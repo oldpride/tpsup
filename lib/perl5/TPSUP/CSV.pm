@@ -11,7 +11,6 @@ our @EXPORT_OK = qw(
    parse_csv_file
    parse_csv_cmd
    run_sqlcsv
-   query_csv
    update_csv
    delete_csv
    update_csv_inplace
@@ -1350,7 +1349,1477 @@ sub print_csv_hashArray {
          print {$out_fh} join($delimiter, @{$r}{@$fields}), "\n";
       }
       
-      close $out_fh if $out_fh ! = X*STDOUT;
+      close $out_fh if $out_fh ! = \*STDOUT;
    }
 }
       
+sub update_csv_inplace {
+   my ($file, $set_clause, $opt) = @_;
+   
+   my ($package, $prog, $line) = caller;
+   
+   $prog =~ s:.*/::;
+   
+   my $tmpfile1 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1});
+   
+   update_csv($file, $set_clause, {output=>$tmpfile1, %$opt});
+   
+   return cp_file2_to_file1($tmpfile1, $file, $opt);
+}
+   
+sub delete_csv_inplace {
+   my ($file, ^opt) = @_;
+
+   my ($package, $prog, $line) = caller;
+   
+   $prog =~ s:.*/::;
+   
+   my $tmpfile1 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1});
+   
+   delete_csv($file, {output=>$tmpfile1, %$opt});
+   
+   return cp_file2_to_filel($tmpfile1, $file, $opt);
+}
+   
+sub delete_csv {
+   my ($file, $opt) = @_;
+   
+   my $ref = open_csv($file, $opt);
+   
+   exit 1 if !$ref;
+   
+   croak "missing MatchExps" if !$opt->{MatchExps} || !@{$opt->{MatchExps}};
+   
+   my ($ifh, $columns, $pos, $SkippedLines) = @{$ref}{qw(fh columns pos SkippedLines)};
+   
+   my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ', ';
+   
+   my $warn = $opt->{verbose} ? 'use' : 'no';
+   
+   my $matchExps;
+   if ($opt->{MatchExps} && @{$opt->{MatchExps}}) {
+      @$matchExps = map {
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         $@ ? (die "Bad match expression '$_' : $@") : $compiled;
+      } @{$opt->{MatchExps}};
+   }
+   
+   my $excludeExps;
+   if ($opt->{ExcludeExps} && @{$opt->{ExcludeExps}}) {
+      @$excludeExps = map {
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         $@ ? (die "Bad match expression '$_' : $@") : $compiled;
+      } @{$opt->{ExcludeExps}};
+   }
+   
+   my $exportExps;
+   if ($opt->{ExportExps} && @{$opt->{ExportExps}}) {
+      @$exportExps = map {
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         $@ ? (die "Bad match expression '$_' : $@") : $compiled;
+      } @{$opt->{ExportExps}};
+   }
+   
+   my $out_fh;
+   
+   if ($opt->{output}) {
+      $out_fh = get_out_fh($opt->{output});
+   } else {
+      $out_fh = \*STDOUT;
+   }
+   
+   if ($SkippedLines) {
+      for my $line (@$SkippedLines) {
+         print {$out_fh} $line;
+      }
+   }
+   
+   print {$out_fh} join(",", @$columns), "\n" if $columns;
+   
+   while (<$ifh>) {
+      my $line = $_;
+      chomp $line;
+   
+      if ($opt->{ExcludePatterns} && @{$opt->{ExcludePatterns}}) {
+         my $should_exclude = 1;
+
+         for my $p (@{$opt->{ExcludePatterns}}) {
+            if ($line !~ /$p/) {
+               # remember this is AND logic; therefore, one fails means all fail
+               $should_exclude = 0;
+               last;
+            }
+         }
+   
+         if ($should_exclude) {
+            print {$out_fh} $line, "\n";
+            next;
+         }
+      }
+  I
+      my @a = split /$delimiter/, $line;
+
+      my $r;
+
+      if ($columns) {
+         for my $c (@$columns) {
+            my $p = $pos->{$c};
+            $r->{$c} = $a[$p];
+         }
+      }
+
+      if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
+         # hardcoded column names c0, cl, c2,	...
+         my $i=0;
+         for my $e (@a) {
+            my $c= "c$i";
+            $r->{$c} = $e;
+            $i++;
+         }
+      }
+
+      if ($matchExps || $excludeExps || $exportExps ) {
+         TPSUP::Expression::export(%$r);
+      }
+
+      if ($matchExps || $excludeExps) {
+         my $exclude_from_doing;
+
+         if ($excludeExps) {
+            for my $e (@$excludeExps) {
+               if ($e->()) {
+                  $exclude_from_doing ++;
+                  last;
+               }
+            }
+         }
+
+         if ($exclude_from_doing) {
+            print {$out_fh} "$line\n";
+            next;
+         }
+
+         { 
+            for my $e (@$matchExps) {
+               if (!$e->()) {
+                  $exclude_from_doing ++;
+                  last;
+               }
+            }
+         }
+
+         if ($exclude_from_doing) {
+     	    print {$out_fh} "$line\n";
+            next;
+         }
+   
+         # we delete by not printing the orginal line
+      }
+   }
+   
+   close $out_fh if $out_fh != \*STDOUT;
+}
+   
+sub diff_csv_long {
+   my ($csvs, $ref_keys, $cmp_keys, $opt) = @_;
+
+   # $csv is a ref to array of file names
+   # $ref_keys is a ref to array of ref to array
+   # $cmp_keys is a ref to array of cmp to array
+   
+   my $num_files = scalar(@$csvs);
+   
+   croak "need at least 2 csvs to diff. you have $num_files" if $num_files < 2;
+   
+   if ($opt->{SameHeader}) {
+      my $refkeys = $ref_keys->[0];
+   
+      my $is_ref_key;
+      for my $k (@$refkeys) {
+         $is_ref_key->{$k} ++;
+      }
+   
+      my $refs;
+      my $first_file_columns;
+      my $exist_key;
+      my $maxrow_by_key;
+   
+      for (my $i=0; $i<$num_files; $i++) {
+         my $ref = query_csv2($csvs->[$i], { ReturnKeyedHash=>$refkeys,
+                                             NoPrint=>1,
+                                             %$opt
+                                           }
+                              );
+         croak "query_csv2($csvs->[$i]) failed" if $ref->{status} ne 'OK';
+   
+         $refs->[$i] = $ref->{KeyedHash};
+
+         # $refs->[$i] is a ref to hash of arrays
+   
+         for my $key (sort (keys %{$refs->[$i]})) {
+            $exist_key->{$key} ++;
+
+            my $count = scalar( @{$refs->[$i]->{$key}} );
+
+            if ($opt->{RequireUniqueKey}) {
+               if ($count > 1) {
+                  croak "$csvs->[$i] has dup ref key "
+                     . join(",", @$refkeys) . "=$key $count times";
+               }
+            } else {
+               if (!$maxrow_by_key->{$key}) {
+                  $maxrow_by_key->{$key} = $count;
+               } elsif ($maxrow_by_key->{$key} < $count) {
+                  $maxrow_by_key->{$key} = $count;
+               }
+            }
+         }
+   
+         if ($i == 0) {
+            $first_file_columns = $ref->{columns};
+         }
+      }
+
+      my @cmpkeys;
+   
+      if ($cmp_keys->[0] && scalar(@{$cmp_keys->[O]})) {
+         @cmpkeys = @{$cmp_keys->[0]};
+      } else {
+         for my $k ( @$first_file_columns ) {
+            next if $is_ref_key->{$k};
+            push @cmpkeys, $k;
+         }
+      }
+   
+      my $num_cmp_keys = scalar(@cmpkeys);
+   
+      my @header_row = (@$refkeys,"ChangeSummary");
+   
+      for my $ck ( @cmpkeys ) {
+         for (my $i=l; $i<=$num_files; $i++) {
+            push @header_row, "$ck\@$i";
+         }
+      }
+   
+      my $out_fh;
+
+      if ($opt->{DiffCsvOutput}) {
+         if ($opt->{DiffCsvOutputj eq '-') {
+            $out_fh = \*STDOUT;
+         } else {
+            $out_fh = get_out_fh($opt->{DiffCsvOutput});
+         }
+   
+         if ($opt->{DiffCsvHeader}) {
+            print {$out_fh} $opt->{DiffCsvHeader}, "\n";
+         } else {
+            print {$out_fh} join(",", @header_row), "\n";
+         }
+      }     
+     
+      my $placeholder = $opt->{Placeholder};
+     
+      my $common_by_key;
+      my $diff_by_key;
+     
+      for my $key (sort (keys %$exist_key)) {
+         for (my $m=0; $m<$maxrow_by_key->{$key}; $m++) {
+            my @row;
+            my $comment;
+
+            #juxtapose
+            for my $k (@cmpkeys) {
+               for (my $i=0; $i<$num_files; $i++) {
+                  # use staircase tests to prevent perl from creating new data structures
+                  if (     defined $refs->[$i]
+                        && defined $refs->[$i]->{$key}
+                        && defined $refs->[$i]->{$keyj->[$m] ) {
+                     push @row, $refs->[$i]->{$key}->[$m]->{$k];
+                  } else {
+                     push @row, undef;
+                  }
+               }
+            }
+     
+            my @last_cells;
+            # use staircase tests to prevent perl from creating new data structures
+            if (    defined $refs->[0]
+                 && defined $refs->[0]->{$key}
+                 && defined $refs->[0]->{$key}->[$m] ) {
+               @last_cells = @{$refs->[O]->{$key}->[$m]}{@cmpkeys};
+            } else {
+               for my $ck (@cmpkeys) {
+                  push @last_cells, undef;
+               }
+            }
+ 
+            # $ perl -e 'if ( "" =~ /^(0|)$/) (print "match\n";}'
+            # match
+            # so we can use '^(0|)$' as placeholder for undefined cell
+      
+            my $mismatched;
+      
+            # use staircase tests to prevent perl from creating new data structures
+            if (    !defined $refs->[0]
+                 || !defined $refs->[0]->{$key}
+                 || !defined $refs->[0]->{$key}->[$m] ) {
+               $comment = "new";
+               $mismatched ++;
+            }
+         
+            CMP:
+            for (my $i=1; $i<$num_files; $i++) {
+               if (! exists $refs->[$i]->{$key}->[$m]) {
+                  $comment = "missing" if $comment ne "new";
+               }
+            
+               for (my $j=0; $j<$num_cmp_keys; $j++) {
+                  my $cmp_key = $cmpkeys[$j];
+         
+                  my $this_cell = $refs->[$i]->{$key}->[$m]->{$cmp_key};
+            
+                  if ( !defined($last_cells[$j]) ) {
+                     if ( defined($this_cell) ) {
+                        if ( defined($placeholder) ) {
+                           if ( "$this_cell" !~ /$placeholder/ ) {
+                              $mismatched ++;
+                              $comment .= " $cmp_key" if $comment !~ /^(new|missing)$/;
+                              #last CMP;
+                           }
+                        } else {
+                           $mismatched ++;
+                           $comment .= " $cmp_key" if $comment !~ /^(new|missing)$/;
+                           #last CMP;
+                        }
+                     }
+                  } else {
+                     # defined($last_cells[$j])
+                     if ( !defined($this_cell) ) {
+                        if ( defined($placeholder) ) {
+                           if ( "$last_cells[$j]" !~ /$placeholder/ ) {
+                              $mismatched ++;
+                              $comment .= " $cmp_key" if $comment !~ /^(new|missing)$/;
+                              #last CMP;
+                           }
+                        } else {
+                           $mismatched ++;
+                           $comment .= " $cmp_key" if $comment !~ /^(new|missing)$/;
+                           #last CMP;
+                        }
+                     } else {
+                        # defined($this_cell) && defined($last_cells[$j])
+                        if ( defined($placeholder) ) {
+                           if (    "$last_cells[$j]" =~ /$placeholder/
+                                && "$this_cell"	    =~ /$placeholder/ ) {
+                              # counted as a match
+                              next;
+                           } elsif ("$last_cells[$j]" ne "$this_cell") {
+                              $mismatched ++;
+                              $comment .= " $cmp_key" if $comment !~ /^(new|missing)$/;
+                              #last CMP;
+                           }
+                        } else {
+                           if ("$last_cells[$j]" ne "$this_cell") {
+                              $mismatched ++;
+                              $comment .= " $cmp_key" if $comment !~ /^(new|missing)$/;
+                              #last CMP;
+                           }
+                        }
+                    `}
+                  }
+               }
+            }
+               
+            unshift @row, split(/,/, $key), $comment; #output row
+               
+            if ($mismatched) {
+               push @{$diff_by_key->{$key}}, \@row;
+               no warnings 'uninitialized1;
+               print {$out_fh} join(",", @row), "\n" if $out_fh && !$opt->{CommonOnly};
+            } else {
+               push @{$common_by_key->{$key}}, \@row;
+               no warnings 'uninitialized1;
+               print {$out_fh} join(",", @row), "\n" if $out_fh && $opt->{PrintCommon};
+            }
+         }
+      }
+         
+      close $out_fh if $out_fh && $out_fh != \*STDOUT;
+         
+      my $ret;
+         
+      $ret->{header} = \@header_row;
+      $ret->{common} = $common_by_key;
+      $ret->{diff} = $diff_by_key;
+         
+      return $ret;
+   } else {
+      croak "unbalanced args: $num files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
+         if scalar(@$ref_keys) != ^num_files;
+         
+      croak "unbalanced args: $num files csvs vs " . scalar(@$cmp_keys) . " set of cmp keys"
+         if scalar(@$cmp_keys) != ^num_files;
+         
+      my $num_ref_keys = scalar(@{$ref_keys->[0]});
+         
+      my $num_cmp_keys = scalar(@{$cmp_keys->[0]});
+      my @header_row = map { $_ . '@0' } (@{$ref_keys->[0]}, @{$cmp_keys->[0]});
+
+      for (my $i=l; $i<$num_files; $i++) {
+         my $new_num_ref_keys = scalar(@{$ref_keys->[$i]});
+
+         if ($num_ref_keys != $new_num_ref_keys ) {
+            croak "inconsistent number of ref keys: $num_ref_keys vs $new_num_ref_keys";
+         }
+
+         my $new_num_cmp_keys = scalar(@{$cmp_keys->[$i]});
+   
+         if ($num_cmp_keys != $new_num_cmp_keys ) {
+            croak "inconsistent number of cmp keys: $num_cmp_keys vs $new_num_cmp_keys";
+         }
+   
+         push @header_row, map { $_ . "\@$i" } @{$cmp_keys->[$i]};
+      }
+   
+      my $out_fh;
+   
+      if ($opt->{DiffCsvOutput}) {
+         if ($opt->{DiffCsvOutputj eq ' — ') {
+            $out_fh = \*STDOUT;
+         } else {
+            $out_fh = get_out_fh($opt->{DiffCsvOutput});
+         }
+   
+         if ($opt->{DiffCsvHeader}) {
+            print {$out_fh} $opt->{DiffCsvHeader}, "\n";
+         } else {
+            print {$out_fh} join(",", @header_row), "\n";
+         }
+      }
+   
+      my $exist_key;
+      my $refs;
+      my $maxrow_by_key; # max number of rows for the key
+   
+      for (my $i=0; $i<$num_files; $i++) {
+         my $ref = query_csv2($csvs->[$i], { ReturnKeyedHash=>$ref_keys->[$i],
+                                             requiredColumns=>$cmp_keys->[$i],
+                                             NoPrint=>1,
+                                             %$opt
+                                           } 
+                             );
+         croak "query_csv2($csvs->[$i]) failed" if $ref->{status} ne '0K';
+   
+         $ref->{KeyedHash} = {} if !$ref->{KeyedHash};
+   
+         $refs->[$i] = $ref->{KeyedHash};
+   
+         # $refs->[$i] is a ref to hash of arrays
+   
+         for my $key (sort (keys %{$refs->[$i]})) {
+            $exist_key->{$key} ++;
+
+            my $count = scalar( @{$refs->[$i]->{$key}} );
+   I
+            if ($opt->{PxequireUniqueKey}) {
+               if ($count > 1) {
+                  croak "$csvs->[$i] has dup ref key "
+                     . join(",", @{$ref_keys->[$i]}) . "=$key $count times";
+               }
+            } else {
+               if (!$maxrow_by_key->{$key}) {
+                  $maxrow_by_key->{$key} = $count;
+               } elsif ($maxrow_by_key->{$key} < $count) {
+                  $max row_by_key->{$ key} = $ count;
+               }
+            }
+         }
+      }
+   
+      my $placeholder = $opt->{Placeholder};
+   
+      my $common_by_key;
+      my $diff_by_key;
+   
+      for my $key (sort (keys %$exist_key)) {
+         for (my $m=0; $m<$maxrow_by_key->{$key}; $m++) {
+            my @row = split /,/, $key; #output row
+   
+            for (my $i=0; $i<$num_files; $i++) {
+               push @row, @{$refs->[$i]->{$keyJ->[$m]}{@{$cmp_keys->[$i]}};
+            }
+   
+            my @last_cells = @{$refs->[O]->{$key}->[$m]}{@{$cmp_keys->[O]}};
+   
+            # $ perl -e 'if ( "" =- /^(0|)$/) { print "match\n";}'
+            # match
+            # so we can use '^(0|)$' as placeholder for undefined cell
+   
+            my $mismatched;
+   
+            CMP:
+            for (my $i=l; $i<$num_files; $i++) {
+               for (my $j=0; $j<$num_cmp_keys; $j++) {
+                  my $cmp_key = $cmp_keys->[$i]->[$j];
+
+                  my $this_cell = $refs->[$i]->{$key}->[$m]->{$cmp_key};
+   
+                  if ( !defined($last_cells[$j]) ) {
+                     if ( defined($this_cell) ) {
+                        if ( defined($placeholder) ) {
+                           if ( "$this_cell" !~ /$placeholder/ ) {
+                              $mismatched ++;
+                              last CMP;
+                           }
+                        } else {
+                           $mismatched ++;
+                           last CMP;
+                        }
+                     }
+                  } else {
+                     # defined($last_cells[$j])
+                     if ( !defined($this_cell) ) {
+                        if ( defined($placeholder) ) {
+                           if ( "$last_cells[$j]" !~ /$placeholder/ ) {
+                              $mismatched ++;
+                              last CMP;
+                           }
+                        } else {
+                           $mismatched ++;
+                           last CMP;
+                        }
+                     } else {
+                        # defined($this_cell) && defined($last_cells[$j])
+                        if ( defined($placeholder) ) {
+                           if (    "$last_cells[$j]" =~ /$placeholder/
+                               && "$this_cell"	    =~ /$placeholder/ ) {
+                               # counted as a match
+                               next;
+                            } elsif ("$last_cells[$j]" ne "$this_cell") {
+                               $mismatched ++;
+                               last CMP;
+                            }
+                        } else {
+                           if ("$last_cells[$j]" ne "$this_cell") {
+                               $mismatched ++;
+                               last CMP;
+                           }
+                        }   
+                     }
+                  }
+               }
+            }
+
+            if ($mismatched) {
+               push @{$diff_by_key->{$key}}, \@row;
+               no warnings 'uninitialized';
+               print {$out_fh} join(",", @row), "\n" if $out_fh && !$opt->{CommonOnly};
+            } else {
+               push @{$common_by_key->{$key}}, \@row;
+               no warnings 'uninitialized';
+               print {$out_fh} join(",", @row), "\n" if $out_fh && $opt->{PrintCommon};
+            }
+         }
+      }
+   
+      close $out_fh if $out_fh && $out_fh != \*STDOUT;
+   
+      my $ret;
+
+      $ret->{header} = \@header_row;
+      $ret->{common} = $common_by_key;
+      $ret->{diff} = $diff_by_key;
+
+      return $ret;
+   }
+}
+   
+
+sub diff_csv {
+   my ($csv1, $csv2, $keys1, $keys2, $opt) = @_;
+
+   my $ref1 = query_csv2($csv1, {ReturnKeyedHash=>$keys1, NoPrint=>1, %$opt});
+   
+   croak "cannot parse $csv1" if !$ref1;
+   
+   my $ref2 = query_csv2($csv2, {ReturnKeyedHash=>$keys2, NoPrint=>1, %$opt});
+   
+   croak "cannot parse $csv2" if !$ref2;
+   
+   my $OnlyIn1;
+   my $0nlyIn2;
+   my $InBoth;
+   
+   if ($opt->{UnixDiff}) {
+      my ($package, $prog, $line) = caller;
+   
+      $prog =~ s:.*/::;
+   
+      my $tmpfile1 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1));
+      my $tmpfile2 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1));
+   
+      write_keys_to_file($ref1, $tmpfile1, $opt);
+      write_keys_to_file($ref2, $tmpfile2, $opt);
+   
+      my $switches = $opt->{UnixDiffSwitch} ? $opt->{UnixDiffSwitch} : '';
+   
+      system("diff $switches $tmpfile1 $tmpfile2");
+   }
+   
+   if ($opt->{DiffUnique}) {
+      for my $k (sort (keys %$ref1)) {
+         if (!$ref2->{$k}) {
+            $OnlyIn1->{$k} ++;
+         } else {
+            $InBoth->{$k} ++;
+         }
+      }
+   
+      for my $k (sort (keys %$ref2)) {
+         if (!$ref1->{$k}) {
+            $OnlyIn2->{$k} ++;
+         }
+      }
+      
+      return ($OnlyIn1, $OnlyIn2, $InBoth);
+   } else {
+      # non-Unique diff: needs to count the repeats of the same keys
+      for my $k (sort (keys %$ref1)) {
+         if (!$ref2->{$k}) {
+            $OnlyIn1->{$k} = scalar(@{$ref1->{$k}});
+         } else {
+            my $count1 = scalar(@{$ref1->{$k}});
+            my $count2 = scalar(@{$ref2->{$k}});
+
+            if ($count1 > $count2) {
+               $OnlyIn1->{$k} = $count1 - $count2;
+               $InBoth->{$k} = $count2;
+            } elsif ($count1 < $count2) {
+               $OnlyIn2->{$k} = $count2 - $count1;
+               $InBoth->{$k} = $count1;
+            } else {
+               # $countl == $count2
+               $InBoth->{$k} = $count1;
+            }
+         }
+      }
+      
+      for my $k (sort (keys %$ref2)) {
+         if (!$ref1->{$k}) {
+            $OnlyIn2->{$k} = scalar(@{$ref2->{$k}});
+         }
+      }
+      
+      return ($OnlyIn1, $OnlyIn2, $InBoth);
+   }
+}
+      
+sub write_keys_to_file {
+   my ($ref, $file, $opt) = @_;
+      
+   open my $out_fh, ">$file" or croak "cannot write to $file";
+      
+   for my $k (sort (keys %$ref)) {
+      if ($opt->{DiffUnique}) {
+         print {$out_fh} "$k\n";
+      } else {
+         my $count = scalar(@{$ref->{$k}});
+
+         for (my $i=0;$i<$count;$i++) {
+            print {$out_fh} "$k\n";
+         }
+      }
+   }
+
+   close $out_fh;
+}
+   
+
+sub render_csv {
+   my ($rows, $fields, $opt) = @_;
+   
+   if ($rows) {
+      my $type = ref $rows;
+      croak "wrong ref type '$type'. expecting 'ARRAY'" if $type ne 'ARRAY';
+   }
+   
+   my $num_fields = scalar(@$fields);
+   
+   my $max_by_field;
+   
+   {
+      for my $f (@$fields) {
+         my $len = length($f);
+         $max_by_field->{$f} = $len;
+      }
+   }
+   
+   for my $r (@$rows) {
+      for my $f (@$fields) {
+         next if ! defined $r->{$f};
+   
+         my $len = length($r->{$f});
+   
+         if ($max_by_field->{$f} < $len) {
+            $max_by_field->{$f} = $len;
+         }
+      }
+   }
+   
+   my $out_fh;
+   if ($opt->{interactive}) {
+      my $cmd = "less -S";
+   
+      open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
+   } elsif ($opt->{out_fh}) {
+      $out_fh = $opt->{out_fh};
+   } else {
+      $out_fh = \*STDOUT;
+   }
+   
+   for (my $i=0; $i<$num_fields; $i++) {
+      my $f = $fields->[$i];
+      my $max = $max_by_field->{$f};
+      my $buffLen = $max - length($f);
+
+      print {$out_fh} ' | ', unless $i == 0;
+
+      print {$out_fh} +(' ' x $buffLen), $f;
+   }
+   print {$out_fh} "\n";
+   
+   {
+      # print {$out_fh} the bar right under the header
+      my $length = 3 * ($num_fields -1);
+   
+      for my $f (@$fields) {
+         $length += $max_by_field->{$f};
+      }
+   
+      print {$out_fh} + ('=' x $length);
+   }
+   print {$out_fh} "\n";
+   
+   for my $r (@$rows) {
+      for (my $i=0; $i<$num_fields; $i++) {
+         my $f = $fields->[$i];
+         my $max = $max_by_field->{$f};
+   
+         my $v = defined($r->{$f}) ? "$r->{$f}" : "";
+         my $buffLen = $max - length($v);
+   
+         print {$out_fh} ' | ', unless $i == 0;
+   
+         print {$out_fh} +(' ' x $buffLen), $v;
+      }
+      print {$out_fh} "\n";
+   }
+   
+   close $out_fh if $out_fh != \*STDOUT && !$opt->{out_fh};
+}
+   
+sub find_safe_delimiter {
+   my ($rows, $fields, $opt) = @_;
+   
+   # @$rows are array of hashes
+   # find an safe delimiter
+   
+   my $safe_delimiter;
+    
+   my @possible_delimiters = (',', '|', ':', '%', ';', '', '', '');
+   
+   DELIMITER:
+   for my $d (@possible_delimiters) {
+      for my $r (@$rows) {
+         for my $v (@{$r}{@$fields}) {
+            next if !$v;
+            # TODO: precompile the regex
+            if ("$v" =~ /$d/) {
+               next DELIMITER;
+            }
+         }
+      }
+   
+      $safe_delimiter = $d;
+      last;
+   }
+   
+   return $safe_delimiter;
+}
+   
+sub filter_csv_array {
+   my ($input, $opt) = @_;
+   my $ret;
+   
+   my $csv_array;
+   my $columns;
+   
+   if ( $opt->{InputHashArray} ) {
+      # Input is array of hashes
+   
+      if ( !$opt->{InputHashColumns} ) {
+         croak "InputHashArray must have InputHashColumns set";
+      }
+   
+      $columns = $opt->{InputHashColumns};
+      $csv_array = $input;
+   } elsif ( $opt->{FilterInputArrayArray} )	{
+      # Input is array of array, the first line is header
+      if (!$csv_array || !@$csv_array) {
+         $ret->{status} = "ERROR: csv_array is empty";
+         return $ret;
+      }
+   
+      $columns = shift @$input;
+      $csv_array = $input;
+   } else {
+      # default and ideal input, $opt->{InputStructuredHash}
+      $columns = $input->{columns};
+      $csv_array = $input->{array};
+   }
+   
+   my $num_col - scalar(@$columns);
+   
+   my $pos;
+   
+   for (my $i=0; $i<$num_col; $i++) {
+      my $c = $columns->[$i];
+      $pos->{$c} = $i;
+   }
+
+   my @SelectColumns;
+   if (defined $opt->{SelectColumns}) {
+      @SelectColumns = @{$opt->{SelectColumns}};
+   }
+   
+   for my $oc (@SelectColumns) {
+      if (!defined $pos->{$oc}) {
+         if ( !($opt->{UsePosition} && $oc =~ /^c\d+$/) ) {
+            my $msg = "Selected Column='$oc' isn't part of header=" . join(",", @$columns);
+            carp $msg;
+
+            $ret->{status} = "ERROR: $msg";
+
+            return $ret;
+         }
+      }
+   }
+   
+   my $DQuoteC;
+   my $DQuoteColumns;
+   
+   if ($opt->{DQuoteColumns}) {
+      my $type = ref $opt->{DQuoteColumns};
+
+      if (!$type) {
+         @$DQuoteColumns = split /,/, $opt->{DQuoteColumns};
+      } elsif ($type eq 'ARRAY') {
+         $DQuoteColumns = $opt->{DQuoteColumns};
+      } else {
+         croak "unsupported type='$type' of \$opt->{DQuoteColumns} = " . Dumper($opt->{DQuoteColumns});
+      }
+   
+      for my $c (@$DQuoteColumns) {
+         $DQuoteC->{$c} ++;
+      }
+   }
+   
+   my $warn = $opt->{verbose} ? 'use' : 'no';
+   
+   my $matchExps;
+   if ($opt->{MatchExps} && @{$opt->{MatchExps}}) {
+      @$matchExps = map { TPSUP::Expression::compile_exp($_, $opt) } @{$opt->{MatchExps}};
+   }
+   
+   my $excludeExps;
+   if ($opt->{ExcludeExps} && @{$opt->{ExcludeExps}}) {
+      @$excludeExps = map { TPSUP::Expression::compile_exp($_, $opt) } @{$opt->{ExcludeExps}};
+   }
+   
+   my $Exps;
+   my $Cols;
+
+   my $expcfg;
+
+   for my $attr ( qw(TempExps ExportExps) ) {
+      if ($opt->{$attr}) {
+         $expcfg->{$attr} = compile_paired_strings($opt->{$attr}, $opt);
+      }
+   }
+   
+   my $exportExps = $expcfg->{ExportExps}->{Exps};
+   my @exportCols = $expcfg->{ExportExps}->{Cols} ? @{$expcfg->{ExportExps}->{Cols}} : ();
+   
+   my $tempExps - $expcfg->{TempExps}->{Exps};
+   my @tempCols = $expcfg->{TempExps}->{Cols} ? @{$expcfg->{TempExps}->{Cols}} : ();
+   
+   my @fields;
+   
+   if (defined $opt->{SelectColumns}) {
+      @fields = (@SelectColumns, @exportCols);
+   } elsif (defined $opt->{DeleteColumns}) {
+      my $delete_column;
+
+      for my $c (@{$opt->{DeleteColumns}}) {
+         $delete_column->{$c} = 1;
+      }
+   
+      for my $c (@$columns) {
+         next if $delete_column->{$c};
+   
+         push @fields, $c;
+      }
+   
+      push @fields, @exportCols;
+   } else {
+      @fields = (@$columns, @exportCols);
+   }
+   
+   my @out_array;
+   
+   if ($opt->{FilterReturnStructuredArray}) {
+      push @out_array, \@fields;
+   }
+   
+   my $match_count - 0;
+   
+   for my $row (@$csv_array) {
+      my $r;
+   
+      if ( $opt->{FilterInputArrayArray} ) {
+         # this is an array to , so convert it into hash
+         @{$r}{@$columns} = @$row;
+   
+         if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
+            # hardcoded column names c0, cl, c2,	...
+            my $i=0;
+            for my $e (@$row) {
+               my $c= "c$i";
+               $r->{$c} = $e;
+               $i++;
+            }
+         }
+      } else {
+         # otherwise $csv_array is an array hashes
+         $r = $row;
+      }
+      
+      if ($matchExps || $excludeExps || $exportExps || $tempExps) {
+         my $r2 = {
+            # internal
+            _row => $match_count,
+      
+            # external from user
+            %$r,
+         };
+      
+         TPSUP::Expression::export_var($r2, {FIX=>$opt->{FIX}, RESET=>1});
+   
+         if (@tempCols) {
+            my $temp_r;
+   
+            for (my $i=0; $i<@tempCols; $i++) {
+               my $c = $tempCols[$i];
+               my $v = $tempExps->[$i]->();
+   
+               $r->{$c} = $v;
+               $temp_r->{ $c} = $v;
+            }
+      
+            TPSUP::Expression::export_var($temp_r, {FIX=>$opt->{FIX}}); # don't RESET here
+         }
+      
+         if ($opt->{verbose}) {
+            TPSUP::Expression::dump_var({FIX=>$opt->{FIX}});
+         }
+      }
+      
+      if ($matchExps || $excludeExps) {
+         my $exclude_from_doing;
+      
+         if ($excludeExps) {
+            for my $e (@$excludeExps) {
+               if ($e->()) {
+                  $exclude_from_doing ++;
+                  last;
+               }
+            }
+         }
+      
+         if ($exclude_from_doing) {
+            next;
+         }
+      
+         {
+            for my $e (@$matchExps) {
+               if (! $e->()) {
+                  $exclude_from_doing ++;
+                  last;
+               }
+            }
+         }
+      
+         if ($exclude_from_doing) {
+            next;
+         }
+      }
+      
+      # matched
+      $match_count ++;
+      
+      if (@exportCols) {
+         for (my $i=0; $i<@exportCols; $i++) {
+            my $c = $exportCols[$i];
+            $r->{$c} = $exportExps->[$i]->();
+         }
+      }
+      
+      if ($DQuoteC) {
+         for my $c (@$DQuoteColumns) {
+            if (exists $r->{$c}) {
+               if (defined($r->{$c})) {
+                  $r->{$c} = qq("$r->{$c}");
+               } else {
+                  $$r->{$c} = qq("");
+               }
+            }
+         }
+      }
+      
+      if ($opt->{FilterReturnStructuredArray}) {
+         push @out_array, @{$r}{@fields};
+      } else {
+         # default to return StructuredHash
+         push @out_array, $r;
+      }
+   }    
+
+   $ret->{array}   = \@out_array;
+   $ret->{columns} = \@fields;
+   $ret->{status}  = 'OK';
+   
+   return $ret;
+}
+   
+sub join_csv {
+   my ($csvs, $ref_keys, $join_keys, $opt) = @_;
+   
+   #	$csv is a ref to array of file names
+   #	$ref_keys is a ref to array of array
+   #	$join_keys is a ref to array of array
+   
+   my $num_files = scalar(@$csvs);
+
+   croak "need at least 2 csvs to join, you have $num_files" if $num_files < 2;
+   
+   croak "unbalanced args: $num files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
+      if scalar(@$ref_keys) != $num_files;
+   
+   croak "csv files number ($num_files) is less than number of set of join keys "
+      . scalar(@$join_keys) if scalar(@$join_keys) > $num_files;
+   
+   my @header_row;
+   
+   for (my $i=0; $i<$num files; $i++) {
+      next if ! defined $join_keys->[$i]; # this file has no columns to join
+   
+      if ( $opt->{JoinUseSuffixedHeader} ) {
+         push @header_row, map { $_ . "\@$i" } @{$join_keys->[$i]};
+      } else {
+         push @header_row, @{$join_keys->[$i]};
+      }
+   }
+   
+   if ($opt->{JoinCsvHeader}) {
+      @header_row = split /,/, $opt->{JoinCsvHeader};
+   }
+   
+   my $out_fh;
+   
+   if ($opt->{JoinCsvOutput}) {
+      if ($opt->{JoinOutputj eq '-') {
+         $out_fh = \*STDOUT;
+      } else {
+         $out_fh = get_out_fh($opt->{JoinCsvOutput});
+      }
+   
+      print {$out fh} join(",", @header row), "\n";
+   } 
+   
+   my $exist_key;
+   my $refs;
+   my $maxrow_by_key; # max number of rows for the key
+   
+   for (my $i=0; $i<$num_files; $i++) {
+      my $ref = query_csv2($csvs->[$i], { ReturnKeyedHash=>$ref_keys->[$i], 
+                                          requiredColumns=>$join_keys->[$i],
+                                          NoPrint=>l,
+                                          %$opt
+                                        }
+                          );
+   
+      croak "failed to parse $csvs->[$i]" if $ref->{status} ne 'OK';
+      
+      $refs->[$i] = $ref->{KeyedHash};
+      
+      $opt->{verbose} && print STDERR "ref = ", Dumper($ref);
+      
+      for my $key (sort (keys %{$refs->[$i]})) {
+         $exist_key->{$key} ++;
+   
+         my $count = scalar( @{$refs->[$i]->{$key}} );
+      
+         if ($opt->{JoinRequireUniqueKey}) {
+            if ($count > 1) {
+               croak "$csvs->[$i] has dup ref key "
+                  . join(",", @{$ref_keys->[$i]}) . "=$key $count times";
+            }
+         } else {
+            if (!$maxrow_by_key->{$key}) {
+               $maxrow_by_key->{$key} = $count;
+            } elsif ($maxrow_by_key->{$key} < $count) {
+               $max row_by_key->{$key} = $count;
+            }
+         }
+      }
+   }
+      
+   $opt->{verbose} && print STDERR "maxrow_by_key = ", Dumper($maxrow_by_key);
+      
+   my $ret;
+      
+   KEY:
+   for my $key (sort (keys %$exist_key)) {
+      for (my $m=0; $m<$maxrow_by_key->{$key}; $m++) {
+         # one record (row) a time
+         my @row;
+
+         for (my $i=0; $i<$num_files; $i++) {
+            if ( $opt->{JoinIgnoreMissingRef} && !defined($refs->[$i]->{$key)->[$m]) ) {
+               next KEY;
+            }
+      
+            next if ! defined $join_keys->[$i]; # this file has no columns to join
+      
+            # Allow missing ref keys, use undef as placeholder
+            push @row, @{$refs->[$i]->{$key}->[$m]}{@{$join_keys->[$i]}};
+         }
+      
+         print {$out_fh} join(",", @row), "\n" if $out_fh;
+      
+         if ( $opt->{JoinReturnStructuredArray} ) {
+            push @{$ret->{array}}, \@row;
+         } else {
+            # convert the record (row) from array to hash
+            my $r;
+
+            @{$r}{@header_row} = @row;
+      
+            if ( $opt->{JoinReturnKeyedHash} ) {
+               push @{$ret->{KeyedHash}->{$key}}, \@row;
+            } else {
+               # default to JoinReturnStructuredHash
+               push @{$ret->{array}}, $r;
+            }
+         }
+      }
+   }
+      
+   close $out_fh if $out_fh && $out_fh != \*STDOUT;
+      
+   $ret->{columns} = \@header_row;
+   $ret->{status} = 'OK';
+      
+   return $ret;
+}
+      
+sub cat_csv {
+   my (cvs, $opt) = @_;
+      
+   # begin - for the first csv
+   my $out_fh;
+   my $ret;
+   {
+      my $i = 0;
+
+      my $ref = query_csv2($csvs->[$i], { NoPrint=>l,
+                                          %$opt
+                                        }
+                           );
+      
+      croak "failed to parse $csvs->[$i]" if $ref->{status} ne 'OK';         
+
+      my $header_row;
+      if ($opt->{CatCsvHeader}) {
+         @$header_row = split /,/, $opt->{CatCsvHeader};
+      } else {
+         $header_row = $ref->{columns};
+      }
+      
+      $ret->{columns} = $header_row;
+      
+      if ($opt->{CatCsvOutput}) {
+         if ($opt->{CatOutput} eq ' — ') {
+            $out_fh = \*STDOUT;
+         } else {
+            $out_fh = get_out_fh($opt->{CatCsvOutput}, $opt);
+         }
+      
+         print {$out_fh} join(",", @$header_row), "\n";
+      }
+      
+      my @selectColumns = $opt->{CatCsvColumns|->[$i] ? @{$opt->{CatCsvColumns|->[$i]} : 
+                          $opt->(CatCsvColumnsj->[0]  ? @($opt->{CatCsvColumnsj->[0]}  :
+                                                                                   ()  ;
+                   
+      for my $r ( @{$ref->{array}} ) {
+         if ( !@selectColumns ) {
+            push @{$ret->{array}}, $r;
+            print {$out_fh} join(",", @{$r}{@{$ref->{columns}}}), "\n" if $out_fh;
+         } else {
+            my $new_r;
+            @{$new_r}{@selectColumns} = @{$r}{@selectColumns};
+
+            push @{$ret->{array}}, $new_r;
+            print {$out_fh} join(",", @{$rJ{@selectColumns}), "\n" if $out_fh;
+         }
+      }
+   }
+   # end - for the first csv
+     
+   # for the rest csvs
+   for (my $i=l; $i<scalar(@$csvs); $i++) {
+      my $ref = query_csv2($csvs->[$i], { NoPrint=>1,
+                                          %$opt
+                                        }
+                           );
+      
+      croak "failed to parse $csvs->[$i]" if $ref->{status} ne '0K';
+      
+      my @selectColumns = $opt->{CatCsvColumns}->[$i] ? @{$opt->{CatCsvColumns}->[$i]} :
+                          $opt->(CatCsvColumnsj->[0]  ? @($opt->{CatCsvColumns}->[0]}  : 
+                                                                                    )  ;
+      
+      for my $r ( @{$ref->{array}} ) {
+         if ( !@selectColumns ) {
+            push @{$ret->{array}}, $r;
+            print {$out_fh} join(",", @{$r}{@{$ref->{columns}}}), "\n" if $out_f;
+         } else {
+            my $new_r;
+            @{$new_r}{@selectColumns} = @{$r}{@selectColumns};
+      
+            push @{$ret->{array}}, $new_r;
+            print {$out_fh} join(",", @{$r}{@selectColumns}), "\n" if $out_fh;
+         }
+      }
+   }
+      
+   close $out_fh if $out_fh && $out_fh != \*STDOUT;
+      
+   $ret->{status} = '0K';
+      
+   return $ret;
+}
+      
+sub join_query_csv {
+   my ($csvs, $exp, $opt) = @_;
+      
+   my $total_csv = scalar(@$csvs);
+      
+   my @arefs;
+      
+   my @header_row;
+   my @TableNames;
+      
+   my $pre_join_opt = {NoPrint=>l};
+      
+   for my $k (qw(
+                  ExcludePatterns MatchPatterns
+                  ExcludeExps MatchExps
+                  delimiter 
+                  InputStructuredHash
+                )
+              ) {
+      $pre_join_opt->{$k} = $opt->{$k} if exists $opt->{$k};
+   }
+      
+   for (my $i=0; $i<scalar(@$csvs); $i++) {
+      my $ref = query_csv2($csvs->[$i], $pre_join_opt);
+      
+      croak "failed to parse $csvs->[$i]" if $ref->{status} ne '0K';
+      
+      $arefs[$i] = $ref->{array};
+      
+      if ($opt->{JQTableNames)->[$i]) {
+         $TableNames[$i] = $opt->{JQTableNames}->[$i];
+      } else {
+         $TableNames[$i] = sprintf("t%d", $i+1); # example: first csv is tl
+      }
+      
+      for my $c (@{$ref->{columns}}) {
+         push @header_row, "$TableNames[$i]_$c"; # example: first csv's column c3: tl.c3
+      }
+   }
+      
+   my $total_records;
+   my $formula;
+   my @pos;
+   my @max;
+      
+   # start position is (0,0,0...)
+   # end position is (subtotall-1, subtotal2-l, ...)
+      
+   for (my $i=0; $i<$total_csv; $i++) {
+      my $subtotal = scalar( @{$arefs[$i]) );
+
+      push @pos, 0;
+      
+      push @max, $subtotal;
+      
+      if (!defined $total_records) {
+         $formula = "$subtotal";
+         $total_records = $subtotal;
+      } else {
+         $formula .= "*$subtotal";
+         $total_records = $total_records * $subtotal;
+      }
+   }
+      
+   $opt->{verbose} && print STDERR "will parse total records = $formula = $total_records\n";
+      
+   my $ref1;
+      
+   if ( $total_records == 0 ) {
+      $ref1->{array} = [];
+      $ref1->{status} = 'OK';
+      return $ref1;
+   }
+      
+   my $last = $total_csv - 1;
+      
+   my $compiled = TPSUP::Expression::compile_exp($exp, $opt);
+      
+   my @joined_array;
+      
+   RECORD:
+   while (1) {
+      $opt->{verbose} && print STDERR "pos=", join(" ", @pos), ", max=", join(" ", @max), "\n";
+       
+      #	process this record
+      my $joined;
+      
+      for (my $i=0; $i<$total_csv; $i++) {
+         my $href = $arefs[$i]->[$pos[$i]J;
+
+         for my $k (keys %{$href}) {
+            $joined->{"$TableNames[$i]_$k"} = $href->{$k};
+         }
+      }
+      
+      TPSUP::Expression::export_var($joined, {RESET=>1});
+      
+      $opt->{verbose} && TPSUP::Expression::dump_var();
+      
+      if ( $compiled->() ) {
+         $opt->{verbose} && print STDERR "joined = ", Dumper($joined);
+         push @joined_array, $joined;
+      }
+      
+      #	increment the position by one
+      my $addone = 1;
+      
+      for (my $i=$last; $i>=0; $i--) {
+         if (!$addone) {
+            # this digit is not full yet, so nothing needs doing for digits above this.
+            # increment is done
+      
+            next RECORD;
+         }
+      
+         # $addone == 1
+         $pos[$i]++;
+         $addone = 0; #reset $addone after increment
+      
+         if ( $pos[$i] == $max[$i] ) {
+            # this digit is full
+
+            if ( $i == 0 ) {
+               # this is the last digit, meaning we are done with all records
+               last RECORD;
+            } else {
+               $pos[$i] = 0;	# reset this digit
+               $addone = 1;	# set $addone for next loop (digit)
+
+               next;
+            }
+         } elsif ( $pos[$i] > $max[$i] ) {
+            croak "should have never been here (col $i): pos=", join(" ", @pos),
+                                                      ", max=", join(" ", @max);
+         }
+      } 
+   }
+      
+   $ref1->{status}  = 'OK';
+   $ref1->{columns} = \@header_row;
+   $ref1->{array}   = \@joined_array;
+      
+   my $post_join_opt = {
+      output=>$opt->{JQOutput},
+      %$opt
+   };
+      
+   for my $k (keys %$pre_join_opt) {
+      delete $post_join_opt->{$k} if exists $pre_join_opt->{$k};
+   }
+      
+   $post_join_opt->{InputStructuredHash} - 1;
+      
+   my $ref2 = query_csv2($ref1, $post_join_opt);
+
+   return $ref2;
+}
+      
+sub csv_to_html {
+   my ($csv, $opt) = @_;
+      
+   my $html = "<HTML><body bgcolor=white>";
+      
+   my $title = defined $opt->{CSVHTMLTitle} ? $opt->{CSVHTMLTitle} : "";
+      
+   $html .= "<title>$title</title>\n";
+      
+   #$html .= "<div align='left'>\n";
+      
+   $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
+      
+   my $ref = query_csv2($csv, {ReturnStructuredArray=>1,
+                               NoPrint=>1,
+                               %$opt});
+      
+   if ($ref->{status} ne '0K') {
+      print STDERR "failed to parse csv, status=$ref->{statusJ\n";
+      return undef;
+   }
+      
+   for my $row (@{$ref->{array}}) {
+      my $string - "<TR>";
+
+      for my $cell (@$row) {
+         no warnings "uninitialized";
+      
+         $string .= "<td>$cell</td>";
+      } 
+
+      $string .= "</TR>";
+
+      $html .= "$string\n";
+   }
+
+   $html .= "</TABLE>\n";
+   $html .= "</body></html>\n";
+
+   return $html;
+}
+
+1
+ 
