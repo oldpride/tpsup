@@ -51,7 +51,7 @@ sub parse_wrapped_csv_line {
 
    $line =~ s/^"//;
    $line =~ s/"$//;
-   $line =~ s/$//:
+   $line =~ s/$//;
 
    my @a = split /","/, $line;
 
@@ -121,7 +121,7 @@ sub open_csv {
       # use the original header
       chomp $header;
 
-      $header =- s///:
+      $header =~ s///;
 
       my @columns;
       my $pos;
@@ -137,8 +137,8 @@ sub open_csv {
       my $i = 0;
 
       for my $c (@columns) {
-        $pos->{$c} = $i;
-        $i ++;
+         $pos->{$c} = $i;
+         $i ++;
       }
 
       if ($opt->{requiredColumns}) {
@@ -175,7 +175,7 @@ sub parse_csv_file {
 
    my $cmd;
 
-   if ($file =- /gz$/) {
+   if ($file =~ /gz$/) {
       $cmd = "gunzip -c $file";
    } else {
       $cmd = "cat $file";
@@ -186,7 +186,7 @@ sub parse_csv_file {
    return parse_csv_array(\@a, $opt);
 }
 
-sub parse_csv cmd {
+sub parse_csv_cmd {
    my ($cmd, $opt) = @_;
 
    my @a = "$cmd";
@@ -215,7 +215,7 @@ sub parse_csv_array {
 
    chomp $header;
 
-   $header =~ s///:
+   $header =~ s///;
 
    my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ',';
 
@@ -254,8 +254,8 @@ sub parse_csv_array {
       push @$in_ref, $header;
    }
 
-   my $pos_by_co1;
-   my @ renamed_headers;
+   my $pos_by_col;
+   my @renamed_headers;
    {
       for (my $i=0; $i<scalar(@h2); $i++) {
          my $col = $h2[$i];
@@ -263,7 +263,7 @@ sub parse_csv_array {
          my $renamed_col;
 
          if (defined $opt->{RenameCol}->{$col}) { 
-            $renamed_col = $opt->{RenameColJ->{$col};
+            $renamed_col = $opt->{RenameCol}->{$col};
          } else {
             $renamed_col = $col;
          }
@@ -301,14 +301,14 @@ sub parse_csv_array {
       next if $opt->{excludePattern} && $l =~ /$opt->{excludePattern}/;
 
       chomp $l;
-      $l =- s///g;
+      $l =~ s///g;
 
       my @a = split /$delimiter/, $l;
 
       my $v_by_k;
 
       for (my $i=0; $i<scalar(@renamed_headers); $i++) {
-         $v_by_k->{$renamed_headers[$i]) = $a[$i];
+         $v_by_k->{$renamed_headers[$i]} = $a[$i];
       }
 
       if (defined $keyColumn) {
@@ -325,14 +325,14 @@ sub parse_csv_array {
    return $out_ref;
 }
 
-sub run sqlcsv ($$;$) {
+sub run_sqlcsv ($$;$) {
    my ($sql, $inputs, $opt) = @_;
 
    my $separator = defined($opt->{separator}) ? $opt->{separator} : ',';
 
    my @out_array;
 
-   my $tmpdir = get_tmp_file("/var/tmp", "sqlcsv", {isDir=>l,chkSpace=>102400000});
+   my $tmpdir = get_tmp_file("/var/tmp", "sqlcsv", {isDir=>1,chkSpace=>102400000});
 
    if (! $tmpdir) {
       carp "failed to get tmp dir";
@@ -381,8 +381,8 @@ sub run sqlcsv ($$;$) {
          close $tmp_fh;
 
          $csv = $tmpfile;
-      } elsif ($input =- /gz$/) { 
-         croak "non-select sql cannot work on gz file" if ($sql !~ /^\s*select/i || $sql =- /update|delete/i);
+      } elsif ($input =~ /gz$/) { 
+         croak "non-select sql cannot work on gz file" if ($sql !~ /^\s*select/i || $sql =~ /update|delete/i);
 
          my $ cmd;
          if ($opt->{skiplines}) {
@@ -393,7 +393,7 @@ sub run sqlcsv ($$;$) {
 
          system($cmd);
 
-         if ($?) (
+         if ($?) {
             carp "ERROR: cmd=$cmd failed, $!";
             return \@out_array;
          }
@@ -492,7 +492,7 @@ sub parse_set_clause {
          croak "clause='$clause' has bad format at key='$key'";
       }
 
-      buffer =~ s/^\s+//;
+      $buffer =~ s/^\s+//;
       $v_by_k->{$key} = $value;
 
       $last_match = "'$key'='$value'";
@@ -595,7 +595,7 @@ sub update_csv {
 
          for my $e (@a) {
             my $c= "c$i";
-            $r->{$c) = $e;
+            $r->{$c} = $e;
             $i++;
          }
       }
@@ -620,9 +620,10 @@ sub update_csv {
 
          {
             for my $e (@$matchExps) {
-            if (! $e->()) {
-               $exclude_from_doing ++;
-               last;
+               if (! $e->()) {
+                  $exclude_from_doing ++;
+                  last;
+               }
             }
          }
 
@@ -643,7 +644,7 @@ sub update_csv {
       print {$out_fh} join(",", @{$r}{@$columns}), "\n";
    }
 
-   close $out_fh if $out_fh ! = \*STDOUT;
+   close $out_fh if $out_fh != \*STDOUT;
 }
 
 sub csv_file_to_array {
@@ -750,18 +751,18 @@ sub csv_file_to_array {
                   if ($opt->{RemoveInputQuotes}) {
                      $cell = $1;
                   } else {
-                     $cell = qq("$l");
+                     $cell = qq("$1");
                   }
                   push @a, $cell;
                } else {
                   $line =~ /\G(.*)/gc; # all the rest of line
                   $cell = $1;
-                  $cell =~ s/"$//; Remove the ending quites
+                  $cell =~ s/"$//;     # Remove the ending quites
 
                   if ($opt->{RemoveInputQuotes}) {
                      push @a, $cell;
                   } else {
-                     $cell = qq("$l");
+                     $cell = qq("$1");
                   }
 
                   last;
@@ -774,7 +775,7 @@ sub csv_file_to_array {
                   $cell = $1;
                   push @a, $cell;
                } else {
-                  $line =- /\G(.*)/gc; # all the rest of line
+                  $line =~ /\G(.*)/gc; # all the rest of line
                   $cell = $1;
                   push @a, $cell;
                   last;
@@ -855,7 +856,7 @@ sub query_csv2 {
       my $col_count = scalar(@columns);
       my $row_count = scalar(@$input);
 
-      for (my $i=l; $i<$row_count; $i++) {
+      for (my $i=1; $i<$row_count; $i++) {
          my $r;
 
          for (my $j=0; $j<$col_count; $j++) {
@@ -892,7 +893,7 @@ sub query_csv2 {
 
       for my $r (@{$ref1->{array}}) {
          for my $k (@Floats) {
-            if (defined $r->{$k)) {
+            if (defined $r->{$k}) {
                $r->{$k} =~ s/0+$// if $r->{$k} =~ /\./;
                $r->{$k} =~ s/\.$//;
             }
@@ -919,7 +920,7 @@ sub query_csv2 {
    # handle Grouping actions
    if ( $opt->{GroupKeys} ) {
       my $tmpref;
-      my $is _GroupKey;
+      my $is_GroupKey;
    
       my @keys = @{$opt->{GroupKeys}};
    
@@ -962,10 +963,10 @@ sub query_csv2 {
 
             my @tmpkeys2 = $opt->{InGroupSortDescend} ? reverse(@tmpkeys1) : @tmpkeys1 ;
       
-            if ( $opt->{InGroupGetFirst) ) {
-               push @{$ref3->{array}}, $tmpref2->{$tmpkeys2[0]|->[0];
+            if ( $opt->{InGroupGetFirst} ) {
+               push @{$ref3->{array}}, $tmpref2->{$tmpkeys2[0]}->[0];
             } elsif ( $opt->{InGroupGetLast} ) {
-               push @{$ref3->{array}}, $tmpref2->{$tmpkeys2[-1]|->[-1];
+               push @{$ref3->{array}}, $tmpref2->{$tmpkeys2[-1]}->[-1];
             } else {
                croak "InGroupSortKeys set but no InGroup action set";
             }
@@ -975,7 +976,7 @@ sub query_csv2 {
 
          if ($opt->{GroupAction}) {
             for my $c (keys %{$opt->{GroupAction}}) {
-               croak "$c is a GroupKey; we cannot act ($opt->{GroupActionJ->{$c}) on it"
+               croak "$c is a GroupKey; we cannot act ($opt->{GroupAction}->{$c}) on it"
                   if $is_GroupKey->{$c};
             }
       
@@ -1092,7 +1093,7 @@ sub query_csv2 {
    #my @exportCols;
    # if ($opt->{ExportExps} && @{$opt->{ExportExps}}) {
    #    for my $pair (@{$opt->{ExportExps}}) {
-   #       if ($pair =- /^(.+?)=(.+)/) {
+   #       if ($pair =~ /^(.+?)=(.+)/) {
    #          my ($c, $e) = ($1, $2);
    #          push @exportCols, $c;
    #       } else {
@@ -1116,7 +1117,7 @@ sub query_csv2 {
 
       if ( $PrintData ) {
          #print_csv_hashArray($ref3->{array}, \@fields, $opt);
-         print_csv_hashArray($ref3->{array}, $ref3->{columnsj, $opt);
+         print_csv_hashArray($ref3->{array}, $ref3->{columns}, $opt);
       }
 
       if ( $opt->{PrintSummary} && $ref3->{summary} ) {
@@ -1158,7 +1159,7 @@ sub query_csv2 {
    
          for my $r (@{$ref3->{array}}) {
             no warnings "uninitialized";
-            my $k = join(",", @{$r){@keys});
+            my $k = join(",", @{$r}{@keys});
             push @{$KeyedHash->{$k}}, $r;
          }
       }
@@ -1349,7 +1350,7 @@ sub print_csv_hashArray {
          print {$out_fh} join($delimiter, @{$r}{@$fields}), "\n";
       }
       
-      close $out_fh if $out_fh ! = \*STDOUT;
+      close $out_fh if $out_fh != \*STDOUT;
    }
 }
       
@@ -1368,7 +1369,7 @@ sub update_csv_inplace {
 }
    
 sub delete_csv_inplace {
-   my ($file, ^opt) = @_;
+   my ($file, $opt) = @_;
 
    my ($package, $prog, $line) = caller;
    
@@ -1456,7 +1457,7 @@ sub delete_csv {
             next;
          }
       }
-  I
+
       my @a = split /$delimiter/, $line;
 
       my $r;
@@ -1582,7 +1583,7 @@ sub diff_csv_long {
 
       my @cmpkeys;
    
-      if ($cmp_keys->[0] && scalar(@{$cmp_keys->[O]})) {
+      if ($cmp_keys->[0] && scalar(@{$cmp_keys->[0]})) {
          @cmpkeys = @{$cmp_keys->[0]};
       } else {
          for my $k ( @$first_file_columns ) {
@@ -1596,7 +1597,7 @@ sub diff_csv_long {
       my @header_row = (@$refkeys,"ChangeSummary");
    
       for my $ck ( @cmpkeys ) {
-         for (my $i=l; $i<=$num_files; $i++) {
+         for (my $i=1; $i<=$num_files; $i++) {
             push @header_row, "$ck\@$i";
          }
       }
@@ -1604,7 +1605,7 @@ sub diff_csv_long {
       my $out_fh;
 
       if ($opt->{DiffCsvOutput}) {
-         if ($opt->{DiffCsvOutputj eq '-') {
+         if ($opt->{DiffCsvOutput} eq '-') {
             $out_fh = \*STDOUT;
          } else {
             $out_fh = get_out_fh($opt->{DiffCsvOutput});
@@ -1633,8 +1634,8 @@ sub diff_csv_long {
                   # use staircase tests to prevent perl from creating new data structures
                   if (     defined $refs->[$i]
                         && defined $refs->[$i]->{$key}
-                        && defined $refs->[$i]->{$keyj->[$m] ) {
-                     push @row, $refs->[$i]->{$key}->[$m]->{$k];
+                        && defined $refs->[$i]->{$key}->[$m] ) {
+                     push @row, $refs->[$i]->{$key}->[$m]->{$k};
                   } else {
                      push @row, undef;
                   }
@@ -1646,7 +1647,7 @@ sub diff_csv_long {
             if (    defined $refs->[0]
                  && defined $refs->[0]->{$key}
                  && defined $refs->[0]->{$key}->[$m] ) {
-               @last_cells = @{$refs->[O]->{$key}->[$m]}{@cmpkeys};
+               @last_cells = @{$refs->[0]->{$key}->[$m]}{@cmpkeys};
             } else {
                for my $ck (@cmpkeys) {
                   push @last_cells, undef;
@@ -1725,7 +1726,7 @@ sub diff_csv_long {
                               #last CMP;
                            }
                         }
-                    `}
+                     }
                   }
                }
             }
@@ -1734,11 +1735,11 @@ sub diff_csv_long {
                
             if ($mismatched) {
                push @{$diff_by_key->{$key}}, \@row;
-               no warnings 'uninitialized1;
+               no warnings 'uninitialized';
                print {$out_fh} join(",", @row), "\n" if $out_fh && !$opt->{CommonOnly};
             } else {
                push @{$common_by_key->{$key}}, \@row;
-               no warnings 'uninitialized1;
+               no warnings 'uninitialized';
                print {$out_fh} join(",", @row), "\n" if $out_fh && $opt->{PrintCommon};
             }
          }
@@ -1754,18 +1755,18 @@ sub diff_csv_long {
          
       return $ret;
    } else {
-      croak "unbalanced args: $num files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
-         if scalar(@$ref_keys) != ^num_files;
+      croak "unbalanced args: $num_files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
+         if scalar(@$ref_keys) != $num_files;
          
-      croak "unbalanced args: $num files csvs vs " . scalar(@$cmp_keys) . " set of cmp keys"
-         if scalar(@$cmp_keys) != ^num_files;
+      croak "unbalanced args: $num_files csvs vs " . scalar(@$cmp_keys) . " set of cmp keys"
+         if scalar(@$cmp_keys) != $num_files;
          
       my $num_ref_keys = scalar(@{$ref_keys->[0]});
          
       my $num_cmp_keys = scalar(@{$cmp_keys->[0]});
       my @header_row = map { $_ . '@0' } (@{$ref_keys->[0]}, @{$cmp_keys->[0]});
 
-      for (my $i=l; $i<$num_files; $i++) {
+      for (my $i=1; $i<$num_files; $i++) {
          my $new_num_ref_keys = scalar(@{$ref_keys->[$i]});
 
          if ($num_ref_keys != $new_num_ref_keys ) {
@@ -1784,7 +1785,7 @@ sub diff_csv_long {
       my $out_fh;
    
       if ($opt->{DiffCsvOutput}) {
-         if ($opt->{DiffCsvOutputj eq ' — ') {
+         if ($opt->{DiffCsvOutput} eq ' — ') {
             $out_fh = \*STDOUT;
          } else {
             $out_fh = get_out_fh($opt->{DiffCsvOutput});
@@ -1820,8 +1821,8 @@ sub diff_csv_long {
             $exist_key->{$key} ++;
 
             my $count = scalar( @{$refs->[$i]->{$key}} );
-   I
-            if ($opt->{PxequireUniqueKey}) {
+
+            if ($opt->{RequireUniqueKey}) {
                if ($count > 1) {
                   croak "$csvs->[$i] has dup ref key "
                      . join(",", @{$ref_keys->[$i]}) . "=$key $count times";
@@ -1830,7 +1831,7 @@ sub diff_csv_long {
                if (!$maxrow_by_key->{$key}) {
                   $maxrow_by_key->{$key} = $count;
                } elsif ($maxrow_by_key->{$key} < $count) {
-                  $max row_by_key->{$ key} = $ count;
+                  $maxrow_by_key->{$key} = $count;
                }
             }
          }
@@ -1846,19 +1847,19 @@ sub diff_csv_long {
             my @row = split /,/, $key; #output row
    
             for (my $i=0; $i<$num_files; $i++) {
-               push @row, @{$refs->[$i]->{$keyJ->[$m]}{@{$cmp_keys->[$i]}};
+               push @row, @{$refs->[$i]->{$key}->[$m]}{@{$cmp_keys->[$i]}};
             }
    
-            my @last_cells = @{$refs->[O]->{$key}->[$m]}{@{$cmp_keys->[O]}};
+            my @last_cells = @{$refs->[0]->{$key}->[$m]}{@{$cmp_keys->[0]}};
    
-            # $ perl -e 'if ( "" =- /^(0|)$/) { print "match\n";}'
+            # $ perl -e 'if ( "" =~ /^(0|)$/) { print "match\n";}'
             # match
             # so we can use '^(0|)$' as placeholder for undefined cell
    
             my $mismatched;
    
             CMP:
-            for (my $i=l; $i<$num_files; $i++) {
+            for (my $i=1; $i<$num_files; $i++) {
                for (my $j=0; $j<$num_cmp_keys; $j++) {
                   my $cmp_key = $cmp_keys->[$i]->[$j];
 
@@ -1947,7 +1948,7 @@ sub diff_csv {
    croak "cannot parse $csv2" if !$ref2;
    
    my $OnlyIn1;
-   my $0nlyIn2;
+   my $OnlyIn2;
    my $InBoth;
    
    if ($opt->{UnixDiff}) {
@@ -1955,8 +1956,8 @@ sub diff_csv {
    
       $prog =~ s:.*/::;
    
-      my $tmpfile1 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1));
-      my $tmpfile2 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1));
+      my $tmpfile1 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1});
+      my $tmpfile2 = get_tmp_file("/var/tmp", "${prog}", {AddIndex=>1});
    
       write_keys_to_file($ref1, $tmpfile1, $opt);
       write_keys_to_file($ref2, $tmpfile2, $opt);
@@ -2412,7 +2413,7 @@ sub join_csv {
 
    croak "need at least 2 csvs to join, you have $num_files" if $num_files < 2;
    
-   croak "unbalanced args: $num files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
+   croak "unbalanced args: $num_files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
       if scalar(@$ref_keys) != $num_files;
    
    croak "csv files number ($num_files) is less than number of set of join keys "
@@ -2420,7 +2421,7 @@ sub join_csv {
    
    my @header_row;
    
-   for (my $i=0; $i<$num files; $i++) {
+   for (my $i=0; $i<$num_files; $i++) {
       next if ! defined $join_keys->[$i]; # this file has no columns to join
    
       if ( $opt->{JoinUseSuffixedHeader} ) {
@@ -2437,13 +2438,13 @@ sub join_csv {
    my $out_fh;
    
    if ($opt->{JoinCsvOutput}) {
-      if ($opt->{JoinOutputj eq '-') {
+      if ($opt->{JoinOutput} eq '-') {
          $out_fh = \*STDOUT;
       } else {
          $out_fh = get_out_fh($opt->{JoinCsvOutput});
       }
    
-      print {$out fh} join(",", @header row), "\n";
+      print {$out_fh} join(",", @header_row), "\n";
    } 
    
    my $exist_key;
@@ -2453,7 +2454,7 @@ sub join_csv {
    for (my $i=0; $i<$num_files; $i++) {
       my $ref = query_csv2($csvs->[$i], { ReturnKeyedHash=>$ref_keys->[$i], 
                                           requiredColumns=>$join_keys->[$i],
-                                          NoPrint=>l,
+                                          NoPrint=>1,
                                           %$opt
                                         }
                           );
@@ -2478,7 +2479,7 @@ sub join_csv {
             if (!$maxrow_by_key->{$key}) {
                $maxrow_by_key->{$key} = $count;
             } elsif ($maxrow_by_key->{$key} < $count) {
-               $max row_by_key->{$key} = $count;
+               $maxrow_by_key->{$key} = $count;
             }
          }
       }
@@ -2495,7 +2496,7 @@ sub join_csv {
          my @row;
 
          for (my $i=0; $i<$num_files; $i++) {
-            if ( $opt->{JoinIgnoreMissingRef} && !defined($refs->[$i]->{$key)->[$m]) ) {
+            if ( $opt->{JoinIgnoreMissingRef} && !defined($refs->[$i]->{$key}->[$m]) ) {
                next KEY;
             }
       
@@ -2534,7 +2535,7 @@ sub join_csv {
 }
       
 sub cat_csv {
-   my (cvs, $opt) = @_;
+   my ($csvs, $opt) = @_;
       
    # begin - for the first csv
    my $out_fh;
@@ -2542,7 +2543,7 @@ sub cat_csv {
    {
       my $i = 0;
 
-      my $ref = query_csv2($csvs->[$i], { NoPrint=>l,
+      my $ref = query_csv2($csvs->[$i], { NoPrint=>1,
                                           %$opt
                                         }
                            );
@@ -2559,7 +2560,7 @@ sub cat_csv {
       $ret->{columns} = $header_row;
       
       if ($opt->{CatCsvOutput}) {
-         if ($opt->{CatOutput} eq ' — ') {
+         if ($opt->{CatOutput} eq '—') {
             $out_fh = \*STDOUT;
          } else {
             $out_fh = get_out_fh($opt->{CatCsvOutput}, $opt);
@@ -2568,8 +2569,8 @@ sub cat_csv {
          print {$out_fh} join(",", @$header_row), "\n";
       }
       
-      my @selectColumns = $opt->{CatCsvColumns|->[$i] ? @{$opt->{CatCsvColumns|->[$i]} : 
-                          $opt->(CatCsvColumnsj->[0]  ? @($opt->{CatCsvColumnsj->[0]}  :
+      my @selectColumns = $opt->{CatCsvColumns}->[$i] ? @{$opt->{CatCsvColumns}->[$i]} : 
+                          $opt->{CatCsvColumns}->[0]  ? @{$opt->{CatCsvColumns}->[0]}  :
                                                                                    ()  ;
                    
       for my $r ( @{$ref->{array}} ) {
@@ -2581,14 +2582,14 @@ sub cat_csv {
             @{$new_r}{@selectColumns} = @{$r}{@selectColumns};
 
             push @{$ret->{array}}, $new_r;
-            print {$out_fh} join(",", @{$rJ{@selectColumns}), "\n" if $out_fh;
+            print {$out_fh} join(",", @{$r}{@selectColumns}), "\n" if $out_fh;
          }
       }
    }
    # end - for the first csv
      
    # for the rest csvs
-   for (my $i=l; $i<scalar(@$csvs); $i++) {
+   for (my $i=1; $i<scalar(@$csvs); $i++) {
       my $ref = query_csv2($csvs->[$i], { NoPrint=>1,
                                           %$opt
                                         }
@@ -2597,13 +2598,13 @@ sub cat_csv {
       croak "failed to parse $csvs->[$i]" if $ref->{status} ne '0K';
       
       my @selectColumns = $opt->{CatCsvColumns}->[$i] ? @{$opt->{CatCsvColumns}->[$i]} :
-                          $opt->(CatCsvColumnsj->[0]  ? @($opt->{CatCsvColumns}->[0]}  : 
-                                                                                    )  ;
+                          $opt->{CatCsvColumns}->[0]  ? @{$opt->{CatCsvColumns}->[0]}  : 
+                                                                                   ()  ;
       
       for my $r ( @{$ref->{array}} ) {
          if ( !@selectColumns ) {
             push @{$ret->{array}}, $r;
-            print {$out_fh} join(",", @{$r}{@{$ref->{columns}}}), "\n" if $out_f;
+            print {$out_fh} join(",", @{$r}{@{$ref->{columns}}}), "\n" if $out_fh;
          } else {
             my $new_r;
             @{$new_r}{@selectColumns} = @{$r}{@selectColumns};
@@ -2631,7 +2632,7 @@ sub join_query_csv {
    my @header_row;
    my @TableNames;
       
-   my $pre_join_opt = {NoPrint=>l};
+   my $pre_join_opt = {NoPrint=>1};
       
    for my $k (qw(
                   ExcludePatterns MatchPatterns
@@ -2650,7 +2651,7 @@ sub join_query_csv {
       
       $arefs[$i] = $ref->{array};
       
-      if ($opt->{JQTableNames)->[$i]) {
+      if ($opt->{JQTableNames}->[$i]) {
          $TableNames[$i] = $opt->{JQTableNames}->[$i];
       } else {
          $TableNames[$i] = sprintf("t%d", $i+1); # example: first csv is tl
@@ -2670,7 +2671,7 @@ sub join_query_csv {
    # end position is (subtotall-1, subtotal2-l, ...)
       
    for (my $i=0; $i<$total_csv; $i++) {
-      my $subtotal = scalar( @{$arefs[$i]) );
+      my $subtotal = scalar( @{$arefs[$i]} );
 
       push @pos, 0;
       
@@ -2709,7 +2710,7 @@ sub join_query_csv {
       my $joined;
       
       for (my $i=0; $i<$total_csv; $i++) {
-         my $href = $arefs[$i]->[$pos[$i]J;
+         my $href = $arefs[$i]->[$pos[$i]];
 
          for my $k (keys %{$href}) {
             $joined->{"$TableNames[$i]_$k"} = $href->{$k};
@@ -2797,7 +2798,7 @@ sub csv_to_html {
                                %$opt});
       
    if ($ref->{status} ne '0K') {
-      print STDERR "failed to parse csv, status=$ref->{statusJ\n";
+      print STDERR "failed to parse csv, status=$ref->{status}\n";
       return undef;
    }
       
