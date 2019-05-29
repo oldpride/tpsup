@@ -18,7 +18,7 @@ our @EXPORT_OK = qw(
    get_ExpHash_from_ArrayOfStrings
    get_user
    get_homedir_by_user
-   recursive_hand1e
+   recursive_handle
    transpose_arrays
    compile_perl
    compile_perl_array
