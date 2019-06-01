@@ -1,0 +1,7 @@
+
+make sure to use the correct perl when generating profile
+/usr/bin/perl Makefile.PL PREFIX=$TPSUP/lib/perl/`uname`
+make
+make test
+make -n install
+make install
