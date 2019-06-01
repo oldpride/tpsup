@@ -1,0 +1,143 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use strict;
+use Carp;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+
+my ($message) = @_;
+   
+   print "$message\n" if $message;
+   
+   print <<"END";
+usage:
+   
+   $prog *
+   
+   -autopath_debug     debug mode for the auto_wrapper only, or you can set AUTOPATH_DEBUG=Y in env.
+   
+examples:
+   
+   $prog -autopath_debug
+   
+END
+   
+   exit 1;
+}
+   
+my $debug;
+   
+if (@ARGV && $ARGV[0] eq '-autopath_debug') {
+   $debug ++;
+   shift @ARGV;
+} elsif ( $ENV{AUTOPATH_DEBUG} && $ENV{AUTOPATH_DEBUG} eq 'Y' ) {
+   $debug ++;
+}
+   
+# to prevent this script from calling itself which creates a infinite loop
+if (! -l $0) {
+   die "$0 is not a symbolic link\n";
+}
+   
+my $dir;
+if ($0 =~ m:^(.+)/:) {
+   $dir = $1;
+} else {
+   $dir = "";
+}
+   
+my $src = readlink($0);
+   
+my $src_prog = $src;
+$src_prog =~ s:.*/::;
+   
+die "$0 cannot be run directly" if $prog eq $src_prog;
+   
+my $src_dir;
+if ($src =~ m:^(.+)/:) {
+   $src_dir = $1;
+} else {
+   $src_dir = "";
+}
+   
+if (!$src_dir) {
+   $src_dir = $dir;
+} elsif($src_dir !~ m:~/:) {
+   $src_dir = "$dir/$src_dir";
+}
+   
+my $TPSUP;
+   
+if ($ENV{TPSUP} && (!$ENV{TPSUPMODE} || $ENV{TPSUPMODE} ne 'safe') ) {
+   $TPSUP = $ENV{TPSUP};
+   
+   my $TPSUPMODE = $ENV{TPSUPMODE} ? $ENV{TPSUPMODE} : "";
+   
+   if ($debug) {
+      print STDERR "TPSUP=$TPSUP is already set. (TPSUPMODE=$TPSUPMODE) No need to source $TPSUP/profile.\n";
+   }
+} else {
+   if ($ENV{TPSUPMODE} && $ENV{TPSUPMODE} eq 'safe') {
+      if ($debug) {
+         print STDERR "unset TPSUPMODE=$ENV{TPSUPMODE}\n";
+      }
+      delete $ENV{TPSUPMODE};
+   }
+   
+   # figure out TPSUP path from the link source's dir
+   if ($src_dir) {
+      $TPSUP = "$src_dir/..";
+   
+      # reduce this kind of repetition, TPSUP=/home/eq2dev/tpsup/autopath/../scripts/..
+      # to TPSUP=/home/eq2dev/tpsup
+      $TPSUP =~ s:[/]+[^/]+/[.][.]/scripts/[.][.]$::;
+   } else {
+      $TPSUP = "..";
+   }
+   
+   my $profile = "$TPSUP/profile";
+   
+   if (! -f $profile) {
+      die "$0 -> $src, but $src is misplaced because there is no $profile";
+   }
+   
+   my @env = `/bin/bash -c ". $profile; env"`;
+   chomp @env;
+   
+   for my $line (@env) {
+      if ($line =~ /^([^=]+?)=(.*)/) {
+         my ($k, $v) = ($1, $2);
+   
+         $v = '' if ! defined $v;
+   
+         $ENV{$k} = $v;
+      }
+   }
+   
+   if ($debug) {
+      print STDERR "Sourced $TPSUP/profile. New ENV is below: \n";
+
+      for my $k (sort {$a cmp $b} (keys %ENV)) {
+         print STDERR "$k=$ENV{$k}\n";
+      }
+   }
+}
+   
+print "TPSUP=$TPSUP\n" if $debug;
+   
+my $no_env_script;
+   
+if ($src_prog =~ /autowrapper/) {
+   $no_env_script = "$TPSUP/scripts/$prog";
+} elsif ($src_prog =~ /in_same_dir/) {
+   $no_env_script = "${prog}.no_env";
+} else {
+   die "unsupported wrapper name='$src'";
+}
+   
+system("$no_env_script", @ARGV);
