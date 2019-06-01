@@ -1,0 +1,2 @@
+nickname,string,login,password,comment
+ADB_USER@AHOST,dbi:Oracle:host=AHOST.abc.com;service_name=AHOST.abc.com;port=1501,ADB_USER,ABCXXX%,ADB prod data
