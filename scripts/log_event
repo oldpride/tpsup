@@ -1,0 +1,816 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+#use File::ReadBackwards;
+use TPSUP::DATE qw(get_interval_seconds);
+use TPSUP::LOG qw(get_PatternCfg);
+use TPSUP::FIX qw(parse_fix_message);
+use TPSUP::UTIL qw(get_out_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir  = $0; $dir  =~ s:[^/]+$::;
+
+my $min_idle = 60;
+my $grepmax = 200;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+   
+description:
+   to check whether a sequence of events happened in the log.
+   
+   The configurations are by default in $dir/log_pattern.csv.
+   
+   -x exclude_pattern             Perl style, exclude lines with this pattern
+   -m   match_pattern             Perl style, only count the lines with this pattern
+   
+   -app App                       As it is in pattern_file .
+   -pf  pattern_file               pattern file, default to $dir/log_pattern.csv.
+   
+   -t TimePattern                 Perl style. Default is in $dir/log_pattern.csv.
+   -a Assignment                  How to assign the matched time_pattern. Default is in $dir/log_pattern.csv.
+   
+   -event tag=pattern             define event tag. can define multiple times to specify a chain of events, in order.
+   
+   -test testname=expression      Perl expression
+   
+   -reset tagl,tag2               clear all events after matched these tags' patterns happend.
+   
+   -halt tagl,tag2                stop parsing after matched these tags' patterns, until reset matched.
+
+   -exit tagl,tag2                exit parsing after matched these tags' patterns happend.
+   
+   -geneos                        output into geneos-friendly csv format
+   
+   -progress int                  to show progress every this number of lines, a positive integer.
+   -grep  pattern                 grep lines matching this pattern and print out at the end.
+   -grepv pattern                 not to grep lines matching this pattern, used with -grep
+   -grepmax int                   max lines to grep, default to $grepmax
+   
+   -tail number                   Staring from this number of lines backward from end of file
+   
+   -front number                  only parse these number of lines from beginning
+   
+   -startpattern exp              Staring from this pattern
+   
+   -starttime time                Staring from this time and after.
+   
+   -backpattern exp               Staring from last pattern from end of file
+   
+   -backtime time                 Staring from this time and after.
+                                  This searches from end of file, the time is in the format
+                                  decided by the app.
+   
+   -backseconds number            Go back this number of seconds from now. This setting
+                                  will be converted into backtime
+   
+   -endtime time                  End searching after this time
+   
+   -print                         print matching lines
+   
+   -oid order_id                  trace this order, can be tag 11,41,17,37. can set multiple times.
+   
+   -output output.txt             default to stdout
+   
+examples:
+   
+   $prog -app risktool \\
+   -event "begin=Log4j config =" \\
+   -event "feeds=database/adjustments.csv" \\
+   -event "position=sql/positions.sql" \\
+   -event "complete=state=RUNNING.*?::.*?: (.+?)[.]" \\
+   -reset begin \\
+   -halt complete \\
+   -test has_begun='defined(\$time{begin}[0])' \\
+   -test has_got_feeds='defined(\$time{feeds}[0])' \\
+   -test has_run_positions_sql='defined(\$time{position}[0])‘ \\
+   -test has_completed='defined(\$time{complete}[0])' \\
+   -test got_feeds_before_complete='\$time{feeds}[0] lt \$time{complete}[0]' \\
+   -test got_postion_before_complete='\$time{position}[0] lt \$time{complete}[0]' \\
+   -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
+   /server/logs/server.out
+   
+
+
+   05:31:17:901 INFO : Read data from /database/adjustments.csv [interfaces.Data][PROCESS THREAD-0]
+   
+   05:31:23:871 INFO : Read /database/sql/positions.sql for CLIENT [interfaces.PositionLoadThread][CLIENT
+   
+   05:33:58:176 INFO : DataServer [state=RUNNING] :: Life-cycle state transition [[NEW] -> [RUNNING]]: DONE.
+   
+   - the following is like a tail command
+   
+   date;$prog -app appia -backseconds 10 -print appia.console.log
+   date;$prog -app appia -backtime "2017-01-18 10:44:49" -print appia.console.log
+   date;$prog -app appia -backpattern "Command line for execution" -print appia.console.log
+   
+   - the following is to trace an order
+   $prog -progress 100000 -m 35= -app appia -backseconds 1800 -oid USABC999 appia.console.log
+   
+   - to extact a period of an appia log file
+   $prog -app appia -starttime "2019/02/21 14:10:00" -endtime "2019/02/21 14:22:00" -print appia.log
+   
+EOF
+   
+   exit 1;
+}
+   
+our ($exclude_pattern, $match_pattern, $verbose, $App, $pattern_file, $TimePattern, $Assignment, $TimeKey) = @_;
+   
+my @events;
+my @tests;
+my $resetString;
+my $exitString;
+my $haltString;
+my $geneos;
+my $progress;
+my $tail;
+my $grep;
+my $grepv;
+my $startpattern;
+my $starttime;
+my $endtime;
+my $backpattern;
+my $backtime;
+my $backseconds;
+my $print;
+my $front;
+my @oids;
+my $output;
+   
+GetOptions(
+   "x=s" => \$exclude_pattern,
+   "m=s" => \$match_pattern,
+   "i=s" => \$min_idle,
+   "v"   => \$verbose,
+   "t=s" => \$TimePattern,
+   "a|assignment=s" => \$Assignment,
+   "pf=s" => \$pattern_file,
+   "app=s" => \$App,
+   "k=s" => \$TimeKey,
+   "event=s"=> \@events,
+   "test=s" => \@tests,
+   "reset=s"=> \$resetString,
+   "exit=s" => \$exitString,
+   "halt=s" => \$haltString,
+   "g|geneos" => \$geneos,
+   "progress=s" => \$progress,
+   "tail=s" => \$tail,
+   "grep=s" => \$grep,
+   "grepv=s" => \$grepv,
+   "grepmax=s" => \$grepmax,
+   "startpattern=s" => \$startpattern,
+   "starttime=s" => \$starttime,
+   "endtime=s" => \$endtime,
+   "backpattern=s" => \$backpattern,
+   "backtime=s" => \$backtime,
+   "backseconds=s" => \$backseconds,
+   "print" => \$print,
+   "front=s" => \$front,
+   "oid=s"=> \@oids,
+   "output=s"=> \$output,
+) or usage("Could not parse command line: $!");
+   
+usage("wrong number of args") if !@ARGV;
+   
+usage("-progress must be followed by a positive integer")
+   if $progress && "$progress" !~ /^[1-9][0-9]*/;
+   
+my $seen_id;
+for my $oid (@oids) {
+   $seen_id->{$oid}->{cmdline} ++;
+}
+   
+my $cfg = get_PatternCfg({
+   PatternFile => $pattern_file,
+   RemoveInputQuotes => 1,
+   App               => $App,
+   TimePattern       => $TimePattern,
+   Assignment        => $Assignment,
+   TimeKey           => $TimeKey,
+   CheckSettings     => [ qw(TimePattern Assignment TimeKey) ],
+});
+   
+my $out_fh = get_out_fh($output);
+   
+my @assignments = split /,/, $cfg->{Assignment};
+my @timekeys = split /,/, $cfg->{TimeKey};
+        
+die "no events defined" if !@events && !$print && !$grep && !$grepv && !@oids;
+         
+# https://perldoc.perl.org/perlop.html#Regexp-Quote-Like-Operators
+# use qr// to precompile to speed up
+if (defined($cfg->{TimePattern})) {
+   $cfg->{TimePattern} = qr/$cfg->{TimePattern}/;
+}
+         
+if (defined $exclude_pattern) {
+   $exclude_pattern = qr/$exclude_pattern/;
+}
+         
+if (defined $match_pattern) {
+   $match_pattern = qr/$match_pattern/;
+};
+         
+if (defined $startpattern) {
+   $startpattern = qr/$startpattern/;
+};
+         
+if (defined $backpattern) {
+   $backpattern = qr/$backpattern/;
+};
+         
+my $pattern_by_tag;
+my $pattern_by_tag;
+for my $e (@events) {
+   if ($e =~ /^(.+?)=(.+)/ ) {
+      my ($tag, $pattern) = ($1, $2);
+         
+      croak "tag='$tag' shows up multiple times in -event" if exists $pattern_by_tag->{$tag};
+         
+      #$pattern_by_tag->{$tag} = $pattern;
+      $pattern_by_tag->{$tag} = qr/$pattern/;
+   } else {
+      croak "event='$e' bad format";
+   }
+}
+         
+my @tags = sort(keys(%$pattern_by_tag));
+         
+my @resets;
+my $is_reset_tag;
+{
+   if ($resetString) {
+      @resets = split /,/, $resetString;
+   }
+         
+   for my $t (@resets) {
+      croak "'$t' in -reset '$resetString' is not defined in -event" if ! exists $pattern_by_tag->{$t};
+      $is_reset_tag->{$t} ++;
+   }
+}
+         
+$verbose && print "is_reset_tag = ", Dumper($is_reset_tag);
+         
+my @exits;
+my $is_exit_tag;
+{
+   if ($exitString) {
+      @exits = split /,/, $exitString;
+   }
+         
+   for my $t (@exits) {
+      croak "'$t' in -exit '$exitString' is not defined in -event" if ! exists $pattern_by_tag->{$t};
+      $is_exit_tag->{$t} ++;
+   }
+}
+         
+$verbose && print "is_exit_tag = ", Dumper($is_exit_tag);
+
+my @halts;
+my $is_halt_tag;
+{
+   if ($haltString) {
+      @halts = split /,/, $haltString;
+   }
+      
+   for my $t (@halts) {
+      croak "'$t' in -halt '$haltString' is not defined in -event" if ! exists $pattern_by_tag->{$t};
+      $is_halt_tag->{$t} ++;
+   }
+}
+      
+$verbose && print "is_halt_tag = ", Dumper($is_halt_tag);
+
+my @on_halts;
+{
+   my $check_tag_during_on_halt;
+   for my $t ((@resets,@exits)) {
+      $check_tag_during_on_halt->{$t} ++;
+   }
+      
+   @on_halts = sort(keys %$check_tag_during_on_halt);
+}
+      
+$verbose && print "\@on_halts = ", Dumper(\@on_halts);
+      
+my $tag_will_capture;
+my @test_tag_expressions;
+      
+for my $test (@tests) {
+   my ($test_tag, $expression);
+      
+   if ($test =~ /^(.+?)=(.+)/ ) {
+      ($test_tag, $expression) = ($1, $2);
+   } else {
+      croak "test='$test' bad format";
+   }
+      
+   while ($expression =~ /\$value\{(.+?)\}/g) {
+      my $event_tag = $1;
+      
+      croak "event_tag='$event_tag' in test='$test' is not defined." if ! exists $pattern_by_tag->{$event_tag};
+      croak "event_tag='$event_tag' in test='$test' is defined, but not capturing anything." if $pattern_by_tag->{$event_tag} !~ /\(.*\)/;
+      $tag_will_capture->{$event_tag} ++;
+   }
+      
+   push @test_tag_expressions, [ $test_tag, $expression ];
+}
+      
+$verbose && print "tag_will_capture ", Dumper($tag_will_capture);
+$verbose && print "test_tag_expressions ", Dumper(\@test_tag_expressions);
+      
+my $error = 0;
+      
+for my $f (@ARGV) {
+   my $prefix = @ARGV > 1 ? "$f:" : "";
+      
+   my $fh;
+      
+   if ($f eq '-') {
+      if ($tail) {
+         open $fh, "tail -$tail|" or croak "tail -$tail failed";
+      } else {
+         $fh = \*STDIN;
+      }
+   } else {
+      if (! -f $f) {
+         print "${prefix}ERROR: cannot find $f\n" if ! -f $f;
+         $error ++;
+         next;
+      }
+      
+      if ($f =~ /gz$/) {
+         my $cmd = $tail ? "gunzip -c $f |tail -$tail" : "gunzip -c $f";
+         open $fh, "$cmd|" or die "cmd=$cmd failed";
+      
+      } else {
+         if ($tail) {
+            open $fh, "tail -$tail $f|" or die "tail -$tail $f failed";
+         } elsif ($backpattern || $backtime || $backseconds) {
+            require File::ReadBackwards;
+            my $back = File::ReadBackwards->new($f) or die $!;
+            my $backstring;
+            my $backstring_criteria;
+      
+            if ($backseconds) {
+               my $now_seconds = time();
+               my $old_seconds = $now_seconds - $backseconds;
+      
+               my $r;
+      
+               my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($old_seconds);
+      
+               $r->{SS}   = sprintf("%02d", $sec);
+               $r->{MM}   = sprintf("%02d", $min);
+               $r->{HH}   = sprintf("%02d", $hour);
+               $r->{yyyy} = sprintf("%04d", $year+1900);
+               $r->{mm}   = sprintf("%02d", $mon+1);
+               $r->{dd}   = sprintf("%02d", $mday);
+         
+               $backstring = join("", @{$r}{@timekeys});
+               $backstring_criteria = "<=$backstring";
+            } elsif ($backtime) {
+               my @a = ($backtime =~ /$cfg->{TimePattern}/);
+      
+               next if ! @a;
+            
+               my $r; # ref
+               @{$r}{@assignments} = @a;
+            
+               $backstring = join("", @{$r}{@timekeys});
+               $backstring_criteria = "<='$backstring'";
+            } elsif ($backpattern) {
+               $backstring_criteria = "=~/$backpattern/";
+            }
+            
+            my $line_count = 0;
+            my $pos;
+            
+            my $last_time = time();
+            my $last_progress_time = $last_time;
+            my $timestring;
+            
+            while (1) {
+               $line_count ++;
+            
+               if ($front && $line_count >= $front) {
+                  print STDERR "total front=$front lines parsed. stop\n";
+                  last;
+               }
+            
+               my $line = $back->readline();
+            
+               last if ! defined($line);
+            
+               if ($progress) {
+                  if ($line_count % $progress == 0 ) {
+                     my $now = time();
+            
+                     my $seconds = $now - $last_progress_time;
+            
+                     $last_progress_time = $now;
+            
+                     print STDERR "$line_count lines are processed backwards, $progress lines in $seconds seconds\n";
+                     if ($verbose) {
+                        print STDERR "\nlast test: \$timestring($timestring) <= \$backstring($backstring)\n";
+                        print STDERR "$line";
+                     }
+                  }
+               }
+               
+               next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
+               
+               next if defined   $match_pattern && $line !~ /$match_pattern/;
+               
+               my @a = ($line =~ /$cfg->{TimePattern}/);
+               
+               next if ! @a;
+               
+               my $r; # ref
+               @{$r}{@assignments} = @a;
+               
+               $timestring - join("", @{$r}{@timekeys});
+               
+               if ($backpattern) {
+                  if ($line =~ /$backpattern/) {
+                     $pos = $back->tell();
+                     print STDERR "backward found line: $line\n";
+                     last;
+                  }
+               } elsif ($backstring) {
+                  if ($timestring <= $backstring) {
+                     $pos = $back->tell();
+                     print STDERR "\nbackward found line: $timestring <= $backstring\n$line\n";
+                     last;
+                  }
+               }
+            }
+               
+            {
+               my $now - t ime();
+               
+               my $seconds = $now - $last_time;
+               
+               $last_time = $now;
+   
+               print STDERR "total $line_count lines are processed backwards in $seconds seconds\n";
+            }
+               
+            if ($backstring_criteria && !defined $pos) {
+               print STDERR "WARN: cannot find the backward position using $backstring_criteria. Going back to beginning of file\n";
+               $pos = 0;
+            }
+               
+            if (defined $pos) {
+               $fh = $back->get_handle();
+               seek($fh, $pos, 0);
+            } else {
+               croak "cannot find the backward position in $f";
+            }
+         } else {
+            open $fh, "<$f" or die "cannot read $f failed";
+            
+            if ($startpattern || $starttime) {
+               my $startstring;
+               my $startstring_criteria;
+            
+               if ($starttime) {
+                  my @a = ($starttime =~ /$cfg->{TimePattern}/);
+
+                  next if ! @a;
+            
+                  my $r; # ref
+                  @{$r}{@assignments} = @a;
+
+                  $startstring = join("", @{$r}{@timekeys});
+                  $startstring_criteria = ">='$startstring'";
+               } elsif ($startpattern) {
+                  $startstring_criteria = "=~/$startpattern/";
+               }
+            
+               my $line_count = 0;
+               my $pos = 0;
+               my $found_position;
+            
+               my $last_time = time();
+               my $last_progress_time = $last_time;
+               my $timestring;
+            
+               while (<$fh>) {
+                  my $line = $_;
+            
+                  $line_count ++;
+            
+                  if ($front && $line_count >= $front) {
+                     print STDERR "total front=$front lines parsed. stop\n";
+                     last;
+                  }
+                  
+                  if ($progress) {
+                     if ($line_count % $progress == 0 ) {
+                        my $now = time();
+
+                        my $seconds = $now - $last_progress_time;
+                  
+                        $last_progress_time = $now;
+                  
+                        print STDERR "$line_count lines are processed, $progress lines in $seconds seconds\n";
+                        if ($verbose) {
+                           print STDERR "\nlast test: \$timestring($timestring) <= \$startstring($startstring)\n";
+                           print STDERR "$line";
+                        }
+                     }
+                  }
+                  
+                  next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
+                  
+                  next if defined   $match_pattern && $line !~   /$match_pattern/;
+                  
+                  my @a = ($line =~ /$cfg->{TimePattern}/);
+                  
+                  next if ! @a;
+                  
+                  my $r; # ref
+                  @{$r}{@assignments} = @a;
+                  
+                  $timestring = join("", @{$r}{@timekeys});
+                  
+                  if ($startpattern) {
+                     if ($line =~ /$startpattern/) {
+                        print STDERR "\nfound start line: $line\n";
+                        $found_position = 1;
+                        last;
+                     }
+                  } elsif ($startstring) {
+                     if ($timestring >= $startstring) {
+                        print STDERR "\nfound start line: $timestring >= $startstring\n$line\n";
+                        $found_position = 1;
+                        last;
+                     }
+                  }
+                  
+                  $pos = tell $fh; # save the next line position
+               }
+                  
+               { 
+                  my $now = time();
+                  
+                  my $seconds = $now - $last_time;
+
+                  $last_time = $now;
+                  
+                  print STDERR "total $line_count lines are processed in $seconds seconds\n";
+               }
+                  
+               if ($found_position) {
+                  seek($fh, $pos, 0); # move to previous line
+               } else {
+                  print STDERR "WARN: cannot find the start position using $startstring_criteria in $f. skipped the file\n";
+                  next;
+               }
+            }
+         }
+      }
+   }
+                  
+   my $endstring;
+   my $endstring_criteria;
+      
+   if ($endtime) {
+      my @a = ($endtime =~ /$cfg->{TimePattern}/);
+      next if ! @a;
+      
+      my $r; # ref
+      @{$r}{@assignments} = @a;
+      
+      $endstring = join("", @{$r}{@timekeys});
+   }
+      
+   my %time;
+   my %value;
+   my $halted;
+   my $line_count;
+   my $last_time = time();
+   my $start_time = $last_time;
+   my @grepped;
+   my $grepcount = 0;
+      
+   LINE:
+   while (<$fh>) {
+      $line_count ++;
+      
+      if ($front && $line_count >= $front) {
+      
+         print STDERR "total front=$front lines parsed. stop\n"; last;
+      }
+         
+      if ($progress) {
+         if ($line_count % $progress == 0 ) {
+            my $now = time();
+         
+            my $seconds = $now - $last_time;
+            
+            $last_time = $now;
+            
+            print STDERR "$line_count lines are processed forwards, $progress lines in $seconds seconds\n";
+         }
+      }
+            
+      my $line = $_;
+
+      chomp $line;
+         
+      next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
+         
+      next if defined   $match_pattern && $line !~   /$match_pattern/;
+         
+      my @a = ($line =~ /$cfg->{TimePattern}/);
+         
+      next if ! @a;
+         
+      my $r; # ref
+      @{$r}{@assignments} = @a;
+         
+      if ($endtime) {
+         my $timestring = join("", @{$r}{@timekeys});
+         
+         if ($timestring > $endstring) {
+            print STDERR "\nmatched endtime line: $timestring > $endstring\n$line\n";
+            last;
+         }
+      }
+         
+      if ($grep && $grepcount < $grepmax && $line =~ /$grep/ && $line !~ /$grepv/ ) {
+         $grepcount ++;
+         
+         push @grepped, $line;
+      }
+         
+      $print && print {$out_fh} "$line\n";
+         
+      if ($seen_id) {
+         my @ids = keys %$seen_id;
+         
+         my $pattern = join("|", @ids);
+         
+         if ($line =~ /\b(11|41|17|37) = ($pattern)\b/) {
+            my $tag = $1;
+            my $val = $2;
+         
+            print "matched $tag=$val: $line\n";
+         
+            my $v_by_k = parse_fix_message($line);
+
+            for my $k (qw(11 41 17 37)) {
+               my $v = $v_by_k->{$k};
+         
+               next if !defined $v || !"$v";
+         
+               if (!$seen_id->{$v}->{$k}) {
+                  $seen_id->{$v}->{$k}++;
+
+                  print "new link: $tag=$val => $k=$v\n";
+         
+                  print "seen_id = ", Dumper($seen_id);
+               } else {
+                  $seen_id->{$v}->{$k}++;
+               }
+            }
+         } elsif ($line =~ /\b($pattern)\b/) {
+            print "matched pattern=$1: $line\n";
+         }
+      }
+         
+      my @check_tags;
+         
+      if ($halted) {
+         @check_tags = @on_halts;
+      } else {
+         @check_tags = @tags;
+      }
+         
+      for my $t (@check_tags) {
+         my @captures;
+         my $matched;
+         
+         if ($tag_will_capture->{$t}) {
+            @captures = ($line =~ /$pattern_by_tag->{$t}/);
+         } elsif ($line =~ /$pattern_by_tag->{$t}/) {
+            $matched ++;
+         }
+         
+         if ($matched || @captures) {
+            my $timestring = join("", @{$r}{@timekeys});
+
+            if ($is_reset_tag->{$t}) {
+               undef %time;
+               undef %value;
+               push @{$time{$t}}, $timestring;
+               push @{$value{$t}}, \@captures if @captures;
+               $halted = 0;
+               @grepped = ();
+               next LINE;
+            } elsif ($is_exit_tag->{$t}) {
+               push @{$time{$t}}, $timestring;
+               push @{$value{$t}}, \@captures if @captures;
+               last LINE;
+            } elsif ($halted) {
+               next LINE;
+            } elsif ($is_halt_tag->{$t}) {
+               push @{$time{$t}}, $timestring;
+               push @{$value{$t}}, \@captures if @captures;
+               $halted ++;
+               next LINE;
+            } else {
+               push @{$time{$t}}, $timestring;
+               push @{$value{$t}}, \@captures if @captures;
+               next LINE;
+            }
+         }
+      }
+   }
+         
+   close $fh if $fh != \*STDIN;
+         
+   {
+      my $now = time();
+         
+      my $seconds = $now - $start_time;
+         
+      print STDERR "total $line_count lines are processed forwards in $seconds seconds\n";
+   }
+         
+   $verbose && print "\%time = ", Dumper(\%time);
+   $verbose && print "\%value = ", Dumper(\%value);
+         
+   my $warn = $verbose ? 'use' : 'no';
+         
+   if ($verbose) {
+      $Data::Dumper::Deparse = 1;
+   }
+         
+   my $index = 0;
+   if ($geneos) {
+      print "index,status,check,expression,detail\n";
+   }
+   
+   for my $row (@test_tag_expressions) {
+      my ($test_tag, $expression) = @$row;
+   
+      my $compiled = eval "$warn warnings; no strict; sub { $expression } ";
+      if ($@) { 
+         print "ERROR: Bad expression '$expression': $@\n";
+         $error ++;
+      }
+   
+      if ($compiled->()) {
+         if ($geneos) {
+            $index ++;
+            print "$index,OK,$test_tag,$expression,";
+         } else {
+            print "${prefix}OK: PASSED: $test_tag $expression => ";
+         }
+      } else {
+         if ($geneos) {
+            $index ++;
+            print "$index,FAIL,$test_tag,$expression,";
+         } else {
+            print "${prefix}ERROR: FAILED: $test_tag $expression => ";
+            $error ++;
+         }
+      }
+      
+      eval "no warnings; print qq($expression), \"\\n\"";
+   }
+      
+   if ($grep) {
+      print "$grepcount lines matching pattern='$grep'. ",
+            $grepcount>$grepmax ? "truncated to $grepmax lines" : "",
+            ";\n";
+      
+      for my $line (@grepped) {
+         print "$line\n";
+      }
+   }
+}
+      
+exit 0 if $geneos;
+      
+if ($error) {
+   print "ERROR: Total $error ERRORS.\n";
+} else {
+   print "OK: All Good.\n";
+}
+exit 0;

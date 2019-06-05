@@ -1,0 +1,4 @@
+DBI folder is for Perl DBD/DBI
+Linux3 is for xterm, xrdb, ...
+
+we should be able to combine them together
