@@ -147,8 +147,8 @@ examples:
    $prog -op RenderStdout -op QuotedInput -op RemoveInputQuotes tpcsv2_test_quoted.csv
    
    - update (this changes the input file), use quotes to handle wierd column names
-   $prog -me '\${"#Ric"} eq "GLD.P'" -set "Source=1 Type=STOCK" tpcsv2_test_header.csv
-   $prog -me '\${"#Ric"j eq "GLD.P"' -set "Source=0 Type=ETF"   tpcsv2_test_header.csv
+   $prog -me '\${"#Ric"} eq "GLD.P"' -set "Source=1 Type=STOCK" tpcsv2_test_header.csv
+   $prog -me '\${"#Ric"} eq "GLD.P"' -set "Source=0 Type=ETF"   tpcsv2_test_header.csv
    
    - compare these 2 commands:
    the first command prints the header, but the 2nd command won't because it treats the header
@@ -193,7 +193,7 @@ examples:
    $prog -FIX -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38)+1' -render tpcsv2_test_FIX.csv
    
    - temporary columns can be used in sort key, MatchExp, ExcludeExp, ExportExp
-   $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -ee 's3=\${s2)' tpcsv2_test.csv
+   $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -ee 's3=\${s2}' tpcsv2_test.csv
    $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -grpkeys s2 -grpact alpha=first,number=sum,string=last,value=maxnumtpcsv2_test.csv
    
 
@@ -311,7 +311,7 @@ for my $op (@other_options) {
    if ($op =~ /^(.+?)=(.+)/) {
       my ($k, $v) = ($1, $2);
       
-      if ($k =~ /A(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
+      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
          @{$opt->{$k}} = split /,/, $v;
       } else {
          $opt->{$k} = $v;

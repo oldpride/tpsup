@@ -69,7 +69,7 @@ sub query_xml {
    # but this doesn't work
    # my $root = XMLin($file, ForceArray=>$ForceArray, KeyAttr=>$KeyAttr, noattr => 1);
    # neither the following works
-   # http://stackoverflow.com/questions/1457333/php-simplexml-doesnt-preserve-1ine-breaks-in-xml-attributes
+   # http://stackoverflow.com/questions/1457333/php-simplexml-doesnt-preserve-line-breaks-in-xml-attributes
    my $root;
       
    if (defined $opt->{AddRootNode}) {
@@ -92,7 +92,7 @@ sub query_xml {
       return $ret;
    }
       
-   my $warn = $opt->{verbose} ? 'use' :	'no';
+   my $warn = $opt->{verbose} ? 'use' : 'no';
    #TPSUP::Expression::export(%$ref);
       
    for my $p (@{$opt->{paths}}) {

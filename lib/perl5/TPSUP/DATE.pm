@@ -17,7 +17,6 @@ our @EXPORT_OK = qw(
 use Carp;
 use Data::Dumper;
 use TPSUP::CSV qw(parse_csv_file);
-use Date::Calc qw(Delta_Days);
 use Time::Local;
 
 my $exists_by_exch_holiday;
@@ -213,6 +212,11 @@ sub get_interval_seconds {
       
    my $seconds;
       
+   require Date::Calc;
+   # TODO:
+   # in prod, use the following instead, and move it to top of this module
+   #use Date::Calc qw(Delta_Days);
+
    if ($yyyymmdd1 && $yyyymmdd2) {
       my ($yyyy1,$mm1,$dd1, $yyyy2,$mm2,$dd2);
       
@@ -427,7 +431,7 @@ sub date2any {
       $converted_r->{HH} = sprintf("%02d", $hour);
       $converted_r->{dd} = sprintf("%02d", $day);
       $converted_r->{mm} = sprintf("%02d", $mon+1);
-      $converted_r->{yyyy} - sprintf("%d", $year+1900);
+      $converted_r->{yyyy} = sprintf("%d", $year+1900);
    } else {
       $converted_r = $r;
    }

@@ -1,0 +1,14 @@
+alpha,number,string,value
+a,0,hello,100
+b,1,john,200
+c,2,henry,300
+d,3,woods,400
+e,4,,500
+f,5,,600
+g,6,will,
+h,7,krish,
+i,8,chris,900
+j,9,santosh,9,io,,
+a,0,,
+b,1,world,700
+c,2,done,800

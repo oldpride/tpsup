@@ -759,22 +759,22 @@ my $ref;
 #http://www.onixs.biz/fix-dictionary/4.2/fields_by_tag.html #Commission type
 
 $ref->{13} = <<END;
-1	= per share
-2	= percentage
-3	= absolute
+1 = per share
+2 = percentage
+3 = absolute
 END
 
 #ExecInst
 $ref->{18} = <<END;
-1	= Not held
-2	= Work
-3	= Go along
-4	= Over the day
-5	= Held
-6	= Participate don't initiate
-7	= Strict scale
-8	= Try to scale
-9	= Stay on bidside
+1 = Not held
+2 = Work
+3 = Go along
+4 = Over the day
+5 = Held
+6 = Participate don't initiate
+7 = Strict scale
+8 = Try to scale
+9 = Stay on bidside
 0 = Stay on offerside
 A = No cross (cross is forbidden)
 B = OK to cross
@@ -812,7 +812,7 @@ END
 #ExecTransType
 $ref->{20} = <<END;
 0 = New
-1 - Cancel
+1 = Cancel
 2 = Correct
 3 = Status
 END
@@ -840,7 +840,7 @@ END
 #MsgType
 $ref->{35} = <<END;
 0 = Heartbeat <0>
-1 - Test Request <1>
+1 = Test Request <1>
 2 = Resend Request <2>
 3 = Reject <3>
 4 = Sequence Reset <4>
@@ -855,8 +855,8 @@ C = Email <C>
 D = Order - Single <D>
 E = Order - List <E>
 F = Order Cancel Request <F>
-G= Order Cancel/Replace Request <G>
-H= Order Status Request <H>
+G = Order Cancel/Replace Request <G>
+H = Order Status Request <H>
 J = Allocation <J>
 K = List Cancel Request <K>
 L = List Execute <L>
@@ -1133,7 +1133,7 @@ END
       
                $desc_by_tag_value->{$tag}->{$value} = $desc;
             } else {
-               croak "bad format in $o->{source} fix desc map at line: $line";
+               croak "bad format in source='$o->{source}' for tag '$tag' fix desc map at line: $line";
             } 
          }
       }
@@ -1292,7 +1292,7 @@ sub parse_fix_message {
                if ( "$k" ne "654" && "$k" ne "566" && "$k" ne "587" && "$k" ne "588"
                     && ( !$last_tag ||
                          "$last_tag" eq "654" || "$last_tag" eq "566" ||
-                         "$last_tag" eq "587" || "$last_tag" eq "588"	)	) {
+                         "$last_tag" eq "587" || "$last_tag" eq "588" ) ) {
                   # we have just completed a leg, start a new one
                   $comp_idx++;
          
@@ -1361,7 +1361,7 @@ sub parse_fix_message {
          $ret->{CommTags}    = \@common_tag_order;
          $ret->{components}  = $components;
          $ret->{CompTagMx}   = $CompTagMatrix;
-         $ret->{Delimiter}	  = $delimiter;
+         $ret->{Delimiter}   = $delimiter;
       
          return $ret;
       }
@@ -2420,7 +2420,7 @@ sub hash_to_fix {
    my $delimiter_pattern;
    if ("$delimiter" eq "|") {
       $delimiter_pattern = "[$delimiter]";
-   } elsif ("$delimiter" eq '^'	|| "$delimiter" eq '$'	|| "$delimiter" eq '?') {
+   } elsif ("$delimiter" eq '^' || "$delimiter" eq '$' || "$delimiter" eq '?') {
       $delimiter_pattern = "\\$delimiter";
    } else {
       $delimiter_pattern = $delimiter;

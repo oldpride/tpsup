@@ -9,8 +9,8 @@ our @EXPORT_OK = qw(
    tpeng_lock
    tpeng_unlock
    get_patterns_from_log
-   cp_fi1e2_to_fi1el
-   backup_fi1el_to_fi1e2
+   cp_file2_to_file1
+   backup_filel_to_file2
    expect_socket
    get_abs_path
    get_abs_cwd
@@ -62,7 +62,7 @@ sub get_tmp_file {
       
       #Solaris 10$ df -k /var/tmp
       #Filesystem kbytes  used    avail    capacity Mounted on
-      #/          4130542 2837486 1251751	70%      /
+      #/          4130542 2837486 1251751 70%      /
       
       if ( ! $DF[1]) {
          carp "cmd='$cmd' failed".
@@ -83,11 +83,11 @@ sub get_tmp_file {
       }
    }
    
-   my $id = "id";
+   my $id = `id`;
    my ($user) = ($id =~ /^.+?\((.+?)\)/ );
 
-   my $yyyymmdd = "date +%Y%m%d"; chomp $yyyymmdd;
-   my $HHMMSS   = "date +%H%M%S"; chomp $HHMMSS;
+   my $yyyymmdd = `date +%Y%m%d`; chomp $yyyymmdd;
+   my $HHMMSS   = `date +%H%M%S`; chomp $HHMMSS;
    
    my $tmpdir = "$basedir/tmp_${user}";
    my $daydir = "$tmpdir/$yyyymmdd";
@@ -240,10 +240,10 @@ sub get_items_from_file {
 }
    
 sub tpeng_lock($;$) {
-   my $MAGIC	=	'AccioConfundoLumosNox';
-   my $len	=	length($_[0]);
-   my $salt	=	$_[1] || $MAGIC;
-   my $magic	=	substr( $salt x	$len,	0, $len );
+   my $MAGIC = 'AccioConfundoLumosNox';
+   my $len = length($_[0]);
+   my $salt = $_[1] || $MAGIC;
+   my $magic = substr( $salt x $len, 0, $len );
 
    return uri_escape($_[0]^$magic);
 }
@@ -302,8 +302,8 @@ sub getpw_by_key {
 }
    
 ######################################################################################
-#	begin: extracted from
-#	.../perl5/site_perl/5.10.0/URI/Escape.pm
+# begin: extracted from
+# .../perl5/site_perl/5.10.0/URI/Escape.pm
    
 sub uri_escape {
    my($text) = @_;
@@ -324,9 +324,9 @@ sub uri_escape {
 }
    
 sub uri_unescape {
-   #	Note from RFC1630: "Sequences which start with a percent sign
-   #	but are not followed by two hexadecimal characters are reserved
-   #	for future extension"
+   # Note from RFC1630: "Sequences which start with a percent sign
+   # but are not followed by two hexadecimal characters are reserved
+   # for future extension"
    my $str = shift;
    if (@_ && wantarray) {
       # not executed for the common case of a single argument
@@ -392,7 +392,7 @@ sub getpatterns_from_log {
       
       my $pattern = $line;
       
-      #$pattern =~ s/\d+/./g;	# convert number into .
+      #$pattern =~ s/\d+/./g; # convert number into .
       
       if ($ErasePattern) {
          $pattern =~ s/$ErasePattern/./g;
@@ -412,8 +412,8 @@ sub getpatterns_from_log {
    return $ret;
 }
       
-sub cp_file2_to_filel {
-   # overwrite filel with file2's content
+sub cp_file2_to_file1 {
+   # overwrite file1 with file2's content
    my ($file2, $file1, $opt) = @_;
 
    if ($opt->{ShowDiff}) {
@@ -476,7 +476,7 @@ sub backup_file1_to_file2 {
 }
    
 sub get_abs_path {
-   my ($path) - @_;
+   my ($path) = @_;
    
    # $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";'
    # /home/gpt/tpsup/autopath
@@ -1027,7 +1027,7 @@ sub chkperl {
       print STDERR "ERROR: $@, string='$string'\n";
       return 0;
    } elsif ($opt->{verbose}) {
-      print STDERR "OK:	compiled. string=$string\n";
+      print STDERR "OK: compiled. string=$string\n";
       return 1;
    }
 }
@@ -1091,7 +1091,7 @@ sub compile_paired_strings {
    
    for my $string (@strings) {
       # string:
-      # 'CumQty=${14J,Price=sprintf("%.2f",${44}),Open/Close=${77}'
+      # 'CumQty=${14},Price=sprintf("%.2f",${44}),Open/Close=${77}'
       # break it into pairs
       # ('CumQty=${14}', 'Price=sprintf("%.2f",${44})', 'Open/Close=${77}')
       
@@ -1213,7 +1213,7 @@ sub recursive_path {
    # mystery: for some reason, 'user' cannot be used in the expresssion. changed
    # to use 'owner' instead
    # @{$r}{qw(path type mode uid gid size mtime user group now)}
-   #	 = ($path, $type, $mode, $uid, $gid, $size, $mtime, $user, $group, $now);
+   #  = ($path, $type, $mode, $uid, $gid, $size, $mtime, $user, $group, $now);
 
    @{$r}{qw(path    type   mode   uid   gid   size   mtime   owner  group   now)}
          = ($path, $type, $mode, $uid, $gid, $size, $mtime, $user, $group, $now);
@@ -1221,7 +1221,7 @@ sub recursive_path {
    #print "r=", Dumper($r);
    
    if (    $opt->{Handlers} && @{$opt->{Handlers}}
-        || $opt->{FlowControl} && @{$opt->{FlowControl}} )	{
+        || $opt->{FlowControl} && @{$opt->{FlowControl}} ) {
 
       TPSUP::Expression::export_var($r, {RESET=>1});
    
@@ -1278,10 +1278,10 @@ sub recursive_path {
    }
       
    if (-f $path) {
-      #	this is a file
+      # this is a file
 
    } elsif (-d $path) {
-      #	this is a dir
+      # this is a dir
       
       $level ++;
       
@@ -1366,7 +1366,7 @@ sub insert_namespaces {
       
          for my $ns (split /,/, $namespaces) {
             if ($type eq 'file') {
-               insert namespace_file($ns, $string, $opt) || $error ++;
+               insert_namespace_file($ns, $string, $opt) || $error ++;
             } elsif ($type eq 'code') {
                insert_namespace_code($ns, $string, $opt) || $error ++;
             } else {
@@ -1602,7 +1602,7 @@ sub chkperl {
    my ($string, $opt) = @_;
       
    if ($opt->{Double2SingleQuote}) {
-      $string =~ s/"/'/g;	# use this test perl-like expression in cfm config
+      $string =~ s/"/'/g; # use this test perl-like expression in cfm config
    }
       
    my $warn = $opt->{verbose} ? "use" : "no";

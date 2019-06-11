@@ -26,7 +26,7 @@ Options:
    -field=COLNAME  The column names to disblay (Default, all columns).
                    Use -Field instead to allow nonexistent fields
    
-   -nofield	   Don't display original columns (i.e. only show -e column
+   -nofield    Don't display original columns (i.e. only show -e column
    
    -match=REGEX    Perl regexp to match rows (like grep), faster than -Match
    
@@ -293,7 +293,7 @@ sub main {
       print $table->render(2147483647);
    }
          
-   warn "Warning: Found $badLines lines with wrong/inconsistent number of columnsXn" if $badLines && !$quiet;
+   warn "Warning: Found $badLines lines with wrong/inconsistent number of columns\n" if $badLines && !$quiet;
 }
 main() unless caller();
          

@@ -35,8 +35,8 @@ use Data::Dumper;
 use TPSUP::UTIL qw(
    get_tmp_file
    get_out_fh
-   cp_fi1e2_to_fi1el
-   backup_fi1el_to_fi1e2
+   cp_file2_to_file1
+   backup_filel_to_file2
    get_exps_from_string
    unique_array
    compile_paired_strings
@@ -150,7 +150,7 @@ sub open_csv {
          }
       }
       $result->{columns} = \@columns;
-      $result->{pos}	= $pos;
+      $result->{pos} = $pos;
    }
 
    $result->{fh} = $fh;
@@ -228,18 +228,18 @@ sub parse_csv_array {
    if ($opt->{OriginalHeaderRef}) {
       ${$opt->{OriginalHeaderRef}} = \@h1;
 
-      #	this is hack to return the original header:
+      # this is hack to return the original header:
       #
-      #	examp1e:
-      #	   my $headers
+      # examp1e:
+      #    my $headers
       #    my $cmd = "sql.linux ...";
-      #	   my $array_of_hash = parse_csv_cmd($cmd, {OriginalHeaderRef=>\$headers});
+      #    my $array_of_hash = parse_csv_cmd($cmd, {OriginalHeaderRef=>\$headers});
    }
 
    my @h2;
 
    if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
-      # hardcoded column names c0, cl, c2, ...
+      # hardcoded column names c0, c1, c2, ...
       my $i=0;
 
       for my $e (@h1) {
@@ -406,7 +406,7 @@ sub run_sqlcsv ($$;$) {
          }
 
          if ($opt->{skiplines}) {
-            system("sed l,$opt->{skiplines}d $input> $tmpfile");
+            system("sed 1,$opt->{skiplines}d $input> $tmpfile");
          } else {
             if ($input =~ m|^/|) {
                system("ln -s      $input $tmpfile");
@@ -542,7 +542,7 @@ sub update_csv {
 
    my $out_fh;
 
-   if ($opt->{output}) {	
+   if ($opt->{output}) { 
       $out_fh = get_out_fh($opt->{output});
    } else {
       $out_fh = \*STDOUT;
@@ -590,7 +590,7 @@ sub update_csv {
       }
 
       if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
-         # hardcoded column names c0, cl, c2, ...
+         # hardcoded column names c0, c1, c2, ...
          my $i=0;
 
          for my $e (@a) {
@@ -803,7 +803,7 @@ sub csv_file_to_array {
          }
 
          if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
-            # hardcoded column names c0, cl, c2, ...
+            # hardcoded column names c0, c1, c2, ...
             my $i=0;
             for my $e (@a) {
                my $c= "c$i";
@@ -1088,7 +1088,7 @@ sub query_csv2 {
    #my @SelectColumns;
 
    #if (defined $opt->{SelectColumns}) {
-   #	@SelectColumns = @{$opt->{SelectColumns}};
+   # @SelectColumns = @{$opt->{SelectColumns}};
    #
    #my @exportCols;
    # if ($opt->{ExportExps} && @{$opt->{ExportExps}}) {
@@ -1105,9 +1105,9 @@ sub query_csv2 {
    #my @fields;
    
    #if (@SelectColumns) {
-   #	@fields = (@SelectColumns, @exportCols);
+   # @fields = (@SelectColumns, @exportCols);
    #} else {
-   #	@fields = (@{$ref3->{columns}}, @exportCols);
+   # @fields = (@{$ref3->{columns}}, @exportCols);
    #} 
    
    # handle print
@@ -1379,7 +1379,7 @@ sub delete_csv_inplace {
    
    delete_csv($file, {output=>$tmpfile1, %$opt});
    
-   return cp_file2_to_filel($tmpfile1, $file, $opt);
+   return cp_file2_to_file1($tmpfile1, $file, $opt);
 }
    
 sub delete_csv {
@@ -1470,7 +1470,7 @@ sub delete_csv {
       }
 
       if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
-         # hardcoded column names c0, cl, c2,	...
+         # hardcoded column names c0, c1, c2, ...
          my $i=0;
          for my $e (@a) {
             my $c= "c$i";
@@ -1510,7 +1510,7 @@ sub delete_csv {
          }
 
          if ($exclude_from_doing) {
-     	    print {$out_fh} "$line\n";
+          print {$out_fh} "$line\n";
             next;
          }
    
@@ -1711,7 +1711,7 @@ sub diff_csv_long {
                         # defined($this_cell) && defined($last_cells[$j])
                         if ( defined($placeholder) ) {
                            if (    "$last_cells[$j]" =~ /$placeholder/
-                                && "$this_cell"	    =~ /$placeholder/ ) {
+                                && "$this_cell"     =~ /$placeholder/ ) {
                               # counted as a match
                               next;
                            } elsif ("$last_cells[$j]" ne "$this_cell") {
@@ -1893,7 +1893,7 @@ sub diff_csv_long {
                         # defined($this_cell) && defined($last_cells[$j])
                         if ( defined($placeholder) ) {
                            if (    "$last_cells[$j]" =~ /$placeholder/
-                               && "$this_cell"	    =~ /$placeholder/ ) {
+                               && "$this_cell"     =~ /$placeholder/ ) {
                                # counted as a match
                                next;
                             } elsif ("$last_cells[$j]" ne "$this_cell") {
@@ -2164,7 +2164,7 @@ sub filter_csv_array {
    
       $columns = $opt->{InputHashColumns};
       $csv_array = $input;
-   } elsif ( $opt->{FilterInputArrayArray} )	{
+   } elsif ( $opt->{FilterInputArrayArray} ) {
       # Input is array of array, the first line is header
       if (!$csv_array || !@$csv_array) {
          $ret->{status} = "ERROR: csv_array is empty";
@@ -2179,7 +2179,7 @@ sub filter_csv_array {
       $csv_array = $input->{array};
    }
    
-   my $num_col - scalar(@$columns);
+   my $num_col = scalar(@$columns);
    
    my $pos;
    
@@ -2251,7 +2251,7 @@ sub filter_csv_array {
    my $exportExps = $expcfg->{ExportExps}->{Exps};
    my @exportCols = $expcfg->{ExportExps}->{Cols} ? @{$expcfg->{ExportExps}->{Cols}} : ();
    
-   my $tempExps - $expcfg->{TempExps}->{Exps};
+   my $tempExps = $expcfg->{TempExps}->{Exps};
    my @tempCols = $expcfg->{TempExps}->{Cols} ? @{$expcfg->{TempExps}->{Cols}} : ();
    
    my @fields;
@@ -2282,7 +2282,7 @@ sub filter_csv_array {
       push @out_array, \@fields;
    }
    
-   my $match_count - 0;
+   my $match_count = 0;
    
    for my $row (@$csv_array) {
       my $r;
@@ -2292,7 +2292,7 @@ sub filter_csv_array {
          @{$r}{@$columns} = @$row;
    
          if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
-            # hardcoded column names c0, cl, c2,	...
+            # hardcoded column names c0, c1, c2, ...
             my $i=0;
             for my $e (@$row) {
                my $c= "c$i";
@@ -2324,13 +2324,14 @@ sub filter_csv_array {
                my $v = $tempExps->[$i]->();
    
                $r->{$c} = $v;
-               $temp_r->{ $c} = $v;
+               $temp_r->{$c} = $v;
             }
       
             TPSUP::Expression::export_var($temp_r, {FIX=>$opt->{FIX}}); # don't RESET here
          }
       
          if ($opt->{verbose}) {
+            print STDERR "calling dump_var({FIX=>$opt->{FIX}}) from ", __FILE__, " line ", __LINE__, "\n"; 
             TPSUP::Expression::dump_var({FIX=>$opt->{FIX}});
          }
       }
@@ -2405,9 +2406,9 @@ sub filter_csv_array {
 sub join_csv {
    my ($csvs, $ref_keys, $join_keys, $opt) = @_;
    
-   #	$csv is a ref to array of file names
-   #	$ref_keys is a ref to array of array
-   #	$join_keys is a ref to array of array
+   # $csv is a ref to array of file names
+   # $ref_keys is a ref to array of array
+   # $join_keys is a ref to array of array
    
    my $num_files = scalar(@$csvs);
 
@@ -2668,7 +2669,7 @@ sub join_query_csv {
    my @max;
       
    # start position is (0,0,0...)
-   # end position is (subtotall-1, subtotal2-l, ...)
+   # end position is (subtotall-1, subtotal2-1, ...)
       
    for (my $i=0; $i<$total_csv; $i++) {
       my $subtotal = scalar( @{$arefs[$i]} );
@@ -2706,7 +2707,7 @@ sub join_query_csv {
    while (1) {
       $opt->{verbose} && print STDERR "pos=", join(" ", @pos), ", max=", join(" ", @max), "\n";
        
-      #	process this record
+      # process this record
       my $joined;
       
       for (my $i=0; $i<$total_csv; $i++) {
@@ -2726,7 +2727,7 @@ sub join_query_csv {
          push @joined_array, $joined;
       }
       
-      #	increment the position by one
+      # increment the position by one
       my $addone = 1;
       
       for (my $i=$last; $i>=0; $i--) {
@@ -2748,8 +2749,8 @@ sub join_query_csv {
                # this is the last digit, meaning we are done with all records
                last RECORD;
             } else {
-               $pos[$i] = 0;	# reset this digit
-               $addone = 1;	# set $addone for next loop (digit)
+               $pos[$i] = 0; # reset this digit
+               $addone = 1; # set $addone for next loop (digit)
 
                next;
             }
@@ -2803,7 +2804,7 @@ sub csv_to_html {
    }
       
    for my $row (@{$ref->{array}}) {
-      my $string - "<TR>";
+      my $string = "<TR>";
 
       for my $cell (@$row) {
          no warnings "uninitialized";

@@ -12,9 +12,74 @@ example
 
    $0 *
 
+   -l      remove blank lines
+   -s      remove spaces
+   -p      perl
+   -f      FIX message
+   -j      java
+
 EOF
    exit 1
 }
+
+extra=""
+
+while getopts lpfjs o; 
+do
+   case "$o" in
+     f) extra="
+               $extra
+               s/z/,/g;
+               s/[l][l][l]\\([^a-zA-Z]\\)/111\\1/g;
+               s/[l][l]\\([^a-zA-Z]\\)/11\\1/g;
+               s/[l]\\([^a-zA-Z]\\)/1\\1/g;
+               s/\\([,|]\\)\\([0-9]*\\)-/\\1\\2=/g;
+               s/564=0/564=O/g;
+               s/>>/=/g;
+              "
+        ;; 
+     l) extra="
+               $extra
+               /^[ ]*\$/d;
+              "
+        ;; 
+     s) extra="
+               $extra
+               s/\\s//g;
+              "
+        ;; 
+     p) 
+         #X${llJ ->\${11}
+         #$dir =~ s:[A/]+$::;
+         extra="
+               $extra
+               s:[X]\\([\$@]\\):\\\\\\1:g;
+               s:J\\([{,]\\):}\\1:g;
+               s:{ll}:{11}:g; 
+               s:>>~:=~:g;
+               s:/A:/^:g;
+               /=~ /s/\\([:\\/\\[]\\)A\\([^-]\\)/\\1^\\2/g;
+               s:«:<<:g;
+               s:my \\(\\S*\\s*\\)-:my \\1=:g;
+               s:filel\\b:file1:g;
+              "
+        ;; 
+     j) extra="
+               $extra
+               s:I4:M:g;
+               s:FIap:Map:g;
+               s:[O]\\([^a-zA-Z0-9)]\\):()\\1:g;
+               /^[ ]*\$/d;
+              "
+        ;; 
+     #k) tail=$OPTARG;;
+     *) echo "unknown switch '$o'"; usage;; 
+   esac
+done
+
+shift $((OPTIND-1))
+
+echo "extra = $extra"
 
 if [ $# -eq 0 ]; then
    usage "wrong number of args"
@@ -34,17 +99,16 @@ do
    # use "sed -b" to trade the file as binary so that it will preserve the line ending ^M
    # https://stackoverflow.com/questions/4652652/preserve-line-endings
 
+   #      /^[ ]*$/d
    sed -b " 
          s:111 +: '\" + :g
          s:+ 111: + \"':g
+         $extra
         "  $f |\
    sed -b '
          s:[X]n:\\n:g;
          s:■:=:g;
-         s:I4:M:g;
-         s:FIap:Map:g;
          s:	: :g;
-         s:[O]\([^a-zA-Z0-9)]\):()\1:g;
          s:get(O):get(0):g
          s:(l):(1):g
          s:(O):(0):g
@@ -68,8 +132,12 @@ do
          s:»:>>:g
    ' >$tmpfile
 
+   if [ $? -ne 0 ]; then
+      echo "sed failed";
+      exit 1
+   fi
+
    #s:[g][e][t][ ]\([a-zA-Z]\):get\1:g;
-   #      /^[ ]*$/d
 
    diff $f $tmpfile
    rc=$?

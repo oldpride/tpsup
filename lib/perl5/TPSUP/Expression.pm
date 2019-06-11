@@ -20,16 +20,16 @@ package TPSUP::Expression;
 
 #without 'my *fix', $TPSUP::Expression::fix{hello) is a global variable, accessible anywhere
 #with 'my *fix', $TPSUP::Expression::fix{hello) will not exist in the main (calling) script
-#	with the 'my' above commented out, we need the following 'no strict ..' to
-#	disable the compiler's complain.
+# with the 'my' above commented out, we need the following 'no strict ..' to
+# disable the compiler's complain.
 
 use strict;
 no strict 'refs' ;
 no strict 'vars';
 
-#	This is old Charlie Huckle's version. It assumes the same set of variables.
-#	Becasuse there is no reset before each initialization, old variable values
-#	could spill over into a new call.
+# This is old Charlie Huckle's version. It assumes the same set of variables.
+# Becasuse there is no reset before each initialization, old variable values
+# could spill over into a new call.
 
 sub export {
    while (@_) {
@@ -40,15 +40,15 @@ sub export {
 }
 
 # export_var is an enhanced version.
-#	1. it took care of the reset need as an option
-#	2. it help handle numeric variable ${35} as fix variable $fix{35}
+# 1. it took care of the reset need as an option
+# 2. it help handle numeric variable ${35} as fix variable $fix{35}
 
 my %_exist;
 
 sub export_var {
    my ($ref, $opt) = @_;
 
-   my $prefix =	defined($opt->{ExpPrefix}) ? $opt->{ExpPrefix} :
+   my $prefix = defined($opt->{ExpPrefix}) ? $opt->{ExpPrefix} :
                 defined($Prefix)           ? $Prefix           :
                                              undef             ;
 
@@ -80,15 +80,15 @@ sub export_var {
       }
    }
 
-   #	This is a workaround to modify $1, $2,	..., eg, ${35} = D
-   #	The following don't work
-   #	$ perl -e '${"35"} = "D"'
-   #	$ perl -e '${35} = "D"'
-   #	Modification of a read-only value attempted at -e line 1.
+   # This is a workaround to modify $1, $2, ..., eg, ${35} = D
+   # The following don't work
+   # $ perl -e '${"35"} = "D"'
+   # $ perl -e '${35} = "D"'
+   # Modification of a read-only value attempted at -e line 1.
    #
-   #	The following work
-   #	$ perl -e '$fix{35} = "D"'
-   #	$ perl -e '$fix{"35"} = "D"'
+   # The following work
+   # $ perl -e '$fix{35} = "D"'
+   # $ perl -e '$fix{"35"} = "D"'
    
    if ($prefix) {
       for my $k (keys %$ref) {
@@ -118,7 +118,7 @@ sub export_var {
                $_exist{$k} = 1;
             }
          } else {
-            $${$k} = $ref->{$k};
+            ${$k} = $ref->{$k};
             $_exist{$k} = 1;
          }
       }
@@ -141,8 +141,8 @@ sub dump_var {
          } else {
             printf {$DumpFH} "%30s => %s\n", "\$fix{$k}", "$fix{$k}";
          }
-     }
-  } else { 
+      }
+   } else { 
       print {$DumpFH} "vars =\n";
 
       for my $k (sort {$a<=>$b} (keys %_exist)) {
@@ -151,7 +151,7 @@ sub dump_var {
                printf {$DumpFH} "%20s => %s\n", "\${$k}{$k2}", "${$k}{$k2}";
             }
          } else {
-	    printf {$DumpFH} "%10s => %s\n", "\$$k", "${$k}";
+               printf {$DumpFH} "%10s => %s\n", "\$$k", "${$k}";
          }
       }
    }
@@ -175,15 +175,15 @@ sub get_fix_value {
 sub convert_to_fix_expression {
    my ($exp, $opt) = @_;
 
-   #	This is a workaround to modify $1, $2,	..., eg, ${35} = D
-   #	The following don't work
-   #	$ perl -e '${"35"} = "D"'
-   #	$ perl -e '${35} = "D"'
-   #	Modification of a read-only value attempted at -e line 1.
+   # This is a workaround to modify $1, $2, ..., eg, ${35} = D
+   # The following don't work
+   # $ perl -e '${"35"} = "D"'
+   # $ perl -e '${35} = "D"'
+   # Modification of a read-only value attempted at -e line 1.
    #
-   #	The following work
-   #	$ perl -e '$fix{35} = "D"'
-   #	$ perl -e '$fix{"35"} = "D"'
+   # The following work
+   # $ perl -e '$fix{35} = "D"'
+   # $ perl -e '$fix{"35"} = "D"'
    
    my $workaround_exp = $exp;
    $workaround_exp =~ s:\$\{:\$fix{:g;
@@ -191,7 +191,7 @@ sub convert_to_fix_expression {
    return $workaround_exp;
 }
    
-my $ compi1ed_by_exp;
+my $ compiled_by_exp;
    
 sub compile_exp {
    my ($exp, $opt) = @_;
@@ -206,15 +206,15 @@ sub compile_exp {
    my $workaround_exp;
 
    if ($opt->{FIX} || $FIX) {
-      #	This is a workaround to modify $1, $2, ..., eg, ${35} = D
-      #	The following don't work
-      #	$ perl -e '${"35"} = "D"'
-      #	$ perl -e '${35} = "D"'
-      #	Modification of a read-only value attempted at -e line 1.
+      # This is a workaround to modify $1, $2, ..., eg, ${35} = D
+      # The following don't work
+      # $ perl -e '${"35"} = "D"'
+      # $ perl -e '${35} = "D"'
+      # Modification of a read-only value attempted at -e line 1.
       #
-      #	The following work
-      #	$ perl -e '$fix{35} = "D"'
-      #	$ perl -e '$fix{"35"} = "D"'
+      # The following work
+      # $ perl -e '$fix{35} = "D"'
+      # $ perl -e '$fix{"35"} = "D"'
    
       $workaround_exp = convert_to_fix_expression($exp);
    
@@ -225,7 +225,7 @@ sub compile_exp {
    
    my $warn = ($opt->{verbose}||$verbose) ? 'use' : 'no';
    
-   my $compiled = eval "$warn warnings; no strict; paackage TPSUP::Expression; sub { $workaround_exp } ";
+   my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $workaround_exp } ";
 
    if ($@) {
       if ($opt->{FIX} || $FIX) {
@@ -284,31 +284,31 @@ sub fixdesc {
 
 ###########################################################################
 #
-#	Each calling script (module) can also add new functions
-#	into this name space TPSUP::Expression
+# Each calling script (module) can also add new functions
+# into this name space TPSUP::Expression
 #
-#	For example, add a fixdesc2() function.
+# For example, add a fixdesc2() function.
 #
 # . . .
-#	exit 0; # end of the script
+# exit 0; # end of the script
 #
 # package TPSUP::Expression;
-#	# If you want to use $fix{$tag} instead of long-typing $TPSUP::Expression::fix{$tag}
-#	# (see below), you need to declare %fix here
-#	# my %fix;
+# # If you want to use $fix{$tag} instead of long-typing $TPSUP::Expression::fix{$tag}
+# # (see below), you need to declare %fix here
+# # my %fix;
 #
-#	sub fixdesc2 {
-#	my ($tag, $opt) = @_;
+# sub fixdesc2 {
+# my ($tag, $opt) = @_;
 #
-#	# the following 2 are the same.
-#	#return TPSUP::FIX::get_desc_by_tag_value($tag,	get_fix_value($tag));
-#	return TPSUP::FIX::get_desc_by_tag_value($tag,	?TPSUP::Expression::fix{$tag});
-# }	
+# # the following 2 are the same.
+# #return TPSUP::FIX::get_desc_by_tag_value($tag, get_fix_value($tag));
+# return TPSUP::FIX::get_desc_by_tag_value($tag, $TPSUP::Expression::fix{$tag});
+# } 
 #
 # 1
 #
-#	Note: you have to announce the name space with "package TPSUP::Expression"
-#	and end the name space with "1".
+# Note: you have to announce the name space with "package TPSUP::Expression"
+# and end the name space with "1".
 ###########################################################################
 
 1

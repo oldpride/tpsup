@@ -459,7 +459,7 @@ for my $f (@ARGV) {
             }
                
             {
-               my $now - t ime();
+               my $now = time();
                
                my $seconds = $now - $last_time;
                
