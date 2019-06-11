@@ -1,0 +1,93 @@
+#!/usr/bin/bash
+
+usage () {
+   cat <<EOF
+echo $1
+
+usage:
+   
+   $0 file1 file2 ...
+
+example
+
+   $0 *
+
+EOF
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   usage "wrong number of args"
+fi
+  
+tmpfile=~/junk.cleanocr.txt
+
+for f in $@
+do
+   if [ ! -f $f ]; then
+      echo "$f is not found"
+      continue
+   fi
+
+   echo ""
+   
+   # use "sed -b" to trade the file as binary so that it will preserve the line ending ^M
+   # https://stackoverflow.com/questions/4652652/preserve-line-endings
+
+   sed -b " 
+         s:111 +: '\" + :g
+         s:+ 111: + \"':g
+        "  $f |\
+   sed -b '
+         s:[X]n:\\n:g;
+         s:■:=:g;
+         s:I4:M:g;
+         s:FIap:Map:g;
+         s:	: :g;
+         s:[O]\([^a-zA-Z0-9)]\):()\1:g;
+         s:get(O):get(0):g
+         s:(l):(1):g
+         s:(O):(0):g
+         s:\[l\]:[1]:g
+         s:\[O\]:[0]:g
+         s:i1e:ile:g
+         s:1ine:line:g
+         s:f ile:file:g
+         s:e[ ]*1[ ]*s[ ]*e:else:g
+         s:11 +:" +:g
+         s:+ 11:+ ":g
+         s:updat e:update:g
+         s:newArrayList:new ArrayList:g;
+         s:Listo():List<>():g;
+         s:Mapo():Map<>():g;
+         s: - new : = new :g
+         s:\(String [^ ]*\) - :\1 = :g
+         s:compile("A\([^-]\):compile("^\1:g
+         s:import j ava:import java:g
+         s:1»:!=:g
+         s:»:>>:g
+   ' >$tmpfile
+
+   #s:[g][e][t][ ]\([a-zA-Z]\):get\1:g;
+   #      /^[ ]*$/d
+
+   diff $f $tmpfile
+   rc=$?
+
+   echo ""
+   
+   if [ $rc -eq 0 ]; then
+      echo "no change in $f"
+   else 
+      echo "do you want to change $f [Y/N, default N]? " 
+      
+      read answer
+   
+      if echo "X$answer" | grep -i "^XY" >/dev/null; then
+         cat $tmpfile >$f
+         echo "$f changed"
+      else
+         echo "$f no change"
+      fi
+   fi
+done 

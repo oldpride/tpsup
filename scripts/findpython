@@ -1,0 +1,48 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 module_name
+
+   find a python module's path
+
+examples:
+
+   $0 os
+   $0 cx_Oracle
+   $0 pwd
+
+   - test with a specific python
+   PATH=/usr/bin       ./findpython pwd
+   PATH=/usr/local/bin ./findpython pwd
+
+EOF
+   exit 1
+}
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+module=$1
+
+echo ""
+which python
+echo ""
+
+echo "
+import sys
+print('search path: ')
+print('\n   '.join(sys.path))
+print('\n')
+
+import inspect
+print('trying to find $module path')
+print('\n')
+
+import $module
+print(inspect.getfile($module))
+" |python
