@@ -1306,7 +1306,7 @@ sub recursive_path {
       } else {
          my @files_in_dir = readdir($dfh);
       
-         for my $f (sort @fi'les_in_dir) {
+         for my $f (sort @files_in_dir) {
             next if $f eq '.' || $f eq '..';
       
             my $ref = recursive_path("$path/$f", $level, $opt);
