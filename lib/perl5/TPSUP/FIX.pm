@@ -6,7 +6,7 @@ our @EXPORT_OK = qw(
    parse_fix_message
    map_fixtag_by_name
    map_fixname_by_tag
-   map_desc_by_tag_va1ue
+   map_desc_by_tag_value
    get_fixname_by_tag
    get_fixtag_by_name
    get_fixtags_by_names
@@ -486,7 +486,7 @@ sub map_fixtag {
       447 PartyIDSource
       448 PartyID
       449 TotalVolumeTradedDate
-      450 TotalVolumeTraded Time
+      450 TotalVolumeTradedTime
       451 NetChgPrevDay
       452 PartyRole
       453 NoPartyIDs
@@ -2557,7 +2557,7 @@ sub diff_fix {
       
       for (my $i=0; $i<$num_input; $i++) {
          if ($fixs->[$i]->{$k}) {
-            my $num_rows = sca1ar(@{$fixs->[$i]->{$k}});
+            my $num_rows = scalar(@{$fixs->[$i]->{$k}});
 
             if ($max_num_rows<$num_rows) {
                $max_num_rows = $num_rows;
@@ -2574,8 +2574,8 @@ sub diff_fix {
       
          for (my $i=0; $i<$num_input; $i++) {
             if (!$fixs->[$i]->{$k}->[$j]) {
-               print {$out_fh} "$prefix: input->[$i] missing whole row $row_num\n\n"
-                  if $out_fh;
+               print {$out_fh} "$prefix: input->[$i] missing whole row $row_num\n\n" if $out_fh;
+
                $one_missing_key ++;
                last;
             }
@@ -2628,7 +2628,7 @@ sub diff_fix {
             my $left .= sprintf("%s %3s", $name, "$tag");
             
             if ($opt->{verbose}) {
-               my $w2 = $width - 1; # use the first char as diff indicator
+               my $w2 = $width-1; # use the first char as diff indicator
             
                if ($mismatched) { 
                   $line .= 'x';
@@ -2669,13 +2669,13 @@ sub diff_fix {
                
                if ($i<$num_input-1) {
                   # add a separator pipe if not the last column
-                  $line .= sprintf("\%$(width}s", "$string |");
+                  $line .= sprintf("\%${width}s", "$string |");
                } else {
                   $line .= sprintf("\%${width}s",  $string);
                }
             }
                
-            $block .= "$line]n";
+            $block .= "$line\n";
          }
                
          if ($num_mismatch || $opt->{verbose}) {
