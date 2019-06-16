@@ -1,0 +1,214 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::UTIL qw(get_exps_from_string get_out_fh);
+use TPSUP::FIX qw(filter_fix map_desc_by_tag_value);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+my $min_idle = 60;
+my $fdelimiter = ",";
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+description:
+   read in fix messages and generate new fix messages
+
+   -xp exclude_pattern      Perl style, exclude lines matching this pattern.
+                            Can use multiple times (AND logic).
+
+   -mp match_pattern        Perl style, only print lines not matching this pattern.
+                            Can use multiple times (AND logic).
+
+   -xe exclude_expression   Perl style, eg, -xe '\$35=~/[DGF]/', can use multiple times.
+                            Can use multiple times (AND logic).
+
+   -me match_expression     Perl style, eg, -me '\$35=~/[DGF]/', can use multiple times.
+                            Can use multiple times (AND logic).
+
+   -o output.csv            default to STDOUT
+
+   -set "t1=exp1,t2=exp2,..."
+                            replace/add these tags
+                            eg, 1115=\${115},38=1,55="ZVZZT.OQ",54=1,40=1 1
+                            eg, 'OnBehalfCompID=\${115},OrderQty=1,Symbol="ZVZZT.OQ",Side=1,OrdType=1'
+                            variables (\${115}) are picked from the input message
+   
+   -delete "tl,t2,..."      delete these tags
+                            eg -delete '115,49'
+                            eg -delete 'OnBehalfCompID,SenderCompID' (will be translated to '115,49')
+
+   -delexp exp              delete these tags by exp. 
+                            eg. remote internal tags: -delexp '\$tag > 5000'
+                            eg. remote non-numeric tags: -delexp '\$tag !~ /^\d+$/'
+
+   -front "tl,t2,..."       put these tags to the front of the message
+                            eg -front '115,49'
+                            eg -front 'OnBehalfCompID,SenderCompID' (will be translated to '115,49')
+
+   -delimiter char          input delimiter, default to auto-detect.
+
+   -odelimiter char         output delimiter, default to the same as the input delimiter
+
+   -maxmatch number         match up to this many lines
+
+   -nested handle           nested fix messages: eg.
+                               New List:      35=E,  66=ListID
+                               New Multi leg: 35=AB, 654=LegID
+
+   -option setting          other options, eg,
+                              -op FixFilterTag=11 -op FixFiIterFile=20170428_tag11.csv
+                              -op FIXPrintLog  this prints original log. will be faster if no tag changes.
+
+NOTE: -mp/-xp are not as accurate as -me/-xe, but they are faster and is a good
+      pre-filter. Using -mp/-xp and -me/-xe together will be faster then using -me/-xe alone.
+      also specify -delimiter will speed up parsing.
+
+examples:
+
+   - test both delete and set
+   $prog -mp '115=JOHN' -me '\${49} eq "SENDER1"' -delete '49,115' \\
+      -set '115=\${49},116=\${49}' fix2fix_test.txt
+
+   - delete by expression
+   $prog -mp '115=JOHN' -me '\${49} eq "SENDER1"' -delexp '\$tag >100' fix2fix_test.txt
+
+   - handle nested fix message.
+   $prog -nested -mp '35=AB' -me '\${49} eq "SENDER1"' -set '55=ZVZZT,600=ZVZZT,623=1,38=1' \\
+      fixlog2csv_test_multileg.txt
+
+   - handle delexp
+   $prog -mp '39=4' -me '\${39} eq "4"' -delexp '\${tag}==41 && \${11} eq \${41}' \\
+       fix2fix_test_delexp.txt
+       
+   - to extract log lines with matching tag 11 or 4011 from a tags file
+   - note: 1. specify the delimiter to speed up, ^A is Control+A
+           2. use -op FIXPrintLog to print the original log lines
+   $prog -mp 11= -delimiter '^A' \\
+      -op FixFilterTag=11,4011 -op FixFiIterFile=/tmp/tags.txt \\
+      -op FIXPrintLog -op ShowProgress=l00000 appia.log
+EOF
+
+   exit 1;
+}
+
+my @exclude_pattern;
+my @match_pattern;
+my $verbose;
+my @match_expression;
+my @exclude_expression;
+my @ExportExps;
+my $output = '-';
+my @set_tags;
+my $delete_tags;
+my $delete_exp;
+my $front_tags;
+my $FixDictFile;
+my $maxmatch;
+my $delimiter;
+my $odelimiter;
+my $delete_tags;
+my $nested;
+my @other_options;
+
+GetOptions(
+   "xp=s" => \@exclude_pattern,
+   "mp=s" => \@match_pattern,
+   "me=s" => \@match_expression,
+   "xe=s" => \@exclude_expression,
+   "ee=s" => \@ExportExps,
+   "v"      =>      \$verbose,
+   "o=s"      =>      \$output,
+   "delimiter=s" => \$delimiter,
+   "odelimiter=s" => \$odelimiter,
+   "set=s" => \@set_tags,
+   "front=s"      => \$front_tags,
+   "delete=s" => \$delete_tags,
+   "delexp=s" => \$delete_exp,
+   "dict=s"      => \$FixDictFile,
+   "maxmatch=s" => \$maxmatch,
+   'nested'      => \$nested,
+   'op|option=s' => \@other_options,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($file) = @ARGV;
+
+my @ExportExps;
+for my $f (@set_tags) {
+   my $aref = get_exps_from_string($f, {verbose=>$verbose, delimiter=>$fdelimiter});
+
+   push @ExportExps, @$aref;
+}
+
+$verbose && print "ExportExps=", Dumper(\@ExportExps);
+
+my $FixDict;
+
+if ($FixDictFile) {
+   croak "$FixDictFile not found" if ! -f $FixDictFile;
+
+   $FixDict = `cat $FixDictFile`;
+
+   # load the user-specified diet here because filter_fix may not take $opt when
+   # applying TPSUP::Express ion
+   map_desc_by_tag_value({FixDict => $FixDict});
+}
+
+my $opt = {
+   MatchExps      => \@match_expression,
+   ExcludeExps      => \@exclude_expression,
+   MatchPatterns      =>      \@match_pattern,
+   ExcludePatterns      =>      \@exclude_pattern,
+   FixDelimiter      =>      $delimiter,
+   Output      =>      $output,
+   verbose      =>      $verbose,
+   ExportExps      =>      \@ExportExps,
+   FilterFixMaxMatch => $maxmatch,
+   NestedFix      =>      $nested,
+};
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      my ($k, $v) = ($1, $2);
+
+      if ($k =~ /(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } else {
+         $opt->{$k} = $v;
+      }
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+if (!$opt->{FIXPrintLog}) {
+   $opt = {
+      %$opt,
+      GenFixMsg      =>      1,
+      GenFixFrontTags => $front_tags,
+      GenFixDeleteTags => $delete_tags,
+      GenFixDeleteExp => $delete_exp,
+      GenFixDelimiter => $odelimiter,
+   };
+}
+
+$verbose && print "opt=", Dumper($opt);
+
+filter_fix($file, $opt);
+
+exit 0;

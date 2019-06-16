@@ -1641,7 +1641,6 @@ sub filter_fix {
       
    my $in_fh = get_in_fh($file, $opt) or croak "cannot open $file";
 
-
    # {FixFilterTag} and {FixFilterFile}/$opt->{FixFilterArray} is a way
    # to quicky filter in lines based on one tag. it is to achieve this
    # sql-equivallent: $tag(49) in ('A', 'B', 'C', ...)
@@ -1710,7 +1709,7 @@ sub filter_fix {
    # for csv output
    my $out_fh;
    my $PrintCsv;
-   
+
    if ($opt->{Output}) {
       # four different formats, but only support one at a time
       # 1. massaged fix message if $opt->{GenFixMsg}
@@ -2315,10 +2314,11 @@ sub hash_to_fix {
          
    if ($opt->{FixDeleteExp}) {
       my $string = $opt->{FixDeleteExp};
+
+      # wrap naked $tag in {}, as ${tag}, just like the other variables, eg, ${35}, ${11}
+      $string =~ s/\$tag/\${tag}/g;
          
       if (!$DeleteExp_by_string->{$string}) {
-         #my $compiled = eval "sub {my (\$tag, \$fix)=\@_; $string}";
-         
          my $warn = $opt->{verbose} ? 'use' : 'no';
          
          my $converted_string = TPSUP::Expression::convert_to_fix_expression($string, $opt);

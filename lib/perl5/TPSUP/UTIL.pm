@@ -130,6 +130,7 @@ sub get_in_fh {
    
    if (!defined($input) || $input eq '-') {
       $in_fh = \*STDIN;
+      $opt->{verbose} && print STDERR "get_in_fh() opened STDIN\n";
    } else {
       my $cmd;
    
@@ -349,7 +350,7 @@ sub _fail_hi {
 # .../perl5/site_perl/5.10.0/URI/Escape.pm
 #################H######HH#####H#############H########H###################H####
    
-sub getpatterns_from_log {
+sub get_patterns_from_log {
    my ($log, $match_pattern, $opt) = @_;
    
    my $exclude_pattern = $opt->{ExcludePattern};

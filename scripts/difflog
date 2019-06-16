@@ -1,0 +1,178 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_patterns_from_log);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $ErasePattern = '\d+';
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+Usage:
+
+   $prog pattern log1 log2
+
+   Compare two logs, log name can be user\@host:/a/b/c
+
+   log1 can be a pattern, use quotes(' or ") to enclose the pattern. This script
+   will pick the latest log matching this pattern.
+
+   -exclude pattern      exclude this pattern, in perl style
+   -v                    verbose
+   -comm                 common pattern only, default to difference only
+   -all                  including common. default to difference only
+   -left                 in the first file only, default to both
+   -right                in the second file only, default to both
+   -erase pattern        erase this pattern in log. Default to "-erase '$ErasePattern'",
+                         which erases time and day, and reduce noise.
+   -begin pattern        begin fetching from this pattern
+   -end pattern          end fetching at this pattern
+
+Examples:
+
+   $prog 'FAIL|ERROR' difflog_test1.log difflog_test2.log
+
+   - log1 can be a glob pattern, use quotes(' or ") to enclose the pattern,
+   the first matched log will be used
+
+   $prog -end 'state=RUNNING.* (DONE|FAIL)' 'FAIL|ERROR' \\
+   '/archive/output.log.20??-??-?? /yesterday/output.log' /realtime/output.log
+
+   - with hostname in the log file, the following comparing logs between hosts
+
+   gprog -end 'state=RUNNING.* (DONE|FAIL)' 'FAIL|ERROR' \\
+      remote_user\@remote_host:/realtime/output.log /realtime/output.log
+
+   TODO: let log1 can also be a combined log, that is, combine multiple logs
+   to make the log1
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $exclude;
+my $leftonly;
+my $rightonly;
+my $commononly;
+my $all;
+my $BeginPattern;
+my $EndPattern;
+
+GetOptions(
+   'verbose'   =>      \$verbose,
+   'left'      =>      \$leftonly,
+   'right'     =>      \$rightonly,
+   'common'    =>      \$commononly,
+   'all'       =>      \$all,
+   'exclude=s' =>      \$exclude,
+   'erase=s'   =>      \$ErasePattern,
+   'begin=s'   =>      \$BeginPattern,
+   'end=s'     =>      \$EndPattern,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 3;
+
+my ($pattern, $log1, $log2) = @ARGV;
+
+# $log1 can be a pattern
+if ($log1 !~ /:/) {
+   my @logs = `ls -t $log1`; chomp @logs;
+
+   my $found;
+
+   for my $lg (@logs) {
+      next if $lg eq $log2; # skip when log1 == log2
+
+      my $fsize = (stat($lg))[7]; # in bytes
+      my $threshold = 10;
+
+      if ($fsize < $threshold) {
+         print "$lg skipped because it is too small($fsize Bytes) < threshold($threshold Bytes)\n";
+         next;
+      }
+   
+      print "$lg vs $log2\n";
+      $log1 = $lg;
+      $found ++;
+      last;
+   }
+
+   die "cannot found a good match for log1='$log1'" if ! $found;
+}
+
+my $opt = {
+   ExcludePattern      =>      $exclude,
+   ErasePattern      =>      $ErasePattern,
+   BeginPattern      =>      $BeginPattern,
+   EndPattern      =>      $EndPattern,
+};
+
+my $ret1 = get_patterns_from_log($log1, $pattern, $opt);
+my $ret2 = get_patterns_from_log($log2, $pattern, $opt);
+
+my $print_left;
+my $print_right;
+my $print_common;
+
+if ($commononly) {
+   $print_common ++;
+} elsif ($leftonly) {
+   $print_left ++;
+} elsif ($rightonly) {
+   $print_right ++;
+} elsif ($all) {
+   $print_left ++;
+   $print_right ++;
+   $print_common ++;
+} else {
+   $print_left ++;
+   $print_right ++;
+}
+
+if ($print_common) {
+   for my $p (sort keys (%$ret1) ) {
+      if ($ret2->{$p}) {
+         print "= ", "pattern=$p\n" if $verbose;
+         print "= ", $ret1->{$p}->{first}, "\n";
+         print "= ", $ret1->{$p}->{last},   "\n" if $ret1->{$p}->{last};
+         print "= ", $ret2->{$p}->{first}, "\n";
+         print "= ", $ret2->{$p}->{last},   "\n" if $ret2->{$p}->{last};
+      }
+   }
+}
+   
+print "\n";
+if ($print_left) {
+   for my $p (sort keys (%$ret1) ) {
+      if (! $ret2->{$p}) {
+         print "< ", "pattern=$p\n" if $verbose;
+         print "< ", $ret1->{$p}->{first}, "\n";
+         print "< ", $ret1->{$p}->{last},  "\n" if $ret1->{$p}->{last};
+      }
+   }
+}
+
+print "\n";
+if ($print_right) {
+   for my $p (sort keys (%$ret2) ) {
+      if (!$ret1->{$p}) {
+         print "> ", "pattern=$p\n" if $verbose;
+         print "> ", $ret2->{$p}->{first}, "\n";
+         print "> ", $ret2->{$p}->{last},  "\n" if $ret2->{$p}->{last};
+      }
+   }
+}
+exit 0;
+   
+   
