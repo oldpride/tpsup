@@ -1,0 +1,114 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::FIX qw(get_order_hierarchy);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir  = $0; $dir =~ s:[^/]+$::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+description:
+   read in fix messages and generate order heirarchy
+
+   -nested        handle multileg messages, eg, 35=E, 35=AB
+   -verbose       verbose mode
+   -render        print out in grid 
+   -o output.csv  default to STDOUT
+
+   -delimiter string    delimiter of the fix message in the log.
+                        default to let the script to detect, slower
+
+   -OrdIdFile file.txt  find heirarchy of order ids in this file.
+                        default format is one OrdId per line.
+                        use "-OrdIdDelimiter pattern" to break each line
+                        into multiple OrdId
+
+   -OrdIdDelimiter pattern
+                        inline delimiter OrdIdFile
+
+   -option setting      other options, eg,
+                        -op FixFilterTag=11 -op FixFiIterFile=20170428_tag11.csv
+
+Examples:
+   
+   $prog fixlog2csv_test_cancel.txt
+
+   $prog -nested fixlog2csv_test_multileg.txt
+
+   $prog -OrdIdFile fix_hierarchy_test_ordfile.txt fixlog2csv_test_cancel.txt
+
+EOF
+
+   exit 1;
+}
+
+my $output = '-';
+my $OrdIdFile;
+my @other_options;
+my $nested;
+my $verbose;
+my $render;
+my $inline_delimiter;
+my $delimiter;
+
+GetOptions(
+   "OrdIdFile=s" => \$OrdIdFile,
+   "OrdIdDelimiter=s" => \$inline_delimiter,
+   "delimiter=s" => \$delimiter,
+   "nested" => \$nested,
+   "verbose" => \$verbose,
+   "render" => \$render,
+   'o|output=s' => \$output,
+   'op|option=s' => \@other_options,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($file) = @ARGV;
+
+my $opt = {
+   FixPickOrdFile => $OrdIdFile,
+   FixPickOrdDelimiter=> $inline_delimiter,
+   FixHierArchyOutput => $output,
+   verbose => $verbose,
+   NestedFix => $nested,
+   RenderStdout => $render,
+   FixDelimiter => $delimiter,
+};
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      my ($k, $v) = ($1, $2);
+
+      if ($k =~ /(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } 
+   
+      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|De1et eColumns)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } else {
+         $opt->{$k} = $v;
+      }
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+$verbose && print "opt=", Dumper($opt);
+
+get_order_hierarchy($file, $opt);
+
+exit 0;

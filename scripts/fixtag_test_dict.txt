@@ -1,0 +1,12 @@
+#MsgType
+$ref->{35} = <<END;
+8 = ExecReport
+D = Order
+END
+
+#Side
+$ref->{54} = <<END;
+1 = B
+2 = S
+5 = SS
+END

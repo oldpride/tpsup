@@ -65,7 +65,7 @@ NOTE:
 
 examples:
 
-   $prog      difffix_test1.txt difffix_test2.txt
+   $prog      difffix_test1.txt difffix_test2.txt | less -S
 
    - compare the 1st message only
    $prog -maxmatch 1 difffix_test1.txt difffix_test2.txt

@@ -7,7 +7,7 @@ use Getopt::Long;
 
 use TPSUP::FIX qw(
    filter_fix
-   map_desc_by_tag_va1ue
+   map_desc_by_tag_value
 );
 
 use TPSUP::UTIL qw(
@@ -101,6 +101,9 @@ description:
 
    -codefile "namespace=file"
                               same as '-code' but the real content is in the 'file'
+
+   -d dict_file               add new FIX dictionary, or overwrite standard tags
+                              see fixtag command for an example
 
    NOTE: -mp/-xp are not as accurate as -me/-xe, but they are much faster and is a good
          pre-filter. Using -mp/-xp and -me/-xe together will be much faster then using

@@ -10,7 +10,7 @@ our @EXPORT_OK = qw(
    get_fixname_by_tag
    get_fixtag_by_name
    get_fixtags_by_names
-   get_desc_by_tag_va1ue
+   get_desc_by_tag_value
    dump_v_by_k
    dump_fix_message
    dump_nested_fix_hash
