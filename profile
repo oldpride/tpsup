@@ -9,11 +9,13 @@ if [[ $UNAME =~ Msys ]]; then
    alias perllib='cd /c/Users/william/github/tpsup/lib/perl5/TPSUP'
    alias tpscripts='cd /c/Users/william/github/tpsup/scripts'
    export PERL5LIB=/c/Users/william/github/tpsup/lib/perl5/TPSUP
+   export PYTHONPATH=/c/Users/william/github/tpsup/python2/lib
    export PATH="$PATH:/c/Users/william/github/tpsup/scripts"
 elif [[ $UNAME =~ Cygwin ]]; then
    alias perllib='cd /cygdrive/c/Users/william/github/tpsup/lib/perl5/TPSUP'
    alias tpscripts='cd /cygdrive/c/Users/william/github/tpsup/scripts'
    export PERL5LIB=/cygdrive/c/Users/william/github/tpsup/lib/perl5
+   export PYTHONPATH=/cygdrive/c/Users/william/github/tpsup/python2/lib
    export PATH="$PATH:/cygdrive/c/Users/william/github/tpsup/scripts"
 else 
    echo "UNAME='$UNAME' is not supported"

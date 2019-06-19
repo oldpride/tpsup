@@ -361,12 +361,12 @@ def uri_escape(string) :
                or  ord_c == ord('-') or  ord_c == ord('.') \
                or  ord_c == ord('_') or  ord_c == ord('~')) :
             escaped.append(c)
-        else : 
+        else:
             escaped.append(escape[c])
 
-        result = ''.join(escaped)
+    result = ''.join(escaped)
 
-        return result
+    return result
 
 def uri_unescape(string) :
     # the following is the same as

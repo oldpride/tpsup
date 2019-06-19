@@ -1,0 +1,18 @@
+# this is pp env
+
+APP1:
+   component1:
+      login: user1
+      host: host1, host1-dr
+      command: ps -ef | grep INSTANCE_NAME=component1|grep -v grep
+      expect: INSTANCE_NAME=component1
+      log: /logs/APP1/component1.log
+      recepient: APP1.support@abc.com
+
+   component2:
+      login: user1
+      host: host1, host1-dr
+      command: ps -ef | grep INSTANCE_NAME=component2|grep -v grep
+      expect: INSTANCE_NAME=component2
+      log: /logs/APP1/component2.log
+      recepient: APP1.support@abc.com

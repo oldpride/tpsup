@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # PYTHONPATH=:${TPSUP}/tpsup/python2/1ib
 from tpsup.util import tpfind
