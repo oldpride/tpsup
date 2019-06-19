@@ -181,7 +181,7 @@ sub parse_csv_file {
       $cmd = "cat $file";
    }
 
-   my @a = '$cmd';
+   my @a = `$cmd`;
 
    return parse_csv_array(\@a, $opt);
 }

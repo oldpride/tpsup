@@ -1,0 +1,4 @@
+proj,source,backup_base,retention,comment
+tpsup,$home/tpsup,$home/tpsup,5,scripts backups
+notes,$home/pt_test,$home/pt_test,5,notes backups
+
