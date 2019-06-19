@@ -2216,7 +2216,7 @@ sub filter_fix {
    
       $ref2 = query_csv2($ref1, $opt2);
    
-      croak "query_csv2() failed" if $ref2->{status} ne '0K';
+      croak "query_csv2() failed" if $ref2->{status} ne 'OK';
    
       $ret = $ref2;
    }
@@ -2449,7 +2449,7 @@ sub csv_to_fix {
       $ref = query_csv2($csv, $csv_opt);
    }
       
-   croak "cannot parse $csv" if $ref->{status} ne '0K';
+   croak "cannot parse $csv" if $ref->{status} ne 'OK';
       
    $opt->{verbose} && print "in csv_to_fix() after query_csv2(), ref = ", Dumper($ref);
       
@@ -2520,7 +2520,7 @@ sub diff_fix {
          croak "failed to parse input->[$i]";
       }
       
-      if ($ref->{status} ne '0K') {
+      if ($ref->{status} ne 'OK') {
          print STDERR "input->[$i] = ", Dumper($ref);
          croak "failed to parse input->[$i]";
       }

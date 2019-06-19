@@ -230,7 +230,7 @@ sub chkcmd {
    }
       
    $ret->{match}  = $match;
-   $ret->{status} = '0K: DONE';
+   $ret->{status} = 'OK: DONE';
       
    return $ret;
 }

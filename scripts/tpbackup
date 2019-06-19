@@ -40,7 +40,7 @@ Usage:
                      proj,source_base,backup_base,retention,comment
                      tpsup,\$home/tpsup,\$home/backup/tpsup,5,these are scripts
                      notes,\$home/notes,\$home/backup/notes,5,these are notes
-		   retention is number of backups
+     retention is number of backups
 
    -b brief mode when 'check'. only prints the file names
 

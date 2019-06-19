@@ -1,0 +1,99 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(diff_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog csv1 csv2 k1-1,k1-2,... k2-1,k2-2,...
+
+   Diff csv by keys only. It will ignore the difference between non-key values.
+
+   -me match_expression      perl style, cell-based, eg, -m '\$Column1 ==1 && \$Column2 eq "B"'
+   -xe exclude_expression    perl style, cell-based, eg, -m '\$Column3=~ /junk/ || !\$Column4'
+
+   -xp exclude_pattern
+                             perl style, line-based. Can be multiple, in AND logic,
+                             eg. -e "junk1" -e "junk2"
+                                will match both "junk1 junk2" and "junk2 junk1",
+                                but will not match "junk1" nor "junk2".
+
+   -delimiter char           default to ','
+
+   -skip number              skip the first n lines of the file, because some files may comments
+                             above header, default to 0, no skipping.
+
+   -output output            default to STDOUT
+
+   -option setting           other options, eg,
+                                -op InputNoHeader this indicates no header line in the input file
+                                -op UsePosition this indicates to use c0,c1,... as column names
+examples:
+
+   $prog diffcsvlong_test1.csv diffcsvlong_test2.csv "TICKER,RIC,TOTAL_EOD_POSITION" "TICKER,RIC,SOD"
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+   
+my $delimiter;
+my $skiplines;
+my @match_expression;
+my @exclude_expression;
+my @exclude_pattern;
+my $output;
+my @other_options;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'd|delimiter=s' => \$delimiter,
+   'skip=s'        => \$skiplines,
+   'me=s'          => \@match_expression,
+   'xe=s'          => \@exclude_expression,
+   'xp=s'          => \@exclude_pattern,
+   'o|output=s'    => \$output,
+   'op|option=s'   => \@other_options,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 4;
+
+my $opt = {
+   MatchExps       => \@match_expression,
+   ExcludeExps     => \@exclude_expression,
+   ExcludePatterns => \@exclude_pattern,
+   delimiter       => $delimiter,
+   skiplines       => $skiplines,
+   verbose         => $verbose,
+};
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      $opt->{$1} = $2;
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+my $error = 0;
+
+my ($csv1, $csv2, $keyString1, $keyString2) = @ARGV;
+
+my @keys1 = split /,/, $keyString1;
+my @keys2 = split /,/, $keyString2;
+
+diff_csv($csv1, $csv2, \@keys1, \@keys2, {UnixDiff=>1, %$opt});

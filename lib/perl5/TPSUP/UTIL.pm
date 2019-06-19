@@ -499,7 +499,7 @@ my $user;
 sub get_user {
    return $user if $user;
    
-   my $line = 'id';
+   my $line = `id`;
    
    #uid=9020(tian) gid=7296(unix)
    

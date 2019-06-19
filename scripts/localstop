@@ -134,7 +134,7 @@ if ($os eq "SunOS") {
          if (!$begun) {
             if ($p == $pid) {
                $begun++;
-	    }
+     }
 
             next;
          } 

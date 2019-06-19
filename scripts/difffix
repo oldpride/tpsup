@@ -175,7 +175,7 @@ for my $op (@other_options) {
    if ($op =~ /^(.+?)=(.+)/) {
       my ($k, $v) = ($1, $2);
 
-      if ($k =~ /rt(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
+      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
          @{$opt->{$k}} = split /,/, $v;
       } else {
          $opt->{$k} = $v;

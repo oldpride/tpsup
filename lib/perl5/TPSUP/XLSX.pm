@@ -40,7 +40,7 @@ sub csv_to_xlsx {
    
       my $ref = query_csv2($csv, {%$opt, NoPrint=>1});
    
-      croak "cannot parse $csv" if $ref->{status} ne '0K';
+      croak "cannot parse $csv" if $ref->{status} ne 'OK';
    
       my $i_add_1 = $i+1;
    

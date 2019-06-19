@@ -828,7 +828,7 @@ sub csv_file_to_array {
       }
    }
 
-   $rtn->{status} = '0K';
+   $rtn->{status} = 'OK';
 
    return $rtn;
 }
@@ -880,7 +880,7 @@ sub query_csv2 {
       # this applies line-based match: ExcludePatterns, MatchPatterns
       $ref1 = csv_file_to_array($input, $opt);
 
-      if ($ref1->{status} ne '0K') {
+      if ($ref1->{status} ne 'OK') {
          carp "csv_file_to_array($input) failed: $ref1->{status}";
          return undef;
       }
@@ -1187,7 +1187,7 @@ sub query_csv2 {
       $ref4 = $ref3;
    }
    
-   $ref4->{status} = '0K';
+   $ref4->{status} = 'OK';
    
    return $ref4;
 }
@@ -1551,7 +1551,7 @@ sub diff_csv_long {
                                              %$opt
                                            }
                               );
-         croak "query_csv2($csvs->[$i]) failed" if $ref->{status} ne 'OK';
+         croak "query_csv2($csvs->[$i]) failed: $ref->{status}" if $ref->{status} ne 'OK';
    
          $refs->[$i] = $ref->{KeyedHash};
 
@@ -1809,7 +1809,7 @@ sub diff_csv_long {
                                              %$opt
                                            } 
                              );
-         croak "query_csv2($csvs->[$i]) failed" if $ref->{status} ne '0K';
+         croak "query_csv2($csvs->[$i]) failed" if $ref->{status} ne 'OK';
    
          $ref->{KeyedHash} = {} if !$ref->{KeyedHash};
    
@@ -1939,13 +1939,16 @@ sub diff_csv_long {
 sub diff_csv {
    my ($csv1, $csv2, $keys1, $keys2, $opt) = @_;
 
-   my $ref1 = query_csv2($csv1, {ReturnKeyedHash=>$keys1, NoPrint=>1, %$opt});
+   my $result1 = query_csv2($csv1, {ReturnKeyedHash=>$keys1, NoPrint=>1, %$opt});
    
-   croak "cannot parse $csv1" if !$ref1;
+   croak "cannot parse $csv1" if !$result1;
    
-   my $ref2 = query_csv2($csv2, {ReturnKeyedHash=>$keys2, NoPrint=>1, %$opt});
+   my $result2 = query_csv2($csv2, {ReturnKeyedHash=>$keys2, NoPrint=>1, %$opt});
    
-   croak "cannot parse $csv2" if !$ref2;
+   croak "cannot parse $csv2" if !$result2;
+
+   my $ref1 = $result1->{KeyedHash};
+   my $ref2 = $result2->{KeyedHash};
    
    my $OnlyIn1;
    my $OnlyIn2;
@@ -2596,7 +2599,7 @@ sub cat_csv {
                                         }
                            );
       
-      croak "failed to parse $csvs->[$i]" if $ref->{status} ne '0K';
+      croak "failed to parse $csvs->[$i]" if $ref->{status} ne 'OK';
       
       my @selectColumns = $opt->{CatCsvColumns}->[$i] ? @{$opt->{CatCsvColumns}->[$i]} :
                           $opt->{CatCsvColumns}->[0]  ? @{$opt->{CatCsvColumns}->[0]}  : 
@@ -2618,7 +2621,7 @@ sub cat_csv {
       
    close $out_fh if $out_fh && $out_fh != \*STDOUT;
       
-   $ret->{status} = '0K';
+   $ret->{status} = 'OK';
       
    return $ret;
 }
@@ -2648,7 +2651,7 @@ sub join_query_csv {
    for (my $i=0; $i<scalar(@$csvs); $i++) {
       my $ref = query_csv2($csvs->[$i], $pre_join_opt);
       
-      croak "failed to parse $csvs->[$i]" if $ref->{status} ne '0K';
+      croak "failed to parse $csvs->[$i]" if $ref->{status} ne 'OK';
       
       $arefs[$i] = $ref->{array};
       
@@ -2798,7 +2801,7 @@ sub csv_to_html {
                                NoPrint=>1,
                                %$opt});
       
-   if ($ref->{status} ne '0K') {
+   if ($ref->{status} ne 'OK') {
       print STDERR "failed to parse csv, status=$ref->{status}\n";
       return undef;
    }

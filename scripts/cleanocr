@@ -90,6 +90,7 @@ do
                s/wh i1 e (/while(/g
                s/GetOpt ions/GetOptions/g
                s:/bin/per1:/bin/perl:g
+               s:\\bper[i1]\\b:perl:g
               " 
         ;; 
      j) extra="
@@ -167,6 +168,8 @@ do
          s:1»:!=:g
          s:»:>>:g
          s:«:<<:g;
+         s:/rt:/^:g
+         s:\b0K\b:OK:g
    ' >$tmpfile
 
    if [ $? -ne 0 ]; then

@@ -74,7 +74,7 @@ description:
                               -op InGroupGetFirst   get the first of each sort group
                               -op InGroupGetLast    get the last of each sort group
 
-   -trimfloat fl,f2,... trim      floating points for these columns, eg 2.03000 -> 2.03
+   -trimfloat f1,f2,...       trim floating points for these columns, eg 2.03000 -> 2.03
 
    -protocol 4.x           default to 4.2
 
@@ -162,7 +162,7 @@ for my $op (@other_options) {
       my ($k, $v) = ($1, $2);
 
       if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys)$/) {
-	 @{$opt->{$k}} = split /,/, $v;
+         @{$opt->{$k}} = split /,/, $v;
       } else {
          $opt->{$k} = $v;
       }
