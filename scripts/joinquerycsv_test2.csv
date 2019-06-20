@@ -1,0 +1,11 @@
+alpha,float,string
+a,0.0,
+b,1.1,John
+c,2.0,
+d,3.0,Stephen
+e,4.0,Joseph
+f,5.1,Jack
+g,,Smith
+x,7.0,Alice
+y,,Donald
+z,9,Hilary

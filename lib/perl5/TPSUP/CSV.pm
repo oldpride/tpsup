@@ -2658,7 +2658,7 @@ sub join_query_csv {
       if ($opt->{JQTableNames}->[$i]) {
          $TableNames[$i] = $opt->{JQTableNames}->[$i];
       } else {
-         $TableNames[$i] = sprintf("t%d", $i+1); # example: first csv is tl
+         $TableNames[$i] = sprintf("t%d", $i+1); # example: first csv is t1
       }
       
       for my $c (@{$ref->{columns}}) {
@@ -2672,7 +2672,7 @@ sub join_query_csv {
    my @max;
       
    # start position is (0,0,0...)
-   # end position is (subtotall-1, subtotal2-1, ...)
+   # end position is (subtotal1-1, subtotal2-1, ...)
       
    for (my $i=0; $i<$total_csv; $i++) {
       my $subtotal = scalar( @{$arefs[$i]} );
@@ -2777,7 +2777,7 @@ sub join_query_csv {
       delete $post_join_opt->{$k} if exists $pre_join_opt->{$k};
    }
       
-   $post_join_opt->{InputStructuredHash} - 1;
+   $post_join_opt->{InputStructuredHash} = 1;
       
    my $ref2 = query_csv2($ref1, $post_join_opt);
 
