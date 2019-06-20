@@ -1,0 +1,43 @@
+#!/bin/bash
+
+debug=N
+
+if [ "X$1" = "-debug" ]; then
+   debug=Y
+fi
+
+scripts_dir=`dirname $0`
+prog=`basename $0`
+
+# only run this script as links, eg
+#
+# $ ln -s wrapper.linux xterm.linux
+# $ ln -s wrapper.linux xrdb.linux
+
+generic=`echo $prog|cut -d. -f1`
+# xterm.linux ----->	xterm
+# xrdb.linux ------>	xrdb
+
+if [ -f "/usr/bin/$generic" ]; then
+   # if localhost already installed xterm/xrdb, use it
+   /usr/bin/$generic "$@"
+   exit $?
+fi
+
+TPSUP=`$scripts_dir/trimpath $scripts_dir/..`
+
+ROOT=$TPSUP/Linux/Linux3
+
+[ $debug = Y ] && set -x
+
+export XFILESEARCHPATH=$ROOT/usr/share/X11/app-defaults/%N
+
+$ROOT/lib64/ld-2.17.so --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+
+exit $?
+
+# to ldd:
+# LD_TRACE_LOADED_OBJECTS=1 $ROOT/lib64/ld-linux-x86-64.so.2 --library-path $ROOT/lib64 $ROOT/usr/bin/xterm -display test.abc.com:6000
+
+# to trace: (note: don't use $ROOT/usr/bin/strace)
+# strace $ROOT/lib64/ld-linux-x86-64.so.2 --library-path $ROOT/lib64 $ROOT/usr/bin/xterm -display test.abc.com:6000

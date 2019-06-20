@@ -91,6 +91,8 @@ do
                s/GetOpt ions/GetOptions/g
                s:/bin/per1:/bin/perl:g
                s:\\bper[i1]\\b:perl:g
+               s:([?]:(\$:g
+               s:^\\([ ]*\\)[?]\\([a-zA-Z]\\):\\1$\\2:g
               " 
         ;; 
      j) extra="
@@ -169,6 +171,8 @@ do
          s:»:>>:g
          s:«:<<:g;
          s:/rt:/^:g
+         s/:rt/:^/g
+         s/\[rt/:[^/g
          s:\b0K\b:OK:g
    ' >$tmpfile
 

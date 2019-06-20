@@ -1,0 +1,252 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::LOG qw(get_PatternCfg);
+use TPSUP::CSV qw(run_sqlcsv);
+use TPSUP::UTIL qw(get_tmp_file get_out_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir  = $0; $dir =~ s:[^/]+$::; $dir =~ s:/$:: if $dir ne '/';
+
+my $min_idle = 60;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+description:
+   extract log into csv
+
+   The configurations are by default in ${dir}/log_pattern.csv.
+
+   -x exclude_pattern         Perl style, exclude lines with this pattern
+   -m  match_pattern          Perl style, only count the lines with this pattern
+
+   -app App                   As it is defined in pattern_file .
+
+   -pf pattern_file           pattern file, default to $dir/log_pattern.csv.
+
+   -t TimePattern Perl style. Default is in $dir/log_pattern.csv.
+   
+   -a Assignment              How to assign the matched time_pattern. Default is in $dir/log_pattern.csv.
+
+   -o output.csv              default to STDOUT
+
+   -capture 'f1,f2...=pattern'
+   —c       'f1,f2...=pattern'
+                              capture strings from matched line and assign them to the fields,
+
+   -query select ...
+   -q     select ...
+                              sqlcsv query mode, see example below, default to just print out
+                              the captures
+   
+   -post "tpcsv_args" pipe the capturing to csv (command) with these args
+
+examples:
+
+   $prog -app app1 \\
+      -c 'TimeRcv,UpstreamOID=^\\S+\s + (\\d{2}-\\d{2}-\\d{4} \\d{2}:\\d{2}:\\d{2}),.*?RECEIVED MSG.*?^A11=(.+?)^A' \\
+      -c "UpstreamOID,DownstreamOID=PREPARED MARSHALLED MESSAGE.*?^A20017=(.+?)^A.*^A11=(.+?)^A" \\
+      -q "select CSV1.TimeRcv as TimeRcv,
+                 CSV1.UpstreamOID as UpstreamOID,
+                 CSV2.DownstreamOID as DownstreamOID
+            from CSV1 left join CSV2 on CSV1.UpstreamOID = CSV2.UpstreamOID" \\
+   /apps/app1.log
+   
+   $prog -app pks \\
+      -c 'aggUnit,instrument,conservativeQty=aggUnit=(.+?), instrument = (.+?),.* conservativeQty=(.+?),.* positionType=SOD_POSITION' \\
+      -post "-sort=aggUnit,instrument" \\
+      /apps/pks.log
+
+EOF
+
+   exit 1;
+
+}
+
+
+
+
+
+
+our ($exclude_pattern, $match_pattern, $verbose, $App,
+     $TimePattern, $Assignment, $TimeKey);
+
+my $pattern_file = "$dir/log_pattern.csv";
+my @captures;
+my $sql;
+my $output = '-';
+my $post_args = '';
+
+GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "m=s"            => \$match_pattern,
+   "i=s"            => \$min_idle,
+   "v"              => \$verbose,
+   "t=s"            => \$TimePattern,
+   "a|assignment=s" => \$Assignment,
+   "pf=s"           => \$pattern_file,
+   "app=s"          => \$App,
+   "k=s"            => \$TimeKey,
+   "c|capture=s"    => \@captures,
+   "q|query=s"      => \$sql,
+   "o=s"            => \$output,
+   "post=s"         => \$post_args,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $cfg = get_PatternCfg({
+   PatternFile       => $pattern_file,
+   RemoveInputQuotes => 1,
+   App               => $App,
+   TimePattern       => $TimePattern,
+   Assignment        => $Assignment,
+   TimeKey           => $TimeKey,
+   CheckSettings    => [ qw(TimePattern Assignment TimeKey) ],
+});
+
+my $assignments = split /,/, $cfg->{Assignment};
+my @timekeys = split ',', $cfg->{TimeKey};
+
+my @CaptureCfgs;
+
+for my $capture (@captures) {
+   if ($capture =~ /^(.+?)=(.+)/) {
+      my ($LHS, $pattern) = ($1, $2);
+
+      my @fields = split /,/, $LHS;
+
+      my $r = {
+         pattern => $pattern,
+         fields => \@fields,
+      };
+
+      push @CaptureCfgs, $r;
+   } else {
+      usage "ERROR: bad format in capture: $capture\n";
+   }
+}
+
+$verbose && print "CaptureCfgs = ", Dumper(\@CaptureCfgs);
+
+my @csvs;
+my $i=1;
+
+for my $c (@CaptureCfgs) {
+   my $tmpfile = get_tmp_file("/var/tmp", "${prog}.CSV$i");
+
+   print STDERR "CSV$i = $tmpfile\n";
+
+   my $ofh = get_out_fh($tmpfile);
+
+   print {$ofh} join(",", @{$c->{fields}}), "\n";
+
+   $c->{ofh}  = $ofh;
+   $c->{file} = $tmpfile;
+
+   push @csvs, $tmpfile;
+   $i++;
+}
+
+$verbose && print "CaptureCfgs = ", Dumper(\@CaptureCfgs);
+
+my $error = 0;
+
+for my $f (@ARGV) {
+   my $fh;
+
+   if ($f eq '-') {
+      $fh = \*STDIN;
+   } else {
+      if (! -f $f) {
+         print "ERROR: cannot find $f\n" if ! -f $f;
+         next;
+      }
+
+      if ($f =~ /gz$/) {
+         my $cmd = "gunzip -c $f";
+         open $fh, "?cmd|" or die "cmd=$cmd failed";
+      } else {
+         open $fh, "<$f" or die "cannot read $f failed";
+      }
+   }
+
+   my $count =0;
+
+   LINE:
+
+   while (<$fh>) {
+      $count ++;
+      print STDERR "$f $count lines processed\n" if $count % 100000 == 0;
+
+      my $line = $_;
+      chomp $line;
+      
+      next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
+      next if defined   $match_pattern && $line !~   /$match_pattern/;
+      
+      my @a = ($line =~ /$cfg->{TimePattern}/);
+
+      next if ! @a;
+
+      for my $c (@CaptureCfgs) {
+         my ($pattern, $fields, $ofh) = @{$c}{qw(pattern fields ofh)};
+
+         my @a = ($line =~ /$pattern/);
+
+         next if !@a;
+
+         print {$ofh} join(",", @a), "\n";
+
+         next LINE;
+      }
+   }
+   close $fh if $fh != \*STDIN;
+}
+
+for my $c (@CaptureCfgs) {
+   close $c->{ofh};
+   system("ls -1 $c->{file} >&2");
+}
+
+if ($sql) {
+   my $ref = run_sqlcsv($sql, \@csvs, {verbose=>$verbose, withHeader=>1});
+
+   die "querv failed" if !$ref;
+
+   my $out_fh;
+
+   if ($output) {
+      $out_fh = get_out_fh($output);
+   } else {
+      $out_fh = \*STDOUT;
+   }
+
+   for my $row (@$ref) {
+      print {$out_fh} join(",", @$row), "\n";
+   }
+
+   close $out_fh if $out_fh != \*STD0UT;
+} else {
+   # use tpcsv as post-processor
+   for my $c (@CaptureCfgs) {
+      my $cmd = qq(csv -csv $post_args $c->{file}|tpcsv2 -o $output -);
+      print STDERR "cmd=$cmd\n";
+      system($cmd);
+   }
+}
+
+exit 0;
+   
