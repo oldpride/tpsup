@@ -58,11 +58,6 @@ suffix=$3
 
 prefix=`echo $prefix|sed -e 's:.*/::'`
 
-if [ "X$suffix" != "X" ]; then
-   suffix=`echo $suffix|sed -e 's:.*/::'`
-   suffix = ".$suffix"
-fi
-
 yyyymmdd=`date +%Y%m%d`
 HHMMSS=`date +%H%M%S`
 dir=$base/tmp_${id}
@@ -73,12 +68,17 @@ if [ ! -d $dailydir ]; then
    find $dir -mount -mtime +5 -exec /bin/rm -fr {} \;
 fi
 
+result="$dailydir/$prefix.$HHMMSS.$$"
+
+if [ "X$suffix" != "X" ]; then
+   suffix=`echo $suffix|sed -e 's:.*/::'`
+   result="$result.$suffix"
+fi
+
 if [ "X$IsDir" = "XY" ]; then
-   result="$dailydir/$prefix.$HHMMSS.$$.$suffix"
    mkdir $result || exit 1
    echo $result
 else
-   result="$dailydir/$prefix.$HHMMSS.$$.$suffix"
    echo $result
 fi
 
