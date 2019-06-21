@@ -70,6 +70,13 @@ examples:
    # notes:close \$fh failed on solaris on an .gz file, if close is the last command, append 'nop'
    $prog -he '\$type eq "file"' -ha '\$fh=ifh(\$path); \$line=<\$fh>; print "\$path,\$line" if \$line =~ m:^#!.#/bash\$:; close \$fh; nop' ~/tpsup
 
+Note: perl system() return 0 when successful, but in perl expression, 0 means false, failure.
+   # the following command find scripts (starting with #!), with mode not equal to 0755 
+   # note the ! before the system() call
+   # also note the use plenty of () to clarify the logic
+   $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("ls -l \$path")'  ~/github/tpsup/scripts
+
+
 END
 
    exit 1;
