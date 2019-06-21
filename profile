@@ -17,6 +17,12 @@ elif [[ $UNAME =~ Cygwin ]]; then
    export PERL5LIB=/cygdrive/c/Users/william/github/tpsup/lib/perl5
    export PYTHONPATH=/cygdrive/c/Users/william/github/tpsup/python2/lib
    export PATH="$PATH:/cygdrive/c/Users/william/github/tpsup/scripts"
+elif [[ $UNAME =~ Linux ]]; then
+   alias perllib='cd ~/github/tpsup/lib/perl5/TPSUP'
+   alias tpscripts='cd ~/github/tpsup/scripts'
+   export PERL5LIB=$HOME/github/tpsup/lib/perl5
+   export PYTHONPATH=$HOME/github/tpsup/python2/lib
+   export PATH="$PATH:$HOME/github/tpsup/scripts"
 else 
    echo "UNAME='$UNAME' is not supported"
 fi
