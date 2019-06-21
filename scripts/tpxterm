@@ -1,0 +1,65 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 display
+
+   pop up an xterm
+
+example:
+
+   $0 192.168.1.164:0
+   $0 host1.abc.com:0
+
+EOF
+   exit 1
+}
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+DISPLAY=$1
+
+OS=`uname`
+
+id=`id |cut -d\( -f2|cut -d\) -f1`
+hostname=`hostname`
+pwd=`pwd`
+title="$id@$hostname:$pwd"
+
+DIR=`dirname $0`
+
+. $DIR/../profile
+
+export PSl
+# man -M /usr/openwin/man xrdb
+# xrdb -display $DISPLAY -query
+
+if [ $OS = SunOS ]; then
+   XPATH=/usr/openwin/bin
+
+   $XPATH/xrdb -display $DISPLAY -override $DIR/xterm.RightButtonPaste
+
+   # /usr/openwin/bin/xlsfonts|grep adobe-courier
+   
+   #nohup /usr/openwin/bin/xterm -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   # -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash --rcfile $TPSUP/profile >/dev/null 2>&1 &
+
+   nohup /usr/openwin/bin/xterm -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
+
+elif [ $OS = Linux ]; then
+   xrdb.linux -display $DISPLAY -override $DIR/xterm.RightButtonPaste
+
+   #nohup xterm.linux -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   #-fg white -bg black -title $title -sl 10000 -sb -e "/bin/bash --rcfile $TPSUP/profile" >/dev/null 2>&1&
+
+   nohup xterm.linux -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1&
+else
+   echo "unsupported OS=$OS"
+fi
