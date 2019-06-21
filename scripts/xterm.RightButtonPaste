@@ -3,9 +3,9 @@
 
 XTerm*selectToClipboard: true
 
-XTerm.vtlOO.translations: #override \
+XTerm.vt100.translations: #override \
  <Btn1Down>: select-start(CLIPBOARD) \n\
- <Btn1Up>: se1ect-end(CLIPBOARD) \n\
+ <Btn1Up>: select-end(CLIPBOARD) \n\
  <Btn3Down>: insert-selection(CLIPBOARD) \n\
 
 ! run xrdb -load this_filename
