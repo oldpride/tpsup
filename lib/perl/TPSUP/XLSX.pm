@@ -97,7 +97,7 @@ sub xlsx_to_csvs {
    
       my $output;
    
-      if ($output_prefix eq '—') {
+      if ($output_prefix eq '-') {
          $output = '-';
       } else {
          $output = $output_prefix . "$i.csv";

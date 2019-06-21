@@ -15,8 +15,8 @@ prog=`basename $0`
 # $ ln -s wrapper.linux xrdb.linux
 
 generic=`echo $prog|cut -d. -f1`
-# xterm.linux ----->	xterm
-# xrdb.linux ------>	xrdb
+# xterm.linux -----> xterm
+# xrdb.linux ------> xrdb
 
 if [ -f "/usr/bin/$generic" ]; then
    # if localhost already installed xterm/xrdb, use it

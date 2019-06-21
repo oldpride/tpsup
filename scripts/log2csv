@@ -43,7 +43,7 @@ description:
    -o output.csv              default to STDOUT
 
    -capture 'f1,f2...=pattern'
-   —c       'f1,f2...=pattern'
+   -c       'f1,f2...=pattern'
                               capture strings from matched line and assign them to the fields,
 
    -query select ...

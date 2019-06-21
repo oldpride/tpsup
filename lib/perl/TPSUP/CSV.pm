@@ -1785,7 +1785,7 @@ sub diff_csv_long {
       my $out_fh;
    
       if ($opt->{DiffCsvOutput}) {
-         if ($opt->{DiffCsvOutput} eq ' — ') {
+         if ($opt->{DiffCsvOutput} eq '-') {
             $out_fh = \*STDOUT;
          } else {
             $out_fh = get_out_fh($opt->{DiffCsvOutput});
@@ -2564,7 +2564,7 @@ sub cat_csv {
       $ret->{columns} = $header_row;
       
       if ($opt->{CatCsvOutput}) {
-         if ($opt->{CatOutput} eq '—') {
+         if ($opt->{CatOutput} eq '-') {
             $out_fh = \*STDOUT;
          } else {
             $out_fh = get_out_fh($opt->{CatCsvOutput}, $opt);

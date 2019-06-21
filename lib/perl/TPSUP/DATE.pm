@@ -217,39 +217,44 @@ sub get_interval_seconds {
    # in prod, use the following instead, and move it to top of this module
    #use Date::Calc qw(Delta_Days);
 
-   if ($yyyymmdd1 && $yyyymmdd2) {
+   if ($yyyymmdd1 && $yyyymmdd2 && $yyyymmdd1 != $yyyymmdd2) {
       my ($yyyy1,$mm1,$dd1, $yyyy2,$mm2,$dd2);
       
-      if ($yyyymmdd1 =~ /^([0-9]{4})([0-9]{2})([0-9]{2})$/) {
+      if ("$yyyymmdd1" =~ /^([0-9]{4})([0-9]{2})([0-9]{2})$/) {
          ($yyyy1, $mm1, $dd1) = ($1, $2, $3);
       } else {
-         croak "yyyymmdd1=$yyyymmdd1 is in bad format";
+         croak "yyyymmdd1='$yyyymmdd1' is in bad format";
       }
       
-      if ($yyyymmdd2 =~ /^([0-9]{4})([0-9]{2})([0-9]{2})$/) {
+      if ("$yyyymmdd2" =~ /^([0-9]{4})([0-9]{2})([0-9]{2})$/) {
          ($yyyy2, $mm2, $dd2) = ($1, $2, $3);
       } else {
-         croak "yyyymmdd2=$yyyymmdd2 is in bad format";
+         croak "yyyymmdd2='$yyyymmdd2' is in bad format";
       }
       
       # use the Date::Calc module
-      my $days = Delta_Days($yyyy1,$mm1,$dd1, $yyyy2,$mm2,$dd2);
+      my $days = Date::Calc::Delta_Days($yyyy1,$mm1,$dd1, $yyyy2,$mm2,$dd2);
       
       $seconds += $days*86400; # 86400 = 24*60*60;
    }
       
    {
       my ($HH1, $MM1, $SS1, $HH2, $MM2, $SS2);
-      if ($HHMMSS1 =~ /^([0—9]{2})([0—9]{2})([0—9]{2})$/) {
+      #tian@linux1$ perl -e 'print "012" =~ /^[0-9]{3}$/ ? "true" : "false", "\n";'
+      #true
+      #tian@linux1$ perl -e 'print "012" =~ /^[0-9]{2}$/ ? "true" : "false", "\n";'
+      #false
+
+      if ("$HHMMSS1" =~ /^([0-9]{2})([0-9]{2})([0-9]{2})$/) {
          ($HH1, $MM1, $SS1) = ($1, $2, $3);
       } else {
-         croak "HHMMSS1=$HHMMSS1 is in bad format";
+         croak "HHMMSS1='$HHMMSS1' is in bad format";
       }
          
-      if ($HHMMSS2 =~ /^([0—9]{2})([0—9]{2})([0—9]{2})$/) {
+      if ("$HHMMSS2" =~ /^([0-9]{2})([0-9]{2})([0-9]{2})$/) {
          ($HH2, $MM2, $SS2) = ($1, $2, $3);
       } else {
-         croak "HHMMSS2=$HHMMSS2 is in bad format";
+         croak "HHMMSS2='$HHMMSS2' is in bad format";
       }
       
       $seconds += ($HH2-$HH1)*3600 + ($MM2-$MM1)*60 + ($SS2-$SS1);

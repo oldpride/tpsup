@@ -42,7 +42,7 @@ Usage:
    -f file         default to ../tpstamp.txt.
                    The current script points to $file.
 
-   -r dir          use this dir as the base dir for the '—d' switch so that
+   -r dir          use this dir as the base dir for the '-d' switch so that
                    you can specify relative paths
 
    -v              verbose mode.

@@ -1,0 +1,188 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::DATE qw(get_interval_seconds);
+use TPSUP::LOG qw(get_PatternCfg);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+my $min_idle = 60;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+ description:
+   to find out log file's idleness pattern. '-' for STDIN.
+
+   The configurations are by default in ${dir}log_pattern.csv.
+
+   -x exclude_pattern     Perl style, exclude lines with this pattern
+   -m  match_pattern      Perl style, only count the lines with this pattern
+   -i min_idle            Ignore if it is less than this count. Default $min_idle
+
+   -app App               As it is in pattern_file .
+   -pf pattern_file       pattern file, default to $dir/log_pattern.csv.
+   -t TimePattern         Perl style. Default is in $dir/log_pattern.csv.
+   -a Assignment          How to assign the matched time_pattern. Default is in $dir/log_pattern.csv.
+
+examples:
+
+   $prog -app appia -i 5 logsnip_test.txt
+
+EOF
+
+   exit 1;
+}
+
+ our ($exclude_pattern, $match_pattern, $verbose, $App, $pattern_file, $TimePattern, $Assignment);
+
+ GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "m=s"            => \$match_pattern,
+   "i=s"            => \$min_idle,
+   "v"              => \$verbose,
+   "t=s"            => \$TimePattern,
+   "a|assignment=s" => \$Assignment,
+   "pf=s"           => \$pattern_file,
+   "app=s"          => \$App,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $cfg = get_PatternCfg({
+   PatternFile       => $pattern_file,
+   RemoveInputQuotes => 1,
+   App               => $App,
+   TimePattern       => $TimePattern,
+   Assignment        => $Assignment,
+   CheckSettings     => [ qw(TimePattern Assignment) ],
+});
+
+my @assignments = split /,/, $cfg->{Assignment};
+
+my $TimePattern = qr/$cfg->{TimePattern}/;
+
+$exclude_pattern = qr/$exclude_pattern/ if defined $exclude_pattern;
+  $match_pattern =   qr/$match_pattern/ if defined   $match_pattern;
+
+ my $error = 0;
+
+for my $f (@ARGV) {
+   print STDERR "file = $f\n";
+
+   my $fh;
+
+   if ($f eq '-') {
+      $fh = \*STDIN;
+   } else {
+      die "cannot find $f" if ! -f $f;
+
+      if ($f =~ /gz$/) {
+         my $cmd = "gunzip -c $f";
+         open $fh, "?cmd|" or die "cmd=$cmd failed";
+      } else {
+         open $fh, "<$f" or die "cannot read $f failed";
+      }
+   }
+
+   my $last_yyyymmdd;
+   my $last_HHMMSS;
+   my $first_ref;
+   my $last_ref;
+   my $idle_by_interval;
+   
+   while (<$fh>) {
+      my $line = $_;
+
+      chomp $line;
+   
+      next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
+      next if defined   $match_pattern && $line !~   /$match_pattern/;
+
+      my @a = ($line =~ /$TimePattern/);
+
+      next if ! @a;
+
+      my $yyyymmdd;
+      my $HHMMSS;
+
+      my $r; # ref
+      @{$r}{@assignments} = @a;
+
+      if (defined($r->{yyyy}) && defined($r->{mm}) && defined($r->{dd})) {
+         $yyyymmdd = "$r->{yyyy}$r->{mm}$r->{dd}";
+      }
+
+      my $HHMMSS = "$r->{HH}$r->{MM}$r->{SS}";
+
+      $last_ref->{line} = $line;
+
+      if (! $last_HHMMSS) {
+         $first_ref->{line} = $line;
+
+         $last_HHMMSS = $HHMMSS;
+
+         if ($yyyymmdd) {
+            $last_yyyymmdd = $yyyymmdd;
+         }
+
+         next;
+      }
+
+      my $idle;
+
+      if ($yyyymmdd) {
+         $idle = get_interval_seconds($last_yyyymmdd, $last_HHMMSS, $yyyymmdd, $HHMMSS);
+      } else {
+         $idle = get_interval_seconds(undef, $last_HHMMSS, undef, $HHMMSS);
+      }
+
+      #print "$last_HHMMSS, $HHMMSS, $idle, $line\n";
+      
+      if ($idle > $min_idle) {
+         $idle_by_interval->{"$last_HHMMSS-$HHMMSS"} = $idle;
+      }
+
+      {
+         $last_HHMMSS = $HHMMSS;
+
+         if ($yyyymmdd) {
+            $last_yyyymmdd = $yyyymmdd;
+         }
+      }
+   }
+
+   close $fh if $fh != \*STDIN;
+
+   for my $k (sort (keys %$first_ref)) {
+      print "first $k = $first_ref->{$k}\n";
+   }
+
+   print "\n";
+
+   for my $k (sort (keys %$last_ref)) {
+      print "last $k = $last_ref->{$k}\n";
+   }
+
+   print "\n";
+
+   for my $interval (sort (keys %$idle_by_interval)) {
+      my $idle = $idle_by_interval->{$interval};
+      print "$interval idle $idle seconds\n";
+   }
+}
+
+exit 0;
+      
+      

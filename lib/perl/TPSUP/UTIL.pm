@@ -176,7 +176,7 @@ sub get_out_fh {
    
    my $out_fh;
    
-   if (!defined($output) || $output eq '—') {
+   if (!defined($output) || $output eq '-') {
       $out_fh = \*STDOUT;
    } else {
       my ($outdir) = ($output =~ m:/^(.+/):);

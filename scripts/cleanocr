@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 usage () {
    cat <<EOF
@@ -174,7 +174,10 @@ do
          s/:rt/:^/g
          s/\[rt/:[^/g
          s:\b0K\b:OK:g
+	 s:—:-:g
    ' >$tmpfile
+
+   # s:—:-:g  the first dash and second dash are actually different.
 
    if [ $? -ne 0 ]; then
       echo "sed failed";
