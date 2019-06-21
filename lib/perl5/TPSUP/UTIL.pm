@@ -147,7 +147,7 @@ sub get_in_fh {
          $ssh_host = "";
          $path = $input;
    
-         croak "cannot find $input" if ! -f $input;
+         croak "$input is not found or is not a file" if ! -f $input;
       }
    
       if ($path =~ /gz$/) {
