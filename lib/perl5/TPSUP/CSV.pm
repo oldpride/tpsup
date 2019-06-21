@@ -2569,13 +2569,17 @@ sub cat_csv {
          } else {
             $out_fh = get_out_fh($opt->{CatCsvOutput}, $opt);
          }
-      
-         print {$out_fh} join(",", @$header_row), "\n";
       }
       
       my @selectColumns = $opt->{CatCsvColumns}->[$i] ? @{$opt->{CatCsvColumns}->[$i]} : 
                           $opt->{CatCsvColumns}->[0]  ? @{$opt->{CatCsvColumns}->[0]}  :
                                                                                    ()  ;
+      
+      if ( !@selectColumns ) {
+         print {$out_fh} join(",", @$header_row), "\n";
+      } else {
+         print {$out_fh} join(",", @selectColumns), "\n";
+      }
                    
       for my $r ( @{$ref->{array}} ) {
          if ( !@selectColumns ) {
