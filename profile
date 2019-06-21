@@ -6,6 +6,7 @@ UNAME=`uname -a`
 # CYGWIN_NT-10.0 LAPTOP-4DDGKLFF 3.0.4(0.338/5/3) 2019-03-16 09:50 x86_64 Cygwin
 
 if [[ $UNAME =~ Msys ]]; then
+   export TPSUP=~/github/tpsup
    alias perllib='cd /c/Users/william/github/tpsup/lib/perl5/TPSUP'
    alias tpscripts='cd /c/Users/william/github/tpsup/scripts'
    alias tpsup='. ~/github/tpsup/profile'
@@ -13,6 +14,7 @@ if [[ $UNAME =~ Msys ]]; then
    export PYTHONPATH=/c/Users/william/github/tpsup/python2/lib
    export PATH="$PATH:/c/Users/william/github/tpsup/scripts"
 elif [[ $UNAME =~ Cygwin ]]; then
+   export TPSUP=/cygdrive/c/Users/william/github/tpsup
    alias perllib='cd /cygdrive/c/Users/william/github/tpsup/lib/perl5/TPSUP'
    alias tpscripts='cd /cygdrive/c/Users/william/github/tpsup/scripts'
    alias tpsup='. /cygdrive/c/Users/william/github/tpsup/profile'
@@ -20,6 +22,7 @@ elif [[ $UNAME =~ Cygwin ]]; then
    export PYTHONPATH=/cygdrive/c/Users/william/github/tpsup/python2/lib
    export PATH="$PATH:/cygdrive/c/Users/william/github/tpsup/scripts"
 elif [[ $UNAME =~ Linux ]]; then
+   export TPSUP=~/github/tpsup
    alias perllib='cd ~/github/tpsup/lib/perl5/TPSUP'
    alias tpscripts='cd ~/github/tpsup/scripts'
    alias tpsup='. ~/github/tpsup/profile'

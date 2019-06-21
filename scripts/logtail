@@ -1,0 +1,96 @@
+#!/bin/bash
+
+prog=`basename $0`
+dir=`dirname $0`
+
+tail_switch="-backseconds 1200"
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog app pattern file
+
+   grep tail part of the log. it calls log_event script
+
+   'app' eg, appia, pks, as defined in $dir/log_pattern.csv
+
+   -x exclude_pattern
+   -m match_pattern
+                these 2 are pre-filters, to speed up
+
+   pattern      this pattern is in addition to exclude_pattern and match_pattern.
+                use "_all_", if you don't want to filter any more
+
+tail switches: (default to -s 1200)
+
+   -p exp       Staring from last pattern from end of file
+
+   -t time      Staring from this time and after, eg. '2019/02/06 15:52:58'
+                This searches from end of file, the time is in the format
+                decided by the app in the $dir/log_pattern.csv
+                If you expect the time is near the beginning of the log,
+                then use -reset
+
+   -s number    Go back this number of seconds from now. This setting
+                will be converted into backtime
+                pattern is an order id to trace
+
+example:
+
+   - filter with '-m 35=' and  '49=SENDER1'
+   $prog -m 35= appia "49=SENDER1" appia1.console.log
+
+   - locate a order id and then use this script to trace
+   tail -100000 appia1.console.log |grep 35=D|grep -i receiv| head -n 1
+
+   - '-o' is to trace order id
+   $prog -o appia IG4US000000c0JeAzBVOOOO appia1.console.log
+   
+   - use '_all_' to disable filter
+   $prog -t '2019/02/06 15:52:58' appia _all_ appia2.log
+
+EOF
+
+   exit 1
+}
+
+pattern_is_order=N
+
+while getopts p:s:t:m:x:vo o;
+do
+   case "$o" in
+      p) tail_switch="-backpattern '$OPTARG'";;
+      s) tail_switch="-backseconds $OPTARG";;
+      t) tail_switch="-backtime '$OPTARG'";;
+      m) match_switch="-m '$OPTARG'";;
+      x) exclude_switch="-x '$OPTARG'";;
+      v) verbose="-v";;
+      o) pattern_is_order="Y";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -lt 3 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+app="$1"
+
+if [ "$2" = "_all_" ]; then
+   grep="-print"
+else
+   if [ $pattern_is_order == Y ]; then
+      grep="-oid $2"
+   else
+      grep="-grep $2"
+   fi
+fi
+
+file="$3"
+
+set -x
+eval log_event -progress 100000 -app $app $tail_switch $match_switch $exclude_switch $verbose $grep $file
