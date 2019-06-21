@@ -1,0 +1,5 @@
+cygwin uses ~/.bash_profile, add 
+
+  . /cygdrive/c/Users/william/github/tpsup/profile 
+
+to the bottom
