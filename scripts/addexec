@@ -1,0 +1,4 @@
+#!/bin/bash
+
+tpfind -he '($type eq "file") && (($mode & 0755) != 0755) && ($fh=ifh($path)) && ($line=<$fh>) && ($line=~/^#!/)' -ha '!system("ls -l $path; chmod 755 $path")'  ~/github/tpsup/scripts
+
