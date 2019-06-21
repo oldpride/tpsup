@@ -1,0 +1,34 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 file
+
+   find the rpm name for a file
+
+   note: Ubuntu doesn't use rpm.
+
+examples:
+
+   $0 libc.so
+
+EOF
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+for i in $@
+do
+   echo "rpm --filesbypkg -aq|egrep -i 'Si'"
+
+   rpm --filesbypkg -aq|egrep -i "$i"
+
+   echo
+
+done
