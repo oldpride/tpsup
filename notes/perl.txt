@@ -5,3 +5,18 @@ make
 make test
 make -n install
 make install
+
+----------------------------------------------------
+https://stackoverflow.com/questions/65865/whats-the-easiest-way-to-install-a-missing-perl-module
+
+Ubuntu: apt-cache search 'perl$'
+
+to install XML::Simple
+
+tian@linux1:~$ apt-cache search 'perl$'|grep -i xml |grep -i simple
+...
+libxml-simple-perl - Perl module for reading and writing XML
+...
+
+tian@linux1:~$ sudo apt install libxml-simple-perl
+
