@@ -103,6 +103,25 @@ git commit -m new
 git remote add origin ssh://git@github.com/oldpride/java.git
 git push origin master
 
+----------------------------------------------------------------------------
+
+on the Linux host, which I set up later, 
+
+'git status' shows up to date
+
+tian@linux1:~/github/tpsup/scripts$ git status
+On branch master
+Your branch is up to date with 'origin/master'.
+
+but I knew I am behind because I have just checked in a file from PC, and 
+'git pull' can pull the file
+
+https://stackoverflow.com/questions/37669297/why-doesnt-my-git-status-show-me-whether-im-up-to-date-with-my-remote-counterp
+
+tian@linux1:~/github/tpsup/notes$ git branch -vv
+* master 9131fac [origin/master] update
+
+
 
 
 
