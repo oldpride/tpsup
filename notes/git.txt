@@ -121,7 +121,10 @@ https://stackoverflow.com/questions/37669297/why-doesnt-my-git-status-show-me-wh
 tian@linux1:~/github/tpsup/notes$ git branch -vv
 * master 9131fac [origin/master] update
 
+tian@linux1:~/github/tpsup/notes$ git rev-parse --symbolic-full-name "@{u}"
+refs/remotes/origin/master
 
+still no help
 
 
 
