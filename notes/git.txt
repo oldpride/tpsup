@@ -1,10 +1,109 @@
 SSH keys:
 
+NOTE: Git Bash and Cygwin are assigning different home directories,
+but we try to keep one set of keys as they are from the same host.
+
 from Git Bash, generate the keys
+ssh-keygen
+the keys are generated and stored in /c/Users/william/.ssh
 
 from Cygwin, 
 william@LAPTOP-4DDGKLFF ~
 $ cp -p /cygdrive/c/Users/william/.ssh/* .ssh
+
+from Linux, generate a separate set of keys
+sshkey-gen
+
+add both pub keys to https://github.com/oldpride
+
+-----------------------------------------------------------------
+
+run this from all the 3 enviroment
+
+git config --global user.email "tianhua_han@yahoo.com"
+git config --global user.name "Tianhua Han"
+
+
+-----------------------------------------------------------------
+in Git Bash
+
+create a repo 'tpsup' on http://github.com
+
+mkdir github
+cd github
+william@LAPTOP-4DDGKLFF MINGW64 ~/github
+$ git clone ssh://git@github.com/oldpride/tpsup.git
+Cloning into 'tpsup'...
+The authenticity of host 'github.com (192.30.253.112)' can't be established.
+RSA key fingerprint is SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8.
+Are you sure you want to continue connecting (yes/no)? yes
+Warning: Permanently added 'github.com,192.30.253.112' (RSA) to the list of known hosts.
+remote: Enumerating objects: 3, done.
+remote: Counting objects: 100% (3/3), done.
+remote: Total 3 (delta 0), reused 0 (delta 0), pack-reused 0
+Receiving objects: 100% (3/3), done.
+
+william@LAPTOP-4DDGKLFF MINGW64 ~/github
+$ ls
+tpsup/
+after adding another file
+git add -A
+git commit -m "not done"
+git push
+
+cygwin
+cd /cygdrive/c/Users/william/github/tpsup/lib/perl/TPSUP
+vi ...
+
+-------------------------------------------------------------------------
+to back out all files in "git add"
+$ git reset
+to remove files in the staging area, ie, committed but not pushed, do
+
+$ git rm --cached lib/perl/TPSUP/.Expression.pm.swp
+rm 'lib/perl/TPSUP/.Expression.pm.swp'
+to remove files in the remote depo, ie, pushed
+
+$ git rm lib/perl/TPSUP/.Expression.pm.swp
+
+--------------------------------------------------------------------------
+To ignore vim/vi tmp filese
+
+in GitBash
+vi ~/.gitignore
+*~
+*.swp
+*.swo
+*.pyc
+.idea
+.git
+tpstamp.txt.*
+
+git config --global core.excludesfile ~/.gitignore
+
+later moved .gitignore under .../github/tpsup. this way it will be checked into git too
+
+----------------------------------------------------------------------------
+
+to set up java/eclipse/git for java
+
+https://help.github.com/en/articles/adding-an-existing-project-to-github-using-the-command-line
+create a new repo "java" on https://github.com/oldpride
+in Git Bash
+cd ~/eclipse-workspace
+git init
+cp ~/.gitignore .
+vi gitignore
+# add the following lines to ignore hidden files and compiled files .../target/...
+.*
+target
+git add -A
+git status
+git commit -m new
+git remote add origin ssh://git@github.com/oldpride/java.git
+git push origin master
+
+
 
 
 
