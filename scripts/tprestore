@@ -9,7 +9,7 @@ use TPSUP::CSV qw(/./);
 
 my $prog = $0; $prog =~ s:.*/::;
 
-my $home = `/usr/bin/bash -c "echo ~"`; chomp $home;
+my $home = `/bin/bash -c "echo ~"`; chomp $home;
 
 sub usage {
    my ($message) = @_;

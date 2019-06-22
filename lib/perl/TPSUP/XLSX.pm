@@ -93,14 +93,12 @@ sub xlsx_to_csvs {
    my $i = 0;
    
    for my $sheet (@{$excel -> {Worksheet}}) {
-      $i++;
-   
       my $output;
    
       if ($output_prefix eq '-') {
          $output = '-';
       } else {
-         $output = $output_prefix . "$i.csv";
+         $output = sprintf("%s%d%s", $output_prefix, $i+1, ".csv");
       } 
       
       my $sheet = $excel->{Worksheet}[$i];
@@ -134,8 +132,12 @@ sub xlsx_to_csvs {
       }
       
       #close $out_fh if $out_fh && $out_fh != \*STDOUT;
-      return query_csv2(\@a, {%$opt, InputArrayArray=>1, output=>$output});
+      query_csv2(\@a, {%$opt, InputArrayArray=>1, output=>$output});
+
+      $i++;
    }
+
+   return;
 }
 
 1
