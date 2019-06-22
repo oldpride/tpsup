@@ -1,0 +1,7 @@
+to search an app, for example, to install java 1.8
+
+apt-cache search 'java' |grep -i jdk
+
+sudo apt install openjdk-8-jdk
+
+sudo apt autoremove default-jdk # (this is jdk 11)
