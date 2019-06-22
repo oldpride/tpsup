@@ -1,0 +1,10 @@
+SSH keys:
+
+from Git Bash, generate the keys
+
+from Cygwin, 
+william@LAPTOP-4DDGKLFF ~
+$ cp -p /cygdrive/c/Users/william/.ssh/* .ssh
+
+
+
