@@ -55,18 +55,18 @@ Troubleshooting commands to test MIME types
 
 examples:
    - one attachment
-   echo test|$prog -s "test" -a tpmail_test.csv tianhua.han\@abc.com
+   echo test|$prog -s "test" -a tpcsv2_test.csv tianhua.han\@abc.com
 
    - multiple attachments (-a)
-   echo test|$prog -s "test" -a tpmail_test.csv -a tpmail_test.html tianhua.han\@abc.com
+   echo test|$prog -s "test" -a tpcsv2_test.csv -a tpmail_test.html tianhua.han\@abc.com
 
    - to send html as main message body, two ways
-   csv2html tpmail_test.csv | $prog -mt text/html -s test tianhua.han\@abc.com
+   csv2html tpcsv2_test.csv | $prog -mt text/html -s test tianhua.han\@abc.com
    $prog -mt text/html -s test tianhua.han\@abc.com <tpmail_test.html
 
    - to prevent outlook from removing line breaks, use -PrefixSpace.
    (or you if the input is csv file, we can also use csv2html, see example above)
-   $prog -PrefixSpace -s test tianhua.han\@abc.com <tpmail_test.csv
+   $prog -PrefixSpace -s test tianhua.han\@abc.com <tpcsv2_test.csv
 
 END
 

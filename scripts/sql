@@ -62,13 +62,13 @@ usage:
 examples:
 
    - oracle
-   sql -maxout 10 ORA_USER\@db1 "select * from all_synonyms"
-   sql -maxout 10 ORA_USER\@db1 file sql_test.sql
-   sql -maxout 10 ORA_USER\@db1 batch sql_test_batch.txt
+   sql -maxout 10 orauser1\@oradb1 "select * from all_synonyms"
+   sql -maxout 10 orauser1\@oradb1 file sql_test.sql
+   sql -maxout 10 orauser1\@oradb1 batch sql_test_batch.txt
 
    - sybase
-   $prog imagine "select \@\@version"
-   $prog imagine file /apps/get_positions.sql
+   $prog sybuser1\@sybdb1 "select \@\@version"
+   $prog sybuser1\@sybdb1 file /apps/get_positions.sql
 
    - test passwords
    $prog -maxout 10 -DbiString \\
@@ -102,7 +102,7 @@ GetOptions(
    'noheader'       => \$noheader,
    'maxout=s'       => \$maxout,
    'o|output=s'     => \$output,
-   'conn=s'         => \$connfile.
+   'conn=s'         => \$connfile,
    'LowMemory'      => \$LowMemory,
    'OutputDelimiter=s' => \$OutputDelimiter,
    'OutputHeader=s' => \$OutputHeader,

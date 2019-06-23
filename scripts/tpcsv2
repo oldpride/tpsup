@@ -189,8 +189,8 @@ examples:
    compare the following two commands:
    The first one will error out "Modification of a read-only value attempted" because
    perl not allow us to use \${35} directly
-   $prog      -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38)+1' -render tpcsv2_test_FIX.csv
-   $prog -FIX -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38)+1' -render tpcsv2_test_FIX.csv
+   $prog      -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38}+1' -render tpcsv2_test_FIX.csv
+   $prog -FIX -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38}+1' -render tpcsv2_test_FIX.csv
    
    - temporary columns can be used in sort key, MatchExp, ExcludeExp, ExportExp
    $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -ee 's3=\${s2}' tpcsv2_test.csv

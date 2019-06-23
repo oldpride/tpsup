@@ -53,7 +53,7 @@ Usage:
 
    -m pattern
    -match pattern
-                   match this pattern, peri style, can use multiple times
+                   match this pattern, perl style, can use multiple times
           
    -UseBase        use the base information in file, default to ignore base
                    so that we can compare on the relative path level.

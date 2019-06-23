@@ -106,13 +106,13 @@ sub get_tmp_file {
       }
    }
    
-   if ($opt->{isDir} && "$opt->{isDir}" !~ /^[nf]/i) {
+   if ($opt->{isDir} && "$opt->{isDir}" !~ /^[nf0]/i) {
       my $dir = "$daydir/$prefix.$HHMMSS.$$.dir";
    
       $dir .= ".$tmp_index" if $opt->{AddIndex};
    
       mkdir($dir) || return undef;
-   
+
       return $dir;
    } else {
       my $file = "$daydir/$prefix.$HHMMSS.$$";
@@ -319,7 +319,7 @@ sub uri_escape {
    
    my $RFC3986 = qr/[^A-Za-z0-9\-\._~]/;
 
-   $text =- s/($RFC3986)/$escapes{$1} || _fail_hi($1)/ge;
+   $text =~ s/($RFC3986)/$escapes{$1} || _fail_hi($1)/ge;
    
    $text;
 }

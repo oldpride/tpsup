@@ -6,7 +6,7 @@ package TPSUP::Expression;
 # http://www.softpanorama.org/Scripting/Perlorama/perl_namespaces.shtml
 
 # "eval '...' statements, as well as regular expressions with deferred evaluation 
-# (like s///e operators or $(?{ }) expressions), re-establish the namespace environment
+# (like s///e operators or $(${ }) expressions), re-establish the namespace environment
 # for the duration of the expression compilation."
 
 #don't use 'my' for the following variables, 'my' will make them not accessible as
@@ -18,8 +18,8 @@ package TPSUP::Expression;
 #my $verbose;
 #see http://www.softpanorama.org/Scripting/Perlorama/perl_namespaces.shtml
 
-#without 'my *fix', $TPSUP::Expression::fix{hello) is a global variable, accessible anywhere
-#with 'my *fix', $TPSUP::Expression::fix{hello) will not exist in the main (calling) script
+#without 'my *fix', $TPSUP::Expression::fix{hello} is a global variable, accessible anywhere
+#with 'my *fix', $TPSUP::Expression::fix{hello} will not exist in the main (calling) script
 # with the 'my' above commented out, we need the following 'no strict ..' to
 # disable the compiler's complain.
 

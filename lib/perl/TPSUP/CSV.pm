@@ -341,13 +341,13 @@ sub run_sqlcsv ($$;$) {
 
    require DBI;
 
-   my $dbh = DBI->connect("DBI: CSV:f_dir=$tmpdir; csv_eol=\n; csv_sep_char=\\$separator;");
+   my $dbh = DBI->connect("DBI:CSV:f_dir=$tmpdir;csv_eol=\n;csv_sep_char=\\$separator;");
 
    if (ref($inputs) ne 'ARRAY') {
       croak "run_sql_csv() 2nd arg needs to be ref to array";
    }
 
-   my $pwd = 'pwd'; chomp $pwd;
+   my $pwd = `pwd`; chomp $pwd;
 
    my $i = 1;
 

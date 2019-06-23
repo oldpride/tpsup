@@ -878,7 +878,7 @@ if ($mode eq 'server') {
 
    $local_dir =~ s:[/]+$::; # remove the trailing /
    my $local_dir_abs = get_abs_path($local_dir);
-   my $old_pwd = 'pwd'; chomp $old_pwd;
+   my $old_pwd = `pwd`; chomp $old_pwd;
 
    my @target_paths;
    for my $server_path (@ARGV) {

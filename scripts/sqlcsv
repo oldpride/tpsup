@@ -1,0 +1,127 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::CSV qw(run_sqlcsv);
+use TPSUP::UTIL qw(get_out_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+
+usage:
+
+   $prog sql input1 [input2 ...]
+
+description:
+
+   use sql to query csv files
+
+   sql                  always assign files to table CSV1, CSV2, ...
+   input                csv files, can be gz file. '-' for STDIN
+
+   -v                   verbose
+   -output output.csv   default to STDOUT
+   -noheader
+   -separator char      default to ','
+   -outheader header    hardcoded output header
+   -rows number         only print our this number of rows.
+   -skip number         skip the first number of lines because some files have comments above header,
+
+examples:
+
+   - query
+   $prog "select * from CSV1" sqlcsv_test1.csv
+   $prog "select * from CSV1 where alpha = 'a'" sqlcsv_test1.csv
+   $prog "select * from CSV1 where name like '%sh'" sqlcsv_test1.csv
+
+   - update / delete / insert
+   cp sqlcsv_test1.csv sqlcsv_test2.csv
+
+   $prog "update CSV1 set number=6, value=100 where name = 'krish'" sqlcsv_test2.csv
+
+   $prog "delete from CSV1 where name = 'woods'" sqlcsv_test2.csv
+
+   $prog "insert into CSV1 VALUES ('m', 1, 'mike', 100)" sqlcsv_test2.csv
+
+   diff sqlcsv_test1.csv sqlcsv_test2.csv
+
+   - multiple tables
+   cp sqlcsv_test1.csv sqlcsv_test2.csv
+   $prog "update CSV1 set number=6, value=100 where name = 'krish'" sqlcsv_test2.csv
+   $prog \\
+      "select CSV1.name, CSV1.value, CSV2.value
+       from CSV1, CSV2
+       where not CSV1.name = ''
+           and CSV1.name = CSV2.name
+      " sqlcsv_test1.csv sqlcsv_test2.csv | csv -
+
+EOF
+
+   exit 1;
+} 
+
+my $separator = ','; 
+
+our ($output, $outheader, $verbose, $num_rows, $noheader, $skip);
+
+GetOptions(
+   "outheader=s" => \$outheader,
+   "separator=s" => \$separator,
+   "noheader"    => \$noheader,
+   "rows=i"      => \$num_rows,
+   "output|o=s"  => \$output,
+) or usage("Could not parse command line: $!"); 
+
+usage("wrong number of args") if @ARGV < 2; 
+
+my $sql = shift @ARGV; 
+
+my $out_fh = get_out_fh($output); 
+
+die "cannot open output" if !$out_fh; 
+
+my $ref = run_sqlcsv($sql, \@ARGV, {verbose=>$verbose, withHeader=>1, separator=>$separator}); 
+
+die "query failed" if !$ref; 
+
+exit 0 if $sql !~ /^\s*select/i; 
+exit 0 if !@$ref; 
+
+my $header_row = shift @$ref; 
+
+if (!$noheader) {
+   if ($outheader) {
+      print {$out_fh} "$outheader\n";
+   } else {
+      print {$out_fh} join(",", @$header_row), "\n";
+   }
+} 
+   
+if (!$num_rows) {
+   for my $row (@$ref) {
+      print {$out_fh} join(",", @$row), "\n";
+   }
+} elsif ($num_rows>0) {
+   my $total = scalar(@$ref);
+   my $end = $total <= $num_rows ? $total-1 : $num_rows-1;
+   for (my $i=0; $i<=$end; $i++) {
+      my $row = $ref->[$i];
+      print {$out_fh} join(",", @$row), "\n";
+   }
+} else {
+   my $total = scalar(@$ref);
+   my $start = $total+$num_rows<=0 ? 0 : $total+$num_rows;
+   for (my $i=$start; $i<$total; $i++) {
+      my $row = $ref->[$i];
+      print {$out_fh} join(",", @$row), "\n";
+   }
+}
+
+exit 0;

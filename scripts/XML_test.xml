@@ -26,7 +26,7 @@
                     or ${143} eq "PROG" or ${143} eq "INTL")'
 
       suppress-out='(${150} eq "3" and ${35} eq "8" and ${12201} eq "Y")
-		    or
+           or
                     (${150} eq "A" and ${35} eq "8" and ${12202} eq "Y")'
 
       pending-new-street="true"

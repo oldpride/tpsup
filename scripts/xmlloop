@@ -28,7 +28,7 @@ usage:
    
    -v                          verbose.
    
-   -path                       perl-style, eg, -path {FIXSessionJ->{suppress-out}.
+   -path                       perl-style, eg, -path {FIXSession}->{suppress-out}.
                                can repeat
    
    -ForceArray a,b,c           force these tags into array.
