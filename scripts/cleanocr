@@ -15,6 +15,7 @@ example
    -l      remove blank lines
    -s      remove spaces
    -p      perl
+   -b      bash
    -f      FIX message
    -j      java
    -y      python
@@ -25,7 +26,7 @@ EOF
 
 extra=""
 
-while getopts lpfjsy o; 
+while getopts lpfjsyb o; 
 do
    case "$o" in
      f) extra="
@@ -49,6 +50,26 @@ do
                s/\\s//g;
               "
         ;; 
+     b) 
+         #X${llJ ->\${11}
+         #$dir =~ s:[A/]+$::;
+
+         # https://stackoverflow.com/questions/9053100/sed-regex-and-substring-negation
+         extra="
+               s:\\(=[ ]*\\)'pwd':\\1\`pwd\`:g
+               s:\\(=[ ]*\\)'id':\\1\`id\`:g
+               s:\\(=[ ]*\\)'hostname':\\1\`hostname\`:g
+               s:'\\(date [^']*\\)':\`\\1\`:g
+               s:'\\(dirname [^']*\\)':\`\\1\`:g
+               s:'\\(baseame [^']*\\)':\`\\1\`:g
+               s:'\\(id [^']*\\)':\`\\1\`:g
+               s:'\\(tty[^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(echo [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(cat [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(df [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(du [^']*\\)':\`\\1\`:g
+               "
+        ;;
      p) 
          #X${llJ ->\${11}
          #$dir =~ s:[A/]+$::;
@@ -75,8 +96,6 @@ do
                s:=~ s/A:=~ s/^:g;
                s/=~ m:A/=~ m:^/g;
                /[!=]~/s:~ \\([ms]*[/:]\\)[*A]:~ \\1^:g;
-               s/^\\([ ]*\\)	/\\1      /;
-               s/	/ /g;
                s:if I:if !:g;
                s:if (I:if (!:g;
                s:-[l]\\([^a-zA-Z ]\\):-1\\1:g;
@@ -93,11 +112,17 @@ do
                s:\\bper[i1]\\b:perl:g
                s:([?]:(\$:g
                s:^\\([ ]*\\)[?]\\([a-zA-Z]\\):\\1$\\2:g
-	       s:\\(=[ ]*\\)'pwd':\\1\`pwd\`:g
-	       s:\\(=[ ]*\\)'id':\\1\`id\`:g
-	       s:\\(=[ ]*\\)'hostname':\\1\`hostname\`:g
-	       s:'\\(date .*?\\)':\`\\1\`:g
-	       s:\"\\(date .*?\\)\":\`\\1\`:g
+               s:\\(=[ ]*\\)'pwd':\\1\`pwd\`:g
+               s:\\(=[ ]*\\)'id':\\1\`id\`:g
+               s:\\(=[ ]*\\)'hostname':\\1\`hostname\`:g
+               s:'\\(date [^']*\\)':\`\\1\`:g
+               s:'\\(dirname [^']*\\)':\`\\1\`:g
+               s:'\\(baseame [^']*\\)':\`\\1\`:g
+               s:'\\(id [^']*\\)':\`\\1\`:g
+               s:'\\(df [^']*\\)':\`\\1\`:g
+               s:'\\(du [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(echo [^']*\\)':\`\\1\`:g
+               s:\"\\(date [^\"]*\\)\":\`\\1\`:g
               " 
         ;; 
      j) extra="
@@ -152,7 +177,8 @@ do
          s:[X]n:\\n:g;
          s:[X]d:\\d:g;
          s:■:=:g;
-         s:	: :g;
+         s/^\([ ]*\)	/\1      /g;
+         /junk/s/	/ /g;
          s:get(O):get(0):g
          s:(l):(1):g
          s:(O):(0):g
@@ -179,7 +205,7 @@ do
          s/:rt/:^/g
          s/\[rt/:[^/g
          s:\b0K\b:OK:g
-	 s:—:-:g
+         s:—:-:g
    ' >$tmpfile
 
    # s:—:-:g  the first dash and second dash are actually different.
