@@ -5,3 +5,12 @@ apt-cache search 'java' |grep -i jdk
 sudo apt install openjdk-8-jdk
 
 sudo apt autoremove default-jdk # (this is jdk 11)
+
+-------------------------------------------------------------------
+install chrome
+
+sudo apt install chromium-browser
+
+to launch
+
+/usr/bin/chromium-browser

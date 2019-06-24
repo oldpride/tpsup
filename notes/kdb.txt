@@ -1,0 +1,364 @@
+https://code.kx.com/v2/learn/install/linux/
+
+from web, request 64-bit license and installation link
+
+kdb can only run it is connected to internet, in order to send out license heartbeat
+
+wait for reply email, which contains the download link
+
+download from linux chrome
+
+the file is saved in ~/Downloads
+
+tian@linux1:~/Downloads$ ls -l
+total 328
+-rw-rw-r-- 1 tian tian 333276 Jun 23 16:45 l64.zip
+
+tian@linux1:~/Downloads$ unzip l64.zip
+Archive:  l64.zip
+  inflating: l64/q
+  inflating: q.k
+
+tian@linux1:~/Downloads$ ls -l
+total 356
+drwxrwxr-x 2 tian tian   4096 Jun 23 16:52 l64
+-rw-rw-r-- 1 tian tian 333276 Jun 23 16:45 l64.zip
+-rw-r--r-- 1 tian tian  23205 Jun  9 13:30 q.k
+
+according to the email
+   A vanilla kdb+ installation consists of 3 files - q, q.k and kc.lic
+   q.k and kc.lic should both reside in the default directory $HOME/q
+   q should reside in $HOME/q/l64 (replace l64 with your os+arch as necessary, e.g.
+   m64,w64,l32,...)
+   custom installations outside of this default directory structure can be specified
+   using the environment variables QHOME and QLIC
+   
+   ~/q$ tree
+   .
+   +-- kc.lic
+   +-- l64
+   |  +-- q
+   +-- q.k
+   1 directory, 3 files
+   
+the download has l64 and q.k, the kc.lic is in the email attachment
+
+tian@linux1:~/Downloads$ mkdir ~/q
+tian@linux1:~/Downloads$ mv l64 q.k ~/q
+
+save the key on PC and uses tpdist to copy over
+tian@linux1:~/q$ tpdist client 192.168.1.164 5555 /cygdrive/c/users/william/downloads/kc.lic .
+
+the web site recommended the following two things
+1. sudo apt install rlwrap
+   (rlwrap - readline wrapper)
+
+2. append q alias to .bashrc
+   alias q='QHOME=~/q rlwrap -r ~/q/l64/q'
+
+. ~/.bashrc
+
+tian@linux1:~$ q
+KDB+ 3.6 2019.06.09 Copyright (C) 1993-2019 Kx Systems
+l64/ 4(16)core 7904MB tian linux1 192.168.1.191 EXPIRE 2020.06.22 tianhua_han@yahoo.com KOD #4165539
+
+q)til 6
+0 1 2 3 4 5
+q)\\
+tian@linux1:~$ 
+
+note: the license expires on 2020.06.22
+
+--------------------------------------------------------------------
+
+generate 10 fibnazzi 
+q){x, sum -2#x}/[10;  1 1]
+1 1 2 3 5 8 13 21 34 55 89 144
+
+--------------------------------------------------------------------
+
+allocate buys to sells
+
+q)buys: 2 1 4 3 5 4
+q)sells: 12
+q)sells&sums buys
+2 3 7 10 12 12
+q)deltas sells&sums buys
+2 1 4 3 2 0
+
+--------------------------------------------------------------------
+
+create a table
+
+generate 10,000,000 dates between 2018.01.01 and 2018.01.31
+q)dates:2018.01.01+10000000?31
+q)count dates
+10000000
+q)dates
+2018.01.13 2018.01.09 2018.01.11 2018.01.02 2018.01.27 2018.01.10 2018.01.27 ..
+
+generate time between 00:00.000 and 24:00.000
+q)times:10000000?24:00:00.0000
+q)times
+02:55:49.666 10:26:51.904 14:48:07.061 12:11:27.794 00:23:39.872 02:05:15.502..
+
+q)qtys:100*1+10000000?100
+q)qtys
+4300 4000 5700 9100 8000 2400 500 1900 2500 7300 2500 7200 1200 3700 5800 310..
+
+q)ixs:10000000?3
+q)ixs
+2 0 1 2 2 1 0 2 0 1 1 0 0 2 1 2 0 2 1 0 2 2 1 2 0 1 0 2 1 1 1 2 0 2 2 1 2 2 1..
+
+generate syms assinging to ixs
+q)syms:`aapl`amzn`googl ixs
+q)syms
+`googl`aapl`amzn`googl`googl`amzn`aapl`googl`aapl`amzn`amzn`aapl`aapl`googl`a..
+
+generate pricecs assinging to ixs
+q)pxs:(1+10000000?0.03)*172.0 1189.0 1073.0 ixs
+q)pxs
+1080.679 172.5521 1211.08 1104.971 1097.452 1193.656 175.9138 1087.95 172.029..
+
+q)t:([] date:dates;time:times;sym:syms;qty:qtys;px:pxs)
+q)t
+date       time         sym   qty  px      
+-------------------------------------------
+2018.01.13 02:55:49.666 googl 4300 1080.679
+2018.01.09 10:26:51.904 aapl  4000 172.5521
+2018.01.11 14:48:07.061 amzn  5700 1211.08 
+2018.01.02 12:11:27.794 googl 9100 1104.971
+2018.01.27 00:23:39.872 googl 8000 1097.452
+2018.01.10 02:05:15.502 amzn  2400 1193.656
+2018.01.27 19:17:12.619 aapl  500  175.9138
+2018.01.12 06:25:05.298 googl 1900 1087.95 
+2018.01.27 06:53:42.222 aapl  2500 172.0294
+2018.01.06 12:02:02.283 amzn  7300 1212.974
+2018.01.21 08:22:01.131 amzn  2500 1189.415
+2018.01.30 03:43:37.124 aapl  7200 175.4103
+2018.01.23 05:34:36.103 aapl  1200 174.0633
+2018.01.07 14:22:25.651 googl 3700 1094.575
+2018.01.02 02:29:19.775 amzn  5800 1203.75 
+2018.01.25 17:48:05.755 googl 3100 1104.639
+2018.01.06 22:55:43.291 aapl  9700 175.852 
+2018.01.27 04:36:03.784 googl 8900 1077.025
+2018.01.05 15:52:41.303 amzn  9600 1213.053
+2018.01.14 19:44:30.940 aapl  3000 176.5086
+..
+
+sort by date,time ascending
+q)t:`date`time xasc t
+q)5#t
+date       time         sym  qty  px      
+------------------------------------------
+2018.01.01 00:00:01.129 aapl 8800 174.7627
+2018.01.01 00:00:02.099 amzn 8000 1198.197
+2018.01.01 00:00:02.670 aapl 1400 175.7161
+2018.01.01 00:00:02.885 amzn 9300 1223.15 
+2018.01.01 00:00:03.396 aapl 7600 175.518 
+
+q)-5#t
+date       time         sym  qty  px      
+------------------------------------------
+2018.01.31 23:59:57.791 aapl 4400 173.5411
+2018.01.31 23:59:57.930 aapl 3100 177.065 
+2018.01.31 23:59:59.075 aapl 6000 173.6112
+2018.01.31 23:59:59.166 amzn 100  1212.241
+2018.01.31 23:59:59.754 amzn 5600 1204.834
+
+--------------------------------------------------------------------
+q)select date,time,sym,px from t where sym=`aapl
+date       time         sym  px      
+-------------------------------------
+2018.01.01 00:00:01.129 aapl 174.7627
+2018.01.01 00:00:02.670 aapl 175.7161
+2018.01.01 00:00:03.396 aapl 175.518 
+2018.01.01 00:00:04.772 aapl 174.5059
+2018.01.01 00:00:05.190 aapl 176.4733
+2018.01.01 00:00:05.254 aapl 175.3628
+2018.01.01 00:00:05.263 aapl 175.1635
+2018.01.01 00:00:08.121 aapl 174.1475
+2018.01.01 00:00:10.048 aapl 174.1638
+2018.01.01 00:00:10.226 aapl 173.114 
+2018.01.01 00:00:10.536 aapl 172.0891
+2018.01.01 00:00:10.994 aapl 175.6005
+
+time the query
+q)\t select date,time,sym,px from t where sym=`aapl
+75
+
+group by date and then find open/close lo/hi px for aapl
+q)3#select open:first px, close:last px, lo:min px, hi:max px by date from t where sym=`aapl
+date      | open     close    lo       hi      
+----------| -----------------------------------
+2018.01.01| 174.7627 174.5251 172.0001 177.1599
+2018.01.02| 172.6117 175.7077 172      177.16  
+2018.01.03| 176.2038 177.1559 172      177.16  
+
+find the max profit if you bought at the min price, grouped by minute
+q)5#select maxprofit:max(px - min px) by date,time.hh,time.mm from t where sym=`aapl
+date       hh mm| maxprofit
+----------------| ---------
+2018.01.01 0  0 | 5.007388 
+2018.01.01 0  1 | 4.831483 
+2018.01.01 0  2 | 4.864731 
+2018.01.01 0  3 | 5.120353 
+2018.01.01 0  4 | 5.02954  
+
+note, you don't need the () because the way how q parses the command: from right to left
+q)5#select maxprofit:max px - min px by date,time.hh,time.mm from t where sym=`aapl
+date       hh mm| maxprofit
+----------------| ---------
+2018.01.01 0  0 | 5.007388 
+2018.01.01 0  1 | 4.831483 
+2018.01.01 0  2 | 4.864731 
+2018.01.01 0  3 | 5.120353 
+2018.01.01 0  4 | 5.02954  
+
+this is actually the range
+
+q)5#select range:(max px) - (min px) by date,time.hh,time.mm from t where sym=`aapl
+date       hh mm| range   
+----------------| --------
+2018.01.01 0  0 | 5.007388
+2018.01.01 0  1 | 4.831483
+2018.01.01 0  2 | 4.864731
+2018.01.01 0  3 | 5.120353
+2018.01.01 0  4 | 5.02954 
+
+??! need to ask an expert 
+
+wvap per minute
+
+q)5#select vwap:qty wavg px by date,time.hh,time.mm from t where sym=`aapl, date=2018.01.01, time.hh=01
+date       hh mm| vwap    
+----------------| --------
+2018.01.01 1  0 | 174.1665
+2018.01.01 1  1 | 174.6049
+2018.01.01 1  2 | 174.6053
+2018.01.01 1  3 | 174.5036
+2018.01.01 1  4 | 174.7556
+
+
+------------------------------------------------------------------------------
+
+server, open port and define a funcction
+q)\p 4242
+q)cub3:{x*x*x}
+
+client side, test a simple mulitplacation, and then call the remote function
+q)h: hopen `:localhost:4242
+q)h "6*7"
+42
+q)h (`cub3; 5)
+125
+
+
+to see the response from server 
+q)cub3:{0N!x*x*x}
+q)125
+
+client side does the same way
+q)h (`cub3; 5)
+125
+
+if the server is not secured, you can also define a function from a client side
+and then let the server to exeute, but this is very dangerous
+
+client side
+q)sq:{x*x}
+q)h (sq; 5)
+25
+
+------------------------------------------------------------------------------
+
+callbacks (asynchronous)
+
+'neg' means asynchonous
+
+server side
+q)cub3:{0N! x*x*x}
+q)worker:{[arg; callback] r:cub3 arg; (neg .z.w) (callback; r)}
+
+client side
+q)contine:{0N!x}
+q)(neg h) (`worker; 5; `continue)
+
+after run
+
+server side
+q)125
+
+client side
+q)'continue
+
+'continue' is the call back function
+
+------------------------------------------------------------------------------
+
+string vs token
+
+q)count "abc"
+3
+q)count `abc
+1
+
+a text file is seen as a list of strings by q
+
+create a list (using ()) of strings 
+
+q)("So long"; "and thanks"; "for all the fish")
+"So long"
+"and thanks"
+"for all the fish"
+q)count ("So long"; "and thanks"; "for all the fish")
+3
+
+I/O
+
+q)`:/tmp/solong.txt 0: ("So long"; "and thanks"; "for all the fish")
+`:/tmp/solong.txt
+
+q)read0 `:/tmp/solong.txt
+"So long"
+"and thanks"
+"for all the fish"
+
+tian@linux1:~/github/tpsup/kdb$ cat /tmp/solong.txt
+So long
+and thanks
+for all the fish
+
+------------------------------------------------------------------------------
+
+write a q script
+use 'show' to print out
+use 'exit 0' to terminate
+
+run a q script within q
+
+q)\l /home/tian/github/tpsup/kdb/testvwap.q
+date       hh mm| vwap    
+----------------| --------
+2018.01.01 1  0 | 174.1665
+2018.01.01 1  1 | 174.6049
+2018.01.01 1  2 | 174.6053
+2018.01.01 1  3 | 174.5036
+2018.01.01 1  4 | 174.7556
+
+run a q script from unix command line
+
+tian@linux1:~/github/tpsup/kdb$ q testvwap.q
+KDB+ 3.6 2019.06.09 Copyright (C) 1993-2019 Kx Systems
+l64/ 4(16)core 7904MB tian linux1 192.168.1.191 EXPIRE 2020.06.22 tianhua_han@yahoo.com KOD #4165539
+
+date       hh mm| vwap    
+----------------| --------
+2018.01.01 1  0 | 174.1665
+2018.01.01 1  1 | 174.6049
+2018.01.01 1  2 | 174.6053
+2018.01.01 1  3 | 174.5036
+2018.01.01 1  4 | 174.7556
+
+
+
