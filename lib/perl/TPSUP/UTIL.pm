@@ -259,7 +259,7 @@ sub tpeng_unlock($;$) {
    return $dec^$magic;
 }
     
-sub getpw_by_key {
+sub get_pw_by_key {
    my ($key, $opt) = @_;
    
    my $book;
