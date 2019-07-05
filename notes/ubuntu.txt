@@ -14,3 +14,48 @@ sudo apt install chromium-browser
 to launch
 
 /usr/bin/chromium-browser
+
+-------------------------------------------------------------------
+add sd card.
+
+Added a 64-GB Samsung evo micro sd card but my linux cannot find it using df, even after reboot
+
+https://askubuntu.com/questions/95391/how-do-i-mount-an-sd-card
+
+$ sudo lshw
+(cannot see any sd card)
+
+$ sudo fsck -l
+...
+Disk /dev/mmcblk1: 59.6 GiB, 64021856256 bytes, 125042688 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0x00000000
+
+this looks like it, around 64GB
+
+timestamp seems to confirm this guess.
+
+tian@linux1:~$ sudo mkdir /media/sdcard
+
+tian@linux1:~$ sudo mount /dev/mmcblk1p1 /media/sdcard
+mount: /media/sdcard: unknown filesystem type 'exfat'.
+
+https://askubuntu.com/questions/364270/mount-error-unknown-filesystem-type-exfat
+
+tian@linux1:~$ sudo apt-get install exfat-fuse exfat-utils
+
+tian@linux1:~$ sudo mount /dev/mmcblk1p1 /media/sdcard
+FUSE exfat 1.2.8
+
+tian@linux1:~$ df -k
+...
+/dev/mmcblk1p1  62504960   16768  62488192   1% /media/sdcard
+
+to make the mount point permanent
+
+https://askubuntu.com/questions/679435/trouble-automounting-an-sd-card-on-trusty
+
+I haven't tried it yet

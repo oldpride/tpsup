@@ -3,6 +3,7 @@ all: autopath
 OBJS := $(wildcard *)
 
 autopath: $(OBJS)
+	[ -d ${TPSUP}/autopath ] || mkdir ${TPSUP}/autopath
 	/bin/rm -f ${TPSUP}/autopath/*
 	cd ${TPSUP}/autopath; \
 	pwd; \

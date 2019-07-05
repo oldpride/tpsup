@@ -71,9 +71,126 @@ note: the license expires on 2020.06.22
 
 --------------------------------------------------------------------
 
+/ is self-inflict function
+
+q)5#2
+2 2 2 2 2
+
+q)(*/) 5#2
+32
+
+--------------------------------------------------------------------
+list
+q)L: 1 2 3
+q)L[1]
+2
+
+q)L: (1, 2, 3)
+q)L[1]
+2
+
+list of list
+
+q)LL: (1 11 111; 2 22 222; 3 33 333)
+q)LL[1]
+2 22 222
+q)LL[1][2]
+222
+
+3D list
+q)LLL: ((1 11 111; 2 22 222; 3 33 333); (4 44 444; 5 55 555; 6 66 666))
+q)LLL[1]
+4 44 444
+5 55 555
+6 66 666
+q)LLL[1][1]
+5 55 555
+q)LLL[1][1][1]
+55
+
+q)count LLL
+2
+
+q)LLL
+1 11 111 2 22 222 3 33 333
+4 44 444 5 55 555 6 66 666
+
+--------------------------------------------------------------------
+dictionary
+
+q)d:`a`b`c!10 20 30
+q)d
+a| 10
+b| 20
+c| 30
+q)d[`a]
+10
+
+dict of list
+q)dl:`c1`c2!(10 20 30; 1.1 2.2 3.3)
+q)dl
+c1| 10  20  30 
+c2| 1.1 2.2 3.3
+
+q)dl[`c1][2]
+30
+q)dl[`c1; 2]
+30
+
+to transpose
+q)flip dl
+c1 c2 
+------
+10 1.1
+20 2.2
+30 3.3
+
+q)(dl)[`c1; 2]
+30
+q)(flip dl)[2; `c1]
+30
+
+flipped dl is a table, can be queried by sql
+q)t:flip dl
+q)select c1 from t
+c1
+--
+10
+20
+30
+q)
+
+
+--------------------------------------------------------------------
 generate 10 fibnazzi 
 q){x, sum -2#x}/[10;  1 1]
 1 1 2 3 5 8 13 21 34 55 89 144
+
+it is actually this function
+q)({[x] x, sum -2#x}/) [10;  1 1]
+1 1 2 3 5 8 13 21 34 55 89 144
+
+more verbosely,
+q)startList: 1 1
+q)({[list] list, sum -2#list}/) [10; startList]
+1 1 2 3 5 8 13 21 34 55 89 144
+
+even more,
+q)startList: (1 1)
+q)({[list] (list, sum -2#list)}/) [10; startList]
+1 1 2 3 5 8 13 21 34 55 89 144
+
+--------------------------------------------------------------------
+
+contrast / vs \
+/ only gives the final 
+\ gives the intermediate values as well
+
+q)(+/) 1+til 10
+55
+
+q)(+\) 1+til 10
+1 3 6 10 15 21 28 36 45 55
 
 --------------------------------------------------------------------
 
@@ -314,7 +431,8 @@ q)("So long"; "and thanks"; "for all the fish")
 q)count ("So long"; "and thanks"; "for all the fish")
 3
 
-I/O
+------------------------------------------------------------------------------
+I/O text file
 
 q)`:/tmp/solong.txt 0: ("So long"; "and thanks"; "for all the fish")
 `:/tmp/solong.txt
@@ -328,6 +446,72 @@ tian@linux1:~/github/tpsup/kdb$ cat /tmp/solong.txt
 So long
 and thanks
 for all the fish
+
+------------------------------------------------------------------------------
+I/O binary file
+
+to save binary data, use 'set'
+
+q)`:/home/tian/test.bin set 5#t
+`:/home/tian/test.bin
+
+read back using 'get'
+q)get `:/home/tian/test.bin
+date       time         sym  qty  px      
+------------------------------------------
+2018.01.01 00:00:01.129 aapl 8800 174.7627
+2018.01.01 00:00:02.099 amzn 8000 1198.197
+2018.01.01 00:00:02.670 aapl 1400 175.7161
+2018.01.01 00:00:02.885 amzn 9300 1223.15 
+2018.01.01 00:00:03.396 aapl 7600 175.518 
+
+------------------------------------------------------------------------------
+convert able to csv
+
+q)t2:5#t
+
+q)csv 0: t2
+"date,time,sym,qty,px"
+"2018-01-01,00:00:01.129,aapl,8800,174.7627"
+"2018-01-01,00:00:02.099,amzn,8000,1198.197"
+"2018-01-01,00:00:02.670,aapl,1400,175.7161"
+"2018-01-01,00:00:02.885,amzn,9300,1223.15"
+"2018-01-01,00:00:03.396,aapl,7600,175.518"
+
+save table into csv file
+
+q)`:/home/tian/test.csv 0: csv 0: t2
+`:/home/tian/test.csv
+
+tian@linux1:~$ cat /home/tian/test.csv
+date,time,sym,qty,px
+2018-01-01,00:00:01.129,aapl,8800,174.7627
+2018-01-01,00:00:02.099,amzn,8000,1198.197
+2018-01-01,00:00:02.670,aapl,1400,175.7161
+2018-01-01,00:00:02.885,amzn,9300,1223.15
+2018-01-01,00:00:03.396,aapl,7600,175.518
+
+read csv file as strings
+q)read0 `:/home/tian/test.csv
+"date,time,sym,qty,px"
+"2018-01-01,00:00:01.129,aapl,8800,174.7627"
+"2018-01-01,00:00:02.099,amzn,8000,1198.197"
+"2018-01-01,00:00:02.670,aapl,1400,175.7161"
+"2018-01-01,00:00:02.885,amzn,9300,1223.15"
+"2018-01-01,00:00:03.396,aapl,7600,175.518"
+
+read csv file as table, you need to know the format
+S: Symbol
+F: Float
+
+q)("SSSFF"; enlist ",") 0: `:/home/tian/test.csv
+date       time         sym  qty  px      
+------------------------------------------
+2018-01-01 00:00:01.129 aapl 8800 174.7627
+2018-01-01 00:00:02.099 amzn 8000 1198.197
+2018-01-01 00:00:02.670 aapl 1400 175.7161
+2018-01-01 00:00:02.885 amzn 9300 1223.15 
+2018-01-01 00:00:03.396 aapl 7600 175.518 
 
 ------------------------------------------------------------------------------
 
@@ -360,5 +544,448 @@ date       hh mm| vwap
 2018.01.01 1  3 | 174.5036
 2018.01.01 1  4 | 174.7556
 
+------------------------------------------------------------------------------
+~ is like =, but more generalized
 
+q)42~(42)
+1b
+q)42=(42)
+1b
+q)42~enlist (42)
+0b
+q)(42)
+42
+q)enlist (42)
+,42
+
+The equality operator = differs from match ~ in that it is atomic in both operands, meaning it tests its operands atom-wise instead of in entirety. All atoms of numeric, temporal or char type are mutually compatible for equality, but symbols are compatible only with symbols.
+
+q)42=42.0
+1b
+q)42~42.0
+0b
+
+q)42="*"
+1b
+q)42~"*"
+0b
+
+That last one may come as a surprise. It simply reflects that the underlying bit pattern of the ASCII char * is the same as the underlying bit pattern for the integer 42.
+
+q)2000.01.01=2000.01.01D00:00:00.000000000
+1b
+q)2000.01.01~2000.01.01D00:00:00.000000000
+0b
+q)12:00:00=12:00:00.000
+1b
+q)12:00:00~12:00:00.000
+
+------------------------------------------------------------------------------
+'not': the test against zero applies for any type with underlying numeric value.
+
+q)not 1010b
+0101b
+
+q)not 0xf
+0b
+
+q)not 99.6
+0b
+
+q)not 0
+1b
+
+q)not "*"
+0b
+
+q)not " "
+0b
+
+q)not ""
+`boolean$()
+
+q)not "\000"
+1b
+
+q)not \000
+'\
+  [0]  not \000
+
+q)not 00:00:00
+1b
+
+q)not 12:00:00.000
+0b
+
+------------------------------------------------------------------------------
+
+Important
+
+Overflow and underflow are not trapped on arithmetic operations on integer types.
+
+
+q)9223372036854775806+4
+-9223372036854775806
+q)2*5223372036854775800
+-8000000000000000016
+q)-9223372036854775806-4
+9223372036854775806
+
+------------------------------------------------------------------------------
+use 'neg' instead of '-' to negate variables
+
+q)-42
+-42
+q)a:42
+q)-a / error
+'-
+q)neg a
+-42
+------------------------------------------------------------------------------
+Maximum | and Minimum &
+------------------------------------------------------------------------------
+'amend'. C-language example: c += 1
+
+q)x:42
+q)x+:1
+q)x
+43
+
+q)x-:1
+q)x
+42
+
+q)x&:41
+q)x
+41
+
+with list
+
+q)L:100 200 300 400
+q)L+:99
+q)L
+199 299 399 499
+
+------------------------------------------------------------------------------
+
+In contrast to some languages, such as C, separate instances of NaN are equal.
+
+q)(0%0)=0%0
+1b
+
+The not operator returns 0b for all infinities and nulls since they all fail
+the test of equality with 0.
+
+q)not 0W
+0b
+q)not -0W
+0b
+q)not 0N
+0b
+
+We saw previously that for any numeric type
+
+null < negative infinity < normal value < positive infinity
+
+Nulls of different type, while equal, are not otherwise comparable  i.e., any relational comparison results in 0b.
+
+Infinities of different type are ordered by their width. For positive infinities
+
+short < int < long < real < float
+
+For negative infinities
+
+-float < -real < -long < -int < -short
+
+------------------------------------------------------------------------------
+
+Alias :: delayed evaluation
+
+q)w::(x*x)+y*y
+q)x:3
+q)y:4
+q)w
+25
+q)y:5
+q)w
+34
+
+It is a non-invasive way to inspect the inner workings of an in-flight evaluation.
+
+
+q)w::(0N!x*x)+y*y
+q)x:3
+q)y:4
+q)w
+9
+25
+q)w
+25
+q)y:6
+q)w
+9
+45
+Copy
+Observe that the first time w is referenced, the expression is evaluated, as indicated by the display of the value of x*x. On the next reference, the expression is not re-evaluated since none of the variables it depends on have changed. After changing y, the last reference causes re-evaluation.
+
+Aliasing is commonly used to provide a database view by specifying a query as the expression.
+
+
+q)t:([]c1:`a`b`c`a;c2:20 15 10 20;c3:99.5 99.45 99.42 99.4)
+q)v::select sym:c1,px:c3 from t where c1=`a
+q)v
+
+The table dependencies of a view are reflected in .z.b
+
+------------------------------------------------------------------------------
+
+Because both the keys and values are required to be lists, you must enlist atoms for a singleton dictionary.
+
+
+q)(enlist `x)!enlist 42
+x| 42
+
+lookup
+q)d:`a`b`c!10 20 30
+q)d[`a]
+10
+
+q)d `a
+10
+
+reverse lookup
+q)d?30
+`c
+
+non-unique keys reverse lookup use 'where'
+q)ddup:`a`b`a`c!10 20 30 20
+q)where 20=ddup
+`b`c
+q)where 10=ddup
+,`a
+"," to make a singleton list
+
+
+dictionary addition
+q)d1:0 100 500000!10 20 30
+q)d2:0 99 1000000!100 200 300
+q)d1+d2
+0      | 110
+100    | 20
+500000 | 30
+99     | 200
+1000000| 300
+
+
+Neither the key nor value lists of a dictionary are required to be atoms or uniform. Either can be nested lists.
+
+q)d:(`a`b; `c`d`e; enlist `f)!10 20 30
+
+q)d
+`a`b  | 10
+`c`d`e| 20
+,`f   | 30
+
+
+q)d `f
+30
+
+q)d?20
+`c`d`e
+
+q)d:`a`b`c!(10 20; 30 40 50; enlist 60)
+
+q)d
+a| 10 20
+b| 30 40 50
+c| ,60
+
+q)d `b
+30 40 50
+
+q)d?30 40 50
+`b
+
+q)d?enlist 60
+`c
+
+---------------------------------------------------------------------
+set up a empty dictionary with types
+q)d: (`symbol$())!`float$()
+q)d
+q)-3!d
+"(`symbol$())!`float$()"
+
+use assignment to extend the dictionary
+q)d[`x]:42
+'type
+  [0]  d[`x]:42
+            ^
+q)d[`x]:42.0
+q)d[`x]:42f
+q)d
+x| 42
+
+---------------------------------------------------------------------
+extract sub dictionary
+q)d:`a`b`c!10 20 30
+q)d `a`c
+_
+q)`a`c#d
+a| 10
+c| 30
+q)(enlist `c)#d
+_
+Copy
+In the event of duplicate keys, only the first is extracted.
+
+
+q)ddup:`a`b`a`c!10 20 30 20
+q)`a`c#ddup
+a| 10
+c| 20
+---------------------------------------------------------------------
+remove entries with '_'
+q)d:`a`b`c!10 20 30
+q)`a`c _ d
+b| 20
+q)(enlist `b) _ d
+a| 10
+c| 30
+q)d
+a| 10
+b| 20
+c| 30
+
+note: original dict not changed
+
+remove all keys leave an empty dict with types
+q) -3!`a`b`c _ d
+"(`symbol$())!`long$()"
+
+---------------------------------------------------------------------
+
+The formal notation for function definition is,
+
+{[p1;...;pn] e1; ...; em}
+
+Note that while the expressions are sequenced left-to-right, an individual expression is always evaluated right-to-left.
+
+The semi-colons in the body are separators, not terminators. Do not place a semi-colon after the last expression unless you deliberately want to suppress the return value.
+
+with calling args:
+
+{[p1;...;pn] e1; ...; em}[arg1;...;argn]
+
+---------------------------------------------------------------------
+assign function to a global variable
+
+q)f:{x*x}
+q)f[5]
+25
+q)`f[5]
+25
+q)`f 5
+25
+
+q).my.name.space.f:{2*x}
+q)`.my.name.space.f[5]
+10
+This works because a global variable is implemented as a symbolic-name/function pair in a dictionary
+
+---------------------------------------------------------------------
+
+An anonymous function can be useful as an in-line macro where it would otherwise be awkward to substitute. For example,
+
+
+f{[...] ...; {...}[...]; ...}
+Copy
+It is arguably more readable to factor this out.
+
+Another use for anonymous functions is a rudimentary form of dynamic dispatch, in which functions are placed in a collection (e.g., list, dictionary, table) and then selected dynamically (i.e., at runtime) rather than by an intrinsic name.
+
+
+q)powers:({1}; {x}; {x*x}; {x*x*x})
+…
+q)selected:2
+q)powers[selected]
+{x*x}
+
+q)powers[2][3]
+9
+
+
+---------------------------------------------------------------------
+"if"
+
+$[exprcond; exprtrue1; exprfalse1;]
+
+"if" with multi-statement
+
+$[exprcond; [exprtrue1; …]; [exprfalse1; …]]
+
+chained "if:
+
+$[exprcond1;exprtrue1; …;exprcondn;exprtruen;exprfalse]
+
+unlike perl and other languages, 0 and null are true
+
+q)a:0
+q)$[a=0;`zero; a>0;`pos; `neg]
+`zero
+
+vector "if"
+
+?[vb;exprtrue;exprfalse]
+
+q)L: til 10
+q)L
+0 1 2 3 4 5 6 7 8 9
+q)?[0<>L mod 3; L; 42]
+42 1 2 42 4 5 42 7 8 42
+
+q)t:([] c1:1.1 2.2 3.3; c2:10 20 30; c3:100 200 300)
+q)t
+c1  c2 c3 
+----------
+1.1 10 100
+2.2 20 200
+3.3 30 300
+q)update mix:?[c1>2.0; c3; c2] from t
+c1  c2 c3  mix
+--------------
+1.1 10 100 10 
+2.2 20 200 200
+3.3 30 300 300
+
+imperative "if"
+ conditionally evaluates a sequence of expressions. It is not a function and does not return a value. It has the form,
+if[exprcond;expr1; …;exprn]
+
+---------------------------------------------------------------------
+empty assginment - that is, ":" with the return value
+
+q)f:{0N!"Begin"; a:x; b:y; :a*b; "End"}
+q)f[6;7]
+"Begin"
+42
+
+
+---------------------------------------------------------------------
+protected evaluation
+
+@[fmon;a;exprfail]
+
+.[fmul;Largs;exprfail]
+
+Here fmon is a monadic function, a is single argument, fmul is a multivalent function, Largs is a list of arguments, and exprfail is an expression or function
+
+q)s:"6*7"
+q)@[value; s; show]
+42
+q)s:"6*`7"
+q)@[value; s; show]
+"type"
+
+---------------------------------------------------------------------
 
