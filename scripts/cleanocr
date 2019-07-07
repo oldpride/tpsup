@@ -19,6 +19,7 @@ example
    -f      FIX message
    -j      java
    -y      python
+   -k      kdb
 
 EOF
    exit 1
@@ -26,7 +27,7 @@ EOF
 
 extra=""
 
-while getopts lpfjsyb o; 
+while getopts lpfjsybk o; 
 do
    case "$o" in
      f) extra="
@@ -138,6 +139,13 @@ do
                s/II II II )/\"\"\")/;
                s/II II II J/\"\"\")/;
                s/II II II ..)/\"\"\")/;
+              "
+        ;; 
+     k) extra="
+               $extra
+               s/	/   /g;
+               /[a-zA-Z]lb/!s/lb/1b/g;
+               /Ob[a-z]/!s/Ob/0b/g;
               "
         ;; 
      #k) tail=$OPTARG;;
