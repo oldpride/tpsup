@@ -1,0 +1,5 @@
+for java project
+
+<groupId>:<artifactId>:<version> makes a fully qualified artifact name,
+ eg, "com.mycompany.app:ma-app:1"
+

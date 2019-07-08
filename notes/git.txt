@@ -103,6 +103,11 @@ git commit -m new
 git remote add origin ssh://git@github.com/oldpride/java.git
 git push origin master
 
+next time
+git push --set-upstream origin master
+git push
+
+
 ----------------------------------------------------------------------------
 
 on the Linux host, which I set up later, 

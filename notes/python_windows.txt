@@ -1,0 +1,28 @@
+installed python 3.7.3, C:\Program Files\Python37\python.exe
+set 3.7.3 version into PATH
+installed python 2.7.16, C:\Program Files\Python27\python.exe
+-------------------------------------------------------------------------------------------------
+installed pycharm community version
+add python 2.7.16 version into Project Interpreter in PyCharm
+File -> Settings
+Project->Project Interpreter-> click the Setting grear on the top right corner->Add
+check System Interpreter, add C:\Program Files\Python27\python.exe
+We shouldn't need to add C:\Program Files\Python37\python.exe because it already in PATH
+----------------------------------------------------------------------------------------------
+to add into PYTHONPATH in PyCharm
+Go to File->Settings->project Interpreter
+In the Project-Interpreter field, click the down facing arrow and select "show All"
+In that Menu, highlight your interpreter and then in the right menu, select the button "Show paths for the selected interpreter" (this is the last button)
+click the plus symbol to add your path
+--------------------------------------------------------------------------------------------
+add new package. 
+This needs to run the admin shell.
+      click start menu, on the search box, type CMD, then Ctrl+Shift+Enter, 
+      this starts the admin cmd.exe
+C:\Program Files\Python27\Scripts>pip.exe search yaml
+this shows PyYaml 5.5.1
+C:\Program Files\Python27\Scripts>pip.exe install pyyaml
+
+
+
+
