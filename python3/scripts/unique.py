@@ -11,7 +11,7 @@ parse csv file like perl-version tpcsv
 examples = textwrap.dedent("""
 examples:
     unique.py	  a b c d e a b c
-    unique.py -d, a, b, c, d, e, a, b, c
+    unique.py -d, a,b,c,d,e,a,b,c
     
  """)
 
