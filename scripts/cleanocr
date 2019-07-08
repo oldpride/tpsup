@@ -144,8 +144,10 @@ do
      k) extra="
                $extra
                s/	/   /g;
+               s/t[ ]*i[ ]*1/til/g;
                /[a-zA-Z]lb/!s/lb/1b/g;
                /Ob[a-z]/!s/Ob/0b/g;
+               s/\"symbol\$()/\`symbol\$()/g;
               "
         ;; 
      #k) tail=$OPTARG;;
