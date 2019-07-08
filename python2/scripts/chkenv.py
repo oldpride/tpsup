@@ -139,7 +139,7 @@ for app in Config.keys():
                     # https://stackoverflow.com/quest ions/2 867513 8/python-check-
                     # output-faiIs-with-ex it-status-1-but-popen-works-for-same-command
                     output =None
-                    kk
+
                     try:
                         output = subprocess.check_output(cmd_args)
                     except Exception as ex:
