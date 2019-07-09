@@ -60,8 +60,8 @@ def string2func(string, **opt):
 
     uncompiled = "def temp(r):\n"
 
-    #https://stackoverflow.com/questions/3995034/does-python-re-m
-    # odule-support-word-boundaries-b 
+    #https://stackoverflow.com/questions/3995034/does-python-re-module-support-word-boundaries-b 
+    #https://stackoverflow.com/questions/12871066/what-exactly-is-a-raw-string-regex-and-how-can-you-use-it
     ifh_opened = False
     if re.search(r'\bifh\b', string):
         # https://docs.python.org/2/library/gzip.html
@@ -334,7 +334,7 @@ def tpeng_unlock(string, salt):
     multplied_salt = length * salt
 
     # https://guide.freecodecamp.org/python/is-there-a-way-to-substr
-    # ing-a-st r ing-in-python/
+    # ing-a-string-in-python/
     magic = multplied_salt[0:length]
 
     plain = ''.join(chr(ord(a) ^ ord(b)) for a,b in zip(magic,unescaped))
@@ -347,7 +347,7 @@ def uri_escape(string) :
     for i in range(0,256):
         escape[chr(i)] = "%%%02X" % i
 
-        #RFC3986 = l[AA-Za-z0-9\-\._~]1;
+        #RFC3986 = '[AA-Za-z0-9\-\._~]';
         #compiled = re.compile(RFC3986)
         #result = re.sub(r"[^A-Za-z0-9\\-\\._~]", escape[r"\1"], string)
 
