@@ -34,3 +34,6 @@ a=[...]
 b=[...]
 for x in chain(a,b):
     ...
+
+Use mmap for IPC and persistence, be careful of synchronization
+
