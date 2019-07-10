@@ -1,6 +1,53 @@
 set -o vi
 
-UNAME=`uname -a`
+umask 022
+
+unset TMOUT
+
+kcd () {
+   old=$1
+   new=$2
+   cd=`pwd|sed -e "s:$old:$new:g"`
+   cd $cd
+}
+
+delpath () {
+   pattern=$1
+   if [ "X$pattern" = X ]; then
+      echo "usage: delpath pattern"
+      return 1
+   fi
+
+   if [ "X$2" = "X" ]; then
+      path=PATH
+   else
+     path=$2
+   fi
+
+   echo "deleting pattern ($pattern) from \$$path" >&2
+   old=`eval "echo \\\$$path"`
+
+   new=`$TPSUP/scripts/delpath $pattern $old`
+   if [ $? -ne 0 ]; then
+      echo "cmd=$TPSUP/scripts/delpath $pattern $old failed, no change" >&2
+      return 1
+   fi
+   eval "export $path=$new"
+}
+
+chknfs () {
+   paths=$1
+
+   if [ "X$paths" = "X" ]; then
+      paths="$PATH"
+   fi
+
+   for p in `echo $paths|/bin/sed -e 's/:/ /g'`
+   do
+      echo $p
+      \cd $p && \cd - >/dev/null
+   done
+}
 
 # MINGW64_NT-10.0 LAPTOP-4DDGKLFF 2.11.2(0.329/5/3) 2018-11-10 14:38 x86_64 Msys
 # CYGWIN_NT-10.0 LAPTOP-4DDGKLFF 3.0.4(0.338/5/3) 2019-03-16 09:50 x86_64 Cygwin
@@ -38,7 +85,3 @@ elif [[ $UNAME =~ Linux ]]; then
 else 
    echo "UNAME='$UNAME' is not supported"
 fi
-
-set -o vi
-
-

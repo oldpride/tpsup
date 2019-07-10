@@ -1,0 +1,205 @@
+umask 022
+
+unset TMOUT
+
+kcd () {
+   old=$1
+   new=$2
+   cd=`pwd|sed -e "s:$old:$new:g"`
+   cd $cd
+}
+
+delpath () {
+   pattern=$1
+   if [ "X$pattern" = X ]; then
+      echo "usage: delpath pattern"
+      return 1
+   fi
+
+   if [ "X$2" = "X" ]; then
+      path=PATH
+   else
+     path=$2
+   fi
+
+   echo "deleting pattern ($pattern) from \$$path" >&2
+   old=`eval "echo \\\$$path"`
+
+   new=`$TPSUP/scripts/delpath $pattern $old`
+   if [ $? -ne 0 ]; then
+      echo "cmd=$TPSUP/scripts/delpath $pattern $old failed, no change" >&2
+      return 1
+   fi
+   eval "export $path=$new"
+}
+
+chknfs () {
+   paths=$1
+
+   if [ "X$paths" = "X" ]; then
+      paths="$PATH"
+   fi
+
+   for p in `echo $paths|/bin/sed -e 's/:/ /g'`
+   do
+      echo $p
+      \cd $p && \cd - >/dev/null
+   done
+}
+
+
+
+
+# save original PATH, add more	reliable	PATH	to the	front,	so that
+# user ENV (eg, a hanging mount point) won't	scroll	up the	critial	part (delpath) of
+# this profile. We will later restore the original PATH
+SAVED_PATH ="$PATH"
+export PATH=/usr/bin:/bin:/sbin:$SAVED_PATH
+HOSTNAME="hostname"
+export HOSTNAME
+#if echo $0 |grep bash >/dev/null; then
+if [ "X$BASH_SOURCE" != "X" ];	then
+# the following sed command	simplify	the path, eg, /a/b/../c =>	/a/c
+TPSUP="dirname $BASH_SOURCE|sed -e 'ss:[V][V]*//*s://*$::'"
+if ! echo "$TPSUP" | grep 'V >/dev/null; then
+TPSUP="pwd"/$TPSUP
+fi
+else
+if ! echo $0 |grep bash >/dev/null; then
+echo "Run bash first ... Env is not set !!!" >&2
+return
+else
+echo "You used wrong bash (/db/bin/bash). please exit and use /bin/bash instead !!!" >&2
+echo " Or you can export BASH_SOURCE=/home/gpt/tpsup/profile or something similar" >&2
+return
+fi
+fi
+ttrestore original PATH
+export PA TH = ? SAVED_PA TH
+if ! /usr/bin/per1 -Mwarnings -e "print	then
+echo "/usr/bin/per1 is too old. We use /db/bin/perl instead" >&2
+USE_DB_PERL=/db/bin/per1
+fi
+
+if [ -f $TPSUP/scripts/trimpath ]; then
+TPSUP="$USE_DB_PERL $TPSUP/scripts/trimpath $TPSUP"
+fi
+export TPSUP
+export TPSUPMODE
+PSl='$USER@$HOSTNAME:$PWD$ '
+export PS1
+
+UNAME=`uname -a`
+HOSTNAME=`hostname`
+
+if [ "X$TPSUPMODE" = "Xsafe" ]; then
+   :
+else
+
+# MINGW64_NT-10.0 LAPTOP-4DDGKLFF 2.11.2(0.329/5/3) 2018-11-10 14:38 x86_64 Msys
+# CYGWIN_NT-10.0 LAPTOP-4DDGKLFF 3.0.4(0.338/5/3) 2019-03-16 09:50 x86_64 Cygwin
+
+if [[ $UNAME =~ Msys ]]; then
+   export TPSUP=~/github/tpsup
+   alias perllib='cd /c/Users/william/github/tpsup/lib/perl/TPSUP'
+   alias tpscripts='cd /c/Users/william/github/tpsup/scripts'
+   alias tpnotes='cd /c/Users/william/github/tpsup/notes'
+   alias kdbnotes='cd /c/Users/william/github/kdb/notes'
+   alias tpsup='. ~/github/tpsup/profile'
+   export PERL5LIB=/c/Users/william/github/tpsup/lib/perl
+   export PYTHONPATH=/c/Users/william/github/tpsup/python2/lib
+   export PATH="$PATH:/c/Users/william/github/tpsup/scripts"
+elif [[ $UNAME =~ Cygwin ]]; then
+   export TPSUP=/cygdrive/c/Users/william/github/tpsup
+   alias perllib='cd /cygdrive/c/Users/william/github/tpsup/lib/perl/TPSUP'
+   alias tpscripts='cd /cygdrive/c/Users/william/github/tpsup/scripts'
+   alias tpnotes='cd /cygdrive/c/Users/william/github/tpsup/notes'
+   alias kdbnotes='cd /cygdrive/c/Users/william/github/kdb/notes'
+   alias tpsup='. /cygdrive/c/Users/william/github/tpsup/profile'
+   export PERL5LIB=/cygdrive/c/Users/william/github/tpsup/lib/perl
+   export PYTHONPATH=/cygdrive/c/Users/william/github/tpsup/python2/lib
+   export PATH="$PATH:/cygdrive/c/Users/william/github/tpsup/scripts"
+elif [[ $UNAME =~ Linux ]]; then
+   export TPSUP=~/github/tpsup
+   alias perllib='cd ~/github/tpsup/lib/perl/TPSUP'
+   alias tpscripts='cd ~/github/tpsup/scripts'
+   alias tpnotes='cd ~/github/tpsup/notes'
+   alias kdbnotes='cd ~/github/kdb/notes'
+   alias tpsup='. ~/github/tpsup/profile'
+   export PERL5LIB=$HOME/github/tpsup/lib/perl
+   export PYTHONPATH=$HOME/github/tpsup/python2/lib
+   export PATH="$PATH:$HOME/github/tpsup/scripts"
+else 
+   echo "UNAME='$UNAME' is not supported"
+fi
+fi
+
+if [ "X$TPSUPMODE" != "Xsafe" ]; then
+PERL5LIB=$TPSUP/1ib/per1:$PERL5LIB
+PATH=$TPSUP/scripts:$PATH
+else
+PERL5LIB=$PERL5LIB:$TPSUP/1ib/per1
+PATH=$TPSUP/autopath:$PATH
+fi
+PYTHONPATH=$PYTHONPATH:$TPSUP/python2/1ib
+export PYTHONPATH
+PATH=$PATH:$TPSUP/python2/scripts
+if [ "X$PATH" != "X" ]; then
+PATH="$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PATH""
+export PATH
+fi
+if [ "X$PERL5LIB" != "X" ]; then
+PERL5LIB="$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PERL5LIB""
+export PERL5LIB
+fi
+if [ "X$LD_LIBRARY_PATH" != "X" ]; then
+LD_LIBRARY_PATH="$USE_DB_PERL $TPSUP/scripts/reducepath -q "$LD_LIBRARY_PATH""
+export LD_LIBRARY_PATH
+fi
+if [ "X$LD_LOAD_PATH'' != "X" ]; then
+LD_LOAD_PATH="$USE_DB_PERL $TPSUP/scripts/reducepath -q "$LD_LOAD_PATH""
+export LD_LOAD_PATH
+fi
+
+alias pythonc='python -m py_compile'
+alias python3c='python3 -m py_compile'
+
+if [ -f ~/local.profle ]; then
+. ~/local.profile
+fi
+
+window_bar () {
+   TERM=xterm
+   export TERM
+   if [ "X$TERM" == Xxterm ]; then
+      PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
+   fi
+}
+
+alias wbar=window_bar
+
+if [ "X$TERM" = Xxterm -o "X$TERM" = "Xvt100" ]; then
+   PROMPT_COMMAND='echo -ne "\033]0;${USER}{HOSTNAME}: ${PWD}\007'"
+   export PROMPT_COMMAND
+
+   vi () {
+      file="$@"
+      echo -ne "\033]0;${USER}@${HOSTNAME}: vi $@\007"
+      /bin/vi "$@"
+   }
+
+   less () {
+      file="$@"
+      echo -ne "\033]0;${USER}@${HOSTNAME}: less $@\007"
+      /bin/less "$@"
+   }
+
+   # unset -f func to unset a function.
+fi
+
+set -o vi
+#  Control-V, Backspace
+if !stty erase  2>/dev/null; then
+   :
+fi		
+
