@@ -9,6 +9,11 @@ fast:
 
 precompile test function (as in csv.py)
 
+Exec("def test(r):\n" +
+    "   if " + exp + ": return True\n"
+    "   return False"
+
+
 when joining many strings, don't use '+', use join() and generator expression ( (...) )
 
    data = ['abc', 50, 'def', 91.1]
