@@ -141,14 +141,14 @@ py2env () {
    alias python=python2
    PYTHONPATH=$TPSUP/python2/lib:$PYTHONPATH
    export PYTHONPATH
-   PATH=$PATH:$TPSUP/python2/scripts
+   PATH=$TPSUP/python2/scripts:$PATH
 }
 
 py3env () {
    alias python=python3
    PYTHONPATH=$TPSUP/python3/lib:$PYTHONPATH
    export PYTHONPATH
-   PATH=$PATH:$TPSUP/python3/scripts
+   PATH=$TPSUP/python3/scripts:$PATH
 }
 
 py3env  # default to python 3

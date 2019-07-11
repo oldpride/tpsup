@@ -15,7 +15,7 @@ from pprint import pprint,pformat
 # in a function.
 
 def open_csv(_file, **opt):
-    if _file == ' -' :
+    if _file == '-' :
         fo = sys.stdin
         filename = 'stdin'
     else:
@@ -198,14 +198,14 @@ def query_csv(**opt):
                     uncompiled += "    if not " + e + ":\n"
                     uncompiled += "        return False\n"
 
-                uncompiled += " return True\n"
+                uncompiled += "    return True\n"
             else:
                 # Exp == 'ExcludeExp'
                 for e in opt[Exp]:
                     uncompiled += "    if " + e + ":\n"
                     uncompiled += "        return True\n"
         
-                uncompiled += " return False\n"
+                uncompiled += "    return False\n"
             if 'verbose' in opt and opt['verbose']:
                 print >> sys.stderr, Exp, "uncompiled = ", uncompiled
 
@@ -286,13 +286,15 @@ def print_csv_dict(_dict_rows, _fields, _output, **opt):
     else:
         ofo = open(_output, 'w')
 
-    if 'odelimiter' in opt and ['odelimiter'] != None:
+    odelimiter = None
+
+    if 'odelimiter' in opt and opt['odelimiter'] != None:
         odelimiter = opt['odelimiter']
-    elif 'delimiter' in opt:
+    elif 'delimiter' in opt and opt['delimiter'] != None:
         odelimiter = opt['delimiter']
     else:
         odelimiter = ','
-        
+       
     if 'verbose' in opt and opt['verbose']:
         print >> sys.stderr, "ofo = ", pformat(ofo);
         print >> sys.stderr, "odelimiter = ", odelimiter;
