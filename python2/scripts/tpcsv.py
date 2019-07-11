@@ -1,11 +1,13 @@
 #!/usr/bin/env python2.7
 
-from tpsup.csv import query_csv
 
 import argparse
 import sys
 import textwrap
 from pprint import pprint,pformat
+#print pformat(sys.path)
+
+from tpsup.csv import query_csv
 
 usage = textwrap.dedent("""\
     parse csv file like perl-version tpcsv
