@@ -113,8 +113,8 @@ elif [[ $UNAME =~ Cygwin ]]; then
    #    python -i
    # or
    #    cygstart python    # this bring up a new window
-   alias python2="/cygdrive/c/Program Files/Python27/python"
-   alias python3="/cygdrive/c/Program Files/Python37/python"
+   alias python2="'/cygdrive/c/Program Files/Python27/python'"
+   alias python3="'/cygdrive/c/Program Files/Python37/python'"
 elif [[ $UNAME =~ Linux ]]; then
    alias python2="/usr/bin/python2.7"
    alias python3="/usr/bin/python3"
