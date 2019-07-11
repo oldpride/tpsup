@@ -86,7 +86,7 @@ do
       i) case="-i";perlcase=i;;
       m) match=$OPTARG;;
       x) exclude=$OPTARG;;
-      Y) default=Y;;
+      y) default=Y;;
       *) echo "unknow switch '$o'"; usage;;
    esac 
 done

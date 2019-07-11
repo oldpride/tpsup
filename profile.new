@@ -1,3 +1,5 @@
+TPSUPMODE="$1"
+
 umask 022
 
 unset TMOUT
@@ -93,50 +95,39 @@ export TPSUPMODE
 PS1='$USER@$HOSTNAME:$PWD$ '
 export PS1
 
-UNAME=`uname -a`
 HOSTNAME=`hostname`
 
-if [ "X$TPSUPMODE" = "Xsafe" ]; then
+UNAME=`uname -a`
+
+# MINGW64_NT-10.0 LAPTOP-4DDGKLFF 2.11.2(0.329/5/3) 2018-11-10 14:38 x86_64 Msys
+# CYGWIN_NT-10.0 LAPTOP-4DDGKLFF 3.0.4(0.338/5/3) 2019-03-16 09:50 x86_64 Cygwin
+# Linux linux1 4.15.0-54-generic #58-Ubuntu SMP Mon Jun 24 10:55:24 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux
+   
+if [[ $UNAME =~ Msys ]]; then
+   # https://stackoverflow.com/questions/32597209/python-not-working-in-the-command-line-of-git-bash
+   alias python2='winpty "/c/Program Files/Python27/python"'
+   alias python3='winpty "/c/Program Files/Python37/python"'
+elif [[ $UNAME =~ Cygwin ]]; then
+   # https://stackoverflow.com/questions/3250749/using-windows-python-from-cygwin
+   # to run interactive python from cygwin
+   #    python -i
+   # or
+   #    cygstart python    # this bring up a new window
+   alias python2="/cygdrive/c/Program Files/Python27/python"
+   alias python3="/cygdrive/c/Program Files/Python37/python"
+elif [[ $UNAME =~ Linux ]]; then
+   alias python2="/usr/bin/python2.7"
+   alias python3="/usr/bin/python3"
    :
-else
-   
-   # MINGW64_NT-10.0 LAPTOP-4DDGKLFF 2.11.2(0.329/5/3) 2018-11-10 14:38 x86_64 Msys
-   # CYGWIN_NT-10.0 LAPTOP-4DDGKLFF 3.0.4(0.338/5/3) 2019-03-16 09:50 x86_64 Cygwin
-   
-   if [[ $UNAME =~ Msys ]]; then
-      export TPSUP=~/github/tpsup
-      alias perllib='cd /c/Users/william/github/tpsup/lib/perl/TPSUP'
-      alias tpscripts='cd /c/Users/william/github/tpsup/scripts'
-      alias tpnotes='cd /c/Users/william/github/tpsup/notes'
-      alias kdbnotes='cd /c/Users/william/github/kdb/notes'
-      alias tpsup='. ~/github/tpsup/profile'
-      export PERL5LIB=/c/Users/william/github/tpsup/lib/perl
-      export PYTHONPATH=/c/Users/william/github/tpsup/python2/lib
-      export PATH="$PATH:/c/Users/william/github/tpsup/scripts"
-   elif [[ $UNAME =~ Cygwin ]]; then
-      export TPSUP=/cygdrive/c/Users/william/github/tpsup
-      alias perllib='cd /cygdrive/c/Users/william/github/tpsup/lib/perl/TPSUP'
-      alias tpscripts='cd /cygdrive/c/Users/william/github/tpsup/scripts'
-      alias tpnotes='cd /cygdrive/c/Users/william/github/tpsup/notes'
-      alias kdbnotes='cd /cygdrive/c/Users/william/github/kdb/notes'
-      alias tpsup='. /cygdrive/c/Users/william/github/tpsup/profile'
-      export PERL5LIB=/cygdrive/c/Users/william/github/tpsup/lib/perl
-      export PYTHONPATH=/cygdrive/c/Users/william/github/tpsup/python2/lib
-      export PATH="$PATH:/cygdrive/c/Users/william/github/tpsup/scripts"
-   elif [[ $UNAME =~ Linux ]]; then
-      export TPSUP=~/github/tpsup
-      alias perllib='cd ~/github/tpsup/lib/perl/TPSUP'
-      alias tpscripts='cd ~/github/tpsup/scripts'
-      alias tpnotes='cd ~/github/tpsup/notes'
-      alias kdbnotes='cd ~/github/kdb/notes'
-      alias tpsup='. ~/github/tpsup/profile'
-      export PERL5LIB=$HOME/github/tpsup/lib/perl
-      export PYTHONPATH=$HOME/github/tpsup/python2/lib
-      export PATH="$PATH:$HOME/github/tpsup/scripts"
-   else 
-      echo "UNAME='$UNAME' is not supported"
-   fi
+else 
+   echo "UNAME='$UNAME' is not supported"
 fi
+
+alias perllib='cd $TPSUP/lib/perl/TPSUP'
+alias tpscripts='cd $TPSUP/scripts'
+alias tpnotes='cd $TPSUP/notes'
+alias kdbnotes='cd $TPSUP/../kdb/notes'
+alias tpsup='. $TPSUP/profile'
 
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    PERL5LIB=$TPSUP/lib/perl:$PERL5LIB
@@ -146,9 +137,29 @@ else
    PATH=$TPSUP/autopath:$PATH
 fi
 
-#PYTHONPATH=$PYTHONPATH:$TPSUP/python2/lib
-#export PYTHONPATH
-#PATH=$PATH:$TPSUP/python2/scripts
+py2env () {
+   alias python=python2
+   PYTHONPATH=$TPSUP/python2/lib:$PYTHONPATH
+   export PYTHONPATH
+   PATH=$PATH:$TPSUP/python2/scripts
+}
+
+py3env () {
+   alias python=python3
+   PYTHONPATH=$TPSUP/python3/lib:$PYTHONPATH
+   export PYTHONPATH
+   PATH=$PATH:$TPSUP/python3/scripts
+}
+
+py3env  # default to python 3
+
+alias pyc="python -m py_compile"
+alias py2c="python2 -m py_compile"
+alias py3c="python3 -m py_compile"
+alias py2scripts='cd $TPSUP/python2/scripts'
+alias py3scripts='cd $TPSUP/python3/scripts'
+alias py2lib='cd $TPSUP/python2/lib/tpsup'
+alias py3lib='cd $TPSUP/python3/lib/tpsup'
 
 if [ "X$PATH" != "X" ]; then
    PATH=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PATH"`
@@ -169,9 +180,6 @@ if [ "X$LD_LOAD_PATH" != "X" ]; then
    LD_LOAD_PATH=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$LD_LOAD_PATH"`
    export LD_LOAD_PATH
 fi
-
-alias pythonc='python -m py_compile'
-alias python3c='python3 -m py_compile'
 
 if [ -f ~/local.profle ]; then
    . ~/local.profile
@@ -194,13 +202,13 @@ if [ "X$TERM" = Xxterm -o "X$TERM" = "Xvt100" ]; then
    vi () {
       file="$@"
       echo -ne "\033]0;${USER}@${HOSTNAME}: vi $@\007"
-      /bin/vi "$@"
+      /usr/bin/vi "$@"
    }
 
    less () {
       file="$@"
       echo -ne "\033]0;${USER}@${HOSTNAME}: less $@\007"
-      /bin/less "$@"
+      /usr/bin/less "$@"
    }
 
    # unset -f func to unset a function.

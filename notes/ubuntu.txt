@@ -59,3 +59,39 @@ to make the mount point permanent
 https://askubuntu.com/questions/679435/trouble-automounting-an-sd-card-on-trusty
 
 I haven't tried it yet
+
+-----------------------------------------------------------------------------
+
+use 'dpkg' to check installed package. for example, I want to find out 
+where is my python 2.7 execuatble installed
+
+first to list all python2 packages
+tian@linux1:~$ dpkg -l|grep python2
+ii  libpython2.7-minimal:amd64            2.7.15-4ubuntu4~18.04                       amd64        Minimal subset of the Python language (version 2.7)
+ii  libpython2.7-stdlib:amd64             2.7.15-4ubuntu4~18.04                       amd64        Interactive high-level object-oriented language (standard library, version 2.7)
+ii  python2.7                             2.7.15-4ubuntu4~18.04                       amd64        Interactive high-level object-oriented language (version 2.7)
+ii  python2.7-minimal                     2.7.15-4ubuntu4~18.04                       amd64        Minimal subset of the Python language (version 2.7)
+
+
+look into python2.7
+tian@linux1:~$ dpkg -L python2.7
+/.
+/usr
+/usr/bin
+/usr/bin/2to3-2.7
+/usr/bin/pydoc2.7
+/usr/bin/pygettext2.7
+/usr/lib
+/usr/lib/python2.7
+...
+
+look into python2.7-minimal
+tian@linux1:~$ dpkg -L python2.7-minimal
+/.
+/usr
+/usr/bin
+/usr/bin/python2.7
+/usr/share
+...
+ 
+found it

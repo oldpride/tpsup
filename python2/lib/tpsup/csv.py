@@ -42,20 +42,20 @@ def open_csv(_file, **opt):
             ret['error'] = filename + " has only " + str(count) \
                            + " lines; but need to skip " + str(skip)
             return ret
-        
-        header_line = fo.readline()
-        
-        if not header_line:
-            ret['error'] = filename + "missing header"
-            return ret
-        
-        header_line = header_line.rstrip()
-        
-        ret['columns']   = header_line.split(delimiter)
-        ret['delimiter'] = delimiter
-        ret['fo']        = fo
-        
+    
+    header_line = fo.readline()
+    
+    if not header_line:
+        ret['error'] = filename + "missing header"
         return ret
+    
+    header_line = header_line.rstrip()
+    
+    ret['columns']   = header_line.split(delimiter)
+    ret['delimiter'] = delimiter
+    ret['fo']        = fo
+    
+    return ret
         
 def csv_to_struct(_file, **opt):
     if 'verbose' in opt and opt['verbose']:

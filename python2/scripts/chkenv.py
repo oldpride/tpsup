@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
 # http://python-future.org/compatible_idioms.html
 from __future__ import print_function  # pip install future

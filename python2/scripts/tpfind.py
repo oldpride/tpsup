@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
-# PYTHONPATH=:${TPSUP}/tpsup/python2/1ib
+# PYTHONPATH=:${TPSUP}/tpsup/python2.7/1ib
 from tpsup.util import tpfind
 
 import argparse

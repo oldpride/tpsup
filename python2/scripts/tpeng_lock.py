@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
 from tpsup.util import tpeng_lock, tpeng_unlock
 import os

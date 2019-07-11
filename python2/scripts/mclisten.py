@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
 # https://stackoverflow.com/questions/603852/multicast-in-python
 import socket
