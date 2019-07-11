@@ -188,7 +188,7 @@ window_bar () {
 alias wbar=window_bar
 
 if [ "X$TERM" = Xxterm -o "X$TERM" = "Xvt100" ]; then
-   PROMPT_COMMAND='echo -ne "\033]0;${USER}{HOSTNAME}: ${PWD}\007"'
+   PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
    export PROMPT_COMMAND
 
    vi () {
