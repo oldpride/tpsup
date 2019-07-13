@@ -6,6 +6,11 @@ usage:
 
    $0 display
 
+   -b      a blank shell, not a login shell, therefore, not sourcing profiles.
+           this way will have a virgin env for testing.
+
+   -d      debug mode
+
    pop up an xterm
 
 example:
@@ -16,6 +21,20 @@ example:
 EOF
    exit 1
 }
+
+loginshell='-ls'
+debug='N'
+
+while getopts bd o;
+do
+   case "$o" in
+      b) loginshell="";;
+      d) debug=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
 
 if [ $# -ne 1 ]; then
    echo "wrong number of args"
@@ -39,6 +58,8 @@ export PSl
 # man -M /usr/openwin/man xrdb
 # xrdb -display $DISPLAY -query
 
+[ $debug = Y ] && set -x
+
 if [ $OS = SunOS ]; then
    XPATH=/usr/openwin/bin
 
@@ -59,7 +80,11 @@ elif [ $OS = Linux ]; then
    #-fg white -bg black -title $title -sl 10000 -sb -e "/bin/bash --rcfile $TPSUP/profile" >/dev/null 2>&1&
 
    nohup xterm.linux -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
-   -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1&
+   -fg white -bg black -title $title -sl 10000 -sb $loginshell >/dev/null 2>&1&
+
+   # -ls     to login session, this will source profile and record in /var/log/wtmp so
+   #         that 'w' command will list this session
+
 else
    echo "unsupported OS=$OS"
 fi

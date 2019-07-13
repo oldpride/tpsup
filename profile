@@ -118,7 +118,7 @@ elif [[ $UNAME =~ Cygwin ]]; then
 elif [[ $UNAME =~ Linux ]]; then
    alias python2="/usr/bin/python2.7"
    alias python3="/usr/bin/python3"
-   :
+   alias eclipse="/home/tian/eclipse/cpp-2019-06/eclipse/eclipse"
 else 
    echo "UNAME='$UNAME' is not supported"
 fi

@@ -1561,7 +1561,7 @@ sub build_dir_tree {
          }
 
          $quiet || print timestamped(), "cd $front\n";
-       chdir($front) || croak "chdir($front) failed";
+         chdir($front) || croak "chdir($front) failed";
 
          my $cmd = "find $back -mount -print";
          $quiet || print timestamped(), "$cmd\n";
@@ -1613,27 +1613,26 @@ sub build_dir_tree {
 
             $tree->{$f}->{mtime} = $mtime;
             $tree->{$f}->{front} = $front;
-          my $octal_mode = sprintf("0%o", ($mode & 07777));
-          $tree->{$f}->{mode} = $octal_mode;
-          
+            my $octal_mode = sprintf("0%o", ($mode & 07777));
+            $tree->{$f}->{mode} = $octal_mode;
 
             if (-d $f && !-l $f) {
                # a link to dir is both a link and a dir.
                # (-d $f && !-1 $f) gives us only the non-link dir
-             $tree->{$f}->{type} = "dir";
+               $tree->{$f}->{type} = "dir";
                $tree->{$f}->{size} = 128; # hard coded
                $tree->{$f}->{test} = "dir"; # not much to test
 
                # check whether the dir is empty, server side need this info when
                # making a tar
-             my $dfh;
+               my $dfh;
                opendir($dfh, $f);
 
                if (!$dfh) {
-              print STDERR "cannot open dir $f\n";
+                  print STDERR "cannot open dir $f\n";
                } else {
-              my @files_in_dir = grep { $_ ne '.' && $_ ne '..' } readdir($dfh);
-              $tree->{$f}->{DirEmpty} = 1 if !@files_in_dir;
+                  my @files_in_dir = grep { $_ ne '.' && $_ ne '..' } readdir($dfh);
+                  $tree->{$f}->{DirEmpty} = 1 if !@files_in_dir;
                }
             } elsif (-l $f) {
                $tree->{$f}->{type} = "link";
@@ -1642,12 +1641,12 @@ sub build_dir_tree {
 
                # we cannot change link's mtimes because lutimes is not implemented
                # in perl, therefore, we hard code it here
-             $tree->{$f}->{mtime} = 0;
+               $tree->{$f}->{mtime} = 0;
 
                # we cannot change link's mode because luchown is not implemented
                # in perl, therefore, we hard code it here
                my $mode = 0777;
-             my $octal_mode = sprintf("0%o", ($mode & 07777));
+               my $octal_mode = sprintf("0%o", ($mode & 07777));
                $tree->{$f}->{mode} = $octal_mode;
 
             } elsif (-f $f) {
@@ -1655,10 +1654,10 @@ sub build_dir_tree {
                $tree->{$f}->{size} = $size;
 
                # cksum for {test} is delayed because it is too time consuming,
-             $tree->{$f}->{test} = cksum($f);
+	       #$tree->{$f}->{test} = cksum($f);
             } else {
                print timestamped(), "skipped $front/$f because we cannot handle this type of file\n";
-             $tree->{$f}->{skip} = "cannot handle this type of file";
+               $tree->{$f}->{skip} = "cannot handle this type of file";
                next;
             }
          }
@@ -1677,8 +1676,8 @@ sub is_allowed {
 
    for my $pattern (@$deny_patterns_ref) {
       if ($file =~ /$pattern/) {
-       $opt->{verbose} && print "$file is denied by $pattern\n";
-       $allowed = 0;
+         $opt->{verbose} && print "$file is denied by $pattern\n";
+         $allowed = 0;
          last;
       }
    }
@@ -1849,6 +1848,10 @@ sub init_crctab {
 sub cksum {
    my ($file, $opt) = @_;
 
+   if (!@crctab) {
+      init_crctab();
+   }
+
    my $cksum = 0;
    my $size = 0;
 
@@ -1880,7 +1883,10 @@ sub cksum {
       # A * for the repeat count uses all characters of the input field. For unpack, nybbles
       # are converted to a string of hexadecimal digits.
       for my $c (unpack 'C*', $data) {
-         $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
+         #$cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
+         # break this into steps for easier troubleshooting.
+	 my $index = (0xFF & ($cksum >> 24)) ^ $c;
+	 $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[$index];
       }
    }
 

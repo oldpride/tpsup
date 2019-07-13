@@ -61,6 +61,10 @@ https://askubuntu.com/questions/679435/trouble-automounting-an-sd-card-on-trusty
 I haven't tried it yet
 
 -----------------------------------------------------------------------------
+to change timezone
+
+sudo dpkg-reconfigure tzdata
+-----------------------------------------------------------------------------
 
 use 'dpkg' to check installed package. for example, I want to find out 
 where is my python 2.7 execuatble installed
@@ -95,3 +99,53 @@ tian@linux1:~$ dpkg -L python2.7-minimal
 ...
  
 found it
+-----------------------------------------------------------------------------
+install eclipse-cdt for c++ ide
+
+sudo apt install eclipse-cdt
+
+run eclipse, failed to start
+
+java.lang.ClassNotFoundException: org.eclipse.core.runtime.adaptor.EclipseStarter
+
+https://askubuntu.com/questions/1031171/eclipse-doesnt-start-on-ubuntu-18-04
+
+the above article says new java is the problem
+
+tian@linux1:/home/tian/.eclipse/org.eclipse.platform_3.8_155965261/configuration$ java -version
+openjdk version "11.0.3" 2019-04-16
+
+the article suggestion: Your options are to download Eclipse from their site or to install the Snap 
+
+$ sudo snap install eclipse
+
+error: This revision of snap "eclipse" was published using classic confinement and thus may perform
+       arbitrary system changes outside of the security sandbox that snaps are usually confined to,
+       which may put your system at risk.
+
+       If you understand and want to proceed repeat the command including --classic.
+
+this scared me away from snap approach
+
+I will download from eclipse and install manually
+
+run browser from linux 
+/usr/bin/chromium-browser
+
+go to https://www.eclipse.org/downloads/packages/release/luna/sr2/eclipse-ide-cc-developers
+
+download it to /home/tian/Downloads
+
+tian@linux1:/home/tian/Downloads$ gunzip -c eclipse-inst-linux64.tar.gz|tar -xvf -
+tian@linux1:/home/tian/Downloads$ cd eclipse-installer
+tian@linux1:/home/tian/Downloads/eclipse-installer$ ./eclipse-inst
+
+readme file:
+file:///home/tian/Downloads/eclipse-installer/readme/readme_eclipse.html
+
+tian@linux1:/home/tian/eclipse/cpp-2019-06/eclipse$ ./eclipse
+
+created a alias 'eclipse'
+
+
+
