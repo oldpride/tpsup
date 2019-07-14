@@ -149,3 +149,11 @@ created a alias 'eclipse'
 
 
 
+-----------------------------------------------------------------------------
+tian@linux1:/home/tian/github/cpp/cookbook/src$ make
+g++     splitWithBoost.cpp   -o splitWithBoost
+splitWithBoost.cpp:4:10: fatal error: boost/algorithm/string.hpp: No such file or directory
+
+https://stackoverflow.com/questions/12241152/boost-no-such-file-or-directory
+
+sudo apt-get install libboost-dev
