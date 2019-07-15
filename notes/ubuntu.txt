@@ -147,8 +147,6 @@ tian@linux1:/home/tian/eclipse/cpp-2019-06/eclipse$ ./eclipse
 
 created a alias 'eclipse'
 
-
-
 -----------------------------------------------------------------------------
 tian@linux1:/home/tian/github/cpp/cookbook/src$ make
 g++     splitWithBoost.cpp   -o splitWithBoost
@@ -157,3 +155,27 @@ splitWithBoost.cpp:4:10: fatal error: boost/algorithm/string.hpp: No such file o
 https://stackoverflow.com/questions/12241152/boost-no-such-file-or-directory
 
 sudo apt-get install libboost-dev
+-----------------------------------------------------------------------------
+set up remote desktop
+
+https://askubuntu.com/questions/592537/can-i-access-ubuntu-from-windows-remotely
+
+sudo apt-get update
+sudo apt-get install xrdp
+sudo apt-get install xfce4
+
+echo xfce4-session > ~/.xsession
+
+sudo vi /etc/xrdp/startwm.sh
+   at the bottom comment out
+      Xsession
+   add
+      startxfce4
+
+sudo service xrdp restart
+
+from windows, run remote desktop, use 'linux1' as hostname
+
+in ubuntu desktop, right click on open space, create laucher
+   name: tpxterm
+   command: /home/tian/github/tpsup/scripts/tpxterm :10.0
