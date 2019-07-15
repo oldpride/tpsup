@@ -4,8 +4,9 @@
 
 for cmd in kdbnotes tpnotes mycpp
 do 
-   echo "------ $cmd -------"
-   $cmd
-   git status
    echo ""
+   echo "------ $cmd -------"
+   echo ""
+   $cmd 2>/dev/null || continue
+   git status
 done
