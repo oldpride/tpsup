@@ -1,0 +1,11 @@
+#!/bin/bash
+
+. $TPSUP/profile
+
+for cmd in kdbnotes tpnotes mycpp
+do 
+   echo "------ $cmd -------"
+   $cmd
+   git status
+   echo ""
+done

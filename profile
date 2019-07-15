@@ -119,16 +119,31 @@ elif [[ $UNAME =~ Linux ]]; then
    alias python2="/usr/bin/python2.7"
    alias python3="/usr/bin/python3"
    alias eclipse="/home/tian/eclipse/cpp-2019-06/eclipse/eclipse"
-   alias mycpp='cd $TPSUP/../cpp/cookbook/src'
 else 
    echo "UNAME='$UNAME' is not supported"
 fi
 
+# https://askubuntu.com/questions/98782/how-to-run-an-alias-in-a-shell-script
+# Aliases are deprecated in favor of shell functions. From the bash manual page:
+# For almost every purpose, aliases are superseded by shell functions.
+
 alias perllib='cd $TPSUP/lib/perl/TPSUP'
 alias tpscripts='cd $TPSUP/scripts'
-alias tpnotes='cd $TPSUP/notes'
-alias kdbnotes='cd $TPSUP/../kdb/notes'
+#alias tpnotes='cd $TPSUP/notes'
+#alias kdbnotes='cd $TPSUP/../kdb/notes'
 alias tpsup='. $TPSUP/profile'
+
+kdbnotes () {
+   cd $TPSUP/../kdb/notes
+}
+
+tpnotes () {
+   cd $TPSUP/notes
+}
+
+mycpp () {
+   cd $TPSUP/../cpp/cookbook/src
+}
 
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    PERL5LIB=$TPSUP/lib/perl:$PERL5LIB
@@ -186,15 +201,14 @@ if [ -f ~/local.profle ]; then
    . ~/local.profile
 fi
 
-window_bar () {
+wbar () {
+   # window bar
    TERM=xterm
    export TERM
    if [ "X$TERM" == Xxterm ]; then
       PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
    fi
 }
-
-alias wbar=window_bar
 
 if [ "X$TERM" = Xxterm -o "X$TERM" = "Xvt100" ]; then
    PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
