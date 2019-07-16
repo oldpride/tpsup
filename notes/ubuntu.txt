@@ -179,3 +179,15 @@ from windows, run remote desktop, use 'linux1' as hostname
 in ubuntu desktop, right click on open space, create laucher
    name: tpxterm
    command: /home/tian/github/tpsup/scripts/tpxterm :10.0
+-----------------------------------------------------------------------------
+set up printer
+
+https://askubuntu.com/questions/960121/lubuntu-16-04-add-network-printer
+
+sudo apt install cups
+
+go to http://localhost:631/ 
+   administration
+      manage printers, you should see the printers. now you can print
+      (if you clicked 'add printers", you would got "Unauthorized Enter your username
+      and password or the root username ")
