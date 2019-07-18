@@ -8,6 +8,11 @@ usage:
 
    $0 display
 
+   pop up an xterm
+
+   When 'display' is set to auto, the script will use the env variable DISPLAY.
+   Currently, DISPLAY='$DISPLAY'
+
    -b      a blank shell, not a login shell, therefore, not sourcing profiles.
            this way will have a virgin env for testing.
 
@@ -17,12 +22,11 @@ usage:
           use Monospace with this font size, eg, 9. normally for ubuntu remote
           desktop. default $font
 
-   pop up an xterm
-
 example:
 
    $0 192.168.1.164:0
    $0 host1.abc.com:0
+   $0 auto
 
 EOF
    exit 1
@@ -48,7 +52,11 @@ if [ $# -ne 1 ]; then
    usage
 fi
 
-DISPLAY=$1
+if [ "$1" = auto ]; then
+   DISPLAY_SWITCH=""
+else
+   DISPLAY_SWITCH="-display $1"
+fi
 
 OS=`uname`
 
@@ -63,31 +71,31 @@ DIR=`dirname $0`
 
 export PSl
 # man -M /usr/openwin/man xrdb
-# xrdb -display $DISPLAY -query
+# xrdb $DISPLAY_SWITCH -query
 
 [ $debug = Y ] && set -x
 
 if [ $OS = SunOS ]; then
    XPATH=/usr/openwin/bin
 
-   $XPATH/xrdb -display $DISPLAY -override $DIR/xterm.RightButtonPaste
+   $XPATH/xrdb $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
 
    # /usr/openwin/bin/xlsfonts|grep adobe-courier
    
-   #nohup /usr/openwin/bin/xterm -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   #nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
    # -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash --rcfile $TPSUP/profile >/dev/null 2>&1 &
 
-   nohup /usr/openwin/bin/xterm -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
    -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
 
 elif [ $OS = Linux ]; then
-   xrdb.linux -display $DISPLAY -override $DIR/xterm.RightButtonPaste
+   xrdb.linux $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
 
-   #nohup xterm.linux -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   #nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
    #-fg white -bg black -title $title -sl 10000 -sb -e "/bin/bash --rcfile $TPSUP/profile" >/dev/null 2>&1&
 
-   #nohup xterm.linux -display $DISPLAY -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
-   eval "nohup xterm.linux -display $DISPLAY -geom 100x44 $font \
+   #nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   eval "nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 $font \
    -fg white -bg black -title $title -sl 10000 -sb $loginshell >/dev/null 2>&1&"
 
    # -ls     to login session, this will source profile and record in /var/log/wtmp so

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+sudo umount /media/sdcard
+df -k /media/sdcard

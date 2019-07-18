@@ -60,6 +60,16 @@ https://askubuntu.com/questions/679435/trouble-automounting-an-sd-card-on-trusty
 
 I haven't tried it yet
 
+tried, not working because our sd card doesn't have uuid somehow
+
+tian@linux1:/dev/disk/by-uuid$ sudo udevadm info /dev/mmcblk1p1|grep -i uu
+tian@linux1:/dev/disk/by-uuid$ 
+
+created script to mount instead
+
+tpsup/scripts/mountsd
+tpsup/scripts/umountsd
+
 -----------------------------------------------------------------------------
 to change timezone
 
@@ -191,3 +201,18 @@ go to http://localhost:631/
       manage printers, you should see the printers. now you can print
       (if you clicked 'add printers", you would got "Unauthorized Enter your username
       and password or the root username ")
+-----------------------------------------------------------------------------
+
+I see my micro sd card listed as an icon on my desktop, but when clicked it, i got error
+   Failed to mount "...", Not authorized to perform operation
+
+https://askubuntu.com/questions/120147/cant-mount-usb-not-authorized
+https://help.ubuntu.com/community/Mount/USB
+
+I followed the USB drive instructions
+   sud apt install dconf-editor
+   sudo dconf-editor
+but USB instructions doesn't seem to apply to micro sd card slot.
+
+
+
