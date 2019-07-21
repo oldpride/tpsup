@@ -232,33 +232,143 @@ local so far.
 
 To create branch in the the remote branch 'origin',
 
-tian@linux1:/home/tian/github/tpsup/notes$ git push origin crazy-experiment
-Counting objects: 4, done.
-Delta compression using up to 4 threads.
-Compressing objects: 100% (4/4), done.
-Writing objects: 100% (4/4), 767 bytes | 767.00 KiB/s, done.
-Total 4 (delta 3), reused 0 (delta 0)
-remote: Resolving deltas: 100% (3/3), completed with 3 local objects.
-remote: 
-remote: Create a pull request for 'crazy-experiment' on GitHub by visiting:
-remote:      https://github.com/oldpride/tpsup/pull/new/crazy-experiment
-remote: 
-To github.com:oldpride/tpsup.git
- * [new branch]      crazy-experiment -> crazy-experiment
-
+   tian@linux1:/home/tian/github/tpsup/notes$ git push origin crazy-experiment
+   Counting objects: 4, done.
+   Delta compression using up to 4 threads.
+   Compressing objects: 100% (4/4), done.
+   Writing objects: 100% (4/4), 767 bytes | 767.00 KiB/s, done.
+   Total 4 (delta 3), reused 0 (delta 0)
+   remote: Resolving deltas: 100% (3/3), completed with 3 local objects.
+   remote: 
+   remote: Create a pull request for 'crazy-experiment' on GitHub by visiting:
+   remote:      https://github.com/oldpride/tpsup/pull/new/crazy-experiment
+   remote: 
+   To github.com:oldpride/tpsup.git
+    * [new branch]      crazy-experiment -> crazy-experiment
+   
 now I see the branch on github.com too.
+   
+I cannot delete the branch because it has unmerged changes
 
-tian@linux1:/home/tian/github/tpsup/notes$ git branch -d crazy-experiment
-error: Cannot delete branch 'crazy-experiment' checked out at '/home/tian/github/tpsup'
+   tian@linux1:/home/tian/github/tpsup/notes$ git branch -d crazy-experiment
+   error: Cannot delete branch 'crazy-experiment' checked out at '/home/tian/github/tpsup'
+   
+to merge, first checkout master
+   tian@linux1:/home/tian/github/tpsup/notes$ git checkout master
+   error: Your local changes to the following files would be overwritten by checkout:
+           notes/git.txt
+   Please commit your changes or stash them before you switch branches.
+   Aborting
+   
+because I have uncommited changes in the branch (i edited a file after the last push), I have to
+check them in before switch away from this branch
+   tian@linux1:/home/tian/github/tpsup/notes$ git branch
+   * crazy-experiment
+     master
+   
+   tian@linux1:/home/tian/github/tpsup/notes$ git add -A
+   tian@linux1:/home/tian/github/tpsup/notes$ git commit -m update
+   [crazy-experiment 734a0bb] update
+    1 file changed, 58 insertions(+)
+   tian@linux1:/home/tian/github/tpsup/notes$ git branch -a
+   * crazy-experiment
+     master
+     remotes/origin/HEAD -> origin/master
+     remotes/origin/crazy-experiment
+     remotes/origin/master
+   tian@linux1:/home/tian/github/tpsup/notes$ git push
+   fatal: The current branch crazy-experiment has no upstream branch.
+   To push the current branch and set the remote as upstream, use
+   
+       git push --set-upstream origin crazy-experiment
+   
+   tian@linux1:/home/tian/github/tpsup/notes$ git push --set-upstream origin crazy-experiment
+   Counting objects: 4, done.
+   Delta compression using up to 4 threads.
+   Compressing objects: 100% (4/4), done.
+   Writing objects: 100% (4/4), 1.06 KiB | 545.00 KiB/s, done.
+   Total 4 (delta 3), reused 0 (delta 0)
+   remote: Resolving deltas: 100% (3/3), completed with 3 local objects.
+   To github.com:oldpride/tpsup.git
+      7c68feb..734a0bb  crazy-experiment -> crazy-experiment
+   Branch 'crazy-experiment' set up to track remote branch 'crazy-experiment' from 'origin'.
 
-tian@linux1:/home/tian/github/tpsup/notes$ git checkout master
-error: Your local changes to the following files would be overwritten by checkout:
-        notes/git.txt
-Please commit your changes or stash them before you switch branches.
-Aborting
-tian@linux1:/home/tian/github/tpsup/notes$ git branch
-* crazy-experiment
-  master
+now we can switch to the master branch
+   tian@linux1:/home/tian/github/tpsup/notes$ git checkout master
+   Switched to branch 'master'
+   Your branch is up to date with 'origin/master'.
 
+   tian@linux1:/home/tian/github/tpsup/notes$ git branch -a
+     crazy-experiment
+   * master
+     remotes/origin/HEAD -> origin/master
+     remotes/origin/crazy-experiment
+     remotes/origin/master
 
+run "git fetch" and "git pull" before merge,
 
+   tian@linux1:/home/tian/github/tpsup/notes$ git fetch
+
+   tian@linux1:/home/tian/github/tpsup/notes$ git pull
+   Already up to date.
+
+   tian@linux1:/home/tian/github/tpsup/notes$ git merge crazy-experiment
+   Updating b793b21..734a0bb
+   Fast-forward
+    notes/git.txt | 81 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    1 file changed, 81 insertions(+)
+
+delete local branch
+   tian@linux1:/home/tian/github/tpsup/notes$ git branch -d crazy-experiment
+   Deleted branch crazy-experiment (was 734a0bb).
+
+delete remote branch
+   tian@linux1:/home/tian/github/tpsup/notes$ git push origin --delete crazy-experiment
+   To github.com:oldpride/tpsup.git
+    - [deleted]         crazy-experiment
+   
+   
+normal workflow: 
+   https://www.atlassian.com/git/tutorials/using-branches/git-merge
+
+   # Start a new feature
+   git checkout -b new-feature master
+   # Edit some files
+   git add <file>
+   git commit -m "Start a feature"
+   # Edit some files
+   git add <file>
+   git commit -m "Finish a feature"
+   # Develop the master branch
+   git checkout master
+   # Edit some files
+   git add <file>
+   git commit -m "Make some super-stable changes to master"
+   # Merge in the new-feature branch
+   git merge new-feature
+   git branch -d new-feature
+   
+------------------------------------------------
+"git fetch" vs "git pull"
+https://stackoverflow.com/questions/292357/what-is-the-difference-between-git-pull-and-git-fetch
+
+   git maintains a local repository with your code and also an additional local repository
+   that mirrors the state of the remote repository. By keeping a copy of the remote
+   repository locally, git can figure out the changes needed even when the remote
+   repository is not reachable. Later when you need to send the changes to someone else,
+   git can transfer them as a set of changes from a point in time known to the remote
+   repository.
+   
+   "git fetch" is the command that says "bring my local copy of the remote repository up
+               to date."
+   
+   "git pull" says "bring the changes in the remote repository to where I keep my own code."
+   
+   Normally "git pull" does this by doing a "git fetch" to bring the local copy of the
+   remote repository up to date, and then merging ("git merge FETCH_HEAD") the changes
+   into your own code repository and possibly your working copy.
+   
+   The take away is to keep in mind that there are often at least three copies of a
+   project on your workstation. One copy is your own repository with your own commit
+   history. The second copy is your working copy where you are editing and building. The
+   third copy is your local "cached" copy of a remote repository
