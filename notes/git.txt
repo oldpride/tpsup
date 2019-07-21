@@ -201,6 +201,64 @@ Deleted branch crazy-experiment (was 4506f04).
 
 The problem is that I should have run "git checkout crazy-experiment".
 
+tian@linux1:/home/tian/github/tpsup/notes$ git branch crazy-experiment
+tian@linux1:/home/tian/github/tpsup/notes$ git checkout crazy-experiment
+M       notes/git.txt
+Switched to branch 'crazy-experiment'
+tian@linux1:/home/tian/github/tpsup/notes$ git status
+On branch crazy-experiment
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+        modified:   git.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+tian@linux1:/home/tian/github/tpsup/notes$ git add git.txt
+tian@linux1:/home/tian/github/tpsup/notes$ git commit -m "test branch"
+[crazy-experiment 7c68feb] test branch
+ 1 file changed, 23 insertions(+)
+tian@linux1:/home/tian/github/tpsup/notes$ git status
+On branch crazy-experiment
+nothing to commit, working tree clean
+tian@linux1:/home/tian/github/tpsup/notes$ git push
+fatal: The current branch crazy-experiment has no upstream branch.
+To push the current branch and set the remote as upstream, use
+
+    git push --set-upstream origin crazy-experiment
+
+it faled because there is no branch is created on the repo. The branch is only
+local so far.
+
+To create branch in the the remote branch 'origin',
+
+tian@linux1:/home/tian/github/tpsup/notes$ git push origin crazy-experiment
+Counting objects: 4, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (4/4), 767 bytes | 767.00 KiB/s, done.
+Total 4 (delta 3), reused 0 (delta 0)
+remote: Resolving deltas: 100% (3/3), completed with 3 local objects.
+remote: 
+remote: Create a pull request for 'crazy-experiment' on GitHub by visiting:
+remote:      https://github.com/oldpride/tpsup/pull/new/crazy-experiment
+remote: 
+To github.com:oldpride/tpsup.git
+ * [new branch]      crazy-experiment -> crazy-experiment
+
+now I see the branch on github.com too.
+
+tian@linux1:/home/tian/github/tpsup/notes$ git branch -d crazy-experiment
+error: Cannot delete branch 'crazy-experiment' checked out at '/home/tian/github/tpsup'
+
+tian@linux1:/home/tian/github/tpsup/notes$ git checkout master
+error: Your local changes to the following files would be overwritten by checkout:
+        notes/git.txt
+Please commit your changes or stash them before you switch branches.
+Aborting
+tian@linux1:/home/tian/github/tpsup/notes$ git branch
+* crazy-experiment
+  master
 
 
 
