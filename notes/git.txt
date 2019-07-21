@@ -132,5 +132,52 @@ refs/remotes/origin/master
 still no help
 
 
+-------------------------------------------------------------------------
+git branch
 
+https://www.atlassian.com/git/tutorials/using-branches
+
+'branch' is only a pointer
+
+list all branches in my repo
+   tian@linux1:/home/tian/github/tpsup/notes$ git branch
+   * master
+
+git branch -a          # List all remote branches.  ?
+   tian@linux1:/home/tian/github/tpsup/notes$ git branch -a
+   * master
+     remotes/origin/HEAD -> origin/master
+     remotes/origin/master
+
+git branch <branch>    # create a new branch called <branch>
+
+git branch -d <branch> # Delete the specified branch. This is a “safe” operation in that
+                       # Git prevents you from deleting the branch if it has unmerged changes.
+
+git branch -D <branch> # Force delete the specified branch, even if it has unmerged changes.
+
+git branch -m <branch> # Rename the current branch to <branch>.
+
+
+
+create a branch using the following command:
+
+git branch crazy-experiment
+
+The repository history remains unchanged. All you get is a new pointer to the current commit:
+
+Note that this only creates the new branch. To start adding commits to it, you need to
+select it with
+
+    git checkout,
+
+ and then use the standard git add and git commit commands. 
+
+tian@linux1:/home/tian/github/tpsup/notes$ git branch crazy-experiment
+tian@linux1:/home/tian/github/tpsup/notes$ git checkout
+M       notes/git.txt
+Your branch is up to date with 'origin/master'.
+tian@linux1:/home/tian/github/tpsup/notes$ git branch
+  crazy-experiment
+* master
 
