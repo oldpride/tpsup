@@ -181,3 +181,26 @@ tian@linux1:/home/tian/github/tpsup/notes$ git branch
   crazy-experiment
 * master
 
+tian@linux1:/home/tian/github/tpsup/notes$ git add git.txt
+tian@linux1:/home/tian/github/tpsup/notes$ git commit -m "test branch"
+[master b793b21] test branch
+ 1 file changed, 47 insertions(+)
+tian@linux1:/home/tian/github/tpsup/notes$ git push
+Counting objects: 4, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (4/4), 948 bytes | 948.00 KiB/s, done.
+Total 4 (delta 3), reused 0 (delta 0)
+remote: Resolving deltas: 100% (3/3), completed with 3 local objects.
+
+this change seems to be pushed into master branch because I can actually delete the branch now,
+meaning no unmerged changes
+
+tian@linux1:/home/tian/github/tpsup/notes$ git branch -d crazy-experiment
+Deleted branch crazy-experiment (was 4506f04).
+
+The problem is that I should have run "git checkout crazy-experiment".
+
+
+
+
