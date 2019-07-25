@@ -1,0 +1,65 @@
+install docker
+
+sudo apt update
+sudo snap install docker
+
+use "-s 100" in docker search  to find the most popular ones (more than 100 stars)
+tian@linux1:/home/tian/tmp$ sudo docker search -s 100 centos
+Flag --stars has been deprecated, use --filter=stars=3 instead
+NAME                      DESCRIPTION                                     STARS               OFFICIAL            AUTOMATED
+centos                    The official build of CentOS.                   5467                [OK]                
+ansible/centos7-ansible   Ansible on Centos7                              122                                     [OK]
+jdeathe/centos-ssh        CentOS-6 6.10 x86_64 / CentOS-7 7.6.1810 x86…   110                                     [OK]
+
+when pulling image, make sure to specify version, eg, 'latest'. otherwise, docker will pull all images, taking away too
+much space
+tian@linux1:/home/tian/tmp$ sudo docker pull centos:latest
+...
+
+tian@linux1:/home/tian/tmp$ sudo docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+centos              latest              9f38484d220f        4 months ago        202MB
+
+tian@linux1:/home/tian/tmp$ cat /etc/issue
+Ubuntu 18.04.2 LTS \n \l
+
+'-it' is for interactive and with a tty
+tian@linux1:/home/tian/tmp$ sudo docker run -it centos:latest /bin/bash
+[root@eb0a6e25613f /]# uname -a
+Linux eb0a6e25613f 4.15.0-54-generic #58-Ubuntu SMP Mon Jun 24 10:55:24 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux
+[root@eb0a6e25613f /]# df  -k .
+Filesystem     1K-blocks     Used Available Use% Mounted on
+none           122029712 11217104 104570816  10% /
+[root@eb0a6e25613f /]# exit
+exit
+
+tian@linux1:/home/tian/tmp$ sudo docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+
+tian@linux1:/home/tian/tmp$ sudo docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS                      PORTS               NAMES
+eb0a6e25613f        centos:latest       "/bin/bash"         2 minutes ago       Exited (0) 29 seconds ago                       sharp_goldstine
+
+tian@linux1:/home/tian/tmp$ sudo docker restart eb0a6e25613f
+eb0a6e25613f
+
+tian@linux1:/home/tian/tmp$ sudo docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+eb0a6e25613f        centos:latest       "/bin/bash"         2 minutes ago       Up 5 seconds                            sharp_goldstine
+
+tian@linux1:/home/tian/tmp$ sudo docker attach eb0a6e25613f
+[root@eb0a6e25613f /]# exit
+exit
+
+tian@linux1:/home/tian/tmp$ sudo docker rm eb0a6e25613f
+eb0a6e25613f
+
+tian@linux1:/home/tian/tmp$ sudo docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+
+
+
+
+
+
+
