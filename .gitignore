@@ -5,3 +5,7 @@
 .idea
 autopath
 tpstamp.txt.*
+
+# perl performance profile
+nytprof.out
+nytprof

@@ -183,7 +183,7 @@ if [ "X$PATH" != "X" ]; then
 fi
 
 if [ "X$PERL5LIB" != "X" ]; then
-   PERL5LIB="$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PERL5LIB""
+   PERL5LIB=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PERL5LIB"`
    export PERL5LIB
 fi
 

@@ -177,7 +177,7 @@ for my $f (@ARGV) {
 
       if ($f =~ /gz$/) {
          my $cmd = "gunzip -c $f";
-         open $fh, "?cmd|" or die "cmd=$cmd failed";
+         open $fh, "$cmd|" or die "cmd=$cmd failed";
       } else {
          open $fh, "<$f" or die "cannot read $f failed";
       }
