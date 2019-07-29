@@ -42,9 +42,10 @@ Solaris 8 (5.8) doesn't have linux-like features, eg,
 
    grep -r
    diff -f
-   find: some switches
-   stats
+   find: some switches. even linux version doesn't have more granular mtime switch, eg, intraday
+   stat
    html2text
+   user level rsync: when without ssh key and root access
    ...
 
 so I use perl to write them

@@ -1,0 +1,4 @@
+design sketches
+
+eg, connect git to get the latest commit
+eg, connect to Jenkins to get the latest build

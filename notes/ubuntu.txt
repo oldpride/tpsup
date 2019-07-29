@@ -16,6 +16,16 @@ to launch
 /usr/bin/chromium-browser
 
 -------------------------------------------------------------------
+
+assume root
+
+tian@linux1:/home/tian/github/tpsup/notes$ sudo su
+[sudo] password for tian: 
+root@linux1:/home/tian/github/tpsup/notes# id
+uid=0(root) gid=0(root) groups=0(root)
+
+-------------------------------------------------------------------
+
 add sd card.
 
 Added a 64-GB Samsung evo micro sd card but my linux cannot find it using df, even after reboot
@@ -166,6 +176,10 @@ https://stackoverflow.com/questions/12241152/boost-no-such-file-or-directory
 
 sudo apt-get install libboost-dev
 -----------------------------------------------------------------------------
+if apt-get install not working, first try
+
+sudo apt-get update
+-----------------------------------------------------------------------------
 set up remote desktop
 
 https://askubuntu.com/questions/592537/can-i-access-ubuntu-from-windows-remotely
@@ -214,5 +228,14 @@ I followed the USB drive instructions
    sudo dconf-editor
 but USB instructions doesn't seem to apply to micro sd card slot.
 
+-----------------------------------------------------------------------------
 
+tian@linux1:/home/tian$ df -k .
+Filesystem     1K-blocks     Used Available Use% Mounted on
+/dev/sda2      122029712 10784128 105003792  10% /
+
+my home dir is not automounted because I didn't even install autofs, therefore
+no configuration files 
+   /etc/auto.master
+   /etc/default/autofs
 

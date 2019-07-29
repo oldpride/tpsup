@@ -1,0 +1,182 @@
+https://www.youtube.com/watch?v=qAMWG86sEm8
+
+----------------------------------------------
+Boot Process
+
+BIOS   (basic input/output system, firmware)
+Boot Loaders
+   LILO (linux loader, old style)
+   GRUB (grand unified unix boot, new style)
+initrd (initial ram disk, mount root file sytem)
+/boot  (contains kernel)
+vmlinux or vmlinuz (kernels)
+
+boot log
+   /var/log/dmesg
+   dmesg
+
+telinit (init)
+    run level 6 is reboot
+
+systemctl (systemd)
+
+shutdown, reboot, poweroff
+----------------------------------------------
+
+syslog
+
+facilities
+serverities
+   emergency
+   alert
+   critical
+   eroor
+   warning
+   notice
+   info
+
+use logger to generate message from cmd line
+use logrotate to rotate and prune logs
+----------------------------------------------
+
+disk management:
+
+create and mod partitions
+   fdisk
+   gdisk
+   parted
+
+file system
+   mkfs
+   mount
+   df
+   umount
+
+register in /etc/fstab
+
+view UUID and labels
+(UUID: universal uniq id)
+   lsblk -f    (display everything)
+   blkid       (only uuid)
+
+creating labels
+   e2label
+----------------------------------------------
+user management
+
+/etc/passwd /etc/shadow
+
+useradd userdel usermod
+groupadd groupdel groupmod
+
+su:      switch user
+sudo:    do as superuser
+sudo su: switch to super user
+visudo:  modify sudoers file
+
+----------------------------------------------
+
+subnet mask is used to separate network part and host part
+class A: 255.0.0.0
+class B: 255.255.0.0
+class C: 255.255.255.0
+
+$ ifconfig     deprecated
+$ ip address   new style
+
+/etc/hosts
+/etc/nsswitch.conf
+
+root@linux1:/home/tian/github/tpsup/notes# hostname
+linux1
+
+root@linux1:/home/tian/github/tpsup/notes# hostname -f
+linux1.fios-router.home
+
+root@linux1:/home/tian/github/tpsup/notes# host linux1
+linux1.fios-router.home has address 192.168.1.191
+
+root@linux1:/home/tian/github/tpsup/notes# getent hosts linux1
+fe80::8639:beff:fe6b:5cfb linux1
+fe80::42:dff:fe24:6933 linux1
+
+----------------------------------------------
+managing software
+
+RPM-based: redhat, centos
+   yum
+   rpm
+
+DEB-based: ubuntu
+   apt
+   dpkg 
+----------------------------------------------
+https://www.youtube.com/watch?v=p3tvtXOg5rg
+----------------------------------------------
+
+monitor memory
+
+top
+vmstat
+free -g           (in gig bytes)
+cat /proc/meminfo
+sar
+
+top
+Tasks: 191 total,   1 running, 138 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  0.7 us,  0.2 sy,  0.0 ni, 99.1 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+KiB Mem :  8094572 total,  2223180 free,  2833820 used,  3037572 buff/cache
+KiB Swap:  4194300 total,  4194300 free,        0 used.  4834720 avail Mem 
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND                        
+18887 xrdp      20   0   54028  26008   7236 S   1.3  0.3   0:55.28 xrdp                           
+19098 root      20   0   42900   4128   3396 R   0.7  0.1   0:00.08 top               
+...
+
+running 
+
+root@linux1:/etc/netplan# vmstat 2 6
+procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 2  0      0 2232084 375260 2660812    0    0     0     3    6    1  8  1 91  0  0
+ 0  0      0 2231952 375260 2660848    0    0     0     0   94  272  1  0 99  0  0
+ 0  0      0 2231952 375260 2660848    0    0     0     0   96  284  1  0 99  0  0
+ 0  0      0 2231952 375268 2660840    0    0     0    10   91  268  1  0 99  0  0
+ 1  0      0 2231952 375268 2660848    0    0     0     0  122  358  1  0 99  0  0
+ 0  0      0 2231952 375268 2660848    0    0     0     0  208  434  6  0 94  0  0
+
+r, run queue:   including running or waiting. if always r > number of cores, add core
+swap, swap usage, if any, add disk
+
+If the idle time (cpu id) is consistently 0 and if the system time (cpu sy) is double the user time (cpu us)
+system is facing shortage of CPU resources.
+
+sar for long term monitoring
+
+----------------------------------------------
+
+scsi drives /dev/sda1, /dev/sda2, ...  
+ide  drives /dev/hda1, /dev/hda2, ...
+floppy      /dev/fd0, /dev/fd1
+
+----------------------------------------------
+
+shrink the size LVM partition and fixes the filesystem size to 10GB.
+1. Unmount the filesystem using unmount command
+   Syntax: umount /dev/hda2 /dir1
+
+   if using ext2 file system, make sure the filesytem has no problem
+      e2fsck -f /dev/hda2
+   this may take a while
+
+   for ext3 and ext4, the file system has journaling. no need e2fsck, and also very fast.
+
+2. Use resize2fs command. this reduces the file system
+    Syntax: resize2fs/dev/mapper/myvg-mylv 10G
+
+3. Now use the lvreduce command. this reduces the volume
+   Syntax: lvreduce -L 10G /dev/mapper/myvg-mylv
+
+----------------------------------------------
+
+

@@ -1,0 +1,74 @@
+https://www.youtube.com/watch?v=LTIjUJEehDA
+
+infrastructure as code (IAC)
+
+pull configuration 
+
+chef: a server,  nodes, and workstation
+
+Chef Server manages the nodes that make up the infrastruture
+Chef server has configuration in Cookbook 
+
+Chef Client runs on each node
+
+Knife is a command line tool on work station
+
+workstation (local chef repo) send config to Chef Server. 
+   Chef Server send config to nodes, also serves as a mirror for the nodes to compare with.
+       nodes configures themself
+
+Chef server can only run on 64-bit linux, no on 32-bit, no on windows
+
+Chef is writen in Ruby and using Ruby as configuration language
+
+vi hello.rb
+   file 'motd' do
+      content 'hello world'
+   end
+
+chef-apply hello.rb
+
+$ cat motd
+hello world
+
+to delete motd file
+
+vi hello.rb
+   file 'motd' do
+      action :delete
+   end
+
+chef-apply hello.rb
+
+vi hello.rb
+   package 'apache2' do
+        action :install
+   end
+   
+   service 'apace2' do
+       action [:enable, :start]
+   end
+   
+   file '/var/www/html/index.html' do
+       content '
+       <html>
+       <body>
+          <h1>hello world!</h1>
+       </body>
+       </html>'
+   end
+
+chef generate cookbook recipe[learn_chef_apache2]
+chef generate template ...
+
+on node side
+chef-client --local-mode -runlist 'recipe[learn_chef_apache2]'
+
+on workstation side
+install starter kit (downloaded from chef.io)
+chef.io has a lot cookbook, just copy and paste
+
+$ knife cookbook site download lean_chef_apache2
+
+on workstation, to set up node (establish relationship between the node host to server)
+knife bootstrap node_ip --ssh-user ashish --sshpassword helloqqq --sudo --use-sudo-password --node-name cnode1 --run-lis 'receipe[learn_chef_apache2]'
