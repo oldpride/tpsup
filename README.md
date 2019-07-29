@@ -27,3 +27,34 @@ REST/RESTful: Representational State Transfer
 
 Spring Boot: on top of Spring framework，all ingredients are ready, only need customization
 
+AWS
+
+Public cloud: share with others
+Private cloud: isolated on vendor side, or buy own cloud hardware and hire own team
+Hybrid: mix on-premise, private, public cloud
+ 
+
+Infrastructure as service: provide OS
+
+Platform as service: provide dashboard: Tomcat, PHP, Apache
+
+Software as service: provide software, eg, Google docs
+
+Service domains:
+Compute, Storage, database, security,
+Management, Customer Engagement, app integration
+
+Compute: 
+EC2 - elastic compute cloud, IAS
+elastic beanstalk - advanced EC2, with suite of software, PAS, eg, web server
+Aws lambda - automated ec2, auto scale
+Elastic Load balancing
+Aws auto scaling
+Elastic container registry - like docker
+Elastic container service
+
+
+
+
+
+
