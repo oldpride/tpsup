@@ -2,7 +2,7 @@
 
 . $TPSUP/profile
 
-for cmd in kdbnotes tpnotes mycpp
+for cmd in tpscripts kdbnotes tpnotes mycpp
 do 
    echo ""
    echo "------ $cmd -------"

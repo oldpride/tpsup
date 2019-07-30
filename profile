@@ -128,17 +128,19 @@ fi
 # For almost every purpose, aliases are superseded by shell functions.
 
 alias perllib='cd $TPSUP/lib/perl/TPSUP'
-alias tpscripts='cd $TPSUP/scripts'
-#alias tpnotes='cd $TPSUP/notes'
-#alias kdbnotes='cd $TPSUP/../kdb/notes'
+#alias tpscripts='cd $TPSUP/scripts'
 alias tpsup='. $TPSUP/profile'
+
+tpscripts () {
+   cd $TPSUP/scripts
+}
 
 kdbnotes () {
    cd $TPSUP/../kdb/notes
 }
 
 tpnotes () {
-   cd $TPSUP/notes
+   cd $TPSUP/../notes
 }
 
 mycpp () {

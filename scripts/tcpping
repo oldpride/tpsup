@@ -1,0 +1,116 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Socket;
+use IO::Socket::INET;
+use Data::Dumper;
+use File::Basename;
+use Getopt::Long;
+use Statistics::Descriptive;
+
+#my $prog = $0; $prog =~ s:.*/::;
+my $prog = basename($0);
+my $iteration = 3;
+my $verbose;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+    sudo $prog host port [iterration]
+
+    tcp-based ping to work around when firewall disables ICMP which is used by traditional ping.
+    This program needs sudo access.
+
+    'host' can be hostname and ip.
+    'iterration' default to $iteration.
+
+    -v verbose
+
+examples:
+
+    sudo $prog www.github.com 80
+
+END
+
+   exit 1;
+}
+
+GetOptions(
+   'v|verbose'    => \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2 || @ARGV > 3  ;
+
+my $ip    = shift;
+my $port  = shift;
+my $count = shift;
+
+$count=$iteration unless $count;
+
+my $diff="Not Available\n";
+
+if ($ip !~ /^\d{1,3}[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}$/ ) {
+   $ip=gethostbyname($ip);
+
+   if (defined $ip) {
+      $ip=inet_ntoa($ip);
+   } else {
+      print "Cannot find IP address for Host Name: $ip. \n";
+      exit 10;
+   }
+}
+
+my $usemame = $ENV{LOGNAME} | | $ENV{USER} | | getpwuid($<);
+
+my $dev=`/sbin/ip route get $ip|grep dev`;
+
+$dev = ~m/~.*dev\s+(\S+)\s.*src\s+(\S+).*$/;
+$dev=$1;
+
+print "$dev\n";
+
+__END__
+my $myip=$2;
+my $tcpdumpCmd=qq(sudo /usr/sbin/tcpdump -Z $username -p -tt -1 -nn -i $dev :pflags] & (tcp-syn|tcp-rst) != 0' and port $port and host $ip);
+open (my $ORIGSTDERR, ">&", STDERR);
+open (my $null, ">",undef);
+open (STDERR, ">&",$null);
+my $pid=open (OPEN,"-|",$tcpdumpCmd);
+open(STDERR, ">&", $ORIGSTDERR);
+sleep 1;
+for ( ;$count>0;$count-- ) {
+my $sock=IO::Socket::INET->new(PeerAddr=>$ip,PeerPort=>$port,Proto=>'tcp', :=>1) ;
+close $sock if $sock';
+unless ( $sock || $! =“ /refused/i ) {
+print "$ip:$port not reacheable\n"; system("/bin/kill $pid");
+exit ;
+}
+}
+system("/bin/kill $pid");
+• =-?-< -;-.® fe i
+my $out=0;
+my %conntrac=();
+my @samples=() ;
+for (<OPEN>) {
+if (m/A(.*)\sIP $myip.(\d{5}) > $ip.$port:/) {
+$out=l; $conntrac{$2}=$l;
+}
+if (m/A(.*)\sIP $ip.$port > $myip.(\d{5}):/ && $out){
+$out=0;
+if ( defined $conntrac{$2} ) {
+my $del=($l-$conntrac{$2})*1000; push(@samples,$del) if $del;
+printf ("%.3f ms\n",$del);
+}
+}
+}
+if (@samples) {
+my $stat=Statistics::Descriptive::Full->new(); $stat->add_data(@samples);
+printf ("Mean latency: %.3f ms\n",$stat->mean());
+# printf ("Median latency: %.3fms\n",$stat->medianO);
+# printf ("Geomet latency: %.3fms\n",$stat->geometric_mean()); }
