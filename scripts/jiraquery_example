@@ -1,0 +1,140 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use JSON;
+
+use Data::Dumper;
+
+my $cmd = 'curl -s -k -u "tpsup.global@abc.com:pass30rd@abc" -X GET -L "https://jiraboss.abc.com/jira01/rest/api/latest/search?&jql=duedate%3E%3D2018-07-12%20AND%20duedate%3C2018—07—13%20AND%2Oproject%20%3D%20CC%20AND%20issuetype%20in%20standardIssueTypes%28%29%20AND%20%28component%20%3D%2OUS-PROD%20OR%20component%20%3D%20FCC-US-Daily%29"';
+
+my $jiraOutput = `$cmd`;
+
+my $jiraJSON = decode_json($jiraOutput);
+
+print Dumper($jiraJSON);
+
+exit 0;
+
+__END__
+
+To get a valid jira query url:
+
+    log onto https://at1as.abc.com/jiraO1
+
+    enter login/password
+
+    to verify as whom you are logged in, click top bar account icon (on the right of Search Field)
+
+    search anything from the Search field.
+
+    This brings out a text search bar.
+
+    then copy part of the Query to the text (skip the date part)
+
+    project = CC AND issuetype in standardlssueTypes() AND (component = US-PROD OR component = FCC-US-Daily)
+
+    click search
+
+   it converts the query to
+
+   Search Link for FCC: https://dbatlas.abc.com/jiraOl/issues/?jql=duedate%3E%3D2018-07-12%20AND%2Oduedate%3C2 018-07-13%20AND%2Oproject%20%3D%20CC%20AND%20issuetype%20in%20standardIssueTypes%28%29%20AND%20%28component%20%3D%2OUS-PROD%20OR%20component%20%3D%20FCC-US-Daily%29
+
+Do it from config
+   
+   <DATASOURCE type="jira" name="FCC">
+   <APPLICATION>FCC</APPLICATION>
+   <HOSTNAME>https://dbat1as.abc.com/jiraO1</HOSTNAME>
+   <USERNAME >tpsup.globa1@abc.com</USERNAME>
+   <PASSWORD>pass30rd@abc</PASSWORD>
+   <QUERY><![CDATA[duedate>=$currentDate AND duedate<$nextBusinessDate AND project = CC AND issuetype in standardlssueTypes() AND (component = US-PROD OR component = FCC-US-Daily)]]></QUERY>
+   </DATASOURCE>
+
+in code
+
+   my $hash = $config->{DATASOURCE}{FCC};
+
+   my $query = uri_escape($hash->{QUERY});
+
+   jiraCurlJSONSomething($hash->{HOSTNAME}, $hash->{USERNAME}, $hash->{PASSWORD}, $query, $hash->{APPLICATION});
+
+   sub jiraCur1JSON§omething{
+       # HostName, UserName, Password, Query, Application
+       my ( $pk1, $p2, $p3, $p4, $p5) = @_;
+       my @array;	
+       my $userName = $p2;
+       my $jiraCommand = "curl	-s -k -u '$p2:$p3' -X GET -L '$p1/rest/api/latest/search?&jql=$p4'";
+       ...
+   }
+
+in curl manual
+
+       -k, --insecure
+              (TLS)  By  default,  every  SSL connection curl makes is verified to be secure. This option
+              allows curl to proceed and operate even for server connections otherwise  considered  inse‐
+              cure.
+
+              The  server  connection  is  verified  by making sure the server's certificate contains the
+              right name and verifies successfully using the cert store.
+
+              See this online resource for further details:
+               https://curl.haxx.se/docs/sslcerts.html
+
+              See also --proxy-insecure and --cacert.
+
+       -L, --location
+              (HTTP) If the server reports that the requested page has  moved  to  a  different  location
+              (indicated  with  a  Location:  header and a 3XX response code), this option will make curl
+              redo the request on the new place. If used together with -i, --include or -I, --head, head‐
+              ers  from  all  requested pages will be shown. When authentication is used, curl only sends
+              its credentials to the initial host. If a redirect takes curl to a different host, it won't
+              be  able to intercept the user+password. See also --location-trusted on how to change this.
+              You can limit the amount of redirects to follow by using the --max-redirs option.
+
+              When curl follows a redirect and the request is not a plain GET (for example POST or  PUT),
+              it  will  do the following request with a GET if the HTTP response was 301, 302, or 303. If
+              the response code was any other 3xx code, curl will re-send the following request using the
+              same unmodified method.
+
+              You  can  tell curl to not change the non-GET request method to GET after a 30x response by
+              using the dedicated options for that: --post301, --post302 and --post303.
+
+
+       -s, --silent
+              Silent  or  quiet  mode.  Don't show progress meter or error messages.  Makes Curl mute. It
+              will still output the data you ask for, potentially even to the terminal/stdout unless  you
+              redirect it.
+
+              Use  -S,  --show-error  in addition to this option to disable progress meter but still show
+              error messages.
+
+              See also -v, --verbose and --stderr.
+
+       -X, --request <command>
+              (HTTP)  Specifies  a  custom request method to use when communicating with the HTTP server.
+              The specified request method will be used instead  of  the  method  otherwise  used  (which
+              defaults  to  GET).  Read  the  HTTP 1.1 specification for details and explanations. Common
+              additional HTTP requests include PUT and  DELETE,  but  related  technologies  like  WebDAV
+              offers PROPFIND, COPY, MOVE and more.
+
+              Normally  you  don't  need  this  option. All sorts of GET, HEAD, POST and PUT requests are
+              rather invoked by using dedicated command line options.
+
+              This option only changes the actual word used in the HTTP request, it does  not  alter  the
+              way  curl  behaves. So for example if you want to make a proper HEAD request, using -X HEAD
+              will not suffice. You need to use the -I, --head option.
+
+              The method string you set with -X, --request will be used for all requests,  which  if  you
+              for  example  use -L, --location may cause unintended side-effects when curl doesn't change
+              request method according to the HTTP 30x response codes - and similar.
+
+              (FTP) Specifies a custom FTP command to use instead of LIST when doing file lists with FTP.
+
+              (POP3) Specifies a custom POP3 command to use instead of LIST or RETR. (Added in 7.26.0)
+
+              (IMAP) Specifies a custom IMAP command to use instead of LIST. (Added in 7.30.0)
+
+              (SMTP) Specifies a custom SMTP command to use instead of HELP or VRFY. (Added in 7.34.0)
+
+              If this option is used several times, the last one will be used.
+
