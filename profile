@@ -156,17 +156,41 @@ else
 fi
 
 py2env () {
-   alias python=python2
+   python () {
+      /usr/bin/python "$@"
+   }
+
+   pip () {
+      /usr/bin/pip "$@"
+   }
+
    PYTHONPATH=$TPSUP/python2/lib:$PYTHONPATH
    export PYTHONPATH
    PATH=$TPSUP/python2/scripts:$PATH
+
+   # export the function
+   set -a
 }
 
 py3env () {
-   alias python=python3
+   python () {
+      /usr/bin/python3 "$@"
+   }
+
+   pip () {
+      /usr/bin/pip3 "$@"
+   }
+
    PYTHONPATH=$TPSUP/python3/lib:$PYTHONPATH
    export PYTHONPATH
    PATH=$TPSUP/python3/scripts:$PATH
+
+   # export the function
+   set -a
+}
+
+functions () {
+   declare -F
 }
 
 py3env  # default to python 3
@@ -230,6 +254,10 @@ if [ "X$TERM" = Xxterm -o "X$TERM" = "Xvt100" ]; then
 
    # unset -f func to unset a function.
 fi
+
+# https://stackoverflow.com/questions/6920402/in-a-bash-script-how-to-run-bash-functions-defined-outside
+# export all functions
+set -a
 
 set -o vi
 #  Control-V, Backspace

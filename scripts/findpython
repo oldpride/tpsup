@@ -29,8 +29,12 @@ fi
 
 module=$1
 
+
 echo ""
-which python
+# which will not report function
+# which python
+# declare -F
+python --version
 echo ""
 
 echo "
@@ -46,3 +50,7 @@ print('\n')
 import $module
 print(inspect.getfile($module))
 " |python
+
+if [ $? -eq 0 ]; then
+   pip freeze |grep $module
+fi
