@@ -116,8 +116,7 @@ elif [[ $UNAME =~ Cygwin ]]; then
    alias python2="'/cygdrive/c/Program Files/Python27/python'"
    alias python3="'/cygdrive/c/Program Files/Python37/python'"
 elif [[ $UNAME =~ Linux ]]; then
-   alias python2="/usr/bin/python2.7"
-   alias python3="/usr/bin/python3"
+   # linux has /usr/bin/python2 and /usr/bin/python3
    alias eclipse="/home/tian/eclipse/cpp-2019-06/eclipse/eclipse"
 else 
    echo "UNAME='$UNAME' is not supported"
@@ -155,7 +154,7 @@ else
    PATH=$TPSUP/autopath:$PATH
 fi
 
-py2env () {
+p2env () {
    python () {
       /usr/bin/python "$@"
    }
@@ -172,7 +171,7 @@ py2env () {
    set -a
 }
 
-py3env () {
+p3env () {
    python () {
       /usr/bin/python3 "$@"
    }
@@ -183,25 +182,24 @@ py3env () {
 
    PYTHONPATH=$TPSUP/python3/lib:$PYTHONPATH
    export PYTHONPATH
-   PATH=$TPSUP/python3/scripts:$PATH
+   PATH=$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH
 
    # export the function
    set -a
 }
 
-functions () {
+funcs () {
    declare -F
 }
 
-py3env  # default to python 3
+p3env  # default to python 3
 
-alias pyc="python -m py_compile"
-alias py2c="python2 -m py_compile"
-alias py3c="python3 -m py_compile"
-alias py2scripts='cd $TPSUP/python2/scripts'
-alias py3scripts='cd $TPSUP/python3/scripts'
-alias py2lib='cd $TPSUP/python2/lib/tpsup'
-alias py3lib='cd $TPSUP/python3/lib/tpsup'
+alias p2c="python2 -m py_compile"
+alias p3c="python3 -m py_compile"
+alias p2scripts='cd $TPSUP/python2/scripts'
+alias p3scripts='cd $TPSUP/python3/scripts'
+alias p2lib='cd $TPSUP/python2/lib/tpsup'
+alias p3lib='cd $TPSUP/python3/lib/tpsup'
 
 if [ "X$PATH" != "X" ]; then
    PATH=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PATH"`
