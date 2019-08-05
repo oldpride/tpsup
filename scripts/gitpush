@@ -50,12 +50,17 @@ if [ $1 = all ]; then
 else 
    ( set -x; git add $dryrun "$@" )
 fi
+
+echo ""
    
 ( 
 set -x
 git diff $dryrun --cached --name-only
+echo ""
 git commit $dryrun -m update
+echo ""
 git diff $dryrun --stat --cached origin/master
+echo ""
 )
 
 if [ $force = N ]; then
@@ -69,7 +74,9 @@ if [ $force = N ]; then
 fi
 
 (
+echo ""
 set -x 
 git push $dryrun
+echo ""
 git status
 )
