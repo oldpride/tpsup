@@ -53,7 +53,7 @@ fi
    
 ( 
 set -x
-git diff $dryrun --cached 
+git diff $dryrun --cached --name-only
 git commit $dryrun -m update
 git diff $dryrun --stat --cached origin/master
 )
