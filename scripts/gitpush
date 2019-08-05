@@ -1,0 +1,75 @@
+#!/bin/bash
+
+prog=`basename $0`
+dir=`dirname $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog  all
+   $prog  filename
+
+   -v     versbose
+   -f     force without asking for confrimation
+
+example:
+
+   $prog all
+   $prog scratchpad.txt
+
+EOF
+
+   exit 1
+}
+
+force=N
+verbose=N
+dryrun=''
+
+while getopts dfv o;
+do
+   case "$o" in
+      d) dryrun='--dry-run';;
+      f) force=Y;;
+      v) verbose=Y;;
+      #m) match=$OPTARG;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac 
+done
+
+shift $((OPTIND-1))
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+if [ $1 = all ]; then
+   ( set -x; git add  $dryrun -A )
+else 
+   ( set -x; git add $dryrun "$@" )
+fi
+   
+( 
+set -x
+git diff $dryrun --cached 
+git commit $dryrun -m update
+git diff $dryrun --stat --cached origin/master
+)
+
+if [ $force = N ]; then
+   echo "Do you want to push the changes Y|N ? [N]"
+   read answer
+
+   if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+       echo "Answer is "$answer". Therefore, skipped $f."
+       exit 0
+   fi
+fi
+
+(
+set -x 
+git push $dryrun
+git status
+)
