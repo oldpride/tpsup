@@ -197,7 +197,9 @@ p3env  # default to python 3
 alias p2c="python2 -m py_compile"
 alias p3c="python3 -m py_compile"
 alias p2scripts='cd $TPSUP/python2/scripts'
+alias p2examples='cd $TPSUP/python2/examples'
 alias p3scripts='cd $TPSUP/python3/scripts'
+alias p3examples='cd $TPSUP/python3/examples'
 alias p2lib='cd $TPSUP/python2/lib/tpsup'
 alias p3lib='cd $TPSUP/python3/lib/tpsup'
 
