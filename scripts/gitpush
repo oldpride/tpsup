@@ -10,8 +10,9 @@ usage:
    $prog  all
    $prog  filename
 
-   -v     versbose
    -f     force without asking for confrimation
+   -n     dryrun
+   -v     versbose
 
 example:
 
@@ -27,10 +28,10 @@ force=N
 verbose=N
 dryrun=''
 
-while getopts dfv o;
+while getopts fnv o;
 do
    case "$o" in
-      d) dryrun='--dry-run';;
+      n) dryrun='--dry-run';;
       f) force=Y;;
       v) verbose=Y;;
       #m) match=$OPTARG;;
@@ -53,15 +54,12 @@ fi
 
 echo ""
    
-( 
-set -x
-git diff $dryrun --cached --name-only
+( set -x; git diff --cached --name-only )
 echo ""
-git commit $dryrun -m update
+( set -x; git commit $dryrun -m update )
 echo ""
-git diff $dryrun --stat --cached origin/master
+( set -x; git diff --stat --cached origin/master )
 echo ""
-)
 
 if [ $force = N ]; then
    echo "Do you want to push the changes Y|N ? [N]"
@@ -73,10 +71,7 @@ if [ $force = N ]; then
    fi
 fi
 
-(
 echo ""
-set -x 
-git push $dryrun
+( set -x; git push $dryrun )
 echo ""
-git status
-)
+( set -x; git status )
