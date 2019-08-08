@@ -38,9 +38,24 @@ def get_ifh(filename: str):
     except IOError as err:
         yield None, err
     else:
+        # https://stackoverflow.com/questions/16138232/is-it-a-good-practice-to-use-try-except-else-in-python
+        # this explains why we need else-statement
         try:
             yield ifh, None
         finally:
+            # this try-yield pattern has no except-statement here, but you could have one for certain situation
+            # https://amir.rachum.com/blog/2017/03/03/generator-cleanup/
+            # def safegen():
+            #     yield 'so far so good'
+            #     closed = False
+            #     try:
+            #         yield 'yay'
+            #     except GeneratorExit:
+            #         closed = True
+            #         raise
+            #     finally:
+            #         if not closed:
+            #             yield 'boo'
             ifh.close()
 
 # the rest

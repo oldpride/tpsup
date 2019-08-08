@@ -57,6 +57,15 @@ def strings_to_funcs(strings, funcs_name, is_exp, **opt):
     return funcs
 
 
+def strings_to_compiled_list(strings, compiled_list_name, **opt):
+    """ convert list of strings into a list of (to-be) compiled patterns"""
+
+    statements = [f'{compiled_list_name} = []'] + \
+                 [f'    {re.compile(s)}' for s in strings]
+
+    return '\n'.join(statements)
+
+
 # learned from Cookbook with modification from Stackoverflow.
 def load_module(new_module_name: str, source: str):
     """ compile the source code into executable using an external module"""
@@ -70,7 +79,7 @@ def load_module(new_module_name: str, source: str):
     return mod
 
 
-def tpeng_lock(plain:str, *, salt=None):
+def tpeng_lock(plain: str, *, salt=None):
     """ encode a string """
     _MAGIC = 'AccioConfundoLumosNox'
     length = len(plain)
@@ -97,7 +106,7 @@ def tpeng_lock(plain:str, *, salt=None):
     return escaped
 
 
-def tpeng_unlock(string:str, *, salt=None):
+def tpeng_unlock(string: str, *, salt=None):
     """ decode a string """
     _MAGIC = 'AccioConfundoLumosNox'
     unescaped = uri_unescape(string)
@@ -173,6 +182,7 @@ def main():
     encoded = tpeng_lock(plain)
     decoded = tpeng_unlock(encoded)
     print(f"plain='{plain}' encoded='{encoded}' decoded='{decoded}'")
+
 
 if __name__ == '__main__':
     main()
