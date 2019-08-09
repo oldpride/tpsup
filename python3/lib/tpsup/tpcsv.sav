@@ -2,16 +2,18 @@ import sys
 import re
 from pprint import pprint, pformat
 from tpsup.util import strings_to_compiled_list, load_module
+import csv
+import io
 
 
 # learned from the Cookbook (8.3)
-class TpCsv:
+class CsvEntry:
     def __init__(self, filename, **opt):
         self.filename = filename
         self.opt = opt
 
     def __enter__(self):
-        tpcsv = {}
+        csv_detail = {}
         opt = self.opt
         filename = self.filename
 
@@ -50,20 +52,20 @@ class TpCsv:
 
         header_line = header_line.rstrip()
 
-        tpcsv['columns'] = header_line.split(delimiter)
-        tpcsv['delimiter'] = delimiter
-        tpcsv['filename'] = filename
-        tpcsv['fh'] = fh
+        csv_detail['columns'] = header_line.split(delimiter)
+        csv_detail['delimiter'] = delimiter
+        csv_detail['filename'] = filename
+        csv_detail['fh'] = fh
 
-        self.tpcsv = tpcsv
+        self.csv_detail = csv_detail
 
-        return tpcsv
+        return csv_detail
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.tpcsv['fh'].close()
+        self.csv_detail['fh'].close()
 
 
-def csv_to_struct(filename, **opt):
+def csv_to_dict_generator(filename, **opt):
     verbose = 0
 
     if 'verbose' in opt and opt['verbose'] != 0:
@@ -72,97 +74,118 @@ def csv_to_struct(filename, **opt):
     if verbose:
         sys.stderr.write(f'opt = \n{pformat(opt)}\n')
 
-    with TpCsv(filename, **opt) as tpcsv:
-        columns = tpcsv['columns']
-        delimiter = tpcsv['delimiter']
-        fh = tpcsv['fh']
+    source_list = ['import re']
 
-        num_of_columns = len(columns)
-        inconsistent_line_count = 0
+    for attr in ['MatchPattern', 'ExcludePattern']:
+        if attr in opt and opt[attr] is not None:
+            # need to convert pattern string into bytes-like object as we read the csv as binary data
+            strings = opt[attr]
+        else:
+            strings = []
 
-        source_list = []
+        source_list.append(strings_to_compiled_list(strings, attr, encode='utf-8'))
 
-        for attr in ['MatchPattern', 'ExcludePattern']:
-            if attr in opt and opt[attr] is not None:
-                strings = opt[attr]
-            else:
-                strings = []
+    source = '\n\n'.join(source_list)
 
-            source_list.append(strings_to_compiled_list(strings, attr))
+    if verbose:
+        sys.stderr.write(f'source code = \n{source}\n')
 
-        source = '\n\n'.join(source_list)
+    pattern_filter = load_module(source)
 
-        if verbose:
-            sys.stderr.write(f'source code = \n{source}')
+    match_patterns = pattern_filter.MatchPattern
+    exclude_patterns = pattern_filter.ExcludePattern
 
-        _csv_to_struct_ = load_module('_csv_to_struct_', source)
+    # this 'with' is a context-manager
+    with CsvEntry(filename, **opt) as csv_detail:
+        columns = csv_detail['columns']
+        delimiter = csv_detail['delimiter']
 
-        array = []
+        if 'use_standard_csv' in opt and opt['use_standard_csv'] != 0:
+            # from csv import DictReader
 
-        while 1:
-            line = fh.readline()
-            if not line:
-                break
+            with io.TextIOWrapper(csv_detail['fh'], encoding='utf-8') as fh:
+                f_csv = csv.DictReader(fh, fieldnames=columns)
+                #f_csv = csv.DictReader(fh)
+                for row in f_csv:
+                    yield row
+        else:
+            num_of_columns = len(columns)
+            inconsistent_line_count = 0
 
-            line = line.rstrip()
+            # this 'with' triggers generator
+            with csv_detail['fh'] as fh:
+                while 1:
+                    # line = fh.readline()
+                    line = next(fh)
+                    if not line:
+                        break
 
-            # https://docs.python.org/2/howto/regex.html
-            # match() Determine if the RE matches at the beginning of the string.
-            # search() Scan through a string, looking for any location where this RE matches.
-            # findall() Find all substrings where the RE matches, and returns them as a list.
-            # finditer() Find all substrings where the RE matches, and returns
-            # them as an iterator.
+                    line = line.rstrip()
 
-            match_patterns = _csv_to_struct_.MatchPattern
-            exclude_patterns = _csv_to_struct_.ExcludePattern
+                    # https://docs.python.org/2/howto/regex.html
+                    # match() Determine if the RE matches at the beginning of the string.
+                    # search() Scan through a string, looking for any location where this RE matches.
+                    # findall() Find all substrings where the RE matches, and returns them as a list.
+                    # finditer() Find all substrings where the RE matches, and returns
+                    # them as an iterator.
 
-            matched = 1
+                    matched = 1
 
-            for compiled in match_patterns:
-                # if not compiled.match(line):
-                if not compiled.search(line):
-                    matched = 0
-                    break
+                    for compiled in match_patterns:
+                        # if not compiled.match(line):
+                        if not compiled.search(line):
+                            matched = 0
+                            break
 
-            if not matched:
-                continue
+                    if not matched:
+                        continue
 
-            excluded = 0
+                    excluded = 0
 
-            for compiled in exclude_patterns:
-                if compiled.search(line):
-                    excluded = 1
-                    break
-            if excluded:
-                continue
+                    for compiled in exclude_patterns:
+                        if compiled.search(line):
+                            excluded = 1
+                            break
+                    if excluded:
+                        continue
 
-            cells = line.split(delimiter)
+                    cells = line.split(delimiter)
 
-            if len(cells) != num_of_columns:
-                inconsistent_line_count += 1
+                    if len(cells) != num_of_columns:
+                        inconsistent_line_count += 1
 
-            # zip will throw away any extra columns
-            row = dict(zip(columns, cells))
+                    # zip will throw away any extra columns
+                    row = dict(zip(columns, cells))
 
-            array.append(row)
+                    yield row
 
-        if inconsistent_line_count:
-            sys.stderr.write(f'found {inconsistent_line_count},lines having inconsistent number of columns\n')
+            if inconsistent_line_count:
+                sys.stderr.write(f'found {inconsistent_line_count},lines having inconsistent number of columns\n')
 
-        ret = {'columns': columns, 'delimiter': delimiter, 'array': array}
-
-        return ret
+        # ret = {'columns': columns, 'delimiter': delimiter, 'array': array}
+        #
+        # return ret
 
 
 def main():
     file = 'csv_test.csv'
-    struct = csv_to_struct(file)
-    print(f'{file} = {pformat(struct)}\n')
+    # struct = csv_to_struct(file)
+    # print(f'{file} = {pformat(struct)}\n')
+    for row in (csv_to_dict_generator(file, use_standard_csv=1)):
+        print(row)
+
+    sys.stdout.flush()
+
+    # struct = csv_to_struct(file, MatchPattern=[',S'], ExcludePattern=['Smith'], verbose=1)
+    # print(f'filtered = {pformat(struct)}\n')
+
+    print(f'filtered')
+    for row in (csv_to_dict_generator(file, MatchPattern=[',S'], ExcludePattern=['Smith'], verbose=1)):
+        print(row)
 
 
 if __name__ == '__main__':
     main()
-
 
 # def query_csv(**opt):
 #     if 'verbose' in opt and opt['verbose']:

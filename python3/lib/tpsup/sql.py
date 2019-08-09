@@ -3,7 +3,7 @@ from pprint import pprint,pformat
 import os
 import sys
 from os.path import expanduser
-from tpsup.csv import query_csv
+from tpsup.tpcsv import query_csv
 from tpsup.util import tpeng_unlock
 import re
 

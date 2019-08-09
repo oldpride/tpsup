@@ -6,6 +6,7 @@ import textwrap
 from pprint import pformat
 from inspect import currentframe, getframeinfo
 import os
+import time
 
 from tpsup.util import strings_to_funcs, load_module
 import platform
@@ -13,8 +14,6 @@ import platform
 if platform.system().lower().startswith("lin"):
     import pwd
     import grp
-
-import time
 
 
 def tpfind(**opt):
@@ -68,7 +67,7 @@ def tpfind(**opt):
             f.write(source)
             f.write('\n')
 
-    dummy = load_module('dummy', source)
+    dummy = load_module(source)
 
     opt['compiled_HandleExps'] = dummy.HandleExps
     opt['compiled_HandleActs'] = dummy.HandleActs
@@ -271,6 +270,7 @@ def main():
     # **kwargs allows you to pass keyworded variable length of arguments to a function.
     # You should use **kwargs if you want to handle named arguments in a function.
     tpfind(**args)
+
 
 if __name__ == '__main__':
     main()

@@ -5,6 +5,7 @@ import sys
 import types
 from contextlib import contextmanager
 from pprint import pformat
+import inspect
 
 
 def string_to_temp_func(string: str, *, is_exp=0, **opt):
@@ -60,14 +61,22 @@ def strings_to_funcs(strings, funcs_name, is_exp, **opt):
 def strings_to_compiled_list(strings, compiled_list_name, **opt):
     """ convert list of strings into a list of (to-be) compiled patterns"""
 
-    statements = [f'{compiled_list_name} = []'] + \
-                 [f'    {re.compile(s)}' for s in strings]
+    statements = [f'{compiled_list_name} = [']
+
+    if 'encode' in opt and opt['encode'] is not None:
+        encode = opt['encode']
+        statements.extend([f'    re.compile("{s}".encode("{encode}")),' for s in strings])
+    else:
+        statements.extend([f'    re.compile("{s}"),' for s in strings])
+
+    statements.extend([f']'])
 
     return '\n'.join(statements)
 
 
+
 # learned from Cookbook with modification from Stackoverflow.
-def load_module(new_module_name: str, source: str):
+def load_module(source: str, new_module_name=inspect.stack()[1][3]):
     """ compile the source code into executable using an external module"""
     # https://stackoverflow.com/questions/32175693/python-importlibs-analogue-for-imp-new-module
     # mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
