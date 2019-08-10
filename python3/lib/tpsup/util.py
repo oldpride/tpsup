@@ -63,11 +63,7 @@ def strings_to_compiled_list(strings, compiled_list_name, **opt):
 
     statements = [f'{compiled_list_name} = [']
 
-    if 'encode' in opt and opt['encode'] is not None:
-        encode = opt['encode']
-        statements.extend([f'    re.compile("{s}".encode("{encode}")),' for s in strings])
-    else:
-        statements.extend([f'    re.compile("{s}"),' for s in strings])
+    statements.extend([f'    re.compile("{s}"),' for s in strings])
 
     statements.extend([f']'])
 

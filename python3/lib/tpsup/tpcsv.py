@@ -33,7 +33,7 @@ class CsvEntry(io.BytesIO):
             else:
                 strings = []
 
-            source_list.append(strings_to_compiled_list(strings, attr, encode='utf-8'))
+            source_list.append(strings_to_compiled_list(strings, attr))
 
         source = '\n\n'.join(source_list)
 
@@ -100,9 +100,9 @@ class CsvEntry(io.BytesIO):
             skip = 0
 
         if 'delimiter' in opt and opt['delimiter']:
-            delimiter = opt['delimiter'].encode('utf-8')
+            delimiter = opt['delimiter']
         else:
-            delimiter = ','.encode('utf-8')
+            delimiter = ','
 
         # https://stackoverflow.com/questions/1984104/how-to-avoid-explicit-self-in-python
         # python requires prefix self
@@ -110,10 +110,11 @@ class CsvEntry(io.BytesIO):
         if filename == '-':
             fh = sys.stdin
         else:
+            # the unicode-sandwich design pattern
             if filename.endswith('.gz'):
-                fh = gzip.open(filename, 'rb')
+                fh = gzip.open(filename, 'r', encoding='utf-8')
             else:
-                fh = open(filename, 'rb')
+                fh = open(filename, 'r', encoding='utf-8')
 
         # skip lines if needed
         for count in range(0, skip):
@@ -151,17 +152,9 @@ def csv_to_dict_stream(filename, **opt):
         columns = csv_entry.columns
 
         # https://stackoverflow.com/questions/51152023/how-to-use-python-csv-dictreader-with-a-binary-file-for-a-babel-custom-extract
-        # open csv as binary file
-        # with io.TextIOWrapper(csv_entry) as fh:
-        dict_reader = csv.DictReader(io.TextIOWrapper(csv_entry), fieldnames=columns)
-        #dict_reader = csv.DictReader(csv_entry, fieldnames=columns)
+        dict_reader = csv.DictReader(csv_entry, fieldnames=columns)
         for row in dict_reader:
             yield row
-
-        # this works but doesn't filter
-        # dict_reader = csv.DictReader(io.TextIOWrapper(csv_entry.fh), fieldnames=columns)
-        # for row in dict_reader:
-        #     yield row
 
 
 def main():
@@ -177,9 +170,15 @@ def main():
 
     sys.stdout.flush()
 
-    print(f'use csv module')
+    print(f'\nuse csv module')
 
     dict_stream = csv_to_dict_stream(file, MatchPattern=[',S'], verbose=1)
+    for row in dict_stream:
+        print(row)
+
+    print(f'\nopen gz file')
+
+    dict_stream = csv_to_dict_stream(file, MatchPattern=[',H'], verbose=1)
     for row in dict_stream:
         print(row)
 
