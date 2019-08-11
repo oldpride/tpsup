@@ -9,3 +9,6 @@ tpstamp.txt.*
 # perl performance profile
 nytprof.out
 nytprof
+
+
+__pycache__
