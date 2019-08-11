@@ -216,6 +216,12 @@ class CsvDictList:
     def __next__(self):
         return self.iterator()
 
+    # def __enter__(self):
+    #     return self
+    #
+    # def __exit__(self, exc_type, exc_val, exc_tb):
+    #     pass
+
 
 def main():
     verbose = 0
@@ -343,9 +349,8 @@ def query_csv(**opt):
         dictlist = _input
     else:
         raise RuntimeError(f'unknown input_type="{input_type}"')
-
-    for dict in filter_dictlist(dict, **opt):
-        yield dict
+    for row in filter_dictlist(dictlist, **opt):
+        yield row
 
 
 if __name__ == '__main__':
