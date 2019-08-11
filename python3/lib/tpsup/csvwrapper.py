@@ -8,6 +8,7 @@ import gzip
 import pkgutil
 import inspect
 import os
+from typing import Dict,List
 
 """
 why do we need this ?
@@ -32,18 +33,14 @@ class CsvEntry(io.BytesIO):
         self.filename = filename
         self.opt = opt
         self.columns = None
-        self.delimiter = None
         self.fh = None
 
-    def readline(self, size=-1):
-        source_list = ['import re']
-
-        opt = self.opt
-
-        verbose = 0
-
         if 'verbose' in opt and opt['verbose'] != 0:
-            verbose = 1
+            self.verbose = 1
+        else:
+            self.verbose = 0
+
+        source_list = ['import re']
 
         for attr in ['MatchPattern', 'ExcludePattern']:
             if attr in opt and opt[attr] is not None:
@@ -56,14 +53,25 @@ class CsvEntry(io.BytesIO):
 
         source = '\n\n'.join(source_list)
 
-        if verbose:
+        if self.verbose == 1:
             sys.stderr.write(f'source code = \n{source}\n')
 
         pattern_filter = load_module(source)
 
-        match_patterns = pattern_filter.MatchPattern
-        exclude_patterns = pattern_filter.ExcludePattern
+        self.match_patterns = pattern_filter.MatchPattern
+        self.exclude_patterns = pattern_filter.ExcludePattern
 
+        if 'skip' in opt and opt['skip']:
+            self.skip = opt['skip']
+        else:
+            self.skip = 0
+
+        if 'delimiter' in opt and opt['delimiter']:
+            self.delimiter = opt['delimiter']
+        else:
+            self.delimiter = ','
+
+    def readline(self, size=-1):
         # this 'with' is a context-manager
         with self.fh as fh:
             while 1:
@@ -71,8 +79,6 @@ class CsvEntry(io.BytesIO):
                 line = next(fh)
                 if not line:
                     break
-
-                line = line.rstrip()
 
                 # https://docs.python.org/2/howto/regex.html
                 # match() Determine if the RE matches at the beginning of the string.
@@ -83,7 +89,7 @@ class CsvEntry(io.BytesIO):
 
                 matched = 1
 
-                for compiled in match_patterns:
+                for compiled in self.match_patterns:
                     # if not compiled.match(line):
                     if not compiled.search(line):
                         matched = 0
@@ -94,7 +100,7 @@ class CsvEntry(io.BytesIO):
 
                 excluded = 0
 
-                for compiled in exclude_patterns:
+                for compiled in self.exclude_patterns:
                     if compiled.search(line):
                         excluded = 1
                         break
@@ -112,16 +118,6 @@ class CsvEntry(io.BytesIO):
     def __enter__(self):
         opt = self.opt
         filename = self.filename
-
-        if 'skip' in opt and opt['skip']:
-            skip = opt['skip']
-        else:
-            skip = 0
-
-        if 'delimiter' in opt and opt['delimiter']:
-            delimiter = opt['delimiter']
-        else:
-            delimiter = ','
 
         # https://stackoverflow.com/questions/1984104/how-to-avoid-explicit-self-in-python
         # python requires prefix self
@@ -142,12 +138,17 @@ class CsvEntry(io.BytesIO):
                 #     if newline is not None:
                 #         raise ValueError("Argument 'newline' not supported in binary mode")
 
-                fh = gzip.open(filename, 'rt', encoding='utf-8')
+                fh = gzip.open(filename, 'rt', encoding='utf-8', newline='')
             else:
-                fh = open(filename, 'r', encoding='utf-8')
+                fh = open(filename, 'r', encoding='utf-8', newline='')
+
+            # If newline='' is not specified, newlines embedded inside quoted fields will not be interpreted
+            # correctly, and on platforms that use \r\n linendings on write an extra \r will be added. It should
+            # always be safe to specify newline='', since the csv module does its own (universal) newline handling.
+            # https://docs.python.org/3/library/csv.html
 
         # skip lines if needed
-        for count in range(0, skip):
+        for count in range(0, self.skip):
             line = fh.readline()
 
             if not line:
@@ -160,13 +161,14 @@ class CsvEntry(io.BytesIO):
 
         header_line = header_line.rstrip()
 
-        self.columns = header_line.split(delimiter)
-        self.delimiter = delimiter
+        self.columns = header_line.split(self.delimiter)
         self.fh = fh
 
         return self
 
-    def __exit__(self, exc_type, exc_value, tb):
+    # def __exit__(self, exc_type, exc_value, tb):
+    # base class's __exit__() is build-in function. I cannot figure out its signature.
+    def __exit__(self, *args, **kwargs):
         self.fh.close()
         self.fh = None
 
@@ -197,14 +199,22 @@ class CsvEntry(io.BytesIO):
 # much better off using NumPy, which can automatically vectorize operations on complex
 # multi-dimensional arrays.
 
-def csv_to_dictlist(filename, **opt):
-    with CsvEntry(filename, **opt) as csv_entry:
-        columns = csv_entry.columns
+class CsvDictList:
+    def __init__(self, filename: str, **opt):
+        self.csv_entry = CsvEntry(filename, **opt)
 
-        # https://stackoverflow.com/questions/51152023/how-to-use-python-csv-dictreader-with-a-binary-file-for-a-babel-custom-extract
-        dict_reader = csv.DictReader(csv_entry, fieldnames=columns)
-        for row in dict_reader:
-            yield row
+    def iterator(self):
+        with self.csv_entry:
+            # https://stackoverflow.com/questions/51152023/how-to-use-python-csv-dictreader-with-a-binary-file-for-a-babel-custom-extract
+            dict_reader = csv.DictReader(self.csv_entry, fieldnames=self.csv_entry.columns)
+            for row in dict_reader:
+                yield row
+
+    def __iter__(self):
+        return self.iterator()
+
+    def __next__(self):
+        return self.iterator()
 
 
 def main():
@@ -221,14 +231,14 @@ def main():
 
     print(f'\nuse csv module\n')
 
-    dictlist = csv_to_dictlist(file, MatchPattern=[',S'], verbose=verbose)
+    dictlist = CsvDictList(file, MatchPattern=[',S'], verbose=verbose)
     for row in dictlist:
         print(row)
 
     gz_file = 'csvwrapper_test.csv.gz'
     print(f'\nopen gz file {gz_file}\n')
 
-    dictlist = csv_to_dictlist(gz_file, MatchPattern=[',H'], verbose=verbose)
+    dictlist = CsvDictList(gz_file, MatchPattern=[',H'], verbose=verbose)
     for row in dictlist:
         print(row)
 
@@ -239,31 +249,14 @@ def main():
         print(row)
 
 
-def query_csv(**opt):
+def filter_dictlist(dictlist: Dict[str, str], **opt) -> List[Dict[str, str]]:
     if 'verbose' in opt and opt['verbose'] == 1:
         verbose = 1
         sys.stderr.write(f'opt =\n{pformat(opt)}\n')
     else:
         verbose = 0
 
-    if 'input' not in opt or opt['input'] is None:
-        raise RuntimeError('missing "input"" setting')
-    else:
-        _input = opt['input']
-
     # import pdb; pdb.set_trace();
-
-    if 'input_type' not in opt or opt['input_type'] is None:
-        input_type = 'file'
-    else:
-        input_type = opt['input_type']
-
-    if input_type == 'file':
-        dictlist = csv_to_dictlist(_input, **opt)
-    elif input_type == 'dictlist':
-        dictlist = _input
-    else:
-        raise RuntimeError(f'unknown input_type="{input_type}"')
 
     if verbose == 1:
         print(f'__package__= {__package__}')
@@ -295,11 +288,11 @@ def query_csv(**opt):
             _list = []
         source_list.append(strings_to_compilable_func(_list, attr, logic=logic, verbose=verbose))
 
-    for attr in ['TempExps']:
+    for attr in ['TempExps', 'ExportExps']:
         if attr in opt and opt[attr] is not None:
             _list = opt[attr]
         else:
-            _list = []
+            _list = {}
         source_list.append(stringdict_to_funcdict(_list, attr, is_exp=1, verbose=verbose))
 
     source = '\n\n'.join(source_list)
@@ -316,10 +309,14 @@ def query_csv(**opt):
 
     match_exps = exp_module.MatchExps
     exclude_exps = exp_module.ExcludeExps
-    tempdict = exp_module.TempExps
+    temp_dict = exp_module.TempExps
+    export_dict = exp_module.ExportExps
 
     for r in dictlist:
-        for name, func in tempdict.items():
+        for name, func in temp_dict.items():
+            r[name] = func(r)
+
+        for name, func in export_dict.items():
             r[name] = func(r)
 
         if verbose == 1:
@@ -327,6 +324,28 @@ def query_csv(**opt):
 
         if match_exps(r) and not exclude_exps(r):
             yield r
+
+
+def query_csv(**opt):
+    if 'input' not in opt or opt['input'] is None:
+        raise RuntimeError('missing "input"" setting')
+    else:
+        _input = opt['input']
+
+    if 'input_type' not in opt or opt['input_type'] is None:
+        input_type = 'file'
+    else:
+        input_type = opt['input_type']
+
+    if input_type == 'file':
+        dictlist = CsvDictList(_input, **opt)
+    elif input_type == 'dictlist':
+        dictlist = _input
+    else:
+        raise RuntimeError(f'unknown input_type="{input_type}"')
+
+    for dict in filter_dictlist(dict, **opt):
+        yield dict
 
 
 if __name__ == '__main__':

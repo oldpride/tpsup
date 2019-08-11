@@ -6,9 +6,13 @@ import types
 from contextlib import contextmanager
 from pprint import pformat
 import inspect
+from typing import Dict, List
 
 
-def string_to_temp_func(string: str, is_exp=0, **opt):
+# https://docs.python.org/3/library/typing.html
+# https://stackoverflow.com/questions/38727520/adding-default-parameter-value-with-type-hint-in-python
+# type hints: import typing
+def string_to_temp_func(string: str, is_exp: int = 0, **opt) -> str:
     """generate a string of expression into a string of function definition"""
 
     extra_indent = ''
@@ -45,7 +49,7 @@ def string_to_temp_func(string: str, is_exp=0, **opt):
     return uncompiled_string
 
 
-def strings_to_funcs(strings, funcs_name, is_exp, **opt):
+def strings_to_funcs(strings: List, funcs_name: str, is_exp: int, **opt) -> str:
     """ convert list of strings into a list of functions"""
 
     source_list = [f'{funcs_name} = []'] + \
@@ -58,7 +62,7 @@ def strings_to_funcs(strings, funcs_name, is_exp, **opt):
     return funcs
 
 
-def stringdict_to_funcdict(stringdict, funcdict_name, is_exp, **opt):
+def stringdict_to_funcdict(stringdict: Dict[str, str], funcdict_name: str, is_exp: int, **opt) -> str:
     """ convert dictionary of strings into a dictionary of functions"""
 
     if 'verbose' in opt and opt['verbose'] == 1:
@@ -76,19 +80,17 @@ def stringdict_to_funcdict(stringdict, funcdict_name, is_exp, **opt):
     return funcdict
 
 
-def strings_to_compilable_patterns(strings, compiled_list_name, **opt):
+def strings_to_compilable_patterns(strings: List, compiled_list_name: str, **opt) -> str:
     """ convert list of strings into a list of (to-be) compilable patterns"""
 
     statements = [f'{compiled_list_name} = [']
-
     statements.extend([f'    re.compile("{s}"),' for s in strings])
-
     statements.extend([f']'])
 
     return '\n'.join(statements)
 
 
-def strings_to_compilable_func(strings, func_name, logic='and', **opt):
+def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and', **opt) -> str:
     """ convert list of strings into ONE compilable function"""
 
     statements = [f'def {func_name}(r):']
