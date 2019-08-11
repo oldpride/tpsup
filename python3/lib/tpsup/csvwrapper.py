@@ -1,9 +1,28 @@
 import sys
 import re
 from pprint import pprint, pformat
-from tpsup.util import strings_to_compiled_list, load_module
+from tpsup.util import strings_to_compilable_patterns, load_module, stringdict_to_funcdict, strings_to_compilable_func
 import csv
 import io
+import gzip
+import pkgutil
+import inspect
+import os
+
+"""
+why do we need this ?
+    standard csv cannot filter input file by line-based pattern, eg, cannot do 'grep 'col1,col2'.
+why do will still use standard csv ?
+    standard csv has sophisticated parser to parse quoted columns. 
+
+steps:
+- open file.
+- filter input, line-based.
+- pass csv.dictReader a fileObj.
+- standard csv module generates dict list.
+- filter dict list, column-based.
+
+"""
 
 
 # learned from the Cookbook (8.3)
@@ -33,7 +52,7 @@ class CsvEntry(io.BytesIO):
             else:
                 strings = []
 
-            source_list.append(strings_to_compiled_list(strings, attr))
+            source_list.append(strings_to_compilable_patterns(strings, attr))
 
         source = '\n\n'.join(source_list)
 
@@ -106,13 +125,24 @@ class CsvEntry(io.BytesIO):
 
         # https://stackoverflow.com/questions/1984104/how-to-avoid-explicit-self-in-python
         # python requires prefix self
-        fh = None
         if filename == '-':
             fh = sys.stdin
         else:
             # the unicode-sandwich design pattern
             if filename.endswith('.gz'):
-                fh = gzip.open(filename, 'r', encoding='utf-8')
+                # in /usr/lib/python/3.6/gzip.py, open()
+                # if "t" in mode:
+                #     if "b" in mode:
+                #         raise ValueError("Invalid mode: %r" % (mode,))
+                # else:
+                #     if encoding is not None:
+                #         raise ValueError("Argument 'encoding' not supported in binary mode")
+                #     if errors is not None:
+                #         raise ValueError("Argument 'errors' not supported in binary mode")
+                #     if newline is not None:
+                #         raise ValueError("Argument 'newline' not supported in binary mode")
+
+                fh = gzip.open(filename, 'rt', encoding='utf-8')
             else:
                 fh = open(filename, 'r', encoding='utf-8')
 
@@ -147,7 +177,27 @@ class CsvEntry(io.BytesIO):
         return self.readline()
 
 
-def csv_to_dict_stream(filename, **opt):
+# list vs array
+# https://stackoverflow.com/questions/176011/python-list-vs-array-when-to-use
+# Basically, Python lists are very flexible and can hold completely heterogeneous,
+# arbitrary data, and they can be appended to very efficiently, in amortized constant
+# time. If you need to shrink and grow your list time-efficiently and without hassle,
+# they are the way to go. But they use a lot more space than C arrays.
+#
+# The array.array type, on the other hand, is just a thin wrapper on C arrays. It can
+# hold only homogeneous data, all of the same type, and so it uses only
+# sizeof(one object) * length bytes of memory. Mostly, you should use it when you need
+# to expose a C array to an extension or a system call (for example, ioctl or fctnl).
+#
+# array.array is also a reasonable way to represent a mutable string in Python 2.x
+# (array('B', bytes)). However, Python 2.6+ and 3.x offers a mutable byte string as
+# bytearray.
+#
+# However, if you want to do math on a homogeneous array of numeric data, then you're
+# much better off using NumPy, which can automatically vectorize operations on complex
+# multi-dimensional arrays.
+
+def csv_to_dictlist(filename, **opt):
     with CsvEntry(filename, **opt) as csv_entry:
         columns = csv_entry.columns
 
@@ -158,160 +208,130 @@ def csv_to_dict_stream(filename, **opt):
 
 
 def main():
-    file = 'csv_test.csv'
+    verbose = 0
 
-    sys.stdout.flush()
+    file = 'csvwrapper_test.csv'
+    print(f'\nfiltered\n')
 
-    print(f'filtered')
-
-    with CsvEntry(file, MatchPattern=[',S'], ExcludePattern=['Smith'], verbose=1) as csv_entry:
+    with CsvEntry(file, MatchPattern=[',S'], ExcludePattern=['Smith'], verbose=verbose) as csv_entry:
         for row in csv_entry.readline():
             print(row)
 
     sys.stdout.flush()
 
-    print(f'\nuse csv module')
+    print(f'\nuse csv module\n')
 
-    dict_stream = csv_to_dict_stream(file, MatchPattern=[',S'], verbose=1)
-    for row in dict_stream:
+    dictlist = csv_to_dictlist(file, MatchPattern=[',S'], verbose=verbose)
+    for row in dictlist:
         print(row)
 
-    print(f'\nopen gz file')
+    gz_file = 'csvwrapper_test.csv.gz'
+    print(f'\nopen gz file {gz_file}\n')
 
-    dict_stream = csv_to_dict_stream(file, MatchPattern=[',H'], verbose=1)
-    for row in dict_stream:
+    dictlist = csv_to_dictlist(gz_file, MatchPattern=[',H'], verbose=verbose)
+    for row in dictlist:
         print(row)
+
+    print(f'\nquery csv\n')
+    dictlist = query_csv(finput_type='file', input=file, MatchExps=['str(r["name"]).startswith("J")'],
+                         TempExps={'newcol': 'r["name"]+"-"+r["number"]'}, verbose=verbose)
+    for row in dictlist:
+        print(row)
+
+
+def query_csv(**opt):
+    if 'verbose' in opt and opt['verbose'] == 1:
+        verbose = 1
+        sys.stderr.write(f'opt =\n{pformat(opt)}\n')
+    else:
+        verbose = 0
+
+    if 'input' not in opt or opt['input'] is None:
+        raise RuntimeError('missing "input"" setting')
+    else:
+        _input = opt['input']
+
+    # import pdb; pdb.set_trace();
+
+    if 'input_type' not in opt or opt['input_type'] is None:
+        input_type = 'file'
+    else:
+        input_type = opt['input_type']
+
+    if input_type == 'file':
+        dictlist = csv_to_dictlist(_input, **opt)
+    elif input_type == 'dictlist':
+        dictlist = _input
+    else:
+        raise RuntimeError(f'unknown input_type="{input_type}"')
+
+    if verbose == 1:
+        print(f'__package__= {__package__}')
+        print(f'__name__= {__name__}')
+
+    source_list = []
+
+    helper_file = 'csvwrapper_helper.py'
+
+    if __package__ is not None:
+        # this file is imported as module
+        helper_source = pkgutil.get_data(__package__, helper_file)
+        source_list.append(helper_source)
+    else:
+        # this file is run as a script
+        filename = inspect.getframeinfo(inspect.currentframe()).filename
+        path = os.path.dirname(os.path.abspath(filename))
+
+        helper_file = f'{path}/{helper_file}'
+
+        # read the entire file
+        with open(helper_file, 'r') as f:
+            source_list.append(f.read())
+
+    for attr, logic in [('MatchExps', 'and'), ('ExcludeExps', 'or')]:
+        if attr in opt and opt[attr] is not None:
+            _list = opt[attr]
+        else:
+            _list = []
+        source_list.append(strings_to_compilable_func(_list, attr, logic=logic, verbose=verbose))
+
+    for attr in ['TempExps']:
+        if attr in opt and opt[attr] is not None:
+            _list = opt[attr]
+        else:
+            _list = []
+        source_list.append(stringdict_to_funcdict(_list, attr, is_exp=1, verbose=verbose))
+
+    source = '\n\n'.join(source_list)
+
+    if verbose == 1:
+        print(f'source =\n{source}\n')
+
+    if 'SaveSource' in opt and opt['SaveSource'] is not None:
+        with open(opt['SaveSource'], 'wt') as f:
+            f.write(source)
+            f.write('\n')
+
+    exp_module = load_module(source)
+
+    match_exps = exp_module.MatchExps
+    exclude_exps = exp_module.ExcludeExps
+    tempdict = exp_module.TempExps
+
+    for r in dictlist:
+        for name, func in tempdict.items():
+            r[name] = func(r)
+
+        if verbose == 1:
+            sys.stderr.write(f'r = {pformat(r)}\n')
+
+        if match_exps(r) and not exclude_exps(r):
+            yield r
 
 
 if __name__ == '__main__':
     main()
 
-
-
-# def query_csv(**opt):
-#     if 'verbose' in opt and opt['verbose']:
-#         sys.stderr.write(f'opt =\n{pformat(opt)}\n')
-#
-#     if 'input' not in opt or opt['input'] is None:
-#         raise RuntimeError('missing "input"" setting')
-#
-#     # import pdb; pdb.set_trace();
-#
-#     if 'input_type' not in opt:
-#         return None
-#
-#     if opt['input_type'] == 'file':
-#         CsvEntry(opt['input'], **opt)
-#     elif opt['input_type'] == 'struct':
-#         csv_struct = opt['input']
-#
-#         for attr in ['array', 'columns', 'delimiter']:
-#             if not attr in csv_struct:
-#                 print >> sys.stderr, "opt['struct'] missing key=" + attr
-#                 sys.exit(1)
-#     else:
-#         print >> sys.stderr, "unknow input_type=", opt['input_type']
-#
-#     if 'error' in csv_struct:
-#         return csv_struct
-#
-#     if 'verbose' in opt and opt['verbose']:
-#         print >> sys.stderr, 'csv_struct = ', pformat(csv_struct)
-#
-#     rows = csv_struct['array']
-#     columns = csv_struct['columns']
-#     delimiter = csv_struct['delimiter']
-
-#     # exec("def test_exp(): return r['alpha'] is 'c'")
-#     MatchExp = None
-#     ExcludeExp = None
-#
-#     for Exp in ['MatchExp', 'ExcludeExp']:
-#         if (Exp in opt and opt[Exp] != None):
-#             uncompiled = "def " + Exp + "(r):\n"
-#             if (Exp == 'MatchExp'):
-#                 for e in opt[Exp]:
-#                     uncompiled += "    if not " + e + ":\n"
-#                     uncompiled += "        return False\n"
-#
-#                 uncompiled += "    return True\n"
-#             else:
-#                 # Exp == 'ExcludeExp'
-#                 for e in opt[Exp]:
-#                     uncompiled += "    if " + e + ":\n"
-#                     uncompiled += "        return True\n"
-#
-#                 uncompiled += "    return False\n"
-#             if 'verbose' in opt and opt['verbose']:
-#                 print >> sys.stderr, Exp, "uncompiled = ", uncompiled
-#
-#             # exec("def test_exp(r): return "    + opt['MatchExp'])
-#             exec(uncompiled)
-#         else:
-#             if (Exp == 'MatchExp'):
-#                 exec("def " + Exp + "(r): return True")
-#             elif (Exp == 'ExcludeExp'):
-#                 exec("def " + Exp + "(r): return False")
-#
-#     temp_fields = []
-#     func_by_field = {}
-#
-#     if 'TempExp' in opt and opt['TempExp'] != None:
-#         i = 0
-#         for string in opt['TempExp']:
-#             m = re.match('^([^=]+)=(.+)', string)
-#             col = m.group(1)
-#             exp = m.group(2)
-#
-#             func_name = "ef_" + str(i)
-#
-#             uncompiled = "def " + func_name + "(r): return " + exp
-#             if 'verbose' in opt and opt['verbose']:
-#                 print >> sys.stderr, "temp col = " + col + " uncompiled = ", uncompiled
-#
-#             exec(uncompiled)
-#
-#             temp_fields.append(col)
-#
-#             exec("func_by_field['" + col + "'] = " + func_name)
-#
-#             i += 1
-#
-#         if 'verbose' in opt and opt['verbose']:
-#             print >> sys.stderr, "func_by_field = ", pformat(func_by_field)
-#             print >> sys.stderr, "temp_fields = ", pformat(temp_fields)
-#
-#     if 'fields' in opt and opt['fields']:
-#         fields = opt['fields'].split(",")
-#     else:
-#         fields = columns + temp_fields
-#
-#     csv_struct2 = {}
-#
-#     rows2 = []
-#
-#     for row in rows:
-#         for f in temp_fields:
-#             func = func_by_field[f]
-#             row[f] = func(row)
-#
-#         if 'verbose' in opt and opt['verbose']:
-#             print >> sys.stderr, "row = ", pformat(row);
-#
-#         # MatchExp() and ExcludeExp() were inserted using exec. TODO: delete this confusion
-#         if MatchExp(row) and not ExcludeExp(row):
-#             rows2.append(row)
-#
-#     csv_struct2['array'] = rows2
-#     csv_struct2['delimiter'] = delimiter
-#     csv_struct2['columns'] = fields
-#
-#     if 'output' in opt:
-#         print_csv_dict(csv_struct2['array'], csv_struct2['columns'], opt['output'], **opt)
-#
-#     return csv_struct2
-#
-#
 # def print_csv_dict(_dict_rows, _fields, _output, **opt):
 #     if 'verbose' in opt and opt['verbose']:
 #         print >> sys.stderr, "print_csv_dict opt = ", pformat(opt);

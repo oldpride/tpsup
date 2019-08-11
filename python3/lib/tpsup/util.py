@@ -8,17 +8,17 @@ from pprint import pformat
 import inspect
 
 
-def string_to_temp_func(string: str, *, is_exp=0, **opt):
+def string_to_temp_func(string: str, is_exp=0, **opt):
     """generate a string of expression into a string of function definition"""
 
     extra_indent = ''
-    uncompiled_array = [f'def temp(r):']
+    uncompiled_list = [f'def temp(r):']
 
     # https://stackoverflow.com/questions/3995034/does-python-re-module-support-word-boundaries-b
     # https://stackoverflow.com/questions/12871066/what-exactly-is-a-raw-string-regex-and-how-can-you-use-it
     if re.search(r'\bifh\b', string):
         # https://stackoverflow.com/questions/713794/catching-an-exception-while-using-a-python-with-statement
-        uncompiled_array = uncompiled_array + [
+        uncompiled_list = uncompiled_list + [
             '    with get_ifh(r["path"]) as (ifh, err):',
             '        if err:',
             '            sys.stderr.write("IOError: " + err + "\\n")',
@@ -31,13 +31,13 @@ def string_to_temp_func(string: str, *, is_exp=0, **opt):
     # https://stackoverflow.com/questions/32383788/python-return-s
     # syntax-error
     if is_exp == 1:
-        uncompiled_array.append(f"{extra_indent}    return {string}")
+        uncompiled_list.append(f"{extra_indent}    return {string}")
     elif is_exp == 0:
-        uncompiled_array.append(f"{extra_indent}    {string}")
+        uncompiled_list.append(f"{extra_indent}    {string}")
     else:
         raise Exception(f"unknown is_exp={is_exp}, expect 0/1")
 
-    uncompiled_string = '\n'.join(uncompiled_array)
+    uncompiled_string = '\n'.join(uncompiled_list)
 
     if 'verbose' in opt and opt['verbose'] != 0:
         sys.stderr.write(f'uncompiled_string =\n{uncompiled_string}\n')
@@ -48,18 +48,36 @@ def string_to_temp_func(string: str, *, is_exp=0, **opt):
 def strings_to_funcs(strings, funcs_name, is_exp, **opt):
     """ convert list of strings into a list of functions"""
 
-    func_source_array = [f'{funcs_name} = []'] + \
-                        [
-                            f'{string_to_temp_func(s, is_exp=is_exp, verbose=opt["verbose"])}\n\n{funcs_name}.append(temp)\n'
-                            for s in strings]
+    source_list = [f'{funcs_name} = []'] + \
+                  [
+                      f'{string_to_temp_func(s, is_exp=is_exp, verbose=opt["verbose"])}\n\n{funcs_name}.append(temp)\n'
+                      for s in strings]
 
-    funcs = '\n\n'.join(func_source_array)
+    funcs = '\n\n'.join(source_list)
 
     return funcs
 
 
-def strings_to_compiled_list(strings, compiled_list_name, **opt):
-    """ convert list of strings into a list of (to-be) compiled patterns"""
+def stringdict_to_funcdict(stringdict, funcdict_name, is_exp, **opt):
+    """ convert dictionary of strings into a dictionary of functions"""
+
+    if 'verbose' in opt and opt['verbose'] == 1:
+        print(f'stringdict = {pformat(stringdict)}')
+
+    # escape in f string, use double curlies
+    # https://stackoverflow.com/questions/42521230/how-to-escape-f-strings-in-python-3-6
+    _list = [f'{funcdict_name} = {{}}'] + \
+            [
+                f'{string_to_temp_func(s, is_exp=is_exp, verbose=opt["verbose"])}\n\n{funcdict_name}["{k}"] = temp\n'
+                for k, s in stringdict.items()]
+
+    funcdict = '\n\n'.join(_list)
+
+    return funcdict
+
+
+def strings_to_compilable_patterns(strings, compiled_list_name, **opt):
+    """ convert list of strings into a list of (to-be) compilable patterns"""
 
     statements = [f'{compiled_list_name} = [']
 
@@ -69,6 +87,22 @@ def strings_to_compiled_list(strings, compiled_list_name, **opt):
 
     return '\n'.join(statements)
 
+
+def strings_to_compilable_func(strings, func_name, logic='and', **opt):
+    """ convert list of strings into ONE compilable function"""
+
+    statements = [f'def {func_name}(r):']
+
+    if logic == 'and':
+        statements.extend([f'    if not ({s}): return False' for s in strings])
+        statements.append(f'    return True')
+    elif logic == 'or':
+        statements.extend([f'    if not ({s}): return True' for s in strings])
+        statements.append(f'    return False')
+    else:
+        raise RuntimeError(f'unknown logic={logic}')
+
+    return '\n'.join(statements)
 
 
 # learned from Cookbook with modification from Stackoverflow.
