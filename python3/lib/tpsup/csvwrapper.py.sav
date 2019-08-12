@@ -8,7 +8,7 @@ import gzip
 import pkgutil
 import inspect
 import os
-from typing import Dict, List
+from typing import Dict,List
 
 """
 why do we need this ?
@@ -259,22 +259,19 @@ def main():
         print(row)
 
     print(f'\nquery csv\n')
-    dictlist = query_csv_to_dictlist(input=file, MatchExps=['str(r["name"]).startswith("J")'],
-                                     TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
-                                     ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
-                                     verbose=verbose)
+    dictlist = query_csv(finput_type='file', input=file, MatchExps=['str(r["name"]).startswith("J")'],
+                         TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
+                         ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
+                         verbose=verbose)
     for row in dictlist:
         print(row)
 
     print(f'\nprint to stdout\n')
-
-    query_csv_to_output(input=file, MatchExps=['str(r["name"]).startswith("J")'],
-                        TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
-                        ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
-                        Output='-',
-                        verbose=verbose)
-
-    print(f'\ndone\n')
+    dictlist = query_csv(finput_type='file', input=file, MatchExps=['str(r["name"]).startswith("J")'],
+                         TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
+                         ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
+                         Output='test.csv',
+                         verbose=verbose)
 
 
 def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str]]:
@@ -355,7 +352,7 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
 
 
 def write_csv(csv_writer, dictlist: List[Dict[str, str]], fields: List[str], **opt):
-    csv_writer.writeheader()
+    csv_writer.writerow(fields)
 
     for row in filter_dictlist(dictlist, **opt):
         # cookbook 1.17
@@ -363,52 +360,27 @@ def write_csv(csv_writer, dictlist: List[Dict[str, str]], fields: List[str], **o
         csv_writer.writerow(new_row)
 
 
-# we have to separate query_csv into two functions because query_csv_to_dictlist() is generator and
-# query_csv_to_output() is not a generator. therefore, they are called differently. If we combine them together,
-# then the non-generator won't run at the first call.
-#
-# https://stackoverflow.com/questions/231767/what-does-the-yield-keyword-do
-#
-# To master yield, you must understand that when you call the function, the code you have written in the function
-# body does not run. The function only returns the generator object.
-#
-# The first time the for calls the generator object created from your function, it will run the code in your function
-# from the beginning until it hits 'yield'.
-
-def query_csv_to_dictlist(**opt) -> List[Dict[str, str]]:
+def query_csv(**opt):
     if 'input' not in opt or opt['input'] is None:
         raise RuntimeError('missing "input"" setting')
     else:
         _input = opt['input']
 
-    dictlist = CsvDictList(_input, **opt)
-    columns = dictlist.csv_entry.columns
-    delimiter = dictlist.csv_entry.delimiter
-
-    out_fields = []
-
-    if 'SelectFields' in opt:
-        out_fields.append(str(opt['SelectFields']).split(','))
+    if 'input_type' not in opt or opt['input_type'] is None:
+        input_type = 'file'
     else:
-        out_fields.extend(columns)
+        input_type = opt['input_type']
 
-    if 'ExportExps' in opt:
-        out_fields.extend(dict(opt['ExportExps']).keys())
-
-    for row in filter_dictlist(dictlist, **opt):
-        new_row = {key: value for key, value in row.items() if key in out_fields}
-        yield new_row
-
-
-def query_csv_to_output(**opt):
-    if 'input' not in opt or opt['input'] is None:
-        raise RuntimeError('missing "input"" setting')
+    if input_type == 'file':
+        dictlist = CsvDictList(_input, **opt)
+        columns = dictlist.csv_entry.columns
+        delimiter = dictlist.csv_entry.delimiter
+    elif input_type == 'dictlist':
+        dictlist = _input
+        columns = []
+        delimiter = None
     else:
-        _input = opt['input']
-
-    dictlist = CsvDictList(_input, **opt)
-    columns = dictlist.csv_entry.columns
-    delimiter = dictlist.csv_entry.delimiter
+        raise RuntimeError(f'unknown input_type="{input_type}"')
 
     out_fields = []
 
@@ -421,15 +393,19 @@ def query_csv_to_output(**opt):
         out_fields.extend(dict(opt['ExportExps']).keys())
 
     if 'Output' not in opt or opt['Output'] is None:
-        raise RuntimeError(f"opt['Output'] is not defined")
-
-    if opt['Output'] == '-':
-        csv_writer = csv.DictWriter(sys.stdout, fieldnames=out_fields)
-        write_csv(csv_writer, dictlist, out_fields, **opt)
+        # we will return the dist list to downstream
+        for row in filter_dictlist(dictlist, **opt):
+            # cookbook 1.17
+            new_row = {key: value for key, value in row.items() if key in out_fields}
+            yield new_row
+    elif opt['Output'] == '-':
+        print('here')
+        csv_writer = csv.writer(sys.stdout)
+        write_csv(csv_writer, dictlist, out_fields)
     else:
         with open(opt['Output'], 'w') as out_fh:
-            csv_writer = csv.DictWriter(out_fh, fieldnames=out_fields)
-            write_csv(csv_writer, dictlist, out_fiel, **opt)
+            csv_writer = csv.writer(fh)
+            write_csv(csv_writer, dictlist, out_fields)
 
 
 if __name__ == '__main__':
