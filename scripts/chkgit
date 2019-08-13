@@ -8,5 +8,7 @@ do
    echo "------ $cmd -------"
    echo ""
    $cmd 2>/dev/null || continue
-   git status
+   (set -x; git status)
+   echo ""
+   (set -x; git fetch --dry-run)
 done

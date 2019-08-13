@@ -99,7 +99,7 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
         statements.extend([f'    if not ({s}): return False' for s in strings])
         statements.append(f'    return True')
     elif logic == 'or':
-        statements.extend([f'    if not ({s}): return True' for s in strings])
+        statements.extend([f'    if ({s}): return True' for s in strings])
         statements.append(f'    return False')
     else:
         raise RuntimeError(f'unknown logic={logic}')

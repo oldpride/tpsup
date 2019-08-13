@@ -34,13 +34,13 @@ class CsvEntry(io.BytesIO):
         self.opt = opt
 
         if 'verbose' in opt and opt['verbose'] != 0:
-            self.verbose = 1
+            self.verbose = opt['verbose']
         else:
             self.verbose = 0
 
         source_list = ['import re']
 
-        for attr in ['MatchPattern', 'ExcludePattern']:
+        for attr in ['MatchPatterns', 'ExcludePatterns']:
             if attr in opt and opt[attr] is not None:
                 # need to convert pattern string into bytes-like object as we read the csv as binary data
                 strings = opt[attr]
@@ -51,13 +51,13 @@ class CsvEntry(io.BytesIO):
 
         source = '\n\n'.join(source_list)
 
-        if self.verbose == 1:
+        if self.verbose >= 2:
             sys.stderr.write(f'source code = \n{source}\n')
 
         pattern_filter = load_module(source)
 
-        self.match_patterns = pattern_filter.MatchPattern
-        self.exclude_patterns = pattern_filter.ExcludePattern
+        self.match_patterns = pattern_filter.MatchPatterns
+        self.exclude_patterns = pattern_filter.ExcludePatterns
 
         if 'skip' in opt and opt['skip']:
             self.skip = opt['skip']
@@ -239,7 +239,7 @@ def main():
     file = 'csvwrapper_test.csv'
     print(f'\nfiltered\n')
 
-    with CsvEntry(file, MatchPattern=[',S'], ExcludePattern=['Smith'], verbose=verbose) as csv_entry:
+    with CsvEntry(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose) as csv_entry:
         for row in csv_entry.readline():
             print(row)
 
@@ -247,14 +247,14 @@ def main():
 
     print(f'\nuse csv module\n')
 
-    dictlist = CsvDictList(file, MatchPattern=[',S'], verbose=verbose)
+    dictlist = CsvDictList(file, MatchPatterns=[',S'], verbose=verbose)
     for row in dictlist:
         print(row)
 
     gz_file = 'csvwrapper_test.csv.gz'
     print(f'\nopen gz file {gz_file}\n')
 
-    dictlist = CsvDictList(gz_file, MatchPattern=[',H'], verbose=verbose)
+    dictlist = CsvDictList(gz_file, MatchPatterns=[',H'], verbose=verbose)
     for row in dictlist:
         print(row)
 
@@ -278,15 +278,15 @@ def main():
 
 
 def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str]]:
-    if 'verbose' in opt and opt['verbose'] == 1:
-        verbose = 1
+    if 'verbose' in opt and opt['verbose'] != 0:
+        verbose = opt['verbose']
         sys.stderr.write(f'opt =\n{pformat(opt)}\n')
     else:
         verbose = 0
 
     # import pdb; pdb.set_trace();
 
-    if verbose == 1:
+    if verbose >= 1:
         print(f'__package__= {__package__}')
         print(f'__name__= {__name__}')
 
@@ -296,7 +296,7 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
 
     if __package__ is not None:
         # this file is imported as module
-        helper_source = pkgutil.get_data(__package__, helper_file)
+        helper_source = pkgutil.get_data(__package__, helper_file).decode('utf-8')
         source_list.append(helper_source)
     else:
         # this file is run as a script
@@ -317,15 +317,24 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
         source_list.append(strings_to_compilable_func(_list, attr, logic=logic, verbose=verbose))
 
     for attr in ['TempExps', 'ExportExps']:
+        _dict = {}
+
         if attr in opt and opt[attr] is not None:
-            _list = opt[attr]
-        else:
-            _list = {}
-        source_list.append(stringdict_to_funcdict(_list, attr, is_exp=1, verbose=verbose))
+            if type(opt[attr]) == dict:
+                # within python, it is easier to spec in dict
+                _dict = opt[attr]
+            elif type(opt[attr]) == list:
+                # on command line, it is easier to spec in list of strings
+                for pair in opt[attr]:
+                    # split at the first occurrence
+                    (key, value) = pair.split("=", 1)
+                    _dict[key] = value
+
+        source_list.append(stringdict_to_funcdict(_dict, attr, is_exp=1, verbose=verbose))
 
     source = '\n\n'.join(source_list)
 
-    if verbose == 1:
+    if verbose >= 2:
         print(f'source =\n{source}\n')
 
     if 'SaveSource' in opt and opt['SaveSource'] is not None:
@@ -347,19 +356,19 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
         for name, func in export_dict.items():
             r[name] = func(r)
 
-        if verbose == 1:
+        if verbose >= 1:
             sys.stderr.write(f'r = {pformat(r)}\n')
 
         if match_exps(r) and not exclude_exps(r):
             yield r
 
 
-def write_csv(csv_writer, dictlist: List[Dict[str, str]], fields: List[str], **opt):
+def write_csv(csv_writer, dictlist: List[Dict[str, str]], _fields: List[str], **opt):
     csv_writer.writeheader()
 
     for row in filter_dictlist(dictlist, **opt):
         # cookbook 1.17
-        new_row = {key: value for key, value in row.items() if key in fields}
+        new_row = {key: value for key, value in row.items() if key in _fields}
         csv_writer.writerow(new_row)
 
 
@@ -387,12 +396,12 @@ def query_csv_to_dictlist(**opt) -> List[Dict[str, str]]:
 
     out_fields = []
 
-    if 'SelectFields' in opt:
-        out_fields.append(str(opt['SelectFields']).split(','))
+    if 'SelectFields' in opt and opt['SelectFields'] is not None:
+        out_fields.extend(str(opt['SelectFields']).split(','))
     else:
         out_fields.extend(columns)
 
-    if 'ExportExps' in opt:
+    if 'ExportExps' in opt and opt['ExportExps'] is not None:
         out_fields.extend(dict(opt['ExportExps']).keys())
 
     for row in filter_dictlist(dictlist, **opt):
@@ -412,70 +421,30 @@ def query_csv_to_output(**opt):
 
     out_fields = []
 
-    if 'SelectFields' in opt:
-        out_fields.append(str(opt['SelectFields']).split(','))
+    if 'SelectFields' in opt and opt['SelectFields'] is not None:
+        out_fields.extend(str(opt['SelectFields']).split(','))
     else:
         out_fields.extend(columns)
 
-    if 'ExportExps' in opt:
+    if 'ExportExps' in opt and opt['ExportExps'] is not None:
         out_fields.extend(dict(opt['ExportExps']).keys())
 
     if 'Output' not in opt or opt['Output'] is None:
         raise RuntimeError(f"opt['Output'] is not defined")
 
     if opt['Output'] == '-':
-        csv_writer = csv.DictWriter(sys.stdout, fieldnames=out_fields)
+        if 'OutDelimiter' in opt and opt['OutDelimiter'] is not None:
+            out_delimiter = opt['OutDelimiter']
+        else:
+            out_delimiter = delimiter
+
+        csv_writer = csv.DictWriter(sys.stdout, fieldnames=out_fields, delimiter=out_delimiter)
         write_csv(csv_writer, dictlist, out_fields, **opt)
     else:
         with open(opt['Output'], 'w') as out_fh:
             csv_writer = csv.DictWriter(out_fh, fieldnames=out_fields)
-            write_csv(csv_writer, dictlist, out_fiel, **opt)
+            write_csv(csv_writer, dictlist, out_fields, **opt)
 
 
 if __name__ == '__main__':
     main()
-
-# def print_csv_dict(_dict_rows, _fields, _output, **opt):
-#     if 'verbose' in opt and opt['verbose']:
-#         print >> sys.stderr, "print_csv_dict opt = ", pformat(opt);
-#
-#     ofo = None
-#
-#     if _output == '-':
-#         ofo = sys.stdout
-#     else:
-#         ofo = open(_output, 'w')
-#
-#     odelimiter = None
-#
-#     if 'odelimiter' in opt and opt['odelimiter'] != None:
-#         odelimiter = opt['odelimiter']
-#     elif 'delimiter' in opt and opt['delimiter'] != None:
-#         odelimiter = opt['delimiter']
-#     else:
-#         odelimiter = ','
-#
-#     if 'verbose' in opt and opt['verbose']:
-#         print >> sys.stderr, "ofo = ", pformat(ofo);
-#         print >> sys.stderr, "odelimiter = ", odelimiter;
-#
-#     ofo.write(odelimiter.join(_fields) + "\n")
-#
-#     for row in _dict_rows:
-#         list = []
-#
-#         for f in _fields:
-#             if not f in row:
-#                 value = ''
-#             else:
-#                 value = row[f]
-#
-#             list.append(value)  # this does    append '' to the list
-#             # list += value     #this doesn't append '' to the list
-#
-#         if 'verbose' in opt and opt['verbose']:
-#             print >> sys.stderr, "print_csv_dict row = ", pformat(row);
-#             print >> sys.stderr, "print_csv_dict list = ", pformat(list);
-#
-#         # map(function, iterable) applies a function to every item of the iterable and return a list.
-#         ofo.write(odelimiter.join(map(str, list)) + "\n")
