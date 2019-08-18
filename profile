@@ -128,7 +128,10 @@ fi
 
 alias perllib='cd $TPSUP/lib/perl/TPSUP'
 #alias tpscripts='cd $TPSUP/scripts'
-alias tpsup='. $TPSUP/profile'
+
+tpsup () {
+  . $TPSUP/profile
+}
 
 tpscripts () {
    cd $TPSUP/scripts

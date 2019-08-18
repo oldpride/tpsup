@@ -4,11 +4,11 @@
 import argparse
 import sys
 import textwrap
-from pprint import pprint,pformat
+from pprint import pprint, pformat
 
-from tpsup.csvwrapper import query_csv_to_output
+from tpsup.csvwrapper import query_csv
 
-usage = textwrap.dedent("""\
+usage = textwrap.dedent("""
     parse csv file like perl-version tpcsv
     """)
 
@@ -56,27 +56,27 @@ parser = argparse.ArgumentParser(
     description=usage,
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
-    
+
 parser.add_argument(
-    'input', default=None,
+    'filename', default=None,
     help='input csv file')
-    
+
 parser.add_argument(
     '-mp', '--MatchPatterns', action='append',
     help="match pattern, eg, 'c,2', can use multiple times, AND logic, like a grep pipe")
-    
+
 parser.add_argument(
     '-xp', '--ExcludePatterns', action='append',
     help="exclude pattern, eg, 'c,2', can use multiple times, AND logic, like a grep -v")
-    
+
 parser.add_argument(
     '-me', '--MatchExps', action='append',
     help="match expression, eg, r['alpha'] is 'c', can use multiple times, AND logic, like a grep pipe")
-    
+
 parser.add_argument(
     '-xe', '--ExcludeExps', action='append',
     help="exclude expression, eg, r['alpha'] is 'c', can use multiple times, AND logic, like a grep -v pipe")
-    
+
 parser.add_argument(
     '-te', '--TempExps', action='append',
     help="temp expression, eg, a2=r['alpha']+'z', n2=r['number']+100, can use multiple times. will not be printed.")
@@ -88,33 +88,33 @@ parser.add_argument(
 parser.add_argument(
     '-f', '--fields', dest='SelectFields', action='store',
     help="select columns (including temp columns) to output, eg, -f alpha")
-    
+
 parser.add_argument(
     '-v', '--verbose', default=0, action="count",
     help='verbose level: -v, -vv, -vvv')
-    
+
 parser.add_argument(
     '-o', '-output', dest="Output", default='-', action='store',
     help="output file, default to '-', STDOUT")
-    
+
 parser.add_argument(
     '-d', '-delimiter', dest="delimiter", default=',', action='store',
     help="input delimiter, default to ','")
-    
+
 parser.add_argument(
     '-od', '-odelimiter', dest="OutDelimiter", default=None, action='store',
     help="output delimiter, default to input delimiter, or then ','")
-    
+
 parser.add_argument(
     '-skip', dest="skip", default=0, action='store', type=int,
     help="skip these number of lines before header, default to 0")
-    
+
 args = vars(parser.parse_args())
-    
+
 if args['verbose'] >= 1:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
-    
+
 # https://pythontips.com/2013/08/04/args-and-kwargs-in-python-explained/
 # *args and **kwargs allow you to pass a variable number of arguments to
 # a function. What does variable mean here is that you do not know before
@@ -126,5 +126,4 @@ if args['verbose'] >= 1:
 # a function. You should use **kwargs if you want to handle named arguments
 # in a function.
 
-query_csv_to_output(**args);
-
+query_csv(**args);

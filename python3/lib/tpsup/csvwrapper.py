@@ -13,8 +13,8 @@ from typing import Dict, List
 """
 why do we need this ?
     standard csv cannot filter input file by line-based pattern, eg, cannot do 'grep 'col1,col2'.
-why do will still use standard csv ?
-    standard csv has sophisticated parser to parse quoted columns. 
+why do will still use standard csv module?
+    standard csv has sophisticated parser to parse quoted columns. and we don't want to reinvent the wheels.
 
 steps:
 - open file.
@@ -27,11 +27,18 @@ steps:
 
 
 # learned from the Cookbook (8.3)
+# I cannot add context manager into CsvEntry because in order to get columns I have to open and parse the file.
+# If use context manager, opening the file should be part of __enter__(). but often time, calling function wanted
+# to get columns information before iteration, ie, before the context management. Therefore, opening and parsing the
+# file (at least till the header line) should be part of __init__().
 class CsvEntry(io.BytesIO):
     def __init__(self, filename, **opt):
         super().__init__()
         self.filename = filename
         self.opt = opt
+        self.verbose = 0
+        self.fh = None
+        self.columns = None
 
         if 'verbose' in opt and opt['verbose'] != 0:
             self.verbose = opt['verbose']
@@ -69,13 +76,11 @@ class CsvEntry(io.BytesIO):
         else:
             self.delimiter = ','
 
-        # https://stackoverflow.com/questions/1984104/how-to-avoid-explicit-self-in-python
-        # python requires prefix self
-        if filename == '-':
+        if self.filename == '-':
             fh = sys.stdin
         else:
             # the unicode-sandwich design pattern
-            if filename.endswith('.gz'):
+            if self.filename.endswith('.gz'):
                 # in /usr/lib/python/3.6/gzip.py, open()
                 # if "t" in mode:
                 #     if "b" in mode:
@@ -88,9 +93,10 @@ class CsvEntry(io.BytesIO):
                 #     if newline is not None:
                 #         raise ValueError("Argument 'newline' not supported in binary mode")
 
-                fh = gzip.open(filename, 'rt', encoding='utf-8', newline='')
+                fh = gzip.open(self.filename, 'rt', encoding='utf-8', newline='')
+                self.need_close_fh = 1
             else:
-                fh = open(filename, 'r', encoding='utf-8', newline='')
+                fh = open(self.filename, 'r', encoding='utf-8', newline='')
 
             # If newline='' is not specified, newlines embedded inside quoted fields will not be interpreted
             # correctly, and on platforms that use \r\n linendings on write an extra \r will be added. It should
@@ -107,19 +113,22 @@ class CsvEntry(io.BytesIO):
         header_line = fh.readline()
 
         if not header_line:
-            raise RuntimeError(f'{filename} missing header. {skip} lines skipped')
+            raise RuntimeError(f'{filename} missing header after {skip} lines skipped')
 
         header_line = header_line.rstrip()
 
         self.columns = header_line.split(self.delimiter)
+        if self.verbose > 0:
+            print(f'columns = {self.columns}', file=sys.stderr)
         self.fh = fh
 
     def readline(self, size=-1):
-        # this 'with' is a context-manager
-        with self.fh as fh:
-            while 1:
+        # # this 'with' is a context-manager
+        # with self.fh as fh:
+        while 1:
+            try:
                 # line = fh.readline()
-                line = next(fh)
+                line = next(self.fh)
                 if not line:
                     break
 
@@ -151,6 +160,11 @@ class CsvEntry(io.BytesIO):
                     continue
 
                 yield line
+            except StopIteration:
+                # self.__exit__()
+                return
+                # https://stackoverflow.com/questions/43617399/how-to-get-rid-of-warning-deprecationwarning-generator-ngrams-raised-stopiter
+                # https://www.python.org/dev/peps/pep-0479/
 
     def closed(self) -> bool:
         if self.fh is None:
@@ -158,20 +172,32 @@ class CsvEntry(io.BytesIO):
         else:
             return False
 
-    def __enter__(self):
-        return self
+    # def __enter__(self):
+    #     if self.verbose > 0:
+    #         print(f'__enter__() CsvEntry', file=sys.stderr)
+    #     # https://stackoverflow.com/questions/1984104/how-to-avoid-explicit-self-in-python
+    #     # python requires prefix self
 
     # def __exit__(self, exc_type, exc_value, tb):
     # base class's __exit__() is build-in function. I cannot figure out its signature.
-    def __exit__(self, *args, **kwargs):
-        self.fh.close()
-        self.fh = None
+    # def __exit__(self, *args, **kwargs):
+    #     if self.verbose > 0:
+    #         print(f'__exit__() CsvEntry', file=sys.stderr)
+    #     if self.need_close_fh == 1:
+    #         if self.verbose > 0:
+    #             print(f'actually closing fh', file=sys.stderr)
+    #         self.fh.close()
+    #     self.fh = None
 
     def __iter__(self):
         return self.readline()
 
     def __next__(self):
         return self.readline()
+
+    def close(self) -> None:
+        if self.fh != sys.stdin:
+            self.fh.close()
 
 
 # list vs array
@@ -198,39 +224,42 @@ class CsvDictList:
     # the following doesn't make much sense as __iter__ and __next are the same, but it works
     def __init__(self, filename: str, **opt):
         self.csv_entry = CsvEntry(filename, **opt)
+        self.filename = filename
+        self.opt = opt
+
+        columns = self.csv_entry.columns
+        opt = self.opt
+
+        out_fields = []
+
+        if 'SelectFields' in opt and opt['SelectFields'] is not None:
+            out_fields.extend(str(opt['SelectFields']).split(','))
+        else:
+            out_fields.extend(columns)
+
+        if 'ExportExps' in opt and opt['ExportExps'] is not None:
+            out_fields.extend(dict(opt['ExportExps']).keys())
+
+        self.columns = out_fields
 
     def iterator(self):
-        with self.csv_entry:
-            # https://stackoverflow.com/questions/51152023/how-to-use-python-csv-dictreader-with-a-binary-file-for-a-babel-custom-extract
-            dict_reader = csv.DictReader(self.csv_entry, fieldnames=self.csv_entry.columns)
-            for row in dict_reader:
-                yield row
+        opt = self.opt
+        out_columns = self.columns
+
+        # https://stackoverflow.com/questions/51152023/how-to-use-python-csv-dictreader-with-a-binary-file-for-a-babel-custom-extract
+        dict_reader = csv.DictReader(self.csv_entry, fieldnames=self.csv_entry.columns)
+
+        for row in filter_dictlist(dict_reader, **opt):
+            new_row = {key: value for key, value in row.items() if key in out_columns}
+            yield new_row
+        self.csv_entry.close()
+        return
 
     def __iter__(self):
         return self.iterator()
 
     def __next__(self):
         return self.iterator()
-
-    # the following seems to make more sense but doesn't work
-
-    # def __init__(self, filename: str, **opt):
-    #     self.filename = filename
-    #     self.csv_entry = None
-    #     self.opt = dict(opt)
-    #
-    # def __iter__(self):
-    #     return self
-    #
-    # def __next__(self):
-    #     # use ** to cast an variable to **kwargs. otherwise, it will be treated as an positional arg
-    #     # https://stackoverflow.com/questions/51751929/python-can-i-pass-a-defined-dictionary-to-kwargs
-    #     self.csv_entry = CsvEntry(self.filename, **self.opt)
-    #     with self.csv_entry:
-    #         # https://stackoverflow.com/questions/51152023/how-to-use-python-csv-dictreader-with-a-binary-file-for-a-babel-custom-extract
-    #         dict_reader = csv.DictReader(self.csv_entry, fieldnames=self.csv_entry.columns)
-    #         for row in dict_reader:
-    #             yield row
 
 
 def main():
@@ -239,11 +268,12 @@ def main():
     file = 'csvwrapper_test.csv'
     print(f'\nfiltered\n')
 
-    with CsvEntry(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose) as csv_entry:
-        for row in csv_entry.readline():
-            print(row)
+    csv_entry = CsvEntry(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose)
+    for row in csv_entry:
+        print(row)
+    csv_entry.close()
 
-    sys.stdout.flush()
+    # sys.stdout.flush()
 
     print(f'\nuse csv module\n')
 
@@ -255,24 +285,29 @@ def main():
     print(f'\nopen gz file {gz_file}\n')
 
     dictlist = CsvDictList(gz_file, MatchPatterns=[',H'], verbose=verbose)
+
     for row in dictlist:
         print(row)
 
     print(f'\nquery csv\n')
-    dictlist = query_csv_to_dictlist(input=file, MatchExps=['str(r["name"]).startswith("J")'],
-                                     TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
-                                     ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
-                                     verbose=verbose)
+    dictlist = CsvDictList(filename=file,
+                           MatchExps=['str(r["name"]).startswith("J")'],
+                           TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
+                           ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
+                           verbose=verbose)
+
     for row in dictlist:
         print(row)
 
     print(f'\nprint to stdout\n')
 
-    query_csv_to_output(input=file, MatchExps=['str(r["name"]).startswith("J")'],
-                        TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
-                        ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
-                        Output='-',
-                        verbose=verbose)
+    query_csv(filename=file,
+              MatchExps=['str(r["name"]).startswith("J")'],
+              ExcludeExps=['int(r["number"])>2'],
+              TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
+              ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
+              Output='-',
+              verbose=verbose)
 
     print(f'\ndone\n')
 
@@ -286,7 +321,7 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
 
     # import pdb; pdb.set_trace();
 
-    if verbose >= 1:
+    if verbose > 0:
         print(f'__package__= {__package__}')
         print(f'__name__= {__name__}')
 
@@ -366,84 +401,46 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
 def write_csv(csv_writer, dictlist: List[Dict[str, str]], _fields: List[str], **opt):
     csv_writer.writeheader()
 
-    for row in filter_dictlist(dictlist, **opt):
+    for row in dictlist:
         # cookbook 1.17
         new_row = {key: value for key, value in row.items() if key in _fields}
         csv_writer.writerow(new_row)
 
 
-# we have to separate query_csv into two functions because query_csv_to_dictlist() is generator and
-# query_csv_to_output() is not a generator. therefore, they are called differently. If we combine them together,
-# then the non-generator won't run at the first call.
-#
-# https://stackoverflow.com/questions/231767/what-does-the-yield-keyword-do
-#
-# To master yield, you must understand that when you call the function, the code you have written in the function
-# body does not run. The function only returns the generator object.
-#
-# The first time the for calls the generator object created from your function, it will run the code in your function
-# from the beginning until it hits 'yield'.
-
-def query_csv_to_dictlist(**opt) -> List[Dict[str, str]]:
-    if 'input' not in opt or opt['input'] is None:
-        raise RuntimeError('missing "input"" setting')
+def query_csv(**opt):
+    if 'filename' not in opt or opt['filename'] is None:
+        raise RuntimeError('missing "filename"" setting')
     else:
-        _input = opt['input']
-
-    dictlist = CsvDictList(_input, **opt)
-    columns = dictlist.csv_entry.columns
-    delimiter = dictlist.csv_entry.delimiter
-
-    out_fields = []
-
-    if 'SelectFields' in opt and opt['SelectFields'] is not None:
-        out_fields.extend(str(opt['SelectFields']).split(','))
-    else:
-        out_fields.extend(columns)
-
-    if 'ExportExps' in opt and opt['ExportExps'] is not None:
-        out_fields.extend(dict(opt['ExportExps']).keys())
-
-    for row in filter_dictlist(dictlist, **opt):
-        new_row = {key: value for key, value in row.items() if key in out_fields}
-        yield new_row
-
-
-def query_csv_to_output(**opt):
-    if 'input' not in opt or opt['input'] is None:
-        raise RuntimeError('missing "input"" setting')
-    else:
-        _input = opt['input']
-
-    dictlist = CsvDictList(_input, **opt)
-    columns = dictlist.csv_entry.columns
-    delimiter = dictlist.csv_entry.delimiter
-
-    out_fields = []
-
-    if 'SelectFields' in opt and opt['SelectFields'] is not None:
-        out_fields.extend(str(opt['SelectFields']).split(','))
-    else:
-        out_fields.extend(columns)
-
-    if 'ExportExps' in opt and opt['ExportExps'] is not None:
-        out_fields.extend(dict(opt['ExportExps']).keys())
+        filename = opt['filename']
 
     if 'Output' not in opt or opt['Output'] is None:
         raise RuntimeError(f"opt['Output'] is not defined")
 
-    if opt['Output'] == '-':
-        if 'OutDelimiter' in opt and opt['OutDelimiter'] is not None:
-            out_delimiter = opt['OutDelimiter']
-        else:
-            out_delimiter = delimiter
+    del opt['filename']
+    dictlist = CsvDictList(filename, **opt)
+    columns = dictlist.columns
+    delimiter = dictlist.csv_entry.delimiter
 
-        csv_writer = csv.DictWriter(sys.stdout, fieldnames=out_fields, delimiter=out_delimiter)
-        write_csv(csv_writer, dictlist, out_fields, **opt)
+    if 'OutDelimiter' in opt and opt['OutDelimiter'] is not None:
+        out_delimiter = opt['OutDelimiter']
+    else:
+        out_delimiter = delimiter
+
+    if opt['Output'] == '-':
+        csv_writer = csv.DictWriter(sys.stdout, fieldnames=columns, delimiter=out_delimiter)
+        write_csv(csv_writer, dictlist, columns, **opt)
+    elif isinstance(opt['Output'], io.IOBase):
+        # https://stackoverflow.com/questions/1549801/what-are-the-differences-between-type-and-isinstance
+        #
+        # isinstance caters for inheritance (an instance of a derived class is an instance of a base class, too),
+        # while checking for equality of type does not (it demands identity of types and rejects instances of
+        # subtypes, AKA subclasses).
+        csv_writer = csv.DictWriter(opt['Output'], fieldnames=columns, delimiter=out_delimiter)
+        write_csv(csv_writer, dictlist, columns, **opt)
     else:
         with open(opt['Output'], 'w') as out_fh:
-            csv_writer = csv.DictWriter(out_fh, fieldnames=out_fields)
-            write_csv(csv_writer, dictlist, out_fields, **opt)
+            csv_writer = csv.DictWriter(out_fh, fieldnames=columns, delimiter=out_delimiter)
+            write_csv(csv_writer, dictlist, columns, **opt)
 
 
 if __name__ == '__main__':
