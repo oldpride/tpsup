@@ -108,8 +108,10 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
 
 
 # learned from Cookbook with modification from Stackoverflow.
-def load_module(source: str, new_module_name=inspect.stack()[1][3]):
+def load_module(source: str, new_module_name=None):
     """ compile the source code into executable using an external module"""
+    if new_module_name is None:
+        new_module_name = inspect.stack()[1][3]
     # https://stackoverflow.com/questions/32175693/python-importlibs-analogue-for-imp-new-module
     # mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
     mod = sys.modules.setdefault(new_module_name, types.ModuleType(new_module_name))
@@ -120,7 +122,7 @@ def load_module(source: str, new_module_name=inspect.stack()[1][3]):
     return mod
 
 
-def tpeng_lock(plain: str, *, salt=None):
+def tpsup_lock(plain: str, *, salt=None):
     """ encode a string """
     _MAGIC = 'AccioConfundoLumosNox'
     length = len(plain)
@@ -147,7 +149,7 @@ def tpeng_lock(plain: str, *, salt=None):
     return escaped
 
 
-def tpeng_unlock(string: str, *, salt=None):
+def tpsup_unlock(string: str, *, salt=None):
     """ decode a string """
     _MAGIC = 'AccioConfundoLumosNox'
     unescaped = uri_unescape(string)
@@ -220,8 +222,8 @@ def uri_unescape(string):
 
 def main():
     plain = 'Hello@123'
-    encoded = tpeng_lock(plain)
-    decoded = tpeng_unlock(encoded)
+    encoded = tpsup_lock(plain)
+    decoded = tpsup_unlock(encoded)
     print(f"plain='{plain}' encoded='{encoded}' decoded='{decoded}'")
 
 

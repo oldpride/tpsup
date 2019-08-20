@@ -12,7 +12,7 @@ def unlock_conn(nickname2, **opt):
         connfile = opt['connfile']
     else:
         # home-directory-in-python
-        home = expanduser("-")
+        home = expanduser("~")
         connfile = home + "/.tpsup/conn.csv"
 
     ret = {}
@@ -106,7 +106,7 @@ def get_dbh(**opt) :
 
             string = info['login'] + '/' + info['unlocked_password'] + '@'\
                     + info['host'] + ':' + info['port'] + '/' + info['service_name']
-            dbh = cz_Oracle.connect(string)
+            dbh = cx_Oracle.connect(string)
 
             dbh_by_nickname[nickname] = dbh
             current_dbh = dbh

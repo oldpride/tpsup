@@ -123,11 +123,8 @@ class CsvEntry(io.BytesIO):
         self.fh = fh
 
     def readline(self, size=-1):
-        # # this 'with' is a context-manager
-        # with self.fh as fh:
         while 1:
             try:
-                # line = fh.readline()
                 line = next(self.fh)
                 if not line:
                     break
@@ -161,7 +158,6 @@ class CsvEntry(io.BytesIO):
 
                 yield line
             except StopIteration:
-                # self.__exit__()
                 return
                 # https://stackoverflow.com/questions/43617399/how-to-get-rid-of-warning-deprecationwarning-generator-ngrams-raised-stopiter
                 # https://www.python.org/dev/peps/pep-0479/
@@ -171,23 +167,6 @@ class CsvEntry(io.BytesIO):
             return True
         else:
             return False
-
-    # def __enter__(self):
-    #     if self.verbose > 0:
-    #         print(f'__enter__() CsvEntry', file=sys.stderr)
-    #     # https://stackoverflow.com/questions/1984104/how-to-avoid-explicit-self-in-python
-    #     # python requires prefix self
-
-    # def __exit__(self, exc_type, exc_value, tb):
-    # base class's __exit__() is build-in function. I cannot figure out its signature.
-    # def __exit__(self, *args, **kwargs):
-    #     if self.verbose > 0:
-    #         print(f'__exit__() CsvEntry', file=sys.stderr)
-    #     if self.need_close_fh == 1:
-    #         if self.verbose > 0:
-    #             print(f'actually closing fh', file=sys.stderr)
-    #         self.fh.close()
-    #     self.fh = None
 
     def __iter__(self):
         return self.readline()
@@ -252,6 +231,9 @@ class CsvDictList:
         for row in filter_dictlist(dict_reader, **opt):
             new_row = {key: value for key, value in row.items() if key in out_columns}
             yield new_row
+        # The resource, csv_entry, has to be opened in __init__(); in __enter__() would be too late. Therefore,
+        # we cannot make this class into context management. Then we have to close the resource by ourselves after
+        # the iterator (generator)
         self.csv_entry.close()
         return
 
@@ -268,7 +250,10 @@ def main():
     file = 'csvwrapper_test.csv'
     print(f'\nfiltered\n')
 
+    # this csv_entry is the instance of the class. we can access all the attributes from it, eg. csv_entry.columns
     csv_entry = CsvEntry(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose)
+
+    # the following csv_entry is actually the iterator(). the iterator is called by for statement
     for row in csv_entry:
         print(row)
     csv_entry.close()
@@ -277,7 +262,10 @@ def main():
 
     print(f'\nuse csv module\n')
 
+    # this dict list is an instance of the class, therefore, we can access all attributes from it, eg, dictlist.columns
     dictlist = CsvDictList(file, MatchPatterns=[',S'], verbose=verbose)
+
+    # this dictlist is actually the iterator, called by the for statement
     for row in dictlist:
         print(row)
 
