@@ -24,7 +24,7 @@ def main():
     examples = textwrap.dedent(f"""
         examples:
         {prog} download_dir output.py
-        {prog} ~/fix/4.4 fix4.4.py
+        {prog} ~/data/fix/4.4 fix4.4.py
         """)
 
     parser = argparse.ArgumentParser(
@@ -77,7 +77,7 @@ def parse_fix_download(**opt):
     # Side <54>
     # b'<p>&#13;\n                  <a href="tagNum_54.html">Side &lt;54&gt;</a> of order&#13;\n
     # field_tag_pattern = r'^(\S+) <(.+?)>'
-    field_tag_pattern = r'^FIX \S+ : (\S+) <(.+?)>'
+    field_tag_pattern = r'^FIX .+? : (\S+) <(.+?)>'
     compiled_field_tag_pattern = re.compile(field_tag_pattern)
 
     # 1 = Buy
@@ -93,104 +93,124 @@ def parse_fix_download(**opt):
     else:
         tags = []
 
-    for f in sorted(os.listdir(_dir)):
-        if len(tags) > 0:
-            skip = True
+    class OutputFh:
+        def __init__(self, filename: str, mode: str):
+            self.filename = filename
+            self.mode = mode
+            self.need_close = False
+            self.fh = None
 
-            for t in tags:
-                if f'_{t}.' in f:
-                    skip = False
-                    break
-            if skip:
-                continue
+        def __enter__(self):
+            if self.filename == '-':
+                self.fh = sys.stdout
+            else:
+                dirname = os.path.dirname(self.filename)
+                if dirname:
+                    os.makedirs(dirname, exist_ok=True)
+                self.fh = open(self.filename, self.mode)
+                self.need_close = True
+            return self.fh
 
-        # f = 'tagNum_54.html'
-        if f.startswith('tagNum_') and f.endswith('.html'):
-            full_path = f'{_dir}/{f}'
-            print('parsing ', full_path, file=sys.stderr)
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if self.need_close:
+                self.fh.close()
+                self.fh = None
 
-            has_valid_values = False
-            field_has_been_printed = False
-            tag = None
+    with OutputFh(output, 'w') as ofh:
+        for f in sorted(os.listdir(_dir)):
+            if len(tags) > 0:
+                skip = True
 
-            output_dirname = os.path.dirname(output)
-            if output_dirname:
-                os.makedirs(output_dirname, exist_ok=True)
+                for t in tags:
+                    if f'_{t}.' in f:
+                        skip = False
+                        break
+                if skip:
+                    continue
 
-            # open file in binary mode, otherwise, I get the following error
-            # TypeError: reading file objects must return bytes objects
-            with open(full_path, 'rb') as ifh, open(output, 'wt') as ofh:
-                # use event-driven lmxl parser for speed
-                # https://lxml.de/3.6/tutorial.html#the-parse-function
-                #
-                # file looks like
-                #                               <td>
-                #                                  <h2>FIX 4.4 : Side &lt;54&gt; field</h2>
-                #                               </td>
-                # ...
-                #                <p><a href="#UsedIn">Used In</a></p><a name="Description"></a>
-                #                   <h3>Description</h3>
-                #
-                #                <p>
-                #                   <a href="tagNum_54.html">Side &lt;54&gt;</a> of order
-                #                   this line is not reliable, for example, in 4.4/tagNum_38.html, this line
-                #                   points to tag 53.
-                #                </p>
-                #
-                #                <p>Valid values:</p>
-                #
-                #                <p>1 = Buy</p>
-                #
-                #                <p>2 = Sell</p>
-                for event, element in etree.iterparse(ifh, tag=('h2', 'p'), html=True):
-                    # set html=True because etree.iterparse() by default parses xml only, but our file
-                    # has <!doctype html>
-                    if verbose > 0:
-                        print('element.text = ', type(element.text), ':',  element.text)
-                        print('etree.tostring(element) = ', etree.tostring(element))
+            # f = 'tagNum_54.html'
+            if f.startswith('tagNum_') and f.endswith('.html'):
+                full_path = f'{_dir}/{f}'
+                print('parsing ', full_path, file=sys.stderr)
 
-                    if not element.text:
-                        continue
+                has_valid_values = False
+                field_has_been_printed = False
+                tag = None
 
-                    if not field_has_been_printed:
-                        if element.tag == 'h2':
-                            h2 = element.text
-
-                            m = compiled_field_tag_pattern.match(h2)
-                            if m:
-                                if verbose > 0:
-                                    print(field_tag_pattern, ' matched ', h2)
-
-                                field = m.group(1)
-                                tag = m.group(2)
-
-                                field_by_tag[tag] = field
-                                tag_by_field[field] = tag
-                                desc_by_tag_value[tag] = {}
-                                field_has_been_printed = True
-                        continue
-
-                    if element.tag != 'p':
-                        continue
-
-                    if not has_valid_values:
-                        if compiled_valid_value_pattern.match(element.text):
-                            has_valid_values = True
-                        continue
-
-                    m = compiled_values_pattern.match(element.text)
-                    if m:
+                # open file in binary mode, otherwise, I get the following error
+                # TypeError: reading file objects must return bytes objects
+                with open(full_path, 'rb') as ifh:
+                    # use event-driven lmxl parser for speed
+                    # https://lxml.de/3.6/tutorial.html#the-parse-function
+                    #
+                    # file looks like
+                    #                               <td>
+                    #                                  <h2>FIX 4.4 : Side &lt;54&gt; field</h2>
+                    #                               </td>
+                    # ...
+                    #                <p><a href="#UsedIn">Used In</a></p><a name="Description"></a>
+                    #                   <h3>Description</h3>
+                    #
+                    #                <p>
+                    #                   <a href="tagNum_54.html">Side &lt;54&gt;</a> of order
+                    #                   this line is not reliable, for example, in 4.4/tagNum_38.html, this line
+                    #                   points to tag 53.
+                    #                </p>
+                    #
+                    #                <p>Valid values:</p>
+                    #
+                    #                <p>1 = Buy</p>
+                    #
+                    #                <p>2 = Sell</p>
+                    for event, element in etree.iterparse(ifh, tag=('h2', 'p'), html=True):
+                        # set html=True because etree.iterparse() by default parses xml only, but our file
+                        # has <!doctype html>
                         if verbose > 0:
-                            print(values_pattern, ' matched ', element.text)
-                        value = m.group(1)
-                        desc = m.group(2)
-                        desc_by_tag_value[tag][value] = desc
+                            print('element.text = ', type(element.text), ':',  element.text)
+                            print('etree.tostring(element) = ', etree.tostring(element))
 
-                    element.clear(keep_tail=True)
+                        if not element.text:
+                            continue
 
-                print('field_by_tag = ', pformat(field_by_tag), file=ofh)
-                print('tag_by_field = ', pformat(tag_by_field), file=ofh)
-                print('desc_by_tag_value = ', pformat(desc_by_tag_value), file=ofh)
+                        if not field_has_been_printed:
+                            if element.tag == 'h2':
+                                h2 = element.text
+
+                                m = compiled_field_tag_pattern.match(h2)
+                                if m:
+                                    if verbose > 0:
+                                        print(field_tag_pattern, ' matched ', h2)
+
+                                    field = m.group(1)
+                                    tag = m.group(2)
+
+                                    field_by_tag[tag] = field
+                                    tag_by_field[field] = tag
+                                    desc_by_tag_value[tag] = {}
+                                    field_has_been_printed = True
+                            continue
+
+                        if element.tag != 'p':
+                            continue
+
+                        if not has_valid_values:
+                            if compiled_valid_value_pattern.match(element.text):
+                                has_valid_values = True
+                            continue
+
+                        m = compiled_values_pattern.match(element.text)
+                        if m:
+                            if verbose > 0:
+                                print(values_pattern, ' matched ', element.text)
+                            value = m.group(1)
+                            desc = m.group(2)
+                            desc_by_tag_value[tag][value] = desc
+
+                        element.clear(keep_tail=True)
+
+        print('field_by_tag = ', pformat(field_by_tag), file=ofh)
+        print('tag_by_field = ', pformat(tag_by_field), file=ofh)
+        print('desc_by_tag_value = ', pformat(desc_by_tag_value), file=ofh)
 
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ def main():
     examples = textwrap.dedent(f"""
         examples:
         {prog} version output_dir
-        {prog} 4.4 ~/fix/4.4
+        {prog} 4.4 ~/data/fix/4.4
         """)
 
     parser = argparse.ArgumentParser(
