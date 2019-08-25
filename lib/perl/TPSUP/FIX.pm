@@ -1251,7 +1251,7 @@ sub parse_fix_message {
       if ("$k" eq "35") {
          if ($v eq 'AB') {
             $is_New_Multileg = 1;
-         } if ($v eq 'E') {
+         } elsif ($v eq 'E') {
             $is_New_List = 1;
          }
       }
