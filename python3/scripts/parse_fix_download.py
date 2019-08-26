@@ -24,7 +24,7 @@ def main():
     examples = textwrap.dedent(f"""
         examples:
         {prog} download_dir output.py
-        {prog} ~/data/fix/4.4 fix4.4.py
+        {prog} ~/data/fix/4.4 fix_4_4.py
         """)
 
     parser = argparse.ArgumentParser(
