@@ -209,6 +209,22 @@ def parse_fix_message(line: bytes, **opt):
             return v_by_k
 
 
+def dump_nested_fix(nested_fix, **opt):
+    if 'DumpFH' in opt and opt['DumpFH']:
+        dump_fh = opt['DumpFH']
+    else:
+        dump_fh = sys.stderr
+
+    dump_value_by_tag(nested_fix['common'], **opt)
+
+    total = len(nested_fix['components'])
+    i = 0
+    for c in nested_fix['components']:
+        i += 1
+        print(f'\n-------- component {i} of {total}')
+        dump_value_by_tag(c)
+
+
 def dump_value_by_tag(value_by_tag: Dict[bytes, bytes], **opt):
     if 'DumpFH' in opt and opt['DumpFH']:
         dump_fh = opt['DumpFH']
@@ -231,6 +247,10 @@ def dump_value_by_tag(value_by_tag: Dict[bytes, bytes], **opt):
         print(f'{field:>19} {tag_str:>5} = {value_str} ({desc})', file=sys.stderr)
 
 
+def dump_fix_message(line, **opt):
+    dump_nested_fix(parse_fix_message(line, NestedFix=1, **opt))
+
+
 def main():
     file = 'fix_test_delimiter.txt'
     with open(file, 'rb') as fh:
@@ -250,6 +270,11 @@ def main():
             dump_value_by_tag(parse_fix_message(line, verbose=1))
             break
 
+    file = 'fix_test_multileg.txt'
+    with open(file, 'rb') as fh:
+        for line in fh:
+            dump_fix_message(line)
+            break
 
 if __name__ == '__main__':
     main()

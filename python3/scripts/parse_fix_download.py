@@ -86,7 +86,7 @@ def parse_fix_download(**opt):
     compiled_values_pattern = re.compile(values_pattern)
 
     valid_value_pattern = r'^Valid values:'
-    compiled_valid_value_pattern = re.compile(valid_value_pattern)
+    compiled_valid_value_pattern = re.compile(valid_value_pattern, re.IGNORECASE)
 
     if 'tags' in opt and opt['tags']:
         tags = opt['tags'].split(',')
@@ -207,6 +207,15 @@ def parse_fix_download(**opt):
                             desc_by_tag_value[tag][value] = desc
 
                         element.clear(keep_tail=True)
+
+        oldtag_by_newtag = {
+            '54': '624',
+            '77': '564',
+        }
+
+        for newtag, oldtag in oldtag_by_newtag.items():
+            if newtag in desc_by_tag_value:
+                desc_by_tag_value[oldtag] = desc_by_tag_value[newtag]
 
         print('field_by_tag = ', pformat(field_by_tag), file=ofh)
         print('tag_by_field = ', pformat(tag_by_field), file=ofh)
