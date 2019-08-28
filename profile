@@ -115,6 +115,9 @@ elif [[ $UNAME =~ Cygwin ]]; then
    #    cygstart python    # this bring up a new window
    alias python2="'/cygdrive/c/Program Files/Python27/python'"
    alias python3="'/cygdrive/c/Program Files/Python37/python'"
+   # ssh in cygwin will get this error without the -tt
+   #    Pseudo-terminal will not be allocated because stdin is not a terminal.
+   alias ssh="ssh -tt"
 elif [[ $UNAME =~ Linux ]]; then
    # linux has /usr/bin/python2 and /usr/bin/python3
    alias eclipse="/home/tian/eclipse/cpp-2019-06/eclipse/eclipse"
@@ -127,7 +130,11 @@ fi
 # For almost every purpose, aliases are superseded by shell functions.
 
 alias perllib='cd $TPSUP/lib/perl/TPSUP'
-#alias tpscripts='cd $TPSUP/scripts'
+alias rm='rm -i'
+alias mv='mv -i'
+alias cp='cp -i'
+alias grep='grep -i'
+alias ls='ls -a'
 
 tpsup () {
   . $TPSUP/profile
