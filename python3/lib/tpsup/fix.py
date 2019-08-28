@@ -257,6 +257,8 @@ def main():
         for line in fh:
             pprint(parse_fix_message(line, ReturnDetail=1, verbose=1))
 
+    print('')
+
     file = 'fix_test_multileg.txt'
     with open(file, 'rb') as fh:
         for line in fh:
@@ -264,17 +266,22 @@ def main():
             pprint(parse_fix_message(line, ReturnDetail=1, verbose=1, NestedFix=1))
             break
 
+    print('')
+
     file = 'fix_test_delimiter.txt'
     with open(file, 'rb') as fh:
         for line in fh:
             dump_value_by_tag(parse_fix_message(line, verbose=1))
             break
 
+    print('')
+
     file = 'fix_test_multileg.txt'
     with open(file, 'rb') as fh:
         for line in fh:
-            dump_fix_message(line)
+            dump_fix_message(line, verbose=1)
             break
+
 
 if __name__ == '__main__':
     main()
