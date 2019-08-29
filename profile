@@ -113,8 +113,11 @@ elif [[ $UNAME =~ Cygwin ]]; then
    #    python -i
    # or
    #    cygstart python    # this bring up a new window
-   alias python2="'/cygdrive/c/Program Files/Python27/python'"
-   alias python3="'/cygdrive/c/Program Files/Python37/python'"
+   alias wpython2="'/cygdrive/c/Program Files/Python27/python'"
+   alias wpython3="'/cygdrive/c/Program Files/Python37/python'"
+   # the above is to run windows's python from cygwin. we had installed python 
+   # inside cygwin, they are /usr/bin/python2 (2.7) and /usr/bin/python3 (3.7)  
+
    # ssh in cygwin will get this error without the -tt
    #    Pseudo-terminal will not be allocated because stdin is not a terminal.
    alias ssh="ssh -tt"
