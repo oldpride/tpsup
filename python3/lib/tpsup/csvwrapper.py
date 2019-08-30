@@ -40,20 +40,13 @@ class CsvEntry(io.BytesIO):
         self.fh = None
         self.columns = None
 
-        if 'verbose' in opt and opt['verbose'] != 0:
-            self.verbose = opt['verbose']
-        else:
-            self.verbose = 0
+        self.verbose = opt.get('verbose', 0)
 
         source_list = ['import re']
 
         for attr in ['MatchPatterns', 'ExcludePatterns']:
-            if attr in opt and opt[attr] is not None:
-                # need to convert pattern string into bytes-like object as we read the csv as binary data
-                strings = opt[attr]
-            else:
-                strings = []
-
+            # need to convert pattern string into bytes-like object as we read the csv as binary data
+            strings = opt.get(attr, [])
             source_list.append(strings_to_compilable_patterns(strings, attr))
 
         source = '\n\n'.join(source_list)
@@ -66,15 +59,9 @@ class CsvEntry(io.BytesIO):
         self.match_patterns = pattern_filter.MatchPatterns
         self.exclude_patterns = pattern_filter.ExcludePatterns
 
-        if 'skip' in opt and opt['skip']:
-            self.skip = opt['skip']
-        else:
-            self.skip = 0
+        self.skip = opt.get('skip', 0)
 
-        if 'delimiter' in opt and opt['delimiter']:
-            self.delimiter = opt['delimiter']
-        else:
-            self.delimiter = ','
+        self.delimiter = opt.get('delimiter', ',')
 
         if self.filename == '-':
             fh = sys.stdin
@@ -211,12 +198,12 @@ class CsvDictList:
 
         out_fields = []
 
-        if 'SelectFields' in opt and opt['SelectFields'] is not None:
-            out_fields.extend(str(opt['SelectFields']).split(','))
+        if opt.get('SelectFields'):
+            out_fields.extend(opt['SelectFields'].split(','))
         else:
             out_fields.extend(columns)
 
-        if 'ExportExps' in opt and opt['ExportExps'] is not None:
+        if opt.get('ExportExps'):
             out_fields.extend(dict(opt['ExportExps']).keys())
 
         self.columns = out_fields
@@ -301,11 +288,10 @@ def main():
 
 
 def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str]]:
-    if 'verbose' in opt and opt['verbose'] != 0:
-        verbose = opt['verbose']
+    verbose = opt.get('verbose', 0)
+
+    if verbose:
         sys.stderr.write(f'opt =\n{pformat(opt)}\n')
-    else:
-        verbose = 0
 
     # import pdb; pdb.set_trace();
 
@@ -333,16 +319,13 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
             source_list.append(f.read())
 
     for attr, logic in [('MatchExps', 'and'), ('ExcludeExps', 'or')]:
-        if attr in opt and opt[attr] is not None:
-            _list = opt[attr]
-        else:
-            _list = []
+        _list = opt.get(attr, [])
         source_list.append(strings_to_compilable_func(_list, attr, logic=logic, verbose=verbose))
 
     for attr in ['TempExps', 'ExportExps']:
         _dict = {}
 
-        if attr in opt and opt[attr] is not None:
+        if opt.get(attr):
             if type(opt[attr]) == dict:
                 # within python, it is easier to spec in dict
                 _dict = opt[attr]
@@ -360,7 +343,7 @@ def filter_dictlist(dictlist: List[Dict[str, str]], **opt) -> List[Dict[str, str
     if verbose >= 2:
         print(f'source =\n{source}\n')
 
-    if 'SaveSource' in opt and opt['SaveSource'] is not None:
+    if opt.get('SaveSource'):
         with open(opt['SaveSource'], 'wt') as f:
             f.write(source)
             f.write('\n')
@@ -396,37 +379,34 @@ def write_csv(csv_writer, dictlist: List[Dict[str, str]], _fields: List[str], **
 
 
 def query_csv(**opt):
-    if 'filename' not in opt or opt['filename'] is None:
+    filename = opt.get('filename', None)
+    if not filename:
         raise RuntimeError('missing "filename"" setting')
-    else:
-        filename = opt['filename']
+    del opt['filename']
 
-    if 'Output' not in opt or opt['Output'] is None:
+    output = opt.get('Output')
+    if not output:
         raise RuntimeError(f"opt['Output'] is not defined")
 
-    del opt['filename']
     dictlist = CsvDictList(filename, **opt)
     columns = dictlist.columns
     delimiter = dictlist.csv_entry.delimiter
 
-    if 'OutDelimiter' in opt and opt['OutDelimiter'] is not None:
-        out_delimiter = opt['OutDelimiter']
-    else:
-        out_delimiter = delimiter
+    out_delimiter = opt.get('OutDelimiter', delimiter)
 
-    if opt['Output'] == '-':
+    if output == '-':
         csv_writer = csv.DictWriter(sys.stdout, fieldnames=columns, delimiter=out_delimiter)
         write_csv(csv_writer, dictlist, columns, **opt)
-    elif isinstance(opt['Output'], io.IOBase):
+    elif isinstance(output, io.IOBase):
         # https://stackoverflow.com/questions/1549801/what-are-the-differences-between-type-and-isinstance
         #
         # isinstance caters for inheritance (an instance of a derived class is an instance of a base class, too),
         # while checking for equality of type does not (it demands identity of types and rejects instances of
         # subtypes, AKA subclasses).
-        csv_writer = csv.DictWriter(opt['Output'], fieldnames=columns, delimiter=out_delimiter)
+        csv_writer = csv.DictWriter(output, fieldnames=columns, delimiter=out_delimiter)
         write_csv(csv_writer, dictlist, columns, **opt)
     else:
-        with open(opt['Output'], 'w') as out_fh:
+        with open(output, 'w') as out_fh:
             csv_writer = csv.DictWriter(out_fh, fieldnames=columns, delimiter=out_delimiter)
             write_csv(csv_writer, dictlist, columns, **opt)
 
