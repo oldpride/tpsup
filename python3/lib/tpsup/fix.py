@@ -19,17 +19,9 @@ def parse_fix_message(line: bytes, **opt):
     if line is None or len(line) == 0:
         return None
 
-    verbose = 0
-    if 'verbose' in opt and opt['verbose'] is not None:
-        verbose = opt['verbose']
-
-    only_numeric = 0
-    if 'OnlyNumeric' in opt and opt['OnlyNumeric'] == 1:
-        only_numeric = 1
-
-    nested_fix = 0
-    if 'NestedFix' in opt and opt['NestedFix'] is not None:
-        nested_fix = opt['NestedFix']
+    verbose = opt.get('verbose', 0)
+    only_numeric = opt.get('OnlyNumeric', 0)
+    nested_fix = opt.get('NestedFix', 0)
 
     # TIME(05:39:37:015) EID(0) JMSID(ID:db_us_GTO_GEMS_S006PROD.35EB53D568E41950096:11763)
     # LEN(196) RAW_DATA(8=FIX.4.1^A9=0172^A35=D^A34=1491...^A59=0^A100=0^A10=142^A)
@@ -57,11 +49,8 @@ def parse_fix_message(line: bytes, **opt):
     if not fix_section or fix_section == '':
         return None
 
-    delimiter = None
-
-    if 'FixDelimiter' in opt and opt['FixDelimiter'] is not None:
-        delimiter = opt['FixDelimiter']
-    else:
+    delimiter = opt.get('FixDelimiter')
+    if delimiter is None:
         # we take pain to figure out the delimiter, time-consuming
         # 8=FIX.4.1
         # 8=FIXT.1.1
@@ -210,10 +199,7 @@ def parse_fix_message(line: bytes, **opt):
 
 
 def dump_nested_fix(nested_fix, **opt):
-    if 'DumpFH' in opt and opt['DumpFH']:
-        dump_fh = opt['DumpFH']
-    else:
-        dump_fh = sys.stderr
+    dump_fh = opt.get('DumpFH', sys.stderr)
 
     dump_value_by_tag(nested_fix['common'], **opt)
 
@@ -221,15 +207,12 @@ def dump_nested_fix(nested_fix, **opt):
     i = 0
     for c in nested_fix['components']:
         i += 1
-        print(f'\n-------- component {i} of {total}')
+        print(f'\n-------- component {i} of {total}', file=dump_fh)
         dump_value_by_tag(c)
 
 
 def dump_value_by_tag(value_by_tag: Dict[bytes, bytes], **opt):
-    if 'DumpFH' in opt and opt['DumpFH']:
-        dump_fh = opt['DumpFH']
-    else:
-        dump_fh = sys.stderr
+    dump_fh = opt.get('DumpFH', sys.stderr)
 
     for tag, value in value_by_tag.items():
         tag_str = tag.decode('utf-8')
@@ -244,7 +227,7 @@ def dump_value_by_tag(value_by_tag: Dict[bytes, bytes], **opt):
         else:
             desc = ''
 
-        print(f'{field:>19} {tag_str:>5} = {value_str} ({desc})', file=sys.stderr)
+        print(f'{field:>19} {tag_str:>5} = {value_str} ({desc})', file=dump_fh)
 
 
 def dump_fix_message(line, **opt):

@@ -43,7 +43,7 @@ def string_to_temp_func(string: str, is_exp: int = 0, **opt) -> str:
 
     uncompiled_string = '\n'.join(uncompiled_list)
 
-    if 'verbose' in opt and opt['verbose'] != 0:
+    if opt.get('verbose'):
         sys.stderr.write(f'uncompiled_string =\n{uncompiled_string}\n')
 
     return uncompiled_string
@@ -65,7 +65,7 @@ def strings_to_funcs(strings: List, funcs_name: str, is_exp: int, **opt) -> str:
 def stringdict_to_funcdict(stringdict: Dict[str, str], funcdict_name: str, is_exp: int, **opt) -> str:
     """ convert dictionary of strings into a dictionary of functions"""
 
-    if 'verbose' in opt and opt['verbose'] == 1:
+    if opt.get('verbose'):
         print(f'stringdict = {pformat(stringdict)}')
 
     # escape in f string, use double curlies

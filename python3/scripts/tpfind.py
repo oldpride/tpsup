@@ -22,24 +22,17 @@ def tpfind(**opt):
     # https://stackoverflow.com/questions/986006/how-do-i-pass-a-variable-by-reference
 
     for k in ['paths', 'HandleExps', 'HandleActs', 'FlowExps', 'FlowDirs']:
-        if k not in opt or opt[k] is None:
+        if not opt.get(k):
             opt[k] = []
 
-    if 'verbose' not in opt:
-        opt['verbose'] = 0
-
-    if 'maxdepth' not in opt:
-        opt['maxdepth'] = 100
+    opt.setdefault('verbose', 0)
+    opt.setdefault('maxdepth', 100)
 
     if len(opt['HandleExps']) != len(opt['HandleActs']):
-        raise Exception("size mismatch: len(HandleExps)={l1}, len(HandleActs)={l2}".format(l1=len(opt['HandleExps']),
-                                                                                           l2=len(opt['HandleActs'])))
+        raise Exception(f"size mismatch: len(HandleExps)={len(opt['HandleExps'])}, len(HandleActs)={len(opt['HandleActs'])}")
 
     if len(opt['FlowExps']) != len(opt['FlowDirs']):
-        raise Exception("size mismatch: len(FlowExps)={l1}, len(FlowDirs)={l2}".format(l1=len(opt['FlowExps']),
-                                                                                       l2=len(opt['FlowDirs'])))
-
-    source_array = []
+        raise Exception(f"size mismatch: len(FlowExps)={len(opt['FlowExps'])}, len(FlowDirs)={len(opt['FlowDirs'])}")
 
     # https://stackoverflow.com/questions/23749750/reading-a-csv-text-file-with-pkgutil-get-data
     # but this only works with in a package, not from a script
@@ -59,10 +52,10 @@ def tpfind(**opt):
         source_array.append(strings_to_funcs(opt[name], name, is_exp=is_exp, verbose=opt['verbose']))
     source = '\n\n'.join(source_array)
 
-    if 'verbose' in opt and opt['verbose'] != 0:
+    if opt.get('verbose'):
         print(f'source =\n{source}\n')
 
-    if 'SaveSource' in opt and opt['SaveSource'] is not None:
+    if opt.get('SaveSource'):
         with open(opt['SaveSource'], 'wt') as f:
             f.write(source)
             f.write('\n')
@@ -90,7 +83,7 @@ def recursive_path(_path, _maxdepth, **opt):
         sys.stderr.write('{_path} not exist\n'.format(_path=_path))
         return ret_struct
 
-    if 'Trace' in opt and opt['Trace']:
+    if opt.get('Trace'):
         print(_path)
 
     _type = 'unknown'
