@@ -30,7 +30,7 @@ usage:
    -t t1,t2,...     select these tags to display, default to all tags.
    -d delimitor     default to /\\b8=FIX[.0-9]+?([^.0-9]+)[0-9]/ or /\\b35=[DEFG8]([^.0-9]+)[0-9]+=/
    -v               verbose mode
-   -d dict_file     extra dictionary for inhouse tags, or overwrite standard tags 
+   -dict dict_file  extra dictionary for inhouse tags, or overwrite standard tags 
    
 
 examples:
