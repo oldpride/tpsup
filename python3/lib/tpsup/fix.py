@@ -1,8 +1,84 @@
 import re
 import sys
 from pprint import pprint, pformat
-from fix_4_4 import field_by_tag, desc_by_tag_value
+# from fix_4_4 import field_by_tag, desc_by_tag_value
 from typing import Dict, List
+from collections import ChainMap
+import inspect
+from tpsup.util import load_module
+
+field_by_version_tag = {}
+tag_by_version_field = {}
+desc_by_version_tag_value = {}
+
+
+def map_fix_dictionary(**opt):
+    fix_version = opt.get('FixVersion', '4.4')
+
+    if field_by_version_tag.get(fix_version) and not opt.get('RefreshCache'):
+        return
+
+    if fix_version == '4.4':
+        import tpsup.fix_4_4 as _myfix
+    elif fix_version == '4.3':
+        import tpsup.fix_4_3 as _myfix
+    elif fix_version == '4.2':
+        import tpsup.fix_4_2 as _myfix
+    elif fix_version == '4.1':
+        import tpsup.fix_4_1 as _myfix
+    elif fix_version == '4.0':
+        import tpsup.fix_4_0 as _myfix
+    elif fix_version == '5.0':
+        import tpsup.fix_5_0_SP2 as _myfix
+    else:
+        raise RuntimeError(f'unsupported FIX version {fix_version}')
+
+    if opt.get('FixDict'):
+        # dict_source = None
+        with open(opt.get('FixDict'), 'r') as fh:
+            dict_source = fh.read()
+        dict_module = load_module(dict_source)
+
+        dict_dir = dir(dict_module)
+
+        if 'field_by_tag' in dict_dir:
+            # ChainMap first arg overwrites the second when duplicate
+            field_by_version_tag[fix_version] = ChainMap(dict_module.field_by_tag, _myfix.field_by_tag)
+        else:
+            field_by_version_tag[fix_version] = _myfix.field_by_tag
+
+        if 'tag_by_field' in dict_dir:
+            tag_by_version_field[fix_version] = ChainMap(dict_module.tag_by_field, _myfix.tag_by_field)
+        else:
+            tag_by_version_field[fix_version] = _myfix.tag_by_field
+
+        if 'desc_by_tag_value' in dict_dir:
+            desc_by_version_tag_value[fix_version] = ChainMap(dict_module.desc_by_tag_value, _myfix.desc_by_tag_value)
+        else:
+            desc_by_version_tag_value[fix_version] = _myfix.desc_by_tag_value
+    else:
+        field_by_version_tag[fix_version] = _myfix.field_by_tag
+        tag_by_version_field[fix_version] = _myfix.tag_by_field
+        desc_by_version_tag_value[fix_version] = _myfix.desc_by_tag_value
+
+
+def get_field_by_tag(tag, **opt):
+    map_fix_dictionary(**opt)
+    fix_version = opt.get('FixVersion', '4.4')
+    return field_by_version_tag[fix_version].get(tag)
+
+
+def get_tag_by_field(field, **opt):
+    map_fix_dictionary(**opt)
+    fix_version = opt.get('FixVersion', '4.4')
+    return tag_by_version_field[fix_version].get(field)
+
+
+def get_desc_by_tag_value(tag, value, **opt):
+    map_fix_dictionary(**opt)
+    fix_version = opt.get('FixVersion', '4.4')
+    return desc_by_version_tag_value[fix_version].get(tag, {}).get(value)
+
 
 delimiter_patterns = {
     'standard': rb'8=FIX[.0-9T]+(.+?)\d',
@@ -41,12 +117,13 @@ def parse_fix_message(line: bytes, **opt):
             j -= 1
         else:
             break
-    fix_section = fix_section[:j].strip()
+
+    fix_section = fix_section[:j+1].strip()
 
     if verbose > 0:
         print('fix_section =', fix_section, file=sys.stderr)
 
-    if not fix_section or fix_section == '':
+    if not fix_section:
         return None
 
     delimiter = opt.get('FixDelimiter')
@@ -98,7 +175,7 @@ def parse_fix_message(line: bytes, **opt):
         if b'=' not in pair:
             continue
 
-        k, v = pair.split(b'=', 1)
+        k, v = pair.decode('utf-8').split('=', 1)
 
         if k is None or v is None:
             continue
@@ -106,27 +183,27 @@ def parse_fix_message(line: bytes, **opt):
         if only_numeric == 1 and not k.isdigit():
             continue
 
-        if k == b'35':
-            if v == b'AB':
+        if k == '35':
+            if v == 'AB':
                 is_new_multileg = True
                 if nested_fix == 0:
                     print(f'warnings: multileg message (35=AB), need to parse with NestedFix=1, at line: ', line,
                           file=sys.stderr)
-            elif v == b'E':
+            elif v == 'E':
                 is_new_list = True
                 print(f'warnings: list message (35=E666), need to parse with NestedFix=1, at line: ', line,
                       file=sys.stderr)
 
         if nested_fix == 1:
             if not in_block:
-                if is_new_multileg and k == b"555":
+                if is_new_multileg and k == "555":
                     if int(v) > 0:
                         in_block = True
                         # otherwise, when 555=0, no leg block
                     num_components = int(v)
                     # tag 555 belongs to common section
                     common_by_k[k] = v
-                elif is_new_list and k == b"11":
+                elif is_new_list and k == "11":
                     in_block = True
 
                     # in List, tag 11 belongs to component section
@@ -142,10 +219,10 @@ def parse_fix_message(line: bytes, **opt):
                     # => 566 LegPrice N
                     # => 587 LegSettlType N
                     # => 588 LegSettlDate N
-                    if k != b"654" and k != b"566" and k != b"587" and k != b"588" and k != b"564" and \
+                    if k != "654" and k != "566" and k != "587" and k != "588" and k != "564" and \
                             (last_tag is None or
-                             last_tag == b"654" or last_tag == b"566" or last_tag == b"587" or last_tag == b"588"
-                             or last_tag == b"564"):
+                             last_tag == "654" or last_tag == "566" or last_tag == "587" or last_tag == "588"
+                             or last_tag == "564"):
                         # we have just completed a leg. start a new one
                         components.append(current_comp)
                         current_comp = {}
@@ -161,7 +238,7 @@ def parse_fix_message(line: bytes, **opt):
                         # we are still within the current leg
                         current_comp[k] = v
                 elif is_new_list:
-                    if k == b"11":
+                    if k == "11":
                         # start a list
                         if current_comp:
                             # is current_comp is not empty, save it into the component list
@@ -172,7 +249,7 @@ def parse_fix_message(line: bytes, **opt):
             # not assuming NestedFix, very naive
             v_by_k[k] = v
 
-        if k == b"10":
+        if k == "10":
             common_by_k[k] = v
             break
 
@@ -208,30 +285,36 @@ def dump_nested_fix(nested_fix, **opt):
     for c in nested_fix['components']:
         i += 1
         print(f'\n-------- component {i} of {total}', file=dump_fh)
-        dump_value_by_tag(c)
+        dump_value_by_tag(c, **opt)
 
 
 def dump_value_by_tag(value_by_tag: Dict[bytes, bytes], **opt):
     dump_fh = opt.get('DumpFH', sys.stderr)
 
+    select_tag = {}
+    if opt.get('tags'):
+        for t in opt.get('tags').split(','):
+            select_tag[t] = True
+    # pprint(select_tag)
+
     for tag, value in value_by_tag.items():
-        tag_str = tag.decode('utf-8')
-        value_str = value.decode('utf-8')
-        if tag_str in field_by_tag:
-            field = field_by_tag[tag_str]
-        else:
+        if select_tag and not select_tag.get(tag):
+            continue
+
+        field = get_field_by_tag(tag, **opt)
+
+        if not field:
             field = ''
 
-        if tag_str in desc_by_tag_value and value_str in desc_by_tag_value[tag_str]:
-            desc = desc_by_tag_value[tag_str][value_str]
-        else:
+        desc = get_desc_by_tag_value(tag, value, **opt)
+        if not desc:
             desc = ''
 
-        print(f'{field:>19} {tag_str:>5} = {value_str} ({desc})', file=dump_fh)
+        print(f'{field:>19} {tag:>5} = {value} ({desc})', file=dump_fh)
 
 
 def dump_fix_message(line, **opt):
-    dump_nested_fix(parse_fix_message(line, NestedFix=1, **opt))
+    dump_nested_fix(parse_fix_message(line, NestedFix=1, **opt), **opt)
 
 
 def main():
@@ -263,6 +346,12 @@ def main():
     with open(file, 'rb') as fh:
         for line in fh:
             dump_fix_message(line, verbose=1)
+            break
+
+    file = 'fix_test_multileg.txt'
+    with open(file, 'rb') as fh:
+        for line in fh:
+            dump_fix_message(line, tags='35,54,38,624', FixDict='fix_test_dict.py', RefreshCache=1, verbose=1)
             break
 
 

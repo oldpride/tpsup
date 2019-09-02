@@ -81,7 +81,8 @@ def parse_fix_download(**opt):
     compiled_field_tag_pattern = re.compile(field_tag_pattern)
 
     # 1 = Buy
-    values_pattern = r'^(\S+) = (.+)'
+    values_pattern = r'^(\S+) = (.*)'
+    # values_pattern = r'^(\S+) = (.+)'
     # values_pattern = r'^(\S+) = ([^\(]+)'
     compiled_values_pattern = re.compile(values_pattern)
 
@@ -204,6 +205,12 @@ def parse_fix_download(**opt):
                                 print(values_pattern, ' matched ', element.text)
                             value = m.group(1)
                             desc = m.group(2)
+
+                            if not desc:
+                                # sometimes the description enclosed by <a>. for example in ~/data/fix/4.4 tag 35
+                                #    <p>0 = <a href="msgType_0_0.html">Heartbeat &lt;0&gt;</a>
+                                desc = element.findtext('a')
+
                             desc_by_tag_value[tag][value] = desc
 
                         element.clear(keep_tail=True)

@@ -11,9 +11,8 @@ import re
 
 
 def unlock_conn(nickname: str, **opt):
-    if 'connfile' in opt and opt['connfile']:
-        connfile = opt['connfile']
-    else:
+    connfile = opt.get('connfile')
+    if not connfile:
         # home-directory-in-python
         home = expanduser("~")
         connfile = home + "/.tpsup/conn.csv"
@@ -73,14 +72,12 @@ def get_dbh(**opt):
 
     if 'nickname' in opt:
         nickname = opt['nickname']
+        del opt['nickname']
 
         if nickname in dbh_by_nickname:
             dbh = dbh_by_nickname[nickname]
             current_dbh = dbh
             return dbh
-
-        if 'nickname' in opt:
-            del opt['nickname']
 
         info = unlock_conn(nickname, **opt)
 
@@ -104,7 +101,6 @@ def get_dbh(**opt):
 
         dbh_by_nickname[nickname] = dbh
         current_dbh = dbh
-
     elif current_dbh:
         dbh = current_dbh
 
@@ -196,35 +192,27 @@ def run_sql(sql, **opt):
     if sql_dictlist is None:
         return 1
 
-    # if 'SqlColumns' in opt and opt['SqlColumns']:
-    #     columns = opt['SqlColumns'].split(",")
-    # else:
     columns = sql_dictlist.columns
 
     need_close = False
 
-    if 'SqlOutput' in opt and opt['SqlOutput']:
-        output = opt['SqlOutput']
+    output = opt.get('SqlOutput', '-')
 
-        if output == '-':
-            ofh = sys.stdout
-        else:
-            ofh = open(output, 'w')
-            need_close = True
-    else:
+    if output == '-':
         ofh = sys.stdout
-
-    if 'SqlDelimiter' in opt:
-        delimiter = opt['SqlDelimiter']
     else:
-        delimiter = ','
+        ofh = open(output, 'w')
+        need_close = True
+
+    delimiter = opt.get('SqlDelimiter', ',')
 
     print(f'{delimiter.join(columns)}\n', file=ofh)
 
     for l in sql_dictlist.list_iterator():
         print(f'{delimiter.join(l)}\n', file=ofh)
 
-    ofh.close()
+    if need_close:
+        ofh.close()
 
     return 0
 
