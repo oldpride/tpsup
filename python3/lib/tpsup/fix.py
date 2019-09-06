@@ -1,15 +1,24 @@
 import re
 import sys
 from pprint import pprint, pformat
-# from fix_4_4 import field_by_tag, desc_by_tag_value
 from typing import Dict, List
 from collections import ChainMap
 import inspect
+import importlib
 from tpsup.util import load_module
 
 field_by_version_tag = {}
 tag_by_version_field = {}
 desc_by_version_tag_value = {}
+
+module_name_by_version = {
+    '4.0': 'tpsup.fix_4_0',
+    '4.1': 'tpsup.fix_4_1',
+    '4.2': 'tpsup.fix_4_2',
+    '4.3': 'tpsup.fix_4_3',
+    '4.4': 'tpsup.fix_4_4',
+    '5.0': 'tpsup.fix_5_0_SP2',
+}
 
 
 def map_fix_dictionary(**opt):
@@ -18,20 +27,12 @@ def map_fix_dictionary(**opt):
     if field_by_version_tag.get(fix_version) and not opt.get('RefreshCache'):
         return
 
-    if fix_version == '4.4':
-        import tpsup.fix_4_4 as _myfix
-    elif fix_version == '4.3':
-        import tpsup.fix_4_3 as _myfix
-    elif fix_version == '4.2':
-        import tpsup.fix_4_2 as _myfix
-    elif fix_version == '4.1':
-        import tpsup.fix_4_1 as _myfix
-    elif fix_version == '4.0':
-        import tpsup.fix_4_0 as _myfix
-    elif fix_version == '5.0':
-        import tpsup.fix_5_0_SP2 as _myfix
-    else:
-        raise RuntimeError(f'unsupported FIX version {fix_version}')
+    fix_module_name = module_name_by_version.get(fix_version)
+
+    if not fix_module_name:
+        raise RuntimeError(f'unsupported FIX version {fix_version}. Supported: {module_name_by_version.keys()}')
+
+    _myfix = importlib.import_module(fix_module_name)
 
     if opt.get('FixDict'):
         # dict_source = None
