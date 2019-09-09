@@ -89,14 +89,14 @@ if [ $OS = SunOS ]; then
    -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
 
 elif [ $OS = Linux ]; then
+   xrdb.linux $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
+
+   #nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   #-fg white -bg black -title $title -sl 10000 -sb -e "/bin/bash --rcfile $TPSUP/profile" >/dev/null 2>&1&
+
+   #nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
    eval "nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 $font \
-   -fg white -bg black -title $title -sl 10000 -sb $loginshell \
-   -xrm 'XTerm*selectToClipboard: true' \
-   -xrm 'XTerm.vt100.translations: #override \\\
-        <Btn1Down>: select-start(CLIPBOARD) \\n\\\
-        <Btn1Up>: select-end(CLIPBOARD) \\n\\\
-        <Btn3Down>: insert-selection(CLIPBOARD) \\n\\\
-   ' >/dev/null 2>&1&"
+   -fg white -bg black -title $title -sl 10000 -sb $loginshell >/dev/null 2>&1&"
 
    # -ls     to login session, this will source profile and record in /var/log/wtmp so
    #         that 'w' command will list this session
