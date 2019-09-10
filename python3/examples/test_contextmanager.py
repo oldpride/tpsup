@@ -22,7 +22,7 @@ class FileContextManager:
 
 outside_f = None
 
-with FileContextManager('test_kwargs.py', 'r') as f:
+with FileContextManager('test_dict_kwargs.py', 'r') as f:
     outside_f = f
     print('Inside context manager')
     # for line in f:
@@ -41,7 +41,7 @@ for line in outside_f:
 # def change_kwargs(**kwargs):
 #
 # Exit called and File closed
-# outside_f = <_io.TextIOWrapper name='test_kwargs.py' mode='r' encoding='UTF-8'>
+# outside_f = <_io.TextIOWrapper name='test_dict_kwargs.py' mode='r' encoding='UTF-8'>
 # Traceback (most recent call last):
 #   File "./test_contextmanager.py", line 33, in <module>
 #     for line in outside_f:
