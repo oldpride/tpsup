@@ -217,18 +217,20 @@ alias p3examples='cd $TPSUP/python3/examples'
 alias p2lib='cd $TPSUP/python2/lib/tpsup'
 alias p3lib='cd $TPSUP/python3/lib/tpsup'
 
-if [ "X$PATH" != "X" ]; then
-   PATH=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PATH"`
+REDUCEPATHCMD=$TPSUP/scripts/reducepath
+
+if [ "X$PATH" != "X" -a -f $REDUCEPATHCMD ]; then
+   PATH=`$USE_DB_PERL $REDUCEPATHCMD -q "$PATH"`
    export PATH
 fi
 
-if [ "X$PERL5LIB" != "X" ]; then
-   PERL5LIB=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$PERL5LIB"`
+if [ "X$PERL5LIB" != "X" -a -f $REDUCEPATHCMD ]; then
+   PERL5LIB=`$USE_DB_PERL $REDUCEPATHCMD -q "$PERL5LIB"`
    export PERL5LIB
 fi
 
-if [ "X$LD_LIBRARY_PATH" != "X" ]; then
-   LD_LIBRARY_PATH=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$LD_LIBRARY_PATH"`
+if [ "X$LD_LIBRARY_PATH" != "X" -a -f $REDUCEPATHCMD ]; then
+   LD_LIBRARY_PATH=`$USE_DB_PERL $REDUCEPATHCMD -q "$LD_LIBRARY_PATH"`
    export LD_LIBRARY_PATH
 fi
 
