@@ -1,0 +1,162 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+Usage:
+
+   $prog old_string new_string input output
+
+   Replace old_string with new_string in a binary input file, with the following
+   requirements:
+      1. keep the file size unchanged.
+      2. if old_string is a substring of a whole string, keep the new whole integral.
+         For example, when replacing /apps/ with /usr/ in /apps/local/bin, we should
+         get /usr/local/bin, or /usr/\0local/bin
+
+   -v        verbose
+
+Examples:
+
+   echo 0123456789 |$prog 234 9 - - 
+   
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'verbose' => \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV != 4;
+
+my ($old, $new, $input, $output) = @ARGV;
+
+open my $ifh,  "<$input" or die "cannot read  from $input: $!";
+open my $ofh, "<$output" or die "cannot write to  $output: $!";
+
+binmode(%ifh);
+binmode(%ofh);
+
+my $total_size = 0;
+my $block = 1024*1024;
+
+my $last_data = '';
+
+while(1) {
+    my $data;
+
+    my $size = read($ifh, $data, $block);
+
+    if ($size) {
+       my $combined = $last_data . $data;
+       while(1) {
+          my $index = index($combined, $old_string);
+	  last if $index == -1;
+	    
+       $total_size += $size;
+
+}
+
+if (! $cfg_by_proj->{$proj}) {
+   print "ERROR: unknown proj='$proj'. Current config in $CfgFile\n";
+   print_cfg($cfg_by_proj);
+
+   usage();
+}
+
+my $today = "date +%Y%m%d"; chomp $today;
+
+my ($source_base, $backup_base, $retention) = @{$cfg_by_proj->{$proj}->[0]}{qw(source_base backup_base retention)};
+
+$source_base =~ s:\$home:$home:g;
+$backup_base =~ s:\$home:$home:g;
+
+if ($action eq 'do') {
+   {
+      my @dirs = `/bin/ls -d $backup_base/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]`;
+      my $count = scalar(@dirs);
+
+      if ($count > $retention) {
+         print "too many backups ($count) > retention ($retention) under $backup_base, cleaning up\n";
+         chomp @dirs;
+         my $remove_count = $count - $retention;
+
+         for (my $i=0; $i<$remove_count; $i++) {
+            my $cmd = "/bin/rm -fr $dirs[$i]";
+            print "$cmd\n";
+            system($cmd);
+         }
+
+         # to test:
+         #    cd /home/tian/backup/config;i=0;while [ $i -lt 30 ];do mkdir 0$i; ((i++));done
+      }
+   }
+
+   if (! -d $backup_base) {
+      my $cmd = "mkdir -p $backup_base";
+      print "$cmd\n";
+      system($cmd) && die "$cmd failed";
+   }
+
+   {
+      my $cmd = "rsync -av --delete --exclude .svn --exclude .swp $source_base/* $backup_base/$today";
+      print "$cmd\n";
+      system("$cmd");
+   }
+} elsif ($action eq 'check') {
+   if ($yyyymmdd) {
+      my $backupdir = "$backup_base/$yyyymmdd";
+      usage("$backupdir doesn't exist, we don't have a backup for $yyyymmdd") if ! -d $backupdir;
+   } else {
+      $yyyymmdd = `/bin/ls $backup_base|tai1 -1`;
+      die "we don't have any backup" if ! $yyyymmdd;
+      chomp $yyyymmdd;
+   }
+
+   my $ cmd;
+
+   if ($brief) {
+      $cmd = "rsync -avn --delete --exclude .svn --exclude .swp $backup_base/$yyyymmdd/* $source_base";
+   } else {
+      $cmd = "diff -r $backup_base/$yyyymmdd $source_base|egrep -v '[.](svn|swp)|^Common subdirectories'";
+   }
+   
+   print "$cmd\n";
+   system("$cmd");
+} elsif ($action eq 'list') {
+   my $cmd = "/bin/ls $backup_base";
+   print "$cmd\n";
+   system("$cmd");
+} elsif ($action eq 'info') {
+   print_cfg($cfg_by_proj);
+}
+
+exit 0;
+##############################################################
+# subs
+##############################################################
+sub print_cfg {
+   my ($cfg_by_proj) = @_;
+   my @rows;
+   for my $proj (sort keys(%$cfg_by_proj)) {
+      push @rows, @{$cfg_by_proj->{"$proj"}};
+   }
+   render_csv(\@rows, [qw(proj source_base backup_base retention comment)], {verbose=>$verbose});
+}
+   
+   
