@@ -6,10 +6,10 @@
 xterm -display :0 \
 -fn '-adobe-courier-medium-r-normal--14-*' -geom 100x44 -fg white -bg black \
 -title test -sl 10000 -sb -ls \
--xrm "XTerm*selectToClipboard: true" \
--xrm "XTerm.vt100.translations: #override \
- <Btn1Down>: select-start(CLIPBOARD) \n\
- <Btn1Up>: select-end(CLIPBOARD) \n\
- <Btn3Down>: insert-selection(CLIPBOARD) \n\
-" &
+   -xrm '*selectToClipboard: true' \
+   -xrm '*.vt100.translations: #override \
+        <Btn1Down>: select-start(CLIPBOARD) \n\
+        <Btn1Up>: select-end(CLIPBOARD) \n\
+        <Btn3Down>: insert-selection(CLIPBOARD) \n\
+' &
 
