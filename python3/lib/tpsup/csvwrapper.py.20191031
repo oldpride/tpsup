@@ -9,7 +9,182 @@ import pkgutil
 import inspect
 import os
 from typing import Dict, List
-import tpfile
+
+"""
+why do we need this ?
+    standard csv cannot filter input file by line-based pattern, eg, cannot do 'grep 'col1,col2'.
+why do will still use standard csv module?
+    standard csv has sophisticated parser to parse quoted columns. and we don't want to reinvent the wheels.
+
+steps:
+- open file.
+- filter input, line-based.
+- pass csv.dictReader a fileObj.
+- standard csv module generates dict list.
+- filter dict list, column-based.
+
+"""
+
+
+# learned from the Cookbook (8.3)
+# I cannot add context manager into CsvEntry because in order to get columns I have to open and parse the file.
+# If use context manager, opening the file should be part of __enter__(). but often time, calling function wanted
+# to get columns information before iteration, ie, before the context management. Therefore, opening and parsing the
+# file (at least till the header line) should be part of __init__().
+class CsvEntry(io.BytesIO):
+    def __init__(self, filename, **opt):
+        super().__init__()
+        self.filename = filename
+        self.opt = opt
+        self.verbose = 0
+        self.fh = None
+        self.columns = None
+
+        self.verbose = opt.get('verbose', 0)
+
+        source_list = ['import re']
+
+        for attr in ['MatchPatterns', 'ExcludePatterns']:
+            # need to convert pattern string into bytes-like object as we read the csv as binary data
+            strings = opt.get(attr, [])
+            source_list.append(strings_to_compilable_patterns(strings, attr))
+
+        source = '\n\n'.join(source_list)
+
+        if self.verbose >= 2:
+            sys.stderr.write(f'source code = \n{source}\n')
+
+        pattern_filter = load_module(source)
+
+        self.match_patterns = pattern_filter.MatchPatterns
+        self.exclude_patterns = pattern_filter.ExcludePatterns
+
+        self.skip = opt.get('skip', 0)
+
+        self.delimiter = opt.get('delimiter', ',')
+
+        if self.filename == '-':
+            fh = sys.stdin
+        else:
+            # the unicode-sandwich design pattern
+            if self.filename.endswith('.gz'):
+                # in /usr/lib/python/3.6/gzip.py, open()
+                # if "t" in mode:
+                #     if "b" in mode:
+                #         raise ValueError("Invalid mode: %r" % (mode,))
+                # else:
+                #     if encoding is not None:
+                #         raise ValueError("Argument 'encoding' not supported in binary mode")
+                #     if errors is not None:
+                #         raise ValueError("Argument 'errors' not supported in binary mode")
+                #     if newline is not None:
+                #         raise ValueError("Argument 'newline' not supported in binary mode")
+
+                fh = gzip.open(self.filename, 'rt', encoding='utf-8', newline='')
+                self.need_close_fh = 1
+            else:
+                fh = open(self.filename, 'r', encoding='utf-8', newline='')
+
+            # If newline='' is not specified, newlines embedded inside quoted fields will not be interpreted
+            # correctly, and on platforms that use \r\n linendings on write an extra \r will be added. It should
+            # always be safe to specify newline='', since the csv module does its own (universal) newline handling.
+            # https://docs.python.org/3/library/csv.html
+
+        # skip lines if needed
+        for count in range(0, self.skip):
+            line = fh.readline()
+
+            if not line:
+                raise RuntimeError(f'{filename} has only {count} lines; but need to skip {skip}')
+
+        header_line = fh.readline()
+
+        if not header_line:
+            raise RuntimeError(f'{filename} missing header after {skip} lines skipped')
+
+        header_line = header_line.rstrip()
+
+        self.columns = header_line.split(self.delimiter)
+        if self.verbose > 0:
+            print(f'columns = {self.columns}', file=sys.stderr)
+        self.fh = fh
+
+    def readline(self, size=-1):
+        while 1:
+            try:
+                line = next(self.fh)
+                if not line:
+                    break
+
+                # https://docs.python.org/2/howto/regex.html
+                # match() Determine if the RE matches at the beginning of the string.
+                # search() Scan through a string, looking for any location where this RE matches.
+                # findall() Find all substrings where the RE matches, and returns them as a list.
+                # finditer() Find all substrings where the RE matches, and returns
+                # them as an iterator.
+
+                matched = 1
+
+                for compiled in self.match_patterns:
+                    # if not compiled.match(line):
+                    if not compiled.search(line):
+                        matched = 0
+                        break
+
+                if not matched:
+                    continue
+
+                excluded = 0
+
+                for compiled in self.exclude_patterns:
+                    if compiled.search(line):
+                        excluded = 1
+                        break
+                if excluded:
+                    continue
+
+                yield line
+            except StopIteration:
+                return
+                # https://stackoverflow.com/questions/43617399/how-to-get-rid-of-warning-deprecationwarning-generator-ngrams-raised-stopiter
+                # https://www.python.org/dev/peps/pep-0479/
+
+    def closed(self) -> bool:
+        if self.fh is None:
+            return True
+        else:
+            return False
+
+    def __iter__(self):
+        return self.readline()
+
+    def __next__(self):
+        return self.readline()
+
+    def close(self) -> None:
+        if self.fh != sys.stdin:
+            self.fh.close()
+
+
+# list vs array
+# https://stackoverflow.com/questions/176011/python-list-vs-array-when-to-use
+# Basically, Python lists are very flexible and can hold completely heterogeneous,
+# arbitrary data, and they can be appended to very efficiently, in amortized constant
+# time. If you need to shrink and grow your list time-efficiently and without hassle,
+# they are the way to go. But they use a lot more space than C arrays.
+#
+# The array.array type, on the other hand, is just a thin wrapper on C arrays. It can
+# hold only homogeneous data, all of the same type, and so it uses only
+# sizeof(one object) * length bytes of memory. Mostly, you should use it when you need
+# to expose a C array to an extension or a system call (for example, ioctl or fctnl).
+#
+# array.array is also a reasonable way to represent a mutable string in Python 2.x
+# (array('B', bytes)). However, Python 2.6+ and 3.x offers a mutable byte string as
+# bytearray.
+#
+# However, if you want to do math on a homogeneous array of numeric data, then you're
+# much better off using NumPy, which can automatically vectorize operations on complex
+# multi-dimensional arrays.
 
 class CsvDictList:
     # the following doesn't make much sense as __iter__ and __next are the same, but it works

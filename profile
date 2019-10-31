@@ -206,6 +206,11 @@ funcs () {
    declare -F
 }
 
+functions () {
+   typeset -F
+   echo "to see detail: typeset -f"
+}
+
 p3env  # default to python 3
 
 alias p2c="python2 -m py_compile"
