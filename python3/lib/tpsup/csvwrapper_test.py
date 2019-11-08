@@ -23,7 +23,7 @@ import sys
 import pprint
 import time
 
-import tpsup.csvwrapper
+import tpsup.tpcsvtools
 
 
 class TestCsvwrapper(unittest.TestCase):
@@ -33,7 +33,7 @@ class TestCsvwrapper(unittest.TestCase):
         _dir = os.path.dirname(sys.modules["tpsup.csvwrapper"].__file__)
         file = os.path.join(_dir, "csvwrapper_test.csv")
         s = io.StringIO()
-        csv_entry = tpsup.csvwrapper.CsvEntry(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose)
+        csv_entry = tpsup.tpcsvtools.CsvEntry(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose)
         for row in csv_entry:
             print(f'{row}', file=s, end='')
         csv_entry.close()
@@ -53,7 +53,7 @@ class TestCsvwrapper(unittest.TestCase):
         # print(fh)
         # print(isinstance(s, io.IOBase))
         # print(isinstance(fh, io.IOBase))
-        tpsup.csvwrapper.query_csv(filename=file,
+        tpsup.tpcsvtools.query_csv(filename=file,
                                    MatchExps=['str(r["name"]).startswith("J")'],
                                    ExcludeExps=['int(r["number"])>2'],
                                    TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},

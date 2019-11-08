@@ -5,7 +5,7 @@ from pprint import pprint, pformat
 import os
 import sys
 from os.path import expanduser
-import tpsup.csvwrapper
+import tpsup.tpcsvtools
 from tpsup.util import tpsup_unlock
 import re
 
@@ -27,7 +27,7 @@ def unlock_conn(nickname: str, **opt):
 
     dictlist = []
 
-    for d in tpsup.csvwrapper.CsvDictList(connfile, **opt):
+    for d in tpsup.tpcsvtools.CsvDictList(connfile, **opt):
         dictlist.append(d)
 
     if len(dictlist) == 0:

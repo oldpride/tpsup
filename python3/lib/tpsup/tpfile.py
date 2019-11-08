@@ -10,10 +10,10 @@ import os
 from typing import Dict, List
 
 
-class TpFile:
-    def __init__(self, **opt):
+class TpInput:
+    def __init__(self, filename, **opt):
         self.verbose = opt.get('verbose', 0)
-        self.filename = opt.get('filename', None)
+        self.filename = filename
         self.need_close_fh = False
         self.fh = None
 
@@ -36,7 +36,7 @@ class TpFile:
 
         self.skip = opt.get('skip', 0)
 
-    def __enter__(self):
+    def open(self):
         if self.filename == '-':
             self.fh = sys.stdin
         else:
@@ -91,20 +91,52 @@ class TpFile:
             yield line
         return
 
+    def close(self):
+        if self.need_close_fh:
+            self.fh.close()
+        self.fh = None
+        self.need_close_fh = False
+
     def closed(self) -> bool:
-        if self.fh is None:
-            return True
-        else:
-            return False
+        return not self.fh
 
     def __iter__(self):
         return self.readline()
 
+    def __enter__(self):
+        return self.__open__()
+
     def __exit__(self, exec_type, exc_value, traceback):
+        self.close()
+
+
+class TpOutput:
+    def __init__(self, filename, **opt):
+        self.verbose = opt.get('verbose', 0)
+        self.filename = filename
+        self.need_close_fh = False
+        self.fh = None
+
+    def __enter__(self):
+        if self.filename == '-':
+            self.fh = sys.stdout
+        else:
+            os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+            self.fh = open(self.filename, 'w', encoding='utf-8')
+            self.need_close_fh = True
+        return self.fh
+
+    def close(self):
         if self.need_close_fh:
-            print('closing')
             self.fh.close()
-            self.fh = None
+        self.fh = None
+        self.need_close_fh = False
+
+    def closed(self) -> bool:
+        return not self.fh
+
+    def __exit__(self, exec_type, exc_value, traceback):
+        self.close()
 
 
 def main():
@@ -113,17 +145,18 @@ def main():
     file = 'csvwrapper_test.csv'
     print(f'\nfiltered\n')
 
-    with TpFile(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose) as tf:
+    with TpInput(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose) as tf:
         for line in tf:
             print(line)
 
     import csv
-    with TpFile(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as tf:
+    with TpInput(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as tf:
         reader = csv.DictReader(tf)
         headers = reader.fieldnames
         print(headers)
         for row in reader:
             pprint(row)
+
 
 if __name__ == '__main__':
     main()
