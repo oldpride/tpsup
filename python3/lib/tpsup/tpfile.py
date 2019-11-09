@@ -13,6 +13,7 @@ from typing import Dict, List
 class TpInput:
     def __init__(self, filename, **opt):
         self.verbose = opt.get('verbose', 0)
+        self.need_header = opt.get('need_header', False)
         self.filename = filename
         self.need_close_fh = False
         self.fh = None
@@ -67,9 +68,16 @@ class TpInput:
         return self
 
     def readline(self):
-        for line in self.fh:
-            matched = 1
+        line_number = 0
 
+        for line in self.fh:
+            line_number += 1
+
+            if line_number == 1 and self.need_header:
+                # csv module needs the header line
+                yield line
+
+            matched = 1
             for compiled in self.match_patterns:
                 # if not compiled.match(line):
                 if not compiled.search(line):
@@ -104,7 +112,7 @@ class TpInput:
         return self.readline()
 
     def __enter__(self):
-        return self.__open__()
+        return self.open()
 
     def __exit__(self, exec_type, exc_value, traceback):
         self.close()
@@ -140,17 +148,18 @@ class TpOutput:
 
 
 def main():
-    verbose = 0
+    verbose = 1
 
     file = 'csvwrapper_test.csv'
-    print(f'\nfiltered\n')
+    print('test1')
 
-    with TpInput(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose) as tf:
-        for line in tf:
-            print(line)
-
-    import csv
     with TpInput(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as tf:
+        for line in tf:
+            print(line, end='')
+
+    print('test2')
+    import csv
+    with TpInput(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose) as tf:
         reader = csv.DictReader(tf)
         headers = reader.fieldnames
         print(headers)

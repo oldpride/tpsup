@@ -5,7 +5,7 @@ from pprint import pprint, pformat
 import os
 import sys
 from os.path import expanduser
-import tpsup.tpcsvtools
+import tpsup.csvtools
 from tpsup.util import tpsup_unlock
 import re
 
@@ -27,8 +27,10 @@ def unlock_conn(nickname: str, **opt):
 
     dictlist = []
 
-    for d in tpsup.tpcsvtools.CsvDictList(connfile, **opt):
-        dictlist.append(d)
+    with QueryCsv(connfile, **opt) as qc:
+        next(qc)  # skip the header
+        for d in qc:
+            dictlist.append(d)
 
     if len(dictlist) == 0:
         ret['error'] = f"connection file {connfile} does not contain nickname = {nickname}"

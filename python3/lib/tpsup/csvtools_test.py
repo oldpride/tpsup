@@ -23,43 +23,41 @@ import sys
 import pprint
 import time
 
-import tpsup.tpcsvtools
+import tpsup.csvtools
 
 
-class TestCsvwrapper(unittest.TestCase):
+class TestCsvTools(unittest.TestCase):
     def test_patterns(self, verbose=0):
         # https://docs.python.org/3/library/pkgutil.html
         # pprint.pprint(sys.modules)
-        _dir = os.path.dirname(sys.modules["tpsup.csvwrapper"].__file__)
-        file = os.path.join(_dir, "csvwrapper_test.csv")
+        _dir = os.path.dirname(sys.modules["tpsup.csvtools"].__file__)
+        file = os.path.join(_dir, "csvtools_test.csv")
         s = io.StringIO()
-        csv_entry = tpsup.tpcsvtools.CsvEntry(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose)
-        for row in csv_entry:
-            print(f'{row}', file=s, end='')
-        csv_entry.close()
+        with tpsup.csvtools.QueryCsv(file, MatchPatterns=[',S'], ExcludePatterns=['Smith'], verbose=verbose) as qc:
+            for row in qc:
+                print(f'{row}', file=s, end='')
 
-        expected_string = "d,3,Stephen\n"
+        expected_string = "{'alpha': 'd', 'number': '3', 'name': 'Stephen'}"
 
         self.assertEqual(s.getvalue(), expected_string)
 
     def test_expressions(self, verbose=0):
         # https://docs.python.org/3/library/pkgutil.html
         # pprint.pprint(sys.modules)
-        _dir = os.path.dirname(sys.modules["tpsup.csvwrapper"].__file__)
-        file = os.path.join(_dir, "csvwrapper_test.csv")
+        _dir = os.path.dirname(sys.modules["tpsup.csvtools"].__file__)
+        file = os.path.join(_dir, "csvtools_test.csv")
         s = io.StringIO()
         # fh = open('/etc/passwd', 'r')
         # print(s)
         # print(fh)
         # print(isinstance(s, io.IOBase))
         # print(isinstance(fh, io.IOBase))
-        tpsup.tpcsvtools.query_csv(filename=file,
-                                   MatchExps=['str(r["name"]).startswith("J")'],
-                                   ExcludeExps=['int(r["number"])>2'],
-                                   TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
-                                   ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
-                                   Output=s,
-                                   verbose=verbose)
+        tpsup.csvtools.QueryCsv(filename=file,
+                                MatchExps=['str(r["name"]).startswith("J")'],
+                                ExcludeExps=['int(r["number"])>2'],
+                                TempExps={'tempcol1': 'r["name"]+"-"+r["number"]'},
+                                ExportExps={'exportcol1': 'r["tempcol1"] + "-confirmed"'},
+                                verbose=verbose).output(filename=s)
 
         # https://stackoverflow.com/questions/3191528/csv-in-python-adding-an-extra-carriage-return-on-windows
         # \n vs \r\n
