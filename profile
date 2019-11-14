@@ -59,14 +59,15 @@ HOSTNAME=`hostname`
 export HOSTNAME
 
 if [ "X$BASH_SOURCE" != "X" ]; then
-   # the following sed command simplify the path, eg, /a/b/../c => /a/c
-   TPSUP=`dirname $BASH_SOURCE|sed -e 's:$:/:;s:[^/][^/]*//*[.][.]::;s://*$::'`
-
-   if ! echo "$TPSUP" | grep '^/' >/dev/null; then
-      TPSUP=`pwd`/$TPSUP
-   fi
+   ## the following sed command simplify the path, eg, /a/b/../c => /a/c
+   #TPSUP=`dirname $BASH_SOURCE|sed -e 's:$:/:;s:[^/][^/]*//*[.][.]::;s://*$::'`
+   #if ! echo "$TPSUP" | grep '^/' >/dev/null; then
+   #   TPSUP=`pwd`/$TPSUP
+   #fi
+   TPSUP=$(cd `dirname $BASH_SOURCE`; pwd -P) || return
+   export TPSUP
 else
-   if ! echo $0 |grep bash >/dev/null; then
+   if ! [[ $0 =~ bash ]]; then
       echo "Run bash first ... Env is not set !!!" >&2
       return
    else
@@ -85,11 +86,11 @@ if ! /usr/bin/perl -Mwarnings -e "print '';"; then
    USE_NEWER_PERL=/usr/local/bin/per1
 fi
 
-if [ -f $TPSUP/scripts/trimpath ]; then
-   TPSUP=`$USE_NEWER_PERL $TPSUP/scripts/trimpath $TPSUP`
-fi
+# if [ -f $TPSUP/scripts/trimpath ]; then
+#   TPSUP=`$USE_NEWER_PERL $TPSUP/scripts/trimpath $TPSUP`
+# fi
+#export TPSUP
 
-export TPSUP
 export TPSUPMODE
 
 PS1='$USER@$HOSTNAME:$PWD$ '
@@ -128,6 +129,20 @@ elif [[ $UNAME =~ Linux ]]; then
 else 
    echo "UNAME='$UNAME' is not supported"
 fi
+
+reduce () {
+   REDUCEPATHCMD=$TPSUP/scripts/reducepath
+   
+   if ! [ -f $REDUCEPATHCMD ]; then
+      return
+   fi 
+
+   export  PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PATH"`
+   export  PERL5LIB=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PERL5LIB"`
+   export  PYTHONPATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PYTHONPATH"`
+   export  LD_LIBRARY_PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$LD_LIBRARY_PATH"`
+   export  LD_LOAD_PATH=`$USE_NEWER_PERL $TPSUP/scripts/reducepath -q "$LD_LOAD_PATH"`
+}
 
 # https://askubuntu.com/questions/98782/how-to-run-an-alias-in-a-shell-script
 # Aliases are deprecated in favor of shell functions. From the bash manual page:
@@ -177,9 +192,9 @@ p2env () {
       /usr/bin/pip "$@"
    }
 
-   PYTHONPATH=$TPSUP/python2/lib:$PYTHONPATH
-   export PYTHONPATH
-   PATH=$TPSUP/python2/scripts:$PATH
+   export PYTHONPATH=$TPSUP/python2/lib:$PYTHONPATH
+   export PATH=$TPSUP/python2/scripts:$PATH
+   reduce
 
    # export the function
    set -a
@@ -194,9 +209,9 @@ p3env () {
       /usr/bin/pip3 "$@"
    }
 
-   PYTHONPATH=$TPSUP/python3/lib:$PYTHONPATH
-   export PYTHONPATH
-   PATH=$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH
+   export PYTHONPATH=$TPSUP/python3/lib:$PYTHONPATH
+   export PATH=$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH
+   reduce
 
    # export the function
    set -a
@@ -221,28 +236,6 @@ alias p3scripts='cd $TPSUP/python3/scripts'
 alias p3examples='cd $TPSUP/python3/examples'
 alias p2lib='cd $TPSUP/python2/lib/tpsup'
 alias p3lib='cd $TPSUP/python3/lib/tpsup'
-
-REDUCEPATHCMD=$TPSUP/scripts/reducepath
-
-if [ "X$PATH" != "X" -a -f $REDUCEPATHCMD ]; then
-   PATH=`$USE_DB_PERL $REDUCEPATHCMD -q "$PATH"`
-   export PATH
-fi
-
-if [ "X$PERL5LIB" != "X" -a -f $REDUCEPATHCMD ]; then
-   PERL5LIB=`$USE_DB_PERL $REDUCEPATHCMD -q "$PERL5LIB"`
-   export PERL5LIB
-fi
-
-if [ "X$LD_LIBRARY_PATH" != "X" -a -f $REDUCEPATHCMD ]; then
-   LD_LIBRARY_PATH=`$USE_DB_PERL $REDUCEPATHCMD -q "$LD_LIBRARY_PATH"`
-   export LD_LIBRARY_PATH
-fi
-
-if [ "X$LD_LOAD_PATH" != "X" ]; then
-   LD_LOAD_PATH=`$USE_DB_PERL $TPSUP/scripts/reducepath -q "$LD_LOAD_PATH"`
-   export LD_LOAD_PATH
-fi
 
 if [ -f ~/local.profle ]; then
    . ~/local.profile

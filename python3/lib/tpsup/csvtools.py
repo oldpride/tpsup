@@ -55,6 +55,10 @@ def main():
                   verbose=verbose) as qc:
         qc.output(filename='-')
 
+    print(f'\ntest7\n')
+    for row in QueryCsv(filename=file, ExcludePatterns=['Smith'], verboske=verbose):
+        print(row)
+
 
 def filter_dicts(dict_iter, columns, **opt):
     verbose = opt.get('verbose', 0)
@@ -175,8 +179,21 @@ class QueryCsv:
         return self
 
     def __iter__(self):
-        # next(self.reader, None)  # skip the header. header is already saved in self.reader
+        if not self.reader:
+            # when without context manager:
+            #     dictlist = list(QueryCsv(...))
+            # or
+            #     for dict in QueryCsv(...)
+            with self:
+                yield from self.iterator()
+        else:
+            # when called with context manager:
+            # with QueryCsv(...) as qc:
+            #      for row in qcL
+            #          print(row)
+            yield from self.iterator()
 
+    def iterator(self):
         for row in filter_dicts(self.reader, self.reader.fieldnames, **self.opt):
             # print('__iter__', row)
             yield {key: value for key, value in row.items() if key in self.columns}

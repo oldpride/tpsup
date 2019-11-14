@@ -130,8 +130,11 @@ class TpOutput:
             self.fh = sys.stdout
         else:
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
-            self.fh = open(self.filename, 'w', encoding='utf-8')
             self.need_close_fh = True
+            if self.filename.endswith('.gz'):
+                self.fh = gzip.open(self.filename, 'wb')
+            else:
+                self.fh = open(self.filename, 'w', encoding='utf-8')
         return self.fh
 
     def close(self):
@@ -150,7 +153,9 @@ class TpOutput:
 def main():
     verbose = 1
 
-    file = 'csvwrapper_test.csv'
+    file = 'csvtools_test.csv'
+    testdir = '/tmp/junkdir'
+    file_gz = f'{testdir}/junk.csv.gz'
     print('test1')
 
     with TpInput(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as tf:
@@ -165,6 +170,15 @@ def main():
         print(headers)
         for row in reader:
             pprint(row)
+
+    print('test3')
+    os.system(f'/bin/rm -fr {testdir}')
+    with TpInput(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose) as ti, \
+            TpOutput(filename=file_gz) as to:
+        for line in ti:
+            to.write(line.encode('utf-8'))
+
+    os.system(f'ls -l {file_gz}; zcat {file_gz}; /bin/rm -fr {testdir}')
 
 
 if __name__ == '__main__':

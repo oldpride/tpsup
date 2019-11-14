@@ -9,88 +9,55 @@ import tpsup.csvtools
 from tpsup.util import tpsup_unlock
 import re
 
+class Conn:
+    def __init__(self, nickname: str, **opt):
+        self.connfile = opt.get('connfile', expanduser("~")+"/.tpsup/conn.csv")
+        self.error = None
 
-def unlock_conn(nickname: str, **opt):
-    connfile = opt.get('connfile')
-    if not connfile:
-        # home-directory-in-python
-        home = expanduser("~")
-        connfile = home + "/.tpsup/conn.csv"
+        if not os.path.exists(connfile):
+            raise RuntimeError(f'connection file {connfile} not found')
 
-    ret = {'error': None}
+        opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
 
-    if not os.path.exists(connfile):
-        ret['error'] = f'connection file {connfile} not found'
-        return ret
+        dictlist = list(QueryCsv(connfile, **opt))
 
-    opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
+        if len(dictlist) == 0:
+            raise RuntimeError(f"connection file {connfile} does not contain nickname = {nickname}")
+        elif len(dictlist) > 1:
+            raise RuntimeError(f'connection file {connfile} has multiple nickname = {nickname} defined')
 
-    dictlist = []
+        self.dbi_string = dictlist[0]['string']
+        self.login = dictlist[0]['login']
+        self.locked_password = dictlist[0]['password']
+        self.parts = {}
 
-    with QueryCsv(connfile, **opt) as qc:
-        next(qc)  # skip the header
-        for d in qc:
-            dictlist.append(d)
+        # https://stackoverflow.com/questions/2554185/match-groups-in-python
+        m0 = re.match("^dbi:(.+?):(.+)", self.dbi_string)
+        if m0:
+            ret["database"] = m0.group(1)
+            pairs = m0.group(2)
 
-    if len(dictlist) == 0:
-        ret['error'] = f"connection file {connfile} does not contain nickname = {nickname}"
-        return ret
-    elif len(dictlist) > 1:
-        ret['error'] = f'connection file {connfile} has multiple nickname = {nickname} defined'
-        return ret
+            for pair in (pairs.split(";")):
+                key, value = pair.split("=", 1)
+                self.parts[key] = value
 
-    dbi_string = dictlist[0]['string']
-    login = dictlist[0]['login']
-    locked_password = dictlist[0]['password']
-
-    # https://stackoverflow.com/questions/2554185/match-groups-in-python
-    m0 = re.match("^dbi:(.+?):(.+)", dbi_string)
-    if m0:
-        ret["database"] = m0.group(1)
-        pairs = m0.group(2)
-
-        for pair in (pairs.split(";")):
-            key, value = pair.split("=", 1)
-            ret[key] = value
-
-    ret["string"] = dbi_string
-    ret["login"] = login
-    ret["locked_password"] = locked_password
-    ret["unlocked_password"] = tpsup.util.tpsup_unlock(locked_password)
-    return ret
+        self.string = dbi_string
+        self.login = login
+        self.locked_password = locked_password
+        self.unlocked_password = tpsup.util.tpsup_unlock(locked_password)
 
 
-# cache
-dbh_by_nickname = {}
-current_dbh = None
+class TpDbh:
+    def __init__(self, nickname:str, **opt):
+        # # https://stackoverflow.com/questions/1977362/how-to-create-module-wide-variables-in-python
+        # global dbh_by_nickname
+        # global current_dbh
+        conn = Conn(nickname, **opt)
 
-
-def get_dbh(**opt):
-    # https://stackoverflow.com/questions/1977362/how-to-create-module-wide-variables-in-python
-    global dbh_by_nickname
-    global current_dbh
-
-    dbh = None
-
-    if 'nickname' in opt:
-        nickname = opt['nickname']
-        del opt['nickname']
-
-        if nickname in dbh_by_nickname:
-            dbh = dbh_by_nickname[nickname]
-            current_dbh = dbh
-            return dbh
-
-        info = unlock_conn(nickname, **opt)
-
-        if info['error'] is not None:
-            print(info['error'], file=sys.stderr)
-            dbh = None
-        else:
-            if 'sid' in info:
-                dsn_tns = cx_Oracle.makedsn(info['host'], info['port'], info['sid'])
-
-                dbh = cx_Oracle.connect(info['login'], info['unlocked_password'], dsn_tns)
+        if re.match("Oracle", conn.string):
+            if 'sid' in conn.parts:
+                dsn_tns = cx_Oracle.makedsn(conn.parts['host'], conn.parts['port'], conn.parts['sid'])
+                dbh = cx_Oracle.connect(conn.login, conn.unlocked_password, dsn_tns)
             elif 'service_name' in info:
                 # use service name
                 # https://stackoverflow.com/questions/51486739/how-to-connect-
