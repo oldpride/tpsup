@@ -58,7 +58,7 @@ class TpDbh:
             if 'sid' in conn.parts:
                 dsn_tns = cx_Oracle.makedsn(conn.parts['host'], conn.parts['port'], conn.parts['sid'])
                 dbh = cx_Oracle.connect(conn.login, conn.unlocked_password, dsn_tns)
-            elif 'service_name' in info:
+            elif 'service_name' in conn.parts:
                 # use service name
                 # https://stackoverflow.com/questions/51486739/how-to-connect-
                 # to-an-oracle-database-using-cx-oracle-with-service-name-and-login
@@ -67,13 +67,10 @@ class TpDbh:
 
                 string = f'{info["login"]}/{info["unlocked_password"]}@{info["host"]}:{info["port"]}/{info["service_name"]}'
                 dbh = cx_Oracle.connect(string)
-
-        dbh_by_nickname[nickname] = dbh
-        current_dbh = dbh
-    elif current_dbh:
-        dbh = current_dbh
-
-    return dbh
+            else:
+                raise RuntimeError(f"unsupported oracle dbi_string {conn.dbi_string}")
+        else:
+            raise RuntimeError(f"unknown database dbi_string {conn.dbi_string}")
 
 
 class SqlDictList:

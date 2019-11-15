@@ -10,11 +10,13 @@ usage () {
 usage:
 
    $0 display
+   $0 auto
 
    pop up an xterm
 
-   When 'display' is set to auto, the script will use the env variable DISPLAY.
-   Currently, DISPLAY='$DISPLAY'
+   When 'display' is set to 'auto', the script will use the env variable DISPLAY.
+   (current DISPLAY='$DISPLAY'.) If the DISPLAY is not set, then the script 
+   will try to use the host from where you logged in.
 
    -b      a blank shell, not a login shell, therefore, not sourcing profiles.
            this way will have a virgin env for testing.
@@ -55,55 +57,103 @@ if [ $# -ne 1 ]; then
    usage
 fi
 
-if [ "$1" = auto ]; then
-   DISPLAY_SWITCH=""
-else
-   DISPLAY_SWITCH="-display $1"
-fi
-
-OS=`uname`
-
-id=`id |cut -d\( -f2|cut -d\) -f1`
-hostname=`hostname`
-pwd=`pwd`
-title="$id@$hostname:$pwd"
-
-DIR=`dirname $0`
-
-. $DIR/../profile
-
-export PSl
-# man -M /usr/openwin/man xrdb
-# xrdb $DISPLAY_SWITCH -query
+display=$1
 
 [ $debug = Y ] && set -x
 
-if [ $OS = SunOS ]; then
-   XPATH=/usr/openwin/bin
-
-   $XPATH/xrdb $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
-
-   # /usr/openwin/bin/xlsfonts|grep adobe-courier
+main () {
+   if [ "$display" = auto ]; then
+      if [ "X$DISPLAY" = "X" ]; then
+         if ! [ "X$SSH_CONNECTION" = "X" ]; then
+            # SSH_CONNECTION=192.168.1.197 50256 192.168.1.191 22
+            #                client             server
+            if [ $debug = Y ]; then
+               echo "SSH_CONNECTION=$SSH_CONNECTION"
+            fi
+            from_host=`echo $SSH_CONNECTION|awk '{print $1}'`
+         else
+            # if we "su or sudo, then there isn't likely either SSH_CONNECTION or DISPLAY 
+            # therefore, use tty to figure out
+            tty=`tty |cut -d/ -f3-`
+            cmd="w|grep -w $tty|awk '{print \$3}'"
+            if [ $debug = Y ]; then
+               echo "no DISPLAY set, figuring it out from \"$cmd\""
+               (set -x; tty)
+               (set -x; w)
+            fi
+            from_host=`eval $cmd`
+         fi
+      
+         if [ "X$from_host" = "X" ]; then
+            echo "You need to manually specify DISPLAY." >&2
+            exit 1
+         fi
    
-   #nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
-   # -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash --rcfile $TPSUP/profile >/dev/null 2>&1 &
+         DISPLAY_SWITCH="-display $from_host:0"
+      else
+         # we use the DISPLAY in ENV
+         DISPLAY_SWITCH=""
+      fi
+   else
+      DISPLAY_SWITCH="-display $1"
+   fi
+   
+   OS=`uname`
+   
+   id=`id |cut -d\( -f2|cut -d\) -f1`
+   hostname=`hostname`
+   pwd=`pwd`
+   title="$id@$hostname:$pwd"
+   
+   DIR=`dirname $0`
+   
+   . $DIR/../profile
+   
+   export PSl
+   # man -M /usr/openwin/man xrdb
+   # xrdb $DISPLAY_SWITCH -query
+   
+   if [ $debug = Y ]; then
+      nohup=""
+      redirect=""
+   else
+      nohup="nohup"
+      redirect=">/dev/null 2>&1&"
+   fi
+   
+   if [ $OS = SunOS ]; then
+      XPATH=/usr/openwin/bin
+   
+      $XPATH/xrdb $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
+   
+      # /usr/openwin/bin/xlsfonts|grep adobe-courier
+      
+      #nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+      # -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash --rcfile $TPSUP/profile >/dev/null 2>&1 &
+   
+      nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+      -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
+   
+   elif [ $OS = Linux ]; then
+      eval "$nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 $font \
+      -fg white -bg black -title $title -sl 10000 -sb $loginshell \
+      -xrm 'XTerm*selectToClipboard: true' \
+      -xrm 'XTerm.vt100.translations: #override \\\
+           <Btn1Down>: select-start(CLIPBOARD) \\n\\\
+           <Btn1Up>: select-end(CLIPBOARD) \\n\\\
+           <Btn3Down>: insert-selection(CLIPBOARD) \\n\\\
+      ' $redirect"
+   
+      # -ls     to login session, this will source profile and record in /var/log/wtmp so
+      #         that 'w' command will list this session
+   
+   else
+      echo "unsupported OS=$OS"
+   fi
+}
 
-   nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
-   -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
-
-elif [ $OS = Linux ]; then
-   eval "nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 $font \
-   -fg white -bg black -title $title -sl 10000 -sb $loginshell \
-   -xrm 'XTerm*selectToClipboard: true' \
-   -xrm 'XTerm.vt100.translations: #override \\\
-        <Btn1Down>: select-start(CLIPBOARD) \\n\\\
-        <Btn1Up>: select-end(CLIPBOARD) \\n\\\
-        <Btn3Down>: insert-selection(CLIPBOARD) \\n\\\
-   ' >/dev/null 2>&1&"
-
-   # -ls     to login session, this will source profile and record in /var/log/wtmp so
-   #         that 'w' command will list this session
-
+if [ $debug = Y ]; then
+   main 2>&1 |tee ~/junk.log
 else
-   echo "unsupported OS=$OS"
+   main
 fi
