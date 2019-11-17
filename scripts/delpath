@@ -41,15 +41,18 @@ usage("wrong number of args") if @ARGV != 2;
 
 my ($pattern, $old_path) = @ARGV;
 
-print STDERR "old_path=$old_path\n";
+$verbose && print STDERR "old_path=$old_path\n";
 
 my @old = split /:/, $old_path;
 
 my @new;
 
+my $changed;
+
 for my $p (@old) {
    if ($p =~ /$pattern/) {
-      print STDERR "dropping $p\n";
+      print STDERR "matched and dropped $p\n";
+      $changed ++;
    } else {
       push @new, $p;
    }
@@ -57,7 +60,13 @@ for my $p (@old) {
 
 my $new_path = join(":", @new);
 
-print STDERR "new_path=$new_path\n";
+if ($verbose) {
+   if ($changed) {
+       print STDERR "new_path=$new_path\n";
+   } else {
+       print STDERR "no change\n";
+   }
+}
 
 print "$new_path\n";
 

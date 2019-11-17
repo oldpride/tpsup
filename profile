@@ -1,40 +1,8 @@
 TPSUPMODE="$1"
 
-umask 022
-
 unset TMOUT
 
-kcd () {
-   old=$1
-   new=$2
-   cd=`pwd|sed -e "s:$old:$new:g"`
-   cd $cd
-}
-
-delpath () {
-   pattern=$1
-   if [ "X$pattern" = X ]; then
-      echo "usage: delpath pattern"
-      return 1
-   fi
-
-   if [ "X$2" = "X" ]; then
-      path=PATH
-   else
-     path=$2
-   fi
-
-   echo "deleting pattern ($pattern) from \$$path" >&2
-   old=`eval "echo \\\$$path"`
-
-   new=`$TPSUP/scripts/delpath $pattern $old`
-   if [ $? -ne 0 ]; then
-      echo "cmd=$TPSUP/scripts/delpath $pattern $old failed, no change" >&2
-      return 1
-   fi
-   eval "export $path=$new"
-}
-
+# define chknfs ASAP so that in case of NFS hung, we can use it to troubleshoot
 chknfs () {
    paths=$1
 
@@ -48,15 +16,6 @@ chknfs () {
       \cd $p && \cd - >/dev/null
    done
 }
-
-# save original PATH, add more reliable PATH to the front, so that
-# user ENV (eg, a hanging mount point) won't scroll up the critial part (delpath) of
-# this profile. We will later restore the original PATH
-SAVED_PATH="$PATH"
-export PATH=/usr/bin:/bin:/sbin:$SAVED_PATH
-
-HOSTNAME=`hostname`
-export HOSTNAME
 
 if [ "X$BASH_SOURCE" != "X" ]; then
    ## the following sed command simplify the path, eg, /a/b/../c => /a/c
@@ -77,21 +36,75 @@ else
    fi
 fi
 
-# restore original PATH
-export PATH="$SAVED_PATH"
+umask 022
+
+kcd () {
+   old=$1
+   new=$2
+   cd=`pwd|sed -e "s:$old:$new:g"`
+   cd $cd
+}
+
+delpath () {
+   local OPTIND OPTARG o quiet usage pattern path new old flag
+
+   quiet=N
+   flag="-v"
+   usage="  
+delpath is a bash function defined in $BASH_SOURCE
+usage:
+
+   delpath [-q] pattern [env_var]
+
+   env_var default to PATH, but can be anthing, eg, LD_LIBRARY_PATH,MANPATH,PERL5LIB,PYTHONPATH
+
+   "
+
+   while getopts q o;
+   do
+      case "$o" in
+         q) quiet=Y; flag="";;
+         *) echo "unknow switch. $usage">&2; return 1;;
+      esac
+   done
+
+   shift $((OPTIND-1))
+
+   pattern=$1
+   if [ "X$pattern" = X ]; then
+      echo "wrong number of args. $usage">&2; return 1
+   fi
+
+   if [ "X$2" = "X" ]; then
+      path=PATH
+   else
+      path=$2
+   fi
+
+   if [ $quiet = N ]; then
+      echo "searching pattern ($pattern) from \$$path" >&2
+   fi
+
+   old=`eval "echo \\\$$path"`
+
+   new=`$TPSUP/scripts/delpath $flag $pattern $old`
+   if [ $? -ne 0 ]; then
+      echo "cmd=$TPSUP/scripts/delpath $flag $pattern $old failed, no change" >&2
+      return 1
+   fi
+   eval "export $path=$new"
+}
+
+functions () {
+   typeset -F
+   echo 'use typeset -f to see detail'
+}
 
 if ! /usr/bin/perl -Mwarnings -e "print '';"; then
    # this happens on old Solaris host
    echo "/usr/bin/per1 is too old. find a newer version instead" >&2
    USE_NEWER_PERL=/usr/local/bin/per1
 fi
-
-# if [ -f $TPSUP/scripts/trimpath ]; then
-#   TPSUP=`$USE_NEWER_PERL $TPSUP/scripts/trimpath $TPSUP`
-# fi
-#export TPSUP
-
-export TPSUPMODE
 
 PS1='$USER@$HOSTNAME:$PWD$ '
 export PS1
@@ -217,10 +230,6 @@ p3env () {
    set -a
 }
 
-funcs () {
-   declare -F
-}
-
 functions () {
    typeset -F
    echo "to see detail: typeset -f"
@@ -236,10 +245,6 @@ alias p3scripts='cd $TPSUP/python3/scripts'
 alias p3examples='cd $TPSUP/python3/examples'
 alias p2lib='cd $TPSUP/python2/lib/tpsup'
 alias p3lib='cd $TPSUP/python3/lib/tpsup'
-
-if [ -f ~/local.profle ]; then
-   . ~/local.profile
-fi
 
 wbar () {
    # window bar

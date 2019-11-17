@@ -48,25 +48,26 @@ class Conn:
 
 
 class TpDbh:
-    def __init__(self, nickname:str, **opt):
-        # # https://stackoverflow.com/questions/1977362/how-to-create-module-wide-variables-in-python
-        # global dbh_by_nickname
-        # global current_dbh
+    def __init__(self, nickname: str, **opt):
         conn = Conn(nickname, **opt)
+        self.conn = conn
+        self.dbh = None
+
+        parts = conn.parts
 
         if re.match("Oracle", conn.string):
-            if 'sid' in conn.parts:
-                dsn_tns = cx_Oracle.makedsn(conn.parts['host'], conn.parts['port'], conn.parts['sid'])
-                dbh = cx_Oracle.connect(conn.login, conn.unlocked_password, dsn_tns)
-            elif 'service_name' in conn.parts:
+            if 'sid' in parts:
+                dsn_tns = cx_Oracle.makedsn(parts['host'], parts['port'], parts['sid'])
+                self.dbh = cx_Oracle.connect(conn.login, conn.unlocked_password, dsn_tns)
+            elif 'service_name' in parts:
                 # use service name
                 # https://stackoverflow.com/questions/51486739/how-to-connect-
                 # to-an-oracle-database-using-cx-oracle-with-service-name-and-login
                 # con = cx_Oracle.connect('username/password@host_name:port/
                 # service_name')
 
-                string = f'{info["login"]}/{info["unlocked_password"]}@{info["host"]}:{info["port"]}/{info["service_name"]}'
-                dbh = cx_Oracle.connect(string)
+                string = f'{conn.login/conn.unlocked_password}@{parts["host"]}:{parts["port"]}/{parts["service_name"]}'
+                self.dbh = cx_Oracle.connect(string)
             else:
                 raise RuntimeError(f"unsupported oracle dbi_string {conn.dbi_string}")
         else:
