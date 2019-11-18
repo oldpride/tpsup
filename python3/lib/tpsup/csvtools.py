@@ -210,28 +210,29 @@ class QueryCsv:
             self.tpi = None
 
     def output(self, filename, **opt):
-        ofh = None
-        # we have to declare ofh here, otherwise ofh is only defined in a function within a function, therefore
-        # is not in the closure. later, we also need announce 'nonlocal ofh'
-        # 'rows', on the other side, is defined in the function, not in a function of a function.
-
-        def output_rows_to_ofh():
-            odelim = opt.get('odelim', self.delimiter or ',')
-            writer = csv.DictWriter(ofh, fieldnames=self.columns, delimiter=odelim)
-            writer.writeheader()
-            # rows is in this python's closure
-            for row in rows:
-                # print('debug2', row)
-                writer.writerow(row)
-
-        def output_rows():
-            nonlocal ofh
-            if isinstance(filename, io.StringIO):
-                ofh = filename
-                output_rows_to_ofh()
-            else:
-                with TpOutput(filename, **opt) as ofh:
-                    output_rows_to_ofh()
+        # ofh = None
+        #
+        # # we have to declare ofh here, otherwise ofh is only defined in a function within a function, therefore
+        # # is not in the closure. later, we also need announce 'nonlocal ofh'
+        # # 'rows', on the other side, is defined in the function, not in a function of a function.
+        #
+        # def output_rows_to_ofh():
+        #     odelim = opt.get('odelim', self.delimiter or ',')
+        #     writer = csv.DictWriter(ofh, fieldnames=self.columns, delimiter=odelim)
+        #     writer.writeheader()
+        #     # rows is in this python's closure
+        #     for row in rows:
+        #         # print('debug2', row)
+        #         writer.writerow(row)
+        #
+        # def output_rows():
+        #     nonlocal ofh
+        #     if isinstance(filename, io.StringIO):
+        #         ofh = filename
+        #         output_rows_to_ofh()
+        #     else:
+        #         with TpOutput(filename, **opt) as ofh:
+        #             output_rows_to_ofh()
 
         if self.tpi:
             # if self.tpi is initiated, __enter__() must have been called, then we must be called by a context manager
@@ -242,7 +243,8 @@ class QueryCsv:
             # in this case, we don't need to use another context manager, just go ahead use self.tpi
             # print("output() called by a context manager")
             rows = self
-            output_rows()
+            # output_rows()
+            write_dictlist_to_csv(self, self.columns, filename)
         else:
             # print("output() not called by a context manager")
             # if self.tpi not initiated, __enter__() must not have been called, then we must not be called by a
@@ -254,7 +256,38 @@ class QueryCsv:
             # or
             #     QueryCsv(...).output(...)
             with self as rows:
-                output_rows()
+                # output_rows()
+                write_dictlist_to_csv(self, self.columns, filename)
+
+
+def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
+    ofh = None
+
+    # we have to declare ofh here, otherwise ofh is only defined in a function within a function, therefore
+    # is not in the closure. later, we also need announce 'nonlocal ofh'
+    # 'rows', on the other side, is defined in the function, not in a function of a function.
+
+    def output_rows_to_ofh():
+        delimiter = opt.get('delimiter', ',')
+        writer = csv.DictWriter(ofh, fieldnames=columns, delimiter=delimiter)
+        writer.writeheader()
+        # rows is in this python's closure
+        for row in dict_iter:
+            # print('debug2', row)
+            new_row = []
+            for key in columns:
+                if key in _row:
+                    new_row.append(string(_row[key]))
+                else:
+                    new_row.append("")
+            writer.writerow(row)
+
+    if isinstance(filename, io.StringIO):
+        ofh = filename
+        output_rows_to_ofh()
+    else:
+        with TpOutput(filename, **opt) as ofh:
+            output_rows_to_ofh()
 
 
 if __name__ == '__main__':

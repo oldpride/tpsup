@@ -4,6 +4,7 @@ unset TMOUT
 
 # define chknfs ASAP so that in case of NFS hung, we can use it to troubleshoot
 chknfs () {
+   local paths p
    paths=$1
 
    if [ "X$paths" = "X" ]; then
@@ -39,6 +40,7 @@ fi
 umask 022
 
 kcd () {
+   local old new cd
    old=$1
    new=$2
    cd=`pwd|sed -e "s:$old:$new:g"`
@@ -144,6 +146,8 @@ else
 fi
 
 reduce () {
+   local REDUCEPATHCMD=
+
    REDUCEPATHCMD=$TPSUP/scripts/reducepath
    
    if ! [ -f $REDUCEPATHCMD ]; then
@@ -151,10 +155,11 @@ reduce () {
    fi 
 
    export  PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PATH"`
+   export  MANPATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$MANPATH"`
    export  PERL5LIB=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PERL5LIB"`
    export  PYTHONPATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PYTHONPATH"`
    export  LD_LIBRARY_PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$LD_LIBRARY_PATH"`
-   export  LD_LOAD_PATH=`$USE_NEWER_PERL $TPSUP/scripts/reducepath -q "$LD_LOAD_PATH"`
+   export  LD_LOAD_PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$LD_LOAD_PATH"`
 }
 
 # https://askubuntu.com/questions/98782/how-to-run-an-alias-in-a-shell-script
@@ -260,12 +265,14 @@ if [ "X$TERM" = Xxterm -o "X$TERM" = "Xvt100" ]; then
    export PROMPT_COMMAND
 
    vi () {
+      local file
       file="$@"
       echo -ne "\033]0;${USER}@${HOSTNAME}: vi $@\007"
       /usr/bin/vi "$@"
    }
 
    less () {
+      local file
       file="$@"
       echo -ne "\033]0;${USER}@${HOSTNAME}: less $@\007"
       /usr/bin/less "$@"

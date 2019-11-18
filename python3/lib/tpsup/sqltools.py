@@ -9,9 +9,10 @@ import tpsup.csvtools
 from tpsup.util import tpsup_unlock
 import re
 
+
 class Conn:
     def __init__(self, nickname: str, **opt):
-        self.connfile = opt.get('connfile', expanduser("~")+"/.tpsup/conn.csv")
+        self.connfile = opt.get('connfile', expanduser("~") + "/.tpsup/conn.csv")
         self.error = None
 
         if not os.path.exists(connfile):
@@ -53,6 +54,8 @@ class TpDbh:
         self.conn = conn
         self.dbh = None
 
+    def get_dbh(self):
+        conn = self.conn
         parts = conn.parts
 
         if re.match("Oracle", conn.string):
@@ -66,94 +69,83 @@ class TpDbh:
                 # con = cx_Oracle.connect('username/password@host_name:port/
                 # service_name')
 
-                string = f'{conn.login/conn.unlocked_password}@{parts["host"]}:{parts["port"]}/{parts["service_name"]}'
+                string = f'{conn.login}/{conn.unlocked_password}@{parts["host"]}:{parts["port"]}/{parts["service_name"]}'
                 self.dbh = cx_Oracle.connect(string)
             else:
                 raise RuntimeError(f"unsupported oracle dbi_string {conn.dbi_string}")
         else:
             raise RuntimeError(f"unknown database dbi_string {conn.dbi_string}")
 
+        return self.dbh
 
-class SqlDictList:
-    # how to handle failure during class creation.
-    # https://stackoverflow.com/questions/17332929/python-init-return-failure-to-create
-    #
-    # You could raise an exception when either assertion fail, or -, if you really don't want or can't
-    # work with exceptions, you can write the  __new__ method in your classes -
-    # in Python, __init__ is technically an "initializer" method - and it should fill in the attributes
-    # and acquire some of the resources and others your object will need during its life cycle - However,
-    # Python does define a real constructor, the __new__ method, which is called prior to __init__- and
-    # unlike this, __new__ actually does return a value: the newly created (uninitialized) instance itself.
+    def __enter__(self):
+        return self.get_dbh()
 
-    # https://spyhce.com/blog/understanding-new-and-init
-    #
-    # Before diving into the actual implementations you need to know that __new__ accepts cls as it's first parameter
-    # and __init__ accepts self, because when calling __new__ you actually don't have an instance yet, therefore no
-    # self exists at that moment, whereas __init__ is called after __new__ and the instance is in place, so you can
-    # use self with it.
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.dbh:
+            self.dbh.close()
 
-    # how to set attr in __new__
-    # https://stackoverflow.com/questions/54358665/python-set-attributes-during-object-creation-in-new
-    def __new__(cls, sql: str, **opt):
-        instance = super(SqlDictList, cls).__new__(cls)
-        instance.sql = sql
-        instance.opt = opt
 
-        dbh = get_dbh(**opt)
-        if not dbh:
-            print(f'cannot open database connection', file=sys.stderr)
-            return None
+class QueryResults:
+    def __init__(self, sql, **opt):
+        self.sql = sql
+        self.opt = opt
+        self.columns = None
 
-        # right now we re-use dbh, but we probably can re-use cursor instead. need more research here
+    def iterator(self, sql):
+        opt = self.opt
+        dbh = opt.get('dbh', None)
+
+        if dbh:
+            yield from self.dbh_cursor(dbh, sql)
+        else:
+            with TpDbh(**opt) as dbh:
+                yield from self.dbh_cursor(dbh, sql)
+
+    def dbh_cursor(self, dbh, sql):
+        opt = self.opt
         cursor = dbh.cursor()
-
+        self.columns = [row[0] for row in cursor.description]
         try:
-            # parse() is not really needed if will run execute anyway. but is useful if we just want to check sql
-            # syntax without running it.
-            # https://www.oracle.com/technetwork/prez-python-queries-101587.html
-            #
-            # Not really required to be called because SQL statements are automatically parsed at the Execute stage.
-            # It can be used to validate statements before executing them. When an error is detected in such a
-            # statement, a DatabaseError exception is raised with a corresponding error message, most likely
-            # "ORA-00900: invalid SQL statement, ORA-01031: insufficient privileges or ORA-00921: unexpected end of
-            # SQL command."
-            # cursor.parse(sq1)
             cursor.execute(sql)
         except Exception as e:
             print(f'failed to execute sql: {e}')
             return None
-            # if we want to return None when instance creation fails, we must use __new__() because only __new__ can
-            # return a value.
-            # but if we used __init__(), it would not return anything, any the instance is always created. but we could
-            # use an attribute to indicate any failure during __init__().
-            # up to now, I don't see any benefit to pick either one in this case.
 
-        instance.dbh = dbh
-        instance.cursor = cursor
-        instance.columns = [row[0] for row in cursor.description]
+        ReturnType = opt.get('ReturnType', 'DictList')
 
-        return instance
+        if RetrunType == 'DictList':
+            for row in cursor:
+                yield dict(zip(columns, row))
+        elif ReturnType == 'ListList':
+            for row in cursor:
+                yield row
+        else:
+            raise RuntimeError(f'unknown ReturnType={ReturnType}. opt={opt}')
 
-    def iterator(self):
-        columns = self.columns
-        for row in self.cursor:
-            yield dict(zip(columns, row))
-        return
+        # parse() is not really needed if will run execute anyway. but is useful if we just want to check sql
+        # syntax without running it.
+        # https://www.oracle.com/technetwork/prez-python-queries-101587.html
+        #
+        # Not really required to be called because SQL statements are automatically parsed at the Execute stage.
+        # It can be used to validate statements before executing them. When an error is detected in such a
+        # statement, a DatabaseError exception is raised with a corresponding error message, most likely
+        # "ORA-00900: invalid SQL statement, ORA-01031: insufficient privileges or ORA-00921: unexpected end of
+        # SQL command."
+        # cursor.parse(sq1)
 
     def __iter__(self):
         return self.iterator()
 
-    def __next__(self):
-        return self.iterator()
 
-    def list_iterator(self):
-        columns = self.columns
-        for row in self.cursor:
-            yield row
-        return
-
-
-def run_sql(sql, **opt):
+def run_sql(sql_list: List[str], **opt):
+    with TpDbh(**opt) as td:
+        for sql in sql_list:
+            qr = QueryResults(dbh=td, ReturnType='DictList')
+            columns = qr.columns
+            print(columns)
+            for row_dict in qr:
+                print(row_dict)
     sql_dictlist = SqlDictList(sql, **opt)
 
     if sql_dictlist is None:
