@@ -59,6 +59,22 @@ def main():
     for row in QueryCsv(filename=file, ExcludePatterns=['Smith'], verboske=verbose):
         print(row)
 
+    print(f'\ntest8\n')
+    output_file_gz = "/tmp/junk.gz"
+    with QueryCsv(filename=file_gz,
+                  MatchExps=["r['name'].startswith('S')"],
+                  ExcludeExps=["r['name'] == 'Stephen'"],
+                  verbose=verbose) as qc:
+        write_dictlist_to_csv(qc, qc.columns, output_file_gz)
+    os.system(f"gunzip -c {output_file_gz}")
+
+    print(f'\ntest9\n')
+
+    with QueryCsv(filename=file_gz, MatchExps=["r['name'].startswith('S')"], verbose=verbose) as qc,\
+            TpOutput(output_file_gz) as ofh:
+        write_dictlist_to_csv(qc, qc.columns, ofh)
+    os.system(f"gunzip -c {output_file_gz}")
+
 
 def filter_dicts(dict_iter, columns, **opt):
     verbose = opt.get('verbose', 0)
@@ -269,25 +285,51 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
 
     def output_rows_to_ofh():
         delimiter = opt.get('delimiter', ',')
+        # print("type=", type(ofh)) print("tree=", inspect.getmro(type(ofh)))
+        # tree = (<class 'gzip.GzipFile'>, < class '_compression.BaseStream' >, < class 'io.BufferedIOBase' >,
+        # < class '_io._BufferedIOBase' >, < class 'io.IOBase' >, < class '_io._IOBase' >, < class 'object' > )
+        #
+        # >>> inspect.getmro(io.StringIO)
+        # (<class '_io.StringIO'>, <class '_io._TextIOBase'>, <class '_io._IOBase'>, <class 'object'>)
+        #
+        # >>> isinstance(sys.stdin, io.TextIOBase)
+        # True
+        # >>> isinstance(sys.stderr, io.TextIOBase)
+        # True
+        # >>> isinstance(sys.stdout, io.TextIOBase)
+        # True
+
         writer = csv.DictWriter(ofh, fieldnames=columns, delimiter=delimiter)
         writer.writeheader()
         # rows is in this python's closure
         for row in dict_iter:
             # print('debug2', row)
-            new_row = []
+            new_row = {}
             for key in columns:
-                if key in _row:
-                    new_row.append(string(_row[key]))
+                if key in row:
+                    new_row[key] = str(row[key])
                 else:
-                    new_row.append("")
-            writer.writerow(row)
+                    new_row[key] = ""
+            writer.writerow(new_row)
 
-    if isinstance(filename, io.StringIO):
-        ofh = filename
-        output_rows_to_ofh()
-    else:
-        with TpOutput(filename, **opt) as ofh:
+    if isinstance(filename, io.IOBase):
+        if isinstance(filename, io.TextIOBase):
+            ofh = filename
             output_rows_to_ofh()
+        elif isinstance(filename, io.BufferedIOBase):
+            # https://stackoverflow.com/questions/50120806/how-to-write-a-csv-file-in-binary-mode
+            with io.TextIOWrapper(filename, encoding='utf-8', newline='') as ofh:
+                output_rows_to_ofh()
+        else:
+            raise RuntimeError(f"io type = {type(filename)}\nclass tree = {inspect.getmro(type(filename))}")
+    else:
+        with TpOutput(filename, **opt) as unknown:
+            if isinstance(unknown, io.TextIOBase):
+                ofh = unknown
+                output_rows_to_ofh()
+            else:
+                with io.TextIOWrapper(unknown, encoding='utf-8', newline='') as ofh:
+                    output_rows_to_ofh()
 
 
 if __name__ == '__main__':

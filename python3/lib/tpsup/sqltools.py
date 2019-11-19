@@ -8,6 +8,7 @@ from os.path import expanduser
 import tpsup.csvtools
 from tpsup.util import tpsup_unlock
 import re
+import tpsup.csvtools
 
 
 class Conn:
@@ -23,9 +24,9 @@ class Conn:
         dictlist = list(QueryCsv(connfile, **opt))
 
         if len(dictlist) == 0:
-            raise RuntimeError(f"connection file {connfile} does not contain nickname = {nickname}")
+            raise RuntimeError(f"connection file {connfile} does not contain nickname = {nickname}: {dictlist}")
         elif len(dictlist) > 1:
-            raise RuntimeError(f'connection file {connfile} has multiple nickname = {nickname} defined')
+            raise RuntimeError(f'connection file {connfile} has multiple nickname = {nickname} defined: {dictlist}')
 
         self.dbi_string = dictlist[0]['string']
         self.login = dictlist[0]['login']
@@ -90,38 +91,36 @@ class QueryResults:
     def __init__(self, sql, **opt):
         self.sql = sql
         self.opt = opt
+        self.dbh = None
         self.columns = None
+        self.return_type = opt.get('ReturnType', 'DictList')
 
-    def iterator(self, sql):
-        opt = self.opt
-        dbh = opt.get('dbh', None)
+    def iterator(self):
+        self.dbh = self.opt.get('dbh', None)
 
-        if dbh:
-            yield from self.dbh_cursor(dbh, sql)
+        if self.dbh:
+            yield from self.dbh_cursor()
         else:
-            with TpDbh(**opt) as dbh:
-                yield from self.dbh_cursor(dbh, sql)
+            with TpDbh(**self.opt) as self.dbh:
+                yield from self.dbh_cursor()
 
-    def dbh_cursor(self, dbh, sql):
-        opt = self.opt
-        cursor = dbh.cursor()
+    def dbh_cursor(self):
+        cursor = self.dbh.cursor()
         self.columns = [row[0] for row in cursor.description]
         try:
-            cursor.execute(sql)
+            cursor.execute(self.sql)
         except Exception as e:
             print(f'failed to execute sql: {e}')
-            return None
+            # return None
 
-        ReturnType = opt.get('ReturnType', 'DictList')
-
-        if RetrunType == 'DictList':
+        if self.return_type == 'DictList':
             for row in cursor:
                 yield dict(zip(columns, row))
-        elif ReturnType == 'ListList':
+        elif self.return_type == 'ListList':
             for row in cursor:
                 yield row
         else:
-            raise RuntimeError(f'unknown ReturnType={ReturnType}. opt={opt}')
+            raise RuntimeError(f'unknown ReturnType={self.return_type}. opt={self.opt}')
 
         # parse() is not really needed if will run execute anyway. but is useful if we just want to check sql
         # syntax without running it.
@@ -141,44 +140,16 @@ class QueryResults:
 def run_sql(sql_list: List[str], **opt):
     with TpDbh(**opt) as td:
         for sql in sql_list:
-            qr = QueryResults(dbh=td, ReturnType='DictList')
-            columns = qr.columns
-            print(columns)
-            for row_dict in qr:
-                print(row_dict)
-    sql_dictlist = SqlDictList(sql, **opt)
-
-    if sql_dictlist is None:
-        return 1
-
-    columns = sql_dictlist.columns
-
-    need_close = False
-
-    output = opt.get('SqlOutput', '-')
-
-    if output == '-':
-        ofh = sys.stdout
-    else:
-        ofh = open(output, 'w')
-        need_close = True
-
-    delimiter = opt.get('SqlDelimiter', ',')
-
-    print(f'{delimiter.join(columns)}\n', file=ofh)
-
-    for l in sql_dictlist.list_iterator():
-        print(f'{delimiter.join(l)}\n', file=ofh)
-
-    if need_close:
-        ofh.close()
-
-    return 0
+            with QueryResults(dbh=td, **opt) as qr:
+                tpsup.csvtools.write_dictlist_to_csv(qr, qr.columns, opt.get('filename', sys.stdout))
 
 
 def main():
-    print(f'open a conn_file')
+    print(f'\nopen a conn_file\n')
     pprint(unlock_conn('ADB_USER@AHOST', connfile='sqllib_conn_test.csv'))
+
+    print(f'\ntest a database\n')
+    run_sql(["select * from all_synonyms"], nickname='a@b')
 
 
 if __name__ == '__main__':
