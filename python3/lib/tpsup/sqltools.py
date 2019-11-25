@@ -125,7 +125,7 @@ class QueryResults:
 
         if self.return_type == 'DictList':
             for row in cursor:
-                yield dict(zip(columns, row))
+                yield dict(zip(self.columns, row))
         elif self.return_type == 'ListList':
             for row in cursor:
                 yield row
