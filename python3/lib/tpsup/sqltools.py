@@ -160,8 +160,8 @@ def unlock_conn(nickname: str, **opt):
 def run_sql(sql_list: List[str], **opt):
     with TpDbh(**opt) as td:
         for sql in sql_list:
-            with QueryResults(dbh=td, **opt) as qr:
-                tpsup.csvtools.write_dictlist_to_csv(qr, qr.columns, opt.get('filename', sys.stdout))
+            qr = QueryResults(sql, dbh=td, **opt)
+            tpsup.csvtools.write_dictlist_to_csv(qr, qr.columns, opt.get('filename', sys.stdout))
 
 
 def main():
