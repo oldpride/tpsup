@@ -9,6 +9,7 @@ import tpsup.csvtools
 from tpsup.util import tpsup_unlock
 import re
 import tpsup.csvtools
+from typing import List, Dict
 
 
 class Conn:
@@ -16,12 +17,14 @@ class Conn:
         self.connfile = opt.get('connfile', expanduser("~") + "/.tpsup/conn.csv")
         self.error = None
 
+        connfile = self.connfile
+
         if not os.path.exists(connfile):
             raise RuntimeError(f'connection file {connfile} not found')
 
         opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
 
-        dictlist = list(QueryCsv(connfile, **opt))
+        dictlist = list(tpsup.csvtools.QueryCsv(connfile, **opt))
 
         if len(dictlist) == 0:
             raise RuntimeError(f"connection file {connfile} does not contain nickname = {nickname}: {dictlist}")
@@ -31,22 +34,30 @@ class Conn:
         self.dbi_string = dictlist[0]['string']
         self.login = dictlist[0]['login']
         self.locked_password = dictlist[0]['password']
-        self.parts = {}
 
         # https://stackoverflow.com/questions/2554185/match-groups-in-python
         m0 = re.match("^dbi:(.+?):(.+)", self.dbi_string)
         if m0:
-            ret["database"] = m0.group(1)
+            self.__dict__['database'] = m0.group(1)
             pairs = m0.group(2)
 
             for pair in (pairs.split(";")):
                 key, value = pair.split("=", 1)
-                self.parts[key] = value
+                self.__dict__[key] = value
 
-        self.string = dbi_string
-        self.login = login
-        self.locked_password = locked_password
-        self.unlocked_password = tpsup.util.tpsup_unlock(locked_password)
+        self.string = self.dbi_string
+        self.unlocked_password = tpsup.util.tpsup_unlock(self.locked_password)
+
+    def __str__(self):
+        strings = []
+        for attr in self.__dict__:
+            if attr == 'unlocked_password':
+                strings.append(f'{attr} = ...')
+            else:
+                strings.append(f'{attr} = {self.__dict__[attr]}')
+        return '\n'.join(strings)
+
+
 
 
 class TpDbh:
@@ -57,20 +68,19 @@ class TpDbh:
 
     def get_dbh(self):
         conn = self.conn
-        parts = conn.parts
 
-        if re.match("Oracle", conn.string):
-            if 'sid' in parts:
-                dsn_tns = cx_Oracle.makedsn(parts['host'], parts['port'], parts['sid'])
+        if re.match("Oracle", conn.database):
+            if hasattr(conn, 'sid'):
+                dsn_tns = cx_Oracle.makedsn(conn.host, conn.port, conn.sid)
                 self.dbh = cx_Oracle.connect(conn.login, conn.unlocked_password, dsn_tns)
-            elif 'service_name' in parts:
+            elif hasattr(conn, 'service_name'):
                 # use service name
                 # https://stackoverflow.com/questions/51486739/how-to-connect-
                 # to-an-oracle-database-using-cx-oracle-with-service-name-and-login
                 # con = cx_Oracle.connect('username/password@host_name:port/
                 # service_name')
 
-                string = f'{conn.login}/{conn.unlocked_password}@{parts["host"]}:{parts["port"]}/{parts["service_name"]}'
+                string = f'{conn.login}/{conn.unlocked_password}@{conn.host}:{conn.port}/{conn.service_name}'
                 self.dbh = cx_Oracle.connect(string)
             else:
                 raise RuntimeError(f"unsupported oracle dbi_string {conn.dbi_string}")
@@ -110,7 +120,7 @@ class QueryResults:
         try:
             cursor.execute(self.sql)
         except Exception as e:
-            print(f'failed to execute sql: {e}')
+            sys.stderr.write(f'failed to execute sql: {e}\n')
             # return None
 
         if self.return_type == 'DictList':
@@ -137,6 +147,16 @@ class QueryResults:
         return self.iterator()
 
 
+def unlock_conn(nickname: str, **opt):
+    try:
+        conn = Conn(nickname, **opt)
+    except Exception as e:
+        sys.stderr.write(f'{e}\n')
+        return None
+    else:
+        return conn
+
+
 def run_sql(sql_list: List[str], **opt):
     with TpDbh(**opt) as td:
         for sql in sql_list:
@@ -146,10 +166,11 @@ def run_sql(sql_list: List[str], **opt):
 
 def main():
     print(f'\nopen a conn_file\n')
-    pprint(unlock_conn('ADB_USER@AHOST', connfile='sqllib_conn_test.csv'))
+    #pprint(unlock_conn('a@b', connfile='sqllib_conn_test.csv'))
+    print(unlock_conn('a@b', connfile='sqllib_conn_test.csv'))
 
     print(f'\ntest a database\n')
-    run_sql(["select * from all_synonyms"], nickname='a@b')
+    run_sql(["select * from all_synonyms"], nickname='a@b', connfile='sqllib_conn_test.csv')
 
 
 if __name__ == '__main__':
