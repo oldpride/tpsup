@@ -99,36 +99,36 @@ class TpDbh:
 
 class QueryResults:
     def __init__(self, sql, **opt):
-        self.sql = sql
-        self.opt = opt
-        self.dbh = None
-        self.columns = None
         self.return_type = opt.get('ReturnType', 'DictList')
+        self.need_close_dbh = False
+        dbh = opt.get('dbh', None)
 
-    def iterator(self):
-        self.dbh = self.opt.get('dbh', None)
+        if dbh is None:
+            dbh = TpDbh(**opt)
+            self.need_close_dbh = True
 
-        if self.dbh:
-            yield from self.dbh_cursor()
-        else:
-            with TpDbh(**self.opt) as self.dbh:
-                yield from self.dbh_cursor()
+        self.cursor = dbh.cursor()
+        self.dbh = dbh
+        self.opt = opt
 
-    def dbh_cursor(self):
-        cursor = self.dbh.cursor()
-        self.columns = [row[0] for row in cursor.description]
         try:
-            cursor.execute(self.sql)
+            self.cursor.execute(sql)
         except Exception as e:
             sys.stderr.write(f'failed to execute sql: {e}\n')
             # return None
 
+        self.columns = [row[0] for row in self.cursor.description]
+
+    def close(self):
+        if self.need_close_dbh:
+            self.dbh.close()
+
+    def __iter__(self):
         if self.return_type == 'DictList':
-            for row in cursor:
+            for row in self.cursor:
                 yield dict(zip(self.columns, row))
         elif self.return_type == 'ListList':
-            for row in cursor:
-                yield row
+            yield from self.cursor
         else:
             raise RuntimeError(f'unknown ReturnType={self.return_type}. opt={self.opt}')
 
@@ -142,9 +142,6 @@ class QueryResults:
         # "ORA-00900: invalid SQL statement, ORA-01031: insufficient privileges or ORA-00921: unexpected end of
         # SQL command."
         # cursor.parse(sq1)
-
-    def __iter__(self):
-        return self.iterator()
 
 
 def unlock_conn(nickname: str, **opt):
