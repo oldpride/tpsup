@@ -1,7 +1,8 @@
 import sys
 import re
 from pprint import pprint, pformat
-from tpsup.util import strings_to_compilable_patterns, load_module, stringdict_to_funcdict, strings_to_compilable_func
+from tpsup.util import strings_to_compilable_patterns, load_module, stringdict_to_funcdict,\
+    strings_to_compilable_func, silence_BrokenPipeError
 import csv
 import io
 import gzip
@@ -300,6 +301,9 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
         # True
 
         writer = csv.DictWriter(ofh, fieldnames=columns, delimiter=delimiter, lineterminator=os.linesep)
+        if ofh is sys.stdout:
+            writer.writeheader = silence_BrokenPipeError(writer.writeheader)
+            writer.writerow = silence_BrokenPipeError(writer.writerow)
         writer.writeheader()
         # rows is in this python's closure
         for row in dict_iter:
