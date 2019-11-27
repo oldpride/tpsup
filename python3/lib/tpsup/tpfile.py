@@ -1,7 +1,8 @@
 import sys
 import re
 from pprint import pprint, pformat
-from tpsup.util import strings_to_compilable_patterns, load_module, stringdict_to_funcdict, strings_to_compilable_func
+from tpsup.util import strings_to_compilable_patterns, load_module, stringdict_to_funcdict,\
+    strings_to_compilable_func, silence_BrokenPipeError
 import io
 import gzip
 import pkgutil
@@ -128,6 +129,7 @@ class TpOutput:
     def __enter__(self):
         if self.filename == '-':
             self.fh = sys.stdout
+            self.fh.write = silence_BrokenPipeError(self.fh.write)
         else:
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
             self.need_close_fh = True

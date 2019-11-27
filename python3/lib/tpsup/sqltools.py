@@ -124,7 +124,7 @@ class QueryResults:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-        
+
     def close(self):
         if self.need_close_dbh:
             self.dbh.close()

@@ -299,7 +299,7 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
         # >>> isinstance(sys.stdout, io.TextIOBase)
         # True
 
-        writer = csv.DictWriter(ofh, fieldnames=columns, delimiter=delimiter)
+        writer = csv.DictWriter(ofh, fieldnames=columns, delimiter=delimiter, lineterminator=os.linesep)
         writer.writeheader()
         # rows is in this python's closure
         for row in dict_iter:

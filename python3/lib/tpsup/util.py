@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pprint import pformat
 import inspect
 from typing import Dict, List
+import functools
 
 
 # https://docs.python.org/3/library/typing.html
@@ -218,6 +219,19 @@ def uri_unescape(string):
         except UnicodeDecodeError:
             res[i] = chr(int(item[:2], 16)) + item[2:]
     return "".join(res)
+
+
+def silence_BrokenPipeError(func):
+    @functools.wraps(func)
+    def silenced(*args, **kwargs):
+        result = None
+        try:
+            result = func(*args, **kwargs)
+        except BrokenPipeError:
+            sys.exit(1)
+        return result
+
+    return silenced
 
 
 def main():
