@@ -1,1 +1,1 @@
-select * from table1
+select * from all_synonyms

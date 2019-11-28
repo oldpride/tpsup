@@ -5,7 +5,7 @@ import sys
 import argparse
 import textwrap
 from pprint import pprint, pformat
-from tpsup.sqllib import run_sql
+from tpsup.sqltools import run_sql
 
 prog = os.path.basename(sys.argv[0])
 

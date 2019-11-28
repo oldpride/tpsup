@@ -16,6 +16,9 @@ from tpfile import TpInput, TpOutput
 def main():
     verbose = 0
 
+    # if you run this script and pipe to 'head' command, you could get BrokenPipeError. disable the error with this line
+    sys.stdout.write = silence_BrokenPipeError(sys.stdout.write)
+
     file = 'csvtools_test.csv'
     file_gz = 'csvtools_test.csv.gz'
 
