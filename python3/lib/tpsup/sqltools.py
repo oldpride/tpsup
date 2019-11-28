@@ -14,10 +14,11 @@ from typing import List, Dict
 
 class Conn:
     def __init__(self, nickname: str, **opt):
-        self.connfile = opt.get('connfile', expanduser("~") + "/.tpsup/conn.csv")
-        self.error = None
+        connfile = opt.get('connfile', None)
+        if connfile is None:
+            connfile = expanduser("~") + "/.tpsup/conn.csv"
 
-        connfile = self.connfile
+        self.connfile = connfile
 
         if not os.path.exists(connfile):
             raise RuntimeError(f'connection file {connfile} not found')
@@ -56,8 +57,6 @@ class Conn:
             else:
                 strings.append(f'{attr} = {self.__dict__[attr]}')
         return '\n'.join(strings)
-
-
 
 
 class TpDbh:

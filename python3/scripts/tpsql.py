@@ -61,7 +61,7 @@ else:
 if args['verbose'] > 0:
     print(f'args =\n{pformat(args)}')
 
-sys.exit(run_sql(statement, **args))
+sys.exit(run_sql([statement], **args))
 
 
 

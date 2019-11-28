@@ -10,7 +10,7 @@ import pkgutil
 import inspect
 import os
 from typing import Dict, List
-from tpfile import TpInput, TpOutput
+from tpsup.tpfile import TpInput, TpOutput
 
 
 def main():
