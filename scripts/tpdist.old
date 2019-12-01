@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '6.4';
+my $version = '6.3';
 my ($expected_peer_protocol) = ($version =~ /^(\d+)/);
 
 use warnings;
@@ -15,66 +15,11 @@ use Socket;
 use POSIX;
 
 my $timeout = 300;
-my $idle = 600;
+my $idle = 3600;
 my $maxtry = 5;
 my $interval = 5;
 
 my $prog = $0; $prog =~ s:.*/::;
-
-my @crctab = (
-   0x00000000,
-   0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b,
-   0x1a864db2, 0x1e475005, 0x2608edb8, 0x22c9f00f, 0x2f8ad6d6,
-   0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
-   0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac,
-   0x5bd4b01b, 0x569796c2, 0x52568b75, 0x6a1936c8, 0x6ed82b7f,
-   0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a,
-   0x745e66cd, 0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039,
-   0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5, 0xbe2b5b58,
-   0xbaea46ef, 0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033,
-   0xa4ad16ea, 0xa06c0b5d, 0xd4326d90, 0xd0f37027, 0xddb056fe,
-   0xd9714b49, 0xc7361b4c, 0xc3f706fb, 0xceb42022, 0xca753d95,
-   0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1, 0xe13ef6f4,
-   0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d, 0x34867077, 0x30476dc0,
-   0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5,
-   0x2ac12072, 0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16,
-   0x018aeb13, 0x054bf6a4, 0x0808d07d, 0x0cc9cdca, 0x7897ab07,
-   0x7c56b6b0, 0x71159069, 0x75d48dde, 0x6b93dddb, 0x6f52c06c,
-   0x6211e6b5, 0x66d0fb02, 0x5e9f46bf, 0x5a5e5b08, 0x571d7dd1,
-   0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
-   0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b,
-   0xbb60adfc, 0xb6238b25, 0xb2e29692, 0x8aad2b2f, 0x8e6c3698,
-   0x832f1041, 0x87ee0df6, 0x99a95df3, 0x9d684044, 0x902b669d,
-   0x94ea7b2a, 0xe0b41de7, 0xe4750050, 0xe9362689, 0xedf73b3e,
-   0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2, 0xc6bcf05f,
-   0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34,
-   0xdc3abded, 0xd8fba05a, 0x690ce0ee, 0x6dcdfd59, 0x608edb80,
-   0x644fc637, 0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb,
-   0x4f040d56, 0x4bc510e1, 0x46863638, 0x42472b8f, 0x5c007b8a,
-   0x58c1663d, 0x558240e4, 0x51435d53, 0x251d3b9e, 0x21dc2629,
-   0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5, 0x3f9b762c,
-   0x3b5a6b9b, 0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff,
-   0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623, 0xf12f560e,
-   0xf5ee4bb9, 0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65,
-   0xeba91bbc, 0xef68060b, 0xd727bbb6, 0xd3e6a601, 0xdea580d8,
-   0xda649d6f, 0xc423cd6a, 0xc0e2d0dd, 0xcda1f604, 0xc960ebb3,
-   0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7, 0xae3afba2,
-   0xaafbe615, 0xa7b8c0cc, 0xa379dd7b, 0x9b3660c6, 0x9ff77d71,
-   0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74,
-   0x857130c3, 0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640,
-   0x4e8ee645, 0x4a4ffbf2, 0x470cdd2b, 0x43cdc09c, 0x7b827d21,
-   0x7f436096, 0x7200464f, 0x76c15bf8, 0x68860bfd, 0x6c47164a,
-   0x61043093, 0x65c52d24, 0x119b4be9, 0x155a565e, 0x18197087,
-   0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
-   0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d,
-   0x2056cd3a, 0x2d15ebe3, 0x29d4f654, 0xc5a92679, 0xc1683bce,
-   0xcc2b1d17, 0xc8ea00a0, 0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb,
-   0xdbee767c, 0xe3a1cbc1, 0xe760d676, 0xea23f0af, 0xeee2ed18,
-   0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4, 0x89b8fd09,
-   0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662,
-   0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf,
-   0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
-);
 
 my ($os_name, $nodename, $os_release, $os_version, $machine) = POSIX::uname();
 my $tmpdir = ($os_name =~ /MINGW/i) ? "/tmp/" : "/var/tmp"; # Git Bash's os_name is MINGW
@@ -174,6 +119,8 @@ Examples:
    host1\$ dist server 5555
    host2\$ tpdist client host1 5555 tpsup ~
 
+   
+
 
 END
 
@@ -257,7 +204,7 @@ if ($mode eq 'server') {
          my $line = `getent passwd $user`;
          #tian:x:9020:7296:Tianhua Han,APP,2254201:/home/tian:/bin/ksh
          my @a = split /:/, $line;
-         $homedir = $a[7];
+       $homedir = $a[7];
          die "cannot figure out home dir from getent passwd $user" if !$homedir;
       }
    }
@@ -284,7 +231,7 @@ if ($mode eq 'server') {
          $allowfile = read_security_file($file);
          if (!$allowfile) {
             print STDERR "FATAL: there is no file to allow according to $allowfileFile\n";
-            exit 1;
+          exit 1;
          }
       }
    }
@@ -307,7 +254,7 @@ if ($mode eq 'server') {
          $allowhost = read_security_file($file);
          if (!$allowhost) {
             print STDERR "FATAL: there is no host to allow according to $allowhostFile\n";
-            exit 1;
+          exit 1;
          }
       }
    }
@@ -328,7 +275,7 @@ if ($mode eq 'server') {
       # waiting for new client connection.
       print "---------------------------------------------------- \n";
       print timestamped(), "Server Waiting for new client connection on port $port (max $idle seconds)\n";
-      my $client_socket = $socket->accept();
+       my $client_socket = $socket->accept();
 
       if (! defined $client_socket) {
          print timestamped(), "No new client connection for $idle seconds. Server quits\n";
@@ -377,7 +324,7 @@ if ($mode eq 'server') {
                      join(' ', @peer_hostnames),
                      ")is not allowed by $allowhostFile\n";
             $client_socket->send("connectin is not allowed\n");
-            $client_socket->close();
+             $client_socket->close();
             next CONNECTION;
          }
       }
@@ -386,8 +333,8 @@ if ($mode eq 'server') {
          for my $h (($peer_address, @peer_hostnames)) {
             if ($denyhost->{$h}) {
                print timestamped(), "$peer_address: $h is denied by $denyhostFile\n";
-               $client_socket->send("connectin is denied\n");
-               $client_socket->close();
+             $client_socket->send("connectin is denied\n");
+             $client_socket->close();
                next CONNECTION;
             }
          }
@@ -423,13 +370,13 @@ if ($mode eq 'server') {
                             {verbose=>$verbose, ExpectTimeout=>$timeout}
                            );
          if ($other->{status} eq 'done') {
-            $server_path    = $captures->[0]->[0];
-            $client_block   = $captures->[1]->[0];
-            $maxsize        = $captures->[2]->[0];
-            $version        = $captures->[3]->[0];
+            $server_path = $captures->[0]->[0];
+            $client_block = $captures->[1]->[0];
+            $maxsize = $captures->[2]->[0];
+            $version = $captures->[3]->[0];
             $exclude_string = $captures->[4]->[0];
-            $match_string   = $captures->[5]->[0];
-            $deep_check     = $captures->[6]->[0];
+            $match_string = $captures->[5]->[0];
+            $deep_check = $captures->[6]->[0];
    
             print timestamped(), "received complete information from client\n";
          } elsif ($other->{status} eq 'timed out') {
@@ -445,7 +392,7 @@ if ($mode eq 'server') {
             next CONNECTION;
          } else {
             print timestamped(), "unsupported connection status: $other->{status}\n";
-            next CONNECTION;
+             next CONNECTION;
          }
       }
 
@@ -455,8 +402,8 @@ if ($mode eq 'server') {
          print timestamped(), "client $peer_address:$peer_port used wrong protocol $peer_protocol, ",
                               "we are expecting protocol $expected_peer_protocol. we closed the connection.\n";
          $client_socket->send("wrong protocol $peer_protocol. expecting $expected_peer_protocol (version $expected_peer_protocol.*)\n");
-         $client_socket->close();
-         next CONNECTION;
+       $client_socket->close();
+       next CONNECTION;
       }
 
       my @client_excludes;
@@ -492,15 +439,13 @@ if ($mode eq 'server') {
 
       my @server_paths = split (/ /, $server_path);
 
-      my ($server_tree, $other) = build_dir_tree(\@server_paths,
-                                                 {verbose=>$verbose,
-                                                  RelativeBase=>$homedir,
+      my ($server_tree, $other) = build_dir_tree(\@server_paths, {verbose=>$verbose,
+                                                              RelativeBase=>$homedir,
                                                   allowfile=>$allowfile,
                                                   denyfile=>$denyfile,
                                                   excludes=>\@client_excludes,
                                                   matches=>\@client_matches,
-                                                 }
-                                                );
+                                               });
 
       $verbose && print "client_tree - ", Dumper($client_tree);
       $verbose && print "server_tree = ", Dumper($server_tree);
@@ -523,13 +468,13 @@ if ($mode eq 'server') {
       my $back_exists_on_server;
       for my $k (keys %$server_tree) {
          my $back = $server_tree->{$k}->{back};
-         $back_exists_on_server->{$back} = 1;
+       $back_exists_on_server->{$back} = 1;
       }
 
       if ($other->{skipped_back}) {
          for my $back (keys %{$other->{skipped_back}}) {
             $back_exists_on_server->{$back} = 1;
-            push @warns, "skipped $back: $other->{skipped_back}->{$back}";
+          push @warns, "skipped $back: $other->{skipped_back}->{$back}";
          }
       }
 
@@ -539,18 +484,18 @@ if ($mode eq 'server') {
             # if the back dir is not shown in server side at all, don't delete it on
             # client side.
             # for example, assume client command is
-            #    $0 client host port a b
+            # $0 client host port a b
             # if 'a' doesn't exist on the server side, we should not delete b/a on the
             # client side
           
             my $back = $client_tree->{$k}->{back};
 
             if ($back_exists_on_server->{$back}) {
-               push @deletes, $k;
+             push @deletes, $k;
 
                if ($k =~ m:^(.+)/:) {
-                  my $parent_dir = $1;
-                  $need_mtime_reset->{$parent_dir} = 1;
+              my $parent_dir = $1;
+              $need_mtime_reset->{$parent_dir} = 1;
                }
             }
          }
@@ -564,6 +509,7 @@ if ($mode eq 'server') {
             push @warns, "skipped $k: $skipped_message";
             next;
          }
+
 
          if (!$client_tree->{$k}) {
             # client missing this file
@@ -585,7 +531,7 @@ if ($mode eq 'server') {
                # But the problem with this approach is that the dir mode
                # (permission) is then not recorded in the tar file. We will have
                # to keep and send the mode information separately (from the tar file)
-               push @modes, $k;
+             push @modes, $k;
             }
 
             next;
@@ -597,7 +543,7 @@ if ($mode eq 'server') {
             my $size = $server_tree->{$k}->{size};
             if ($size) {
                last if $maxsize >=0 && $RequiredSpace+$size > $maxsize;
-               $RequiredSpace += $size;
+             $RequiredSpace += $size;
             }
 
             $change_by_file->{$k} = "newType";
@@ -607,7 +553,7 @@ if ($mode eq 'server') {
                # But the problem with this approach is that the dir mode
                # (permission) is then not recorded in the tar file. We will have
                # to keep and send the mode information separately (from the tar file)
-               push @modes, $k;
+             push @modes, $k;
             }
 
             next;
@@ -616,7 +562,7 @@ if ($mode eq 'server') {
          # both sides are same kind type: file, dir, or link
          if (     $server_tree->{$k}->{type} ne 'link'
                && $client_tree->{$k}->{mode} != $server_tree->{$k}->{mode} ) {
-             push @modes, $k;
+          push @modes, $k;
          }
 
          # note: dir and link's sizes are hard-coded, so they will always equal.
@@ -628,7 +574,7 @@ if ($mode eq 'server') {
 
             if ($size) {
                last if $maxsize >=0 && $RequiredSpace+$size > $maxsize;
-               $RequiredSpace += $size;
+             $RequiredSpace += $size;
             }
 
             $change_by_file->{$k} = "update";
@@ -639,18 +585,18 @@ if ($mode eq 'server') {
 
          # compare {test} if it is populated
          # dir's {test} and link's {test} are hardcoded, we are really only compare files, 
-         if (!$server_tree->{$k}->{test} && !$client_tree->{$k}->{test}) {
+       if (!$server_tree->{$k}->{test} && !$client_tree->{$k}->{test}) {
             # if both missing tests, we compare mtime first
             # for fast check (default), if size and mtime match, then no need to update.
             # for deep check, or when mtime not matching (but size matching), resort to
             # cksum.
 
             if ($client_tree->{$k}->{mtime} != $server_tree->{$k}->{mtime}) {
-               push @need_cksums, $k;
+             push @need_cksums, $k;
                $need_mtime_reset->{$k} = 1
             } elsif ($deep_check) {
                # $client_tree->{$k}->{mtime} == $server_tree->{$k}->{mtime}
-               push @need_cksums, $k;
+             push @need_cksums, $k;
             }
          } elsif ( !$server_tree->{$k}->{test} || !$client_tree->{$k}->{test}) {
             # we reach here if only one test is missing.
@@ -666,7 +612,7 @@ if ($mode eq 'server') {
          } else {
             # $server_tree->{$k}->{test} eq $client_tree->{$k}->{test}
             if ($client_tree->{$k}->{mtime} != $server_tree->{$k}->{mtime}) {
-               $need_mtime_reset->{$k} = 1
+             $need_mtime_reset->{$k} = 1
             }
          }
       }
@@ -699,17 +645,17 @@ if ($mode eq 'server') {
                        );
          if ($other->{status} eq 'done') {
             $client_cksums_string = $captures->[0]->[0];
-            print timestamped(), "received cksum results from client\n";
+          print timestamped(), "received cksum results from client\n";
          } elsif ($other->{status} eq 'timed out') {
             print timestamped(), "client $peer_address:$peer_port may use wrong protocol\n";
-            $client_socket->close();
+          $client_socket->close();
             next CONNECTION;
          } elsif ($other->{status} eq 'closed') {
             print timestamped(), "client $peer_address:$peer_port closed connection.\n";
-            next CONNECTION;
+          next CONNECTION;
          } else {
             print timestamped(), "unsupported connection status: $other->{status}\n";
-            next CONNECTION;
+          next CONNECTION;
          }
       }
 
@@ -725,7 +671,7 @@ if ($mode eq 'server') {
       for my $f (keys %$server_cksum_by_file) {
          if ( !$client_cksum_by_file->{$f} ) {
             print "ERROR: client cksum results missing $f\n";
-            $change_by_file->{$f} = "update";
+          $change_by_file->{$f} = "update";
          } elsif ($client_cksum_by_file->{$f} ne $server_cksum_by_file->{$f} ) {
             $change_by_file->{$f} = "update";
             $diff_by_file->{$f}++; # only type=file can get here.
@@ -741,7 +687,6 @@ if ($mode eq 'server') {
       # don't unblock socket when writing; doing so would corrupt data.
       # instead, flush writes manually
       $client_socket->blocking(1);
-
 
       my $delete_string = "<DELETES>" . join("\n", sort(@deletes)) . "</DELETES>\n";
       print timestamped(), "sending deletes: ", scalar(@deletes), " item(s)\n";
@@ -763,7 +708,7 @@ if ($mode eq 'server') {
       my $mtime_string = "<MTIMES>";
       for my $f (@mtimes) {
          my $mt = $server_tree->{$f}->{mtime}; 
-         $mtime_string .= "$mt $f\n";
+       $mtime_string .= "$mt $f\n";
       }
       $mtime_string .= "</MTIMES>\n";
 
@@ -772,8 +717,8 @@ if ($mode eq 'server') {
 
       my $mode_string = "<MODES>";
       for my $f (@modes) {
-         my $mode = $server_tree->{$f}->{mode};
-         $mode_string .= "$mode $f\n";
+       my $mode = $server_tree->{$f}->{mode};
+       $mode_string .= "$mode $f\n";
       }
       $mode_string .= "</MODES>\n";
 
@@ -1121,16 +1066,16 @@ if ($mode eq 'server') {
            );
 
       if ($other->{status} eq 'done') {
-         $deletes_string = $captures->[0]->[0];
-         $mtimes_string = $captures->[1]->[0];
-         $modes_string = $captures->[2]->[0];
-         $RequiredSpace = $captures->[3]->[0];
-         $adds_string = $captures->[4]->[0];
-         $warns_string = $captures->[5]->[0];
+       $deletes_string = $captures->[0]->[0];
+       $mtimes_string = $captures->[1]->[0];
+       $modes_string = $captures->[2]->[0];
+       $RequiredSpace = $captures->[3]->[0];
+       $adds_string = $captures->[4]->[0];
+       $warns_string = $captures->[5]->[0];
       } elsif ($other->{status} eq 'timed out') {
-         croak "server connection may use a different protocol";
+       croak "server connection may use a different protocol";
       } elsif ($other->{status} eq 'closed') {
-         croak "server connection unexpectedly closed";
+       croak "server connection unexpectedly closed";
       } else {
          croak "connection status: $other->{status}";
       }
@@ -1147,7 +1092,7 @@ if ($mode eq 'server') {
       my $last_delete;
 
       for my $d (sort @deletes) {
-         if (!$last_delete || $d !~ m:^$last_delete/: ) {
+       if (!$last_delete || $d !~ m:^$last_delete/: ) {
             # if we already deleted the dir, no need to delete files under it.
 
             my $cmd = "/bin/rm -fr $d";
@@ -1267,19 +1212,19 @@ if ($mode eq 'server') {
                # This doesn't work because the binmode() only works on file not on a command pipe
                # open $fh, "|tar -xvfp -" or die "tar -xvfp - failed";
                # Therefore, we save the output to file.
-               #
+             #
                open $fh, ">$tmpfile" or die "cannot write to $tmpfile";
-               binmode($fh);
+             binmode($fh);
             }
 
             if ($unpack) {
                my $packed_data = pack("H*", $data);
                my $packed_size = length($packed_data);
                $total_size += $packed_size;
-               print {$fh} $packed_data;
+             print {$fh} $packed_data;
             } else {
                $total_size += $size;
-               print {$fh} $data;
+             print {$fh} $data;
             }
          }
       }
@@ -1298,7 +1243,7 @@ if ($mode eq 'server') {
                                                    "tar -x${tar_verbose}pf $tmpfile";
          #Msys is Git Bash 
          print timestamped(), "$cmd\n" if $verbose;
-         system($cmd);
+       system($cmd);
 
          if ($KeepTmpFile) {
             print timestamped(), "tmp file $tmpfile is kept\n";
@@ -1309,14 +1254,14 @@ if ($mode eq 'server') {
 
       if ($diff) {
          $verbose && print timestamped(), "cd $old_pwd\n";
-         chdir($old_pwd) || croak "cannot cd $old_pwd";
+       chdir($old_pwd) || croak "cannot cd $old_pwd";
 
          for my $relative_path (@diff_files) {
             # our dir now is $tmpdir
             my $cmd = "diff $tmpdir/$relative_path $local_dir_abs/$relative_path";
-            print "$cmd\n";
-            system($cmd);
-            print "\n";
+          print "$cmd\n";
+          system($cmd);
+          print "\n";
          }
 
          if ($KeepTmpFile) {
@@ -1363,7 +1308,7 @@ if ($mode eq 'server') {
             print "chmod(oct(\"$mode\"), $f)\n";
             $dryrun || chmod(oct("$mode"), $f);
          } else {
-            print "bad mode format at line: $l\n";
+           print "bad mode format at line: $l\n";
          }
       }
    }
@@ -1546,7 +1491,7 @@ sub build_dir_tree {
          print timestamped(), "cd $opt->{RelativeBase}\n";
          if ( !chdir($opt->{RelativeBase}) ) {
             print timestamped(), "cd $opt->{RelativeBase} failed, $path is skipped.\n";
-            next;
+          next;
          }
       }
 
@@ -1554,7 +1499,7 @@ sub build_dir_tree {
       if ($? || !@globs) {
          print timestamped(), "/bin/ls -1d $path failed, skipped $path\n";
          push @{$other->{errors}}, "$path not found";
-         next;
+       next;
       }
       chomp @globs;
 
@@ -1562,7 +1507,7 @@ sub build_dir_tree {
 
       for my $p (@globs) {
          # conver *csv to a.csv, b.csv, ...
-         #
+       #
          my $abs_path;
 
          if ($p !~ m:^/:) {
@@ -1611,7 +1556,7 @@ sub build_dir_tree {
          }
 
          if (!is_allowed($abs_path, \@allow_patterns, \@deny_patterns, $opt)) {
-            $other->{skipped_back}->{$back} = "no permission";
+          $other->{skipped_back}->{$back} = "no permission";
             next;
          }
 
@@ -1621,12 +1566,15 @@ sub build_dir_tree {
          my $cmd = "find $back -mount -print";
          $quiet || print timestamped(), "$cmd\n";
 
-         open my $fh, "$cmd |" or croak "$cmd failed";
-         FILES:
-         while (<$fh>) {
-            my $f = $_;
-            chomp $f;
+         my @files = `$cmd`;
+         if ($? || !@files) {
+            croak "$cmd failed";
+         }
 
+         chomp @files;
+
+         FILES:
+         for my $f (@files) {
             if (@{$opt->{matches}}) {
                my $matched;
 
@@ -1713,8 +1661,6 @@ sub build_dir_tree {
                next;
             }
          }
-
-         close $fh;
       }
    }
 
@@ -1775,7 +1721,7 @@ sub expect_socket {
 
             if ($total_wait >= $opt->{ExpectTimeout}) {
                print timestamped(), "expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
-               return (\@matched, \@captures, {status=>'timed out'});
+             return (\@matched, \@captures, {status=>'timed out'});
             }
          }
 
@@ -1825,13 +1771,14 @@ sub expect_socket {
 use integer; # for cksum
 sub get_cksums {
    my ($aref, $dir_tree, $opt) = @_;
+   init_crctab();
    my $cksum_by_file;
 
    for my $f (@$aref) {
       my $front = $dir_tree->{$f}->{front};
       if (!$front) {
          print STDERR "missing \$dir_tree->{$f}->{front}. skipped\n";
-         next;
+       next;
       }
       $opt->{verbose} && print timestamped(), "calculating cksum('$front/$f')\n";
       $cksum_by_file->{$f} = cksum("$front/$f");
@@ -1839,8 +1786,71 @@ sub get_cksums {
    return $cksum_by_file;
 }
 
+my @crctab;
+
+sub init_crctab {
+   @crctab = (
+      0x00000000,
+      0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b,
+      0x1a864db2, 0x1e475005, 0x2608edb8, 0x22c9f00f, 0x2f8ad6d6,
+      0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
+      0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac,
+      0x5bd4b01b, 0x569796c2, 0x52568b75, 0x6a1936c8, 0x6ed82b7f,
+      0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a,
+      0x745e66cd, 0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039,
+      0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5, 0xbe2b5b58,
+      0xbaea46ef, 0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033,
+      0xa4ad16ea, 0xa06c0b5d, 0xd4326d90, 0xd0f37027, 0xddb056fe,
+      0xd9714b49, 0xc7361b4c, 0xc3f706fb, 0xceb42022, 0xca753d95,
+      0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1, 0xe13ef6f4,
+      0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d, 0x34867077, 0x30476dc0,
+      0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5,
+      0x2ac12072, 0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16,
+      0x018aeb13, 0x054bf6a4, 0x0808d07d, 0x0cc9cdca, 0x7897ab07,
+      0x7c56b6b0, 0x71159069, 0x75d48dde, 0x6b93dddb, 0x6f52c06c,
+      0x6211e6b5, 0x66d0fb02, 0x5e9f46bf, 0x5a5e5b08, 0x571d7dd1,
+      0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
+      0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b,
+      0xbb60adfc, 0xb6238b25, 0xb2e29692, 0x8aad2b2f, 0x8e6c3698,
+      0x832f1041, 0x87ee0df6, 0x99a95df3, 0x9d684044, 0x902b669d,
+      0x94ea7b2a, 0xe0b41de7, 0xe4750050, 0xe9362689, 0xedf73b3e,
+      0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2, 0xc6bcf05f,
+      0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34,
+      0xdc3abded, 0xd8fba05a, 0x690ce0ee, 0x6dcdfd59, 0x608edb80,
+      0x644fc637, 0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb,
+      0x4f040d56, 0x4bc510e1, 0x46863638, 0x42472b8f, 0x5c007b8a,
+      0x58c1663d, 0x558240e4, 0x51435d53, 0x251d3b9e, 0x21dc2629,
+      0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5, 0x3f9b762c,
+      0x3b5a6b9b, 0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff,
+      0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623, 0xf12f560e,
+      0xf5ee4bb9, 0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65,
+      0xeba91bbc, 0xef68060b, 0xd727bbb6, 0xd3e6a601, 0xdea580d8,
+      0xda649d6f, 0xc423cd6a, 0xc0e2d0dd, 0xcda1f604, 0xc960ebb3,
+      0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7, 0xae3afba2,
+      0xaafbe615, 0xa7b8c0cc, 0xa379dd7b, 0x9b3660c6, 0x9ff77d71,
+      0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74,
+      0x857130c3, 0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640,
+      0x4e8ee645, 0x4a4ffbf2, 0x470cdd2b, 0x43cdc09c, 0x7b827d21,
+      0x7f436096, 0x7200464f, 0x76c15bf8, 0x68860bfd, 0x6c47164a,
+      0x61043093, 0x65c52d24, 0x119b4be9, 0x155a565e, 0x18197087,
+      0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
+      0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d,
+      0x2056cd3a, 0x2d15ebe3, 0x29d4f654, 0xc5a92679, 0xc1683bce,
+      0xcc2b1d17, 0xc8ea00a0, 0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb,
+      0xdbee767c, 0xe3a1cbc1, 0xe760d676, 0xea23f0af, 0xeee2ed18,
+      0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4, 0x89b8fd09,
+      0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662,
+      0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf,
+      0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
+   );
+};
+
 sub cksum {
    my ($file, $opt) = @_;
+
+   if (!@crctab) {
+      init_crctab();
+   }
 
    my $cksum = 0;
    my $size = 0;
@@ -1866,7 +1876,7 @@ sub cksum {
 
       #for (my $i = 0; $i < $n; ++$i) {
       # my $c = unpack 'C', substr $data, $i, 1;
-      # $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c]; #}
+      # $cksum = (0xFFFFFFFF & ($cksum << 8)) A $crctab[(0xFF & ($cksum >> 24)) A $c]; #}
       
       # C - an unsigned char
       # If the input string is longer than needed, extra characters are ignored.
@@ -1890,16 +1900,8 @@ sub cksum {
    }
 
    $cksum = ~ $cksum;
-   # ~ is bitwise negation operator
-   # $ perl -e 'printf("%b\n",   1);'
-   # 1
-   # $ perl -e 'printf("%b\n",  ~ 1);'
-   # 1111111111111111111111111111111111111111111111111111111111111110
 
    # positivise the result even on a 32 bit processor
-   # perl -e 'printf("%ld\n", 1024*1024*1024*4);'
-   # 4294967296
-   # this is 2e32
    no integer;
    my $crc = $cksum;
    $crc += 4294967296 if $crc < 0;
