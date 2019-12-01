@@ -132,11 +132,17 @@ sub open_csv {
       }
 
       my $delimiter = defined $opt->{delimiter} ? $opt->{delimiter} : ',';
-      @columns = split /$delimiter/, $header;
+
+      my $columns;
+      if ($opt->{QuotedInput}) {
+         $columns = parse_quoted_line($header, $delimiter, $opt);
+      } else {
+         @$columns = split /$delimiter/, $header;
+      }
 
       my $i = 0;
 
-      for my $c (@columns) {
+      for my $c (@$columns) {
          $pos->{$c} = $i;
          $i ++;
       }
@@ -149,7 +155,7 @@ sub open_csv {
             }
          }
       }
-      $result->{columns} = \@columns;
+      $result->{columns} = $columns;
       $result->{pos} = $pos;
    }
 
@@ -223,10 +229,15 @@ sub parse_csv_array {
       $delimiter = '\|';
    }
 
-   my @h1 = split /$delimiter/, $header;
+   my $h1;
+   if ($opt->{QuotedInput}) {
+       $h1 = parse_quoted_line($header, $delimiter, $opt);
+   } else {
+       @$h1 = split /$delimiter/, $header;
+   }
 
    if ($opt->{OriginalHeaderRef}) {
-      ${$opt->{OriginalHeaderRef}} = \@h1;
+      ${$opt->{OriginalHeaderRef}} = $h1;
 
       # this is hack to return the original header:
       #
@@ -242,12 +253,12 @@ sub parse_csv_array {
       # hardcoded column names c0, c1, c2, ...
       my $i=0;
 
-      for my $e (@h1) {
+      for my $e (@$h1) {
          push @h2, "c$i";
          $i ++;
       }
    } else {
-      @h2 = @h1;
+      @h2 = @$h1;
    }
 
    if ($opt->{InputNoHeader} ) {
@@ -303,12 +314,17 @@ sub parse_csv_array {
       chomp $l;
       $l =~ s///g;
 
-      my @a = split /$delimiter/, $l;
+      my $a;
+      if ($opt->{QuotedInput}) {
+         $a = parse_quoted_line($l, $delimiter, $opt);
+      } else {
+         @$a = split /$delimiter/, $l;
+      }
 
       my $v_by_k;
 
       for (my $i=0; $i<scalar(@renamed_headers); $i++) {
-         $v_by_k->{$renamed_headers[$i]} = $a[$i];
+         $v_by_k->{$renamed_headers[$i]} = $a->[$i];
       }
 
       if (defined $keyColumn) {
@@ -577,15 +593,20 @@ sub update_csv {
             next;
          }
       }
-
-      my @a = split /$delimiter/, $line;
+      
+      my $a;
+      if ($opt->{QuotedInput}) {
+          $a = parse_quoted_line($line, $delimiter, $opt);
+      } else {
+          @$a = split /$delimiter/, $line;
+      }
 
       my $r;
 
       if ($columns) {
          for my $c (@$columns) {
             my $p = $pos->{$c};
-            $r->{$c} = $a[$p];
+            $r->{$c} = $a->[$p];
          }
       }
 
@@ -593,7 +614,7 @@ sub update_csv {
          # hardcoded column names c0, c1, c2, ...
          my $i=0;
 
-         for my $e (@a) {
+         for my $e (@$a) {
             my $c= "c$i";
             $r->{$c} = $e;
             $i++;
@@ -646,6 +667,77 @@ sub update_csv {
 
    close $out_fh if $out_fh != \*STDOUT;
 }
+
+
+sub parse_quoted_line {
+   my ($line, $delimiter, $opt) = @_;
+
+   # take the hassle to parse double-quoted csv. (single quote cannot group in csv)
+   #
+   # COLLOQ_TY P E,COLLOQ_NAME,COLLOQ_COD E,XDATA
+   # S,"BELT,FAN",003541547,
+   # S,"BELT V,FAN",000324244,
+   # S,SHROUD SPRING SCREW,000868265,
+   # S,"D" REL VALVE ASSY,000771881,
+   # S,"YBELT,"V"",000323030,
+   # S,"YBELT,'V'",000322933,
+
+   my $len = length($line);
+   pos($line) = 0; # reset
+
+   $opt->{verbose} && print "\nline='$line', len=$len\n";
+
+   my @a;
+
+   while ( pos($line) < $len ) {
+      my $cell;
+
+      if ($line =~ /\G"/gc) {
+         # this is a quoted cell
+
+         $opt->{verbose} && print "starting a quoted cell, pos=", pos($line), "\n";
+
+         if ($line =~ /\G(.*?)"$delimiter/gc ) {
+            if ($opt->{RemoveInputQuotes}) {
+               $cell = $1;
+            } else {
+               $cell = qq("$1");
+            }
+            push @a, $cell;
+         } else {
+            $line =~ /\G(.*)/gc; # all the rest of line
+            $cell = $1;
+            $cell =~ s/"$//;     # Remove the ending quites
+
+            if ($opt->{RemoveInputQuotes}) {
+               push @a, $cell;
+            } else {
+               $cell = qq("$1");
+            }
+
+            last;
+         }
+      } else {
+         # this is not a quoted cell
+         $opt->{verbose} && print "starting a non-quoted cell, pos=", pos($line), "\n";
+
+         if ($line =~ /\G(.*?)$delimiter/gc) {
+            $cell = $1;
+            push @a, $cell;
+         } else {
+            $line =~ /\G(.*)/gc; # all the rest of line
+            $cell = $1;
+            push @a, $cell;
+            last;
+         }
+      }
+
+      $opt->{verbose} && print "cell='$cell', clen=", length($cell), ", pos=", pos($line), "\n";
+   }
+
+   return \@a;
+}
+
 
 sub csv_file_to_array {
    my ($file, $opt) = @_;
@@ -721,7 +813,7 @@ sub csv_file_to_array {
 
       $line =~ s///g; #remove DOS return
 
-      my @a;
+      my $a;
 
       if ($opt->{QuotedInput}) {
          # take the hassle to parse double-quoted csv. (single quote cannot group in csv)
@@ -734,62 +826,13 @@ sub csv_file_to_array {
          # S,"YBELT,"V"",000323030,
          # S,"YBELT,'V'",000322933,
 
-         my $len = length($line);
-         pos($line) = 0; # reset
-
-         $opt->{verbose} && print "\nline='$line', len=$len\n";
-
-         while ( pos($line) < $len ) {
-            my $cell;
-
-            if ($line =~ /\G"/gc) {
-               # this is a quoted cell
-
-               $opt->{verbose} && print "starting a quoted cell, pos=", pos($line), "\n";
-
-               if ($line =~ /\G(.*?)"$delimiter/gc ) {
-                  if ($opt->{RemoveInputQuotes}) {
-                     $cell = $1;
-                  } else {
-                     $cell = qq("$1");
-                  }
-                  push @a, $cell;
-               } else {
-                  $line =~ /\G(.*)/gc; # all the rest of line
-                  $cell = $1;
-                  $cell =~ s/"$//;     # Remove the ending quites
-
-                  if ($opt->{RemoveInputQuotes}) {
-                     push @a, $cell;
-                  } else {
-                     $cell = qq("$1");
-                  }
-
-                  last;
-               }
-            } else {
-               # this is not a quoted cell
-               $opt->{verbose} && print "starting a non-quoted cell, pos=", pos($line), "\n";
-
-               if ($line =~ /\G(.*?)$delimiter/gc) {
-                  $cell = $1;
-                  push @a, $cell;
-               } else {
-                  $line =~ /\G(.*)/gc; # all the rest of line
-                  $cell = $1;
-                  push @a, $cell;
-                  last;
-               }
-            }
-
-            $opt->{verbose} && print "cell='$cell', clen=", length($cell), ", pos=", pos($line), "\n";
-         }
+         $a = parse_quoted_line($line, $delimiter, $opt);
       } else {
-         @a = split /$delimiter/, $line;
+         @$a = split /$delimiter/, $line;
       }
 
       if ($opt->{FileReturnStructuredArray}) {
-         push @{$rtn->{array}}, \@a;
+         push @{$rtn->{array}}, $a;
       } else {
          # default to return StructuredHash
          my $r;
@@ -798,20 +841,20 @@ sub csv_file_to_array {
             for my $c (@$columns) {
                my $p = $pos->{$c};
 
-               $r->{$c} = $a[$p];
+               $r->{$c} = $a->[$p];
             }
          }
 
          if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
             # hardcoded column names c0, c1, c2, ...
             my $i=0;
-            for my $e (@a) {
+            for my $e (@$a) {
                my $c= "c$i";
                $r->{$c} = $e;
                $i++;
             }
 
-            $column_count = scalar(@a) if $column_count < scalar(@a);
+            $column_count = scalar(@$a) if $column_count < scalar(@$a);
          }
 
          push @{$rtn->{array}}, $r;
@@ -1458,21 +1501,27 @@ sub delete_csv {
          }
       }
 
-      my @a = split /$delimiter/, $line;
+      my $a;
+
+      if ($opt->{QuotedInput}) {
+          $a = parse_quoted_line($line, $delimiter, $opt);
+      } else {
+          @$a = split /$delimiter/, $line;
+      }
 
       my $r;
 
       if ($columns) {
          for my $c (@$columns) {
             my $p = $pos->{$c};
-            $r->{$c} = $a[$p];
+            $r->{$c} = $a->[$p];
          }
       }
 
       if ($opt->{UsePosition} || $opt->{InputNoHeader}) {
          # hardcoded column names c0, c1, c2, ...
          my $i=0;
-         for my $e (@a) {
+         for my $e (@$a) {
             my $c= "c$i";
             $r->{$c} = $e;
             $i++;

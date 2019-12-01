@@ -31,7 +31,10 @@ sub unlock_conn {
       
    my $file_mode = sprintf("%04o", (stat($connfile))[2] & 07777);
    croak "$connfile permissions is $file_mode not expected 0600\n" if "$file_mode" ne "0600";
-   my $ref = parse_csv_file($connfile, {keyColumn=>'nickname'});
+   my $ref = parse_csv_file($connfile, {keyColumn=>'nickname',
+                                        QuotedInput=>1,
+                                        RemoveInputQuotes=>1,
+                                       });
       
    my $rows = $ref->{$nickname};
       

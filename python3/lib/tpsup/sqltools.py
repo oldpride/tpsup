@@ -1,6 +1,15 @@
-# https://www.oracle.com/technetwork/prez-python-queries-101587.html
+# oracle
+try:
+    import cx_Oracle
+except ImportError:
+    pass
 
-import cx_Oracle
+# ms sql odbc
+try:
+    import pyodbc
+except ImportError:
+    pass
+
 from pprint import pprint, pformat
 import os
 import sys
@@ -10,6 +19,7 @@ from tpsup.util import tpsup_unlock
 import re
 import tpsup.csvtools
 from typing import List, Dict
+import itertools
 
 
 class Conn:
@@ -39,12 +49,12 @@ class Conn:
         # https://stackoverflow.com/questions/2554185/match-groups-in-python
         m0 = re.match("^dbi:(.+?):(.+)", self.dbi_string)
         if m0:
-            self.__dict__['database'] = m0.group(1)
+            self.__dict__['dbtype'] = m0.group(1)
             pairs = m0.group(2)
 
             for pair in (pairs.split(";")):
                 key, value = pair.split("=", 1)
-                self.__dict__[key] = value
+                self.__dict__[key.lower()] = value
 
         self.string = self.dbi_string
         self.unlocked_password = tpsup.util.tpsup_unlock(self.locked_password)
@@ -68,7 +78,7 @@ class TpDbh:
     def get_dbh(self):
         conn = self.conn
 
-        if re.match("Oracle", conn.database):
+        if re.match("^dbi:Oracle:.+", conn.dbi_string, re.IGNORECASE):
             if hasattr(conn, 'sid'):
                 dsn_tns = cx_Oracle.makedsn(conn.host, conn.port, conn.sid)
                 self.dbh = cx_Oracle.connect(conn.login, conn.unlocked_password, dsn_tns)
@@ -83,6 +93,10 @@ class TpDbh:
                 self.dbh = cx_Oracle.connect(string)
             else:
                 raise RuntimeError(f"unsupported oracle dbi_string {conn.dbi_string}")
+        elif re.match("^dbi:ODBC:.+", conn.dbi_string, re.IGNORECASE):
+            conn_string = f'DRIVER={conn.driver};SERVER={conn.server};DATABASE={conn.database};UID={conn.login};' \
+                          f'PWD={conn.unlocked_password}'
+            self.dbh = pyodbc.connect(conn_string)
         else:
             raise RuntimeError(f"unknown database dbi_string {conn.dbi_string}")
 
@@ -100,6 +114,8 @@ class QueryResults:
     def __init__(self, sql, **opt):
         self.return_type = opt.get('ReturnType', 'DictList')
         self.need_close_dbh = False
+        self.maxout = opt.get('maxout', -1)
+
         dbh = opt.get('dbh', None)
 
         if dbh is None:
@@ -130,10 +146,17 @@ class QueryResults:
 
     def __iter__(self):
         if self.return_type == 'DictList':
-            for row in self.cursor:
-                yield dict(zip(self.columns, row))
+            gen = (dict(zip(self.columns, row)) for row in self.cursor)
+
+            if self.maxout >= 0:
+                yield from itertools.islice(gen, self.maxout)
+            else:
+                yield from gen
         elif self.return_type == 'ListList':
-            yield from self.cursor
+            if self.maxout >= 0:
+                yield from itertools.islice(self.cursor, self.maxout)
+            else:
+                yield from self.cursor
         else:
             raise RuntimeError(f'unknown ReturnType={self.return_type}. opt={self.opt}')
 
@@ -167,12 +190,14 @@ def run_sql(sql_list: List[str], **opt):
 
 
 def main():
-    print(f'\nopen a conn_file\n')
-    #pprint(unlock_conn('a@b', connfile='sqllib_conn_test.csv'))
-    print(unlock_conn('a@b', connfile='sqllib_conn_test.csv'))
+    print(f'\nparse conn_file for oracle\n')
+    print(unlock_conn('ora_user@ora_db', connfile='sqltools_conn_example.csv'))
+
+    print(f'\nparse conn_file for ms sql\n')
+    print(unlock_conn('sql_user@sql_db', connfile='sqltools_conn_example.csv'))
 
     print(f'\ntest a database\n')
-    run_sql(["select * from all_synonyms"], nickname='a@b', connfile='sqllib_conn_test.csv')
+    run_sql(["select * from all_synonyms"], nickname='ora_user@ora_db', connfile='sqltools_conn_example.csv')
 
 
 if __name__ == '__main__':

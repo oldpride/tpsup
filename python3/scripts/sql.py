@@ -11,11 +11,15 @@ prog = os.path.basename(sys.argv[0])
 
 usage = textwrap.dedent("""
     run oracle sql
+    run ms sql (odbc) sql
     """)
 
 examples = textwrap.dedent(f"""
     examples:
-    {prog} ORACLE_USER@ORACLE_DB "select * from all_synonyms"
+    {prog} -maxout 5 ora_user@ora_db "select * from all_synonyms"
+
+    {prog} -maxout 5 sql_user@sql_db "select * from information.schema.tables where table_type = 'BASE TABLE'"
+
     {prog} -f ORACLE_USER@ORACLE_DB tpsql_test.sql
     """)
 
@@ -45,6 +49,10 @@ parser.add_argument(
 parser.add_argument(
     '-f', '--sqlfile', action="store_true",
     help="sql file instead of sql statement")
+
+parser.add_argument(
+    '-maxout', dest='maxout', default=-1, type=int, action="store",
+    help="max rows of output")
 
 parser.add_argument(
     '-v', '--verbose', default=0, action="count",
