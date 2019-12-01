@@ -1621,11 +1621,19 @@ sub build_dir_tree {
          my $cmd = "find $back -mount -print";
          $quiet || print timestamped(), "$cmd\n";
 
+         my $file_count = 0;
+
          open my $fh, "$cmd |" or croak "$cmd failed";
          FILES:
          while (<$fh>) {
             my $f = $_;
             chomp $f;
+
+            $file_count ++;
+
+            if ($file_count % 1000 == 0) {
+               $quiet || print timestamped(), "checked $file_count files\n";
+            }
 
             if (@{$opt->{matches}}) {
                my $matched;
@@ -1649,8 +1657,8 @@ sub build_dir_tree {
             }
 
             if ( !is_allowed($f, \@allow_patterns, \@deny_patterns, $opt) ) {
-             $tree->{$f}->{skip} = "no permission";
-             next;
+               $tree->{$f}->{skip} = "no permission";
+               next;
             }
 
             if ($tree->{$f}->{back}) {
@@ -1714,6 +1722,7 @@ sub build_dir_tree {
             }
          }
 
+         $quiet || print timestamped(), "checked $file_count files in total\n";
          close $fh;
       }
    }
