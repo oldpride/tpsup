@@ -859,7 +859,7 @@ if ($mode eq 'server') {
 
          for my $f (@files) {
             next if ! defined $f;
-            $file_string .= " '$f'";
+            $file_string .= " '$f'"; # use '' to wrap file name in case there are space chars.
 
             # Break one big tar command into smaller commands, to avoid this error
             # Can't exec "/bin/sh": Argument list too long
