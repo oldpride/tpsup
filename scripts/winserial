@@ -1,0 +1,15 @@
+#!/bin/bash
+
+UNAME=`uname -a`
+
+# MINGW64_NT-10.0 LAPTOP-4DDGKLFF 2.11.2(0.329/5/3) 2018-11-10 14:38 x86_64 Msys
+# CYGWIN_NT-10.0 LAPTOP-4DDGKLFF 3.0.4(0.338/5/3) 2019-03-16 09:50 x86_64 Cygwin
+# Linux linux1 4.15.0-54-generic #58-Ubuntu SMP Mon Jun 24 10:55:24 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux
+
+if [[ $UNAME =~ Msys || $UNAME =~ Cygwin ]]; then
+   wmic bios get serialnumber
+else
+   echo "this script only works for PC:  Cygwin or Git Bash"
+fi
+
+
