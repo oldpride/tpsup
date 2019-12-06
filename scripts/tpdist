@@ -820,9 +820,10 @@ if ($mode eq 'server') {
 
       print timestamped(), "received client tranfer mode: $mode. creating local tar file\n";
 
-      my $tmpfile = get_tmp_file($tmpdir, $prog, {chkSpace=>$RequiredSpace*2});
+      my $tmp_tar_file = get_tmp_file($tmpdir, "$prog.tar",  {chkSpace=>$RequiredSpace*2});
+      my $tmp_tar_list = get_tmp_file($tmpdir, "$prog.list");
 
-      croak "cannot get a tmp file under $tmpdir. disk full?" if !$tmpfile;
+      croak "cannot get a tmp file under $tmpdir. disk full?" if !$tmp_tar_file;
 
       my $files_to_tar;
       if ($mode eq 'diff') {
@@ -852,28 +853,43 @@ if ($mode eq 'server') {
 
       my $created_tar;
 
-      my $file_string = '';
-
       for my $front (sort(keys %$files_by_front)) {
          my @files = sort @{$files_by_front->{$front}};
 
+         next if !@files;
+
+         #my $file_string = '';
+         open my $list_fh, ">$tmp_tar_list" or croak "cannot write to $tmp_tar_list: $!";
+
          for my $f (@files) {
             next if ! defined $f;
-            $file_string .= " '$f'"; # use '' to wrap file name in case there are space chars.
 
-            # Break one big tar command into smaller commands, to avoid this error
-            # Can't exec "/bin/sh": Argument list too long
-            # http://stackoverflow.com/questions/11475221/why-do-i-get-bin-sh-argument-list-too-long-when-passing-quoted-arguments
-
-            if (length($file_string) > 51200) {
-               tar_file_string($front, $tmpfile, $created_tar, $file_string);
-               $created_tar ++;
-               $file_string = ''; #reset $file_string
-            }
+            # use '' to wrap file name in case there are space chars.
+            print {$list_fh} "$f\n";
          }
 
-         tar_file_string($front, $tmpfile, $created_tar, $file_string) if $file_string ne '';
+         close $list_fh;
+
+         tar_file_list($front, $tmp_tar_file, $created_tar, $tmp_tar_list);
          $created_tar ++;
+
+         # for my $f (@files) {
+         #    next if ! defined $f;
+         #    $file_string .= " '$f'"; # use '' to wrap file name in case there are space chars.
+
+         #    # Break one big tar command into smaller commands, to avoid this error
+         #    # Can't exec "/bin/sh": Argument list too long
+         #    # http://stackoverflow.com/questions/11475221/why-do-i-get-bin-sh-argument-list-too-long-when-passing-quoted-arguments
+
+         #    if (length($file_string) > 51200) {
+         #       tar_file_string($front, $tmpfile, $created_tar, $file_string);
+         #       $created_tar ++;
+         #       $file_string = ''; #reset $file_string
+         #    }
+         # }
+
+         # tar_file_string($front, $tmpfile, $created_tar, $file_string) if $file_string ne '';
+         # $created_tar ++;
       }
 
       if ( !$created_tar ) {
@@ -887,7 +903,7 @@ if ($mode eq 'server') {
 
       print timestamped(), "sending tar-format data (mode=$mode) to client.\n";
 
-      open my $fh, "< $tmpfile" or die "cannot read $tmpfile"; 
+      open my $fh, "< $tmp_tar_file" or die "cannot read $tmp_tar_file"; 
       binmode($fh);
 
       my $total_size = 0;
@@ -915,9 +931,10 @@ if ($mode eq 'server') {
       print timestamped(), "sent total_size=$total_size. closed client connection\n";
 
       if ($KeepTmpFile) {
-         print timestamped(), "tmp file $tmpfile is kept\n";
+         print timestamped(), "tmp file $tmp_tar_file is kept\n";
       } else {
-         unlink($tmpfile);
+         unlink($tmp_tar_file);
+         unlink($tmp_tar_list);
       }
    }
 } else {
@@ -1379,14 +1396,28 @@ exit 0;
 # subs
 ###########################################################
 
-sub tar_file_string {
-   my ($front, $tar_file, $created_tar, $string) = @_;
+#sub tar_file_string {
+#   my ($front, $tar_file, $created_tar, $string) = @_;
+#
+#   my $cmd;
+#   if (!$created_tar) {
+#      $cmd = "cd $front; tar -cvf $tar_file $string";
+#   } else {
+#      $cmd = "cd $front; tar -uvf $tar_file $string";
+#   }
+#   $verbose && print timestamped(), "$cmd\n";
+#   system($cmd);
+#   croak "$cmd failed" if $?;
+#}
+
+sub tar_file_list {
+   my ($front, $tar_file, $created_tar, $tar_list) = @_;
 
    my $cmd;
    if (!$created_tar) {
-      $cmd = "cd $front; tar -cvf $tar_file $string";
+      $cmd = "cd $front; tar -cvf $tar_file -T $tar_list";
    } else {
-      $cmd = "cd $front; tar -uvf $tar_file $string";
+      $cmd = "cd $front; tar -uvf $tar_file -T $tar_list";
    }
    $verbose && print timestamped(), "$cmd\n";
    system($cmd);
@@ -1657,7 +1688,12 @@ sub build_dir_tree {
             }
 
             if ( !is_allowed($f, \@allow_patterns, \@deny_patterns, $opt) ) {
-               $tree->{$f}->{skip} = "no permission";
+               $tree->{$f}->{skip} = "not allowed";
+               next;
+            }
+
+            if ( ! -l $f && ! -r $f ) {
+               $tree->{$f}->{skip} = "no read access";
                next;
             }
 
