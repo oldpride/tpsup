@@ -1,0 +1,455 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use POSIX ":sys_wait_h";
+use Carp;
+
+my $prog = $0; $prog =~ s:.*/::;
+my $maxcount = 5;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $0 -hl host1,host2,... -- command
+   $0 -hf hosts.txt       -- command
+
+description:
+
+   Run the command on a list of hosts.
+
+   Host can be host or login\@host.
+   
+   -hl host1,host2     specify host list on command line, separated by ','.
+
+   -hf hostfile.txt    hosts are stored in this file, separated by ',', space or new-line.
+
+   -v                  verbose mode
+
+   -sshargs            args to pass to generic ssh command, can set multiple times
+
+   -style bash|perl    Default to 'perl', because perl handles ' and " much better.
+                       Can also be 'bash'.
+
+   -n number           max number of parallel processes, default to $maxcount.
+
+examples:
+
+   $prog -hl host1,user2\@host2 -- ls -d /etc /usr
+
+   - this command should return "File not found"
+   $prog -hl host1,user2\@host2 -- ls '/etc /usr'
+
+   - remote perl
+   $prog -hl host1,user2\@host2 -- perl -e 'print readlink("/bin"), "\\n";'
+   
+   - test stdout/stderr
+   $prog -hl host1,user2\@host2 -- "ls -d '/etc /usr' /bin; sleep 1"
+
+   - test timeout
+   $prog -t 3 -hl host1,user2\@host2 -- "ls -d '/etc /usr' /bin; sleep 6; echo done"
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $remote_login;
+my $style = 'perl';
+my @sshargs;
+my $timeout;
+my $hostlist;
+my $hostfile;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'l=s'           => \$remote_login,
+   'style=s'       => \$style,
+   'sshargs=s'     => \@sshargs,
+   't|timeout=s'   => \$timeout,
+   'hl|hostlist=s' => \$hostlist,
+   'hf|hostfile=s' => \$hostfile,
+   'n=s'           => \$maxcount,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 1;
+
+my @hosts;
+
+if ($hostfile) {
+   croak "hostfile='$hostfile' not found" if ! -f $hostfile;
+   open my $fh, "<$hostfile" or croak "cannot read $hostfile";
+
+   while (<$fh>) {
+      my $line = $_;
+      chomp $line;
+      $line =~ s/#.*//;
+      next if $line =~ /^\s*$/;
+
+      for my $e (split /[\s,]+/, $line) {
+         next if !$e;
+         push @hosts, $e;
+      }
+   }
+}
+
+if ($hostlist) {
+   for my $e (split /[\s,]+/, $hostlist) {
+      next if !$e;
+      push @hosts, $e;
+   }
+}
+
+usage("not host defined") if !@hosts;
+
+# sort and make @hosts unique
+my $exists_host;
+
+for my $h (@hosts) {
+   $exists_host->{$h} ++;
+}
+
+@hosts = sort (keys %$exists_host);
+
+my $ count = 0;
+my @todo = @hosts;
+my $info_by_pid;
+
+while (1) {
+   while ($count<$maxcount && @todo) {
+      my $host = shift @todo;
+
+      my $tmp_prefix = get_tmp_file("/var/tmp", $prog);
+      my $tmp_stdout = "$tmp_prefix.$host.stdout";
+      my $tmp_stderr = "$tmp_prefix.$host.stderr";
+
+      my $child_pid = fork();
+
+      if ($child_pid) {
+         # this is the parent
+
+         $info_by_pid->{$child_pid}->{host} = $host;
+         $info_by_pid->{$child_pid}->{begin} = get_timestamp();
+         $info_by_pid->{$child_pid}->{begin_sec} = time();
+         $info_by_pid->{$child_pid}->{stdout}= $tmp_stdout;
+         $info_by_pid->{$child_pid}->{stderr}= $tmp_stderr;
+
+         $count ++;
+      } elsif ($child_pid == 0) {
+         # this is the child
+
+         my $opt = {
+            style        => $style,
+            timeout      => $timeout,
+            remote_login => $remote_login,
+            sshargs      => \@sshargs,
+            verbose      => $verbose,
+            stdout       => $tmp_stdout,
+            stderr       => $tmp_stderr,
+         };
+
+         my @command;
+
+         my $timestamp = get_timestamp();
+
+         my ($yyyy, $mm, $dd, $HH, $MM, $SS)
+            = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
+
+         for my $e (@ARGV) {
+            $e =~ s/\%\{host\}/$host/g;
+            $e =~ s/\%\{yyyy\}/$yyyy/g;
+            $e =~ s/\%\{mm\}/$mm/g;
+            $e =~ s/\%\{dd\}/$dd/g;
+            $e =~ s/\%\{HH\}/$HH/g;
+            $e =~ s/\%\{MM\}/$MM/g;
+            $e =~ s/\%\{SS\}/$SS/g;
+
+            push @command, $e;
+         }
+
+         tpssh($host, \@command, $opt);
+      } else {
+         print STDERR "fork() failed. count=$count, host=$host\n";
+         exit 1;
+      }
+   }
+
+   # this is the parent
+   while ( $ count ) {
+      my $kid = waitpid(-1, WNOHANG);
+
+      my $rc = $?;
+
+      last if !$kid;
+
+      $info_by_pid->{$kid}->{end}     = get_timestamp();
+      $info_by_pid->{$kid}->{end_sec} = time();
+      $info_by_pid->{$kid}->{rc}      = $rc;
+      $info_by_pid->{$kid}->{duration}
+         = $info_by_pid->{$kid}->{end_sec} - $info_by_pid->{$kid}->{begin_sec};
+
+      $count--;
+
+      my $host = $info_by_pid->{$kid}->{host};
+
+      print "host=$host,pid=$kid",
+            ",rc=$rc",
+            ",begin=$info_by_pid->{$kid}->{begin}",
+            ",end=$info_by_pid->{$kid}->{end}",
+            ",duration=$info_by_pid->{$kid}->{duration}",
+            "\n";
+
+      for my $output ( qw(stdout stderr) ) {
+         for my $line (`cat $info_by_pid->{$kid}->{$output}`) {
+            print "$host, $output,$line";
+         }
+      }
+   }
+
+   $verbose && print STDERR "count=$count, todo=", scalar (@todo),
+                            ",total=", scalar(@hosts), "\n";
+
+   last if !$count && !@todo;
+
+   sleep 1;
+}
+
+#######################################
+# subs
+#######################################
+#
+my $tmp_index;
+
+sub get_tmp_file {
+   my ($basedir, $prefix, $opt) = @_;
+
+   if ($opt->{chkSpace}) {
+      my $os = `uname -a`; chomp $os;
+
+      my $cmd = $os =~ /^Linux/ ? "df -kP $basedir" : "df -k $basedir";
+
+      my @DF = `$cmd`;
+
+      #host1:/home/userl/tpsup/scripts$ df -k /var/tmp
+      #Filesystem   kbytes    used   avail capacity Mounted on
+      #/           4130542 2837486 1251751      70%          /
+      
+      if ( ! $DF[1]) {
+         carp "cmd='$cmd' failed";
+         return undef;
+      }
+
+      chomp @DF;
+
+      my @a = split /\s+/, $DF[1];
+      my $avail = $a[3];
+      $avail *= 1024;
+
+      if ($avail < $opt->{chkSpace}) {
+         carp "$basedir does not have enough space, avail=$avail, require=$opt->{chkSpace}";
+         return undef;
+      }
+   }
+
+   my $id = `id`;
+   my ($user) = ($id =~ /^.+?\((.+?)\)/ );
+
+   my $timestamp = get_timestamp();
+
+   my ($yyyy, $mm, $dd, $HH, $MM, $SS)
+      = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
+
+   my $yyyymmdd = "$yyyy$mm$dd";
+   my $HHMMSS   = "$HH$MM$SS";
+
+   my $tmpdir = "$basedir/tmp_${user}";
+   my $daydir = "$tmpdir/$yyyymmdd";
+
+   if (! -d $daydir ) {
+      system("mkdir -p $daydir");
+      die "failed mkdir -p $daydir" if $?;
+      system("find $tmpdir -mount -mtime +7 -exec /bin/rm -fr {} V;");
+   }
+
+   if ($opt->{AddIndex}) {
+      if (!$tmp_index) {
+         $tmp_index = 1;
+      } else {
+         $tmp_index++;
+      }
+   }
+
+   if ($opt->{isDir} && "$opt->{isDir}" !~ /^[nf0]/i) {
+      my $dir = "$daydir/$prefix.$HHMMSS.$$.dir";
+      $dir .= ".$tmp_index" if $opt->{AddIndex};
+      mkdir($dir) || return undef;
+      return $dir;
+   } else {
+      my $file = "$daydir/$prefix.$HHMMSS.$$";
+      $file .= ".$tmp_index" if $opt->{AddIndex};
+      return $file;
+   }
+}
+
+sub get_timestamp {
+   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+   return sprintf("%04d%02d%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
+}
+
+sub tpssh {
+   my ($host, $args, $opt) = @_;
+   
+   my $local_login = `id | cut -d\\\( -f2 | cut -d\\\) -f1`;
+   chomp $local_login;
+
+   my $remote_login;
+   if ( $host =~ /(\S+)\@(\S+)/ ) {
+      $remote_login = $1;
+      $host = $2;
+   } elsif ($opt->{remote_login}) {
+      $remote_login = $opt->{remote_login};
+   } else {
+      $remote_login = $local_login;
+   }
+
+   my $local_cmd_file = get_tmp_file("/var/tmp", $prog);
+
+   my $remote_cmd_file = $local_cmd_file;
+   $remote_cmd_file =~ s:/var/tmp/tmp_${local_login}:/var/tmp/tmp_${remote_login}:;
+
+   my $verbose = $opt->{verbose} ? 1 : 0;
+
+   $verbose && print STDERR " local_cmd_file = $local_cmd_file\n";
+   $verbose && print STDERR "remote_cmd_file = $remote_cmd_file\n";
+
+   my ($ldir, $lfile) =  ($local_cmd_file =~ m:^(.*)/(.*):);
+   my ($rdir, $rfile) = ($remote_cmd_file =~ m:^(.*)/(.*):);
+
+   open my $cfh, ">$local_cmd_file" or die "cannot write to $local_cmd_file";
+
+   if ($opt->{style} eq 'bash') {
+      print {$cfh} "#!/bin/bash\n\n";
+      print {$cfh} join(" ", @$args), "\n";
+   } else {
+      # default to perl style
+      print {$cfh} <<"EOF";
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my \$verbose = $verbose;
+
+EOF
+
+      print {$cfh} "my ", Dumper(\@ARGV), "\n";
+   
+      #print {$cfh} qq(\$ENV{PATH}="/usr/bin:/bin:\$ENV{PATH}";\n);
+      
+      if (!$opt->{timeout}) {
+         print {$cfh} "exec \@\$VAR1;\n";
+      } else {
+         print {$cfh} "my \$seconds = $opt->{timeout};\n\n";
+      
+         while (<DATA>) {
+            print {$cfh} $_;
+         }
+      }
+   }
+
+   close $cfh;
+
+   system("chmod 744 $local_cmd_file");
+   $? && exit 1;
+
+   $verbose && system("cat $local_cmd_file") ;
+
+   # idea was coming from:
+   # http://unix.stackexchange.com/questions/57807/copy-over-ssh-and-execute-commands-in-one-session
+   # my $cmd = "tar cf - -C $ldir $lfile | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes \\
+   # ${ remote_login}\@${host} 'OWD=`pwd`; mkdir -p $rdir && cd $rdir && tar xf - && cd \$OWD && $remote_cmd_file'";
+   
+   my $extra_ssh = "";
+
+   if ($opt->{sshargs}) {
+      $extra_ssh .= join(" ", @{$opt->{sshargs}}) ;
+   }
+
+   my $ConnectTimeout = $opt->{ConnectTimeout} ? $opt->{ConnectTimeout} : 3;
+
+   my $stdout = !$opt->{stdout} ? ""                :
+                                  ">$opt->{stdout}" ;
+
+   my $stderr = !$opt->{stderr}             ? ""                 :
+                 $opt->{stderr} eq 'stdout' ? '2>&1'             :
+                                              "2>$opt->{stderr}" ;
+
+   my $cmd = "cat $local_cmd_file| ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout -o BatchMode=yes \\
+   $extra_ssh ${remote_login}\@${host} \\
+   'mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file' $stdout $stderr";
+
+   $verbose && print "cmd = $cmd\n";
+
+   exec("$cmd");
+}
+
+__DATA__
+my $child_pid = fork();
+
+if ($child_pid) {
+   # this is parent
+   $SIG{ALRM} = sub {
+      my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
+      print STDERR "$HHMMSS timed out after $seconds seconds, killing pid=$child_pid. return code set to 1\n";
+      kill('TERM', $child_pid);
+   
+      sleep 1;
+
+      if (kill(0, $child_pid)) {
+         kill('KILL', $child_pid); # kill -9
+      }
+
+      waitpid(-1, 0) ;
+
+      exit 1;
+   };
+
+   alarm $seconds;
+
+   if (waitpid(-1, 0) ) {
+      my $rc = $?;
+
+      alarm 0; # clear the alarm
+
+      my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
+      if ($? & 127) {
+         $verbose && printf STDERR "$HHMMSS child died with signal %d, %s coredump\n",
+                                   ($? & 127), ($? & 128) ? 'with' : 'without';
+         exit 1;
+      } else {
+         my $return_code = $? >> 8;
+         $verbose && printf STDERR "$HHMMSS child exited with value %d\n", $return_code;
+         exit $return_code;
+      }
+   }
+} elsif ($child_pid == 0) {
+   if ($verbose) {
+      # this is child
+      my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
+      print STDERR "$HHMMSS cmd=", join(' ', @$VAR1), "\n";
+   }
+
+   exec @$VAR1;
+} else {
+   die "ERROR: Could not fork new process: $!\n";
+}
+      
+      
+      

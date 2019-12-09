@@ -39,6 +39,7 @@ our @EXPORT_OK = qw(
    get_pw_by_key
    get_java
    glob2regex
+   get_timestamp
 );
 
 use Carp;
@@ -47,6 +48,11 @@ use IO::Select;
 use Cwd;
 use Cwd 'abs_path';
 use TPSUP::Expression;
+
+sub get_timestamp {
+   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+   return sprintf("%04d%02d%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
+}
 
 my $tmp_index;
 

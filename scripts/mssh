@@ -6,9 +6,14 @@ use Data::Dumper;
 use Getopt::Long;
 use POSIX ":sys_wait_h";
 use Carp;
+use TPSUP::SSH qw(tpssh get_remote_login_host);
+use TPSUP::UTIL qw(get_timestamp get_tmp_file);
 
 my $prog = $0; $prog =~ s:.*/::;
-my $maxcount = 5;
+my $default_ssh_maxcount = 5;
+my $default_scp_maxcount = 1;   # scp should be single-thread
+
+my $default_hostfile = "~/support/hosts.csv";
 
 sub usage {
    my ($message) = @_;
@@ -17,12 +22,16 @@ sub usage {
    print << "END";
 usage:
 
-   $0 -hl host1,host2,... -- command
-   $0 -hf hosts.txt       -- command
+   mssh -- command arg1 arg2
+
+   mscp -- file1 file2 ... remote_host:dir
+   mscp -- remote_host:file file.\%{host}
 
 description:
 
-   Run the command on a list of hosts.
+   Run the command on a list of hosts. Default host list is stored in $default_hostfile.
+   First column of each line is hostname, or login\@hostname. Columns are separated by ','.
+   This file allows comments (#) and blank lines
 
    Host can be host or login\@host.
    
@@ -32,28 +41,49 @@ description:
 
    -v                  verbose mode
 
+   -a ssh|scp          action, default to use script name to figure out.
+
    -sshargs            args to pass to generic ssh command, can set multiple times
 
    -style bash|perl    Default to 'perl', because perl handles ' and " much better.
                        Can also be 'bash'.
 
-   -n number           max number of parallel processes, default to $maxcount.
+   -n number           max number of parallel processes.
+                       ssh default to $default_ssh_maxcount.
+                       scp default to $default_scp_maxcount because scp is heavy on network.
+
+   -m match_pattern    regex (eg, perl style).
+                       Can use multiple times, in AND logic. OR logic can use 'a|b'
+                       
+
+   -x exclude_pattern  regex (eg, perl style).
+                       Can use multiple times, in AND logic. OR logic can use 'a|b'
+
+   -prefix             print prefix 'host,stdout/stderr,', on each line for easy parsing.
+
+   Build-in variables  \%{host}, (remote host), \%{login} (remote login)
+                       \%{yyyy}, \%{mm}, \%{dd}, \%{HH}, \%{MM}, \%{SS}
 
 examples:
 
-   $prog -hl host1,user2\@host2 -- ls -d /etc /usr
+   - use default hostfile
+   mssh  -- ls -d /etc /usr
+   mscp  -- /etc/hosts localhost:/tmp
+
+   - use host switch
+   mssh -hl localhost,tian\@linux1 -- ls -d /etc /usr
 
    - this command should return "File not found"
-   $prog -hl host1,user2\@host2 -- ls '/etc /usr'
+   mssh -hl localhost,tian\@linux1 -- ls '/etc /usr'
 
    - remote perl
-   $prog -hl host1,user2\@host2 -- perl -e 'print readlink("/bin"), "\\n";'
+   mssh -hl localhost,tian\@linux1 -- perl -e 'print readlink("/bin"), "\\n";'
    
    - test stdout/stderr
-   $prog -hl host1,user2\@host2 -- "ls -d '/etc /usr' /bin; sleep 1"
+   mssh -prefix -hl localhost,tian\@linux1 -- "ls -d '/etc /usr' /bin; sleep 1"
 
    - test timeout
-   $prog -t 3 -hl host1,user2\@host2 -- "ls -d '/etc /usr' /bin; sleep 6; echo done"
+   mssh -t 3 -hl localhost,tian\@linux1 -- "ls -d '/etc /usr' /bin; sleep 6; echo done"
 
 END
 
@@ -67,31 +97,75 @@ my @sshargs;
 my $timeout;
 my $hostlist;
 my $hostfile;
+my @MatchPatterns;
+my @ExcludePatterns;
+my $prefix;
+my $action;
+my $maxcount;
 
 GetOptions(
    'v|verbose'     => \$verbose,
    'l=s'           => \$remote_login,
+   'a|action=s'    => \$action,
    'style=s'       => \$style,
    'sshargs=s'     => \@sshargs,
    't|timeout=s'   => \$timeout,
    'hl|hostlist=s' => \$hostlist,
    'hf|hostfile=s' => \$hostfile,
    'n=s'           => \$maxcount,
+   'm|match=s'     => \@MatchPatterns,
+   'x|exclude=s'   => \@ExcludePatterns,
+   'prefix'        => \$prefix,
+
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV < 1;
 
 my @hosts;
 
-if ($hostfile) {
-   croak "hostfile='$hostfile' not found" if ! -f $hostfile;
-   open my $fh, "<$hostfile" or croak "cannot read $hostfile";
+if ($hostlist) {
+   for my $e (split /[\s,]+/, $hostlist) {
+      next if !$e;
+      push @hosts, $e;
+   }
+} else {
+   $hostfile = $hostfile ? $hostfile : $default_hostfile;
 
+   my $real_hostfile = `readlink -f $hostfile`;
+   chomp $real_hostfile;
+
+   croak "hostfile='$hostfile' ($real_hostfile) not found" if ! -f $real_hostfile;
+   open my $fh, "<$real_hostfile" or croak "cannot read $real_hostfile";
+   
+   LINE:
    while (<$fh>) {
       my $line = $_;
       chomp $line;
-      $line =~ s/#.*//;
-      next if $line =~ /^\s*$/;
+
+      next if $line =~ /^(host|hostname)$/i;     # skip header
+      next if $line =~ /^\s*#/;                  # skip comment
+      next if $line =~ /^\s*$/;                  # skip blank lines
+
+      if (@MatchPatterns) {
+         for my $m (@MatchPatterns) {
+            if ($line !~ /$m/) {
+               next LINE;
+            }
+         }
+      }
+
+      if (@ExcludePatterns) {
+         my $excluded = 1;
+
+         for my $m (@ExcludePatterns) {
+            if ($line !~ /$m/) {
+               $excluded = 0;
+               last;
+            }
+         }
+
+         next LINE if $excluded;
+      }
 
       for my $e (split /[\s,]+/, $line) {
          next if !$e;
@@ -100,14 +174,10 @@ if ($hostfile) {
    }
 }
 
-if ($hostlist) {
-   for my $e (split /[\s,]+/, $hostlist) {
-      next if !$e;
-      push @hosts, $e;
-   }
+if (!@hosts) {
+   print "no hosts matched criteria\n";
+   exit 0;
 }
-
-usage("not host defined") if !@hosts;
 
 # sort and make @hosts unique
 my $exists_host;
@@ -118,13 +188,42 @@ for my $h (@hosts) {
 
 @hosts = sort (keys %$exists_host);
 
-my $ count = 0;
+if ($action) {
+   if ($action ne 'ssh' && $action ne 'scp') {
+      usage("unsupported action='$action'");
+   }
+} else {
+   if ($prog =~ /ssh/) {
+      $action = 'ssh';
+   } elsif ($prog =~ /scp/) {
+      $action = 'scp';
+      usage("wrong number of args") if @ARGV < 2;
+   } else {
+      croak "cannot figure out action from script name '$prog'";
+   }
+}
+
+if (!$maxcount) {
+   if ($action eq 'ssh') {
+      $maxcount = $default_ssh_maxcount;
+   } elsif ($action eq 'scp') {
+      $maxcount = $default_scp_maxcount;
+   } else {
+      $maxcount = 1;
+   }
+}
+
+
+my $count = 0;
 my @todo = @hosts;
 my $info_by_pid;
 
 while (1) {
    while ($count<$maxcount && @todo) {
       my $host = shift @todo;
+
+      my ($remote_login, $remote_host)
+         = get_remote_login_host($host, {remote_login => $remote_login});
 
       my $tmp_prefix = get_tmp_file("/var/tmp", $prog);
       my $tmp_stdout = "$tmp_prefix.$host.stdout";
@@ -163,7 +262,8 @@ while (1) {
             = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
 
          for my $e (@ARGV) {
-            $e =~ s/\%\{host\}/$host/g;
+            $e =~ s/\%\{host\}/$remote_host/g;
+            $e =~ s/\%\{login\}/$remote_login/g;
             $e =~ s/\%\{yyyy\}/$yyyy/g;
             $e =~ s/\%\{mm\}/$mm/g;
             $e =~ s/\%\{dd\}/$dd/g;
@@ -174,7 +274,7 @@ while (1) {
             push @command, $e;
          }
 
-         tpssh($host, \@command, $opt);
+         tpssh($action, $host, \@command, $opt);
       } else {
          print STDERR "fork() failed. count=$count, host=$host\n";
          exit 1;
@@ -182,7 +282,7 @@ while (1) {
    }
 
    # this is the parent
-   while ( $ count ) {
+   while ( $count ) {
       my $kid = waitpid(-1, WNOHANG);
 
       my $rc = $?;
@@ -207,9 +307,17 @@ while (1) {
             "\n";
 
       for my $output ( qw(stdout stderr) ) {
+         print "\n" if ! $prefix;
+
          for my $line (`cat $info_by_pid->{$kid}->{$output}`) {
-            print "$host, $output,$line";
+            if ($prefix) {
+               print "$host,$output,$line";
+            } else {
+               print "$line";
+            }
          }
+
+         print "\n" if ! $prefix;
       }
    }
 
@@ -220,236 +328,3 @@ while (1) {
 
    sleep 1;
 }
-
-#######################################
-# subs
-#######################################
-#
-my $tmp_index;
-
-sub get_tmp_file {
-   my ($basedir, $prefix, $opt) = @_;
-
-   if ($opt->{chkSpace}) {
-      my $os = `uname -a`; chomp $os;
-
-      my $cmd = $os =~ /^Linux/ ? "df -kP $basedir" : "df -k $basedir";
-
-      my @DF = `$cmd`;
-
-      #host1:/home/userl/tpsup/scripts$ df -k /var/tmp
-      #Filesystem   kbytes    used   avail capacity Mounted on
-      #/           4130542 2837486 1251751      70%          /
-      
-      if ( ! $DF[1]) {
-         carp "cmd='$cmd' failed";
-         return undef;
-      }
-
-      chomp @DF;
-
-      my @a = split /\s+/, $DF[1];
-      my $avail = $a[3];
-      $avail *= 1024;
-
-      if ($avail < $opt->{chkSpace}) {
-         carp "$basedir does not have enough space, avail=$avail, require=$opt->{chkSpace}";
-         return undef;
-      }
-   }
-
-   my $id = `id`;
-   my ($user) = ($id =~ /^.+?\((.+?)\)/ );
-
-   my $timestamp = get_timestamp();
-
-   my ($yyyy, $mm, $dd, $HH, $MM, $SS)
-      = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
-
-   my $yyyymmdd = "$yyyy$mm$dd";
-   my $HHMMSS   = "$HH$MM$SS";
-
-   my $tmpdir = "$basedir/tmp_${user}";
-   my $daydir = "$tmpdir/$yyyymmdd";
-
-   if (! -d $daydir ) {
-      system("mkdir -p $daydir");
-      die "failed mkdir -p $daydir" if $?;
-      system("find $tmpdir -mount -mtime +7 -exec /bin/rm -fr {} V;");
-   }
-
-   if ($opt->{AddIndex}) {
-      if (!$tmp_index) {
-         $tmp_index = 1;
-      } else {
-         $tmp_index++;
-      }
-   }
-
-   if ($opt->{isDir} && "$opt->{isDir}" !~ /^[nf0]/i) {
-      my $dir = "$daydir/$prefix.$HHMMSS.$$.dir";
-      $dir .= ".$tmp_index" if $opt->{AddIndex};
-      mkdir($dir) || return undef;
-      return $dir;
-   } else {
-      my $file = "$daydir/$prefix.$HHMMSS.$$";
-      $file .= ".$tmp_index" if $opt->{AddIndex};
-      return $file;
-   }
-}
-
-sub get_timestamp {
-   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-   return sprintf("%04d%02d%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
-}
-
-sub tpssh {
-   my ($host, $args, $opt) = @_;
-   
-   my $local_login = `id | cut -d\\\( -f2 | cut -d\\\) -f1`;
-   chomp $local_login;
-
-   my $remote_login;
-   if ( $host =~ /(\S+)\@(\S+)/ ) {
-      $remote_login = $1;
-      $host = $2;
-   } elsif ($opt->{remote_login}) {
-      $remote_login = $opt->{remote_login};
-   } else {
-      $remote_login = $local_login;
-   }
-
-   my $local_cmd_file = get_tmp_file("/var/tmp", $prog);
-
-   my $remote_cmd_file = $local_cmd_file;
-   $remote_cmd_file =~ s:/var/tmp/tmp_${local_login}:/var/tmp/tmp_${remote_login}:;
-
-   my $verbose = $opt->{verbose} ? 1 : 0;
-
-   $verbose && print STDERR " local_cmd_file = $local_cmd_file\n";
-   $verbose && print STDERR "remote_cmd_file = $remote_cmd_file\n";
-
-   my ($ldir, $lfile) =  ($local_cmd_file =~ m:^(.*)/(.*):);
-   my ($rdir, $rfile) = ($remote_cmd_file =~ m:^(.*)/(.*):);
-
-   open my $cfh, ">$local_cmd_file" or die "cannot write to $local_cmd_file";
-
-   if ($opt->{style} eq 'bash') {
-      print {$cfh} "#!/bin/bash\n\n";
-      print {$cfh} join(" ", @$args), "\n";
-   } else {
-      # default to perl style
-      print {$cfh} <<"EOF";
-#!/usr/bin/perl
-
-use strict;
-use warnings;
-
-my \$verbose = $verbose;
-
-EOF
-
-      print {$cfh} "my ", Dumper(\@ARGV), "\n";
-   
-      #print {$cfh} qq(\$ENV{PATH}="/usr/bin:/bin:\$ENV{PATH}";\n);
-      
-      if (!$opt->{timeout}) {
-         print {$cfh} "exec \@\$VAR1;\n";
-      } else {
-         print {$cfh} "my \$seconds = $opt->{timeout};\n\n";
-      
-         while (<DATA>) {
-            print {$cfh} $_;
-         }
-      }
-   }
-
-   close $cfh;
-
-   system("chmod 744 $local_cmd_file");
-   $? && exit 1;
-
-   $verbose && system("cat $local_cmd_file") ;
-
-   # idea was coming from:
-   # http://unix.stackexchange.com/questions/57807/copy-over-ssh-and-execute-commands-in-one-session
-   # my $cmd = "tar cf - -C $ldir $lfile | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes \\
-   # ${ remote_login}\@${host} 'OWD=`pwd`; mkdir -p $rdir && cd $rdir && tar xf - && cd \$OWD && $remote_cmd_file'";
-   
-   my $extra_ssh = "";
-
-   if ($opt->{sshargs}) {
-      $extra_ssh .= join(" ", @{$opt->{sshargs}}) ;
-   }
-
-   my $ConnectTimeout = $opt->{ConnectTimeout} ? $opt->{ConnectTimeout} : 3;
-
-   my $stdout = !$opt->{stdout} ? ""                :
-                                  ">$opt->{stdout}" ;
-
-   my $stderr = !$opt->{stderr}             ? ""                 :
-                 $opt->{stderr} eq 'stdout' ? '2>&1'             :
-                                              "2>$opt->{stderr}" ;
-
-   my $cmd = "cat $local_cmd_file| ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout -o BatchMode=yes \\
-   $extra_ssh ${remote_login}\@${host} \\
-   'mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file' $stdout $stderr";
-
-   $verbose && print "cmd = $cmd\n";
-
-   exec("$cmd");
-}
-
-__DATA__
-my $child_pid = fork();
-
-if ($child_pid) {
-   # this is parent
-   $SIG{ALRM} = sub {
-      my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
-      print STDERR "$HHMMSS timed out after $seconds seconds, killing pid=$child_pid. return code set to 1\n";
-      kill('TERM', $child_pid);
-   
-      sleep 1;
-
-      if (kill(0, $child_pid)) {
-         kill('KILL', $child_pid); # kill -9
-      }
-
-      waitpid(-1, 0) ;
-
-      exit 1;
-   };
-
-   alarm $seconds;
-
-   if (waitpid(-1, 0) ) {
-      my $rc = $?;
-
-      alarm 0; # clear the alarm
-
-      my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
-      if ($? & 127) {
-         $verbose && printf STDERR "$HHMMSS child died with signal %d, %s coredump\n",
-                                   ($? & 127), ($? & 128) ? 'with' : 'without';
-         exit 1;
-      } else {
-         my $return_code = $? >> 8;
-         $verbose && printf STDERR "$HHMMSS child exited with value %d\n", $return_code;
-         exit $return_code;
-      }
-   }
-} elsif ($child_pid == 0) {
-   if ($verbose) {
-      # this is child
-      my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
-      print STDERR "$HHMMSS cmd=", join(' ', @$VAR1), "\n";
-   }
-
-   exec @$VAR1;
-} else {
-   die "ERROR: Could not fork new process: $!\n";
-}
-      
-      
-      
