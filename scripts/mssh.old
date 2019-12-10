@@ -232,59 +232,13 @@ while (1) {
       my $tmp_stdout = "$tmp_prefix.$host.stdout";
       my $tmp_stderr = "$tmp_prefix.$host.stderr";
 
-      my $opt = {
-         style        => $style,
-         timeout      => $timeout,
-         remote_login => $remote_login,
-         sshargs      => \@sshargs,
-         verbose      => $verbose,
-         stdout       => $tmp_stdout,
-         stderr       => $tmp_stderr,
-      };
-
-      my @command;
-
-      my $timestamp = get_timestamp();
-
-      my ($yyyy, $mm, $dd, $HH, $MM, $SS)
-         = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
-
-      for my $e (@ARGV) {
-         $e =~ s/\%\{host\}/$remote_host/g;
-         $e =~ s/\%\{login\}/$remote_login/g;
-         $e =~ s/\%\{yyyy\}/$yyyy/g;
-         $e =~ s/\%\{mm\}/$mm/g;
-         $e =~ s/\%\{dd\}/$dd/g;
-         $e =~ s/\%\{HH\}/$HH/g;
-         $e =~ s/\%\{MM\}/$MM/g;
-         $e =~ s/\%\{SS\}/$SS/g;
-
-         push @command, $e;
-      }
-
-      my $key;
-      if ($action eq 'ssh') {
-         $key = join(",", ($host, @command));
-      } elsif ($action eq 'scp')  {
-         $key= join(",", @command);
-      }
-
-      print STDERR "key=$key\n" if $verbose;
-
-      if ($executed->{$key}) {
-         print STDERR "\nINFO: key=$key repeats. skipped.\n";
-         next;
-      } else {
-         $executed->{$key} ++;
-      }
-      
       my $child_pid = fork();
 
       if ($child_pid) {
          # this is the parent
 
          $info_by_pid->{$child_pid}->{host} = $host;
-         $info_by_pid->{$child_pid}->{begin} = $timestamp;
+         $info_by_pid->{$child_pid}->{begin} = get_timestamp();
          $info_by_pid->{$child_pid}->{begin_sec} = time();
          $info_by_pid->{$child_pid}->{stdout}= $tmp_stdout;
          $info_by_pid->{$child_pid}->{stderr}= $tmp_stderr;
@@ -292,6 +246,36 @@ while (1) {
          $count ++;
       } elsif ($child_pid == 0) {
          # this is the child
+
+         my $opt = {
+            style        => $style,
+            timeout      => $timeout,
+            remote_login => $remote_login,
+            sshargs      => \@sshargs,
+            verbose      => $verbose,
+            stdout       => $tmp_stdout,
+            stderr       => $tmp_stderr,
+         };
+
+         my @command;
+
+         my $timestamp = get_timestamp();
+
+         my ($yyyy, $mm, $dd, $HH, $MM, $SS)
+            = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
+
+         for my $e (@ARGV) {
+            $e =~ s/\%\{host\}/$remote_host/g;
+            $e =~ s/\%\{login\}/$remote_login/g;
+            $e =~ s/\%\{yyyy\}/$yyyy/g;
+            $e =~ s/\%\{mm\}/$mm/g;
+            $e =~ s/\%\{dd\}/$dd/g;
+            $e =~ s/\%\{HH\}/$HH/g;
+            $e =~ s/\%\{MM\}/$MM/g;
+            $e =~ s/\%\{SS\}/$SS/g;
+
+            push @command, $e;
+         }
 
          tpssh($action, $host, \@command, $opt);
       } else {
