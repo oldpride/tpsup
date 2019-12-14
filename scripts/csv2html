@@ -48,9 +48,12 @@ usage:
 
    -o output.hmtl          default to STDOUT
 
+   -TableOnly              only print the table part, not the whole html body
+
 examples:
 
-    $prog tpcsv2_test.csv
+    $prog            tpcsv2_test.csv
+    $prog -TableOnly tpcsv2_test.csv
 
 END
    
@@ -66,10 +69,12 @@ my @match_pattern;
 my @exclude_pattern;
 my @other_options;
 my $title;
+my $TableOnly;
 my $output = "-";
 
 GetOptions(
    'v|verbose'     => \$verbose,
+   'TableOnly'     => \$TableOnly,
    'd|delimiter=s' => \$delimiter,
    'skip=s'        => \$skiplines,
    'me=s'          => \@match_expression,
@@ -93,6 +98,7 @@ my $opt = {
    delimiter       => $delimiter,
    skiplines       => $skiplines,
    verbose         => $verbose,
+   TableOnly       => $TableOnly,
    CSVHTMLTitle    => $title,
 };
 

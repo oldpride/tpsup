@@ -2840,14 +2840,18 @@ sub join_query_csv {
 sub csv_to_html {
    my ($csv, $opt) = @_;
       
-   my $html = "<HTML><body bgcolor=white>";
-      
-   my $title = defined $opt->{CSVHTMLTitle} ? $opt->{CSVHTMLTitle} : "";
-      
-   $html .= "<title>$title</title>\n";
-      
-   #$html .= "<div align='left'>\n";
-      
+   my $html = "";
+
+   if (!$opt->{TableOnly}) {
+      $html .= "<HTML><body bgcolor=white>";
+         
+      my $title = defined $opt->{CSVHTMLTitle} ? $opt->{CSVHTMLTitle} : "";
+         
+      $html .= "<title>$title</title>\n";
+         
+      #$html .= "<div align='left'>\n";
+   }
+         
    $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
       
    my $ref = query_csv2($csv, {ReturnStructuredArray=>1,
@@ -2874,7 +2878,10 @@ sub csv_to_html {
    }
 
    $html .= "</TABLE>\n";
-   $html .= "</body></html>\n";
+
+   if (!$opt->{TableOnly}) {
+      $html .= "</body></html>\n";
+   }
 
    return $html;
 }
