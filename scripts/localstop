@@ -87,7 +87,7 @@ if ($pid !~ /^\d+$/) {
 
 my $os = `/bin/uname`; chomp $os;
 
-my $ cmd;
+my $cmd;
 
 if ($os eq "SunOS") {
    $cmd = "/usr/bin/ptree $pid";
@@ -134,7 +134,7 @@ if ($os eq "SunOS") {
          if (!$begun) {
             if ($p == $pid) {
                $begun++;
-     }
+            }
 
             next;
          } 

@@ -170,14 +170,93 @@ my $child_pid = fork();
 if ($child_pid) {
    # this is parent
    $SIG{ALRM} = sub {
+      my $os = `/bin/uname`; chomp $os;
+      my $cmd;
+
+      if ($os eq "SunOS") {
+         $cmd = "/usr/bin/ptree $child_pid";
+      } elsif ($os eq "Linux") {
+         $cmd = "/usr/bin/pstree -pal $child_pid";
+      } else {
+         print STDERR "os=$os is not supported. cannot time out.";
+         return;
+      }
+
+      my @lines = `$cmd 2>/dev/null`;
+      if ($?) {
+         print STDERR "cannot time out because '$cmd' failed: $!\n";
+         return;
+      }
+
       my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
       print STDERR "$HHMMSS timed out after $seconds seconds, killing pid=$child_pid. return code set to 1\n";
-      kill('TERM', $child_pid);
-   
-      sleep 1;
 
-      if (kill(0, $child_pid)) {
-         kill('KILL', $child_pid); # kill -9
+      if ($verbose) {
+         print STDERR "\n";
+         print STDERR "cmd=$cmd\n";
+         print STDERR @lines; 
+      }
+
+      my @to_be_killed;
+
+      if ($os eq "SunOS") {
+         # Solaris
+         # $ /usr/bin/ptree 713
+         # 7994 zsched
+         # 9307 /usr/lib/ssh/sshd
+         # 12609 /usr/lib/ssh/sshd
+         # 12610 /usr/lib/ssh/sshd
+         # 12649 -ksh
+         # 713 /usr/bin/perl /home/gpt/tpsup/scripts/localstart sleep_l sleep
+         # 745 sleep 1000
+      
+         for my $l (@lines) {
+            
+            if ($l =~ /^\s*(\d+)/) {
+               my $p = $1;
+      
+               $verbose && print "kill $p\n";
+      
+               kill('TERM', $p);
+               push @to_be_killed, $p;
+            }
+         }
+      } elsif ($os eq "Linux") {
+         # /usr/bin/pstree -pal 72199--
+         # localstart,72199 /home/tian/scripts/localstart sleep_l sleep 10000
+         # "-sleep,72216 10000
+      
+         for my $l (@lines) {
+            if ($l =~ /^.*?,(\d+)/) {
+               my $p = $1;
+      
+               $verbose && print "kill $p\n";
+      
+               kill('TERM', $p);
+               push @to_be_killed, $p;
+            }
+         }
+      }
+      
+      my $wait_time = 1;
+      my $has_waited = 0;
+      for my $p (@to_be_killed) {
+         # wait the process to handle the signal
+      
+         while($has_waited < $wait_time) {
+            if (-d "/proc/$p") {
+               sleep 1;
+               $has_waited ++;
+            } else {
+               last;
+            }
+      
+            # if the child process does not exit, kill -9
+            if (-d "/proc/$p") {
+               $verbose && print "kill -9 $p\n";
+               kill (9, $p);
+            }
+         }
       }
 
       waitpid(-1, 0) ;

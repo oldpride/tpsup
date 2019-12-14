@@ -83,7 +83,7 @@ examples:
    mssh -prefix -hl localhost,tian\@linux1 -- "ls -d '/etc /usr' /bin; sleep 1"
 
    - test timeout
-   mssh -t 3 -hl localhost,tian\@linux1 -- "ls -d '/etc /usr' /bin; sleep 6; echo done"
+   mssh -t 3 -hl localhost -- "ls -d '/etc /usr' /bin; sleep 10; echo done"
 
 END
 
