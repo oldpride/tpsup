@@ -180,7 +180,7 @@ examples:
             my \$sum = 0;
             for my \$r (\@\$ah) { \$sum += \$r->{\$col}}
             return \$sum;
-         }' \\ 
+         }' \\
       -summexp number='mysum("number", \$ah)' tpcsv2_test.csv
    
    $prog -codefile TPSUP::FIX,TPSUP::CSV,TPSUP::Expression=tpcsv2_test_codefile.pl -summexp number='mysum("number", \$ah)' tpcsv2_test.csv
@@ -194,7 +194,7 @@ examples:
    
    - temporary columns can be used in sort key, MatchExp, ExcludeExp, ExportExp
    $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -ee 's3=\${s2}' tpcsv2_test.csv
-   $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -grpkeys s2 -grpact alpha=first,number=sum,string=last,value=maxnumtpcsv2_test.csv
+   $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -grpkeys s2 -grpact alpha=first,number=sum,string=last,value=maxnum tpcsv2_test.csv
    
 
 END

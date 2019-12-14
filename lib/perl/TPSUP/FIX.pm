@@ -2201,7 +2201,7 @@ sub filter_fix {
    
       %$opt2 = %$opt;
    
-      $opt2->{InputStructuredHash} = 1;
+      $opt2->{InputType} = 'StructuredHash';
       $opt2->{NoPrint} = 1;
       $opt2->{FIX} = 1;
    

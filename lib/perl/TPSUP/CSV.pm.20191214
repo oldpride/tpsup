@@ -883,30 +883,16 @@ sub query_csv2 {
 
    my $ref1;
 
-   #  TODO: remove this later
-   croak "please change InputHashArray to \$opt->{InputType} = 'HashArray'" if $opt->{InputHashArray};
-   croak "please change InputArrayArray to \$opt->{InputType} = 'ArrayArray'" if $opt->{InputArrayArray};
-   croak "please change InputStructuredHash to \$opt->{InputType} = 'StructuredHash'" if $opt->{InputStructuredHash};
-
-   if ( ! $opt->{InputType} || $opt->{InputType} eq 'CSV' ) {
-      # input is default to a csv file
-
-      # this applies line-based match: ExcludePatterns, MatchPatterns
-      $ref1 = csv_file_to_array($input, $opt);
-
-      if ($ref1->{status} ne 'OK') {
-         carp "csv_file_to_array($input) failed: $ref1->{status}";
-         return undef;
-      }
-   } elsif ( $opt->{InputType} eq 'HashArray' ) {
+   # read the csv into an array of hash. TODO: change to use InputType for easier overwrite
+   if ( $opt->{InputHashArray} ) {
       # input is an array of hash
       if (!$opt->{InputHashColumns}) {
-         croak "calling query_csv2($input) with InputType=HashArray must also set InputHashColumns";
+         croak "calling query_csv2($input) with InputHashArray must also set InputHashColumns";
       }
 
       $ref1->{array} = $input;
       $ref1->{columns} = $opt->{InputHashColumns};
-   } elsif ( $opt->{InputType} eq 'ArrayArray' ) {
+   } elsif ( $opt->{InputArrayArray} ) {
       # input is an array of array, with the first row to be headers
       my @columns = @{$input->[0]};
 
@@ -927,12 +913,20 @@ sub query_csv2 {
       }
 
       $ref1->{columns} = \@columns;
-   } elsif ( $opt->{InputType} eq 'StructuredHash') {
+   } elsif ( $opt->{InputStructuredHash} ) {
       # already in the same structure, our ideal structure
       $ref1->{columns} = $input->{columns};
       $ref1->{array}   = $input->{array};
    } else {
-      croak "unsupported InputType=$opt->{InputType}";
+      # input is a csv file
+
+      # this applies line-based match: ExcludePatterns, MatchPatterns
+      $ref1 = csv_file_to_array($input, $opt);
+
+      if ($ref1->{status} ne 'OK') {
+         carp "csv_file_to_array($input) failed: $ref1->{status}";
+         return undef;
+      }
    }
 
    #trim floating point numbers, 2.03000 => 2.03. $opt->{TrimFloats} contains column names
@@ -2213,16 +2207,16 @@ sub filter_csv_array {
    my $csv_array;
    my $columns;
    
-   if ( $opt->{FilterInputType} eq 'HashArray' ) {
+   if ( $opt->{InputHashArray} ) {
       # Input is array of hashes
    
       if ( !$opt->{InputHashColumns} ) {
-         croak "InputType=HashArray must have InputHashColumns set";
+         croak "InputHashArray must have InputHashColumns set";
       }
    
       $columns = $opt->{InputHashColumns};
       $csv_array = $input;
-   } elsif ( $opt->{FilterInputType} eq 'ArrayArray' ) {
+   } elsif ( $opt->{FilterInputArrayArray} ) {
       # Input is array of array, the first line is header
       if (!$csv_array || !@$csv_array) {
          $ret->{status} = "ERROR: csv_array is empty";
@@ -2232,7 +2226,7 @@ sub filter_csv_array {
       $columns = shift @$input;
       $csv_array = $input;
    } else {
-      # default and ideal input, $opt->{FilterInputType} = StructuredHash
+      # default and ideal input, $opt->{InputStructuredHash}
       $columns = $input->{columns};
       $csv_array = $input->{array};
    }
@@ -2836,7 +2830,7 @@ sub join_query_csv {
       delete $post_join_opt->{$k} if exists $pre_join_opt->{$k};
    }
       
-   $post_join_opt->{InputType} = 'StructuredHash';
+   $post_join_opt->{InputStructuredHash} = 1;
       
    my $ref2 = query_csv2($ref1, $post_join_opt);
 
@@ -2892,53 +2886,5 @@ sub csv_to_html {
    return $html;
 }
 
-sub csv_to_html2 {
-   my ($csv, $opt) = @_;
-      
-   my $html = "";
-
-   if (!$opt->{TableOnly}) {
-      $html .= "<HTML><body bgcolor=white>";
-         
-      my $title = defined $opt->{CSVHTMLTitle} ? $opt->{CSVHTMLTitle} : "";
-         
-      $html .= "<title>$title</title>\n";
-         
-      #$html .= "<div align='left'>\n";
-   }
-         
-   $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
-      
-   my $ref = query_csv2($csv, {ReturnStructuredArray=>1,
-                               NoPrint=>1,
-                               %$opt});
-      
-   if ($ref->{status} ne 'OK') {
-      print STDERR "failed to parse csv, status=$ref->{status}\n";
-      return undef;
-   }
-      
-   for my $row (@{$ref->{array}}) {
-      my $string = "<TR>";
-
-      for my $cell (@$row) {
-         no warnings "uninitialized";
-      
-         $string .= "<td>$cell</td>";
-      } 
-
-      $string .= "</TR>";
-
-      $html .= "$string\n";
-   }
-
-   $html .= "</TABLE>\n";
-
-   if (!$opt->{TableOnly}) {
-      $html .= "</body></html>\n";
-   }
-
-   return $html;
-}
-
 1
+ 
