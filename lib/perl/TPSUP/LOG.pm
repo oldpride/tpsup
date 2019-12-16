@@ -36,13 +36,13 @@ sub parse_PatternFile {
 
    return if exists $PatternCfg_by_file_app->{$file};
       
-   my $result = query_csv2($file, { ReturnKeyedHash => ['App'],
-                                                         QuotedInput     => 1,
-                                                         NoPrint         => 1,
-                                                         # skip comments and blank lines
-                                                         MatchPatterns   => ['^[ ]*[^#]'],
-                                                         %$opt
-                                               });
+   my $result = query_csv2($file, { ReturnType =>'StringKeyedHash=App',
+                                    QuotedInput     => 1,
+                                    NoPrint         => 1,
+                                    # skip comments and blank lines
+                                    MatchPatterns   => ['^[ ]*[^#]'],
+                                    %$opt
+                                  });
 
    $PatternCfg_by_file_app->{$file} = $result->{KeyedHash};
 

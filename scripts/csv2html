@@ -50,10 +50,22 @@ usage:
 
    -TableOnly              only print the table part, not the whole html body
 
+   -RowExp exp -ColAtrrVal c1=attr1=val1,attr2=val2;c2=attr1=val1,attr2=val2,...
+                           if a row matched the exp, then these attributes will be added to 
+                           the cell's tag
+                              <td color=red>100</td>
+
+                           These two switches can be used multiple times but must come in pairs.
+
 examples:
 
     $prog            tpcsv2_test.csv
     $prog -TableOnly tpcsv2_test.csv
+
+    $prog \\
+         -RowExp '\$value<300' -ColAttrVal 'string=bgcolor=red;value=bgcolor=red' \\
+         -RowExp '\$value>700' -ColAttrVal 'string=bgcolor=green;value=bgcolor=green' \\
+         tpcsv2_test.csv
 
 END
    
@@ -71,6 +83,8 @@ my @other_options;
 my $title;
 my $TableOnly;
 my $output = "-";
+my @RowExps;
+my @ColAttrVals;
 
 GetOptions(
    'v|verbose'     => \$verbose,
@@ -84,6 +98,8 @@ GetOptions(
    'op|option=s'   => \@other_options,
    'title=s'       => \$title,
    'o|output=s'    => \$output,
+   'RowExp=s'      => \@RowExps,
+   'ColAttrVal=s'  => \@ColAttrVals,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -100,6 +116,8 @@ my $opt = {
    verbose         => $verbose,
    TableOnly       => $TableOnly,
    CSVHTMLTitle    => $title,
+   HTMLRowExp      => \@RowExps,
+   ColAttrVal      => \@ColAttrVals,
 };
 
 for my $op (@other_options) {

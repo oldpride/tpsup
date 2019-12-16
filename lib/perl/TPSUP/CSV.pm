@@ -40,6 +40,8 @@ use TPSUP::UTIL qw(
    get_exps_from_string
    unique_array
    compile_paired_strings
+   compile_perl_array
+   transpose_arrays
 );
 
 use TPSUP::Expression;
@@ -1184,38 +1186,60 @@ sub query_csv2 {
       }
    }
 
-   # handle return. TODO: change to ReturnType so that we can overwrite more easily
    my $ref4;
    
-   if ($opt->{ReturnKeyedHash}) {
+   if (!$opt->{ReturnType} || $opt->{ReturnType} eq 'StructuredHash') {
+      # default to return StructuredHash;
+      $ref4 = $ref3;
+   } elsif ($opt->{ReturnType} =~ /^ExpKeyedHash=(.+)/) {
+      my $ExpKey=$1;
+   
+      my $warn = $opt->{verbose} ? 'use' : 'no';
+      my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { return $opt->{ExpKey}; }";
+
       my $KeyedHash;
-   
-      if ($opt->{ReturnKeyIsExpression}) {
-         my $warn = $opt->{verbose} ? 'use' : 'no';
 
-         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { return $opt->{ReturnKeyedHash}; }";
+      for my $r (@{$ref3->{array}}) {
+         TPSUP::Expression::export_var($r, {FIX=>$opt->{FIX}, RESET=>1});
 
-         for my $r (@{$ref3->{array}}) {
-            TPSUP::Expression::export_var($r, {FIX=>$opt->{FIX}, RESET=>1});
+         #no warnings "uninitialized";
+         my $k = $compiled->();
+   
+         push @{$KeyedHash->{$k}}, $r;
+      }
+      $ref4->{KeyedHash} = $KeyedHash;
+      $ref4->{columns} = $ref3->{columns};
+   } elsif ($opt->{ReturnType} =~ /^StringKeyedHash=(.+)/) {
+      my $key_string = $1;
 
-            #no warnings "uninitialized";
-            my $k = $compiled->();
-   
-            push @{$KeyedHash->{$k}}, $r;
-         }
-      } else {
-         my @keys = @{$opt->{ReturnKeyedHash}};
-   
-         for my $r (@{$ref3->{array}}) {
-            no warnings "uninitialized";
-            my $k = join(",", @{$r}{@keys});
-            push @{$KeyedHash->{$k}}, $r;
-         }
+      my @keys = split /,/, $key_string;
+
+      my $KeyedHash;
+
+      for my $r (@{$ref3->{array}}) {
+         no warnings "uninitialized";
+         my $k = join(",", @{$r}{@keys});
+         push @{$KeyedHash->{$k}}, $r;
       }
 
       $ref4->{KeyedHash} = $KeyedHash;
       $ref4->{columns} = $ref3->{columns};
-   } elsif ( $opt->{ReturnStructuredArray} ) {
+
+   } elsif ($opt->{ReturnType} =~ /^RefKeyedHash/) {
+      my  @keys = @{$opt->{ReturnRefKey}};
+   
+      my $KeyedHash;
+
+      for my $r (@{$ref3->{array}}) {
+         no warnings "uninitialized";
+         my $k = join(",", @{$r}{@keys});
+         push @{$KeyedHash->{$k}}, $r;
+      }
+
+      $ref4->{KeyedHash} = $KeyedHash;
+      $ref4->{columns} = $ref3->{columns};
+
+   } elsif ( $opt->{ReturnType} eq 'StructuredArray' ) {
       $ref4->{columns} = $ref3->{columns};
       push @{$ref4->{array}}, $ref3->{columns};
 
@@ -1232,8 +1256,7 @@ sub query_csv2 {
          push @{$ref4->{array}}, \@a;
       }
    } else {
-      # default to return StructuredHash;
-      $ref4 = $ref3;
+      croak "unsupported ReturnType=$opt->{ReturnType}";
    }
    
    $ref4->{status} = 'OK';
@@ -1601,7 +1624,8 @@ sub diff_csv_long {
       my $maxrow_by_key;
    
       for (my $i=0; $i<$num_files; $i++) {
-         my $ref = query_csv2($csvs->[$i], { ReturnKeyedHash=>$refkeys,
+         my $ref = query_csv2($csvs->[$i], { ReturnType=>'RefKeyedHash',
+                                             ReturnRefKey=>$refkeys,
                                              NoPrint=>1,
                                              %$opt
                                            }
@@ -1858,7 +1882,8 @@ sub diff_csv_long {
       my $maxrow_by_key; # max number of rows for the key
    
       for (my $i=0; $i<$num_files; $i++) {
-         my $ref = query_csv2($csvs->[$i], { ReturnKeyedHash=>$ref_keys->[$i],
+         my $ref = query_csv2($csvs->[$i], { ReturnType=>'RefKeyedHash',
+                                             ReturnRefKey=>$ref_keys->[$i],
                                              requiredColumns=>$cmp_keys->[$i],
                                              NoPrint=>1,
                                              %$opt
@@ -1994,11 +2019,17 @@ sub diff_csv_long {
 sub diff_csv {
    my ($csv1, $csv2, $keys1, $keys2, $opt) = @_;
 
-   my $result1 = query_csv2($csv1, {ReturnKeyedHash=>$keys1, NoPrint=>1, %$opt});
+   my $result1 = query_csv2($csv1, {ReturnType=>'RefKeyedHash',
+                                    ReturnRefKey=>$keys1, 
+                                    NoPrint=>1,
+                                    %$opt});
    
    croak "cannot parse $csv1" if !$result1;
    
-   my $result2 = query_csv2($csv2, {ReturnKeyedHash=>$keys2, NoPrint=>1, %$opt});
+   my $result2 = query_csv2($csv2, {ReturnType=>'RefKeyedHash',
+                                    ReturnRefKey=>$keys2,
+                                    NoPrint=>1,
+                                    %$opt});
    
    croak "cannot parse $csv2" if !$result2;
 
@@ -2213,7 +2244,11 @@ sub filter_csv_array {
    my $csv_array;
    my $columns;
    
-   if ( $opt->{FilterInputType} eq 'HashArray' ) {
+   if (!$opt->{FilterInputType} || $opt->{FilterInputType} eq 'StructuredHash') {
+      # default and ideal input, $opt->{FilterInputType} = StructuredHash
+      $columns = $input->{columns};
+      $csv_array = $input->{array};
+   } elsif ( $opt->{FilterInputType} eq 'HashArray' ) {
       # Input is array of hashes
    
       if ( !$opt->{InputHashColumns} ) {
@@ -2232,9 +2267,7 @@ sub filter_csv_array {
       $columns = shift @$input;
       $csv_array = $input;
    } else {
-      # default and ideal input, $opt->{FilterInputType} = StructuredHash
-      $columns = $input->{columns};
-      $csv_array = $input->{array};
+      croak "unsupported FilterInputType=$opt->{FilterInputType}";
    }
    
    my $num_col = scalar(@$columns);
@@ -2336,7 +2369,7 @@ sub filter_csv_array {
    
    my @out_array;
    
-   if ($opt->{FilterReturnStructuredArray}) {
+   if ($opt->{FilterReturnType} && $opt->{FilterReturnType} eq 'StructuredArray') {
       push @out_array, \@fields;
    }
    
@@ -2446,11 +2479,13 @@ sub filter_csv_array {
          }
       }
       
-      if ($opt->{FilterReturnStructuredArray}) {
-         push @out_array, @{$r}{@fields};
-      } else {
+      if (!$opt->{FilterReturnType} || $opt->{FilterReturnType} eq 'StructuredHash') {
          # default to return StructuredHash
          push @out_array, $r;
+      } elsif ($opt->{FilterReturnType} eq 'StructuredArray') {
+         push @out_array, @{$r}{@fields};
+      } else {
+         croak "unsupported FilterReturnType=$opt->{FilterReturnType}";
       }
    }    
 
@@ -2511,7 +2546,8 @@ sub join_csv {
    my $maxrow_by_key; # max number of rows for the key
    
    for (my $i=0; $i<$num_files; $i++) {
-      my $ref = query_csv2($csvs->[$i], { ReturnKeyedHash=>$ref_keys->[$i], 
+      my $ref = query_csv2($csvs->[$i], { ReturnType=>'RefKeyedHash',
+                                          ReturnRefKey=>$ref_keys->[$i], 
                                           requiredColumns=>$join_keys->[$i],
                                           NoPrint=>1,
                                           %$opt
@@ -2843,7 +2879,7 @@ sub join_query_csv {
    return $ref2;
 }
       
-sub csv_to_html {
+sub csv_to_html_deco {
    my ($csv, $opt) = @_;
       
    my $html = "";
@@ -2860,7 +2896,7 @@ sub csv_to_html {
          
    $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
       
-   my $ref = query_csv2($csv, {ReturnStructuredArray=>1,
+   my $ref = query_csv2($csv, {ReturnType=>'StructuredArray',
                                NoPrint=>1,
                                %$opt});
       
@@ -2892,7 +2928,7 @@ sub csv_to_html {
    return $html;
 }
 
-sub csv_to_html2 {
+sub csv_to_html {
    my ($csv, $opt) = @_;
       
    my $html = "";
@@ -2907,9 +2943,16 @@ sub csv_to_html2 {
       #$html .= "<div align='left'>\n";
    }
          
-   $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
-      
-   my $ref = query_csv2($csv, {ReturnStructuredArray=>1,
+   my $handlers;
+
+   if ( $opt->{HTMLRowExp} && @{$opt->{HTMLRowExp}} ) { 
+      my $exps = compile_perl_array($opt->{HTMLRowExp});
+      my $ColAttrVals = $opt->{ColAttrVal};
+
+      $handlers = transpose_arrays([$exps, $ColAttrVals, $opt->{HTMLRowExp}]);
+   }
+
+   my $ref = query_csv2($csv, {ReturnType=>'StructuredHash',
                                NoPrint=>1,
                                %$opt});
       
@@ -2917,14 +2960,69 @@ sub csv_to_html2 {
       print STDERR "failed to parse csv, status=$ref->{status}\n";
       return undef;
    }
+
+   my @columns = @{$ref->{columns}};
       
-   for my $row (@{$ref->{array}}) {
+   $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
+      
+   # header
+   {
       my $string = "<TR>";
 
-      for my $cell (@$row) {
-         no warnings "uninitialized";
-      
-         $string .= "<td>$cell</td>";
+      for my $c (@columns) {
+         $string .= "<td>$c</td>";
+      } 
+
+      $string .= "</TR>";
+      $html .= "$string\n";
+   }
+
+   for my $row (@{$ref->{array}}) {
+      #print Dumper($row);
+
+      my $AttrVals_by_column;
+
+      if (@$handlers) {
+         TPSUP::Expression::export_var($row, {RESET=>1});
+
+         if ($opt->{verbose}) {
+            $TPSUP::Expression::verbose = 1;
+         }
+
+         for my $h (@$handlers) {
+            my ($compiled, $ColAttrVals, $uncompiled) = @$h;
+            #print "uncompiled = $uncompiled\n";
+
+            if ($compiled->()) {
+               #print "matched\n";
+
+               if ($ColAttrVals) {
+                  # student=color=red;score=color=red
+
+                  for my $col_attr_val (split /;/, $ColAttrVals) {
+                      # student=color=red
+
+                      my ($col, $attr_val) = split /=/, $col_attr_val, 2;
+                      # student, color=red
+
+                      push @{$AttrVals_by_column->{$col}}, $attr_val;
+                  }
+               }
+            }
+         }
+      }
+
+      my $string = "<TR>";
+
+      no warnings "uninitialized";
+      for my $c (@columns) {
+         $string .= "<td";
+         if (exists $AttrVals_by_column->{$c}) {
+            for my $attr_val (@{$AttrVals_by_column->{$c}}) {
+               $string .= " $attr_val";
+            }
+         }
+         $string .= ">$row->{$c}</td>";
       } 
 
       $string .= "</TR>";

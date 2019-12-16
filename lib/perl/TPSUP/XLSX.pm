@@ -132,7 +132,7 @@ sub xlsx_to_csvs {
       }
       
       #close $out_fh if $out_fh && $out_fh != \*STDOUT;
-      query_csv2(\@a, {%$opt, InputArrayArray=>1, output=>$output});
+      query_csv2(\@a, {%$opt, InputType=>'ArrayArray', output=>$output});
 
       $i++;
    }

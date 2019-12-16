@@ -27,7 +27,7 @@ our @EXPORT_OK = qw(
    tpfind
    recursive_path
    get_user_by_uid
-   get _group_by_gid
+   get_group_by_gid
    insert_namespace_code
    insert_namespace_file
    insert_namespaces
