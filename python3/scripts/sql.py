@@ -51,6 +51,10 @@ parser.add_argument(
     help="sql file instead of sql statement")
 
 parser.add_argument(
+    '-noheader', dest='PrintNoHeader', action="store_true",
+    help="not to print header line")
+
+parser.add_argument(
     '-maxout', dest='maxout', default=-1, type=int, action="store",
     help="max rows of output")
 

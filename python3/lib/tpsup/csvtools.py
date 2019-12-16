@@ -307,7 +307,8 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
         if ofh is sys.stdout:
             writer.writeheader = silence_BrokenPipeError(writer.writeheader)
             writer.writerow = silence_BrokenPipeError(writer.writerow)
-        writer.writeheader()
+        if not opt.get('PrintNoHeader'):
+            writer.writeheader()
         # rows is in this python's closure
         for row in dict_iter:
             # print('debug2', row)

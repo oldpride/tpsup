@@ -2982,7 +2982,7 @@ sub csv_to_html {
 
       my $AttrVals_by_column;
 
-      if (@$handlers) {
+      if ($handlers && @$handlers) {
          TPSUP::Expression::export_var($row, {RESET=>1});
 
          if ($opt->{verbose}) {

@@ -51,10 +51,10 @@ sub tpssh {
 
    my $extra_ssh = "";
 
-   $extra_ssh .= " -q" if !$verbose;
+   $extra_ssh .= "-q" if !$verbose;
 
    if ($opt->{sshargs}) {
-      $extra_ssh .= join(" ", @{$opt->{sshargs}}) ;
+      $extra_ssh .= " " . join(" ", @{$opt->{sshargs}}) ;
    }
 
    my $ConnectTimeout = $opt->{ConnectTimeout} ? $opt->{ConnectTimeout} : 3;

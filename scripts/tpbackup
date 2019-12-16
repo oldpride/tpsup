@@ -38,8 +38,8 @@ Usage:
 
    -f tpbackup.csv default to ~/.tpsup/tpbackup.csv. Example of format:
                      proj,source_base,backup_base,retention,comment
-                     tpsup,\$home/tpsup,\$home/backup/tpsup,5,these are scripts
-                     notes,\$home/notes,\$home/backup/notes,5,these are notes
+                     tpsup,\$home/\$proj,\$home/backup/\$proj,5,these are scripts
+                     notes,\$home/\$proj,\$home/backup/\$proj,5,these are notes
      retention is number of backups
 
    -b brief mode when 'check'. only prints the file names
@@ -97,12 +97,14 @@ if (! $cfg_by_proj->{$proj}) {
    usage();
 }
 
-my $today = "date +%Y%m%d"; chomp $today;
+my $today = `date +%Y%m%d`; chomp $today;
 
 my ($source_base, $backup_base, $retention) = @{$cfg_by_proj->{$proj}->[0]}{qw(source_base backup_base retention)};
 
 $source_base =~ s:\$home:$home:g;
 $backup_base =~ s:\$home:$home:g;
+$source_base =~ s:\$proj:$proj:g;
+$backup_base =~ s:\$proj:$proj:g;
 
 if ($action eq 'do') {
    {
@@ -141,7 +143,7 @@ if ($action eq 'do') {
       my $backupdir = "$backup_base/$yyyymmdd";
       usage("$backupdir doesn't exist, we don't have a backup for $yyyymmdd") if ! -d $backupdir;
    } else {
-      $yyyymmdd = `/bin/ls $backup_base|tai1 -1`;
+      $yyyymmdd = `/bin/ls $backup_base|tail -1`;
       die "we don't have any backup" if ! $yyyymmdd;
       chomp $yyyymmdd;
    }

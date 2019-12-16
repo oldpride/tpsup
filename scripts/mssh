@@ -85,6 +85,9 @@ examples:
    - test timeout
    mssh -t 3 -hl localhost -- "ls -d '/etc /usr' /bin; sleep 10; echo done"
 
+   - test catch bogus host failure
+   mssh -t 3 -hf ~/support/hosts.csv.bogus -prefix -- sleep 1 |grep ,std
+
 END
 
    exit 1;
@@ -325,10 +328,14 @@ while (1) {
             ",duration=$info_by_pid->{$kid}->{duration}",
             "\n";
 
+      my $row_count = 0;
+
       for my $output ( qw(stdout stderr) ) {
          print "\n" if ! $prefix;
 
          for my $line (`cat $info_by_pid->{$kid}->{$output}`) {
+            $row_count ++;
+
             if ($prefix) {
                print "$host,$output,$line";
             } else {
@@ -337,6 +344,16 @@ while (1) {
          }
 
          print "\n" if ! $prefix;
+      }
+
+      # make sure there is explicit output when in prefix mode; otherwise, we
+      # may fail to notice that ssh command failure
+      if (!$row_count && $prefix) {
+         if ($rc == 0) {
+            print "$host,stdout,\n";         # print a new line to stdout when successful
+         } else {
+            print "$host,stderr,ssh cmd failed\n";  # print error to stderr when failed
+         }
       }
    }
 

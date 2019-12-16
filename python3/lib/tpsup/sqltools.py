@@ -186,7 +186,7 @@ def run_sql(sql_list: List[str], **opt):
     with TpDbh(**opt) as td:
         for sql in sql_list:
             qr = QueryResults(sql, dbh=td, **opt)
-            tpsup.csvtools.write_dictlist_to_csv(qr, qr.columns, opt.get('filename', sys.stdout))
+            tpsup.csvtools.write_dictlist_to_csv(qr, qr.columns, opt.get('filename', sys.stdout), **opt)
 
 
 def main():

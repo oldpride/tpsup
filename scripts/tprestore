@@ -39,8 +39,8 @@ Usage:
    -f tpbackup.csv
                  default to ~/.tpsup/tpbackup.csv. Example of format:
                          proj,source,backup_base,retention,comment
-                         tpsup,\$home/tpsup,\$home/tpsup,5,scripts backups
-                         notes,\$home/pt_test,\$home/pt_test,5,notes backups
+                         tpsup,\$home/\$proj,\$home/backup/\$proj,5,scripts backups
+                         notes,\$home/\$proj,\$home/backup/\$proj,5,notes   backups
 
 Examples:
 
@@ -116,6 +116,9 @@ for my $f (@ARGV) {
          ($source_base, $backup_base) = @{$row}{qw(source_base backup_base)};
          $source_base =~ s:\$home:$home:g;
          $backup_base =~ s:\$home:$home:g;
+
+         $source_base =~ s:\$proj:$proj:g;
+         $backup_base =~ s:\$proj:$proj:g;
 
          if ($source_full =~ /${source_base}(.*)/) {
             $relative = $1;
