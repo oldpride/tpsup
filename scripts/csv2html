@@ -50,12 +50,15 @@ usage:
 
    -TableOnly              only print the table part, not the whole html body
 
-   -RowExp exp -ColAtrrVal c1=attr1=val1,attr2=val2;c2=attr1=val1,attr2=val2,...
+   -RowExp exp -RowAct c1=attr1=val1,attr2=val2;c2=attr1=val1,attr2=val2,...
                            if a row matched the exp, then these attributes will be added to 
                            the cell's tag
                               <td color=red>100</td>
 
                            These two switches can be used multiple times but must come in pairs.
+
+   -ColAtrrVal c1=attr1=val1,attr2=val2;c2=attr1=val1,attr2=val2,...
+                           set default attr and value for the specified columns: c1, c2, ...
 
 examples:
 
@@ -63,8 +66,9 @@ examples:
     $prog -TableOnly tpcsv2_test.csv
 
     $prog \\
-         -RowExp '\$value<300' -ColAttrVal 'string=bgcolor=red;value=bgcolor=red' \\
-         -RowExp '\$value>700' -ColAttrVal 'string=bgcolor=green;value=bgcolor=green' \\
+         -ColAttrVal 'string=bgcolor=green;value=bgcolor=green' \\
+         -RowExp '\$value<300' -RowAct 'string=bgcolor=red;value=bgcolor=red' \\
+         -RowExp '\$value<700' -RowAct 'string=bgcolor=orange;value=bgcolor=orange' \\
          tpcsv2_test.csv
 
 END
@@ -84,6 +88,7 @@ my $title;
 my $TableOnly;
 my $output = "-";
 my @RowExps;
+my @RowActs;
 my @ColAttrVals;
 
 GetOptions(
@@ -99,6 +104,7 @@ GetOptions(
    'title=s'       => \$title,
    'o|output=s'    => \$output,
    'RowExp=s'      => \@RowExps,
+   'RowAct=s'      => \@RowActs,
    'ColAttrVal=s'  => \@ColAttrVals,
 ) || usage ("cannot parse command line: $!");
 
@@ -117,6 +123,7 @@ my $opt = {
    TableOnly       => $TableOnly,
    CSVHTMLTitle    => $title,
    HTMLRowExp      => \@RowExps,
+   HTMLRowAct      => \@RowActs,
    ColAttrVal      => \@ColAttrVals,
 };
 

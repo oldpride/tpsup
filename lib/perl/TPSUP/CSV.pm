@@ -2879,55 +2879,6 @@ sub join_query_csv {
    return $ref2;
 }
       
-sub csv_to_html_deco {
-   my ($csv, $opt) = @_;
-      
-   my $html = "";
-
-   if (!$opt->{TableOnly}) {
-      $html .= "<HTML><body bgcolor=white>";
-         
-      my $title = defined $opt->{CSVHTMLTitle} ? $opt->{CSVHTMLTitle} : "";
-         
-      $html .= "<title>$title</title>\n";
-         
-      #$html .= "<div align='left'>\n";
-   }
-         
-   $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
-      
-   my $ref = query_csv2($csv, {ReturnType=>'StructuredArray',
-                               NoPrint=>1,
-                               %$opt});
-      
-   if ($ref->{status} ne 'OK') {
-      print STDERR "failed to parse csv, status=$ref->{status}\n";
-      return undef;
-   }
-      
-   for my $row (@{$ref->{array}}) {
-      my $string = "<TR>";
-
-      for my $cell (@$row) {
-         no warnings "uninitialized";
-      
-         $string .= "<td>$cell</td>";
-      } 
-
-      $string .= "</TR>";
-
-      $html .= "$string\n";
-   }
-
-   $html .= "</TABLE>\n";
-
-   if (!$opt->{TableOnly}) {
-      $html .= "</body></html>\n";
-   }
-
-   return $html;
-}
-
 sub csv_to_html {
    my ($csv, $opt) = @_;
       
@@ -2943,13 +2894,28 @@ sub csv_to_html {
       #$html .= "<div align='left'>\n";
    }
          
-   my $handlers;
+   my $default_AttrVals_by_column;
+   if ($opt->{ColAttrVal}) {
+      for my $ColAttrVals (@{$opt->{ColAttrVal}}) {
+         # student=color=red;score=color=red
 
+         for my $col_attr_val (split /;/, $ColAttrVals) {
+            # student=color=red
+
+            my ($col, $attr_val) = split /=/, $col_attr_val, 2;
+            # student, color=red
+
+            push @{$default_AttrVals_by_column->{$col}}, $attr_val;
+         }
+      }
+   }
+
+   my $handlers;
    if ( $opt->{HTMLRowExp} && @{$opt->{HTMLRowExp}} ) { 
       my $exps = compile_perl_array($opt->{HTMLRowExp});
-      my $ColAttrVals = $opt->{ColAttrVal};
+      my $acts = $opt->{HTMLRowAct};
 
-      $handlers = transpose_arrays([$exps, $ColAttrVals, $opt->{HTMLRowExp}]);
+      $handlers = transpose_arrays([$exps, $acts, $opt->{HTMLRowExp}]);
    }
 
    my $ref = query_csv2($csv, {ReturnType=>'StructuredHash',
@@ -2980,7 +2946,7 @@ sub csv_to_html {
    for my $row (@{$ref->{array}}) {
       #print Dumper($row);
 
-      my $AttrVals_by_column;
+      my $act_AttrVals_by_column;
 
       if ($handlers && @$handlers) {
          TPSUP::Expression::export_var($row, {RESET=>1});
@@ -3005,7 +2971,7 @@ sub csv_to_html {
                       my ($col, $attr_val) = split /=/, $col_attr_val, 2;
                       # student, color=red
 
-                      push @{$AttrVals_by_column->{$col}}, $attr_val;
+                      push @{$act_AttrVals_by_column->{$col}}, $attr_val;
                   }
                }
             }
@@ -3017,8 +2983,12 @@ sub csv_to_html {
       no warnings "uninitialized";
       for my $c (@columns) {
          $string .= "<td";
-         if (exists $AttrVals_by_column->{$c}) {
-            for my $attr_val (@{$AttrVals_by_column->{$c}}) {
+         if (exists $act_AttrVals_by_column->{$c}) {
+            for my $attr_val (@{$act_AttrVals_by_column->{$c}}) {
+               $string .= " $attr_val";
+            }
+         } elsif (exists $default_AttrVals_by_column->{$c}) {
+            for my $attr_val (@{$default_AttrVals_by_column->{$c}}) {
                $string .= " $attr_val";
             }
          }
