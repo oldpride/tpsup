@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 
 # https://intoli.com/blog/installing-google-chrome-on-centos/
@@ -21,9 +21,6 @@ if [ $# -ne 1 ]; then
 fi
 
 file=$1
-
-# set LD_LIBRARY_PATH
-# LD_LIBRARY_PATH= ...
 
 # set proxy
 # export http_proxy=...

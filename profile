@@ -235,6 +235,19 @@ p3env () {
    set -a
 }
 
+tpproxy () {
+   # to make wget/curl work behind firewall
+
+   # export http_proxy=http://user:password@host:port
+   # export https_proxy=http://user:password@host:port
+
+   # for authencationless proxy
+   # export http_proxy=http://host:port
+   # export https_proxy=http://host:port
+
+   echo "tpproxy is not implemented on yet" >&2
+}
+
 functions () {
    typeset -F
    echo "to see detail: typeset -f"
