@@ -1,0 +1,35 @@
+Job Name                    Last Start           Last End             ST/Ex Run/Ntry Pri/Xit
+___________________________ ____________________ ____________________ _____ ________ _______
+Nightly_Download            05/21/2010 11:27:31  05/21/2010 11:27:33  SU    197/1    0      
+ 
+  Status/[Event]  Time                 Ntry ES  ProcessTime           Machine
+  --------------  --------------------- --  --  --------------------- ----------------
+  RUNNING         05/21/2010 11:27:31    1  PD  05/21/2010 11:27:31   
+  SUCCESS         05/21/2010 11:27:33    1  PD  05/21/2010 11:27:34   
+ 
+ Watch_4_file                           05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0      
+ 
+   Status/[Event]  Time                 Ntry ES  ProcessTime           Machine
+   --------------  --------------------- --  --  --------------------- ----------------
+   STARTING        05/21/2010 11:27:31    1  PD  05/21/2010 11:27:31   localhost
+   RUNNING         05/21/2010 11:27:32    1  PD  05/21/2010 11:27:32   localhost
+     <Executing at WA_AGENT>
+   SUCCESS         05/21/2010 11:27:33    1  PD  05/21/2010 11:27:33   localhost
+ 
+ filter_data                            05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0      
+ 
+   Status/[Event]  Time                 Ntry ES  ProcessTime           Machine
+   --------------  --------------------- --  --  --------------------- ----------------
+   STARTING        05/21/2010 11:27:31    1  PD  05/21/2010 11:27:31   localhost
+   RUNNING         05/21/2010 11:27:32    1  PD  05/21/2010 11:27:32   localhost
+     <Executing at WA_AGENT>
+   SUCCESS         05/21/2010 11:27:33    1  PD  05/21/2010 11:27:33   localhost
+ 
+ update_DBMS                            05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0      
+ 
+   Status/[Event]  Time                 Ntry ES  ProcessTime           Machine
+   --------------  --------------------- --  --  --------------------- ----------------
+   STARTING        05/21/2010 11:27:31    1  PD  05/21/2010 11:27:31   localhost
+   RUNNING         05/21/2010 11:27:32    1  PD  05/21/2010 11:27:32   localhost
+     <Executing at WA_AGENT>
+   SUCCESS         05/21/2010 11:27:33    1  PD  05/21/2010 11:27:33   localhost
