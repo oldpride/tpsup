@@ -1699,7 +1699,7 @@ sub build_dir_tree {
 
             if ($tree->{$f}->{back}) {
                $tree->{$f}->{skip} = "duplicate target path: skipp $front/$f";
-             next;
+               next;
             } else {
                $tree->{$f}->{back} = $back;
             }

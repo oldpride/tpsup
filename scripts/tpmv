@@ -11,6 +11,8 @@ usage:
 
    $prog -s sed_clause path1 path2 ...
 
+   massively change file names using pattern
+
    'sed_clause'    eg, s/old_pattern/new_pattern/g
    'path1 path2 ...'
                    can be both file and directory

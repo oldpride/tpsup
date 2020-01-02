@@ -185,7 +185,7 @@ kdbnotes () {
    cd $TPSUP/../kdb/notes
 }
 
-tpnotes () {
+mynotes () {
    cd $TPSUP/../notes
 }
 
