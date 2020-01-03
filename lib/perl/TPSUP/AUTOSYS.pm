@@ -7,6 +7,7 @@ use base qw( Exporter );
 our @EXPORT_OK = qw(
       autorep_J
       autorep_q_J
+      get_dependency
 );
       
 use Carp;
@@ -23,9 +24,9 @@ sub get_autosys_fh {
       $in_fh = get_in_fh($file);
    } elsif ($input =~ /command=(.+)/) {
       my $cmd = $1;
-      $in_fh = open "$cmd |" or croak "cmd='$cmd' failed: $!";
+      $in_fh = open "$cmd |" or confess "cmd='$cmd' failed: $!";
    } else {
-      croak "unknown input='$input'";
+      confess "unknown input='$input'";
    }
 
    return $in_fh;
@@ -62,7 +63,7 @@ sub autorep_J {
       my $line = $_;
       chomp $line;
 
-      if ( $line =~ /^(\S+?)\s+?(\S.{18})\s+?(\S.{18})\s+?(\S+)\s+/ ) {
+      if ( $line =~ /^\s*(\S+?)\s+?(\S.{18})\s+?(\S.{18})\s+?(\S+)\s+/ ) {
          @{$result->{$1}}{qw(JobName LastStart LastEnd Status)} = ($1, $2, $3, $4);
       } else {
          print STDERR "unsupported format at line: $line\n";
@@ -107,7 +108,7 @@ sub autorep_q_J {
       my $line = $_;
       chomp $line;
 
-      if ( $line =~ /^([a-zA-Z]\S*?):(.*)/ ) {
+      if ( $line =~ /^\s*([a-zA-Z]\S*?):(.*)/ ) {
          my $attr = $1;
          my $rest = $2;
 
@@ -116,13 +117,13 @@ sub autorep_q_J {
             my @a = split /\s+/, $rest;
             $current_JobName = shift(@a);
             if (@a != 2 && $a[0] ne 'job_type:') {
-               croak "unexpected insert_job line: $line\n";
+               confess "unexpected insert_job line: $line\n";
             } else {
                $result->{$current_JobName}->{job_type} = $a[1];
             }
          } else {
             if (!$current_JobName) {
-               croak "unexpected line before insert_job: $line\n";
+               confess "unexpected line before insert_job: $line\n";
             }
 
             $result->{$current_JobName}->{$attr} = $rest;
@@ -148,24 +149,24 @@ sub get_cache_file {
 
    my $QuerySwitch = $opt->{QuerySwitch} ? $opt->{QuerySwitch} : '-q -J';
    
-   if ( !$QuerySwitch eq '-q -J' || $QuerySwitch eq '-J -q' ) {
+   if ( $QuerySwitch eq '-q -J' || $QuerySwitch eq '-J -q' ) {
       $file .= "/autorep_q_J_";
-      $QuerySwitch = "-q -J";
+      $QuerySwitch = "-q -J"; # normalize
    } elsif ( $QuerySwitch eq '-J' ) {
       $file .= "/autorep_J_";
    } else {
-      croak "unsupported QuerySwitch=$QuerySwitch";
+      confess "unsupported QuerySwitch=$QuerySwitch";
    }
        
    $file .= "$sub_filename" . ".txt";
 
    sub need_refresh {
-      my $refresh = $opt->{Refresh};
-      return 1 if $refresh;
+      my ($f) = @_;
+      return 1 if $opt->{Refresh};
 
-      return 1 if ! -f $file;
+      return 1 if ! -f $f;
 
-      my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = lstat($file);
+      my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = lstat($f);
       my $now_sec = time();
       my $expire_sec = $opt->{CacheExpire} ? $opt->{CacheExpire} : 3600 * 12;
 
@@ -174,11 +175,15 @@ sub get_cache_file {
       return 0;
    }
 
-   return $file if ! need_refresh();
+   if (!need_refresh($file)) {
+      $opt->{verbose} && print STDERR "we will use cached $file\n";
+      return $file;
+   }
 
-   my $cmd = "autorep $QuerySwitch $pattern";
-   system("$cmd > $file");
-   croak "cmd=$cmd failed: $!" if $?;
+   my $cmd = "autorep $QuerySwitch $pattern > $file";
+   $opt->{verbose} && print STDERR "running cmd=$cmd\n";
+   system($cmd);
+   confess "cmd=$cmd failed: $!" if $?;
 
    return $file;
 }
@@ -190,48 +195,85 @@ sub get_dependency {
    my $detail_ref; 
    my $status_ref; 
    
-   if ($opt->{DetailFile}) {
-      $detail_ref = autorep_q_J("file=$opt->{DetailFile}");
+   if ($opt->{DetailFiles}) {
+      for my $file (split /,/, $opt->{DetailFiles}) {
+         $file =~ s/\s+//;
+         $file =~ s/\s+$//;
+         my $new = autorep_q_J("file=$file", $opt);
 
-      if (! $detail_ref->{$job2}) {
-         print STDERR "$job2 is not part: $opt->{DetailFile}\n";
-         return undef;
+         next if ! $new;
+
+         if ($detail_ref) {
+            $detail_ref = {%$detail_ref, %$new};
+         } else {
+            $detail_ref = $new;
+         }
       }
 
+      if (! $detail_ref->{$job2}) {
+         print STDERR "$job2 is not part: $opt->{DetailFiles}\n";
+         return undef;
+      }
    } elsif ($opt->{UnivPatterns}) {
       # APP1%|APP2%
       for my $pattern (split /[|]/, $opt->{UnivPatterns}) {
          my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
+                                              %$opt,
                                    });  
 
-          my $new = autorep_q_J($file);
+         my $new = autorep_q_J("file=$file", $opt);
 
-          %{$detail_ref} = (%{$detail_ref}, %{$new});
+         next if ! $new;
+
+         if ($detail_ref) {
+            $detail_ref = {%$detail_ref, %$new};
+         } else {
+            $detail_ref = $new;
+         }
       }
 
       if (! $detail_ref->{$job2}) {
          print STDERR "$job2 is not part: $opt->{UnivPatterns}\n";
          return undef;
       }
-
    } else {
-      croak "don't know how to find universe";
+      confess "don't know how to find universe: neither DetailFiles nor UnivPatterns is defined.";
    }
 
-   if ($opt->{StatusFile}) {
-      $status_ref = autorep_J("file=$opt->{StatusFile}");
+   if ($opt->{StatusFiles}) {
+      for my $file (split /,/, $opt->{StatusFiles}) {
+         $file =~ s/\s+//;
+         $file =~ s/\s+$//;
+         my $new = autorep_J("file=$file", $opt);
+
+         next if ! $new;
+
+         if ($status_ref) {
+            $status_ref = {%$status_ref, %$new};
+         } else {
+            $status_ref = $new;
+         }                          'box_name' => 'test_box1',
+
+      }
    } elsif ($opt->{UnivPatterns}) {
       # APP1%|APP2%
       for my $pattern (split /[|]/, $opt->{UnivPatterns}) {
          my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
+                                              %$opt,
                                    });  
 
-          my $new = autorep_J($file);
+          my $new = autorep_J("file=$file", $opt);
 
-          %{$status_ref} = (%{$status_ref}, %{$new});
+          next if ! $new;
+
+          if ($status_ref) {
+             $status_ref = {%$status_ref, %$new};
+          } else {
+             $status_ref = $new;
+          }
       }
    } else {
-      croak "don't know how to find universe";
+      confess "don't know how to find universe: neither StatusFiles nor UnivPatterns is defined.";
    }
 
    my $children_by_parent;
@@ -267,7 +309,8 @@ sub get_dependency {
             my $status = $status_ref->{$box_name}->{Status};
             $status = "UNKNOWN" if !defined $status;
 
-            push @{$dependency->{$updown}}, [$serial.".$i", $box_name, $status];
+            push @{$dependency->{$updown}}, 
+               [$serial.".$i", $status_ref->{$box_name}, $detail_ref->{$box_name}];
             trace_dependency($serial.".$i", $box_name, $updown);
             $i++;
             $seen->{$updown}->{$box_name} = 1;
@@ -288,7 +331,8 @@ sub get_dependency {
             my $status = $status_ref->{$j}->{Status};
             $status = "UNKNOWN" if !defined $status;
 
-            push @{$dependency->{$updown}}, [$serial.".$i", $j, $status];
+            push @{$dependency->{$updown}},
+               [$serial.".$i", $status_ref->{$j}, $detail_ref->{$j}];
             trace_dependency($serial.".$i", $j, $updown);
             $i++;
             $seen->{$updown}->{$j} = 1;
@@ -296,8 +340,13 @@ sub get_dependency {
       } 
    }
 
-   trace_dependency("1", $job2, "up");
-   trace_dependency("1", $job2, "down");
+   my $starting_serial = "1";
+
+   trace_dependency($starting_serial, $job2, "up");
+   trace_dependency($starting_serial, $job2, "down");
+
+   push @{$dependency->{'self'}},
+       [$starting_serial, $status_ref->{$job2}, $detail_ref->{$job2}];
 
    return $dependency;
 }
@@ -333,8 +382,8 @@ sub main {
    print "autorep_q_J=", Dumper(autorep_q_J("file=autorep_J_q_example.txt")); 
    print "get_dependency=", Dumper(get_dependency("test_job1", 
                                      {
-                                        DetailFile => "autorep_J_q_example.txt", 
-                                        StatusFile => "autorep_J_example.txt", 
+                                        DetailFiles => "autorep_J_q_example.txt", 
+                                        StatusFiles => "autorep_J_example.txt", 
                                         #verbose => 1,
                                      })); 
    
