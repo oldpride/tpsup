@@ -1,0 +1,43 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog path
+
+   check a file or dir's permission, from the specified 'path' up to root '/'.
+
+EOF
+
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+path=$1
+
+if [ -d $path ]; then
+   dir=$(cd $path; pwd -P)
+else
+   ls -ld $path
+   dir=$(cd `dirname $path`; pwd -P)
+fi
+
+while :
+do
+   ls -ld $dir
+
+   if [ $dir = / ]; then
+      break
+   fi
+
+   cd ..
+   dir=$(pwd -P)
+done
+
