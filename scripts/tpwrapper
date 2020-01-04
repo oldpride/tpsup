@@ -91,7 +91,7 @@ if ($ENV{TPSUP} && (!$ENV{TPSUPMODE} || $ENV{TPSUPMODE} ne 'safe') ) {
    chomp @env;
 
    for my $line (@env) {
-      if ($ line =~ /^([^=]+?) = (.*)/) {
+      if ($line =~ /^([^=]+?)=(.*)/) {
          my ($k, $v) = ($1, $2);
    
          $v = '' if ! defined $v;

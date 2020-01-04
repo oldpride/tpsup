@@ -40,7 +40,10 @@ our @EXPORT_OK = qw(
    get_java
    glob2regex
    get_timestamp
+   get_setting_from_env
+   get_setting_from_profile
 );
+
 
 use Carp;
 use Data::Dumper;
@@ -48,6 +51,41 @@ use IO::Select;
 use Cwd;
 use Cwd 'abs_path';
 use TPSUP::Expression;
+
+
+sub get_setting_from_env {
+   my ($VarName, $VarToFile, $FileName, $opt) = @_;
+   # 1. if $VarName is defined in env, return this.
+   # 2. if $VarToFile is defined in env, search $VarName in file named by $VarToFile.
+   #    return if found.
+   # 3. if $FileName exists, search $VarName in $FileName. return if found.
+   # 4. return undef
+
+   return $ENV{$VarName} if exists $ENV{$VarName};
+
+   if ( exists $ENV{$VarToFile} ) {
+      return get_setting_from_profile($VarName, $ENV{$VarToFile}); 
+   } else {
+      return get_setting_from_profile($VarName, $FileName); 
+   }
+}
+
+
+sub get_setting_from_profile {
+   my ($VarName, $FileName, $opt) = @_;
+
+   my @env = `/bin/bash -c ". $FileName; env"`;
+   chomp @env;
+
+   for my $line (@env) {
+      if ($line =~ /^${VarName}=(.*)/) {
+         return $1;
+      }
+   }
+
+   return undef;
+}
+
 
 sub get_timestamp {
    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);

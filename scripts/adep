@@ -1,0 +1,98 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::AUTOSYS qw(get_dependency);
+use TPSUP::UTIL    qw(get_setting_from_env);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $DetailExpire = 24*60*60;
+my $StatusExpire = 24*60*60;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog JobName
+   
+description:
+
+   check autosys dependency
+
+   -u UnivPatterns    job universe pattern. eg PROJ1_APP1%,PROJ2_APP2%. Multiple
+                       patterns are separated by coma.
+
+   -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
+
+   -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
+   
+   -de n               expire Detail cache after n seconds. default 24 hours.
+
+   -se n               expire Status cache after n seconds. default 24 hours.
+
+   If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
+   shell environment.
+
+   If \$UNIV_PATTERNS is not set in environment, this script will search it in
+   ~/.tpautosys, a bash init file.
+
+examples:
+
+   $prog -df ../lib/perl/TPSUP/autorep_J_q_example.txt -sf ../lib/perl/TPSUP/autorep_J_example.txt test_job1
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $DetailFiles;
+my $StatusFiles;
+my $UnivPatterns;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'u=s'           => \$UnivPatterns,
+   'df=s'          => \$DetailFiles,
+   'sf=s'          => \$StatusFiles,
+   'de=s'          => \$DetailExpire,
+   'se=s'          => \$StatusExpire,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($job) = @ARGV;
+
+my $opt = { 
+   verbose     => $verbose,
+   DetailFiles => $DetailFiles,
+   StatusFiles => $StatusFiles,
+   DetailExpire => $DetailExpire,
+   StatusExpire => $StatusExpire,
+};
+
+if (!$DetailFiles || !$StatusFiles) {
+   if (!$UnivPatterns) {
+      $UnivPatterns = get_setting_from_env('UNIV_PATTERNS', 'TPAUTOSYS', '.tpautosys');
+   }
+}
+
+my $dependency = get_dependency($job, $opt);
+
+no warnings 'uninitialized';
+
+for my $updown (qw(up self down)) {
+   for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
+                                :         @{$dependency->{$updown}}  ) {
+      print "$dep->{serial}, $dep->{job}, $dep->{detail}->{job_type}, ",
+            "$dep->{status}->{Status}, ",
+            "$dep->{status}->{LastStart}, $dep->{status}->{LastEnd}\n";
+   }
+}

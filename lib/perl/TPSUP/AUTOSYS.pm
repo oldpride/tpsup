@@ -12,7 +12,7 @@ our @EXPORT_OK = qw(
       
 use Carp;
 use Data::Dumper;
-use TPSUP::UTIL qw(get_in_fh get_out_fh get_homedir_by_user);
+use TPSUP::UTIL qw(get_in_fh get_out_fh get_homedir_by_user get_setting_from_env);
 
 sub get_autosys_fh {
    my ($input, $opt) = @_;
@@ -216,8 +216,9 @@ sub get_dependency {
       }
    } elsif ($opt->{UnivPatterns}) {
       # APP1%|APP2%
-      for my $pattern (split /[|]/, $opt->{UnivPatterns}) {
+      for my $pattern (split /,/, $opt->{UnivPatterns}) {
          my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
+                                              CacheExpire=>$opt->{DetailExpire},
                                               %$opt,
                                    });  
 
@@ -257,8 +258,9 @@ sub get_dependency {
       }
    } elsif ($opt->{UnivPatterns}) {
       # APP1%|APP2%
-      for my $pattern (split /[|]/, $opt->{UnivPatterns}) {
+      for my $pattern (split /,/, $opt->{UnivPatterns}) {
          my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
+                                              CacheExpire=>$opt->{StatusExpire},
                                               %$opt,
                                    });  
 
@@ -309,8 +311,11 @@ sub get_dependency {
             my $status = $status_ref->{$box_name}->{Status};
             $status = "UNKNOWN" if !defined $status;
 
-            push @{$dependency->{$updown}}, 
-               [$serial.".$i", $status_ref->{$box_name}, $detail_ref->{$box_name}];
+            push @{$dependency->{$updown}}, { job => $box_name,
+                                              serial => $serial.".$i",
+                                              status => $status_ref->{$box_name},
+                                              detail => $detail_ref->{$box_name},
+                                            };
             trace_dependency($serial.".$i", $box_name, $updown);
             $i++;
             $seen->{$updown}->{$box_name} = 1;
@@ -331,8 +336,11 @@ sub get_dependency {
             my $status = $status_ref->{$j}->{Status};
             $status = "UNKNOWN" if !defined $status;
 
-            push @{$dependency->{$updown}},
-               [$serial.".$i", $status_ref->{$j}, $detail_ref->{$j}];
+            push @{$dependency->{$updown}}, { job => $j,
+                                              serial => $serial.".$i",
+                                              status => $status_ref->{$j},
+                                              detail => $detail_ref->{$j},
+                                            };
             trace_dependency($serial.".$i", $j, $updown);
             $i++;
             $seen->{$updown}->{$j} = 1;
@@ -340,13 +348,14 @@ sub get_dependency {
       } 
    }
 
-   my $starting_serial = "1";
+   trace_dependency("-1", $job2, "up");
+   trace_dependency( "1", $job2, "down");
 
-   trace_dependency($starting_serial, $job2, "up");
-   trace_dependency($starting_serial, $job2, "down");
-
-   push @{$dependency->{'self'}},
-       [$starting_serial, $status_ref->{$job2}, $detail_ref->{$job2}];
+   push @{$dependency->{'self'}}, { job => $job2,
+                                    serial => "0",
+                                    status => $status_ref->{$job2},
+                                    detail => $detail_ref->{$job2},
+                                  };
 
    return $dependency;
 }
