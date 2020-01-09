@@ -86,44 +86,114 @@ if (!$UnivPatterns) {
    $UnivPatterns = get_univ_patterns();
 }
 
-my $status = autorep_J(  $UnivPatterns, {StatusExpire=>1});
-my $detail = autorep_q_J($UnivPatterns, {DetailExpire=>600});
+my $info = query_jobs({
+   UnivPatterns=>$UnivPatterns,
+   DetailExpire=>300,
+   StatusExpire=>1
+   DetailFiles=>\$DetailFiles,
+   StatusFiles=>\$StatusFiles,
+});
 
-while (<$ifh>) {
-    chomp $_;
-    my $job = $_;
+my $exists_box_job;
 
-    next if $job =~ /^\s*$/;     # skip blank lines
-    next if $job =~ /^\s*#/;     # skip comment
+for my $job (keys %$info) {
+   my $box_name = $info->{box_name};
 
-    next if defined $ExcludePattern && $job =~ /$ExcludePattern/i; 
-    next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
-
-    if (!$status->{$job}) {
-       croak "cannot find $job in $UnivPatterns\n";
-    }
-
-    my $dep = get_dependency($job
-}
-
-my $opt = { 
-   verbose      => $verbose,
-   DetailFiles  => $DetailFiles,
-   StatusFiles  => $StatusFiles,
-   DetailExpire => $DetailExpire,
-   StatusExpire => $StatusExpire,
-   UnivPatterns => $UnivPatterns,
-};
-
-my $dependency = get_dependency($job, $opt);
-
-no warnings 'uninitialized';
-
-for my $updown (qw(up self down)) {
-   for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
-                                :         @{$dependency->{$updown}}  ) {
-      print "$dep->{serial}, $dep->{job}, $dep->{detail}->{job_type}, ",
-            "$dep->{status}->{Status}, ",
-            "$dep->{status}->{LastStart}, $dep->{status}->{LastEnd}\n";
+   if ($box_name) {
+      $exists_box_job->{$box_name}->{$job} ++;
    }
 }
+
+my @jobs;
+my $seen;
+
+while (<$ifh>) {
+   chomp $_;
+   my $job = $_;
+
+   next if $job =~ /^\s*$/;     # skip blank lines
+   next if $job =~ /^\s*#/;     # skip comment
+
+   next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
+
+   push @jobs, $job;
+   $seen->{$job} ++;
+}
+
+close $ifh;
+
+my $subjobs_by_job;
+
+for my $job (@jobs) {
+   if (!$status->{$job}) {
+      croak "cannot find $job in $UnivPatterns\n";
+   }
+
+   my $dep = get_dependency($job, {DepExps=>['$Status !~ /OH|OI/']});
+
+   if ($dep->{down}) {
+      croak "$job has dependent\n";
+   }
+
+   if ($info->{$job}->{job_type} eq 'BOX') {
+      for my $j2 (keys %$exists_box_job->{$job}) {
+         if $info->{$j2}->{Status} !~ /^(OH|OI)$/) {
+            push @{$subjobs_by_job->{$job}}, $j2;
+         } 
+      }
+
+      if (!$subjobs_by_job->{$job}) {
+         croak "all jobs in BOX $job are OH or OI";
+      }
+   } else {
+      push @{$subjobs_by_job->{$job}}, $job;
+   }
+}
+
+for my $job (@jobs) {
+   { 
+      my $cmd = "sendevent -E FORCE_STARTJOB -J $job";
+   
+      print "cmd = $cmd\n";
+      if (!$dry_run) {
+         system($cmd);
+         $? && exit 1;
+      }
+   }
+
+   
+   while (1) { 
+      my $cmd = "autorep -J $job";
+   
+      print "cmd = $cmd\n";
+
+      if (!$dry_run) {
+         my @lines = `$cmd`;
+         $? && exit 1;
+
+         my @falied = grep { / (TE|FA) /} @lines;
+
+         if (@failed) {
+            print "$job failed\n"; 
+            print @lines;
+            exit 1;
+         }
+
+         my @successful = grep { / (SU) /} @lines;
+
+         print "$job: ", scalar(@successful), " of ", scalar(@{$subjobs_by_job->{$job}}), " succeeded\n";
+
+         if (scalar(@successful) == scalar(@{$subjobs_by_job->{$job}})  
+            last;
+         }
+      }
+
+      last if $dry_run;
+
+      sleep 10;
+   }
+}
+
+print "all complete successfully\n";
+
+exit 0;

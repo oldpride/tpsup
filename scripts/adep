@@ -12,6 +12,7 @@ my $prog = $0; $prog =~ s:.*/::;
 
 my $DetailExpire = 24*60*60;
 my $StatusExpire = 24*60*60;
+my @DepExps;
 
 sub usage {
    my ($message) = @_;
@@ -37,6 +38,8 @@ description:
 
    -se n               expire Status cache after n seconds. default 24 hours.
 
+   -m matchExpression  eg -m '\$Status !~ /OH|OI/'
+
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.
 
@@ -46,6 +49,11 @@ description:
 examples:
 
    $prog -df ../lib/perl/TPSUP/autorep_J_q_example.txt -sf ../lib/perl/TPSUP/autorep_J_example.txt test_job1
+
+   $prog -df ../lib/perl/TPSUP/autorep_J_q_example.txt \\
+         -sf ../lib/perl/TPSUP/autorep_J_example.txt \\
+         -m '\$Status !~ /OH|OI/' \\
+         test_job1
 
 END
 
@@ -64,6 +72,7 @@ GetOptions(
    'sf=s'          => \$StatusFiles,
    'de=s'          => \$DetailExpire,
    'se=s'          => \$StatusExpire,
+   'm=s'           => \@DepExps,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -77,6 +86,7 @@ my $opt = {
    DetailExpire => $DetailExpire,
    StatusExpire => $StatusExpire,
    UnivPatterns => $UnivPatterns,
+   DepExps      => \@DepExps,
 };
 
 my $dependency = get_dependency($job, $opt);

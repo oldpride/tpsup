@@ -42,6 +42,7 @@ sub export {
 # export_var is an enhanced version.
 # 1. it took care of the reset need as an option
 # 2. it help handle numeric variable ${35} as fix variable $fix{35}
+# 3. it handles Hash-of-Hash input: set $opt->{Hash} to 1
 
 my %_exist;
 
@@ -56,6 +57,7 @@ sub export_var {
       if ($prefix) {
          for my $k (keys %{${$prefix}}) { 
             if ( $opt->{Hash} ) {
+               # this is nested
                for my $k2 (keys %{${$prefix}{$k}}) {
                   delete ${$prefix}{$k}{$k2};
                }
@@ -69,6 +71,7 @@ sub export_var {
       } else {
          for my $k (keys %_exist) {
             if ( $opt->{Hash} ) {
+               # this is nested
                for my $k2 (keys %{$k}) {
                   delete ${$k}{$k2};
                }
@@ -93,6 +96,7 @@ sub export_var {
    if ($prefix) {
       for my $k (keys %$ref) {
         if ($opt->{Hash}) {
+           # this is nested
            for my $k2 (keys %{$ref->{$k}}) {
               ${$prefix}{$k}{$k2} = $ref->{$k}->{$k2};
            }

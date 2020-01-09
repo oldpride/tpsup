@@ -15,6 +15,7 @@ our @EXPORT_OK = qw(
 use Carp;
 use Data::Dumper;
 use TPSUP::UTIL qw(get_in_fh get_out_fh get_homedir_by_user get_setting_from_env);
+use TPSUP::Expression;
 
 sub get_autosys_fh {
    my ($input, $opt) = @_;
@@ -306,19 +307,11 @@ sub query_jobs {
    my $warn = $opt->{verbose} ? 'use' : 'no';
 
    my $matchExps;
-   if ($opt->{JobMatchExps} && @{$opt->{JobMatchExps}}) {
+   if ($opt->{JobExps} && @{$opt->{JobExps}}) {
       @$matchExps = map {
          my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
          $@ ? (die "Bad match expression '$_' : $@") : $compiled;
-      } @{$opt->{JobMatchExps}};
-   }
-
-   my $excludeExps;
-   if ($opt->{JobExcludeExps} && @{$opt->{JobExcludeExps}}) {
-      @$excludeExps = map {
-         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
-         $@ ? (die "Bad match expression '$_' : $@") : $compiled;
-      } @{$opt->{JobExcludeExps}};
+      } @{$opt->{JobExps}};
    }
 
    my $return_ref;
@@ -334,34 +327,12 @@ sub query_jobs {
 
       $r->{JobName} = $job;
 
-      if ($matchExps || $excludeExps) {
-         TPSUP::Expression::export(%$r);
-         my $exclude_from_doing;
-
-         if ($excludeExps) {
-            for my $e (@$excludeExps) {
-               if ($e->()) {
-                  $exclude_from_doing ++;
-                  last;
-               }
+      if ($matchExps) {
+         TPSUP::Expression::export_var(%$r, {RESET=>1});
+         for my $e (@$matchExps) {
+            if (! $e->()) {
+               next;
             }
-         }
-
-         if ($exclude_from_doing) {
-            next;
-         }
-
-         {
-            for my $e (@$matchExps) {
-               if (! $e->()) {
-                  $exclude_from_doing ++;
-                  last;
-               }
-            }
-         }
-
-         if ($exclude_from_doing) {
-            next;
          }
       }
 
@@ -395,6 +366,16 @@ sub get_dependency {
     
    $opt->{verbose} && print STDERR "children=", Dumper($children_by_parent);
 
+   my $warn = $opt->{verbose} ? 'use' : 'no';
+
+   my $matchExps;
+   if ($opt->{DepExps} && @{$opt->{DepExps}}) {
+      @$matchExps = map {
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         $@ ? (die "Bad match expression '$_' : $@") : $compiled;
+      } @{$opt->{DepExps}};
+   }
+
    my $max_depth = 100;
    my $depth = 0;
    my $dependency;
@@ -405,6 +386,20 @@ sub get_dependency {
 
       $opt->{verbose} && print "trace_dependency($serial, $job, $updown)\n";
 
+      my $r = $all_ref->{$job};
+
+      if ($matchExps) {
+         TPSUP::Expression::export_var($r, {RESET=>1});
+         for my $e (@$matchExps) {
+            if (! $e->()) {
+               return;
+            }
+         }
+      }
+
+      push @{$dependency->{$updown}}, { detail => $r,
+                                        serial => $serial,
+                                      };
       my $i = 1;
 
       # just in case we got into a dead loop
@@ -415,9 +410,6 @@ sub get_dependency {
       if ($box_name) {
          if (!$seen->{$updown}->{$box_name}) {
             my $r = $all_ref->{$box_name};
-            push @{$dependency->{$updown}}, { detail => $r,
-                                              serial => $serial.".$i",
-                                            };
             trace_dependency($serial.".$i", $box_name, $updown);
             $i++;
             $seen->{$updown}->{$box_name} = 1;
@@ -437,9 +429,6 @@ sub get_dependency {
          if (!$seen->{$updown}->{$j}) {
             my $r = $all_ref->{$j};
 
-            push @{$dependency->{$updown}}, { detail => $r,
-                                              serial => $serial.".$i",
-                                            };
             trace_dependency($serial.".$i", $j, $updown);
             $i++;
             $seen->{$updown}->{$j} = 1;
