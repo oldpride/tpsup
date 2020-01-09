@@ -71,18 +71,13 @@ usage("wrong number of args") if @ARGV != 1;
 my ($job) = @ARGV;
 
 my $opt = { 
-   verbose     => $verbose,
-   DetailFiles => $DetailFiles,
-   StatusFiles => $StatusFiles,
+   verbose      => $verbose,
+   DetailFiles  => $DetailFiles,
+   StatusFiles  => $StatusFiles,
    DetailExpire => $DetailExpire,
    StatusExpire => $StatusExpire,
+   UnivPatterns => $UnivPatterns,
 };
-
-if (!$DetailFiles || !$StatusFiles) {
-   if (!$UnivPatterns) {
-      $UnivPatterns = get_setting_from_env('UNIV_PATTERNS', 'TPAUTOSYS', '.tpautosys');
-   }
-}
 
 my $dependency = get_dependency($job, $opt);
 
@@ -91,8 +86,8 @@ no warnings 'uninitialized';
 for my $updown (qw(up self down)) {
    for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
                                 :         @{$dependency->{$updown}}  ) {
-      print "$dep->{serial}, $dep->{job}, $dep->{detail}->{job_type}, ",
-            "$dep->{status}->{Status}, ",
-            "$dep->{status}->{LastStart}, $dep->{status}->{LastEnd}\n";
+      print "$dep->{serial}, $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
+            "$dep->{detail}->{Status}, ",
+            "$dep->{detail}->{LastStart}, $dep->{detail}->{LastEnd}\n";
    }
 }

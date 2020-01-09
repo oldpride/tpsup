@@ -64,9 +64,17 @@ sub get_setting_from_env {
    return $ENV{$VarName} if exists $ENV{$VarName};
 
    if ( exists $ENV{$VarToFile} ) {
-      return get_setting_from_profile($VarName, $ENV{$VarToFile}); 
+      my $value = get_setting_from_profile($VarName, $ENV{$VarToFile}); 
+      if (!defined $value) {
+         confess "cannot find $VarName in $VarName or $VarToFile=$ENV{$VarToFile}";
+      }
+      return $value;
    } else {
-      return get_setting_from_profile($VarName, $FileName); 
+      my $value = get_setting_from_profile($VarName, $FileName); 
+      if (!defined $value) {
+         confess "cannot find $VarName in $VarName or $FileName";
+      }
+      return $value;
    }
 }
 
@@ -74,7 +82,7 @@ sub get_setting_from_env {
 sub get_setting_from_profile {
    my ($VarName, $FileName, $opt) = @_;
 
-   my @env = `/bin/bash -c ". $FileName; env"`;
+   my @env = `/bin/bash -c "set -o allexporrt; . $FileName; env"`;
    chomp @env;
 
    for my $line (@env) {
