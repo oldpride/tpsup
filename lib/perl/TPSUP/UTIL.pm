@@ -82,7 +82,7 @@ sub get_setting_from_env {
 sub get_setting_from_profile {
    my ($VarName, $FileName, $opt) = @_;
 
-   my @env = `/bin/bash -c "set -o allexporrt; . $FileName; env"`;
+   my @env = `/bin/bash -c "set -o allexport; . $FileName; env"`;
    chomp @env;
 
    for my $line (@env) {
