@@ -1,0 +1,51 @@
+/* ---------- test_box1 -------------*/
+  
+insert_job: test_box1 job_type: BOX
+machine: juno
+data_conditions: 0
+owner: jerry@juno
+condition: s(test_job3,0) and n(test_job4)
+permission:
+alarm_if_fail: 1
+  
+/* ---------- test_job1 -------------*/
+  
+insert_job: test_job1 job_type: CMD
+box_name: test_box1
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+profile: /etc/profile
+
+/* ---------- test_job2 -------------*/
+  
+insert_job: test_job2 job_type: CMD
+box_name: test_box1
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+profile: /etc/profile
+
+/* ---------- test_job3 -------------*/
+  
+insert_job: test_job3 job_type: CMD
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+profile: /etc/profile
+
+/* ---------- test_job4 -------------*/
+  
+insert_job: test_job4 job_type: CMD
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+profile: /etc/profile

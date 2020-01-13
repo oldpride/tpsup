@@ -48,10 +48,15 @@ description:
 
 examples:
 
-   $prog -df ../lib/perl/TPSUP/autorep_J_q_example.txt -sf ../lib/perl/TPSUP/autorep_J_example.txt test_job1
+   - test a job in box
+   $prog -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt test_job1
 
-   $prog -df ../lib/perl/TPSUP/autorep_J_q_example.txt \\
-         -sf ../lib/perl/TPSUP/autorep_J_example.txt \\
+   - test a box
+   $prog -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt test_box1
+
+   - filter out job on-hold and on-ice
+   $prog -df adep_autorep_J_q_example.txt \\
+         -sf adep_autorep_J_example.txt \\
          -m '\$Status !~ /OH|OI/' \\
          test_job1
 
@@ -96,7 +101,11 @@ no warnings 'uninitialized';
 for my $updown (qw(up self down)) {
    for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
                                 :         @{$dependency->{$updown}}  ) {
-      print "$dep->{serial}, $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
+                                  
+      print $updown eq 'up' ? '-': '',
+            join('.', @{$dep->{serial}}),
+            ", $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
+            "$dep->{reason}, ",
             "$dep->{detail}->{Status}, ",
             "$dep->{detail}->{LastStart}, $dep->{detail}->{LastEnd}\n";
    }
