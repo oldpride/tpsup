@@ -96,9 +96,13 @@ my $opt = {
 
 my $dependency = get_dependency($job, $opt);
 
+$verbose && print STDERR "dependency=", Dumper($dependency);
+
 no warnings 'uninitialized';
 
 for my $updown (qw(up self down)) {
+   next if ! exists $dependency->{$updown};
+
    for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
                                 :         @{$dependency->{$updown}}  ) {
                                   

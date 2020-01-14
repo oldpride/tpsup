@@ -384,7 +384,6 @@ sub get_dependency {
    }
 
    my $max_depth = 100;
-   my $depth = 0;
    my $dependency;
    my $seen;
 
@@ -425,7 +424,7 @@ sub get_dependency {
       my $i = 1;
 
       # just in case we got into a dead loop
-      $depth ++;
+      my $depth = scalar(@$serial);
       croak "exceeded max depth $max_depth" if $depth > $max_depth;
 
       my @next_level;
@@ -434,13 +433,7 @@ sub get_dependency {
       if ($box_name) {
          # this job is in a box
 
-         if (!$seen->{$updown}->{$box_name}) {
-            $seen->{$updown}->{$box_name} = 1;
-
-            push @next_level, ['box', [$box_name]];
-            #trace_dependency([@$serial, $i], $box_name, $updown, 'box');
-            #$i++;
-         }
+         push @next_level, ['box', [$box_name]];
       }
 
 
@@ -449,11 +442,9 @@ sub get_dependency {
          push @next_level, ['condition', 
                             [condition_to_jobs($all_ref->{$job}->{condition})]
                            ];
-         #@next_level = condition_to_jobs($all_ref->{$job}->{condition});
       } else {
          # now $updown eq 'down'
          if ($children_by_parent->{$job}) {
-            #@next_level = @{$children_by_parent->{$job}};
             push @next_level, ['condition', $children_by_parent->{$job}];
          }
       }
@@ -470,25 +461,21 @@ sub get_dependency {
             if (!$seen->{$updown}->{$j}) {
                $seen->{$updown}->{$j} = 1;
                
-               my $r = $all_ref->{$j};
-   
                trace_dependency([@$serial, $i], $j, $updown, $rsn);
                $i++;
             } 
          }
       } 
-
    }
 
    push @{$dependency->{'self'}}, { detail => $all_ref->{$job2},
                                     serial => [0],
                                     reason => 'self',
                                   };
-
    $seen->{up}->{$job2} ++;
    $seen->{down}->{$job2} ++;
 
-   trace_dependency([], $job2, "up", 'self');
+   trace_dependency([], $job2, "up",   'self');
    trace_dependency([], $job2, "down", 'self');
 
    return $dependency;
