@@ -32,5 +32,12 @@ do
 
    perl -M$i -e "print \$INC{'$short'}"
 
+   if [ $? -eq 0 ]; then
+      echo ""
+       
+      perl -M$i -e "print \"\\\$$i::VERSION=\$$i::VERSION\\n\";"
+   fi
+
    echo ""
+
 done

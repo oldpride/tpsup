@@ -8,7 +8,8 @@ use Carp;
 #use TPSUP::AUTOSYS qw(get_dependency);
 #use TPSUP::UTIL    qw(get_setting_from_env);
 
-use WWW::Mechanize; my $mech = WWW::Mechanize->new();
+use WWW::Mechanize;
+use IO::Socket::SSL qw();
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -41,7 +42,48 @@ GetOptions(
 
 #my ($job) = @ARGV;
 
+my $mech = WWW::Mechanize->new(
+   agent => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/79.0.3945.79 Chrome/79.0.3945.79 Safari/537.36",
+
+   # https://www.perlmonks.org/?node_id=1037506
+   ssl_opts => {
+      Timeout => 5,     # default 180
+
+      # https://stackoverflow.com/questions/47183328/wwwmechanize-ignore-ssl
+      # The SSL handshake can not be ignored with https since it is an integral
+      # part of a TLS connection (and thus https). At most you could try to
+      # skip validation of the certificate (bad idea) which is what you are
+      # trying. But, this does not make handshake failures vanish.
+      #SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE,
+      #verify_hostname => 0,
+   },
+);
+
+# The following are for SSL debug
+# https://metacpan.org/pod/distribution/IO-Socket-SSL/lib/IO/Socket/SSL.pod
+# 0 - No debugging (default).
+# 1 - Print out errors from IO::Socket::SSL and ciphers from Net::SSLeay.
+# 2 - Print also information about call flow from IO::Socket::SSL and progress
+#     information from Net::SSLeay.
+# 3 - Print also some data dumps from IO::Socket::SSL and from Net::SSLeay.
+# Also, analyze-ssl.pl from the ssl-tools repository at
+#    https://github.com/noxxi/p5-ssl-tools
+# might be a helpful tool when debugging SSL problems, as do the openssl
+# command line tool and a check with a different SSL implementation (e.g. 
+# a web browser).
+$IO::Socket::SSL::DEBUG = 3;
+
+# the following are two ways to print LWP detail, not SSL detail
+# use LWP::ConsoleLogger::Everywhere;
+$mech->add_handler("request_send",  sub {shift->dump; return});
+$mech->add_handler("response_done", sub {shift->dump; return});
+
+#$mech->proxy( ['http', 'https'], "http://...");
+#$mech->progress();
+
 my $url = "https://docs.impact.broadridge.com";
+#my $url = "https://prd.impact.spsfi.broadridge.com";
+
 $mech->get($url);
 #$mech->follow_link( url => 'https://account.login.page.com');
 if (! $mech->success()){
