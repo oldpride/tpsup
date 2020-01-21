@@ -13,6 +13,10 @@ examples:
    $0 Inline::MakeMaker
    $0 TPSUP::CSV
 
+   # can also use / in place of ::
+   $0 Data/Dumper
+   $0 Data/Dumper.pm
+
 EOF
    exit 1
 }
@@ -26,7 +30,8 @@ which perl
 
 for i in $@
 do
-   short=`echo $i|sed -e 's/::/\//g;s/$/.pm/'`
+   i=`echo $i|sed -e 's!/!::!g; s![.]pm$!!'`
+   short=`echo $i|sed -e 's/::/\//g; s/$/.pm/'`
 
    echo "perl -M$i -e \"print \\\$INC{'$short'}\""
 

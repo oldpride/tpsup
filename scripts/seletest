@@ -1,0 +1,89 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+#use TPSUP::AUTOSYS qw(get_dependency);
+#use TPSUP::UTIL    qw(get_setting_from_env);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog JobName
+   
+description:
+
+
+examples:
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+) || usage("cannot parse command line: $!");
+
+#usage("wrong number of args") if @ARGV != 1;
+
+#my ($job) = @ARGV;
+
+
+use Selenium::Chrome;
+
+my $driver = Selenium::Chrome->new (
+   startup_timeout => 20,
+);
+
+# <input class="gLFyf gsfi" maxlength="2048" name="q" type="text" jsaction="paste:puy29d" aria-autocomplete="both" aria-haspopup="false" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" role="combobox" spellcheck="false" title="Search" value="" aria-label="Search" data-ved="0ahUKEwjt7s-M5pXnAhVDuVkKHUlHBscQ39UDCAY">
+
+# https://gist.github.com/dnmfarrell/5dde6d3957bf9ae037e170cdb44f75a5 
+
+my $url = "https://www.google.com";
+$driver->get($url);
+
+#my $text = $driver->get_body;
+#print $FH encode('UTF-8', $text);
+
+#my @links = $driver->find_elements('a', 'tag_name');
+#for my $l (@links) {
+#      my $link_url = eval { $l->get_attribute('href') };
+#      next unless $link_url;
+#      my $link_uri = URI->new($link_url);
+#      next unless $link_uri->can('host'); # not all URIs have a domain
+#      my $link_host = $link_uri->host;
+# }
+
+sleep 1;
+
+my $search_box = $driver->find_element('q', 'name');
+$driver->send_keys_to_active_element("perl Selenium", "\n");
+
+sleep 5;
+
+
+$driver->shutdown_binary;
+
+__END__
+use Selenium::Remote::Driver;
+#use Encode 'encode';
+
+my $driver = Selenium::Remote::Driver->new(
+  browser_name => 'chrome',
+  #browser_name => 'chromium-browser',
+  extra_capabilities => { chromeOptions => {args => [
+    'window-size=960,540',
+    'headless',
+  ]}},
+);
