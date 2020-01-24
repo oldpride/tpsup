@@ -61,14 +61,14 @@ description:
 
    -prefix             print prefix 'host,stdout/stderr,', on each line for easy parsing.
 
-   Build-in variables  \%{host}, (remote host), \%{login} (remote login)
+   Build-in variables  \%{host} (remote host), \%{login} (remote login)
                        \%{yyyy}, \%{mm}, \%{dd}, \%{HH}, \%{MM}, \%{SS}
 
 examples:
 
    - use default hostfile
    mssh  -- ls -d /etc /usr
-   mscp  -- /etc/hosts localhost:/tmp
+   mscp  -- /etc/hosts \%{host}:/tmp
 
    - use host switch
    mssh -hl localhost,tian\@linux1 -- ls -d /etc /usr
