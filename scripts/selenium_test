@@ -46,10 +46,16 @@ my $driver = Selenium::Chrome->new (
    custom_args => '--no-sandbox',
 );
 
+sleep 5;
+
+$driver->shutdown_binary;
+
 my $url = "https://www.google.com";
 $driver->get($url);
 
 sleep 2;
+
+exit 0;
 
 # <input class="gLFyf gsfi" maxlength="2048" name="q" type="text" jsaction="paste:puy29d" aria-autocomplete="both" aria-haspopup="false" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" role="combobox" spellcheck="false" title="Search" value="" aria-label="Search" data-ved="0ahUKEwjt7s-M5pXnAhVDuVkKHUlHBscQ39UDCAY">
 
