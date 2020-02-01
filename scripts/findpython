@@ -18,6 +18,15 @@ examples:
    PATH=/usr/bin       ./findpython pwd
    PATH=/usr/local/bin ./findpython pwd
 
+   - format for convenience
+   $0 urllib3.request
+   $0 urllib3.request.py
+   $0 urllib3/request.py
+
+   - format in perl style
+   $0 urllib3::request
+   $0 urllib3::request.py
+
 EOF
    exit 1
 }
@@ -29,6 +38,10 @@ if [ $# -ne 1 ]; then
 fi
 
 module=$1
+
+module=`echo $module|sed -e 's://*:.:g; s/::*/./g; s/[.]py$//'`
+
+echo "normalized module: $module"
 
 echo ""
 # which will not report function

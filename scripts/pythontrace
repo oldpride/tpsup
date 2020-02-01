@@ -1,3 +1,32 @@
 #!/bin/bash
 
-python -m trace --trace "$@"
+usage () {
+   cat <<EOF
+
+usage: $0 command.py ...
+
+EOF
+
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "ERROR: wrong number of args"
+   usage
+fi
+
+# prefer tptrace as it prints full mode name
+# request vs url.request, url2.request, url3.request
+
+# "tian@linux1:/home/tian/github/tpsup/python3/scripts$ diff /usr/lib/python3.6/trace.py /usr/lib/python3.6/tptrace.py
+# "276c276
+# "<                 modulename = _modname(filename)
+# "---
+# ">                 modulename = _fullmodname(filename)
+
+
+if echo "import tptrace"|python 2>/dev/null; then
+   python -m tptrace --trace "$@"
+else
+   python -m trace --trace "$@"
+fi
