@@ -52,8 +52,6 @@ sub timestamped {
    return sprintf("%04d%02d%02d %02d:%02d:%02d ", $year+1900, $mon+1, $mday, $hour, $min, $sec);
 }
 
-$| = 1;
-
 my $verbose;
 
 GetOptions(
@@ -125,7 +123,8 @@ while (1) {
                $left_client_socket->recv($data,1024000);
 
                if (!$data) {
-                  print timestamped(), "client $peer_host:$peer_port quitted. \n";
+                  print timestamped(), "client $peer_host:$peer_port quitted, then we close server $remote_host:$remote_port\n";
+                  $right_server_socket->close();
                   last SELECT;
                } else {
                   print timestamped(), "received from client $peer_host:$peer_port ", length($data), " bytes. sending to $remote_host:$remote_port\n";
@@ -144,7 +143,8 @@ while (1) {
                $right_server_socket->recv($data,1024000);
 
                if (!$data) {
-                  print timestamped(), "server $remote_host:$remote_port quitted. \n";
+                  print timestamped(), "server $remote_host:$remote_port quitted, then we close client $peer_host:$peer_port.\n";
+                  $left_client_socket->close();
                   last SELECT;
                } else {
                   print timestamped(), "received from server $remote_host:$remote_port ", length($data), " bytes. sending to $peer_host:$peer_port\n";
