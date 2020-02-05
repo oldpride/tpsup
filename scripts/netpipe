@@ -40,8 +40,12 @@ examples:
    $prog 3333 localhost:4444
    tpnc localhost 3333
 
-   - to test selenium on pc
-   $prog 9333 192.168.1.164:9222
+   - to set up selenium with a chrome browser on a remote pc at port 9222, run the following 
+     on the pc's cygwin terminal. 
+
+        $prog 9333 localhost:9222
+
+     then have chromedriver point to pc:93333
 
 END
    exit 1;
