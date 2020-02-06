@@ -41,21 +41,40 @@ GetOptions(
 #my ($job) = @ARGV;
 
 my $driver = Selenium::Chrome->new (
+   # the following seting are in Selenium::Chrome
    startup_timeout => 20,
-   #custom_args => '--log-path=/path/to/log --no-sandbox --proxy-pac-url=http://pac.abc.com/',
-   custom_args => '--no-sandbox',
+   custom_args => '--verbose --log-path=/tmp/selenium_chromedriver.log',  # chromedriver cmd line
+
+   # the following setting are in Selenium/CanStartBinary.pm
+   logfile => '/tmp/selenium_chromedriver_short.log',  # another chromedriver log, shorter version
+
+   # Selenium::Chrome is an extension of Selenium::Remote::Driver
+   # the following setting are in Selenium::Remote::Driver
+   debug_on   => 1, 
+   extra_capabilities => {
+      'goog:chromeOptions' => {
+         # these are chrome browser (including chromium-browser) command line args
+         args => [
+            '--no-sandbox',              # to run without root
+            '--disable-dev-shm-usage',   # to run without root
+            '--window-size=960,540',
+
+            # use a separate browser dir to avoid corruption
+            '--user-data-dir=/tmp/selenium_chrome_browser_dir',  
+
+            #'--headless',
+            #'--proxy-pac-url=http://pac.abc.net',
+         ],
+      },
+   },
 );
 
-sleep 5;
-
-$driver->shutdown_binary;
+sleep 2;
 
 my $url = "https://www.google.com";
 $driver->get($url);
 
 sleep 2;
-
-exit 0;
 
 # <input class="gLFyf gsfi" maxlength="2048" name="q" type="text" jsaction="paste:puy29d" aria-autocomplete="both" aria-haspopup="false" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" role="combobox" spellcheck="false" title="Search" value="" aria-label="Search" data-ved="0ahUKEwjt7s-M5pXnAhVDuVkKHUlHBscQ39UDCAY">
 
