@@ -8,11 +8,14 @@ use strict;
 use Carp;
 use IO::Socket::INET;
 use IO::Select;
+use POSIX ":sys_wait_h";
 
 my $prog = $0; $prog =~ s:.*/::;
 
 my $number_of_retries = 1;
 my $retry_interval = 3;
+
+my $queue_depth = 1;
 
 sub usage {
    my ($message) = @_;
@@ -36,6 +39,8 @@ server switches:
    -w wait_time           wait this many seconds for client connection.
                           return code is 2 after timeout,
                           default to wait forever.
+
+   -queue  int            listener queue depth, default to $queue_depth.
 
 client switches:
 
@@ -75,6 +80,7 @@ GetOptions(
    'r=s'      =>      \$number_of_retries,
    'i=s'      =>      \$retry_interval,
    'w=s'      =>      \$wait_seconds,
+   'queue=s'  =>      \$queue_depth,
 ) || usage("cannot parse command line: $!");
 
 usage("number_of_retries=$number_of_retries is not a positive integer")
@@ -96,66 +102,80 @@ if (defined $localport) {
       #LocalHost => '127.0.0.1',
       LocalPort => $localport,
       Proto => 'tcp',
-      Listen => 5,
+      Listen => $queue_depth,
       Reuse => 1,
+      Timeout => $wait_seconds,
    ) or die "ERROR in Socket Creation : $!\n";
 
-   if ($wait_seconds) {
-      $SIG{ALRM} = sub {
-         $verbose && print STDERR "server exits after $wait_seconds seconds not getting client connection\n";
-         exit 2;
-      };
+   while(1) {
+      $verbose && print STDERR "SERVER Waiting for client connection on port $localport.\n";
+      my $client_socket = $socket->accept();
+      if (!$client_socket) {
+         print STDERR "No new client connection. Server quits\n"; 
+         exit(0);
+      }
 
-      alarm $wait_seconds;
-   }
-
-   # waiting for new client connection.
-   $verbose && print STDERR "SERVER Waiting for client connection on port $localport\n";
-   my $client_socket = $socket->accept();
-
-   alarm 0 if $wait_seconds;      # clear the alarm
-
-   # get the host and port number of newly connected client,
-   my $peer_address = $client_socket->peerhost();
-   my $peer_port = $client_socket->peerport();
-
-   $verbose && print STDERR "Accepted new client connection from $peer_address:$peer_port\n";
-
-   my $select = IO::Select->new($client_socket) or die "IO::Select $!";
-   $select->add(\*STDIN) or die "IO::Select $!";
-
-   SELECT:
-   while (1) {
-      $verbose && print STDERR "waiting for ready inputs\n";
-
-      if (my @ready = $select->can_read(300)) {
-         for my $fh (@ready) {
-            if ($fh == $client_socket) {
-               $verbose && print STDERR "found client activities\n";
-
-               my $data;
-
-               $client_socket->recv($data,1024000);
-
-               if (!$data) {
-                  $verbose && print STDERR "client $peer_address: $peer_port quitted. \n";
-                  last SELECT;
+      # get the host and port number of newly connected client,
+      my $peer_address = $client_socket->peerhost();
+      my $peer_port = $client_socket->peerport();
+   
+      $verbose && print STDERR "Accepted new client connection from $peer_address:$peer_port\n";
+   
+      my $child_pid = fork();
+   
+      die "fork() failed: $! " if ! defined($child_pid);
+   
+      if ($child_pid) {
+         # this is parent
+   
+         while (1) {
+            my $kid = waitpid(-1, WNOHANG);
+            if (!$kid) {
+               last;
+            }
+         }
+   
+         next ACCEPT;
+      }
+   
+      my $select = IO::Select->new($client_socket) or die "IO::Select $!";
+      $select->add(\*STDIN) or die "IO::Select $!";
+   
+      SELECT:
+      while (1) {
+         $verbose && print STDERR "waiting for ready inputs\n";
+   
+         if (my @ready = $select->can_read(300)) {
+            for my $fh (@ready) {
+               if ($fh == $client_socket) {
+                  $verbose && print STDERR "found client activities\n";
+   
+                  my $data;
+   
+                  $client_socket->recv($data,1024000);
+   
+                  if (!$data) {
+                     $verbose && print STDERR "client $peer_address: $peer_port quitted. \n";
+                     last SELECT;
+                  } else {
+                     print $data;
+                  }
                } else {
-                  print $data;
-               }
-            } else {
-               $verbose && print STDERR "found stdin activities\n";
-               my $data;
-               read(STDIN, $data, 1024000);
-               if (!$data) {
-                  $verbose && print STDERR "STDIN closed. \n";
-                  last SELECT;
-               } else {
-                  $client_socket->send($data);
+                  $verbose && print STDERR "found stdin activities\n";
+                  my $data;
+                  read(STDIN, $data, 1024000);
+                  if (!$data) {
+                     $verbose && print STDERR "STDIN closed. \n";
+                     last SELECT;
+                  } else {
+                     $client_socket->send($data);
+                  }
                }
             }
          }
       }
+   
+      exit(0);
    }
 } else {
    # this is a client
