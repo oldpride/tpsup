@@ -28,6 +28,9 @@ usage:
 
    - as a server, listening at a local port
    $prog -l local_port
+   this server can accept multiple clients but can only talk to one client because
+   there is only one STDIN, therefore, cannot direct the input to multiple clients
+   at will 
 
    - as a client, connecting to a remote port
    $prog remote_host remote_port
