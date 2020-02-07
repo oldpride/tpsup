@@ -107,6 +107,7 @@ if (defined $localport) {
       Timeout => $wait_seconds,
    ) or die "ERROR in Socket Creation : $!\n";
 
+   ACCEPT:
    while(1) {
       $verbose && print STDERR "SERVER Waiting for client connection on port $localport.\n";
       my $client_socket = $socket->accept();
