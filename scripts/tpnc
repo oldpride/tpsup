@@ -107,12 +107,11 @@ if (defined $localport) {
       Timeout => $wait_seconds,
    ) or die "ERROR in Socket Creation : $!\n";
 
-   ACCEPT:
    while(1) {
-      $verbose && print STDERR "SERVER Waiting for client connection on port $localport for $wait_seconds seconds.\n";
+      $verbose && print STDERR "SERVER Waiting for client connection on port $localport.\n";
       my $client_socket = $socket->accept();
       if (!$client_socket) {
-         print STDERR "No new client connection for $wait_seconds seconds. Server quits\n"; 
+         print STDERR "No new client connection. Server quits\n"; 
          exit(0);
       }
 
