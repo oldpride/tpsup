@@ -8,6 +8,7 @@ use strict;
 use Carp;
 use IO::Socket::INET;
 use IO::Select;
+use POSIX ":sys_wait_h";
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -77,15 +78,18 @@ my ($remote_host, $remote_port) = split /:/, $remote_host_port;
 #                         +--------------------------------+     +------------------+ 
 # 
 
+my $info_by_pid;
+
 my $left_server_socket = new IO::Socket::INET (
    #LocalHost => '127.0.0.1',
    LocalPort => $local_port,
    Proto => 'tcp',
-   Listen => 5,
+   Listen => 10,
    Reuse => 1,
    Timeout => $wait,
 ) or die "ERROR in Socket Creation : $!\n";
 
+ACCEPT:
 while (1) {
    print timestamped(), "Waiting for client connection at port $local_port for $wait seconds\n";
    my $left_client_socket = $left_server_socket->accept();
@@ -99,7 +103,29 @@ while (1) {
    my $peer_host = $left_client_socket->peerhost();
    my $peer_port = $left_client_socket->peerport();
 
-   print timestamped(), "Accepted new client connection from $peer_host:$peer_port, then connect to $remote_host:$remote_port\n";
+   my $child_pid = fork();
+
+   die "fork() failed: $! " if ! defined($child_pid);
+
+   if ($child_pid) {
+      # this is parent
+
+      print timestamped(), "Accepted new client connection from $peer_host:$peer_port, then connect to $remote_host:$remote_port, child_pid=$child_pid\n";
+
+      $info_by_pid->{$child_pid}->{host} = $peer_host;
+      $info_by_pid->{$child_pid}->{port} = $peer_port;
+
+      while (1) {
+         my $kid = waitpid(-1, WNOHANG);
+         if (!$kid) {
+            last;
+         }
+      }
+
+      next ACCEPT;
+   } 
+
+   # this is child
 
    my $right_server_socket = new IO::Socket::INET (
                                  PeerHost => $remote_host,
@@ -165,6 +191,8 @@ while (1) {
          }
       }
    }
+
+   exit(0);
 } 
 
 exit 0;
