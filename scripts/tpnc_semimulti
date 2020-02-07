@@ -28,9 +28,13 @@ usage:
 
    - as a server, listening at a local port
    $prog -l local_port
+
    this server can accept multiple clients but can only talk to one client because
    there is only one STDIN, therefore, cannot direct the input to multiple clients
-   at will 
+   at will.
+
+   only the first forked process get the STDIN, the rest forked process will just
+   echo back the client message
 
    - as a client, connecting to a remote port
    $prog remote_host remote_port
@@ -97,6 +101,8 @@ usage("wait_seconds=$wait_seconds is not a positive integer")
 
 # http://www.thegeekstuff.com/2010/07/perl-tcp-udp-socket-programming
 
+my $stdin_is_taken = 0;
+
 if (defined $localport) {
    # this is a server
    usage("wrong number of args") if @ARGV;
@@ -123,7 +129,14 @@ if (defined $localport) {
       my $peer_address = $client_socket->peerhost();
       my $peer_port = $client_socket->peerport();
    
-      $verbose && print STDERR "Accepted new client connection from $peer_address:$peer_port\n";
+      my $has_stdin = 0;
+      if (! $stdin_is_taken) {
+         $stdin_is_taken = 1;
+         $has_stdin = 1;
+         $verbose && print STDERR "Accepted new client connection from $peer_address:$peer_port\n";
+      } else {
+         $verbose && print STDERR "Accepted new client connection from $peer_address:$peer_port. we only echo client because STDIN was taken.\n";
+      }
    
       my $child_pid = fork();
    
@@ -143,7 +156,10 @@ if (defined $localport) {
       }
    
       my $select = IO::Select->new($client_socket) or die "IO::Select $!";
-      $select->add(\*STDIN) or die "IO::Select $!";
+        
+      if ($has_stdin) {
+         $select->add(\*STDIN) or die "IO::Select $!";
+      }
    
       SELECT:
       while (1) {
@@ -152,17 +168,21 @@ if (defined $localport) {
          if (my @ready = $select->can_read(300)) {
             for my $fh (@ready) {
                if ($fh == $client_socket) {
-                  $verbose && print STDERR "found client activities\n";
+                  $verbose && print STDERR "found client activities $peer_address:$peer_port\n";
    
                   my $data;
    
                   $client_socket->recv($data,1024000);
    
                   if (!$data) {
-                     $verbose && print STDERR "client $peer_address: $peer_port quitted. \n";
+                     $verbose && print STDERR "client $peer_address:$peer_port quitted. \n";
                      last SELECT;
                   } else {
                      print $data;
+
+                     if (!$has_stdin) {
+                        $client_socket->send("server echo: " . $data);
+                     }
                   }
                } else {
                   $verbose && print STDERR "found stdin activities\n";
