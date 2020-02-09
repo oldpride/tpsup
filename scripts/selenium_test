@@ -141,21 +141,17 @@ if ($verbose) {
    # to check any lingering chromedriver. they should have been killed before we start
    my $cmd = "ps -ef |grep $drivername|grep -v grep";
    print "$cmd\n";
-   system($cmd)
-}
+   system($cmd);
 
-{
-   my $cmd = "cat /dev/null $driver_log";
+   $cmd = "cat /dev/null $driver_log";
    print "$cmd\n";
-   system($cmd)
-}
+   system($cmd);
 
-{
    # --pid PID  exits when PID is gone
    # -F         retry file if it doesn't exist
-   my $cmd = "tail --pid $$ -F -f $driver_log &";
+   $cmd = "tail --pid $$ -F -f $driver_log &";
    print "$cmd\n";
-   system($cmd)
+   system($cmd);
 }
 
 my $driver = Selenium::Chrome->new (
@@ -180,6 +176,9 @@ my $url = "https://www.google.com";
 $driver->get($url);
 
 sleep 2;
+
+# in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,
+# in the source code window, right click -> copy -> ...
 
 # <input class="gLFyf gsfi" maxlength="2048" name="q" type="text" jsaction="paste:puy29d" aria-autocomplete="both" aria-haspopup="false" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" role="combobox" spellcheck="false" title="Search" value="" aria-label="Search" data-ved="0ahUKEwjt7s-M5pXnAhVDuVkKHUlHBscQ39UDCAY">
 

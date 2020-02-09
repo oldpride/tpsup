@@ -3,6 +3,7 @@
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from urllib.parse import urlparse
 
 import argparse
 import sys
@@ -112,15 +113,16 @@ if args['verbose']:
 
 driver_args = ["--verbose", f"--log-path={driver_log}"]  # for chromedriver
 
-cmd = f"cat /dev/null {driver_log}"
-print(cmd)
-os.system(cmd)
+if args['verbose']:
+    cmd = f"cat /dev/null {driver_log}"
+    print(cmd)
+    os.system(cmd)
 
-# --pid PID  exits when PID is gone
-# -F         retry file if it doesn't exist
-cmd = f"tail --pid {os.getpid()} -F -f {driver_log} &"
-print(cmd)
-os.system(cmd)
+    # --pid PID  exits when PID is gone
+    # -F         retry file if it doesn't exist
+    cmd = f"tail --pid {os.getpid()} -F -f {driver_log} &"
+    print(cmd)
+    os.system(cmd)
 
 # chrome_options will be used on chrome browser's command line not chromedriver's commandline
 browser_options = Options()
@@ -174,18 +176,9 @@ driver = webdriver.Chrome(driver,  # make sure chromedriver is in the PATH
                           service_args=driver_args,  # for chromedriver
                           )
 
-# os.system(f"tail -f {chromedriver_log} &")
-#tail_pid = os.spawnl(os.P_NOWAIT, "/usr/bin/tail", "-f", f"{driver_log}")
-
-# tail_pid = os.fork()
-#
-# if tail_pid == 0:
-#     # child
-#     os.execlp("/usr/bin/tail", "-f", f"{driver_log}")
-
 time.sleep(2)  # give 1 sec to let the tail set up
 
-# print(f'driver.title={driver.title}')
+#print(f'driver.title={driver.title}')
 
 url = 'http://www.google.com/'
 driver.get(url)
@@ -194,6 +187,9 @@ if not headless:
     time.sleep(2)  # Let the user actually see something!
 
 try:
+    # https://dev.to/endtest/a-practical-guide-for-finding-elements-with-selenium-4djf
+    # in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,
+    # in the source code window, right click -> copy -> ...
     search_box = driver.find_element_by_name('q')
 except NoSuchElementException as e:
     print(e)
@@ -201,15 +197,19 @@ else:
     search_box.send_keys('ChromeDriver')
     search_box.submit()
     if not headless:
-        time.sleep(2)  # Let the user actually see something!   `
+        time.sleep(2)  # Let the user actually see something!
+
+for tag_a in driver.find_elements_by_tag_name('a'):
+    link = None
+    try:
+        url = tag_a.get_attribute('href')
+    except NoSuchElementException as e:
+        pass
+    else:
+        #print(f'url={url}')
+        print(f'hostname = {urlparse(url).hostname}')
 
 driver.quit()
-
-# if tail_pid:
-#     try:
-#         os.killpg(tail_pid, signal.SIGTERM)
-#     except OSError:
-#         pass
 
 # list all the log files for debug purpose
 os.system("ls -ld /tmp/selenium_*")
