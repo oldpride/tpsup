@@ -38,7 +38,7 @@ examples = textwrap.dedent(f"""
 examples:
     - let selenium to start a local browser automatically
     {prog} auto
-    {prog} -ba proxy-pac-url=http://pac.abc.net' auto
+    {prog} -ba proxy-pac-url=http://pac.abc.net auto
 
     - start Chrome (c1) on localhost with debug port 9222.
     /usr/bin/chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
