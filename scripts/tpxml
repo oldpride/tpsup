@@ -6,6 +6,7 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 use TPSUP::XML qw(query_xml);
+use YAML;
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -36,6 +37,8 @@ usage:
 
    -addRoot string        add a root node
 
+   -yamlDump              Dump into YAML format
+
 examples:
 
    # To see the XML general structure
@@ -43,38 +46,31 @@ examples:
    $prog -ForceArray FIXSession XML_test.xml
 
    # To get a branch or leaf, taking steps to narrow down to your target
-   $prog -path 'return \$root' XML_test.xml
-   $prog -path 'return \$root->{FIXSession}' XML_test.xml
-   $prog -path 'return \$root->{FIXSession}->{"suppress-out"}' XML_test.xml
+   $prog -path 'return \$r' XML_test.xml
+   $prog -path 'return \$r->{FIXSession}' XML_test.xml
+   $prog -path 'return \$r->{FIXSession}->{"suppress-out"}' XML_test.xml
 
    # 'return' is optional
-   $prog -path '\$root->{FIXSession}->{"suppress-out"}' XML_test.xml
+   $prog -path '\$r->{FIXSession}->{"suppress-out"}' XML_test.xml
    
-   # To handle array, we have to use loop. The following are the same
-   $prog -ForceArray FIXSession -path \\
-      'for my \$e (\@{\$root->{FIXSession}}) {
-         if (\$e->{"sender-comp-id"} eq "SENDER1") {
-            return \$e->{"suppress-out"} }}' XML_test.xml
+   # return the first match in an array
+   $prog -path \\
+      'for my \$cd (\@{\$r->{CD}}) {
+         if (\$cd->{YEAR} == 1990) {
+            return \$cd->{ARTIST} }}' XML_test_nested.xml
 
-   $prog -ForceArray FIXSession -path \\
-      "for my \\\$e (\@{\\\$root->{FIXSession}}) {
-         if (\\\$e->{'sender-comp-id'} eq 'SENDER1') {
-            return \\\$e->{'suppress-out'} }}" XML_test.xml
-
-   $prog -ForceArray FIXSession -path \\
-      "for (\@{\\\$root->{FIXSession}}) {
-         if (\\\$_->{'sender-comp-id'} eq 'SENDER1') {
-           return \\\$_->{'suppress-out'} }}" XML_test.xml
-
-   $prog -ForceArray FIXSession -path \\
-      "for (\@{\\\$root->{FIXSession}}) {
-         (\\\$_->{'sender-comp-id'} eq 'SENDER1') && return \\\$_->{'suppress-out'} }" XML_test.xml
+   # return all matches in an array
+   $prog -path 'map {\$_->{ARTIST}} grep {\$_->{YEAR} == 1990} \@{\$r->{CD}}' XML_test_nested.xml
 
    # Return an array
-   $prog -path 'my \@a=keys(\%{\$root->{FIXSession}}); return \\\@a;' XML_test.xml
+   $prog -path 'my \@a=keys(\%{\$r->{FIXSession}}); return \\\@a;' XML_test.xml
 
-   #This is equivalent to xmllint
-   $prog -path 'return \$root' XML_test.xml
+   # This is equivalent to xmllint
+   $prog -path '\$r' XML_test.xml
+
+   # Dump into Yaml format
+   $prog -path '\$r' -yamlDump XML_test.xml
+   $prog -path '\$r' -yamlDump XML_test_nested.xml
 
    # this add a root node to an file without root node
    $prog -addRoot xml XML_test_withoutRoot.xml
@@ -90,6 +86,7 @@ my %attr_by_key;
 my $ForceArrayString;
 my @paths;
 my $addRoot;
+my $yamlDump;
 
 GetOptions(
    'v|verbose'    => \$verbose,
@@ -97,6 +94,7 @@ GetOptions(
    'KeyAttr=s'    => \%attr_by_key,
    'p|path=s'     => \@paths,
    'addRoot=s'    => \$addRoot,
+   'yamlDump|yaml'=> \$yamlDump,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1 ;
@@ -116,11 +114,15 @@ $verbose && print Dumper($rows);
 #my $type = ref $rows;
 #if ($type eq 'ARRAY' || $type eq 'HASH') {
 
-$Data::Dumper::Terse = 1;
-
-for my $r (@$rows) {
-   my $string = Dumper($r);
-   print $string;
+if ($yamlDump) {
+   print YAML::Dump($rows);
+} else {
+   $Data::Dumper::Terse = 1;
+   
+   for my $r (@$rows) {
+      my $string = Dumper($r);
+      print $string;
+   }
 }
 
 exit 0;

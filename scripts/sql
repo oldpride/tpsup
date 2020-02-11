@@ -178,7 +178,7 @@ while (@ARGV) {
 
          my $sqls = TPSUP::XML::query_xml($file, { ForceArray => 'SQL',
                                                    AddRootNode => 'xml',
-                                                   paths => ['$root->{SQL}'],
+                                                   paths => ['$r->{SQL}'],
                                                    verbose => $verbose});
 
          print "sqls = ", Dumper($sqls) if $verbose;

@@ -5,7 +5,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::XML qw(parse_inline_xml_log);
+use TPSUP::XML qw(query_xml);
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -25,7 +25,7 @@ usage:
 
    -m MatchPattern        perl-style, can use once
 
-   -m ExcludePattern      perl-style, can exclude once
+   -x ExcludePattern      perl-style, can exclude once
 
    -path string           perl-style, eg, -path {FIXSession}->{suppress-out}
                           can repeat
@@ -40,42 +40,10 @@ examples:
 
    $prog parse_xml_log_test.log
 
-   # To get a branch or leaf, taking steps to narrow down to your target
-   $prog -path 'return \$root' parse_xml_log_test.log
-   $prog -path 'return \$root->{FIXSession}' parse_xml_log_test.log
-   $prog -path 'return \$root->{FIXSession}->{"suppress-out"}' parse_xml_log_test.log
+   $prog -m Gees parse_xml_log_test.log
 
-   # 'return' is optional
-   $prog -path '\$root->{FIXSession}->{"suppress-out"}' parse_xml_log_test.log
-   
-   # To handle array, we have to use loop. The following are the same
-   $prog -ForceArray FIXSession -path \\
-      'for my \$e (\@{\$root->{FIXSession}}) {
-         if (\$e->{"sender-comp-id"} eq "SENDER1") {
-            return \$e->{"suppress-out"} }}' parse_xml_log_test.log
-
-   $prog -ForceArray FIXSession -path \\
-      "for my \\\$e (\@{\\\$root->{FIXSession}}) {
-         if (\\\$e->{'sender-comp-id'} eq 'SENDER1') {
-            return \\\$e->{'suppress-out'} }}" parse_xml_log_test.log
-
-   $prog -ForceArray FIXSession -path \\
-      "for (\@{\\\$root->{FIXSession}}) {
-         if (\\\$_->{'sender-comp-id'} eq 'SENDER1') {
-           return \\\$_->{'suppress-out'} }}" parse_xml_log_test.log
-
-   $prog -ForceArray FIXSession -path \\
-      "for (\@{\\\$root->{FIXSession}}) {
-         (\\\$_->{'sender-comp-id'} eq 'SENDER1') && return \\\$_->{'suppress-out'} }" parse_xml_log_test.log
-
-   # Return an array
-   $prog -path 'my \@a=keys(\%{\$root->{FIXSession}}); return \\\@a;' parse_xml_log_test.log
-
-   #This is equivalent to xmllint
-   $prog -path 'return \$root' parse_xml_log_test.log
-
-   # this add a root node to an file without root node
-   $prog -addRoot xml XML_test_withoutRoot.xml
+   # get ARTIST for 1990 
+   $prog -m 1990 -path 'map {\$_->{ARTIST}} grep {\$_->{YEAR} == 1990} \@{\$r->{CD}}' parse_xml_log_test.log
 
 END
 
@@ -105,19 +73,17 @@ usage("wrong number of args") if @ARGV != 1 ;
 
 my $file = shift @ARGV;
 
-my $rows = parse_inline_xml_log($file, {
+my $rows = query_xml($file, {
    KeyAttr        => \%attr_by_key,
    ForceArray     => $ForceArrayString,
    verbose        => $verbose,
    paths          => \@paths,
    AddRootNode    => $addRoot,
-   yamlOutput     => 1,
    MatchPattern   => $MatchPattern,
    ExcludePattern => $ExcludePattern,
+   DumpInlineXml  => 1,
+   yamlOutput     => 1,
 });
-
-
-#$Data::Dumper::Terse = 1;
 
 exit 0;
    
