@@ -8,9 +8,38 @@ our @EXPORT_OK = qw(
 );
 
 use Carp;
-use Data::Dumper;
-use XML::Simple;
-#use TPSUP::Expression;
+use Data::Dumper; 
+
+my $use_LibXML;
+
+BEGIN {
+   # XML::LibXML is much more reliable and faster than XML::Simple, but XML::Simple's
+   # famous XMLin() can convert XML to HASH in one step, while XML::LibXML doesn't have.
+   # anything similar.
+   #
+   # XML::LibXML::Simple is a wrapper of XML::LibXML to mimic XML::Simple's
+   # interface, in particular XMLin()
+
+   eval { use XML::LibXML::Simple };
+
+   if (!$@) {
+      $use_LibXML ++;
+      #next DONE_XML_IMPORT;
+   }
+
+   # XML::Simple is a secondary choice as it is said not reliable
+   eval { use XML::Simple };
+
+   if ($@) {
+      croak "neither XML::LibXML nor XML::Simple available";
+   }
+
+   # direct XML::Simple to try XML::Parser first. otherwise, it uses SAX which is not very stable
+   $XML::Simple::PREFERRED_PARSER = 'XML::Parser'; 
+
+   DONE_XML_IMPORT:
+}
+
 use TPSUP::UTIL qw(
    recursive_handle
    transpose_arrays
@@ -148,6 +177,9 @@ sub query_xml {
          next if   $match_pattern && ! /$match_pattern/;
          next if $exclude_pattern && /$exclude_pattern/;
    
+         # print the original format
+         print;
+
          if (/^.*?<[?]xml.*?>\s*(<.*>)/) {
             my $string;
    
@@ -159,7 +191,13 @@ sub query_xml {
    
             #print $string;
          
-            my $r = XMLin($string, ForceArray=>$ForceArray, KeyAttr=>$KeyAttr);
+            my $r;
+            eval { $r = XMLin($string, ForceArray=>$ForceArray, KeyAttr=>$KeyAttr) };
+
+            if ($@) {
+               print "failed to parse XML\n";
+               next;
+            }
          
             $opt->{verbose} && print "r = ", Dumper($r);
    
@@ -178,8 +216,6 @@ sub query_xml {
             if ($opt->{yamlOutput}) {
                print YAML::Dump($ret);
             }
-         } else {
-            print;
          }
       }
    } else {
