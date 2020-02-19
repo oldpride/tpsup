@@ -123,15 +123,15 @@ if [[ $UNAME =~ Msys ]]; then
    # Git Bash has USERNAME preset instead of USER
    export USER=$USERNAME
 
-   alias     ework='cd /c/user/$USER/eclipse-workspace'
-   alias downloads='cd /c/user/$USER/downloads'
+   alias     ework='cd /c/users/$USER/eclipse-workspace'
+   alias downloads='cd /c/users/$USER/downloads'
 
    # https://stackoverflow.com/questions/32597209/python-not-working-in-the-command-line-of-git-bash
    alias python2='winpty "/c/Program Files/Python27/python"'
    alias python3='winpty "/c/Program Files/Python37/python"'
 elif [[ $UNAME =~ Cygwin ]]; then
-   alias     ework='cd /cygdrive/c/user/$USER/eclipse-workspace'
-   alias downloads='cd /cygdrive/c/user/$USER/downloads'
+   alias     ework='cd /cygdrive/c/users/$USER/eclipse-workspace'
+   alias downloads='cd /cygdrive/c/users/$USER/downloads'
 
    # https://stackoverflow.com/questions/3250749/using-windows-python-from-cygwin
    # to run interactive python from cygwin
