@@ -25,7 +25,7 @@ if [ "X$BASH_SOURCE" != "X" ]; then
    #   TPSUP=`pwd`/$TPSUP
    #fi
 
-   # for windows (Git Bash), wrap around in order to handle space chars, eg C:\Program Files\...
+   # for windows, wrap around in order to handle space chars, eg C:\Program Files\...
    TPSUP=$(cd "`dirname \"$BASH_SOURCE\"`"; pwd -P) || return
    export TPSUP
 else
@@ -91,8 +91,8 @@ usage:
 
    old=`eval "echo \\\$$path"`
 
-   # wrap around for windows (Git Bash) PATH
-   # windows (Git Bash) always need perl to launch perl script
+   # wrap around for windows PATH
+   # windows always need perl to launch perl script
    new=`perl "$TPSUP/scripts/delpath" $flag "$pattern" "$old"`
    if [ $? -ne 0 ]; then
       echo "cmd=perl \"$TPSUP/scripts/delpath\" $flag \"$pattern\" \"$old\" failed, no change" >&2
@@ -130,8 +130,8 @@ if [[ $UNAME =~ Msys ]]; then
    alias python2='winpty "/c/Program Files/Python27/python"'
    alias python3='winpty "/c/Program Files/Python37/python"'
 elif [[ $UNAME =~ Cygwin ]]; then
-   alias     ework='cd /c/user/$USER/eclipse-workspace'
-   alias downloads='cd /c/user/$USER/downloads'
+   alias     ework='cd /cygdrive/c/user/$USER/eclipse-workspace'
+   alias downloads='cd /cygdrive/c/user/$USER/downloads'
 
    # https://stackoverflow.com/questions/3250749/using-windows-python-from-cygwin
    # to run interactive python from cygwin
