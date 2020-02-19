@@ -24,7 +24,9 @@ if [ "X$BASH_SOURCE" != "X" ]; then
    #if ! echo "$TPSUP" | grep '^/' >/dev/null; then
    #   TPSUP=`pwd`/$TPSUP
    #fi
-   TPSUP=$(cd `dirname $BASH_SOURCE`; pwd -P) || return
+
+   # for windows (Git Bash), wrap around in order to handle space chars, eg C:\Program Files\...
+   TPSUP=$(cd "`dirname \"$BASH_SOURCE\"`"; pwd -P) || return
    export TPSUP
 else
    if ! [[ $0 =~ bash ]]; then
@@ -32,7 +34,7 @@ else
       return
    else
       echo "You used wrong bash (check version). please exit and find a newer version instead !!!" >&2
-      echo " Or you can export BASH_SOURCE=/home/tia/github/tpsup/profile or something similar" >&2
+      echo " Or you can export BASH_SOURCE=/home/tian/github/tpsup/profile or something similar" >&2
       return
    fi
 fi
@@ -43,8 +45,8 @@ kcd () {
    local old new cd
    old=$1
    new=$2
-   cd=`pwd|sed -e "s:$old:$new:g"`
-   cd $cd
+   cd=`pwd|sed -e "s!$old!$new!g"`
+   cd "$cd"
 }
 
 delpath () {
@@ -89,12 +91,14 @@ usage:
 
    old=`eval "echo \\\$$path"`
 
-   new=`$TPSUP/scripts/delpath $flag $pattern $old`
+   # wrap around for windows PATH
+   # windows always need perl to launch perl script
+   new=`perl "$TPSUP/scripts/delpath" $flag "$pattern" "$old"`
    if [ $? -ne 0 ]; then
-      echo "cmd=$TPSUP/scripts/delpath $flag $pattern $old failed, no change" >&2
+      echo "cmd=perl \"$TPSUP/scripts/delpath\" $flag \"$pattern\" \"$old\" failed, no change" >&2
       return 1
    fi
-   eval "export $path=$new"
+   eval "export $path=\"$new\""
 }
 
 functions () {
@@ -102,11 +106,7 @@ functions () {
    echo 'use typeset -f to see detail'
 }
 
-if ! /usr/bin/perl -Mwarnings -e "print '';"; then
-   # this happens on old Solaris host
-   echo "/usr/bin/per1 is too old. find a newer version instead" >&2
-   USE_NEWER_PERL=/usr/local/bin/per1
-fi
+export PERL_BINARY=perl
 
 PS1='$USER@$HOSTNAME:$PWD$ '
 export PS1
@@ -121,6 +121,8 @@ UNAME=`uname -a`
    
 if [[ $UNAME =~ Msys ]]; then
    # https://stackoverflow.com/questions/32597209/python-not-working-in-the-command-line-of-git-bash
+   alias     ework='cd /c/user/$USER/eclipse-workspace'
+   alias downloads='cd /c/user/$USER/downloads'
    alias python2='winpty "/c/Program Files/Python27/python"'
    alias python3='winpty "/c/Program Files/Python37/python"'
 elif [[ $UNAME =~ Cygwin ]]; then
@@ -138,6 +140,12 @@ elif [[ $UNAME =~ Cygwin ]]; then
    #    Pseudo-terminal will not be allocated because stdin is not a terminal.
    alias ssh="ssh -tt"
 elif [[ $UNAME =~ Linux ]]; then
+   if ! /usr/bin/perl -Mwarnings -e "print '';"; then
+      # this happens on old Solaris host
+      echo "/usr/bin/per1 is too old. find a newer version instead" >&2
+      export PERL_BINARY=/usr/local/bin/per1
+   fi
+
    # linux has /usr/bin/python2 and /usr/bin/python3
    alias eclipse="/home/tian/eclipse/cpp-2019-06/eclipse/eclipse"
    alias pycharm="/snap/bin/pycharm-community"
@@ -146,27 +154,27 @@ else
 fi
 
 reduce () {
-   local REDUCEPATHCMD=
+   local REDUCEPATHCMD
 
-   REDUCEPATHCMD=$TPSUP/scripts/reducepath
+   REDUCEPATHCMD="$TPSUP/scripts/reducepath"
    
-   if ! [ -f $REDUCEPATHCMD ]; then
+   if ! [ -f "$REDUCEPATHCMD" ]; then
       return
    fi 
 
-   export  PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PATH"`
-   export  MANPATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$MANPATH"`
-   export  PERL5LIB=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PERL5LIB"`
-   export  PYTHONPATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$PYTHONPATH"`
-   export  LD_LIBRARY_PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$LD_LIBRARY_PATH"`
-   export  LD_LOAD_PATH=`$USE_NEWER_PERL $REDUCEPATHCMD -q "$LD_LOAD_PATH"`
+   export             PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PATH"`
+   export          MANPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$MANPATH"`
+   export         PERL5LIB=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PERL5LIB"`
+   export       PYTHONPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PYTHONPATH"`
+   export     LD_LOAD_PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$LD_LOAD_PATH"`
+   export  LD_LIBRARY_PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$LD_LIBRARY_PATH"`
 }
 
 # https://askubuntu.com/questions/98782/how-to-run-an-alias-in-a-shell-script
 # Aliases are deprecated in favor of shell functions. From the bash manual page:
 # For almost every purpose, aliases are superseded by shell functions.
 
-alias perllib='cd $TPSUP/lib/perl/TPSUP'
+alias perllib='cd "$TPSUP/lib/perl/TPSUP"'
 alias rm='rm -i'
 alias mv='mv -i'
 alias cp='cp -i'
@@ -174,31 +182,31 @@ alias grep='grep -i'
 alias ls='ls -a'
 
 tpsup () {
-  . $TPSUP/profile
+  . "$TPSUP/profile"
 }
 
 tpscripts () {
-   cd $TPSUP/scripts
+   cd "$TPSUP/scripts"
 }
 
 kdbnotes () {
-   cd $TPSUP/../kdb/notes
+   cd "$TPSUP/../kdb/notes"
 }
 
 mynotes () {
-   cd $TPSUP/../notes
+   cd "$TPSUP/../notes"
 }
 
 mycpp () {
-   cd $TPSUP/../cpp/cookbook/src
+   cd "$TPSUP/../cpp/cookbook/src"
 }
 
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
-   PERL5LIB=$TPSUP/lib/perl:$PERL5LIB
-   PATH=$TPSUP/scripts:$PATH
+   PERL5LIB="$TPSUP/lib/perl:$PERL5LIB"
+   PATH="$TPSUP/scripts:$PATH"
 else
-   PERL5LIB=$PERL5LIB:$TPSUP/lib/perl
-   PATH=$TPSUP/autopath:$PATH
+   PERL5LIB="$PERL5LIB:$TPSUP/lib/perl"
+   PATH="$TPSUP/autopath:$PATH"
 fi
 
 p2env () {
@@ -227,8 +235,8 @@ p3env () {
       /usr/bin/pip3 "$@"
    }
 
-   export PYTHONPATH=$TPSUP/python3/lib:$PYTHONPATH
-   export PATH=$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH
+   export PYTHONPATH="$TPSUP/python3/lib:$PYTHONPATH"
+   export       PATH="$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH"
    reduce
 
    # export the function
@@ -276,12 +284,12 @@ p3env  # default to python 3
 
 alias p2c="python2 -m py_compile"
 alias p3c="python3 -m py_compile"
-alias p2scripts='cd $TPSUP/python2/scripts'
-alias p2examples='cd $TPSUP/python2/examples'
-alias p3scripts='cd $TPSUP/python3/scripts'
-alias p3examples='cd $TPSUP/python3/examples'
-alias p2lib='cd $TPSUP/python2/lib/tpsup'
-alias p3lib='cd $TPSUP/python3/lib/tpsup'
+alias p2scripts='cd "$TPSUP/python2/scripts"'
+alias p2examples='cd "$TPSUP/python2/examples"'
+alias p3scripts='cd "$TPSUP/python3/scripts"'
+alias p3examples='cd "$TPSUP/python3/examples"'
+alias p2lib='cd "$TPSUP/python2/lib/tpsup"'
+alias p3lib='cd "$TPSUP/python3/lib/tpsup"'
 
 wbar () {
    # window bar

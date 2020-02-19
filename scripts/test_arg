@@ -1,0 +1,48 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_tmp_file);
+use TPSUP::SQL qw(run_sql);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $output = '-'; #STDOUT
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+   $prog args
+
+   test arguments
+
+   -v              verbose
+
+examples:
+
+   $prog  `echo    a b`
+   $prog  `echo  \\"a b\\"`
+   $prog  `echo   "a b"`
+   $prog "`echo    a b`"
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose'      => \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+print "\@ARGV=\n", Dumper(@ARGV);
