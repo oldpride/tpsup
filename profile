@@ -91,8 +91,8 @@ usage:
 
    old=`eval "echo \\\$$path"`
 
-   # wrap around for windows PATH
-   # windows always need perl to launch perl script
+   # wrap around for windows (Git Bash) PATH
+   # windows (Git Bash) always need perl to launch perl script
    new=`perl "$TPSUP/scripts/delpath" $flag "$pattern" "$old"`
    if [ $? -ne 0 ]; then
       echo "cmd=perl \"$TPSUP/scripts/delpath\" $flag \"$pattern\" \"$old\" failed, no change" >&2
@@ -120,12 +120,19 @@ UNAME=`uname -a`
 # Linux linux1 4.15.0-54-generic #58-Ubuntu SMP Mon Jun 24 10:55:24 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux
    
 if [[ $UNAME =~ Msys ]]; then
-   # https://stackoverflow.com/questions/32597209/python-not-working-in-the-command-line-of-git-bash
+   # Git Bash has USERNAME preset instead of USER
+   export USER=$USERNAME
+
    alias     ework='cd /c/user/$USER/eclipse-workspace'
    alias downloads='cd /c/user/$USER/downloads'
+
+   # https://stackoverflow.com/questions/32597209/python-not-working-in-the-command-line-of-git-bash
    alias python2='winpty "/c/Program Files/Python27/python"'
    alias python3='winpty "/c/Program Files/Python37/python"'
 elif [[ $UNAME =~ Cygwin ]]; then
+   alias     ework='cd /c/user/$USER/eclipse-workspace'
+   alias downloads='cd /c/user/$USER/downloads'
+
    # https://stackoverflow.com/questions/3250749/using-windows-python-from-cygwin
    # to run interactive python from cygwin
    #    python -i
