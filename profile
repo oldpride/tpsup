@@ -11,10 +11,12 @@ chknfs () {
       paths="$PATH"
    fi
 
-   for p in `echo $paths|/bin/sed -e 's/:/ /g'`
+   # this cannot handle space char in PATH (in windows)
+   #for p i `echo "$paths"|/bin/sed -e 's/:/ /g'`
+   echo "$paths"|/bin/sed -e "s/:/\n/g" | while read p
    do
       echo $p
-      \cd $p && \cd - >/dev/null
+      \cd "$p" && \cd - >/dev/null
    done
 }
 
