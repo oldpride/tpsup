@@ -157,6 +157,7 @@ elif [[ $UNAME =~ Linux ]]; then
    fi
 
    # linux has /usr/bin/python2 and /usr/bin/python3
+
    alias eclipse="/home/tian/eclipse/cpp-2019-06/eclipse/eclipse"
    alias pycharm="/snap/bin/pycharm-community"
 else 
