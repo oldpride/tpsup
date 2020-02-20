@@ -15,9 +15,10 @@ chknfs () {
    #for p i `echo "$paths"|/bin/sed -e 's/:/ /g'`
    echo "$paths"|/bin/sed -e "s/:/\n/g" | while read p
    do
-      echo $p
+      echo "checking '$p'"
       \cd "$p" && \cd - >/dev/null
    done
+   echo All Done
 }
 
 if [ "X$BASH_SOURCE" != "X" ]; then
@@ -31,7 +32,7 @@ if [ "X$BASH_SOURCE" != "X" ]; then
    TPSUP=$(cd "`dirname \"$BASH_SOURCE\"`"; pwd -P) || return
    export TPSUP
 else
-   if ! [[ $0 =~ bash ]]; then
+   if ! [[ "$0" =~ bash ]]; then
       echo "Run bash first ... Env is not set !!!" >&2
       return
    else
