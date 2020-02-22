@@ -64,15 +64,15 @@ do
    jobindex=$(($jobindex + 1))
    # Get all job names referenced by given name - may be wildcard or box
    echo -n "Collecting jobs matching '$j' ($jobindex of $jobcount) on $AUTOSERV -"
-   autorep_output=`autorep -J $j`
+   autorep_before=`autorep -J $j`
 
    # list of job names in this query
-   sublist=`echo "$autorep_output" | egrep -v '^$|^Job Name|^_____' | \
+   sublist=`echo "$autorep_before" | egrep -v '^$|^Job Name|^_____' | \
             sed 's/^\s\s*//; s/\s\s\s*/ /g' | cut -d' ' -f1`
    
    # Capture just one set of headers for the final report
    if [ "$final_report" = "" ]; then
-      final_report=`echo "$autorep_output" | head -3`
+      final_report=`echo "$autorep_before" | head -3`
    fi
 
    # If any are currently held or on ice, report it and exit
@@ -81,14 +81,14 @@ do
    for i in `echo $sublist`;
    do
       subcount=$(($subcount + 1))
-      if echo "$autorep_output" | grep "$i " | egrep " OH | OI " >/dev/null; then
+      if echo "$autorep_before" | grep "$i " | egrep " OH | OI " >/dev/null; then
          suberror=$(($suberror + 1))
       fi
    done
 
    if [ $suberror -ne 0 ]; then
       echo " $subcount jobs found"
-      echo "$autorep_output"
+      echo "$autorep_before"
       echo
       echo "ABORTING - $suberror jobs not runnable."
       echo
@@ -102,12 +102,13 @@ do
       (set -x; sendevent -E FORCE_STARTJOB -J $j)
    else
       echo "dryrun: sendevent -E FORCE_STARTJOB -J $j"
+      continue;
    fi
 
    # Monitor all jobs for completion
    while :
    do
-      CURRSTAT=`autorep -J $j`
+      autorep_after=`autorep -J $j`
 
       runcount=0
       suberror=0
@@ -116,8 +117,8 @@ do
       # Add 1 to $runcount when found. Add 1 to $suberror if not SU.
       for i in `echo $sublist`
       do
-         ORIGLINE=`echo "$autorep_output" | grep "$i "`
-         CURRLINE=`echo "CURRSTAT"        | grep "$i "`
+         ORIGLINE=`echo "$autorep_before" | grep "$i "`
+         CURRLINE=`echo "$autorep_after"  | grep "$i "`
 
          if [ "$ORIGLINE" != "$CURRLINE" ]; then
             if [[ $CURRLINE =~ ( SU | TE | FA ) ]]; then
@@ -135,14 +136,14 @@ do
          echo "Only $runcount of $subcount compelete. Sleep for 10."
 
          if [ $dryrun = Y ]; then
-            echo "autorep_output"
+            echo "autorep_before"
          else
             sleep 10
          fi
          continue
       else
          # capture final state to overall final report
-         final_report="$final_report`echo; echo \"$CURRSTAT\" | tail -$runcount`"
+         final_report="$final_report`echo; echo \"$autorep_after\" | tail -$runcount`"
          break
       fi
        
