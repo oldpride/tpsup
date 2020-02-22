@@ -13,7 +13,7 @@ One job a line.
 Commented lines (starting with #) or blank lines will be skipped.
 
    -d        debug  mode
-   -n        dryrun mode
+   -n        dryrun mode, to check whether jobs are in: OH, OI
 
 EOF
 
@@ -67,6 +67,8 @@ do
    autorep_before=`autorep -J $j`
 
    # list of job names in this query
+   # remove heading space chars
+   # condense multiple space chars into one
    sublist=`echo "$autorep_before" | egrep -v '^$|^Job Name|^_____' | \
             sed 's/^\s\s*//; s/\s\s\s*/ /g' | cut -d' ' -f1`
    
@@ -81,13 +83,17 @@ do
    for i in `echo $sublist`;
    do
       subcount=$(($subcount + 1))
-      if echo "$autorep_before" | grep "$i " | egrep " OH | OI " >/dev/null; then
+
+      # extra space in "^$i " to prevent job 'ABC' from matching 'ABCD'
+      # caret char  in "^$i " to prevent job 'ABC' from matching 'EABC'
+      if echo "$autorep_before" | grep "^$i " | egrep " OH | OI " >/dev/null; then
          suberror=$(($suberror + 1))
       fi
    done
 
    if [ $suberror -ne 0 ]; then
-      echo " $subcount jobs found"
+      echo "$subcount jobs found"
+      echo
       echo "$autorep_before"
       echo
       echo "ABORTING - $suberror jobs not runnable."
@@ -105,7 +111,7 @@ do
       continue;
    fi
 
-   # Monitor all jobs for completion
+   # Monitor all jobs in this sublist for completion
    while :
    do
       autorep_after=`autorep -J $j`
@@ -117,15 +123,15 @@ do
       # Add 1 to $runcount when found. Add 1 to $suberror if not SU.
       for i in `echo $sublist`
       do
-         ORIGLINE=`echo "$autorep_before" | grep "$i "`
-         CURRLINE=`echo "$autorep_after"  | grep "$i "`
+         line_before=`echo "$autorep_before" | grep "^$i "`
+         line_after=` echo "$autorep_after"  | grep "^$i "`
 
-         if [ "$ORIGLINE" != "$CURRLINE" ]; then
-            if [[ $CURRLINE =~ ( SU | TE | FA ) ]]; then
+         if [ "$line_before" != "$line_after" ]; then
+            if [[ $line_after =~ ( SU | TE | FA ) ]]; then
                runcount=$(($runcount + 1))
             fi
 
-            if [[ $CURRLINE =~ ( TE | FA ) ]]; then
+            if [[ $line_after =~ ( TE | FA ) ]]; then
                suberror=$(($suberror + 1))
             fi
          fi
@@ -134,20 +140,10 @@ do
       # If jobs remain incomplete, sleep 10 secs and try again
       if [ $runcount -lt $subcount ] && [ $suberror -eq 0 ]; then
          echo "Only $runcount of $subcount compelete. Sleep for 10."
-
-         if [ $dryrun = Y ]; then
-            echo "autorep_before"
-         else
-            sleep 10
-         fi
-         continue
+         sleep 10
       else
          # capture final state to overall final report
          final_report="$final_report`echo; echo \"$autorep_after\" | tail -$runcount`"
-         break
-      fi
-       
-      if [ $dryrun = Y ]; then
          break
       fi
    done
@@ -162,6 +158,3 @@ do
       exit 0
    fi
 done
-
-
-
