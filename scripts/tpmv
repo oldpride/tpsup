@@ -1,10 +1,19 @@
-#!/bin/bash
+#!/usr/bin/perl
 
-prog=`basename $0`
-dir=`dirname $0`
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
 
-usage () {
-   cat <<EOF
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
 usage:
 
    $prog old_pattern new_string path1 path2 ...
@@ -23,19 +32,14 @@ usage:
 
    -i              case-insensitive when handling '-x' and '-m'.
                    default to case-sensitive.
-                   note: old sed command doesn't support case-insensitive.
 
    -f force        the change without asking for confirmation
-
-   -d              debug mode
 
    -v              verbose mode
 
    -n              dry run. just list the changes without making the changes
 
-   -s              the next arg is a sed_clause, eg s/old_pattern/new_pattern/g
-
-   -p              use perl, this way '-i' case-insensitive also works on the pattern
+   -s              the next arg is a perl substitution, eg s/old_pattern/new_pattern/g
 
    -y              when prompt, simple return means 'Y'. default to 'N';
 
@@ -54,153 +58,221 @@ example:
 
    - only change *.properties files under current dir recursively
    $prog -m .properties old_string new_string .
-   
-   - use perl to do case-insensitive replacement, the following commands
-   achieves the same goal.
-   $prog -m .properties -p -i       OLD new    OLDdir
-   $prog -m .properties -p -i -s "s/OLD/new/"  OLDdir
-   $prog -m .properties -p    -s "s/OLD/new/i" OLDdir
 
-EOF
+END
 
-   exit 1
+   exit 1;
 }
 
-force=N
-exclude='_NO_EXCLUDE'
-match='.*'
-case=''
-verbose=N
-debug=N
-dryrun=N
-sedarg=N
-perl=N
-perlcase=''
-default=N
+my $verbose;
 
-while getopts m:x:fivnsdpy o;
-do
-   case "$o" in
-      f) force=Y;;
-      v) verbose=Y;;
-      d) debug=Y;;
-      p) perl=Y;;
-      n) dryrun=Y;;
-      s) sedarg=Y;;
-      i) case="-i";perlcase=i;;
-      m) match=$OPTARG;;
-      x) exclude=$OPTARG;;
-      y) default=Y;;
-      *) echo "unknow switch '$o'"; usage;;
-   esac 
-done
+my @paths;
+my $perl_substitution;
+my $force;
+my $default_yes;
+my $maxdepth = 100;
+my $insensitive;
+my $MatchPattern;
+my $ExcludePattern;
+my $dryrun;
 
-shift $((OPTIND-1))
+GetOptions(
+   'v|verbose'  =>  \$verbose,
+   'f'          =>  \$force,
+   'n'          =>  \$dryrun,
+   'y'          =>  \$default_yes,
+   's=s'        =>  \$perl_substitution,
+   'i'          =>  \$insensitive,
+   'm=s'        =>  \$MatchPattern,
+   'x=s'        =>  \$ExcludePattern,
+   'maxdepth=s' =>  \$maxdepth,
+) || usage ("cannot parse command line: $!");
 
-if [ $sedarg = Y ]; then
-   if [ $# -lt 2 ]; then
-      echo "wrong number of args"
-      usage
-   fi
+my $substitution;
 
-   sed_clause=$1
-   shift
-else
-   if [ $# -lt 3 ]; then
-     echo "wrong number of args"
-     usage
-   fi
+if ($perl_substitution) {
+   $substitution = $perl_substitution;
+   usage("wrong number of args") if !@ARGV;
+} else {
+   usage("wrong number of args") if @ARGV < 3;
+   my $old = shift @ARGV;
+   my $new = shift @ARGV;
 
-   old_pattern=$1
-   new_string=$2
-   shift
-   shift
+   $substitution = "s!$old!$new!g";
+}
 
-   sep=not_found
+my $warn = $verbose ? "use" : "no";
+my $compiled = eval "$warn warnings; no strict; sub { my (\$path)=\@_; \$path =~ $substitution; return \$path }";
 
-   for c in / : % '|'
-   do
-      if [[ "$old_pattern" =~ [${c}] ]]; then
-         continue
-      fi
+die "failed to compile '$substitution'" if $@;
 
-      if [[ "$new_string" =~ [${c}] ]]; then
-         continue
-      fi
+my $opt = {
+   RecursiveMax => $maxdepth,
+   compiled     => $compiled,
+};
 
-      sep=$c
-      break
-   done
+$opt->{DefaultAnswer} = $default_yes ? "Y" : "N";
 
-   if [ $sep = not_found ]; then
-      echo "cannot find a good separator for old_pattern='$old_pattern', new_string='$new_string'"
-      exit 1
-   fi
+my $insensitive_flag = $insensitive ? "i" : "";
 
-   sed_clause="s${sep}${old_pattern}${sep}${new_string}${sep}g"
-fi
+if ($MatchPattern) {
+   if ($insensitive) {
+      $opt->{$MatchPattern} = qr/$MatchPattern/i;
+   } else {
+      $opt->{$MatchPattern} = qr/$MatchPattern/;
+   }
+}
 
-if [ $perl = Y ]; then
-   echo perl_clause=${sed_clause}${perlcase}
-else
-   sed_clause=${sed_clause}${perlcase}
-fi
+if ($ExcludePattern) {
+   if ($insensitive) {
+      $opt->{$ExcludePattern} = qr/$ExcludePattern/i;
+   } else {
+      $opt->{$ExcludePattern} = qr/$ExcludePattern/;
+   }
+}
 
-for d in $@
-do
-   # .?* will match hiden files and folders, eg, .., .git,
-   # but will not match current folder '.'
-   for f in `find $d -mount \( -name .?\* -o -name \*\~ \) -prune -o -type f -print|egrep $case "$match" |egrep -v $case "$exclude"`
-   do
-      [ $verbose = Y ] && echo $f
+my $error;
 
-      if [ $perl = N ]; then
-         [ $debug = Y ] && set -x
-         new_f=`echo $f|sed "$sed_clause"`
-         rc=$?
+for my $path (@ARGV) {
+   if (! -e $path) {
+      print "$path not found\n";
+      $error ++;
+      next;
+   }
 
-         if [ $rc -ne 0 ]; then
-            echo "cmd=sed "$sed_clause" $f failed" >&2
-            exit 1
-         fi
-      else
-         [ $debug = Y ] && set -x
-         new_f=`echo $f | /usr/bin/perl -e "{ while (<>) { ${sed_clause}${perlcase}; print \$_; } }"`
-         rc=$?
+   my $res = move_file($path, $opt);
+   $error += $res->{error};
 
-         if [ $rc -ne 0 ]; then
-            echo "cmd=perl $file failed" >&2
-            exit 1
-         fi
-      fi
+   my $ref = recursive_path($res->{new_file}, 1, $opt);
+   $error += $ref->{error};
+}
 
-      if [ X"$new_f" = X"$f" ]; then
-         # no change
-         continue;
-      else
-         if [ $force = N -a $dryrun = N ]; then
-            echo ""
-            echo "We will mv $f $new_f"
+if ($error) {
+   print "Total $error errors.\n";
+}
 
-            echo "Do you want to change Y|N ? [$default]"
-            read answer
+exit $error;
 
-            if [ "X$answer" = "X" ]; then
-               answer=$default
-            fi
+################################################################
 
-            if [ "$answer" != "Y" -a "$answer" != "y" ]; then
-               echo "Answer is "$answer". Therefore, skipped $f."
-               continue;
-            fi
-         fi
+sub recursive_path {
+   my ($path, $level, $opt) = @_;
 
-         if [ $dryrun = N ]; then
-            mv $f $new_f
-            echo ""
-            echo "mv'ed $f $new_f"
-            echo ""
-         fi
-      fi
-   done
-done
+   my $ret;
+   $ret->{error} = 0;
+
+   if (! -e $path) {
+      return $ret;
+   }
+
+   if (-d $path) {
+      # this is a dir
+
+      $level ++;
+
+      my $max_level = defined $opt->{RecursiveMax} ? $opt->{RecursiveMax} : 100;
+
+      if ($level > $max_level) {
+         if (defined $opt->{RecursiveMax}) {
+            # this is user-defined limit - it is intentional, so return without complain
+            return $ret;
+
+         } else {
+            # this is safety catch
+            croak "recursive level($level) > max_level($max_level), path=$path";
+         }
+      }
+
+      my $dfh;
+      opendir($dfh, $path);
+
+      if (!$dfh) {
+         print STDERR "cannot open dir $path\n";
+         $ret->{error} ++;
+      } else {
+         my @files_in_dir = readdir($dfh);
+
+         for my $f (sort @files_in_dir) {
+            next if $f eq '.' || $f eq '..';
+
+            my $res = move_file($f, $opt);
+
+            $ret->{error} += $res->{error};
+            
+            my $ref = recursive_path("$path/$res->{new_file}", $level, $opt);
+
+            $ret->{error} += $ref->{error};
+
+            if ($ref->{exit}) {
+               $ret->{exit} ++;
+               last;
+            }
+         }
+      }
+   } 
+
+   return $ret;
+}
+
+sub move_file {
+   my ($old_file, $opt) = @_;
+
+   my $new_file = $opt->{compiled}->($old_file);
+
+   my $res = {
+      new_file => $new_file,
+      error    => 0,
+   };
+
+   if ($new_file eq $old_file) {
+      return $res;
+   }
+
+   my $cmd = "/bin/mv -f $old_file $new_file";
+
+   if (-e $new_file) {
+      print "cmd=$cmd cancelled because $new_file already exsits\n";   
+      $res->{new_file} = $old_file;
+      $res->{error}    = 1;
+      return $res;
+   }
+
+   print "cmd=$cmd\n";
+   print "Do you want to make this change? Y/N [$opt->{DefaultAnswer}]\n";
+
+   my $will_do = 0;
+
+   if ($opt->{force}) {
+      $will_do ++;
+   } else {
+      my $answer = readline(*STDIN);
+
+      if ($answer =~ /^\s*[yY]/) {
+         $will_do ++;
+      } elsif ($answer =~ /^\s*$/ && $opt->{DefaultAnswer} eq 'Y') {
+         $will_do ++;
+      }
+   }
+
+   if ($will_do) {
+      if ($dryrun) {
+         print "dryrun\n";
+         $res->{new_file} = $old_file;
+         $res->{error}    = 0;
+      } else {
+         my $rc = system($cmd);
+         print "executed\n";
+
+         if ($rc) {
+            $res->{new_file} = $old_file;
+            $res->{error}    = 1;
+         } 
+      }
+   } else {
+      print "your answer is not yes. skipped.\n";
+      $res->{new_file} = $old_file;
+      $res->{error}    = 0;
+   }
+
+   return $res;
+}
