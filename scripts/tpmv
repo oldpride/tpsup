@@ -118,17 +118,17 @@ my $insensitive_flag = $insensitive ? "i" : "";
 
 if ($MatchPattern) {
    if ($insensitive) {
-      $opt->{$MatchPattern} = qr/$MatchPattern/i;
+      $opt->{MatchPattern} = qr/$MatchPattern/i;
    } else {
-      $opt->{$MatchPattern} = qr/$MatchPattern/;
+      $opt->{MatchPattern} = qr/$MatchPattern/;
    }
 }
 
 if ($ExcludePattern) {
    if ($insensitive) {
-      $opt->{$ExcludePattern} = qr/$ExcludePattern/i;
+      $opt->{ExcludePattern} = qr/$ExcludePattern/i;
    } else {
-      $opt->{$ExcludePattern} = qr/$ExcludePattern/;
+      $opt->{ExcludePattern} = qr/$ExcludePattern/;
    }
 }
 
@@ -246,13 +246,13 @@ sub move_file {
    }
 
    print "cmd=$cmd\n";
-   print "Do you want to make this change? Y/N [$opt->{DefaultAnswer}]\n";
 
    my $will_do = 0;
 
    if ($opt->{force}) {
       $will_do ++;
    } else {
+      print "Do you want to make this change? Y/N [$opt->{DefaultAnswer}]\n";
       my $answer = readline(*STDIN);
 
       if ($answer =~ /^\s*[yY]/) {
