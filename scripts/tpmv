@@ -109,6 +109,7 @@ die "failed to compile '$substitution'" if $@;
 my $opt = {
    RecursiveMax => $maxdepth,
    compiled     => $compiled,
+   force        => $force,
 };
 
 $opt->{DefaultAnswer} = $default_yes ? "Y" : "N";
@@ -140,10 +141,10 @@ for my $path (@ARGV) {
       next;
    }
 
-   my $res = move_file($path, $opt);
+   my $res = move_file($path, $path, $opt);
    $error += $res->{error};
 
-   my $ref = recursive_path($res->{new_file}, 1, $opt);
+   my $ref = recursive_path($res->{new_path}, 1, $opt);
    $error += $ref->{error};
 }
 
@@ -195,11 +196,11 @@ sub recursive_path {
          for my $f (sort @files_in_dir) {
             next if $f eq '.' || $f eq '..';
 
-            my $res = move_file($f, $opt);
+            my $res = move_file($f, "$path/$f", $opt);
 
             $ret->{error} += $res->{error};
             
-            my $ref = recursive_path("$path/$res->{new_file}", $level, $opt);
+            my $ref = recursive_path("$path/$res->{new_path}", $level, $opt);
 
             $ret->{error} += $ref->{error};
 
@@ -215,24 +216,31 @@ sub recursive_path {
 }
 
 sub move_file {
-   my ($old_file, $opt) = @_;
+   my ($path, $full_path, $opt) = @_;
 
-   my $new_file = $opt->{compiled}->($old_file);
+   my $new_path;
+   if ($opt->{MatchPattern} && $full_path !~ /$opt->{MatchPattern}/) {
+      $new_path = $path;
+   } elsif ($opt->{ExcludePattern} && $full_path =~ /$opt->{ExcludePattern}/) {
+      $new_path = $path;
+   } else {
+      $new_path = $opt->{compiled}->($path);
+   }
 
    my $res = {
-      new_file => $new_file,
+      new_path => $new_path,
       error    => 0,
    };
 
-   if ($new_file eq $old_file) {
+   if ($new_path eq $path) {
       return $res;
    }
 
-   my $cmd = "/bin/mv -f $old_file $new_file";
+   my $cmd = "/bin/mv -f $path $new_path";
 
-   if (-e $new_file) {
-      print "cmd=$cmd cancelled because $new_file already exsits\n";   
-      $res->{new_file} = $old_file;
+   if (-e $new_path) {
+      print "cmd=$cmd cancelled because $new_path already exsits\n";   
+      $res->{new_path} = $path;
       $res->{error}    = 1;
       return $res;
    }
@@ -257,22 +265,23 @@ sub move_file {
    if ($will_do) {
       if ($dryrun) {
          print "dryrun\n";
-         $res->{new_file} = $old_file;
+         $res->{new_path} = $path;
          $res->{error}    = 0;
       } else {
          my $rc = system($cmd);
          print "executed\n";
 
          if ($rc) {
-            $res->{new_file} = $old_file;
+            $res->{new_path} = $path;
             $res->{error}    = 1;
          } 
       }
    } else {
       print "your answer is not yes. skipped.\n";
-      $res->{new_file} = $old_file;
+      $res->{new_path} = $path;
       $res->{error}    = 0;
    }
 
    return $res;
 }
+
