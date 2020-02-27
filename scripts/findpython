@@ -44,8 +44,9 @@ module=`echo $module|sed -e 's://*:.:g; s/::*/./g; s/[.]py$//'`
 echo "normalized module: $module"
 
 echo ""
-# which will not report function
-# which python
+# 'which' will not report function. 'type' will report both function and binary path
+type python
+
 # declare -F
 python --version
 echo ""

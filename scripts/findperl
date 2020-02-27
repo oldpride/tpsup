@@ -26,7 +26,8 @@ if [ $# -eq 0 ]; then
    usage
 fi
 
-which perl
+# 'which perl' cannot report function
+type perl
 
 for i in $@
 do

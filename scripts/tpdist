@@ -1154,8 +1154,8 @@ if ($mode eq 'server') {
    }
 
    if (-d $local_dir_abs) {
-      $quiet || print timestamped(), "cd $local_dir_abs\n";
-      chdir($local_dir_abs) || croak "cd $local_dir_abs failed";
+      $quiet || print timestamped(), "cd '$local_dir_abs'\n";
+      chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
    }
 
    if ($deletes_string) {
@@ -1167,7 +1167,7 @@ if ($mode eq 'server') {
          if (!$last_delete || $d !~ m:^$last_delete/: ) {
             # if we already deleted the dir, no need to delete files under it.
 
-            my $cmd = "/bin/rm -fr $d";
+            my $cmd = "/bin/rm -fr '$d'";
             print "$cmd\n";
             $dryrun || system($cmd);
 
@@ -1242,20 +1242,22 @@ if ($mode eq 'server') {
       if ($diff) {
          $tmpdir = get_tmp_file($tmpdir, $prog, {isDir=>'Y', chkSpace=>$RequiredSpace*2});
          if (! -d $tmpdir) {
-            $quiet || print timestamped(), "mkdir -p $tmpdir\n";
-            $dryrun || system("mkdir -p $tmpdir") && croak "mkdir -p $tmpdir failed";
+            my $cmd = "mkdir -p '$tmpdir'";
+            $quiet || print timestamped(), "$cmd\n";
+            $dryrun || system($cmd) && croak "$cmd failed";
          }
    
-         print timestamped(), "cd $tmpdir\n";
-         chdir($tmpdir) || croak "cd $tmpdir failed";
+         print timestamped(), "cd '$tmpdir'\n";
+         chdir($tmpdir) || croak "cd '$tmpdir' failed";
       } else {
          if (! -d $local_dir_abs) {
-            $quiet || print timestamped(), "mkdir -p $local_dir_abs\n";
-            $dryrun || system("mkdir -p $local_dir_abs") && croak "mkdir -p $local_dir_abs failed";
+            my $cmd = "mkdir -p '$local_dir_abs'";
+            $quiet || print timestamped(), "$cmd\n";
+            $dryrun || system($cmd) && croak "$cmd failed";
          }
    
-         $quiet || print timestamped(), "cd $local_dir_abs\n";
-         chdir($local_dir_abs) || croak "cd $local_dir_abs failed";
+         $quiet || print timestamped(), "cd '$local_dir_abs'\n";
+         chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
       }
    
       # unblock socket when reading
@@ -1325,21 +1327,21 @@ if ($mode eq 'server') {
       }
 
       if ($diff) {
-         $verbose && print timestamped(), "cd $old_pwd\n";
-         chdir($old_pwd) || croak "cannot cd $old_pwd";
+         $verbose && print timestamped(), "cd '$old_pwd'\n";
+         chdir($old_pwd) || croak "cannot cd '$old_pwd'";
 
          for my $relative_path (@diff_files) {
             # our dir now is $tmpdir
-            my $cmd = "diff $tmpdir/$relative_path $local_dir_abs/$relative_path";
+            my $cmd = "diff '$tmpdir/$relative_path' '$local_dir_abs/$relative_path'";
             print "$cmd\n";
             system($cmd);
             print "\n";
          }
 
          if ($KeepTmpFile) {
-            print timestamped(), "tmpdir $tmpdir is kept\n";
+            print timestamped(), "tmpdir '$tmpdir' is kept\n";
          } else {
-            my $cmd = "/bin/rm -fr $tmpdir\n";
+            my $cmd = "/bin/rm -fr '$tmpdir'";
             $verbose && print timestamped(), "$cmd\n";
             system($cmd);
          }
@@ -1415,9 +1417,9 @@ sub tar_file_list {
 
    my $cmd;
    if (!$created_tar) {
-      $cmd = "cd $front; tar -cvf $tar_file -T $tar_list";
+      $cmd = "cd '$front'; tar -cvf $tar_file -T $tar_list";
    } else {
-      $cmd = "cd $front; tar -uvf $tar_file -T $tar_list";
+      $cmd = "cd '$front'; tar -uvf $tar_file -T $tar_list";
    }
    $verbose && print timestamped(), "$cmd\n";
    system($cmd);
@@ -1494,8 +1496,9 @@ sub get_tmp_file {
    my $daydir = "$tmpdir/$yyyymmdd";
 
    if (! -d $daydir ) {
-      system("mkdir -p $daydir");
-      die "failed mkdir -p $daydir" if $?;
+      my $cmd = "mkdir -p '$daydir'";
+      system($cmd);
+      die "cmd=$cmd failed" if $?;
       system("find $tmpdir -mount -mtime +7 -exec /bin/rm -fr {} \\;");
    }
 
@@ -1574,9 +1577,9 @@ sub build_dir_tree {
 
    for my $path (@$paths) {
       if ($opt->{RelativeBase} && $path !~ m:^/: ) {
-         print timestamped(), "cd $opt->{RelativeBase}\n";
+         print timestamped(), "cd '$opt->{RelativeBase}'\n";
          if ( !chdir($opt->{RelativeBase}) ) {
-            print timestamped(), "cd $opt->{RelativeBase} failed, $path is skipped.\n";
+            print timestamped(), "cd '$opt->{RelativeBase}' failed, $path is skipped.\n";
             next;
          }
       }
@@ -1646,10 +1649,10 @@ sub build_dir_tree {
             next;
          }
 
-         $quiet || print timestamped(), "cd $front\n";
+         $quiet || print timestamped(), "cd '$front'\n";
          chdir($front) || croak "chdir($front) failed";
 
-         my $cmd = "find $back -mount -print";
+         my $cmd = "find '$back' -mount -print";
          $quiet || print timestamped(), "$cmd\n";
 
          my $file_count = 0;
