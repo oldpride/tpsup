@@ -268,7 +268,13 @@ to
 
 usage:    itrs command args
 
+          itrs -r
+          >> command args
+
 example:  itrs less '/apps/log/<today %Y%m%d>.log'
+
+          itrs -r
+          >> less /apps/log/<today %Y%m%d>.log
    
 "
    if [ $# -eq 0 ]; then
@@ -281,7 +287,14 @@ example:  itrs less '/apps/log/<today %Y%m%d>.log'
      mm=`echo $yyyymmdd|cut -c5-6`
      dd=`echo $yyyymmdd|cut -c7-8`
 
-   args=`echo "$@"|sed -e 's:%Y:$yyyy:g; s:%m:$mm:g; s:%d:$dd:g; s:<today[ ]*::; s:>::'`
+   if [ "$1" = "-r" ]; then
+      echo -n ">> "
+      read args
+   else
+      args="$@"
+   fi
+
+   args=`echo "$args"|sed -e 's:%Y:$yyyy:g; s:%m:$mm:g; s:%d:$dd:g; s:<today[ ]*::; s:>::'`
 
    eval "$args"
 }
