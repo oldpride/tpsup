@@ -238,6 +238,10 @@ p2env () {
 }
 
 p3env () {
+   if ! [ -e /usr/bin/python3 ]; then
+      return
+   fi
+
    python () {
       /usr/bin/python3 "$@"
    }
@@ -252,6 +256,34 @@ p3env () {
 
    # export the function
    set -a
+}
+
+itrs () {
+   local usage args yyyymmdd yyyy mm dd
+   usage="
+convert ITRS path from
+   /apps/log/<today %Y%m%d>.log
+to
+   /apps/log/20200226.log
+
+usage:    itrs command args
+
+example:  itrs less '/apps/log/<today %Y%m%d>.log'
+   
+"
+   if [ $# -eq 0 ]; then
+      echo "$usage"
+      return
+   fi
+
+   yyyymmdd=`date +%Y%m%d`
+   yyyy=`echo $yyyymmdd|cut -c1-4`
+     mm=`echo $yyyymmdd|cut -c5-6`
+     dd=`echo $yyyymmdd|cut -c7-8`
+
+   args=`echo "$@"|sed -e 's:%Y:$yyyy:g; s:%m:$mm:g; s:%d:$dd:g; s:<today[ ]*::; s:>::'`
+
+   eval "$args"
 }
 
 tpproxy () {
