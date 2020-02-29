@@ -331,6 +331,43 @@ usage:
    # export https_proxy=http://host:port
 }
 
+diffalias () {
+   local usage
+   usage="
+usage:
+   Compare alias change.
+   
+   Snap the current alias
+      diffalias snap
+  
+   Compare with the current alias with the previous snap
+      diffalias diff
+
+example:
+
+   unalias a>/dev/null; diffalias snap; alias a=b; diffalias diff
+
+   "
+
+   if [ $# -ne 1 ]; then
+      echo "$usage"
+      return
+   fi
+
+   dir="/tmp/snap_dir_$USER"
+   [ -d $dir ] || mkdir -p $dir || return 
+
+   if   [ $1 = snap ]; then
+      alias >$dir/alias.txt
+   elif [ $1 = diff ]; then
+      alias >$dir/alias.txt.new
+      diff $dir/alias.txt $dir/alias.txt.new
+   else
+      echo "$usage"
+      return
+   fi
+}
+
 functions () {
    typeset -F
    echo "to see detail: typeset -f"

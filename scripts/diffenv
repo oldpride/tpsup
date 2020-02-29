@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl -i
 
 use warnings;
 use strict;
@@ -40,6 +40,10 @@ description:
     'env' includes 
         env    (which contains PWD and OLDPWD)
         ulimit
+
+   Note: alias cannot be compared by a script because it is not passed down to
+         non-interactive shell.
+         alias is instead diff'ed by a shell function diffalias.
 
    -x ExcludePattern  perl regex pattern, exclude these lines
 
@@ -96,8 +100,8 @@ sub snap {
       $? && exit 1;
    }
 
-   system("env       > $snap_dir/env.txt");     $? && exit 1;
-   system("ulimit -a > $snap_dir/ulimit.txt");  $? && exit 1;
+   system("env       > $snap_dir/env.txt");              $? && exit 1;
+   system("ulimit -a > $snap_dir/ulimit.txt");           $? && exit 1;
 }
 
 sub parse_env {
@@ -124,8 +128,8 @@ sub parse_env {
 sub diff {
    my ($snap_dir, $opt) = @_;
 
-   system("env       > $snap_dir/env.txt.new");     $? && exit 1;
-   system("ulimit -a > $snap_dir/ulimit.txt.new");  $? && exit 1;
+   system("env       > $snap_dir/env.txt.new");              $? && exit 1;
+   system("ulimit -a > $snap_dir/ulimit.txt.new");           $? && exit 1;
 
    print "\n";
    $verbose && print "--- diff $snap_dir/env.txt $snap_dir/env.txt.new ---\n";
