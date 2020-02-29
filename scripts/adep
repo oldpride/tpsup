@@ -34,9 +34,9 @@ description:
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
    
-   -de n               expire Detail cache after n seconds. default 24 hours.
+   -de n               expire Detail cache after n seconds. default $DetailExpire.
 
-   -se n               expire Status cache after n seconds. default 24 hours.
+   -se n               expire Status cache after n seconds. default $StatusExpire.
 
    -m matchExpression  eg -m '\$Status !~ /OH|OI/'
 
