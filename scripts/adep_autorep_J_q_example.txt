@@ -49,3 +49,14 @@ owner: jerry@juno
 permission:
 alarm_if_fail: 1
 profile: /etc/profile
+
+/* ---------- test_job5 -------------*/
+  
+insert_job: test_job5 job_type: CMD
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+profile: /etc/profile
+condition: s(test_box1)

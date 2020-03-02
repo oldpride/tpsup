@@ -6,7 +6,6 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 use TPSUP::AUTOSYS qw(get_dependency);
-use TPSUP::UTIL    qw(get_setting_from_env);
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -106,9 +105,10 @@ for my $updown (qw(up self down)) {
    for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
                                 :         @{$dependency->{$updown}}  ) {
                                   
-      print $updown eq 'up' ? '-': '',
+      print $updown eq 'up'   ? '-': 
+            $updown eq 'down' ? '+' : '',
             join('.', @{$dep->{serial}}),
-            ", $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
+            ",   $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
             "$dep->{reason}, ",
             "$dep->{detail}->{Status}, ",
             "$dep->{detail}->{LastStart}, $dep->{detail}->{LastEnd}\n";

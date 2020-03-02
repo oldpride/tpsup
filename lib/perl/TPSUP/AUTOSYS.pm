@@ -29,7 +29,10 @@ sub get_autosys_fh {
    } elsif ($input =~ /command=(.+)/) {
       my $cmd = $1;
       print STDERR "cmd=$cmd\n" if !$opt->{AutosysQuiet};
-      $in_fh = open "$cmd |" or confess "cmd='$cmd' failed: $!";
+      $in_fh = open "$cmd |";
+
+      # don't bomb out here, just print an error. let the caller to handle it.
+      print STDERR "cmd='$cmd' failed: $!" if ! $in_fh;
    } else {
       confess "unknown input='$input'";
    }
@@ -40,16 +43,43 @@ sub get_autosys_fh {
 sub autorep_J {
    my ($input, $opt) = @_;
 
+   my $result;
+
+   # goal is to convert $input into an array of strings and then parse them
+   my $autorep_array;
+
    if (!$input) {
       my $UnivPatterns = get_setting_from_env('UNIV_PATTERNS', 'TPAUTOSYS', get_homedir_by_user() . "/.tpautosys");
       $input = "command=autorep -J $UnivPatterns";
-   } elsif ($input !~ /(file|command)=/) {
+   } elsif (ref($input) eq 'ARRAY') {
+      $autorep_array = $input;
+   } elsif ($input =~ /^string=(.*)/s) {
+      my @array = split /\n/, $2;
+      $autorep_array = \@array;
+   } elsif ($input !~ /^(file|command)=/) {
       # $input is a pattern
       $input = "command=autorep -J $input";
    }
 
-   my $in_fh = get_autosys_fh($input, $opt);
+   if (!$autorep_array) {
+      # now $input is "file=..." or "command=..."
+      my $in_fh = get_autosys_fh($input, $opt);
+   
+      if (!$in_fh) {
+         return $result;
+      }
+   
+      while (<$in_fh>) {
+         my $line = $_;
+         chomp $line;
 
+         push @$autorep_array, $line
+      }
+      
+      close $in_fh if $in_fh != \*STDIN;
+   }
+
+   # now we have $autorep_array, let's parse it
    # Job Name           Last Start           Last End             ST/Ex Run/Ntry Pri/Xit
    # _________________ ____________________ ____________________ _____ ________ _______
    # Nightly_Download   05/21/2010 11:27:31  05/21/2010 11:27:33  SU    197/1    0
@@ -62,28 +92,21 @@ sub autorep_J {
    # test_job4_run      05/21/2010 11:27:32  ----                 RU    197/1    0
    # test_job5_hold     05/21/2010 11:27:32  05/21/2010 11:27:33  OH    197/1    0
 
-   my $skip = 3;
-   {
-      my $i = 0;
-      while ( $i<$skip && <$in_fh> ) {
-         $i++;
+   if (!$opt->{AutorepInputHasNoHeader}) {
+      my $skip = 3;
+
+      for (my $i=0; $i<$skip; $i++) {
+         shift @$autorep_array;
       }
    }
-
-   my $result;
-
-   while (<$in_fh>) {
-      my $line = $_;
-      chomp $line;
-
+   
+   for my $line (@$autorep_array) {
       if ( $line =~ /^\s*(\S+?)\s+?(\S.{18})\s+?(\S.{18})\s+?(\S+)\s+/ ) {
          @{$result->{$1}}{qw(JobName LastStart LastEnd Status)} = ($1, $2, $3, $4);
       } else {
          print STDERR "unsupported format at line: $line\n";
       }
    }
-   
-   close $in_fh if $in_fh != \*STDIN;
 
    return $result;
 }

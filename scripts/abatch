@@ -5,7 +5,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw(get_dependency autorep_J autorep_q_J get_univ_patterns query_jobs);
+use TPSUP::AUTOSYS qw(get_dependency query_jobs);
 use TPSUP::UTIL    qw(get_in_fh);
 # use Carp::Always;
 
@@ -25,24 +25,35 @@ usage:
    
 description:
 
-   run a list of autosys jobs, stored in a file
+   Run autosys jobs listed in a file. Within the file, one line per job. The file
+   allow comments (#) and blank lines.
+
+   Before running autosys jobs. The script will check them first:
+      validate job's existence.
+      print the current job status.
+      spot jobs in OH (on-hold), OI (on-ice), or RU (running).
+      spot jobs that have downstream dependency. 
+
+   After the check, the script will prompt for whether to proceed to run. (use -f to skip
+   the prompt.)
 
    -x  ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
 
    -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
 
-   -ignoreDep          check dependent jobs, so that we won't trigger dependent
-                       jobs by mistake
-
-   -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
-
-   -n                  dry-run
-
-   -v                  verbose
+   -u UnivPatterns      use this to check dependent jobs, when '-chkdep' specified
 
    -de n               expire Detail cache after n seconds. default $DetailExpire.
 
    -se n               expire Status cache after n seconds. default $StatusExpire.
+
+   -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
+
+   -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
+
+   -f                  force to run the jobs without prompt for confirmation.
+
+   -n                  dryrun mode, check-only. will print the command but won't run the jobs.
 
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.
@@ -52,9 +63,10 @@ description:
 
 examples:
 
-   $prog               abatch_test.txt
+   $prog abatch_test.txt
 
-   $prog -n -ignoreDep abatch_test.txt
+   - test without autosys
+   $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test.txt
 
 END
 
@@ -64,18 +76,18 @@ END
 my $verbose;
 my $MatchPattern;
 my $ExcludePattern;
-my $dryrun;
-my $ignoreDep;
 my $DetailFiles;
 my $StatusFiles;
 my $UnivPatterns;
+my $force;
+my $dryrun;
 
 GetOptions(
    'v|verbose'     => \$verbose,
+   'n|dryrun'      => \$dryrun,
+   'f|force'       => \$force,
    'm=s'           => \$MatchPattern,
    'x=s'           => \$ExcludePattern,
-   'n|dryrun'      => \$dryrun,
-   'ignoreDep'     => \$ignoreDep,
    'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
@@ -87,32 +99,10 @@ usage("wrong number of args") if @ARGV != 1;
 
 my ($file) = @ARGV;
 
-my $ifh = get_in_fh($file);
-
-if (!$UnivPatterns) {
-   $UnivPatterns = get_univ_patterns();
-}
-
-my $info = query_jobs({
-   UnivPatterns=>$UnivPatterns,
-   DetailExpire=>$DetailExpire,
-   StatusExpire=>$StatusExpire,
-   DetailFiles=>$DetailFiles,
-   StatusFiles=>$StatusFiles,
-});
-
-my $exists_box_job;
-
-for my $job (keys %$info) {
-   my $box_name = $info->{job}->{box_name};
-
-   if ($box_name) {
-      $exists_box_job->{$box_name}->{$job} ++;
-   }
-}
-
 my @jobs;
 my $seen;
+
+my $ifh = get_in_fh($file);
 
 while (<$ifh>) {
    chomp $_;
@@ -121,7 +111,7 @@ while (<$ifh>) {
    next if $job =~ /^\s*$/;     # skip blank lines
    next if $job =~ /^\s*#/;     # skip comment
 
-   next if defined $MatchPattern && $job !~ /$MatchPattern/i; 
+   next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
 
    push @jobs, $job;
    $seen->{$job} ++;
@@ -129,90 +119,194 @@ while (<$ifh>) {
 
 close $ifh;
 
-my $subjobs_by_job;
+my $opt = {
+   UnivPatterns=>$UnivPatterns,
+   DetailExpire=>$DetailExpire,
+   StatusExpire=>$StatusExpire,
+   DetailFiles=>$DetailFiles,
+   StatusFiles=>$StatusFiles,
+};
+
+my $dependency = get_dependency("test_box1", $opt);
+
+print "dependency=", Dumper($dependency);
+
+my $info = query_jobs($opt);
+
+my $exists_box_job;
+
+for my $job (keys %$info) {
+   my $box_name = $info->{box_name};
+
+   if ($box_name) {
+      $exists_box_job->{$box_name}->{$job} ++;
+   }
+}
+
+my $error = 0;
+my $fatal = 0;
 
 for my $job (@jobs) {
+   print "\n";
+
    if (!$info->{$job}) {
-      croak "cannot find $job in $UnivPatterns\n";
+      print "$job\n";
+      print "   FATAL: not found\n";
+      $error ++;
+      $fatal ++;
+      next;
    }
 
-   if (!$ignoreDep) {
-      my $dependency = get_dependency($job, {DepExps=>['$Status !~ /OH|OI/']});
+   if (!$info->{$job}->{Status}) {
+      print "$job\n";
+      print "   FATAL: status not found. just deleted?\n";
+      $error ++;
+      $fatal ++;
+      next;
+   }
 
-      if ($dependency->{down}) {
-         # if the job is box and the dependency is box_child, ignore
-         for my $dep (@{$dependency->{down}}) {
-            if ($dep->{reason} ne 'box_child') {
-               print STDERR "$job has dependent $dep->{detail}->{JobName}\n";
-               exit 1;
+   print "$job $info->{$job}->{LastStart} $info->{$job}->{LastEnd} $info->{$job}->{Status}\n";
+
+   if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+      print "   FATAL: $job is in $info->{$job}->{Status} mode.\n";
+      $error ++;
+      $fatal ++;
+      next;
+   }
+
+   if ($info->{$job}->{Status} =~ /^(RU)$/) {
+      print "   ERROR: $job is in $info->{$job}->{Status} mode.\n";
+      $error ++;
+      next;
+   }
+
+   my @conditionals;
+
+   #my $dependency = get_dependency($job, {%$opt, DepExps=>['$Status !~ /OH|OI/']});
+   my $dependency = get_dependency($job, $opt);
+
+   print "$job dependency=", Dumper($dependency);
+
+   if ($dependency->{down}) {
+      for my $dep (@{$dependency->{down}}) {
+         if ($dep->{reason} ne 'box_child') {
+            push @conditionals, $dep->{detail}->{JobName};
+         }
+      }
+   }
+    
+   if (@conditionals) {
+      print "   ERROR: $job has conditioanl dependencies: ", join(" ", @conditionals);
+      $error ++;
+      next;
+   }
+}
+
+print "Total $error errors. $fatal fatal.\n";
+
+if ($fatal) {
+   exit $error;
+}
+
+if (!$force) {
+   print "Do you want to proceed to run the jobs ? Y/N\n";
+   my $answer = readline(*STDIN);
+
+   if ($answer !~ /^\s*[yY]/) {
+      print "your answer is not yes. quit\n";
+      exit 0;
+   }
+}
+
+my @tally;
+
+for my $job (@jobs) {
+   my $autorep_cmd = "command=autorep -J $job";
+
+   my $before_result;
+   my @subjobs;
+   my $subcount;
+
+   if (!$dryrun) {
+      $before_result = autorep_J("command=$autorep_cmd");
+   
+      while (!$before_result) {
+         print "command=autorep -J $job failed. will try again after 10 seconds\n";
+         sleep 10;
+         $before_result = autorep_J("command=$autorep_cmd");
+      }
+   
+      @subjobs  = sort(keys %$before_result);
+      $subcount = scalar(@subjobs);
+   }
+
+   my $start_cmd = "sendevent -E FORCE_STARTJOB -J $job";
+   
+   if ($dryrun) {
+      print "dryrun = $start_cmd\n";
+   } else {
+      print "cmd = $start_cmd\n";
+      system($start_cmd);
+      if ($?) {
+         print "force start job failed: $!";
+         exit 1;
+      }   
+   }   
+
+   next if $dryrun;
+   
+   my $sub_run = 0;
+   my $sub_err = 0;
+
+   while (1) { 
+      my $after_result = autorep_J("command=$autorep_cmd");
+
+      for my $j (@subjobs) {
+         if ( $before_result->{$j}->{Status}    ne $after_result->{$j}->{Status}    ||
+              $before_result->{$j}->{LastStart} ne $after_result->{$j}->{LastStart} ||
+              $before_result->{$j}->{LastEnd}   ne $after_result->{$j}->{LastEnd}   ){
+            if ($after_result->{$j}->{Status} =~ /^(SU|TE|FA)$/) {
+               $sub_run ++;             
+            }
+            if ($after_result->{$j}->{Status} =~ /^(TE|FA)$/) {
+               $sub_err ++;             
             }
          }
       }
+
+      if ($sub_run < $subcount && $sub_err == 0 ) {
+         print "Only $sub_run of $subcount complete. sleep for 10\n";
+         sleep 10;
+      } else {
+         # try to restore the original autorep -J format
+         # start with the main job 
+         push @tally, "$job $after_result->{$job}->{LastStart} $after_result->{$job}->{LastEnd} $after_result->{$job}->{Status}\n";
+
+         # then list the rest jobs with indent
+         for my $j (@subjobs) {
+            # skip the main job as it was already printed.
+            next if $j eq $job;
+            push @tally, "   $j $after_result->{$j}->{LastStart} $after_result->{$j}->{LastEnd} $after_result->{$j}->{Status}\n";
+         }
+         last;
+      }
    }
 
-   #print "$job = ", Dumper($info->{$job});
+   print "\n";
+   print "JobName Last_Start Last_End Status\n";
+   print "--------------------------------------------------------\n";
+   print join("\n", @tally), "\n";
 
-   if ($info->{$job}->{job_type} eq 'BOX') {
-      # print  "\$exists_box_job->{$job}) = ", Dumper($exists_box_job->{$job});
-
-      for my $j2 (keys %{$exists_box_job->{$job}}) {
-         if ( $info->{$j2}->{Status} !~ /^(OH|OI)$/ ) {
-            push @{$subjobs_by_job->{$job}}, $j2;
-         } 
-      }
-
-      if (!$subjobs_by_job->{$job}) {
-         croak "all jobs in BOX $job are OH or OI";
-      }
-   } else {
-      push @{$subjobs_by_job->{$job}}, $job;
+   if ($sub_err) {
+       print "Aborting - $sub_err jobs did not complete successfully\n";
+       exit 1;
    }
 }
 
-for my $job (@jobs) {
-   { 
-      my $cmd = "sendevent -E FORCE_STARTJOB -J $job";
-   
-      print "cmd = $cmd\n";
-      if (!$dryrun) {
-         system($cmd);
-         $? && exit 1;
-      }
-   }
-
-   
-   while (1) { 
-      my $cmd = "autorep -J $job";
-   
-      print "cmd = $cmd\n";
-
-      if (!$dryrun) {
-         my @lines = `$cmd`;
-         $? && exit 1;
-
-         my @failed = grep {/ (TE|FA) /} @lines;
-
-         if (@failed) {
-            print "$job failed\n"; 
-            print @lines;
-            exit 1;
-         }
-
-         my @successful = grep {/ (SU) /} @lines;
-
-         print "$job: ", scalar(@successful), " of ", scalar(@{$subjobs_by_job->{$job}}), " succeeded\n";
-
-         if (scalar(@successful) == scalar(@{$subjobs_by_job->{$job}})) {
-            last;
-         }
-      }
-
-      last if $dryrun;
-
-      sleep 10;
-   }
+if ($dryrun) {
+   print "dryrun mode. nothing done.\n";
+} else {
+   print "all complete successfully\n";
 }
-
-print "all complete successfully\n";
 
 exit 0;
