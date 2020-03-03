@@ -25,23 +25,27 @@ usage:
    
 description:
 
-   Run autosys jobs listed in a file. Within the file, one line per job. The file
-   allow comments (#) and blank lines.
+   Run autosys jobs listed in a file, joblist.txt. Within the file, one job per line.
+   The file allows comments (#) and blank lines.
 
    Before running autosys jobs. The script will check them first:
       validate job's existence.
       print the current job status.
       spot jobs in OH (on-hold), OI (on-ice), or RU (running).
       spot jobs that have downstream dependency. 
+      spot jobs that will trigger another job in the same list.
 
    After the check, the script will prompt for whether to proceed to run. (use -f to skip
    the prompt.)
+
+   If the script aborted halfway, you can comment out the jobs already ran and start
+   again.
 
    -x  ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
 
    -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
 
-   -u UnivPatterns      use this to check dependent jobs, when '-chkdep' specified
+   -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
 
    -de n               expire Detail cache after n seconds. default $DetailExpire.
 
@@ -66,7 +70,8 @@ examples:
    $prog abatch_test.txt
 
    - test without autosys
-   $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test.txt
+   $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
+   $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
 
 END
 
@@ -120,16 +125,12 @@ while (<$ifh>) {
 close $ifh;
 
 my $opt = {
-   UnivPatterns=>$UnivPatterns,
-   DetailExpire=>$DetailExpire,
-   StatusExpire=>$StatusExpire,
-   DetailFiles=>$DetailFiles,
-   StatusFiles=>$StatusFiles,
+   UnivPatterns => $UnivPatterns,
+   DetailExpire => $DetailExpire,
+   StatusExpire => $StatusExpire,
+   DetailFiles  => $DetailFiles,
+   StatusFiles  => $StatusFiles,
 };
-
-my $dependency = get_dependency("test_box1", $opt);
-
-print "dependency=", Dumper($dependency);
 
 my $info = query_jobs($opt);
 
@@ -180,28 +181,39 @@ for my $job (@jobs) {
       next;
    }
 
-   my @conditionals;
+   my @downDeps;
+   my @willRunAgain;
 
-   #my $dependency = get_dependency($job, {%$opt, DepExps=>['$Status !~ /OH|OI/']});
-   my $dependency = get_dependency($job, $opt);
+   #my $dependency = get_dependency($job, $opt);
+   my $dependency = get_dependency($job, {%$opt, DepExps=>['$Status !~ /OH|OI/']});
 
-   print "$job dependency=", Dumper($dependency);
+   #print "$job dependency=", Dumper($dependency);
 
    if ($dependency->{down}) {
       for my $dep (@{$dependency->{down}}) {
          if ($dep->{reason} ne 'box_child') {
-            push @conditionals, $dep->{detail}->{JobName};
+            push @downDeps, "$dep->{detail}->{JobName} ($dep->{reason})";
+         }
+
+         if ($seen->{$dep->{detail}->{JobName}}) {
+            push @willRunAgain, $dep->{detail}->{JobName};
          }
       }
    }
     
-   if (@conditionals) {
-      print "   ERROR: $job has conditioanl dependencies: ", join(" ", @conditionals);
+   if (@downDeps) {
+      print "   ERROR: $job has dependencies: ", join(" ", @downDeps), "\n";
       $error ++;
-      next;
+   }
+
+   if (@willRunAgain) {
+      print "   ERROR: $job triggers other jobs in the list: ", join(" ", @willRunAgain), "\n";
+      $error ++;
    }
 }
 
+print "\n";
+print "----------------------------------.\n";
 print "Total $error errors. $fatal fatal.\n";
 
 if ($fatal) {
@@ -219,6 +231,7 @@ if (!$force) {
 }
 
 my @tally;
+my $format = "%-30s %-18s %-18s %s\n";
 
 for my $job (@jobs) {
    my $autorep_cmd = "command=autorep -J $job";
@@ -280,22 +293,24 @@ for my $job (@jobs) {
       } else {
          # try to restore the original autorep -J format
          # start with the main job 
-         push @tally, "$job $after_result->{$job}->{LastStart} $after_result->{$job}->{LastEnd} $after_result->{$job}->{Status}\n";
+         push @tally, [$job, $after_result->{$job}->{LastStart}, $after_result->{$job}->{LastEnd}, $after_result->{$job}->{Status}];
 
          # then list the rest jobs with indent
          for my $j (@subjobs) {
             # skip the main job as it was already printed.
             next if $j eq $job;
-            push @tally, "   $j $after_result->{$j}->{LastStart} $after_result->{$j}->{LastEnd} $after_result->{$j}->{Status}\n";
+            push @tally, [$j, $after_result->{$j}->{LastStart}, $after_result->{$j}->{LastEnd}, $after_result->{$j}->{Status}];
          }
          last;
       }
    }
 
-   print "\n";
-   print "JobName Last_Start Last_End Status\n";
-   print "--------------------------------------------------------\n";
-   print join("\n", @tally), "\n";
+   printf "\n";
+   printf $format, "Job Name", "Last Start", "Last End", "Status";
+   print "---------------------------------------------------------------------------\n";
+   for my $row (@tally) {
+       printf $format, @$row;
+   }
 
    if ($sub_err) {
        print "Aborting - $sub_err jobs did not complete successfully\n";
@@ -305,6 +320,8 @@ for my $job (@jobs) {
 
 if ($dryrun) {
    print "dryrun mode. nothing done.\n";
+   printf $format, "Job Name", "Last Start", "Last End", "Status";
+   print "---------------------------------------------------------------------------\n";
 } else {
    print "all complete successfully\n";
 }

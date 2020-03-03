@@ -410,87 +410,6 @@ sub get_dependency {
    my $dependency;
    my $seen;
 
-   sub trace_dependency {
-      my ($serial, $job, $updown, $reason) = @_;
-
-      $opt->{verbose} && print "trace_dependency([@[$serial]], $job, $updown, $reason)\n";
-
-      my $r = $all_ref->{$job};
-
-      if ($reason ne 'self') {
-         if ($r) {
-            if ($matchExps) {
-               TPSUP::Expression::export_var($r, {RESET=>1});
-               for my $e (@$matchExps) {
-                  if (! $e->()) {
-                     return;
-                  }
-               }
-            }
-      
-            push @{$dependency->{$updown}}, { detail => $r,
-                                              serial => $serial,
-                                              reason => $reason,
-                                            };
-         } else {
-            # this job is outside the UNIV_PATTERNS
-            $r->{JobName} = $job;
-   
-            push @{$dependency->{$updown}}, { detail => $r,
-                                              serial => $serial,
-                                              reason => $reason,
-                                            };
-            return;
-         };
-      }
-
-      my $i = 1;
-
-      # just in case we got into a dead loop
-      my $depth = scalar(@$serial);
-      croak "exceeded max depth $max_depth" if $depth > $max_depth;
-
-      my @next_level;
-
-      my $box_name = $all_ref->{$job}->{box_name};
-      if ($box_name) {
-         # this job is in a box
-
-         push @next_level, ['box', [$box_name]];
-      }
-
-
-      # handle condition relationship
-      if ($updown eq 'up') {
-         push @next_level, ['condition', 
-                            [condition_to_jobs($all_ref->{$job}->{condition})]
-                           ];
-      } else {
-         # now $updown eq 'down'
-         if ($children_by_parent->{$job}) {
-            push @next_level, ['condition', $children_by_parent->{$job}];
-         }
-      }
-
-      # this job is a box
-      if ($children_by_box->{$job}) {
-         push @next_level, ['box_child', $children_by_box->{$job}];
-      }
-
-      for my $reason_jobs (@next_level) {
-         my ($rsn, $jobs) = @$reason_jobs;
-
-         for my $j (@$jobs) {
-            if (!$seen->{$updown}->{$j}) {
-               $seen->{$updown}->{$j} = 1;
-               
-               trace_dependency([@$serial, $i], $j, $updown, $rsn);
-               $i++;
-            } 
-         }
-      } 
-   }
-
    push @{$dependency->{'self'}}, { detail => $all_ref->{$job2},
                                     serial => [0],
                                     reason => 'self',
@@ -498,8 +417,94 @@ sub get_dependency {
    $seen->{up}->{$job2} ++;
    $seen->{down}->{$job2} ++;
 
-   trace_dependency([], $job2, "up",   'self');
-   trace_dependency([], $job2, "down", 'self');
+   for my $updown (qw(up down)) {
+      my @todo = ([ [], $job2, 'self' ]);
+
+      TODO:
+      while (@todo) {
+         my $cur = pop @todo;
+         my ($serial, $job, $reason) = @$cur;
+         # $serial is the index of current dependency, 0 is self
+         # $reason is why we are here, eg, self, box, condition
+
+         $opt->{verbose} && print "trace dependency([@[$serial]], $job, $updown, $reason)\n";
+
+         my $r = $all_ref->{$job};
+
+         if ($reason ne 'self') {
+            if ($r) {
+               if ($matchExps) {
+                  TPSUP::Expression::export_var($r, {RESET=>1});
+                  for my $e (@$matchExps) {
+                     if (! $e->()) {
+                        next TODO;
+                     }
+                  }
+               }
+         
+               push @{$dependency->{$updown}}, { detail => $r,
+                                                 serial => $serial,
+                                                 reason => $reason,
+                                               };
+            } else {
+               # this job is outside the UNIV_PATTERNS
+               $r->{JobName} = $job;
+      
+               push @{$dependency->{$updown}}, { detail => $r,
+                                                 serial => $serial,
+                                                 reason => $reason,
+                                               };
+               next TODO;
+            };
+         }
+   
+         # just in case we got into a dead loop
+         my $depth = scalar(@$serial);
+         croak "exceeded max depth $max_depth" if $depth > $max_depth;
+   
+         my @next_level;
+   
+         my $box_name = $all_ref->{$job}->{box_name};
+         if ($box_name) {
+            # this job is in a box
+   
+            push @next_level, ['box_parent', [$box_name]];
+         }
+   
+   
+         # handle condition relationship
+         if ($updown eq 'up') {
+            push @next_level, ['condition', 
+                               [condition_to_jobs($all_ref->{$job}->{condition})]
+                              ];
+         } else {
+            # now $updown eq 'down'
+            if ($children_by_parent->{$job}) {
+               push @next_level, ['condition', $children_by_parent->{$job}];
+            }
+         }
+   
+         # this job is a box
+         if ($children_by_box->{$job}) {
+            push @next_level, ['box_child', $children_by_box->{$job}];
+         }
+
+         my $i = 1;
+   
+         for my $reason_jobs (@next_level) {
+            my ($rsn, $jobs) = @$reason_jobs;
+   
+            for my $j (@$jobs) {
+               if (!$seen->{$updown}->{$j}) {
+                  $seen->{$updown}->{$j} = 1;
+                  
+                  push @todo, [[@$serial, $i], $j, $rsn];
+                  $i++;
+               } 
+            }
+         } 
+      }
+   }
 
    return $dependency;
 }

@@ -60,3 +60,22 @@ permission:
 alarm_if_fail: 1
 profile: /etc/profile
 condition: s(test_box1)
+
+/* ---------- test_box2 -------------*/
+  
+insert_job: test_box2 job_type: BOX
+machine: juno
+data_conditions: 0
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+
+/* ---------- test_job6 -------------*/
+  
+insert_job: test_job6 job_type: CMD
+box_name: test_box2
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
