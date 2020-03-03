@@ -1,0 +1,26 @@
+#!/bin/bash
+
+usage () {
+   cat >&2 <<EOF
+
+usage:   $0 n command args ...
+
+example: $0 3 echo a
+
+EOF
+   exit 1
+
+}
+
+if [ $# -le 1 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+n=$1
+shift 1
+
+for ((x=0; x<$n; ++x))
+do
+  "$@"
+done
