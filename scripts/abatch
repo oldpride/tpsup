@@ -5,7 +5,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw(get_dependency query_jobs);
+use TPSUP::AUTOSYS qw(get_dependency query_jobs print_autorep_J_header get_autorep_J_format);
 use TPSUP::UTIL    qw(get_in_fh);
 # use Carp::Always;
 
@@ -144,6 +144,8 @@ for my $job (keys %$info) {
    }
 }
 
+print_autorep_J_header();
+
 my $error = 0;
 my $fatal = 0;
 
@@ -166,7 +168,7 @@ for my $job (@jobs) {
       next;
    }
 
-   print "$job $info->{$job}->{LastStart} $info->{$job}->{LastEnd} $info->{$job}->{Status}\n";
+   printf get_autorep_J_format(), $job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
 
    if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
       print "   FATAL: $job is in $info->{$job}->{Status} mode.\n";
@@ -221,7 +223,8 @@ if ($fatal) {
 }
 
 if (!$force) {
-   print "Do you want to proceed to run the jobs ? Y/N\n";
+   my $run = $dryrun ? "dryrun" : "run";
+   print "Do you want to proceed to $run the jobs ? Y/N\n";
    my $answer = readline(*STDIN);
 
    if ($answer !~ /^\s*[yY]/) {
@@ -231,7 +234,6 @@ if (!$force) {
 }
 
 my @tally;
-my $format = "%-30s %-18s %-18s %s\n";
 
 for my $job (@jobs) {
    my $autorep_cmd = "command=autorep -J $job";
@@ -305,11 +307,9 @@ for my $job (@jobs) {
       }
    }
 
-   printf "\n";
-   printf $format, "Job Name", "Last Start", "Last End", "Status";
-   print "---------------------------------------------------------------------------\n";
+   print_autorep_J_header();
    for my $row (@tally) {
-       printf $format, @$row;
+       printf get_autorep_J_format(), @$row;
    }
 
    if ($sub_err) {
@@ -320,8 +320,7 @@ for my $job (@jobs) {
 
 if ($dryrun) {
    print "dryrun mode. nothing done.\n";
-   printf $format, "Job Name", "Last Start", "Last End", "Status";
-   print "---------------------------------------------------------------------------\n";
+   print_autorep_J_header();
 } else {
    print "all complete successfully\n";
 }

@@ -7,8 +7,10 @@ use base qw( Exporter );
 our @EXPORT_OK = qw(
       autorep_J
       autorep_q_J
+      get_autorep_J_format
       get_dependency
       get_univ_patterns
+      print_autorep_J_header
       query_jobs
 );
       
@@ -535,6 +537,15 @@ sub condition_to_jobs {
    return @jobs;
 }
 
+sub get_autorep_J_format {
+   return "%-50s %-19s %-19s %s\n";
+}
+
+sub print_autorep_J_header {
+   printf get_autorep_J_format(), "Job Name", "Last Start", "Last End", "Status";
+   printf "\n";
+   printf get_autorep_J_format(), "-"x50,     "-"x19,        "-"x19,    "-"x2;
+}
 
 sub main {
    use Data::Dumper;
