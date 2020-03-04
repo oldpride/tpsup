@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# copied from Lei Chen (Leo) and modified by me
+
 from __future__ import unicode_literals
 import itchat, logging, time, sys, json
 from itchat.content import *
