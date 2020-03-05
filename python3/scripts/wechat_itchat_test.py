@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# as of 2020/03/03, wechat blocked most users's web interface. itchat doesn't work anymore.
+
 #from __future__ import unicode_literals
 
 import itchat
