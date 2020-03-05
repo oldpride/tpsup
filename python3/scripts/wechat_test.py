@@ -23,16 +23,18 @@ itchat.auto_login()
 # Windows微信下载地址：https://pc.weixin.qq.com  Mac微信下载地址：https://mac.weixin.qq.com</message></error>
 # not working any more
 # https://www.cnblogs.com/fby698/p/11515470.html
-friend_remarkName = input("please enter friend name (eg HelenFeng): ")
-print(f'friend="{friend_remarkName}"')
-#friend_wechatName = itchat.search_friends(remarkName=friend_remarkName)[0]['UserName']
-#friend_wechatName = itchat.search_friends(name=friend_remarkName)[0]['UserName']
+
 friends = itchat.get_friends()
-print('list')
-pprint.pprint(friends[:10])
+pprint.pprint(friends)
+chatrooms = itchat.get_chatrooms()
+pprint.pprint(chatrooms)
 
 sys.exit(0)
 
+#friend_remarkName = input("please enter friend name (eg HelenFeng): ")
+#print(f'friend="{friend_remarkName}"')
+#friend_wechatName = itchat.search_friends(remarkName=friend_remarkName)[0]['UserName']
+#friend_wechatName = itchat.search_friends(name=friend_remarkName)[0]['UserName']
 # while True:
 #     message = input("please enter your message: ")
 #     itchat.send_msg(msg=message, toUserName=friend_wechatName)
