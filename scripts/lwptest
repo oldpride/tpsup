@@ -7,6 +7,8 @@ use Getopt::Long;
 use Carp;
 use LWP::UserAgent;
 use HTTP::Cookies;
+use File::Basename;
+use Cwd 'abs_path';
 
 my $prog = $0; $prog =~ s:.*/::;
 
