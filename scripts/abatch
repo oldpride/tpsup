@@ -5,7 +5,8 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw(get_dependency query_jobs print_autorep_J_header get_autorep_J_format);
+use TPSUP::AUTOSYS qw(get_dependency query_jobs print_autorep_J_header
+                      get_autorep_J_format autorep_J);
 use TPSUP::UTIL    qw(get_in_fh);
 # use Carp::Always;
 
