@@ -41,13 +41,18 @@ while ($tcpConnection.Connected)
 
     if ($tcpConnection.Connected)
     {
+        <#
         Write-Host -NoNewline "prompt> "
+        #>
+        <# https://powershell.one/tricks/input-devices/detect-key-press #>
         $command = Read-Host
 
+        <#
         if ($command -eq "escape")
         {
             break
         }
+        #>
 
         $writer.WriteLine($command) | Out-Null
     }
