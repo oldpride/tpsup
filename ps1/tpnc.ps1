@@ -13,13 +13,26 @@ what is this for?
 #>
 param (
     [switch]$v = $false,
+    #[switch]$l = $false,
     [Parameter(Mandatory=$true)][string]$remote_host,
     [Parameter(Mandatory=$true)][string]$remote_port
- )
+)
 
-write-host $v
-write-host $remote_host
-write-host $remote_port
+if ($v) {
+   write-host "verbose=$v"
+   write-host "listener=$l"
+   write-host "remote_host=$remote_host"
+   write-host "remote_port=$remote_port"
+}
+
+$hasConsole = $true
+
+try { [Console]::KeyAvailable }
+catch [System.InvalidOperationException] {$hasConsole = $false}
+
+if ($v) { 
+   write-host "hasConsole = $hasConsole"
+}
 
 $tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)
 $tcpStream = $tcpConnection.GetStream()
@@ -30,32 +43,45 @@ $writer.AutoFlush = $true
 $buffer = new-object System.Byte[] 1024
 $encoding = new-object System.Text.AsciiEncoding 
 
+<#
+  TcpClient.Connected isn't really useful
+
+  The Connected property gets the connection state of the Client socket as of the last I/O operation.
+  When it returns false, the Client socket was either never connected, or is no longer connected.
+
+  Because the Connected property only reflects the state of the connection as of the most recent
+  operation, you should attempt to send or receive a message to determine the current state. After
+  the message send fails, this property no longer returns true. Note that this behavior is by design.
+  You cannot reliably test the state of the connection because, in the time between the test and a
+  send/receive, the connection could have been lost. Your code should assume the socket is connected,
+  and gracefully handle failed transmissions
+#>
 while ($tcpConnection.Connected)
 {
     while ($tcpStream.DataAvailable)
     {
-        $rawresponse = $tcpStream.Read($buffer, 0, 1024)
-        $response = $encoding.GetString($buffer, 0, $rawresponse)   
-        write-host $response
-    }
-
-    if ($tcpConnection.Connected)
-    {
-        <#
-        Write-Host -NoNewline "prompt> "
-        #>
-        <# https://powershell.one/tricks/input-devices/detect-key-press #>
-        $command = Read-Host
-
-        <#
-        if ($command -eq "escape")
-        {
-            break
+        $size = $tcpStream.Read($buffer, 0, 1024)
+        $text = $encoding.GetString($buffer, 0, $size)   
+        if ($v) {
+           write-host "received $size byte(s)"
         }
-        #>
-
-        $writer.WriteLine($command) | Out-Null
+        write-host -n "$text"
     }
+
+    if ($hasConsole) {
+       ## https://powershell.one/tricks/input-devices/detect-key-press
+       while ([Console]::KeyAvailable)
+       {
+           Write-Host -NoNewline "hit 'enter' to receive and to send > "
+           $line = Read-Host
+           $writer.WriteLine($line) | Out-Null
+       }
+    } else {
+           Write-Host -NoNewline "hit 'enter' to receive and to send > "
+           $line = Read-Host
+           $writer.WriteLine($line) | Out-Null
+    } 
+
     start-sleep -Milliseconds 500
 }
 
