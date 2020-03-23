@@ -121,6 +121,9 @@ if (defined $localport) {
 
    $verbose && print STDERR "Accepted new client connection from $peer_address:$peer_port\n";
 
+   # we only accept one connection; therefore, close the listener after accepting one client.
+   close($socket);
+
    my $select = IO::Select->new($client_socket) or die "IO::Select $!";
    $select->add(\*STDIN) or die "IO::Select $!";
 
