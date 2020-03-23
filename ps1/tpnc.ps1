@@ -148,14 +148,29 @@ if ($listener_port) {
 
    # https://learn-powershell.net/2014/02/22/building-a-tcp-server-using-powershell/
 
-   $listener = new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
-   $listener.start()
-   
-   write-host "listner started at port $listener_port"
+   $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
 
-   $tcpConnection = $listener.AcceptTcpClient()
+   if (-not $listener) {
+      exit 1
+   }
+   
+   try   { $listener.start()     }
+   catch { write-host $_; exit 1 }
+   
+   write-host "listener started at port $listener_port"
+
+   $tcpConnection = $null
+   try {
+      $tcpConnection = $listener.AcceptTcpClient()
+   } catch {
+      write-host $_
+      exit 1
+   }
 
    write-host "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+
+   # we only want to accept one client; therefore, close the listener now.
+   $listener.stop()
 
    SendAndReceive($tcpConnection)
    
@@ -174,7 +189,10 @@ if ($listener_port) {
       write-host "remote_port=$remote_port"
    }
 
-   $tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)
+   $tcpConnection = $null
+   try   {New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
+   catch { Write-Host $_; exit 1 }
+
    write-host "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
 
    SendAndReceive($tcpConnection)
