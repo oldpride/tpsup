@@ -12,8 +12,6 @@
 param (
     [switch]$v = $false,
     [string]$l = $null,
-    [string]$outfile = $null,
-    [string]$infile  = $null,
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
@@ -67,8 +65,6 @@ if ($v) {
 function SendAndReceive {
    param ([Parameter(Mandatory = $true)]$tcpConnection = $null)
 
-   $infile_sent = $false
-
    $tcpStream = $tcpConnection.GetStream()
    $reader = New-Object System.IO.StreamReader($tcpStream)
    $writer = New-Object System.IO.StreamWriter($tcpStream)
@@ -120,33 +116,21 @@ function SendAndReceive {
            }
        }
    
-       if ($infile) {
-          if (-Not $infile_sent) {
-             # https://stackoverflow.com/questions/24708859/output-binary-data-on-powershell-pipeline/24745250#24745250
-             # to-do, need to write in chunk?
-             $indata = $null
-             try { $indata = (Get-Content $infile -encoding byte) }
-             catch {write-host $_; exit 1}
-             $writer.Write($indata, 0, $indata.length)
-             $infile_sent = $true
+       if ($hasConsole) {
+          ## https://powershell.one/tricks/input-devices/detect-key-press
+          while ([Console]::KeyAvailable)
+          {
+              Write-Host -NoNewline "hit 'enter' to receive and to send > "
+              $line = Read-Host
+              Write-Host "sending $($line.Length) byte(s) + line ends"
+              $writer.WriteLine($line) | Out-Null
           }
        } else {
-          if ($hasConsole) {
-             ## https://powershell.one/tricks/input-devices/detect-key-press
-             while ([Console]::KeyAvailable)
-             {
-                 Write-Host -NoNewline "hit 'enter' to receive and to send > "
-                 $line = Read-Host
-                 Write-Host "sending $($line.Length) byte(s) + line ends"
-                 $writer.WriteLine($line) | Out-Null
-             }
-          } else {
-                 Write-Host -NoNewline "hit 'enter' to receive and to send > "
-                 $line = Read-Host
-                 Write-Host "sending $($line.Length) byte(s) + line ends"
-                 $writer.WriteLine($line) | Out-Null
-          } 
-       }
+              Write-Host -NoNewline "hit 'enter' to receive and to send > "
+              $line = Read-Host
+              Write-Host "sending $($line.Length) byte(s) + line ends"
+              $writer.WriteLine($line) | Out-Null
+       } 
    
        start-sleep -Milliseconds 500
    }

@@ -127,7 +127,7 @@ if [[ $UNAME =~ Msys ]]; then
    export USER=$USERNAME
 
    alias     ework='cd /c/users/$USER/eclipse-workspace'
-   alias    github='cd /c/users/$USER/github'
+   alias     mygit='cd /c/users/$USER/github'
    alias downloads='cd /c/users/$USER/downloads'
 
    # https://stackoverflow.com/questions/32597209/python-not-working-in-the-command-line-of-git-bash
@@ -135,7 +135,7 @@ if [[ $UNAME =~ Msys ]]; then
    alias python3='winpty "/c/Program Files/Python37/python"'
 elif [[ $UNAME =~ Cygwin ]]; then
    alias     ework='cd /cygdrive/c/users/$USER/eclipse-workspace'
-   alias    github='cd /cygdrive/c/users/$USER/github'
+   alias     mygit='cd /cygdrive/c/users/$USER/github'
    alias downloads='cd /cygdrive/c/users/$USER/downloads'
 
    # https://stackoverflow.com/questions/3250749/using-windows-python-from-cygwin
@@ -164,7 +164,7 @@ elif [[ $UNAME =~ Linux ]]; then
    alias pycharm="/snap/bin/pycharm-community"
 
    alias     ework='cd ~/eclipse-workspace'
-   alias    github='cd ~/github'
+   alias     mygit='cd ~/github'
    alias downloads='cd ~/Downloads'
 else 
    echo "UNAME='$UNAME' is not supported"

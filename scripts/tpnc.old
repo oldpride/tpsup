@@ -124,9 +124,44 @@ if (defined $localport) {
    # we only accept one connection; therefore, close the listener after accepting one client.
    close($socket);
 
-   send_and_receive($client_socket, {verbose=>$verbose});
+   my $select = IO::Select->new($client_socket) or die "IO::Select $!";
+   $select->add(\*STDIN) or die "IO::Select $!";
 
-   close($client_socket);
+   SELECT:
+   while (1) {
+      $verbose && print STDERR "waiting for ready inputs\n";
+
+      if (my @ready = $select->can_read(300)) {
+         for my $fh (@ready) {
+            if ($fh == $client_socket) {
+               $verbose && print STDERR "found client activities\n";
+
+               my $data;
+
+               $client_socket->recv($data,1024000);
+
+               if (!$data) {
+                  $verbose && print STDERR "client $peer_address: $peer_port quitted. \n";
+                  last SELECT;
+               } else {
+                  $verbose && print STDERR "received ", length($data), " bytes\n";
+                  print $data;
+               }
+            } else {
+               $verbose && print STDERR "found stdin activities\n";
+               my $data;
+               my $size = read(STDIN, $data, 1024000);
+               if (!$data) {
+                  $verbose && print STDERR "STDIN closed. \n";
+                  last SELECT;
+               } else {
+                  $verbose && print STDERR "sending $size bytes\n";
+                  $client_socket->send($data);
+               }
+            }
+         }
+      }
+   }
 } else {
    # this is a client
 
@@ -153,52 +188,32 @@ if (defined $localport) {
        $i++;
          next;
       } else {
-         my $sock_address = $server_socket->sockhost();
-         my $sock_port    = $server_socket->sockport();
-
-         $verbose && print STDERR "connected to $host:$port from $sock_address:$sock_port after $i try/tries\n";
+         $verbose && print STDERR "connected to $host:$port after $i try/tries\n";
          last;
       }
    }
 
    die "ERROR: give up after total $number_of_retries tries" if !$server_socket;
 
-   send_and_receive($server_socket, {verbose=>$verbose});
-
-   close($server_socket);
-}
-
-exit 0;
-
-#################################################################
-# subs
-#################################################################
-
-sub send_and_receive {
-   my ($socket, $opt) = @_;
-
-   my $verbose = $opt->{verbose};
-
-   my $select = IO::Select->new($socket) or die "IO::Select $!";
+   my $select = IO::Select->new($server_socket) or die "IO::Select $!";
    $select->add(\*STDIN) or die "IO::Select $!";
 
    SELECT:
    while(1) {
-      $verbose && print STDERR "waiting for activities from stdin or remote\n";
+      $verbose && print STDERR "waiting for ready inputs\n";
 
       if (my @ready = $select->can_read(300)) {
          for my $fh (@ready) {
-            if ($fh == $socket) {
-               $verbose && print STDERR "found remote activities\n";
+            if ($fh == $server_socket) {
+               $verbose && print STDERR "found server activities\n";
 
                my $data;
 
-               $socket->recv($data,1024000);
+               $server_socket->recv($data,1024000);
                if (!$data) {
-                  $verbose && print STDERR "remote closed.\n";
+                  $verbose && print STDERR "server quitted.\n";
                   last SELECT;
                } else {
-                  $verbose && print STDERR "receiverd ", length($data), " bytes\n";
                   print $data;
                }
             } else {
@@ -210,12 +225,12 @@ sub send_and_receive {
                   last SELECT;
                } else {
                   $verbose && print STDERR "sending $size bytes\n";
-                  $socket->send($data);
+                  $server_socket->send($data);
                }
             }
          }
       }
    }
-
-   return;
 }
+
+exit 0;
