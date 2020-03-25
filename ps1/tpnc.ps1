@@ -12,8 +12,8 @@
 param (
     [switch]$v = $false,
     [string]$l = $null,
-    [string]$outfile = $null,
     [string]$infile  = $null,
+    [string]$outfile = $null,
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
@@ -41,15 +41,34 @@ Usage:
   as a client
      tpnc remote_host remote_port
 
-  '-v'      verbose mode.
+  -v                  verbose mode.
+
+  -infile path        input from this file. default is stdin.
+                      powershell doesn't support redirect of stdin '<'. To redirect, use this switch.
+
+  -outfile path       output to this file. default is stdout.
+                      powershell's '>' doesn't support binary output because powershell
+                      interprets control characters. To save binary output, use this switch.
 
 Examples:
 
   as a server
-     tpnc -l 5555
+     powershell -ExecutionPolicy Bypass -File ./tpnc.ps1 -l 5555
 
   as a client
-     tpnc localhost 5555
+     powershell -ExecutionPolicy Bypass -File ./tpnc.ps1 localhost 5555
+
+  to transfer binary file
+     on server side: 
+        powershell -ExecutionPolicy Bypass -File ./tpnc.ps1 -infile  `$env:WINDIR\System32\xcopy.exe -v -l 5555
+
+     on client side:
+        powershell -ExecutionPolicy Bypass -File ./tpnc.ps1 -outfile `$env:USERPROFILE\Downloads\output.bin -v localhost 5555
+
+     in cygwin to run cksum or cmp check results
+        
+        cksum /cygdrive/c/Windows/System32/xcopy.exe /cygdrive/c/users/`$USER/downloads/output.bin
+        cmp   /cygdrive/c/Windows/System32/xcopy.exe /cygdrive/c/users/`$USER/downloads/output.bin
 
 "
 
@@ -68,15 +87,32 @@ function SendAndReceive {
    param ([Parameter(Mandatory = $true)]$tcpConnection = $null)
 
    $infile_sent = $false
+   $infile_wait_maxloop = 5
+   $infile_wait_already = 0
+
+   $out_stream = $null
+   if ($outfile) {
+      try   { $out_stream = [System.IO.File]::OpenWrite($outfile) }
+      catch { Write-Host $_; exit 1 } 
+   }
+
 
    $tcpStream = $tcpConnection.GetStream()
-   $reader = New-Object System.IO.StreamReader($tcpStream)
-   $writer = New-Object System.IO.StreamWriter($tcpStream)
+
+   # to transfer binary files, we have to use BinaryReader/BinaryWriter
+   # https://stackoverflow.com/questions/10353913/streamreader-vs-binaryreader.
+   # StreamReader/StreamWriter only works binary representation of text.
+   #   $reader = New-Object System.IO.StreamReader($tcpStream)
+   #   $writer = New-Object System.IO.StreamWriter($tcpStream)
+   $reader = New-Object System.IO.BinaryReader($tcpStream)
+   $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
    $writer.AutoFlush = $true
    
    $buffer = new-object System.Byte[] 1024
    $encoding = new-object System.Text.AsciiEncoding 
+
+   $recv_total_bytes = 0
 
    <#
      TcpClient.Connected isn't really useful
@@ -93,13 +129,7 @@ function SendAndReceive {
    #>
 
    while ($tcpConnection.Connected) {
-       # https://learn-powershell.net/2015/03/29/checking-for-disconnected-connections-with-tcplistener-using-powershell/
-       if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
-            $tcpConnection.Client.Available -eq 0)) {
-          write-host "remote disconnected"
-          exit 0
-       }
-
+       # empty input queue first
        while ($tcpStream.DataAvailable)
        {
            $size = 0
@@ -108,11 +138,18 @@ function SendAndReceive {
            #catch [IOException] { write-host "remote closed connection"; exit 0}
 
            if ($size -gt 0 ) {
-              $text = $encoding.GetString($buffer, 0, $size)   
+              $recv_total_bytes += $size
+
               if ($v) {
-                 write-host "received $size byte(s)"
+                 write-host "received $size byte(s). total $recv_total_bytes byte(s)"
               }
-              write-host -n "$text"
+
+              if ($outfile) {
+                 $out_stream.Write($buffer, 0, $size)
+              } else {
+                 $text = $encoding.GetString($buffer, 0, $size)   
+                 write-host -n "$text"
+              }
            } else {
               # this never worked.
               write-host "remote closed connection"
@@ -120,15 +157,49 @@ function SendAndReceive {
            }
        }
    
+       # check whether network connection is still connected
+       # https://learn-powershell.net/2015/03/29/checking-for-disconnected-connections-with-tcplistener-using-powershell/
+       if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
+            $tcpConnection.Client.Available -eq 0)) {
+          write-host "remote disconnected"
+          break
+       }
+
        if ($infile) {
           if (-Not $infile_sent) {
              # https://stackoverflow.com/questions/24708859/output-binary-data-on-powershell-pipeline/24745250#24745250
-             # to-do, need to write in chunk?
-             $indata = $null
-             try { $indata = (Get-Content $infile -encoding byte) }
-             catch {write-host $_; exit 1}
-             $writer.Write($indata, 0, $indata.length)
+             # https://stackoverflow.com/questions/4533570/in-powershell-how-do-i-split-a-large-binary-file
+             #$indata = $null
+             #try { $indata = (Get-Content $infile -encoding byte) }
+             #catch {write-host $_; exit 1}
+             #$size = $indata.length
+             #$writer.Write($indata, 0, $indata.length)
+
+             $in_stream = $null
+             if ($infile) {
+                try   { $in_stream = [System.IO.File]::OpenRead($infile) }
+                catch { Write-Host $_; exit 1 } 
+             }
+
+             $in_buffer = new-object System.Byte[] 1024
+             $total_bytes = 0
+
+             while($in_size = $in_stream.Read($in_buffer, 0, 1024)) {
+                $total_bytes += $in_size 
+                Write-Host "read $in_size bytes from file and sending out. total $total_bytes bytes"
+                $writer.Write($in_buffer, 0, $in_size)
+                #$writer.flush()
+                #start-sleep -Milliseconds 500
+             }
+
              $infile_sent = $true
+          } else {
+             # wait a little bit in case the remote wants to send reply
+             if ($infile_wait_already -ge $infile_wait_maxloop) {
+                break
+             } else {
+                $infile_wait_already ++
+             }
           }
        } else {
           if ($hasConsole) {
