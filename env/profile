@@ -1,0 +1,6 @@
+# copy this to ~/.profile 
+
+set -o vi
+. ~/github/tpsup/profile
+tpscripts
+git status
