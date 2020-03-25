@@ -104,15 +104,17 @@ function SendAndReceive {
    # StreamReader/StreamWriter only works binary representation of text.
    #   $reader = New-Object System.IO.StreamReader($tcpStream)
    #   $writer = New-Object System.IO.StreamWriter($tcpStream)
+   #   $writer.AutoFlush = $true
+
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-   $writer.AutoFlush = $true
    
    $buffer = new-object System.Byte[] 1024
    $encoding = new-object System.Text.AsciiEncoding 
 
    $recv_total_bytes = 0
+   $send_total_bytes = 0
 
    <#
      TcpClient.Connected isn't really useful
@@ -182,15 +184,13 @@ function SendAndReceive {
              }
 
              $in_buffer = new-object System.Byte[] 1024
-             $total_bytes = 0
 
-             while($in_size = $in_stream.Read($in_buffer, 0, 1024)) {
-                $total_bytes += $in_size 
-                Write-Host "read $in_size bytes from file and sending out. total $total_bytes bytes"
-                $writer.Write($in_buffer, 0, $in_size)
-                #$writer.flush()
-                #start-sleep -Milliseconds 500
+             while($size = $in_stream.Read($in_buffer, 0, 1024)) {
+                $send_total_bytes += $size
+                Write-Host "read $size bytes from file and sending out. total send $send_total_bytes bytes"
+                $writer.Write($in_buffer, 0, $size)
              }
+             $writer.flush()
 
              $infile_sent = $true
           } else {
@@ -202,21 +202,30 @@ function SendAndReceive {
              }
           }
        } else {
+          $read_stdin = $false
+
           if ($hasConsole) {
              ## https://powershell.one/tricks/input-devices/detect-key-press
-             while ([Console]::KeyAvailable)
-             {
-                 Write-Host -NoNewline "hit 'enter' to receive and to send > "
-                 $line = Read-Host
-                 Write-Host "sending $($line.Length) byte(s) + line ends"
-                 $writer.WriteLine($line) | Out-Null
+             if ([Console]::KeyAvailable) {
+                 $read_stdin = $true
              }
           } else {
-                 Write-Host -NoNewline "hit 'enter' to receive and to send > "
-                 $line = Read-Host
-                 Write-Host "sending $($line.Length) byte(s) + line ends"
-                 $writer.WriteLine($line) | Out-Null
+             $read_stdin = $true
           } 
+
+          if ($read_stdin) {
+             $line = Read-Host -prompt "hit 'enter' to receive and to send"
+             $line += "`n"
+
+             $size = $line.Length
+
+             $send_total_bytes += $size
+             Write-Host "sending $size byte(s). total $send_total_bytes bytes"
+
+             #$writer.WriteLine($line) | Out-Null
+             $writer.Write($line) | Out-Null
+             $writer.flush() | Out-Null
+          }          
        }
    
        start-sleep -Milliseconds 500
