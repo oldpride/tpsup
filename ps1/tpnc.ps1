@@ -58,7 +58,7 @@ Examples:
   as a client
      powershell -ExecutionPolicy Bypass -File ./tpnc.ps1 localhost 5555
 
-  to transfer binary file
+  to transfer binary file. this is best way preserve the content.
      on server side: 
         powershell -ExecutionPolicy Bypass -File ./tpnc.ps1 -infile  `$env:WINDIR\System32\xcopy.exe -v -l 5555
 
@@ -76,8 +76,13 @@ Examples:
 }
 
 $hasConsole = $true
-try { [Console]::KeyAvailable | Out-null}
-catch [System.InvalidOperationException] {$hasConsole = $false}
+try { 
+   [Console]::KeyAvailable | Out-null
+}
+catch [System.InvalidOperationException] {
+   $hasConsole = $false
+   Write-Host "You are likely running this script from Cygwin. In Cygwin use the perl version of tpnc is much better."
+}
 
 if ($v) { 
    write-host "hasConsole = $hasConsole"
@@ -92,10 +97,21 @@ function SendAndReceive {
 
    $out_stream = $null
    if ($outfile) {
-      try   { $out_stream = [System.IO.File]::OpenWrite($outfile) }
-      catch { Write-Host $_; exit 1 } 
+      try   { 
+         # cannot use OpenWrite, because it cannot handle existing file correctly
+         #   $out_stream = [System.IO.File]::OpenWrite($outfile)
+         #
+         # " 
+         #   If you overwrite a longer string (such as "This is a test of the OpenWrite method") with
+         #   a shorter string (such as "Second run"), the file will contain a mix of the strings
+         #   ("Second runtest of the OpenWrite method").
+         # "
+         #$out_stream = [System.IO.File]::Open($outfile, FileMode.Create)
+         $out_stream = [System.IO.File]::Create($outfile)
+      } catch {
+         Write-Host $_; exit 1
+      } 
    }
-
 
    $tcpStream = $tcpConnection.GetStream()
 
@@ -109,7 +125,6 @@ function SendAndReceive {
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-   
    $buffer = new-object System.Byte[] 1024
    $encoding = new-object System.Text.AsciiEncoding 
 
@@ -136,8 +151,6 @@ function SendAndReceive {
        {
            $size = 0
            $size = $tcpStream.Read($buffer, 0, 1024)
-           #try {$size = $tcpStream.Read($buffer, 0, 1024)}
-           #catch [IOException] { write-host "remote closed connection"; exit 0}
 
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
@@ -150,11 +163,11 @@ function SendAndReceive {
                  $out_stream.Write($buffer, 0, $size)
               } else {
                  $text = $encoding.GetString($buffer, 0, $size)   
-                 write-host -n "$text"
+                 write-host -n $text
               }
            } else {
               # this never worked.
-              write-host "remote closed connection"
+              write-host "first time happend. remote closed connection"
               exit 0
            }
        }
@@ -169,14 +182,6 @@ function SendAndReceive {
 
        if ($infile) {
           if (-Not $infile_sent) {
-             # https://stackoverflow.com/questions/24708859/output-binary-data-on-powershell-pipeline/24745250#24745250
-             # https://stackoverflow.com/questions/4533570/in-powershell-how-do-i-split-a-large-binary-file
-             #$indata = $null
-             #try { $indata = (Get-Content $infile -encoding byte) }
-             #catch {write-host $_; exit 1}
-             #$size = $indata.length
-             #$writer.Write($indata, 0, $indata.length)
-
              $in_stream = $null
              if ($infile) {
                 try   { $in_stream = [System.IO.File]::OpenRead($infile) }
@@ -205,7 +210,7 @@ function SendAndReceive {
           $read_stdin = $false
 
           if ($hasConsole) {
-             ## https://powershell.one/tricks/input-devices/detect-key-press
+             # https://powershell.one/tricks/input-devices/detect-key-press
              if ([Console]::KeyAvailable) {
                  $read_stdin = $true
              }
@@ -216,14 +221,15 @@ function SendAndReceive {
           if ($read_stdin) {
              $line = Read-Host -prompt "hit 'enter' to receive and to send"
              $line += "`n"
-
-             $size = $line.Length
+             
+             # convert text to bytes before sending over
+             $bytes = [system.Text.Encoding]::Default.GetBytes($line)
+             $size = $bytes.Length
 
              $send_total_bytes += $size
              Write-Host "sending $size byte(s). total $send_total_bytes bytes"
 
-             #$writer.WriteLine($line) | Out-Null
-             $writer.Write($line) | Out-Null
+             $writer.Write($bytes) | Out-Null
              $writer.flush() | Out-Null
           }          
        }
@@ -297,9 +303,13 @@ if ($listener_port) {
    try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
    catch { Write-Host $_; exit 1 }
 
-   write-host "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+   if ($v) {
+      write-host "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+   }
 
    SendAndReceive($tcpConnection)
 
    $tcpConnection.Close()
 }
+
+exit 0
