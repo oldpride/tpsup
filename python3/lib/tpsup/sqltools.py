@@ -10,6 +10,12 @@ try:
 except ImportError:
     pass
 
+# mysql
+try:
+    import pymysql.cursors
+except ImportError:
+    pass
+
 from pprint import pprint, pformat
 import os
 import sys
@@ -97,6 +103,13 @@ class TpDbh:
             conn_string = f'DRIVER={conn.driver};SERVER={conn.server};DATABASE={conn.database};UID={conn.login};' \
                           f'PWD={conn.unlocked_password}'
             self.dbh = pyodbc.connect(conn_string)
+        elif re.match("^dbi:mysql:.+", conn.dbi_string, re.IGNORECASE):
+            self.dbh = pymysql.connect(host=conn.host,
+                                       user=conn.login,
+                                       password=conn.unlocked_password,
+                                       db=conn.database,
+                                       charset='utf8mb4',
+                                       cursorclass=pymysql.cursors.DictCursor)
         else:
             raise RuntimeError(f"unknown database dbi_string {conn.dbi_string}")
 

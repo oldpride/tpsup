@@ -70,6 +70,9 @@ examples:
    $prog sybuser1\@sybdb1 "select \@\@version"
    $prog sybuser1\@sybdb1 file /apps/get_positions.sql
 
+   - mysql
+   $prog tian\@tiandb 'SHOW TABLES'
+
    - test passwords
    $prog -maxout 10 -DbiString \\
    'dbi:Oracle:host=h.db.com;service_name=h.db.com;port=l725,ORA_USER,\%encoded\%' \\
