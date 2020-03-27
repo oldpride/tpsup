@@ -1,5 +1,11 @@
 # print key
 
+if ([console]::NumberLock) {
+   $wsh = New-Object -ComObject WScript.Shell
+   $wsh.SendKeys('{NUMLOCK}') 
+   write-Host "your NumLock was ON. This would interfere with Control Key. We toggled it off"
+}
+
 start-sleep -Milliseconds 500
 while ( $host.ui.rawui.KeyAvailable) {
    Write-Host "found leftovers"
@@ -26,13 +32,13 @@ while ($true) {
       } elseif ($key.virtualKeyCode -eq 13) {
          # this is a 'return', print the current string and reset the array list 
          $string = -join $charArrayList
-         Write-Host $string
+         Write-Host "$string (length $($string.length))"
          $charArrayList.clear()
       } elseif ( ($key.ControlKeyState -eq  "LeftCtrlPressed" -OR $key.ControlKeyState -eq "RightCtrlPressed") -AND 
                  ($key.virtualKeyCode -eq 68 -OR $key.virtualKeyCode -eq 90) ) {
          # this Ctrl-D or Ctrl-Z, return current string and exit
          $string = -join $charArrayList
-         Write-Host -n $string
+         Write-Host -n "$string (length $($string.length))"
          exit 0
       } else {
          $charArrayList.Add($key.character) | out-null
