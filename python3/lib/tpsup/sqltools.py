@@ -104,12 +104,14 @@ class TpDbh:
                           f'PWD={conn.unlocked_password}'
             self.dbh = pyodbc.connect(conn_string)
         elif re.match("^dbi:mysql:.+", conn.dbi_string, re.IGNORECASE):
+            # https://github.com/PyMySQL/PyMySQL
             self.dbh = pymysql.connect(host=conn.host,
                                        user=conn.login,
                                        password=conn.unlocked_password,
                                        db=conn.database,
                                        charset='utf8mb4',
-                                       cursorclass=pymysql.cursors.DictCursor)
+                                       # cursorclass=pymysql.cursors.DictCursor # don't use this as it will return dict.
+                                       )
         else:
             raise RuntimeError(f"unknown database dbi_string {conn.dbi_string}")
 
@@ -159,7 +161,11 @@ class QueryResults:
 
     def __iter__(self):
         if self.return_type == 'DictList':
+            # if the cursor returns List, use this
             gen = (dict(zip(self.columns, row)) for row in self.cursor)
+
+            # if the cursor returns Dictionary, use this
+            # gen = self.cursor
 
             if self.maxout >= 0:
                 yield from itertools.islice(gen, self.maxout)
@@ -199,7 +205,26 @@ def run_sql(sql_list: List[str], **opt):
     with TpDbh(**opt) as td:
         for sql in sql_list:
             qr = QueryResults(sql, dbh=td, **opt)
+            # for row in qr:
+            #     print(row)
             tpsup.csvtools.write_dictlist_to_csv(qr, qr.columns, opt.get('filename', sys.stdout), **opt)
+
+
+def test_mysql():
+    dbh = TpDbh(nickname='tian@tiandb').get_dbh()
+    with dbh.cursor() as cursor:
+        sql = "SELECT * FROM tblMembers"
+        cursor.execute(sql)
+        for row in cursor:
+            print(row)
+
+    # this works too
+    # with TpDbh(nickname='tian@tiandb') as td:
+    #     cursor = td.cursor()
+    #     sql = "SELECT * FROM tblMembers"
+    #     cursor.execute(sql)
+    #     for row in cursor:
+    #         print(row)
 
 
 def main():
@@ -209,8 +234,11 @@ def main():
     print(f'\nparse conn_file for ms sql\n')
     print(unlock_conn('sql_user@sql_db', connfile='sqltools_conn_example.csv'))
 
-    print(f'\ntest a database\n')
-    run_sql(["select * from all_synonyms"], nickname='ora_user@ora_db', connfile='sqltools_conn_example.csv')
+    print(f'\ntest a mysql database\n')
+    run_sql(["select * from tblMembers"], nickname='tian@tiandb')
+
+    print(f'\none more test mysql\n')
+    test_mysql()
 
 
 if __name__ == '__main__':
