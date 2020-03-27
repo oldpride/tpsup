@@ -1,0 +1,84 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::UTIL qw(get_out_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog perl.pl
+   $prog tpnc.ps1
+
+description:
+
+   Remove comments and blank lines from perl/powershell script. This condenses
+   the script to make copy-and-paste eaiser. 
+
+   -v          verbose mode
+
+   -o output   default to STDOUT
+
+examples:
+
+   $prog tpns.ps1
+   $prog netsuck
+
+EOF
+
+   exit 1;
+}
+
+my $verbose;
+my $output;
+
+GetOptions(
+   "v"        => \$verbose,
+   "o=s"      => \$output,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+   
+my ($file) = @ARGV;
+
+die "$file not found"    if ! -f $file;
+die "$file not readable" if ! -r $file;
+
+my $string = `cat $file`;
+exit 1 if $?;
+
+my $old_count = `wc -l $file`; chomp $old_count;
+
+my $ofh = get_out_fh($output);
+
+# first remove <#...#>
+$string =~ s/<#.*?#>//gs;
+
+my @lines = split /\n/, $string;
+
+my $new_count = 0;
+
+for my $l (@lines) {
+   next if $l =~ /^\s*$/;                        #skip blank   lines
+   next if $l =~ /^\s*#/ && $new_count == 0;     #skip comment lines
+
+   $new_count ++;
+   print {$ofh} $l, "\n";
+}
+
+close $ofh;
+
+print STDERR "--------------------------------------------\n";
+print STDERR "Reduced from $old_count lines to $new_count lines\n";
+
+exit 0;
