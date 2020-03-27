@@ -12,6 +12,7 @@ prog = os.path.basename(sys.argv[0])
 usage = textwrap.dedent("""
     run oracle sql
     run ms sql (odbc) sql
+    run mysql sql
     """)
 
 examples = textwrap.dedent(f"""
@@ -19,6 +20,9 @@ examples = textwrap.dedent(f"""
     {prog} -maxout 5 ora_user@ora_db "select * from all_synonyms"
 
     {prog} -maxout 5 sql_user@sql_db "select * from information.schema.tables where table_type = 'BASE TABLE'"
+
+    - mysql 
+    {prog} tian@tiandb "SHOW TABLES"
 
     {prog} -f ORACLE_USER@ORACLE_DB tpsql_test.sql
     """)
