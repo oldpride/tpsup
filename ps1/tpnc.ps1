@@ -155,9 +155,7 @@ function SendAndReceive {
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
 
-              if ($v) {
-                 write-host "received $size byte(s). total $recv_total_bytes byte(s)"
-              }
+              if ($v) { write-host "received $size byte(s). total $recv_total_bytes byte(s)" }
 
               if ($outfile) {
                  $out_stream.Write($buffer, 0, $size)
@@ -192,7 +190,7 @@ function SendAndReceive {
 
              while($size = $in_stream.Read($in_buffer, 0, 1024)) {
                 $send_total_bytes += $size
-                Write-Host "read $size bytes from file and sending out. total send $send_total_bytes bytes"
+                if ($v) {Write-Host "read $size bytes from file and sending out. total send $send_total_bytes bytes"}
                 $writer.Write($in_buffer, 0, $size)
              }
              $writer.flush()
@@ -227,7 +225,7 @@ function SendAndReceive {
              $size = $bytes.Length
 
              $send_total_bytes += $size
-             Write-Host "sending $size byte(s). total $send_total_bytes bytes"
+             if ($v) {Write-Host "sending $size byte(s). total $send_total_bytes bytes"}
 
              $writer.Write($bytes) | Out-Null
              $writer.flush() | Out-Null
@@ -252,9 +250,7 @@ if ($listener_port) {
       usage("wrong numnber of args")
    }
 
-   if ($v) {
-      write-host "listener_port=$listener_port"
-   }
+   if ($v) { write-host "listener_port=$listener_port" }
 
    # https://learn-powershell.net/2014/02/22/building-a-tcp-server-using-powershell/
 

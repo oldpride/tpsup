@@ -5,7 +5,6 @@ use warnings;
 use Data::Dumper;
 use Carp;
 use Getopt::Long;
-use TPSUP::UTIL qw(get_out_fh);
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -24,6 +23,13 @@ description:
 
    Remove comments and blank lines from perl/powershell script. This condenses
    the script to make copy-and-paste eaiser. 
+
+   The script also flattens simple structure, like,
+      if (a) {
+         b;
+      }
+   to 
+      if (a) { b }
 
    -v          verbose mode
 
@@ -59,24 +65,55 @@ exit 1 if $?;
 
 my $old_count = `wc -l $file`; chomp $old_count;
 
-my $ofh = get_out_fh($output);
+my $ofh;
+if (!$output || $output eq '-') {
+   $ofh = \*STDOUT;
+} else { 
+   open $ofh, ">$output" or die "cannot write to $output: $!";
+}
 
 # first remove <#...#>
 $string =~ s/<#.*?#>//gs;
 
 my @lines = split /\n/, $string;
 
-my $new_count = 0;
+my @lines2;
 
-for my $l (@lines) {
-   next if $l =~ /^\s*$/;                        #skip blank   lines
-   next if $l =~ /^\s*#/ && $new_count == 0;     #skip comment lines
+for (my $i=0; $i< $#lines; $i++) {
+   next if $lines[$i] =~ /^\s*$/;                #skip blank   lines
+   next if $lines[$i] =~ /^\s*#/ && $i != 0;     #skip comment lines but keep #! 
 
-   $new_count ++;
-   print {$ofh} $l, "\n";
+   # flat this stucture
+   #   if (a) {
+   #      b;
+   #   }
+   # to
+   #   if (a) { b; }
+
+   if ($lines[$i] =~ /{\s*$/) {
+      if ($i+2 < $#lines && $lines[$i+2] =~ /^\s*}\s*$/) {
+         # trim spaces
+         $lines[$i] =~ s/\s+$//;
+
+         $lines[$i+1] =~ s/^\s+//;
+         $lines[$i+1] =~ s/\s+$//;
+
+         $lines[$i+2] =~ s/^\s+//;
+
+         push @lines2, "$lines[$i] $lines[$i+1] }";
+         $i +=2;
+         next;
+      }
+   } 
+
+   push @lines2, $lines[$i];
 }
+   
+my $new_count = scalar(@lines2);
 
-close $ofh;
+print {$ofh} join("\n", @lines2), "\n";
+
+close $ofh if $ofh != \*STDOUT;
 
 print STDERR "--------------------------------------------\n";
 print STDERR "Reduced from $old_count lines to $new_count lines\n";

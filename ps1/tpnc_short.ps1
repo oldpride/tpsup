@@ -13,9 +13,7 @@ if ($v) {
 }
 function usage {
   param([string]$message = $null)
-  if ($message) {
-     write-host $message
-  }
+  if ($message) { write-host $message }
   write-host "
 Usage:
   Netcat in powershell
@@ -46,16 +44,12 @@ Examples:
    exit 1
 }
 $hasConsole = $true
-try { 
-   [Console]::KeyAvailable | Out-null
-}
+try { [Console]::KeyAvailable | Out-null }
 catch [System.InvalidOperationException] {
    $hasConsole = $false
    Write-Host "You are likely running this script from Cygwin. In Cygwin use the perl version of tpnc is much better."
 }
-if ($v) { 
-   write-host "hasConsole = $hasConsole"
-}
+if ($v) { write-host "hasConsole = $hasConsole" }
 function SendAndReceive {
    param ([Parameter(Mandatory = $true)]$tcpConnection = $null)
    $infile_sent = $false
@@ -65,9 +59,7 @@ function SendAndReceive {
    if ($outfile) {
       try   { 
          $out_stream = [System.IO.File]::Create($outfile)
-      } catch {
-         Write-Host $_; exit 1
-      } 
+      } catch { Write-Host $_; exit 1 }
    }
    $tcpStream = $tcpConnection.GetStream()
    $reader = New-Object System.IO.BinaryReader($tcpStream)
@@ -83,9 +75,7 @@ function SendAndReceive {
            $size = $tcpStream.Read($buffer, 0, 1024)
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
-              if ($v) {
-                 write-host "received $size byte(s). total $recv_total_bytes byte(s)"
-              }
+              if ($v) { write-host "received $size byte(s). total $recv_total_bytes byte(s)" }
               if ($outfile) {
                  $out_stream.Write($buffer, 0, $size)
               } else {
@@ -112,7 +102,7 @@ function SendAndReceive {
              $in_buffer = new-object System.Byte[] 1024
              while($size = $in_stream.Read($in_buffer, 0, 1024)) {
                 $send_total_bytes += $size
-                Write-Host "read $size bytes from file and sending out. total send $send_total_bytes bytes"
+                if ($v) {Write-Host "read $size bytes from file and sending out. total send $send_total_bytes bytes"}
                 $writer.Write($in_buffer, 0, $size)
              }
              $writer.flush()
@@ -120,26 +110,20 @@ function SendAndReceive {
           } else {
              if ($infile_wait_already -ge $infile_wait_maxloop) {
                 break
-             } else {
-                $infile_wait_already ++
-             }
+             } else { $infile_wait_already ++ }
           }
        } else {
           $read_stdin = $false
           if ($hasConsole) {
-             if ([Console]::KeyAvailable) {
-                 $read_stdin = $true
-             }
-          } else {
-             $read_stdin = $true
-          } 
+             if ([Console]::KeyAvailable) { $read_stdin = $true }
+          } else { $read_stdin = $true }
           if ($read_stdin) {
              $line = Read-Host -prompt "hit 'enter' to receive and to send"
              $line += "`n"
              $bytes = [system.Text.Encoding]::Default.GetBytes($line)
              $size = $bytes.Length
              $send_total_bytes += $size
-             Write-Host "sending $size byte(s). total $send_total_bytes bytes"
+             if ($v) {Write-Host "sending $size byte(s). total $send_total_bytes bytes"}
              $writer.Write($bytes) | Out-Null
              $writer.flush() | Out-Null
           }          
@@ -152,16 +136,10 @@ function SendAndReceive {
 }
 $listener_port = $l
 if ($listener_port) {
-   if ($remainingArgs.count -ne 0) {
-      usage("wrong numnber of args")
-   }
-   if ($v) {
-      write-host "listener_port=$listener_port"
-   }
+   if ($remainingArgs.count -ne 0) { usage("wrong numnber of args") }
+   if ($v) { write-host "listener_port=$listener_port" }
    $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
-   if (-not $listener) {
-      exit 1
-   }
+   if (-not $listener) { exit 1 }
    try   { $listener.start()     }
    catch { write-host $_; exit 1 }
    write-host "listener started at port $listener_port"
@@ -177,9 +155,7 @@ if ($listener_port) {
    SendAndReceive($tcpConnection)
    $tcpConnection.Close()
 } else {
-   if ($remainingArgs.count -ne 2) {
-      usage("wrong numnber of args")
-   }
+   if ($remainingArgs.count -ne 2) { usage("wrong numnber of args") }
    $remote_host,$remote_port = $remainingArgs
    if ($v) {
       write-host "remote_host=$remote_host"
@@ -188,10 +164,7 @@ if ($listener_port) {
    $tcpConnection = $null
    try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
    catch { Write-Host $_; exit 1 }
-   if ($v) {
-      write-host "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
-   }
+   if ($v) { write-host "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)." }
    SendAndReceive($tcpConnection)
    $tcpConnection.Close()
 }
-exit 0
