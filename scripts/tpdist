@@ -166,8 +166,8 @@ Examples:
         or
            telnet host1 4444 > tpdist
         or
-           if no telnet or tpnc but has perl (eg cygwin), copy the netsuck (a very short
-           perl program) first by copy-and-paste using an editor
+           if the host has no telnet/nc/tpnc but has perl (eg cygwin), copy the netsuck
+           (a very short perl program) first by copy-and-paste using an editor
            netsuck host1 4444 > tpdist
 
    # to use tpdist. Relative path is relative to server side home dir.
