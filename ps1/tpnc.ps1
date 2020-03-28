@@ -12,6 +12,7 @@
 param (
     [switch]$v = $false,
     [string]$l = $null,
+    #[string]$w = $null,
     [string]$infile  = $null,
     [string]$outfile = $null,
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
@@ -20,8 +21,11 @@ param (
 if ($v) {
    write-host "verbose=$v"
    write-host "listener=$l"
+   write-host "wait=$w (seconds)"
    write-host "remaining=$remainingArgs, size=$($remainingArgs.count)"
 }
+
+$default_wait = 5
 
 function usage {
   param([string]$message = $null)
@@ -49,6 +53,8 @@ Usage:
   -outfile path       output to this file. default is stdout.
                       powershell's '>' doesn't support binary output because powershell
                       interprets control characters. To save binary output, use this switch.
+
+  #-w seconds          Listener wait these many seconds before quit. default to $default_wait.
 
 Examples:
 
@@ -217,7 +223,10 @@ function SendAndReceive {
           } 
 
           if ($read_stdin) {
-             $line = Read-Host -prompt "hit 'enter' to receive and to send"
+             # -prompt doesn't work in Cygwin
+             # $line = Read-Host -prompt "hit 'enter' to receive and to send"
+             Write-Host -n "hit 'enter' to receive and to send : "
+             $line = Read-Host 
              $line += "`n"
              
              # convert text to bytes before sending over
@@ -255,6 +264,14 @@ if ($listener_port) {
    # https://learn-powershell.net/2014/02/22/building-a-tcp-server-using-powershell/
 
    $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
+
+   if (!$w) {
+       $w = $default_wait
+   }
+
+   # doesn't work
+   #$listener.Server.ReceiveTimeout = $w;
+   #$listener.Server.SendTimeout   = $w;
 
    if (-not $listener) {
       exit 1
