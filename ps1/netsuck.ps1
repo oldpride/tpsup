@@ -3,12 +3,13 @@ param (
     [string]$outfile = $null,
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
+Set-StrictMode -Version Latest
 function usage {
   param([string]$message = $null)
   if ($message) { write-host $message }
   write-host "
 Usage:
-  powershell -ExecutionPolicy Bypass -File $PSCommandPath remote_host remote_port
+  powershell -ExecutionPolicy Bypass -File ./netsuck.ps1 remote_host remote_port
 
   As a client, pull in data from a remote server 
 

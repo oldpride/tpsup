@@ -12,20 +12,24 @@
 param (
     [switch]$v = $false,
     [string]$l = $null,
-    #[string]$w = $null,
     [string]$infile  = $null,
     [string]$outfile = $null,
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
-if ($v) {
-   write-host "verbose=$v"
-   write-host "listener=$l"
-   write-host "wait=$w (seconds)"
-   write-host "remaining=$remainingArgs, size=$($remainingArgs.count)"
-}
+Set-StrictMode -Version Latest
+#Set-PsDebug -Trace 1
 
-$default_wait = 5
+if ($v) {
+   $verbosePreference = "Continue"
+}   
+
+write-verbose "verbose=$v"
+write-verbose "listener=$l"
+write-verbose "remainingArgs=$remainingArgs"
+if ($remainingArgs) {
+   write-verbose "remainingArgs size=$($remainingArgs.count)"
+}   
 
 function usage {
   param([string]$message = $null)
@@ -90,9 +94,7 @@ catch [System.InvalidOperationException] {
    Write-Host "You are likely running this script from Cygwin. In Cygwin use the perl version of tpnc is much better."
 }
 
-if ($v) { 
-   write-host "hasConsole = $hasConsole"
-}
+write-verbose "hasConsole = $hasConsole"
 
 function SendAndReceive {
    param ([Parameter(Mandatory = $true)]$tcpConnection = $null)
@@ -161,7 +163,7 @@ function SendAndReceive {
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
 
-              if ($v) { write-host "received $size byte(s). total $recv_total_bytes byte(s)" }
+              write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"
 
               if ($outfile) {
                  $out_stream.Write($buffer, 0, $size)
@@ -196,7 +198,7 @@ function SendAndReceive {
 
              while($size = $in_stream.Read($in_buffer, 0, 1024)) {
                 $send_total_bytes += $size
-                if ($v) {Write-Host "read $size bytes from file and sending out. total send $send_total_bytes bytes"}
+                Write-Verbose "read $size bytes from file and sending out. total send $send_total_bytes bytes"
                 $writer.Write($in_buffer, 0, $size)
              }
              $writer.flush()
@@ -234,7 +236,7 @@ function SendAndReceive {
              $size = $bytes.Length
 
              $send_total_bytes += $size
-             if ($v) {Write-Host "sending $size byte(s). total $send_total_bytes bytes"}
+             Write-Verbose "sending $size byte(s). total $send_total_bytes bytes"
 
              $writer.Write($bytes) | Out-Null
              $writer.flush() | Out-Null
@@ -255,23 +257,15 @@ $listener_port = $l
 if ($listener_port) {
    # this is server
 
-   if ($remainingArgs.count -ne 0) {
+   if ($remainingArgs -AND $remainingArgs.count -ne 0) {
       usage("wrong numnber of args")
    }
 
-   if ($v) { write-host "listener_port=$listener_port" }
+   write-verbose "listener_port=$listener_port"
 
    # https://learn-powershell.net/2014/02/22/building-a-tcp-server-using-powershell/
 
    $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
-
-   if (!$w) {
-       $w = $default_wait
-   }
-
-   # doesn't work
-   #$listener.Server.ReceiveTimeout = $w;
-   #$listener.Server.SendTimeout   = $w;
 
    if (-not $listener) {
       exit 1
@@ -283,11 +277,13 @@ if ($listener_port) {
    write-host "listener started at port $listener_port"
 
    $tcpConnection = $null
-   try {
-      $tcpConnection = $listener.AcceptTcpClient()
-   } catch {
-      write-host $_
-      exit 1
+
+   while ($true) { 
+      if ($listener.Pending()) {
+         $tcpConnection = $listener.AcceptTcpClient()
+         break;
+      }
+      start-sleep -Milliseconds 1000
    }
 
    write-host "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
@@ -301,24 +297,20 @@ if ($listener_port) {
 } else {
    # this is client
 
-   if ($remainingArgs.count -ne 2) {
+   if (!$remainingArgs -OR $remainingArgs.count -ne 2) {
       usage("wrong numnber of args")
    }
 
    $remote_host,$remote_port = $remainingArgs
 
-   if ($v) {
-      write-host "remote_host=$remote_host"
-      write-host "remote_port=$remote_port"
-   }
+   write-verbose "remote_host=$remote_host"
+   write-verbose "remote_port=$remote_port"
 
    $tcpConnection = $null
    try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
    catch { Write-Host $_; exit 1 }
 
-   if ($v) {
-      write-host "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
-   }
+   write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
 
    SendAndReceive($tcpConnection)
 
