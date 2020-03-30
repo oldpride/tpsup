@@ -79,6 +79,9 @@ my @crctab = (
 my ($os_name, $nodename, $os_release, $os_version, $machine) = POSIX::uname();
 my $tmpdir = ($os_name =~ /MINGW/i) ? "/tmp" : "/var/tmp"; # Git Bash's os_name is MINGW
 
+my $cygwin;
+$cygwin ++ if $os_name =~ /^CYGWIN/i;
+
 sub usage {
    my ($message) = @_;
 
@@ -180,7 +183,6 @@ Examples:
    # to use tpdist. Relative path is relative to server side home dir.
    host1\$ dist server 5555
    host2\$ tpdist client host1 5555 tpsup ~
-
 
 END
 
@@ -659,6 +661,14 @@ sub build_dir_tree {
          }
       }
 
+      # resolve * when filename has space
+      # example:
+      #    ls -1d  /cygdrive/c/users/william/My\ Documents/*txt     # works
+      #    ls -1d  /cygdrive/c/users/william/'My Documents'/*txt    # works 
+      #    ls -1d '/cygdrive/c/users/william/My Documents/*txt'     # doesn't work
+
+      $path =~ s/(\s)/\\$1/g;   # escape the space
+
       my @globs = `/bin/ls -1d $path`;
       if ($? || !@globs) {
          print timestamped(), "/bin/ls -1d $path failed, skipped $path\n";
@@ -667,11 +677,9 @@ sub build_dir_tree {
       }
       chomp @globs;
 
-      $quiet || print timestamped(), "resolve globs if any: $path=>", join(' ', @globs), "\n";
+      $quiet || print timestamped(), "resolved globs if any: $path=>", join(' ', @globs), "\n";
 
       for my $p (@globs) {
-         # conver *csv to a.csv, b.csv, ...
-         #
          my $abs_path;
 
          if ($p !~ m:^/:) {
@@ -771,8 +779,11 @@ sub build_dir_tree {
             }
 
             if ( ! -l $f && ! -r $f ) {
-               $tree->{$f}->{skip} = "no read access";
-               next;
+               if (!$cygwin || !test_read_by_open($f)) {
+                  # why cygwin? see comment at test_read_y_open()
+                  $tree->{$f}->{skip} = "no read access";
+                  next;
+               }
             }
 
             if ($tree->{$f}->{back}) {
@@ -1070,6 +1081,7 @@ sub to_be_pulled {
    my $back_exists_on_local;
    for my $k (keys %$local_tree) {
       my $back = $local_tree->{$k}->{back};
+      next if !defined($back);
       $back_exists_on_local->{$back} = 1;
    }
 
@@ -1381,7 +1393,7 @@ sub to_be_pulled {
 
    if (!@{$files_to_tar}) {
       print timestamped(), "no need to send anything to remote\n";
-      next;
+      return;
    }
 
    my $files_by_front;
@@ -1491,9 +1503,9 @@ sub to_pull {
       my $local_path = "$local_dir/$back";
 
       # resolve dir/*csv to dir/a.csv, a/b.csv, ...
-      # example:
-      # $0 client host port /a/b/c/*.csv d
-      # we need to check whether we have d/*.csv
+      #    example:
+      #       $0 client host port /a/b/c/*.csv d
+      #    we need to check whether we have d/*.csv
     
       my @globs = `/bin/ls -1d $local_path 2>/dev/null`;
       next if !@globs;
@@ -1505,18 +1517,18 @@ sub to_pull {
 
          next if !$local_abs;
 
-         $verbose && print timestamped(), "remote ($remote_path) -> local ($local_path) -> local abs path ($local_abs)\n";
+         $verbose && print timestamped(), "remote ($remote_path) -> local ($local_path) -> local abs ($local_abs)\n";
 
-       push @local_paths, $local_abs;
+         push @local_paths, $local_abs;
       }
    }
 
    $quiet || print timestamped(), "building local tree using abs_path: ", join(" ", @local_paths), "\n";
    my ($local_tree, $other)
           = build_dir_tree(\@local_paths, {verbose=>$verbose,
-                                            excludes=>\@excludes,
-                                            matches=>\@matches,
-                                           });
+                                           excludes=>\@excludes,
+                                           matches=>\@matches,
+                                          });
    $verbose && print "local_tree = ", Dumper($local_tree);
 
    # don't unblock socket when writing; doing so would corrupt data.
@@ -1576,8 +1588,7 @@ sub to_pull {
       my ($matched, $captures, $other)
          = expect_socket(
               $socket,
-              [ '<NEED_CKSUMS>(.*)</NEED_CKSUMS>',
-              ],
+              [ '<NEED_CKSUMS>(.*)</NEED_CKSUMS>',],
               {verbose=>$verbose, ExpectTimeout=>$timeout}
            );
 
@@ -1996,5 +2007,57 @@ sub cksum {
 
    return $crc;
 }
+
+# In $cygwin/perl, when (-r $f) failed, the file may still be readable.
+# This is because cygwin/perl only checks the standard UNIX bits
+#    drwxrwxrwx
+# Windows file may also have extended ACL, as indicated by the "+" at
+# the end.
+#
+#    $ ls -ld /cygdrive/c/Windows/notepad.exe
+#    -rwxr-x---+ 3 NT SERVICE+TrustedInstaller NT SERVICE+TrustedInstaller 181248 Mar 11 17:07 
+#                                                                             /cygdrive/c/Windows/notepad.exe
+#
+# test '-r $file'
+#    $ perl -e '! -r "/cygdrive/c/Windows/notepad.exe" && print "test read failed\n"'
+#    test read failed
+#
+# getfacl can show more ACL permissions
+#    $ getfacl /cygdrive/c/Windows/notepad.exe
+#    file: /cygdrive/c/Windows/notepad.exe
+#    owner: NT SERVICE+TrustedInstaller
+#    group: NT SERVICE+TrustedInstaller
+#    user::rwx
+#    group::---
+#    group:SYSTEM:r-x
+#    group:Administrators:r-x
+#    group:Users:r-x
+#    group:ALL APPLICATION PACKAGES:r-x
+#    group:ALL RESTRICTED APPLICATION PACKAGES:r-x
+#    mask::r-x
+#    other::---
+#    
+# we can read the file with 'head'
+#    $ head -n 1 /cygdrive/c/Windows/notepad.exe
+#    ...
+#
+# cygwin/perl can open the file in read mode too.
+#    $ perl -e 'open my $fh, "</cygdrive/c/Windows/notepad.exe" and print "can read\n"'
+#    can read
+#
+# there seems no good getfacl module in cygwin/perl, therefore, we resort to the following open-file test.
+#
+# GitBash/Perl doesn't have this problem.
+#   $ ls -ld /c/Windows/notepad.exe
+#   -rwxr-xr-x 3 william 197121 181248 Mar 11 17:07 /c/Windows/notepad.exe
+
+sub test_read_by_open {
+   my ($file, $opt) = @_;
+   open my $fh, "<$file" or return 0;
+   close $fh;
+   return 1;
+}
+
+
 # END
 ###################################################################################
