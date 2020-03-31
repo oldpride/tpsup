@@ -942,7 +942,7 @@ sub expect_socket {
                $opt->{verbose} && print "matched $patterns->[$i]\n";
 
                $matched[$i] = 1;
-               $captures[$i] = [$1, $2, $3];
+               $captures[$i] = [$1, $2, $3];  # we normally only need $1.
             } else {
                $all_matched = 0;
             }

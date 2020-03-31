@@ -8,13 +8,12 @@ param (
 Set-StrictMode -Version Latest
 #Set-PsDebug -Trace 1
 
-$version = "6.4"
+$version = "7.0"
 
 if ($v) {
    $verbosePreference = "Continue"
 }   
-
-   
+ 
 
 function usage {
   param([string]$message = $null)
@@ -44,10 +43,15 @@ Examples:
   as a client
      tpdist.ps1 client localhost 5555 /cygdrive/c/Users/william/github/tpsup/ps1 tmp 
 
+     tpdist.ps1 client localhost 5555 'C:/users/william/github/tpsup/ps1' 'C:/users/william/github/tpsup/kdb' /tmp
+
 "
 
    exit 1
 }
+
+$BufferSize = 4*1024*1024
+$ReadBuffer = new-object System.Byte[] $BufferSize
 
 function SendText {
    param (
@@ -58,63 +62,198 @@ function SendText {
    $writer.Write([system.Text.Encoding]::Default.GetBytes($text))
 }
 
-function SendAndReceive {
+function Pull {
    param (
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
       [Parameter(Mandatory = $true)]$remote_dirs = $null,
       [Parameter(Mandatory = $true)]$local_dirs = $null
    )
 
-   $infile_sent = $false
-   $infile_wait_maxloop = 5
-   $infile_wait_already = 0
-
-   
-
-   $temp_file = [System.IO.Path]::GetTempFileName()
-   $tar_file = [System.IO.Path]::ChangeExtension($temp_file, ".tar")
-   Move-Item $temp_file $tar_file
-
-   # Remove-Item $receive_tar
-
-   $out_stream = $null
-   try   { $out_stream = [System.IO.File]::Create($tar_file) }
-   catch { Write-Host $_; exit 1}
-
    $tcpStream = $tcpConnection.GetStream()
 
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-   $buffersize = 4*1024*1024
-   $buffer = new-object System.Byte[] $buffersize
    $encoding = new-object System.Text.AsciiEncoding 
 
    $recv_total_bytes = 0
    $send_total_bytes = 0
 
+   $remote_dirs_string = $remote_dirs -join "|"
+
    SendText $writer "<VERSION>$version</VERSION>`n"
+   SendText $writer "<PATH>$remote_dirs_string</PATH>`n"
+   SendText $writer "<DEEP>0</DEEP>`n"
+   SendText $writer "<TREE></TREE>`n"
+   SendText $writer "<MAXSIZE>-1</MAXSIZE>`n"
+   SendText $writer "<EXCLUDE></EXCLUDE>`n"
+   SendText $writer "<MATCH></MATCH>`n"
 
-   exit 1
+   $writer.Flush()
 
+   $patterns = @('<NEED_CKSUMS>(.*)</NEED_CKSUMS>')
+   
+   $matched, $captures, $other = ExpectSocket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+
+   $need_cksums_string = $null
+   if ($other["status"] -eq 'done') {
+      $need_cksums_string = $captures[0][0]
+      Write-Verbose "need_cksums_string=$need_cksums_string"
+   } else {
+      Write-Error $other["status"]
+      exit 1
+   }
+
+   Write-Verbose "received cksum requests, calculating cksums"
+
+   # todo
+
+   $cksums_results_string = ""
+
+   SendText $writer "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>"
+   $writer.Flush()
+
+   $patterns = @('<DELETES>(.*)</DELETES>',
+                 '<MTIMES>(.*)</MTIMES>',
+                 '<MODES>(.*)</MODES>',
+                 '<SPACE>(\d+)</SPACE>',
+                 '<ADDS>(.*)</ADDS>',
+                 '<WARNS>(.*)</WARNS>')
+
+
+   $matched, $captures, $other = ExpectSocket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+
+   $deletes_string = ""
+   $mtimes_string  = ""
+   $modes_string   = ""
+   $adds_string    = ""
+   $warns_string   = ""
+   $RequiredSpace  = -1
+
+   if ($other["status"] -eq 'done') {
+      $deletes_string = $captures[0][0];
+      $mtimes_string  = $captures[1][0];
+      $modes_string   = $captures[2][0];
+      $RequiredSpace  = $captures[3][0];
+      $adds_string    = $captures[4][0];
+      $warns_string   = $captures[5][0];
+   } else {
+      for ($i = 0; $i -lt $matched.count; $i++) { 
+         if ($matched[$i]) {
+            Write-Host "$($patterns[$i]) matched"
+         } else {
+            Write-Host "$($patterns[$i]) didn't match"
+         } 
+      }
+      Write-Error $other["status"]
+      exit 1
+   }
+
+   $local_dir_abs = Resolve-Path $local_dir
+   Set-Location -Path $local_dir_abs
+
+   WriteText $writer "please send data`n"
+   $writer.Flush()
+
+   Write-Host "waiting for data from remote\n"
+
+   $total_size = 0
+
+   $temp_file = [System.IO.Path]::GetTempFileName()
+   $tar_file = [System.IO.Path]::ChangeExtension($temp_file, ".tar")
+   Move-Item $temp_file $tar_file
+
+   
+
+   $out_stream = $null
+   try   { $out_stream = [System.IO.File]::Create($tar_file)}
+   catch { Write-Host $_; exit 1}
+
+   while ($tcpConnection.Connected) {     
+      while ($tcpStream.DataAvailable) {
+         $size = $tcpStream.Read($ReadBuffer, 0, $BufferSize)
+
+         if ($size -gt 0 ) {
+            $recv_total_bytes += $size
+            write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"  
+            $out_stream.Write($buffer, 0, $size)            
+         } else {
+              # this never worked.
+              write-host "first time happend. remote closed connection"
+              exit 0
+         }
+      }
+
+      if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
+            $tcpConnection.Client.Available -eq 0)) {
+          write-host "remote disconnected"
+          break
+      }
+
+      start-sleep -Milliseconds 1000
+   }
+
+   Write-Verbose $tar_file
+   # Remove-Item $receive_tar
+
+}
+
+function ExpectSocket {
+   param (
+      [Parameter(Mandatory = $true)]$tcpConnection = $null,
+      [Parameter(Mandatory = $true)]$tcpStream = $null,
+      [Parameter(Mandatory = $true)]$reader = $null,
+      [Parameter(Mandatory = $true)]$patterns = $null,
+      $opt = $null
+   )
+
+   $data_str = ""
+   $num_patterns = $patterns.count
+   $matched = New-Object boolean[] $num_patterns
+   $captures = New-Object object[] $num_patterns 
+   $other = @{}
+   $total_wait = 0
+
+   Write-Verbose "ExpectSocket"
+   
    while ($tcpConnection.Connected) {
        # empty input queue first
        while ($tcpStream.DataAvailable)
        {
            $size = 0
-           $size = $tcpStream.Read($buffer, 0, 1024)
+           $size = $tcpStream.Read($ReadBuffer, 0, $BufferSize)
 
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
+              write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"              
+              $text = $encoding.GetString($ReadBuffer, 0, $size)   
+              $data_str += $text
+              
+              write-verbose "data_str=$data_str"
 
-              write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"
-
-              if ($outfile) {
-                 $out_stream.Write($buffer, 0, $size)
-              } else {
-                 $text = $encoding.GetString($buffer, 0, $size)   
-                 write-host -n $text
+              $all_matched = $true
+              
+              for ($i = 0; $i -lt $num_patterns; $i++){ 
+                 if ($matched[$i]) {
+                    next;
+                 }
+                 # Set-PsDebug -Trace 2
+                 # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_regular_expressions?view=powershell-7
+                 Write-Verbose "pattern=$patterns[$i]"
+                 if ($data_str -match $patterns[$i]) {
+                 #if ($data_str -match '<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>') {
+                    $matched[$i] = $true
+                    $captures[$i] = ($Matches[1], $Matches[2], $Matches[3])    # Matches[0] is the whole string
+                 } else {
+                    $all_matched = $false
+                 }  
+                 # Set-PsDebug -Trace 0                 
               }
+                 
+              if ($all_matched) {
+                 $other["status"] = "done"
+                 return ($matched, $captures, $other)
+              }                       
            } else {
               # this never worked.
               write-host "first time happend. remote closed connection"
@@ -130,6 +269,21 @@ function SendAndReceive {
           break
        }
 
+       if ($opt["ExpectTimeout"]) {
+          if ($total_wait -gt $opt['ExpectTimeout']) {
+             Write-Verbose "ExpectSocket timed out after $($opt['ExpectTimeout']) seconds\n"
+             $other["status"] = "timed out"
+             return ($matched, $captures, $other)
+          }
+          
+       }
+       start-sleep -Milliseconds 1000
+       $total_wait ++
+   }
+}
+
+<#
+function dummy {
        if ($infile) {
           if (-Not $infile_sent) {
              $in_stream = $null
@@ -195,6 +349,7 @@ function SendAndReceive {
 
    return
 }
+#>
 
 if (!$remainingArgs) {
    usage("wrong number of args")
@@ -258,7 +413,8 @@ if ($role.ToLower() -eq 'server') {
 
    $remote_host,$remote_port = $remainingArgs[1..2]
    $local_dir = $remainingArgs[-1]
-   $remote_dirs = $remainingArgs[3..-2]
+   $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
+
 
    write-verbose "remote_host=$remote_host"
    write-verbose "remote_port=$remote_port"
@@ -271,7 +427,7 @@ if ($role.ToLower() -eq 'server') {
 
    write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)"
 
-   SendAndReceive $tcpConnection $remote_dirs $local_dir
+   Pull $tcpConnection $remote_dirs $local_dir
 
    $tcpConnection.Close()
 }
