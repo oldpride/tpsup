@@ -912,6 +912,7 @@ sub expect_socket {
             }
          }
 
+         $opt->{verbose} && print timestamped(), "no activity from remote in last $ExpectInterval seconds\n";
          next;
       }
 

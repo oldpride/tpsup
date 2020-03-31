@@ -51,9 +51,9 @@ Examples:
 }
 
 $BufferSize = 4*1024*1024
-$ReadBuffer = new-object System.Byte[] $BufferSize
+$buffer = new-object System.Byte[] $BufferSize
 
-function SendText {
+function send_text {
    param (
       [Parameter(Mandatory = $true)]$writer = $null,
       [Parameter(Mandatory = $true)]$text = $null
@@ -62,7 +62,7 @@ function SendText {
    $writer.Write([system.Text.Encoding]::Default.GetBytes($text))
 }
 
-function Pull {
+function to_pull {
    param (
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
       [Parameter(Mandatory = $true)]$remote_dirs = $null,
@@ -81,19 +81,19 @@ function Pull {
 
    $remote_dirs_string = $remote_dirs -join "|"
 
-   SendText $writer "<VERSION>$version</VERSION>`n"
-   SendText $writer "<PATH>$remote_dirs_string</PATH>`n"
-   SendText $writer "<DEEP>0</DEEP>`n"
-   SendText $writer "<TREE></TREE>`n"
-   SendText $writer "<MAXSIZE>-1</MAXSIZE>`n"
-   SendText $writer "<EXCLUDE></EXCLUDE>`n"
-   SendText $writer "<MATCH></MATCH>`n"
+   send_text $writer "<VERSION>$version</VERSION>`n"
+   send_text $writer "<PATH>$remote_dirs_string</PATH>`n"
+   send_text $writer "<DEEP>0</DEEP>`n"
+   send_text $writer "<TREE></TREE>`n"
+   send_text $writer "<MAXSIZE>-1</MAXSIZE>`n"
+   send_text $writer "<EXCLUDE></EXCLUDE>`n"
+   send_text $writer "<MATCH></MATCH>`n"
 
    $writer.Flush()
 
    $patterns = @('<NEED_CKSUMS>(.*)</NEED_CKSUMS>')
    
-   $matched, $captures, $other = ExpectSocket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
 
    $need_cksums_string = $null
    if ($other["status"] -eq 'done') {
@@ -110,7 +110,7 @@ function Pull {
 
    $cksums_results_string = ""
 
-   SendText $writer "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>"
+   send_text $writer "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>"
    $writer.Flush()
 
    $patterns = @('<DELETES>(.*)</DELETES>',
@@ -121,7 +121,7 @@ function Pull {
                  '<WARNS>(.*)</WARNS>')
 
 
-   $matched, $captures, $other = ExpectSocket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
 
    $deletes_string = ""
    $mtimes_string  = ""
@@ -149,29 +149,36 @@ function Pull {
       exit 1
    }
 
-   $local_dir_abs = Resolve-Path $local_dir
-   Set-Location -Path $local_dir_abs
+   $local_dir_abs = get_abs_path $local_dir
+   if ( -not (Test-Path -Path $local_dir_abs)) {
+      Write-Host "creating directory $local_dir_abs"
+      try { New-Item -ItemType "directory" -Path $local_dir_abs -Force }
+      catch { Write-Error $_; exit 1}     
+   }
+   Write-Host "cd $local_dir_abs"
 
-   WriteText $writer "please send data`n"
+   #Set-Location -Path $local_dir_abs
+   cd $local_dir_abs
+
+   send_text $writer "please send data`n"
    $writer.Flush()
 
-   Write-Host "waiting for data from remote\n"
+   $temp_file = [System.IO.Path]::GetTempFileName()
+   $tmp_tar_file = [System.IO.Path]::ChangeExtension($temp_file, ".tar")
+   Move-Item $temp_file $tmp_tar_file   
+
+   Write-Host "waiting for data from remote, will write to $tmp_tar_file"
+
+   # create an FileStream for output
+   $out_stream = $null
+   try   { $out_stream = [System.IO.File]::Create($tmp_tar_file)}
+   catch { Write-Host $_; exit 1}
 
    $total_size = 0
 
-   $temp_file = [System.IO.Path]::GetTempFileName()
-   $tar_file = [System.IO.Path]::ChangeExtension($temp_file, ".tar")
-   Move-Item $temp_file $tar_file
-
-   
-
-   $out_stream = $null
-   try   { $out_stream = [System.IO.File]::Create($tar_file)}
-   catch { Write-Host $_; exit 1}
-
    while ($tcpConnection.Connected) {     
       while ($tcpStream.DataAvailable) {
-         $size = $tcpStream.Read($ReadBuffer, 0, $BufferSize)
+         $size = $tcpStream.Read($buffer, 0, $BufferSize)
 
          if ($size -gt 0 ) {
             $recv_total_bytes += $size
@@ -190,15 +197,26 @@ function Pull {
           break
       }
 
-      start-sleep -Milliseconds 1000
+      #start-sleep -Milliseconds 1000
+      sleep 1
    }
 
-   Write-Verbose $tar_file
-   # Remove-Item $receive_tar
+   $out_stream.flush()
+   $out_stream.dispose()
+
+   dir $tmp_tar_file
+
+   # 1. tar -xvf $tmp_tar_file send veriticalut to outp stdout. therefore, use 2 commands instead
+   # 2.need to wait external command to finish before remove the $tmp_tar_file, eg, use |Out_Host
+   #    https://stackoverflow.com/questions/1741490/how-to-tell-powershell-to-wait-for-each-command-to-end-before-starting-the-next
+   tar -tf $tmp_tar_file |Out-Host
+   tar -xf $tmp_tar_file |Out-Host
+
+   Remove-Item $tmp_tar_file
 
 }
 
-function ExpectSocket {
+function expect_socket {
    param (
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
       [Parameter(Mandatory = $true)]$tcpStream = $null,
@@ -221,12 +239,12 @@ function ExpectSocket {
        while ($tcpStream.DataAvailable)
        {
            $size = 0
-           $size = $tcpStream.Read($ReadBuffer, 0, $BufferSize)
+           $size = $tcpStream.Read($buffer, 0, $BufferSize)
 
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
               write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"              
-              $text = $encoding.GetString($ReadBuffer, 0, $size)   
+              $text = $encoding.GetString($buffer, 0, $size)   
               $data_str += $text
               
               write-verbose "data_str=$data_str"
@@ -239,8 +257,10 @@ function ExpectSocket {
                  }
                  # Set-PsDebug -Trace 2
                  # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_regular_expressions?view=powershell-7
-                 Write-Verbose "pattern=$patterns[$i]"
-                 if ($data_str -match $patterns[$i]) {
+                 Write-Verbose "pattern=$($patterns[$i])"
+
+                 # multiline regex use "(?s)"
+                 if ($data_str -match "(?s)$($patterns[$i])") {
                  #if ($data_str -match '<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>') {
                     $matched[$i] = $true
                     $captures[$i] = ($Matches[1], $Matches[2], $Matches[3])    # Matches[0] is the whole string
@@ -277,9 +297,25 @@ function ExpectSocket {
           }
           
        }
-       start-sleep -Milliseconds 1000
+       sleep 1
        $total_wait ++
    }
+}
+
+# https://stackoverflow.com/questions/3038337/powershell-resolve-path-that-might-not-exist
+function get_abs_path {
+   param (
+      [Parameter(Mandatory = $true)]$path = $null,
+      $opt = $null
+   )
+
+   $abs_path = Resolve-Path $path -ErrorAction SilentlyContinue `
+                                  -ErrorVariable myerror
+    if (-not($abs_path)) {
+        $abs_path = $myerror[0].TargetObject
+    }
+
+    return $abs_path
 }
 
 <#
@@ -364,6 +400,8 @@ if ($role.ToLower() -ne 'server' -AND $role.ToLower() -ne 'client') {
    usage("Role must be either 'server' or 'client'")
 }
 
+$old_pwd = $pwd
+
 if ($role.ToLower() -eq 'server') {
    # this is server
 
@@ -427,9 +465,14 @@ if ($role.ToLower() -eq 'server') {
 
    write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)"
 
-   Pull $tcpConnection $remote_dirs $local_dir
+   to_pull $tcpConnection $remote_dirs $local_dir
 
    $tcpConnection.Close()
+
+   Write-Host "going back to old pwd: cd $old_pwd"
+
+   #Set-Location -Path $old_pwd
+   cd $old_pwd
 }
 
 exit 0
