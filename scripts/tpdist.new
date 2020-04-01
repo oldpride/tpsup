@@ -908,16 +908,8 @@ sub expect_socket {
 
             if ($total_wait >= $opt->{ExpectTimeout}) {
                print get_timestamp(), "expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
-               
-               for (my $i=0; $i<$num_patterns; $i++) {
-                   print "   pattern=$patterns->[$i]  ", $matched[$i] ? "matched" : "didn't match";
-               }
-
-               my $message = 'timed out. very likely wrong protocol. expecting $expected_peer_protocol.*';
-               print get_timestamp(), "$message\n";
-               $socket->send("$message\n");
-
-               return undef;
+               return (\@matched, \@captures,
+                       {status=>'timed out. very likely wrong protocol. expecting $expected_peer_protocol.*'});
             }
          }
 
@@ -926,6 +918,7 @@ sub expect_socket {
       }
 
       my $data;
+
       my $size = read($socket, $data, 1024000);
 
       if (!$size) {
@@ -936,9 +929,10 @@ sub expect_socket {
                           substr($total_data, $total_size-$print_size, $print_size) : '';
 
          print get_timestamp(), "socket closed. ... $last_words\n";
-         return undef;
+         return (\@matched, \@captures, {status=>'remote side closed connection'});
       } else {
          $opt->{verbose} && print get_timestamp(), "received data: $data\n";
+
          $total_data .= $data;
 
          my $all_matched = 1;
@@ -956,10 +950,7 @@ sub expect_socket {
             }
          }
 
-         if ($all_matched) {
-            print get_timestamp(), "received complete information from remote\n";
-            return \@captures;
-         }
+         return (\@matched, \@captures, {status=>'done'}) if $all_matched;
       }
    }
 }
@@ -972,30 +963,45 @@ sub to_be_pulled {
    
    print get_timestamp(), "waiting information from remote ...\n";
 
-   my $captures = expect_socket($socket,
-                      [ '<PATH>(.+)</PATH>',
-                        '<TREE>(.*)</TREE>',
-                        '<MAXSIZE>([-]?\d+)</MAXSIZE>',
-                        '<VERSION>(.+)</VERSION>',
-                        '<EXCLUDE>(.*)</EXCLUDE>',
-                        '<MATCH>(.*)</MATCH>',
-                        '<DEEP>(.)</DEEP>',
-                      ],
-                      {verbose=>$verbose, ExpectTimeout=>$timeout}
-                     );
+   my $local_paths_string;
+   my $remote_tree_block;
+   my $maxsize;
+   my $version;
+   my $match_string;
+   my $exclude_string;
+   my $deep_check;
+   {
+      my ($matched, $captures, $other)
+         = expect_socket($socket,
+                         [ '<PATH>(.+)</PATH>',
+                           '<TREE>(.*)</TREE>',
+                           '<MAXSIZE>([-]?\d+)</MAXSIZE>',
+                           '<VERSION>(.+)</VERSION>',
+                           '<EXCLUDE>(.*)</EXCLUDE>',
+                           '<MATCH>(.*)</MATCH>',
+                           '<DEEP>(.)</DEEP>',
+                         ],
+                         {verbose=>$verbose, ExpectTimeout=>$timeout}
+                        );
+      if ($other->{status} eq 'done') {
+         $local_paths_string  = $captures->[0]->[0];
+         $remote_tree_block   = $captures->[1]->[0];
+         $maxsize             = $captures->[2]->[0];
+         $version             = $captures->[3]->[0];
+         $exclude_string      = $captures->[4]->[0];
+         $match_string        = $captures->[5]->[0];
+         $deep_check          = $captures->[6]->[0];
 
-   if (!$captures) {
-      $socket->close();
-      return;
+         print get_timestamp(), "received complete information from remote\n";
+      } else {
+         print get_timestamp(), "$other->{status}\n";
+         if ($other->{status} ne 'remote side closed connection') {
+            $socket->send("$other->{status}\n");
+         }
+         $socket->close();
+         return;
+      } 
    }
-
-   my $local_paths_string  = $captures->[0]->[0];
-   my $remote_tree_block   = $captures->[1]->[0];
-   my $maxsize             = $captures->[2]->[0];
-   my $version             = $captures->[3]->[0];
-   my $exclude_string      = $captures->[4]->[0];
-   my $match_string        = $captures->[5]->[0];
-   my $deep_check          = $captures->[6]->[0];
 
    my ($peer_protocol) = ($version =~ /^(\d+)/);
 
@@ -1238,17 +1244,26 @@ sub to_be_pulled {
 
    print get_timestamp(), "waiting remote cksum results.\n";
 
-   $captures = expect_socket($socket,
+   my $remote_cksums_string;
+   { 
+      my ($matched, $captures, $other)
+         = expect_socket($socket,
                          [ '<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>',
                          ],
                          {verbose=>$verbose, ExpectTimeout=>$timeout}
                     );
-   if (!$captures) {
-      $socket->close();
-      return;
+      if ($other->{status} eq 'done') {
+         $remote_cksums_string = $captures->[0]->[0];
+         print get_timestamp(), "received cksum results from remote\n";
+      } else {
+         print get_timestamp(), "$other->{status}\n";
+         if ($other->{status} ne 'remote side closed connection') {
+            $socket->send("$other->{status}\n");
+         }
+         $socket->close();
+         return;
+      }
    }
-
-   my $remote_cksums_string = $captures->[0]->[0];
 
    my $remote_cksum_by_file;
    if ($remote_cksums_string) {
@@ -1336,18 +1351,27 @@ sub to_be_pulled {
 
    print get_timestamp(), "waiting for transfer mode from remote\n";
 
-   $captures = expect_socket(
+   my $mode;
+   {
+      my ($matched, $captures, $other)
+         = expect_socket(
               $socket,
               ["please send (data|diff|unpacked)"],
               {verbose=>$verbose, ExpectTimeout=>$timeout}
            );
 
-   if (!$captures) {
-      $socket->close();
-      return;
+      if ($other->{status} eq 'done') {
+         $mode = $captures->[0]->[0];
+         print get_timestamp(), "received complete information from remote\n";
+      } else {
+         print get_timestamp(), "$other->{status}\n";
+         if ($other->{status} ne 'remote side closed connection') {
+            $socket->send("$other->{status}\n");
+         }
+         $socket->close();
+         return;
+      }
    }
-
-   my $mode = $captures->[0]->[0];
 
    print get_timestamp(), "received remote tranfer mode: $mode. creating local tar file\n";
 
@@ -1555,18 +1579,25 @@ sub to_pull {
 
    $quiet || print get_timestamp(), "waiting cksum requests from remote...\n";
 
-   my $captures = expect_socket(
+   my $need_cksums_string;
+   {
+      my ($matched, $captures, $other)
+         = expect_socket(
               $socket,
               [ '<NEED_CKSUMS>(.*)</NEED_CKSUMS>',],
               {verbose=>$verbose, ExpectTimeout=>$timeout}
            );
 
-   if (!$captures) {
-      $socket->close();
-      return;
+      if ($other->{status} eq 'done') {
+         $need_cksums_string = $captures->[0]->[0];
+      } elsif ($other->{status} eq 'timed out') {
+         croak "remote connection may be using a different protocol";
+      } elsif ($other->{status} eq 'closed') {
+         croak "remote connection unexpectedly closed";
+      } else {
+         croak "connection status: $other->{status}";
+      }
    }
-
-   my $need_cksums_string = $captures->[0]->[0];
 
    $quiet || print get_timestamp(), "received cksum requests, calculating cksums\n";
 
@@ -1599,7 +1630,15 @@ sub to_pull {
    # unblock socket when reading
    $socket->blocking(0);
 
-   $captures = expect_socket(
+   my $deletes_string;
+   my $mtimes_string;
+   my $modes_string;
+   my $adds_string;
+   my $warns_string;
+   my $RequiredSpace;
+   {
+      my ($matched, $captures, $other)
+         = expect_socket(
               $socket,
               [ '<DELETES>(.*)</DELETES>',
                 '<MTIMES>(.*)</MTIMES>',
@@ -1611,18 +1650,22 @@ sub to_pull {
               {verbose=>$verbose, ExpectTimeout=>$timeout}
            );
 
-   if (!$captures) {
-      $socket->close();
-      return;
+      if ($other->{status} eq 'done') {
+         $deletes_string = $captures->[0]->[0];
+         $mtimes_string  = $captures->[1]->[0];
+         $modes_string   = $captures->[2]->[0];
+         $RequiredSpace  = $captures->[3]->[0];
+         $adds_string    = $captures->[4]->[0];
+         $warns_string   = $captures->[5]->[0];
+      } elsif ($other->{status} eq 'timed out') {
+         croak "remote connection may be using a different protocol";
+      } elsif ($other->{status} eq 'closed') {
+         croak "remote connection unexpectedly closed";
+      } else {
+         croak "connection status: $other->{status}";
+      }
    }
 
-   my $deletes_string = $captures->[0]->[0];
-   my $mtimes_string  = $captures->[1]->[0];
-   my $modes_string   = $captures->[2]->[0];
-   my $RequiredSpace  = $captures->[3]->[0];
-   my $adds_string    = $captures->[4]->[0];
-   my $warns_string   = $captures->[5]->[0];
-    
    if (-d $local_dir_abs) {
       $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
       chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";

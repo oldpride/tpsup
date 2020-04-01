@@ -2,6 +2,8 @@
 
 param (
     [switch]$v = $false,
+    [switch]$reverse = $false,
+    [switch]$r       = $false,
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
@@ -9,31 +11,42 @@ Set-StrictMode -Version Latest
 #Set-PsDebug -Trace 1
 
 $version = "7.0"
+$version_split = $version -split "[.]"
+$expected_peer_protocl = $version_split[0]
 
 if ($v) {
    $verbosePreference = "Continue"
-}   
+}
+
+$reverse = $false
+if ($r -or $reverse) {
+   $reverse = $true
+}
  
 
 function usage {
   param([string]$message = $null)
 
   if ($message) {
-     write-host $message
+     Write-Host $(get_timestamp) $message
   }
 
-  write-host "
+  Write-Host $(get_timestamp) "
 Usage:
 
-  tpdist in powershell
+   tpdist in powershell
 
-  as a server
-     tpdist server port
+   normal mode: server waits to be pulled; client pulls.
+     tpdist server local_port
+     tpdist client remote_host remote_port remote_path1 remote_path2 ... local_dir
 
-  as a client
-     tpdist client server_host server_port source_path target_dir
+   reversed mode: server waits to take in data; client pushes.
+     tpdist server local_port  -reverse remote_port remote_path1 remote_path2 ... local_dir
+     tpdist client remote_host remoe_port -reverse
 
-  -v                  verbose mode.
+   if remote path is a relative path, it will be relative to remote user's home dir.
+
+   -v                  verbose mode.
 
 Examples:
 
@@ -48,6 +61,10 @@ Examples:
 "
 
    exit 1
+}
+
+function get_timestamp {
+  return "{0:yyyyMMdd} {0:HH:mm:ss}" -f (Get-Date)
 }
 
 $BufferSize = 4*1024*1024
@@ -76,9 +93,6 @@ function to_pull {
 
    $encoding = new-object System.Text.AsciiEncoding 
 
-   $recv_total_bytes = 0
-   $send_total_bytes = 0
-
    $remote_dirs_string = $remote_dirs -join "|"
 
    send_text $writer "<VERSION>$version</VERSION>`n"
@@ -93,7 +107,7 @@ function to_pull {
 
    $patterns = @('<NEED_CKSUMS>(.*)</NEED_CKSUMS>')
    
-   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 300}
 
    $need_cksums_string = $null
    if ($other["status"] -eq 'done') {
@@ -101,7 +115,11 @@ function to_pull {
       Write-Verbose "need_cksums_string=$need_cksums_string"
    } else {
       Write-Error $other["status"]
-      exit 1
+      if ($other["status"] -ne 'remote side closed connection') {
+         $writer.Write($other["status"])
+         $writer.Close()
+      }
+      return
    }
 
    Write-Verbose "received cksum requests, calculating cksums"
@@ -138,24 +156,21 @@ function to_pull {
       $adds_string    = $captures[4][0];
       $warns_string   = $captures[5][0];
    } else {
-      for ($i = 0; $i -lt $matched.count; $i++) { 
-         if ($matched[$i]) {
-            Write-Host "$($patterns[$i]) matched"
-         } else {
-            Write-Host "$($patterns[$i]) didn't match"
-         } 
-      }
       Write-Error $other["status"]
-      exit 1
+      if ($other["status"] -ne 'remote side closed connection') {
+         $writer.Write($other["status"])
+         $writer.Close()
+      }
+      return
    }
 
    $local_dir_abs = get_abs_path $local_dir
    if ( -not (Test-Path -Path $local_dir_abs)) {
-      Write-Host "creating directory $local_dir_abs"
+      Write-Host $(get_timestamp) "creating directory $local_dir_abs"
       try { New-Item -ItemType "directory" -Path $local_dir_abs -Force }
       catch { Write-Error $_; exit 1}     
    }
-   Write-Host "cd $local_dir_abs"
+   Write-Host $(get_timestamp) "cd $local_dir_abs"
 
    #Set-Location -Path $local_dir_abs
    cd $local_dir_abs
@@ -167,12 +182,12 @@ function to_pull {
    $tmp_tar_file = [System.IO.Path]::ChangeExtension($temp_file, ".tar")
    Move-Item $temp_file $tmp_tar_file   
 
-   Write-Host "waiting for data from remote, will write to $tmp_tar_file"
+   Write-Host $(get_timestamp) "waiting for data from remote, will write to $tmp_tar_file"
 
    # create an FileStream for output
    $out_stream = $null
    try   { $out_stream = [System.IO.File]::Create($tmp_tar_file)}
-   catch { Write-Host $_; exit 1}
+   catch { Write-Host $(get_timestamp) $_; exit 1}
 
    $total_size = 0
 
@@ -186,14 +201,14 @@ function to_pull {
             $out_stream.Write($buffer, 0, $size)            
          } else {
               # this never worked.
-              write-host "first time happend. remote closed connection"
+              Write-Host $(get_timestamp) "first time happend. remote closed connection"
               exit 0
          }
       }
 
       if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
             $tcpConnection.Client.Available -eq 0)) {
-          write-host "remote disconnected"
+          Write-Host $(get_timestamp) "remote disconnected"
           break
       }
 
@@ -213,6 +228,79 @@ function to_pull {
    tar -xf $tmp_tar_file |Out-Host
 
    Remove-Item $tmp_tar_file
+}
+
+function to_be_pulled {
+   param (
+      [Parameter(Mandatory = $true)]$tcpConnection = $null,
+      $opt = $null
+   )
+
+   Write-Host $(get_timestamp), "waiting information from remote ...`n";
+
+   $patterns = @(       
+      '<PATH>(.+)</PATH>',
+      '<TREE>(.*)</TREE>',
+      '<MAXSIZE>([-]?\d+)</MAXSIZE>',
+      '<VERSION>(.+)</VERSION>',
+      '<EXCLUDE>(.*)</EXCLUDE>',
+      '<MATCH>(.*)</MATCH>',
+      '<DEEP>(.)</DEEP>'
+   )
+
+   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+
+   if ($other["status"] -ne "done") {
+      if ($other["status"] -ne 'remote side closed connection') {
+         $writer.Write($other["status"])
+         $writer.Close()
+      }
+      return
+   }
+
+   $local_paths_string  = $captures[0][0]
+   $remote_tree_block   = $captures[1][0]
+   $maxsize             = $captures[2][0]
+   $remote_version      = $captures[3][0]
+   $exclude_string      = $captures[4][0]
+   $match_string        = $captures[5][0]
+   $deep_check          = $captures[6][0]
+
+   $remote_version_split = $remote_version -split "[.]";
+   $peer_protocol = $remote_version_split[0]
+
+   if ($peer_protocol -ne $expected_peer_protocol) {
+      Write-Host $(get_timestamp), "remote used wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol. we closed the connection.\n";
+      $writer.Write("wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol")
+      $writer.Flush()
+      return;
+   }
+
+   $remote_tree = @{}
+
+   if ($remote_tree_block -ne "") {
+      $lines = $remote_tree_block -split "`n"
+
+      foreach ($l in $lines) {
+         if (! ($l -match "^key="))  {
+            next
+         }
+
+         $pairs = $l -split "[|]"
+         $branch = @{}
+         foreach ($pair in $pairs) {
+            $k,$v = $pair -split "=", 2
+            $branch[$k] = $v
+         }
+
+         $remote_tree[$branch["key"]] = $branch
+      }
+   
+      
+
+
+
+
 
 }
 
@@ -221,6 +309,7 @@ function expect_socket {
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
       [Parameter(Mandatory = $true)]$tcpStream = $null,
       [Parameter(Mandatory = $true)]$reader = $null,
+      [Parameter(Mandatory = $true)]$writer = $null,
       [Parameter(Mandatory = $true)]$patterns = $null,
       $opt = $null
    )
@@ -231,37 +320,27 @@ function expect_socket {
    $captures = New-Object object[] $num_patterns 
    $other = @{}
    $total_wait = 0
-
-   Write-Verbose "ExpectSocket"
    
    while ($tcpConnection.Connected) {
-       # empty input queue first
-       while ($tcpStream.DataAvailable)
-       {
-           $size = 0
+       while ($tcpStream.DataAvailable) {
            $size = $tcpStream.Read($buffer, 0, $BufferSize)
 
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
               write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"              
               $text = $encoding.GetString($buffer, 0, $size)   
-              $data_str += $text
-              
+              $data_str += $text              
               write-verbose "data_str=$data_str"
 
               $all_matched = $true
-              
+                            
               for ($i = 0; $i -lt $num_patterns; $i++){ 
                  if ($matched[$i]) {
                     next;
                  }
                  # Set-PsDebug -Trace 2
-                 # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_regular_expressions?view=powershell-7
-                 Write-Verbose "pattern=$($patterns[$i])"
-
                  # multiline regex use "(?s)"
                  if ($data_str -match "(?s)$($patterns[$i])") {
-                 #if ($data_str -match '<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>') {
                     $matched[$i] = $true
                     $captures[$i] = ($Matches[1], $Matches[2], $Matches[3])    # Matches[0] is the whole string
                  } else {
@@ -271,13 +350,12 @@ function expect_socket {
               }
                  
               if ($all_matched) {
-                 $other["status"] = "done"
-                 return ($matched, $captures, $other)
+                 return $captures
               }                       
            } else {
               # this never worked.
-              write-host "first time happend. remote closed connection"
-              exit 0
+              Write-Host $(get_timestamp) "first time happend. remote closed connection"
+              exit 1
            }
        }
    
@@ -285,17 +363,31 @@ function expect_socket {
        # https://learn-powershell.net/2015/03/29/checking-for-disconnected-connections-with-tcplistener-using-powershell/
        if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
             $tcpConnection.Client.Available -eq 0)) {
-          write-host "remote disconnected"
-          break
+          $last_words = ""
+          if ($data_str -ne "") {
+             $tail_size = 50
+             if ($data_str.Length -le 50 ) {
+                $last_words = $data_str
+             } else {
+                $last_words = $data_str.Substring($data_str.Length - 50)
+             }
+          }
+          Write-Error "remote side closed connection. Last words: $last_words"
+          return $null
        }
 
        if ($opt["ExpectTimeout"]) {
           if ($total_wait -gt $opt['ExpectTimeout']) {
-             Write-Verbose "ExpectSocket timed out after $($opt['ExpectTimeout']) seconds\n"
-             $other["status"] = "timed out"
-             return ($matched, $captures, $other)
-          }
-          
+             Write-Error "timed out after $($opt['ExpectTimeout']) seconds. very likely wrong protocol. expecting $expected_peer_protocol.*"
+             for (my $i=0; $i -lt $num_patterns; $i++) {
+                if ($matched[$i]) {
+                   Write-Host "   pattern=$($patterns[$i])  matched"
+                } else {
+                   Write-Host "   pattern=$($patterns[$i])  didn't matched"
+                }
+             }
+             return $null
+          }         
        }
        sleep 1
        $total_wait ++
@@ -325,7 +417,7 @@ function dummy {
              $in_stream = $null
              if ($infile) {
                 try   { $in_stream = [System.IO.File]::OpenRead($infile) }
-                catch { Write-Host $_; exit 1 } 
+                catch { Write-Host $(get_timestamp) $_; exit 1 } 
              }
 
              $in_buffer = new-object System.Byte[] 1024
@@ -361,7 +453,7 @@ function dummy {
           if ($read_stdin) {
              # -prompt doesn't work in Cygwin
              # $line = Read-Host -prompt "hit 'enter' to receive and to send"
-             Write-Host -n "hit 'enter' to receive and to send : "
+             Write-Host $(get_timestamp) -n "hit 'enter' to receive and to send : "
              $line = Read-Host 
              $line += "`n"
              
@@ -420,9 +512,9 @@ if ($role.ToLower() -eq 'server') {
    }
    
    try   { $listener.start()     }
-   catch { write-host $_; exit 1 }
+   catch { Write-Host $(get_timestamp) $_; exit 1 }
    
-   write-host "listener started at port $listener_port"
+   Write-Host $(get_timestamp) "listener started at port $listener_port"
 
    $tcpConnection = $null
 
@@ -434,7 +526,7 @@ if ($role.ToLower() -eq 'server') {
       start-sleep -Milliseconds 1000
    }
 
-   write-host "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+   Write-Host $(get_timestamp) "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
 
    # we only want to accept one client; therefore, close the listener now.
    $listener.stop()
@@ -445,8 +537,18 @@ if ($role.ToLower() -eq 'server') {
 } else {
    # this is client
 
-   if (!$remainingArgs -OR $remainingArgs.count -lt 5) {
+   if (!$remainingArgs) {
       usage("wrong numnber of args")
+   }
+
+   if ($reverse) {
+      if ($remainingArgs.count -ne 2) {
+         usage("wrong numnber of args")
+      }
+   } else {
+      if ($remainingArgs.count -lt 5) {
+         usage("wrong numnber of args")
+      }
    }
 
    $remote_host,$remote_port = $remainingArgs[1..2]
@@ -461,15 +563,19 @@ if ($role.ToLower() -eq 'server') {
 
    $tcpConnection = $null
    try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
-   catch { Write-Host $_; exit 1 }
+   catch { Write-Host $(get_timestamp) $_; exit 1 }
 
    write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)"
 
-   to_pull $tcpConnection $remote_dirs $local_dir
+   if ($reverse) {
+      to_be_pulled $tcpConnection
+   } else {
+      to_pull $tcpConnection $remote_dirs $local_dir
+   }
 
    $tcpConnection.Close()
 
-   Write-Host "going back to old pwd: cd $old_pwd"
+   Write-Host $(get_timestamp) "going back to old pwd: cd $old_pwd"
 
    #Set-Location -Path $old_pwd
    cd $old_pwd
