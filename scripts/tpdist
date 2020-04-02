@@ -14,7 +14,7 @@ use IO::Select;
 use Socket;
 use POSIX;
 
-my $timeout = 300;
+my $timeout = 3;
 my $idle = 600;
 my $maxtry = 5;
 my $interval = 5;
@@ -130,7 +130,7 @@ Server switches:
                       file contains allowed/deny dir or file, one per line, 
                       lines stars with # is comment
                       default:
-                         \$HOME/.tpsup/tpdist_allofile.txt
+                         \$HOME/.tpsup/tpdist_allowfile.txt
                          \$HOME/.tpsup/tpdist_denyfile.txt
 
    -idle seconds
@@ -194,10 +194,10 @@ $| = 1;
 my $verbose;
 my $base;
 my $KeepTmpFile;
-my $denyfileFile;
-my $allowfileFile;
-my $denyhostFile;
-my $allowhostFile;
+my $denyfile;
+my $allowfile;
+my $denyhost;
+my $allowhost;
 my $dryrun;
 my $diff;
 my $unpack;
@@ -209,26 +209,26 @@ my $quiet;
 my $reverse;
 
 GetOptions(
-   'v|verbose' => \$verbose,
-   'r|reverse' => \$reverse,
-   'q|quiet' => \$quiet,
-   'KeepTmpFile' => \$KeepTmpFile,
-   'denyfile=s' => \$denyfileFile,
-   'allowfile=s' => \$allowfileFile,
-   'denyhost=s' => \$denyhostFile,
-   'allowhost=s' => \$allowhostFile,
-   'n' => \$dryrun,
-   'diff' => \$diff,
-   'unpack' => \$unpack,
-   'deep' => \$deep,
-   'maxsize=s' => \$maxsize,
-   'timeout=s' => \$timeout,
-   'idle=s' => \$idle,
-   'maxtry=s' => \$maxtry,
-   'interval=s' => \$interval,
-   'match=s' => \@matches,
-   'exclude=s' => \@excludes,
-   'tmpdir=s' => \$tmpdir,
+   'v|verbose'       => \$verbose,
+   'r|reverse'       => \$reverse,
+   'q|quiet'         => \$quiet,
+   'KeepTmpFile'     => \$KeepTmpFile,
+   'denyfile=s'      => \$denyfile,
+   'allowfile=s'     => \$allowfile,
+   'denyhost=s'      => \$denyhost,
+   'allowhost=s'     => \$allowhost,
+   'n|dryrun'        => \$dryrun,
+   'diff'            => \$diff,
+   'unpack'          => \$unpack,
+   'deep'            => \$deep,
+   'maxsize=s'       => \$maxsize,
+   'timeout=s'       => \$timeout,
+   'idle=s'          => \$idle,
+   'maxtry=s'        => \$maxtry,
+   'interval=s'      => \$interval,
+   'match=s'         => \@matches,
+   'exclude=s'       => \@excludes,
+   'tmpdir=s'        => \$tmpdir,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV < 2;
@@ -241,7 +241,6 @@ my $host;
 my $port;
 my $remote_paths;
 my $local_dir;
-my ($allowhost, $denyhost, $allowfile, $denyfile);
 
 my $homedir = get_homedir();
 $verbose && print STDERR "homedir=$homedir\n";
@@ -257,7 +256,6 @@ if ($mode eq 'server') {
       @$remote_paths = @ARGV;
    } else {
       usage("wrong number of args") if @ARGV;
-      ($allowhost, $denyhost, $allowfile, $denyfile) = load_access();
    }
 } elsif ($mode eq 'client') {
    $host = shift @ARGV;
@@ -265,7 +263,6 @@ if ($mode eq 'server') {
 
    if ($reverse) {
       usage("wrong number of args") if @ARGV;
-      ($allowhost, $denyhost, $allowfile, $denyfile) = load_access();
    } else {
       usage("wrong number of args") if @ARGV < 2;
       $local_dir = pop @ARGV;
@@ -279,6 +276,15 @@ $quiet || print get_timestamp(), "version=$version, protocol=$expected_peer_prot
 
 umask(022);
 
+my $user_specified = {
+   allowfile => $allowfile,
+    denyfile =>  $denyfile,
+   allowhost => $allowhost,
+    denyhost =>  $denyhost,
+};
+
+my $AccessMatrix = load_access($user_specified);
+
 if ($mode eq 'server') {
    # this is a server
    
@@ -289,7 +295,6 @@ if ($mode eq 'server') {
          Reuse => 1,
          Timeout => $idle,
    ) or die "ERROR in Socket Creation : $!\n";
-
 
    CONNECTION:
    while (1) {
@@ -329,49 +334,30 @@ if ($mode eq 'server') {
          print get_timestamp(), "peer_hostnames = ", join(" ", @peer_hostnames), "\n";
       }
 
-      if ($allowhostFile) {
-         my $allowed;
-
-         for my $h (($peer_address, @peer_hostnames)) {
-            next if ! $allowhost->{$h};
-
-            print get_timestamp(), "$peer_address: $h is allowed by $allowhostFile\n";
-             $allowed ++;
-            last;
-         }
-
-         if (!$allowed) {
-            print get_timestamp(), "$peer_address: (",
-                     join(' ', @peer_hostnames),
-                     ")is not allowed by $allowhostFile\n";
-            $socket->send("connectin is not allowed\n");
-            $socket->close();
-            next CONNECTION;
-         }
+      my $allowed;
+      for my $h (($peer_address, @peer_hostnames)) {
+         next if ! is_allowed($h, $AccessMatrix->{host}, {verbose=>$verbose});
+         print get_timestamp(), "$peer_address: $h is allowed to connect to us.\n";
+         $allowed ++;
+         last;
       }
 
-      if ($denyhostFile) {
-         for my $h (($peer_address, @peer_hostnames)) {
-            if ($denyhost->{$h}) {
-               print get_timestamp(), "$peer_address: $h is denied by $denyhostFile\n";
-               $socket->send("connectin is denied\n");
-               $socket->close();
-               next CONNECTION;
-            }
-         }
-
-         print get_timestamp(), "$peer_address: (",
-                  join(' ', @peer_hostnames),
-                  ")is not denied by $denyhostFile\n";
+      if (!$allowed) {
+         print get_timestamp(), "$peer_address: (", join(' ', @peer_hostnames), ") not allowed to connect to us.\n";
+         $socket->send("connection is not allowed\n");
+         $socket->flush();
+         sleep 2; #give a little time so that the remote can process the message.
+         $socket->close();
+         next CONNECTION;
       }
 
       # restore pwd as functions may chdir to other places
       chdir($old_pwd) || croak "cannot cd '$old_pwd'";
 
       if ($reverse) {
-         to_pull($socket, $remote_paths, $local_dir);
+         to_pull($socket, $remote_paths, $local_dir, {verbose=>$verbose});
       } else {
-         to_be_pulled($socket);
+         to_be_pulled($socket, {verbose=>$verbose, AllowDenyPatterns=>$AccessMatrix->{file}});
       }
    }
 } else {
@@ -388,19 +374,19 @@ if ($mode eq 'server') {
       last if $socket;
       print STDERR get_timestamp(), "Cannot connect to server $host:$port: $!.\n";
       if ($i<$maxtry-1) {
-         print STDERR " On $host please run\n";
-         print STDERR " tpdist server $port\n";
-         print STDERR " Will retry in $interval seconds for ", $maxtry-$i-1, " time(s)\n";
-         sleep $interval
+         print STDERR "   On $host please run\n";
+         print STDERR "     tpdist server $port\n";
+         print STDERR "     Will retry in $interval seconds for ", $maxtry-$i-1, " time(s)\n";
+         sleep $interval;
       } else {
          exit 1;
       }
    }
 
    if ($reverse) {
-      to_be_pulled($socket);
+      to_be_pulled($socket, {verbose=>$verbose, AllowDenyPatterns=>$AccessMatrix->{file}});
    } else {
-      to_pull($socket, $remote_paths, $local_dir);
+      to_pull($socket, $remote_paths, $local_dir, {verbose=>$verbose});
    }
 }
 
@@ -435,58 +421,32 @@ sub get_homedir {
 }
 
 sub load_access {
-   my $allowhost;
-   my $denyhost;
-   my $allowfile;
-   my $denyfile;
-   {
-      my $file = $allowfileFile ? $allowfileFile :
-         (-f "$homedir/.tpsup/tpdist_allowfile.txt") ?
-             "$homedir/.tpsup/tpdist_allowfile.txt" : undef ;
-      if ($file ) {
-         $allowfile = read_security_file($file);
-         if (!$allowfile) {
-            print STDERR "FATAL: there is no file to allow according to $allowfileFile\n";
-            exit 1;
-         }
-      }
-   }
-   {
-      my $file = $denyfileFile ? $denyfileFile :
-                 (-f "$homedir/.tpsup/tpdist_denyfile.txt") ?
-                     "$homedir/.tpsup/tpdist_denyfile.txt" : undef ;
-      if ($file ) {
-         $denyfile = read_security_file($file);
-         if (!$denyfile) {
-            print STDERR "INFO: there is no file to deny according to $denyfileFile\n";
-         }
-      }
-   }
-   {
-      my $file = $allowhostFile ? $allowhostFile :
-                 (-f "$homedir/.tpsup/tpdist_allowhost.txt") ?
-                     "$homedir/.tpsup/tpdist_allowhost.txt" : undef ;
-      if ($file ) {
-         $allowhost = read_security_file($file);
-         if (!$allowhost) {
-            print STDERR "FATAL: there is no host to allow according to $allowhostFile\n";
-            exit 1;
-         }
-      }
-   }
-   {
-      my $file = $denyhostFile ? $denyhostFile :
-                 (-f "$homedir/.tpsup/tpdist_denyhost.txt") ?
-                 "$homedir/.tpsup/tpdist_denyhost.txt" : undef ;
-      if ($file ) {
-         $denyhost = read_security_file($file);
-         if (!$denyhost) {
-            print STDERR "INFO: there is no host to deny according to $denyhostFile\n";
+   my ($user_specified, $opt) = @_;
+
+   my $matrix;
+
+   for my $type (qw(host file)) {
+      for my $access (qw(allow deny)) {
+         my $key = "${type}${access}";
+         my $file = $user_specified->{$key}                 ? $user_specified->{$key} :
+                     (-f "$homedir/.tpsup/tpdist_$key.txt") ? "$homedir/.tpsup/tpdist_$key.txt" :
+                                                               undef ;
+         if ($file ) {
+            my $patterns = read_security_file($file);
+            if ($patterns) {
+               $matrix->{$type}->{$access} = $patterns;
+            } else {
+               # why fatal here?
+               # because if a file exists but is empty, for example, if the allow file exists but is
+               # empty, should we allow all or allow none? this becomes ambiguous and prone to error!!
+               print STDERR "FATAL: there is no settings in $file\n";
+               exit 1;
+            }
          }
       }
    }
 
-   return ($allowhost, $denyhost, $allowfile, $denyfile);
+   return $matrix;
 }
 
 sub tar_file_list {
@@ -515,16 +475,19 @@ sub read_security_file {
 
    my @lines = `cat $file`;
    croak "cannot read $file" if $?;
-
    chomp @lines;
-   my $ref;
+
+   my @patterns;
    for my $l (@lines) {
       next if $l =~ /^\s*$/;
       next if $l =~ /^\s*#/;
-      $l =~ s/\s+//;
-      $ref->{$l} = 1;
+
+      $l =~ s/^\s+//;
+      $l =~ s/\s+$//;
+
+      push @patterns, qr/$l/; # pre-compile the pattern
    }
-   return $ref;
+   return \@patterns;
 }
 
 my $tmp_index;
@@ -626,7 +589,7 @@ sub get_abs_path {
    for my $e (@a1) {
       if ($e eq '.') {
          # convert /a/./b to /a/b
-       next;
+         next;
       } elsif ($e eq '..' ) {
          # convert /a/b/../c to /a/c
          pop @a2;
@@ -644,8 +607,7 @@ sub get_abs_path {
 sub build_dir_tree {
    my ($paths, $opt) = @_;
 
-   my @deny_patterns = sort(keys %{$opt->{denyfile}}) if $opt->{denyfile};
-   my @allow_patterns = sort(keys %{$opt->{allowfile}}) if $opt->{allowfile};
+   my $AllowDenyPatterns = $opt->{AllowDenyPatterns};
 
    my $cwd = getcwd();
 
@@ -727,8 +689,8 @@ sub build_dir_tree {
             croak "unexpected path $abs_path";
          }
 
-         if (!is_allowed($abs_path, \@allow_patterns, \@deny_patterns, $opt)) {
-            $other->{skipped_back}->{$back} = "no permission";
+         if (!is_allowed($abs_path, $AllowDenyPatterns, $opt)) {
+            $other->{skipped_back}->{$back} = "denied";
             next;
          }
 
@@ -773,7 +735,7 @@ sub build_dir_tree {
                }
             }
 
-            if ( !is_allowed($f, \@allow_patterns, \@deny_patterns, $opt) ) {
+            if ( !is_allowed($f, $AllowDenyPatterns, $opt) ) {
                $tree->{$f}->{skip} = "not allowed";
                next;
             }
@@ -857,30 +819,34 @@ sub build_dir_tree {
 }
 
 sub is_allowed {
-   my ($file, $deny_patterns_ref, $allow_patterns_ref, $opt) = @_;
+   my ($string, $AllowDenyPatterns, $opt) = @_;
 
-   my $allowed = 1;
-
-   for my $pattern (@$deny_patterns_ref) {
-      if ($file =~ /$pattern/) {
-         $opt->{verbose} && print "$file is denied by $pattern\n";
-         $allowed = 0;
-         last;
+   # handle deny_patterns first
+   if (exists $AllowDenyPatterns->{deny}) {
+      my $allowed = 1;
+      for my $pattern (@{$AllowDenyPatterns->{deny}}) {
+         if ($string =~ /$pattern/) {
+            $opt->{verbose} && print "$string is denied by $pattern\n";
+            $allowed = 0;
+            last;
+         }
       }
+      return 0 if !$allowed;
    }
-   return 0 if !$allowed;
-   return 1 if !@$allow_patterns_ref;
 
-   $allowed = 0;
-
-   for my $pattern (@$allow_patterns_ref) {
-      if ($file =~ /$pattern/) {
-         $opt->{verbose} && print "$file is allowed by $pattern\n";
-         $allowed = 1;
-         last;
+   # handle allow_patterns 
+      if (exists $AllowDenyPatterns->{allow}) {
+      my $allowed = 0;
+      for my $pattern (@{$AllowDenyPatterns->{allow}}) {
+         if ($string =~ /$pattern/) {
+            $opt->{verbose} && print "$string is allowed by $pattern\n";
+            $allowed = 1;
+            last;
+         }
       }
+      return 0 if !$allowed;
    }
-   return 0 if !$allowed;
+
    return 1;
 }
 
@@ -890,7 +856,7 @@ sub expect_socket {
    my $type = ref $patterns;
    croak "\$patterns must be ref to ARRAY, yours is $type" if $type ne 'ARRAY';
 
-   my $ExpectInterval = $opt->{ExpectInterval} ? $opt->{ExpectInterval} : 30;
+   my $ExpectInterval = $opt->{ExpectInterval} ? $opt->{ExpectInterval} : 3;
 
    my $total_data;
    my @matched;
@@ -910,12 +876,15 @@ sub expect_socket {
                print get_timestamp(), "expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
                
                for (my $i=0; $i<$num_patterns; $i++) {
-                   print "   pattern=$patterns->[$i]  ", $matched[$i] ? "matched" : "didn't match";
+                   print "   pattern=$patterns->[$i]  ",
+                         $matched[$i] ? "matched" : "didn't match",
+                         "\n";
                }
 
-               my $message = 'timed out. very likely wrong protocol. expecting $expected_peer_protocol.*';
+               my $message = "timed out after $opt->{ExpectTimeout} seconds. very likely wrong protocol. expecting $expected_peer_protocol.*";
                print get_timestamp(), "$message\n";
                $socket->send("$message\n");
+               $socket->flush(); sleep 2; # give a little time so that remote can process this message
 
                return undef;
             }
@@ -935,7 +904,7 @@ sub expect_socket {
          my $last_words = defined $total_data ?
                           substr($total_data, $total_size-$print_size, $print_size) : '';
 
-         print get_timestamp(), "socket closed. ... $last_words\n";
+         print get_timestamp(), "remote side closed socket. Last words: $last_words\n";
          return undef;
       } else {
          $opt->{verbose} && print get_timestamp(), "received data: $data\n";
@@ -1043,8 +1012,7 @@ sub to_be_pulled {
    my ($local_tree, $other) = build_dir_tree(\@local_paths,
                                               {verbose=>$verbose,
                                                RelativeBase=>$homedir,
-                                               allowfile=>$opt->{allowfile},
-                                               denyfile=>$opt->{denyfile},
+                                               AllowDenyPatterns=>$opt->{AllowDenyPatterns},
                                                excludes=>\@excludes,
                                                matches=>\@matches,
                                               }

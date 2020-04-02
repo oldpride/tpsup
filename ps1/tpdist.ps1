@@ -10,13 +10,14 @@ param (
 Set-StrictMode -Version Latest
 #Set-PsDebug -Trace 1
 
-$version = "7.0"
-$version_split = $version -split "[.]"
-$expected_peer_protocl = $version_split[0]
-
 if ($v) {
    $verbosePreference = "Continue"
 }
+
+$version = "7.0"
+$version_split = $version -split "[.]"
+$expected_peer_protocol = $version_split[0]
+Write-Verbose "`$expected_peer_protocol = $expected_peer_protocol"
 
 $reverse = $false
 if ($r -or $reverse) {
@@ -107,20 +108,18 @@ function to_pull {
 
    $patterns = @('<NEED_CKSUMS>(.*)</NEED_CKSUMS>')
    
-   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 300}
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 300})
 
-   $need_cksums_string = $null
-   if ($other["status"] -eq 'done') {
-      $need_cksums_string = $captures[0][0]
-      Write-Verbose "need_cksums_string=$need_cksums_string"
-   } else {
-      Write-Error $other["status"]
-      if ($other["status"] -ne 'remote side closed connection') {
-         $writer.Write($other["status"])
-         $writer.Close()
-      }
+   if (!$captures) {
+      $reader.Dispose()
+      $writer.Dispose()
+      $tcpStream.close()
       return
    }
+
+   Write-Verbose "`$captures = $(ConvertTo-Json $captures)"
+
+   $need_cksums_string = $captures[0][0]
 
    Write-Verbose "received cksum requests, calculating cksums"
 
@@ -139,30 +138,21 @@ function to_pull {
                  '<WARNS>(.*)</WARNS>')
 
 
-   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
 
-   $deletes_string = ""
-   $mtimes_string  = ""
-   $modes_string   = ""
-   $adds_string    = ""
-   $warns_string   = ""
-   $RequiredSpace  = -1
-
-   if ($other["status"] -eq 'done') {
-      $deletes_string = $captures[0][0];
-      $mtimes_string  = $captures[1][0];
-      $modes_string   = $captures[2][0];
-      $RequiredSpace  = $captures[3][0];
-      $adds_string    = $captures[4][0];
-      $warns_string   = $captures[5][0];
-   } else {
-      Write-Error $other["status"]
-      if ($other["status"] -ne 'remote side closed connection') {
-         $writer.Write($other["status"])
-         $writer.Close()
-      }
+   if (!$captures) {
+      $reader.Dispose()
+      $writer.Dispose()
+      $tcpStream.Close()
       return
    }
+
+   $deletes_string = $captures[0][0];
+   $mtimes_string  = $captures[1][0];
+   $modes_string   = $captures[2][0];
+   $RequiredSpace  = $captures[3][0];
+   $adds_string    = $captures[4][0];
+   $warns_string   = $captures[5][0];
 
    $local_dir_abs = get_abs_path $local_dir
    if ( -not (Test-Path -Path $local_dir_abs)) {
@@ -248,13 +238,12 @@ function to_be_pulled {
       '<DEEP>(.)</DEEP>'
    )
 
-   $matched, $captures, $other = expect_socket $tcpConnection $tcpStream $reader $patterns @{ExpectTimeout = 3}
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
 
-   if ($other["status"] -ne "done") {
-      if ($other["status"] -ne 'remote side closed connection') {
-         $writer.Write($other["status"])
-         $writer.Close()
-      }
+   if (!$captures) {
+      $reader.Dispose()
+      $writer.Dispose()
+      $tcpStream.Close()
       return
    }
 
@@ -295,22 +284,33 @@ function to_be_pulled {
 
          $remote_tree[$branch["key"]] = $branch
       }
-   
+   }
+
+
+}
+
+function build_dir_tree {
+   param (
+      [Parameter(Mandatory = $true)][string[]]$localpaths = $null,
+      [hashtable]$opt = $null
+   )
+
+   $deny_patterns = $null
+   $allow_patterns = $null
+
+   if ($opt["denyfile"]) {
+      sleep 1;
       
-
-
-
-
-
+   }
 }
 
 function expect_socket {
    param (
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
       [Parameter(Mandatory = $true)]$tcpStream = $null,
-      [Parameter(Mandatory = $true)]$reader = $null,
-      [Parameter(Mandatory = $true)]$writer = $null,
-      [Parameter(Mandatory = $true)]$patterns = $null,
+      [Parameter(Mandatory = $true)][System.IO.BinaryReader]$reader = $null,
+      [Parameter(Mandatory = $true)][System.IO.BinaryWriter]$writer = $null,
+      [Parameter(Mandatory = $true)][string []]$patterns = $null,
       $opt = $null
    )
 
@@ -336,13 +336,13 @@ function expect_socket {
                             
               for ($i = 0; $i -lt $num_patterns; $i++){ 
                  if ($matched[$i]) {
-                    next;
+                    continue;
                  }
                  # Set-PsDebug -Trace 2
                  # multiline regex use "(?s)"
                  if ($data_str -match "(?s)$($patterns[$i])") {
                     $matched[$i] = $true
-                    $captures[$i] = ($Matches[1], $Matches[2], $Matches[3])    # Matches[0] is the whole string
+                    $captures[$i] = @($Matches[1], $Matches[2], $Matches[3])    # Matches[0] is the whole string
                  } else {
                     $all_matched = $false
                  }  
@@ -350,6 +350,7 @@ function expect_socket {
               }
                  
               if ($all_matched) {
+                 Write-Verbose "`$captures = $(ConvertTo-Json $captures)"
                  return $captures
               }                       
            } else {
@@ -365,11 +366,11 @@ function expect_socket {
             $tcpConnection.Client.Available -eq 0)) {
           $last_words = ""
           if ($data_str -ne "") {
-             $tail_size = 50
-             if ($data_str.Length -le 50 ) {
+             $tail_size = 100
+             if ($data_str.Length -le $tail_size ) {
                 $last_words = $data_str
              } else {
-                $last_words = $data_str.Substring($data_str.Length - 50)
+                $last_words = $data_str.Substring($data_str.Length - $tail_size + 1)
              }
           }
           Write-Error "remote side closed connection. Last words: $last_words"
@@ -378,7 +379,12 @@ function expect_socket {
 
        if ($opt["ExpectTimeout"]) {
           if ($total_wait -gt $opt['ExpectTimeout']) {
-             Write-Error "timed out after $($opt['ExpectTimeout']) seconds. very likely wrong protocol. expecting $expected_peer_protocol.*"
+             $message = "timed out after $($opt['ExpectTimeout']) seconds. very likely wrong protocol. expecting $expected_peer_protocol.*"
+             Write-Error $message
+             $writer.Write([system.Text.Encoding]::Default.GetBytes($message))
+             $writer.Flush();
+             sleep 2; # give a little time so that remote can process this messsage
+             
              for (my $i=0; $i -lt $num_patterns; $i++) {
                 if ($matched[$i]) {
                    Write-Host "   pattern=$($patterns[$i])  matched"
