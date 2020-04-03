@@ -291,18 +291,192 @@ function to_be_pulled {
 
 function build_dir_tree {
    param (
-      [Parameter(Mandatory = $true)][string[]]$localpaths = $null,
-      [hashtable]$opt = $null
+      [Parameter(Mandatory = $true)][string[]]$paths = $null,
+      [hashtable][hashtable]$opt = $null
    )
 
-   $deny_patterns = $null
-   $allow_patterns = $null
+   $old_cwd = $pwd
+   
+   $tree = @{}
+   $other = @{}
 
-   if ($opt["denyfile"]) {
-      sleep 1;
-      
+   $AllowDenyPatterns = $opt["AllowDenyPatterns"]
+
+   foreach ($path in $paths) {
+      if ($opt["RelativeBase"] -and ! ($path -match "^/")) {
+         Write-Verbose "cd $($opt["RelativeBase"])"
+
+         # in powershell, try{}catch{} only catches terminating errors. 
+         # 'cd' will not cause terminating error. therefore, we cannot use
+         # try/catch. instead, we use $? which is $true/$false, not 0/1
+         cd $opt["RelativeBase"]
+         if (!$?) {
+            Write-Host "$(get_timestampe) cd $($opt["RelativeBase"]) failed. $path is skipped"
+            continue
+         }        
+      }
+
+      $globs = @(Resolve-Path -Path $path|Select -ExpandProperty "Path")
+
+      if (!$?) {
+         $message = "dir $path failed. skipped $path"
+         Write-Host "$(get_timestamp) $message"
+         save_hash_of_arrays $other "error" $message
+         continue
+      }
+
+      Write-Host "$(get_timestamp) resolved globs if any: $path => $(ConvertTo-Json $globs)"
+
+      foreach ($p in $globs) {
+         $abs_path = $null
+         if ( ($p -match "[a-zA-Z]:^[/\]") -or ($p -match "^[/\]") ) {
+            # examples: C://users, C:\\users, //netappsrv/data, \\netappsrv\data
+
+            # this is abs path, still simplify it: a/../b -> b
+            $abs_path = get_abs_path($p)
+         } else {
+            if ($opt["RelativeBase"]) {
+               $abs_path = get_abs_path("$($opt["RelativeBase"])\$p")
+            } else {
+               $abs_path = get_abs_path("$cwd\$p")
+            }
+         }
+
+         if (!$abs_path) {
+            $message = "cannot find abs_path for $p. skipped"
+            write-host "$(get_time_stamp) $message"
+            save_hash_of_arrays $other "error" $message
+            continue
+         }
+
+         if (! (Test-Path $abs_path) -and ! (Get-ItemProperty william).LinkType ) {
+            # https://stackoverflow.com/questions/817794/find-out-whether-a-file-is-a-symbolic-link-in-powershell
+            # to-do, not sure windows tar can handle broken symbolic links
+            $message = "cannot find $abs_path for $p. skipped"
+            Write-Host "$(get_timestamp) $message"
+            save_hash_of_arrays $other "error" $message
+            continue;
+         }
+
+         if ($abs_path -match '^[/\]+$') {
+            Write-Error "cannot handle $abs_path for $p"
+            exit 1
+         }
+
+         # $back is the starting point to compare, a relative path
+         # $front is the parent path (absolute path)
+         # example:
+         #    $0 client host port /a/b/*.csv /c/d/e f/g
+         # $back will be *.csv and e.
+         # when comparing *.csv, server needs to 'cd /a/b'. client needs to 'cd /f/g'.
+         # when comparing e, server needs to 'cd /c/d'. client needs to 'cd /f/g'.
+
+         $front = $null
+         $back  = $null
+
+         if ($abs_path -match '^(.*[\/])(.+)') {
+            $front,$back = $Matches[1],$Matches[2]
+         } else {
+            Write-Error "unexpected path $abs_path"
+            exit 1
+         }
+
+         if (!(is_allowed $abs_path $AllowDenyPatterns $opt )) {
+            save_hash_of_hashes $other "skipped_back" $back "denied"
+            continue
+         }
+
+         Write-Host "cd '$front'"
+         cd $front
+         if (!$?) {
+            exit 1
+         }
+
+         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { ConvertTo-Json $f}
+         # foreach ($f in @(Get-ChildItem -Recurse tmp\ps1\List-Exe.ps1)) { ConvertTo-Json $f}
+         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.DirectoryName)\$($f.Name) $($f.LastWriteTime)"}
+         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.FullName) $($f.Mode) $($f.length) $($f.LastWriteTime)"}
+
+         # how to read Mode
+         # https://stackoverflow.com/questions/4939802/what-are-the-possible-mode-values-returned-by-powershells-get-childitem-cmdle
+         # d - Directory
+         # a - Archive
+         # r - Read-only
+         # h - Hidden
+         # s - System
+         # l - Reparse point, symlink, etc.
+
+         
+
+
+
+
+
+
+
+
+      }
+
+   }
+   
+
+
+
+   
+}
+
+function save_hash_of_arrays {
+  param (
+      [Parameter(Mandatory = $true)][hashtable]$hash = $null,
+      [Parameter(Mandatory = $true)][string]$key = $null,
+      [Parameter(Mandatory = $true)]$value = $null,
+      $opt = $null
+   )
+
+   # we need a self-initialized hash of arrays. therefore, we implement this function
+   # https://powershell.org/forums/topic/working-with-hash-of-arrays/
+
+   if ($hash[$key]) {
+      $hash[$key] += $value
+   } else {
+      $hash[$key] = @($value)
    }
 }
+
+function save_hash_of_arrays_test {
+   $test_hash = @{}
+   save_hash_of_arrays $test_hash "test_key" "test_value_1"
+   save_hash_of_arrays $test_hash "test_key" "test_value_2"
+   ConvertTo-Json $test_hash
+}
+
+function save_hash_of_arrays_test {
+   $test_hash = @{}
+   save_hash_of_arrays $test_hash "test_key" "test_value_1"
+   save_hash_of_arrays $test_hash "test_key" "test_value_2"
+   ConvertTo-Json $test_hash
+}
+
+function save_hash_of_hashes {
+  param (
+      [Parameter(Mandatory = $true)][hashtable]$hash = $null,
+      [Parameter(Mandatory = $true)][string]$key = $null,
+      [Parameter(Mandatory = $true)][string]$key2 = $null,
+      [Parameter(Mandatory = $true)]$value = $null,
+      $opt = $null
+   )
+
+   # we need a self-initialized hash of arrays. therefore, we implement this function
+   # https://powershell.org/forums/topic/working-with-hash-of-arrays/
+
+   if ($hash[$key]) {
+      $hash[$key][$key2] = $value
+   } else {
+      $hash[$key] = @{$key2 = $value}
+   }
+}
+
+
 
 function expect_socket {
    param (
@@ -416,74 +590,6 @@ function get_abs_path {
     return $abs_path
 }
 
-<#
-function dummy {
-       if ($infile) {
-          if (-Not $infile_sent) {
-             $in_stream = $null
-             if ($infile) {
-                try   { $in_stream = [System.IO.File]::OpenRead($infile) }
-                catch { Write-Host $(get_timestamp) $_; exit 1 } 
-             }
-
-             $in_buffer = new-object System.Byte[] 1024
-
-             while($size = $in_stream.Read($in_buffer, 0, 1024)) {
-                $send_total_bytes += $size
-                Write-Verbose "read $size bytes from file and sending out. total send $send_total_bytes bytes"
-                $writer.Write($in_buffer, 0, $size)
-             }
-             $writer.flush()
-
-             $infile_sent = $true
-          } else {
-             # wait a little bit in case the remote wants to send reply
-             if ($infile_wait_already -ge $infile_wait_maxloop) {
-                break
-             } else {
-                $infile_wait_already ++
-             }
-          }
-       } else {
-          $read_stdin = $false
-
-          if ($hasConsole) {
-             # https://powershell.one/tricks/input-devices/detect-key-press
-             if ([Console]::KeyAvailable) {
-                 $read_stdin = $true
-             }
-          } else {
-             $read_stdin = $true
-          } 
-
-          if ($read_stdin) {
-             # -prompt doesn't work in Cygwin
-             # $line = Read-Host -prompt "hit 'enter' to receive and to send"
-             Write-Host $(get_timestamp) -n "hit 'enter' to receive and to send : "
-             $line = Read-Host 
-             $line += "`n"
-             
-             # convert text to bytes before sending over
-             $bytes = [system.Text.Encoding]::Default.GetBytes($line)
-             $size = $bytes.Length
-
-             $send_total_bytes += $size
-             Write-Verbose "sending $size byte(s). total $send_total_bytes bytes"
-
-             $writer.Write($bytes) | Out-Null
-             $writer.flush() | Out-Null
-          }          
-       }
-   
-       start-sleep -Milliseconds 500
-   }
-
-   $reader.Close()
-   $writer.Close()
-
-   return
-}
-#>
 
 if (!$remainingArgs) {
    usage("wrong number of args")

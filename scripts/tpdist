@@ -651,7 +651,6 @@ sub build_dir_tree {
                #$abs_path = "$opt->{RelativeBase}/$p";
             } else {
                $abs_path = get_abs_path("$cwd/$p");
-               #$abs_path = "$abs_cwd/$p";
             }
          } else {
             # this is absolute path, still simplify eg. from a/../b to b 
@@ -659,19 +658,19 @@ sub build_dir_tree {
          }
 
          if (!$abs_path) {
-            print get_timestamp(), "cannot find abs_path for $p\n";
+            print get_timestamp(), "cannot find abs_path for $p. skipped\n";
             push @{$other->{errors}}, "cannot find abs_path for $p";
             next;
          }
 
-         # -l $abs_path below will allow a symbolic link pointing to nowhere
+         # -l $abs_path allows a symbolic link pointing to nowhere
          if (! -e $abs_path && ! -l $abs_path) {
             print get_timestamp(), "cannot find $abs_path for $p\n";
-            push @{$other->{errors}}, "cannot find$abs_path for $p";
+            push @{$other->{errors}}, "cannot find $abs_path for $p";
             next;
          }
 
-         croak "cannot handle '/'" if $abs_path eq '/';
+         croak "cannot handle '/'" if $abs_path =~ /^[/]+$/';
 
          # $back is the starting point to compare, a relative path
          # $front is the parent path (absolute path)
