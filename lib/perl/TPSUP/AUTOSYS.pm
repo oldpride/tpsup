@@ -31,7 +31,7 @@ sub get_autosys_fh {
    } elsif ($input =~ /command=(.+)/) {
       my $cmd = $1;
       print STDERR "cmd=$cmd\n" if !$opt->{AutosysQuiet};
-      $in_fh = open "$cmd |";
+      open $in_fh, "$cmd |";
 
       # don't bomb out here, just print an error. let the caller to handle it.
       print STDERR "cmd='$cmd' failed: $!" if ! $in_fh;

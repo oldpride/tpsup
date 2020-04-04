@@ -689,7 +689,7 @@ sub build_dir_tree {
          }
 
          if (!is_allowed($abs_path, $AllowDenyPatterns, $opt)) {
-            $other->{skipped_back}->{$back} = "denied";
+            $other->{skipped_back}->{$back} = "not allowed";
             next;
          }
 

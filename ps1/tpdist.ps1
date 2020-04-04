@@ -321,7 +321,7 @@ function build_dir_tree {
       if (!$?) {
          $message = "dir $path failed. skipped $path"
          Write-Host "$(get_timestamp) $message"
-         save_hash_of_arrays $other "error" $message
+         set_hash_of_arrays $other "error" $message
          continue
       }
 
@@ -345,7 +345,7 @@ function build_dir_tree {
          if (!$abs_path) {
             $message = "cannot find abs_path for $p. skipped"
             write-host "$(get_time_stamp) $message"
-            save_hash_of_arrays $other "error" $message
+            set_hash_of_arrays $other "error" $message
             continue
          }
 
@@ -354,7 +354,7 @@ function build_dir_tree {
             # to-do, not sure windows tar can handle broken symbolic links
             $message = "cannot find $abs_path for $p. skipped"
             Write-Host "$(get_timestamp) $message"
-            save_hash_of_arrays $other "error" $message
+            set_hash_of_arrays $other "error" $message
             continue;
          }
 
@@ -381,8 +381,8 @@ function build_dir_tree {
             exit 1
          }
 
-         if (!(is_allowed $abs_path $AllowDenyPatterns $opt )) {
-            save_hash_of_hashes $other "skipped_back" $back "denied"
+         if (!(is_allowed $abs_path $AllowDenyPatterns $opt)) {
+            set_nested_hash $other @("skipped_back", $back) "denied"
             continue
          }
 
@@ -394,8 +394,10 @@ function build_dir_tree {
 
          # foreach ($f in @(Get-ChildItem -Recurse tmp)) { ConvertTo-Json $f}
          # foreach ($f in @(Get-ChildItem -Recurse tmp\ps1\List-Exe.ps1)) { ConvertTo-Json $f}
+         # foreach ($f in @(Get-ChildItem -Recurse -Directory tmp)) { ConvertTo-Json $f}
          # foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.DirectoryName)\$($f.Name) $($f.LastWriteTime)"}
-         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.FullName) $($f.Mode) $($f.length) $($f.LastWriteTime)"}
+         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.FullName) $($f.Mode) $($f.length) $($f.LastWriteTime) PSIsContainer=$($f.PSIsContainer) LinkType=$($f.LinkType)"}
+         # Get-ChildItem -Recurse tmp | wheres FullName match 'tpnc'
 
          # how to read Mode
          # https://stackoverflow.com/questions/4939802/what-are-the-possible-mode-values-returned-by-powershells-get-childitem-cmdle
@@ -406,9 +408,62 @@ function build_dir_tree {
          # s - System
          # l - Reparse point, symlink, etc.
 
-         
+         $file_count = 0
+         :FILES foreach ($item in @(Get-ChildItem -Recurse $back)) {
+            $file_count ++
+            if ($file_count % 10000 -eq 0) {
+               Write-Host "$(get_timestamp) checked $file_count files"
+            }
 
+            $f = item.FullName
 
+            if ($opt["matches"]) {
+               $matched = $false
+               # $hash_of_array = @{ 'a'= @(1,2,3)}
+               # ConvertTo-Json $hash_of_array['a']
+               foreach ($m in $opt["matches"]) {
+                  if ($f -match $m) {
+                     $matched = $true
+                     last
+                  }
+               }
+               if (!$matched) {
+                  continue
+               }
+            }
+         }
+
+         if ($opt["excludes"]) {
+            foreach ($m in $opt["excludes"]) {
+               if ($f -match $m) {
+                  continue FILES
+               }
+            }
+         }         
+
+         if (!(is_allowed($f, $AllowDenyPatterns)) ) {
+            set_nested_hash $tree @($f, "skip") "not allowed"
+            continue
+         }
+
+         if (!(Test-Path -LiteralPath $f -ErrorAction SilentlyContinue)) {
+            set_nested_hash $tree @($f, 'skip') "no access"
+            contiue
+         }
+          
+         if (get_nested_hash $tree @($f, 'back')) {
+            set_nested_hash $tree @($f, 'skip') "duplicate target path: skip $front/$f"
+            continue
+         } else {
+            set_nested_hash $tree @($f, 'back') $back
+         }
+
+         $mtime   = $item.lastWriteTime
+         $winmode = $item.Mode
+         $size    = $item.Length
+
+         $type = 
+         if ($winmode -match '^d') {
 
 
 
@@ -418,14 +473,66 @@ function build_dir_tree {
       }
 
    }
-   
-
-
-
-   
 }
 
-function save_hash_of_arrays {
+function tar_file_list {
+  param (
+      [Parameter(Mandatory = $true)][hashtable]$front = $null,
+      [Parameter(Mandatory = $true)][string]$tar = $null,
+      [Parameter(Mandatory = $true)][string []]$files = $null,
+      [Parameter(Mandatory = $true)][boolean]$create = $null,
+      [hashtable]$opt = $null
+   )
+
+   # C:\users\william\tmp\ps1\List-Exe.ps1
+   # C:\users\william\tmp\ps1\netsuck.ps1
+   # C:\users\william\tmp\ps1\print_key.ps1
+   # C:\users\william\tmp\ps1\tpnc.ps1
+   # cd C:\users\william\
+   # echo "tmp\ps1\List-Exe.ps1" > test_list.txt
+   # echo "tmp\ps1\netsuck.ps1" >> test_list.txt
+   # type test_list.txt
+   # tar -cvf test.tar -T test_list.txt # this doesn't work as -t and -T is ambiguous in windows
+   # -v somehow causing error, therefore we use -cf instead of -cvf below
+   # tar -cf test.tar "tmp\ps1\List-Exe.ps1" "tmp\ps1\netsuck.ps1"
+   # tar -tvf test.tar
+   # tar -uf test.tar "tmp\ps1\print_key.ps1" "tmp\ps1\tpnc.ps1"
+   # tar -tvf test.tar
+   # rm test.tar
+
+   # wrap each file name with quotes to take the spaces in filenames
+   $file_string = @(foreach ($f in $files) {"'$f'"}) -join " "
+   $substring = $file_string
+   if ($file_string.Length -gt 30) {
+      $substring = "$($file_string.Substring(0,50)) ..."
+   }
+
+   Write-Host "$(get_timestamp) cd $front; tar -cf $tar $substring"
+
+   $saved_tar_pwd = $pwd
+   cd $front
+
+   $command = $null
+   if ($create) {
+      # -v switch triggers an error, therefore, we don't use it
+      # PS C:\users\william> tar -cvf test.tar "tmp\ps1\List-Exe.ps1"|Out-Null
+      # tar : a tmp/ps1/List-Exe.ps1
+      # At line:1 char:1
+      # + tar -cvf test.tar "tmp\ps1\List-Exe.ps1"|Out-Null
+      # + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      #    + CategoryInfo          : NotSpecified: (a tmp/ps1/List-Exe.ps1:String) [], RemoteException
+      #    + FullyQualifiedErrorId : NativeCommandError
+
+      $command = "tar -cf $tar $file_string"
+   } else {
+      $command = "tar -uf $tar $file_string"
+   }
+   Invoke-Expression $command | Out-Host
+   
+   cd $saved_tar_pwd
+}
+
+function set_hash_of_arrays {
   param (
       [Parameter(Mandatory = $true)][hashtable]$hash = $null,
       [Parameter(Mandatory = $true)][string]$key = $null,
@@ -443,39 +550,67 @@ function save_hash_of_arrays {
    }
 }
 
-function save_hash_of_arrays_test {
+function set_hash_of_arrays_test {
    $test_hash = @{}
-   save_hash_of_arrays $test_hash "test_key" "test_value_1"
-   save_hash_of_arrays $test_hash "test_key" "test_value_2"
+   set_hash_of_arrays $test_hash "test_key" "test_value_1"
+   set_hash_of_arrays $test_hash "test_key" "test_value_2"
    ConvertTo-Json $test_hash
 }
 
-function save_hash_of_arrays_test {
+function set_hash_of_arrays_test {
    $test_hash = @{}
-   save_hash_of_arrays $test_hash "test_key" "test_value_1"
-   save_hash_of_arrays $test_hash "test_key" "test_value_2"
+   set_hash_of_arrays $test_hash "test_key" "test_value_1"
+   set_hash_of_arrays $test_hash "test_key" "test_value_2"
    ConvertTo-Json $test_hash
 }
 
-function save_hash_of_hashes {
+function set_nested_hash {
   param (
       [Parameter(Mandatory = $true)][hashtable]$hash = $null,
-      [Parameter(Mandatory = $true)][string]$key = $null,
-      [Parameter(Mandatory = $true)][string]$key2 = $null,
+      [Parameter(Mandatory = $true)][string[]]$keys = $null,
       [Parameter(Mandatory = $true)]$value = $null,
       $opt = $null
    )
-
    # we need a self-initialized hash of arrays. therefore, we implement this function
    # https://powershell.org/forums/topic/working-with-hash-of-arrays/
-
-   if ($hash[$key]) {
-      $hash[$key][$key2] = $value
-   } else {
-      $hash[$key] = @{$key2 = $value}
+   $count = $keys.Count
+   $chop1 = $count -1 
+   foreach ($key in $keys[0..$chop1]) {
+      if (!$hash[$key]) {
+         $hash[$key] = @{}
+      }
+      $hash = $hash[$key]
    }
+   $hash[$keys[-1]] = $value   
 }
 
+function get_nested_hash {
+  param (
+      [Parameter(Mandatory = $true)][hashtable]$hash = $null,
+      [Parameter(Mandatory = $true)][string []]$keys = $null,
+      $opt = $null
+   )
+   $count = $keys.Count
+   $chop1 = $count -1 
+   foreach ($key in $keys[0..$chop1]) {
+      if (!$hash[$key]) {
+         return $null
+      }
+      $hash = $hash[$key]
+   }
+   return $hash[$keys[-1]]
+}
+
+function set_nested_hash_test {
+   $test_hash = @{}
+   set_nested_hash $test_hash @("a1", "b1") "value1"
+   set_nested_hash $test_hash @("a2", "b2") "value2"
+   ConvertTo-Json $test_hash
+   if ($test_hash["a3"]) {Write-Host $test_hash["a3"] } else {Write-Host "not exist"}
+   if ($test_hash["a3"]["b3"]) {Write-Host $test_hash["a3"]["b3"] } else {Write-Host "not exist"} # this should fail
+   get_nested_hash $test_hash @("a3", "b3")
+   get_nested_hash $test_hash @("a2", "b2")
+}
 
 
 function expect_socket {
