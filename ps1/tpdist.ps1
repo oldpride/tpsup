@@ -462,8 +462,12 @@ function build_dir_tree {
          $winmode = $item.Mode
          $size    = $item.Length
 
-         $type = 
-         if ($winmode -match '^d') {
+         $type = "file"
+         if ($item.PSIsContainer) {
+            $type = "dir"
+         } elsif ($item.LinkType) {
+            $type = "link"
+         }
 
 
 
