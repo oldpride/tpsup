@@ -64,12 +64,17 @@ Examples:
    exit 1
 }
 
+
 function get_timestamp {
   return "{0:yyyyMMdd} {0:HH:mm:ss}" -f (Get-Date)
 }
 
+$AsciiEncoding = new-object System.Text.AsciiEncoding
 $BufferSize = 4*1024*1024
 $buffer = new-object System.Byte[] $BufferSize
+$encoding = new-object System.Text.AsciiEncoding
+$homedir = $HOME
+
 
 function send_text {
    param (
@@ -80,6 +85,37 @@ function send_text {
    $writer.Write([system.Text.Encoding]::Default.GetBytes($text))
 }
 
+
+function is_allowed {
+   param (
+      [Parameter(Mandatory = $true)][string] $string = $null,
+      [Parameter(Mandatory = $true)][hashtable]$AllowDenyPatterns = $null
+   )
+
+   # handle deny_patterns
+   if ($AllowDenyPatterns["deny"]) {
+      foreach ($pattern in $AllowDenyPatterns["deny"]) {
+         if ($string -match $pattern) {
+            Write-Verbose "$string is denied by $pattern"
+            return $false
+         }
+      }
+   }
+   
+   # handle allow_patterns
+   if ($AllowDenyPatterns["allow"]) {
+      foreach ($pattern in $AllowDenyPatterns["allow"]) {
+         if ($string -match $pattern) {
+            Write-Verbose "$string is denied by $pattern"
+            return $true
+         }
+      }
+   }
+
+   return $true
+}
+
+
 function to_pull {
    param (
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
@@ -88,11 +124,10 @@ function to_pull {
    )
 
    $tcpStream = $tcpConnection.GetStream()
-
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-   $encoding = new-object System.Text.AsciiEncoding 
+    
 
    $remote_dirs_string = $remote_dirs -join "|"
 
@@ -226,6 +261,10 @@ function to_be_pulled {
       $opt = $null
    )
 
+   $tcpStream = $tcpConnection.GetStream()
+   $reader = New-Object System.IO.BinaryReader($tcpStream)
+   $writer = New-Object System.IO.BinaryWriter($tcpStream)
+
    Write-Host $(get_timestamp), "waiting information from remote ...`n";
 
    $patterns = @(       
@@ -272,7 +311,7 @@ function to_be_pulled {
 
       foreach ($l in $lines) {
          if (! ($l -match "^key="))  {
-            next
+            continue
          }
 
          $pairs = $l -split "[|]"
@@ -286,21 +325,53 @@ function to_be_pulled {
       }
    }
 
+   Write-Verbose "remote_tree = $(ConvertTo-Json $remote_tree)"
+
+   $local_paths = $local_paths_string -split "[|]"
+
+   # $Matches is a reserved powershell var. a good crap. Therefore, we had to use $matches2
+   $matches2 = @()
+   if ($match_string -ne "") {
+      $matches2 = $match_string -split "`n"
+   }
+
+   $excludes = @()
+   if ($exclude_string -ne "") {
+      $excludes = $exclude_string -split "`n"
+   }
+
+   $local_tree,$other = @(build_dir_tree $local_paths @{ RelativeBase=$homedir;
+                                                         matches2=$matches2; 
+                                                         excludes=$excludes; 
+                                                         AllowDenyPatterns = @{}
+                                                       })
+   
+   Write-Verbose "local_tree  = $(ConvertTo-Json  $local_tree)"
+   Write-Verbose "maxsize = $maxsize"
 
 }
 
+
 function build_dir_tree {
    param (
-      [Parameter(Mandatory = $true)][string[]]$paths = $null,
-      [hashtable][hashtable]$opt = $null
+      [Parameter(Mandatory = $true)][string []]$paths = $null,
+      [hashtable]$opt = $null
    )
 
-   $old_cwd = $pwd
+   $AllowDenyPatterns = @{}
+   if ($opt["AllowDenyPatterns"]) {
+      $AllowDenyPatterns = $opt["AllowDenyPatterns"]
+   }
    
+   # to get UNIX-style mtime, which seconds from epoc time.
+   # https://stackoverflow.com/questions/4192971/in-powershell-how-do-i-convert-datetime-to-unix-time
+   $unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
+   # seconds from epoc to now
+   # [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
+
+   $old_cwd = $pwd   # save pwd as we keep changing dir later
    $tree = @{}
    $other = @{}
-
-   $AllowDenyPatterns = $opt["AllowDenyPatterns"]
 
    foreach ($path in $paths) {
       if ($opt["RelativeBase"] -and ! ($path -match "^/")) {
@@ -329,7 +400,7 @@ function build_dir_tree {
 
       foreach ($p in $globs) {
          $abs_path = $null
-         if ( ($p -match "[a-zA-Z]:^[/\]") -or ($p -match "^[/\]") ) {
+         if ( ($p -match "^[a-zA-Z]:[/\\]") -or ($p -match "^[/\\]") ) {
             # examples: C://users, C:\\users, //netappsrv/data, \\netappsrv\data
 
             # this is abs path, still simplify it: a/../b -> b
@@ -344,7 +415,7 @@ function build_dir_tree {
 
          if (!$abs_path) {
             $message = "cannot find abs_path for $p. skipped"
-            write-host "$(get_time_stamp) $message"
+            write-host "$(get_timestamp) $message"
             set_hash_of_arrays $other "error" $message
             continue
          }
@@ -358,7 +429,7 @@ function build_dir_tree {
             continue;
          }
 
-         if ($abs_path -match '^[/\]+$') {
+         if ($abs_path -match '^[/\\]+$') {
             Write-Error "cannot handle $abs_path for $p"
             exit 1
          }
@@ -374,14 +445,14 @@ function build_dir_tree {
          $front = $null
          $back  = $null
 
-         if ($abs_path -match '^(.*[\/])(.+)') {
+         if ($abs_path -match '^(.*[/\\])(.+)') {
             $front,$back = $Matches[1],$Matches[2]
          } else {
             Write-Error "unexpected path $abs_path"
             exit 1
          }
 
-         if (!(is_allowed $abs_path $AllowDenyPatterns $opt)) {
+         if (!(is_allowed $abs_path $AllowDenyPatterns)) {
             set_nested_hash $other @("skipped_back", $back) "denied"
             continue
          }
@@ -392,12 +463,25 @@ function build_dir_tree {
             exit 1
          }
 
-         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { ConvertTo-Json $f}
-         # foreach ($f in @(Get-ChildItem -Recurse tmp\ps1\List-Exe.ps1)) { ConvertTo-Json $f}
-         # foreach ($f in @(Get-ChildItem -Recurse -Directory tmp)) { ConvertTo-Json $f}
-         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.DirectoryName)\$($f.Name) $($f.LastWriteTime)"}
-         # foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.FullName) $($f.Mode) $($f.length) $($f.LastWriteTime) PSIsContainer=$($f.PSIsContainer) LinkType=$($f.LinkType)"}
-         # Get-ChildItem -Recurse tmp | wheres FullName match 'tpnc'
+         <#
+          foreach ($f in @(Get-ChildItem -Recurse tmp)) { ConvertTo-Json $f}
+         
+          https://stackoverflow.com/questions/41658770/determining-object-type
+          foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.FullName) $($f.GetType())"}
+          C:\users\william\tmp\ps1 System.IO.DirectoryInfo
+          C:\users\william\tmp\space in name System.IO.DirectoryInfo
+          C:\users\william\tmp\ps1\List-Exe.ps1 System.IO.FileInfo
+          BaseType is System.IO.FileSystemInfo
+
+          foreach ($f in @(Get-ChildItem -Recurse tmp\ps1\List-Exe.ps1)) { ConvertTo-Json $f}
+          foreach ($f in @(Get-ChildItem -Recurse -Directory tmp)) { ConvertTo-Json $f}
+          foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.DirectoryName)\$($f.Name) $($f.LastWriteTime)"}
+         
+          foreach ($f in @(Get-ChildItem -Recurse tmp)) { 
+             write-host "$($f.FullName) $($f.Mode) $($f.length) $($f.LastWriteTime) PSIsContainer=$($f.PSIsContainer) LinkType=$($f.LinkType) Target=$($f.Target)"}
+         
+          Get-ChildItem -Recurse tmp | wheres FullName match 'tpnc'
+         #>
 
          # how to read Mode
          # https://stackoverflow.com/questions/4939802/what-are-the-possible-mode-values-returned-by-powershells-get-childitem-cmdle
@@ -408,21 +492,25 @@ function build_dir_tree {
          # s - System
          # l - Reparse point, symlink, etc.
 
+         # C:\users\william\tmp\space in name d-----  04/03/2020 23:03:33 PSIsContainer=True LinkType=
+         # C:\users\william\tmp\ps1\List-Exe.ps1 -a---- 85 03/22/2020 10:34:15 PSIsContainer=False LinkType=
+
          $file_count = 0
-         :FILES foreach ($item in @(Get-ChildItem -Recurse $back)) {
+         :FILES foreach ($item in @(Get-ChildItem -Recurse $back)) {            
             $file_count ++
             if ($file_count % 10000 -eq 0) {
                Write-Host "$(get_timestamp) checked $file_count files"
             }
 
-            $f = item.FullName
+            $f = $item.FullName
+            Write-Verbose "parsing $f"
 
-            if ($opt["matches"]) {
+            if ($opt["matches2"] -and $opt["matches2"].count -ne 0) {
                $matched = $false
                # $hash_of_array = @{ 'a'= @(1,2,3)}
                # ConvertTo-Json $hash_of_array['a']
-               foreach ($m in $opt["matches"]) {
-                  if ($f -match $m) {
+               foreach ($p in $opt["matches2"]) {
+                  if ($f -match $p) {
                      $matched = $true
                      last
                   }
@@ -431,52 +519,87 @@ function build_dir_tree {
                   continue
                }
             }
-         }
 
-         if ($opt["excludes"]) {
-            foreach ($m in $opt["excludes"]) {
-               if ($f -match $m) {
-                  continue FILES
+            Write-Verbose "passed matches2"
+         
+            if ($opt["excludes"] -and $opt["excludes"].count -ne 0) {
+               foreach ($p in $opt["excludes"]) {
+                  if ($f -match $p) {
+                     continue FILES
+                  }
+               }
+            }  
+            
+            Write-Verbose "passed excludes"       
+
+            if (!(is_allowed $f $AllowDenyPatterns) ) {
+               set_nested_hash $tree @($f, "skip") "not allowed"
+               continue
+            }
+
+            if (!(Test-Path -LiteralPath $f -ErrorAction SilentlyContinue)) {
+               set_nested_hash $tree @($f, 'skip') "no access"
+               contiue
+            }
+         
+            if (get_nested_hash $tree @($f, 'back')) {
+               set_nested_hash $tree @($f, 'skip') "duplicate target path: skip $front/$f"
+               continue
+            } else {
+               set_nested_hash $tree @($f, 'back') $back
+            }
+
+            # $wintime = (Get-Item tmp\ps1\List-Exe.ps1).LastWriteTime
+            $wintime = $item.lastWriteTime
+            $mtime = [int]($wintime - $unixEpochStart).TotalSeconds   # UNIX style, total seconds from epoc
+            set_nested_hash $tree @($f, 'mtime') $mtime
+
+            $type = $null
+            $size = 0
+            if ($item.LinkType) {
+               $type = "link"
+               $size = 128   #hard coded
+               set_nested_hash $tree @($f, 'test') $item.Target
+            } elseif ($item.PSIsContainer) {
+               $type = "dir"
+               $size = 128   # hard coded 
+               set_nested_hash $tree @($f, 'test') 'dir' # hard coded, means no test
+            } else {
+               $type = "file"
+               $size = $item.Length
+            }
+            set_nested_hash $tree @($f, 'size') $size
+            set_nested_hash $tree @($f, 'type') $type
+
+            $winmode = $item.Mode    # windows mode "darhsl"
+            $mode    = $null         # unix    mode "drwxrwxrwx"
+            if ($winmode -match '^..r') {
+               # read-only
+               if ($type -eq 'dir') {
+                  $mode = "0555"
+               } else {
+                  $mode = "0444"
+               }
+            } else {
+               # writable
+               if ($type -eq 'dir') {
+                  $mode = "0777"
+               } else {
+                  $mode = "0666"
                }
             }
-         }         
-
-         if (!(is_allowed($f, $AllowDenyPatterns)) ) {
-            set_nested_hash $tree @($f, "skip") "not allowed"
-            continue
+            set_nested_hash $tree @($f, 'winmode') $winmode
+            set_nested_hash $tree @($f,    'mode')    $mode      
+            
+            #ConvertTo-Json $tree     
          }
-
-         if (!(Test-Path -LiteralPath $f -ErrorAction SilentlyContinue)) {
-            set_nested_hash $tree @($f, 'skip') "no access"
-            contiue
-         }
-          
-         if (get_nested_hash $tree @($f, 'back')) {
-            set_nested_hash $tree @($f, 'skip') "duplicate target path: skip $front/$f"
-            continue
-         } else {
-            set_nested_hash $tree @($f, 'back') $back
-         }
-
-         $mtime   = $item.lastWriteTime
-         $winmode = $item.Mode
-         $size    = $item.Length
-
-         $type = "file"
-         if ($item.PSIsContainer) {
-            $type = "dir"
-         } elsif ($item.LinkType) {
-            $type = "link"
-         }
-
-
-
-
-
-
-      }
-
+         Write-Host "$(get_timestamp) checked $file_count files in total"
+      }  
    }
+
+   cd $old_cwd
+
+   return @($tree, $other)
 }
 
 function tar_file_list {
@@ -561,12 +684,12 @@ function set_hash_of_arrays_test {
    ConvertTo-Json $test_hash
 }
 
-function set_hash_of_arrays_test {
+<#
    $test_hash = @{}
    set_hash_of_arrays $test_hash "test_key" "test_value_1"
    set_hash_of_arrays $test_hash "test_key" "test_value_2"
    ConvertTo-Json $test_hash
-}
+#>
 
 function set_nested_hash {
   param (
@@ -578,7 +701,7 @@ function set_nested_hash {
    # we need a self-initialized hash of arrays. therefore, we implement this function
    # https://powershell.org/forums/topic/working-with-hash-of-arrays/
    $count = $keys.Count
-   $chop1 = $count -1 
+   $chop1 = $count - 2
    foreach ($key in $keys[0..$chop1]) {
       if (!$hash[$key]) {
          $hash[$key] = @{}
@@ -605,7 +728,7 @@ function get_nested_hash {
    return $hash[$keys[-1]]
 }
 
-function set_nested_hash_test {
+<#
    $test_hash = @{}
    set_nested_hash $test_hash @("a1", "b1") "value1"
    set_nested_hash $test_hash @("a2", "b2") "value2"
@@ -614,7 +737,7 @@ function set_nested_hash_test {
    if ($test_hash["a3"]["b3"]) {Write-Host $test_hash["a3"]["b3"] } else {Write-Host "not exist"} # this should fail
    get_nested_hash $test_hash @("a3", "b3")
    get_nested_hash $test_hash @("a2", "b2")
-}
+#>
 
 
 function expect_socket {
@@ -698,7 +821,7 @@ function expect_socket {
              $writer.Flush();
              sleep 2; # give a little time so that remote can process this messsage
              
-             for (my $i=0; $i -lt $num_patterns; $i++) {
+             for ($i=0; $i -lt $num_patterns; $i++) {
                 if ($matched[$i]) {
                    Write-Host "   pattern=$($patterns[$i])  matched"
                 } else {
@@ -748,12 +871,30 @@ $old_pwd = $pwd
 if ($role.ToLower() -eq 'server') {
    # this is server
 
-   if (!$remainingArgs -OR $remainingArgs.count -ne 2) {
+   if (!$remainingArgs) {
       usage("wrong numnber of args")
    }
 
-   $listener_port = $remainingArgs[1]
+   $local_dir= $null
+   $remote_dirs = $null
+   if (!$reverse) {
+       # tpdist server port
+      if ($remainingArgs.count -ne 2) {
+         usage("wrong numnber of args")
+      }
+   } else {
+      # tpdist -reverse server port remote_dir ... local_dir
+      if ($remainingArgs.count -lt 4) {
+         usage("wrong numnber of args")
+      }
 
+      $local_dir = $remainingArgs[-1]
+      $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
+      write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
+      write-verbose "local_dir=$local_dir"
+   }
+
+   $listener_port = $remainingArgs[1]
    write-verbose "listener_port=$listener_port"
 
    $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
@@ -762,6 +903,9 @@ if ($role.ToLower() -eq 'server') {
       exit 1
    }
    
+   #
+   #$listener.Server.SetSocketOption("Socket", "ReuseAddress", 1)
+
    try   { $listener.start()     }
    catch { Write-Host $(get_timestamp) $_; exit 1 }
    
@@ -774,16 +918,20 @@ if ($role.ToLower() -eq 'server') {
          $tcpConnection = $listener.AcceptTcpClient()
          break;
       }
-      start-sleep -Milliseconds 1000
+      sleep 1
    }
 
    Write-Host $(get_timestamp) "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
 
    # we only want to accept one client; therefore, close the listener now.
-   $listener.stop()
+   # $listener.stop()
 
-   SendAndReceive($tcpConnection)
-   
+   if (!$reverse) {
+      to_be_pulled $tcpConnection
+   } else {
+      to_pull $tcpConnection $remote_dirs $local_dir
+   }
+
    $tcpConnection.Close()
 } else {
    # this is client
@@ -791,6 +939,9 @@ if ($role.ToLower() -eq 'server') {
    if (!$remainingArgs) {
       usage("wrong numnber of args")
    }
+
+   $remote_dirs = $null
+   $local_dir   = $null
 
    if ($reverse) {
       if ($remainingArgs.count -ne 2) {
@@ -800,17 +951,16 @@ if ($role.ToLower() -eq 'server') {
       if ($remainingArgs.count -lt 5) {
          usage("wrong numnber of args")
       }
+
+      $local_dir = $remainingArgs[-1]
+      $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
+      write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
+      write-verbose "local_dir=$local_dir"
    }
 
    $remote_host,$remote_port = $remainingArgs[1..2]
-   $local_dir = $remainingArgs[-1]
-   $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
-
-
    write-verbose "remote_host=$remote_host"
    write-verbose "remote_port=$remote_port"
-   write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
-   write-verbose "local_dir=$local_dir"
 
    $tcpConnection = $null
    try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}

@@ -14,10 +14,10 @@ use IO::Select;
 use Socket;
 use POSIX;
 
-my $timeout = 3;
+my $timeout = 300;
 my $idle = 600;
 my $maxtry = 5;
-my $interval = 5;
+my $interval = 30;
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -670,7 +670,7 @@ sub build_dir_tree {
             next;
          }
 
-         croak "cannot handle '/'" if $abs_path =~ /^[/]+$/';
+         croak "cannot handle '/'" if $abs_path =~ m:^/+$:;
 
          # $back is the starting point to compare, a relative path
          # $front is the parent path (absolute path)
@@ -822,28 +822,23 @@ sub is_allowed {
 
    # handle deny_patterns first
    if (exists $AllowDenyPatterns->{deny}) {
-      my $allowed = 1;
       for my $pattern (@{$AllowDenyPatterns->{deny}}) {
          if ($string =~ /$pattern/) {
             $opt->{verbose} && print "$string is denied by $pattern\n";
-            $allowed = 0;
-            last;
+            return 0
          }
       }
-      return 0 if !$allowed;
    }
 
    # handle allow_patterns 
-      if (exists $AllowDenyPatterns->{allow}) {
-      my $allowed = 0;
+   if (exists $AllowDenyPatterns->{allow}) {
       for my $pattern (@{$AllowDenyPatterns->{allow}}) {
          if ($string =~ /$pattern/) {
             $opt->{verbose} && print "$string is allowed by $pattern\n";
-            $allowed = 1;
-            last;
+            return 1
          }
       }
-      return 0 if !$allowed;
+      return 0;
    }
 
    return 1;
@@ -855,7 +850,7 @@ sub expect_socket {
    my $type = ref $patterns;
    croak "\$patterns must be ref to ARRAY, yours is $type" if $type ne 'ARRAY';
 
-   my $ExpectInterval = $opt->{ExpectInterval} ? $opt->{ExpectInterval} : 3;
+   my $ExpectInterval = $opt->{ExpectInterval} ? $opt->{ExpectInterval} : 30;
 
    my $total_data;
    my @matched;
@@ -1480,10 +1475,10 @@ sub to_pull {
    $socket->send("<VERSION>$version</VERSION>\n");
 
    $quiet || print get_timestamp(), "sending paths: $paths\n";
-   $socket->send("<PATH>$paths</PATH>");
+   $socket->send("<PATH>$paths</PATH>\n");
 
    $quiet || print get_timestamp(), "sending deep check flag: $deep\n";
-   $socket->send("<DEEP>$deep</DEEP>");
+   $socket->send("<DEEP>$deep</DEEP>\n");
 
    my $local_tree_block = "";
 
@@ -1498,22 +1493,22 @@ sub to_pull {
    }
 
    $quiet || print get_timestamp(), "sending local_tree\n";
-   $socket->send("<TREE>$local_tree_block</TREE>");
-   $socket->send("<MAXSIZE>$maxsize</MAXSIZE>");
+   $socket->send("<TREE>$local_tree_block</TREE>\n");
+   $socket->send("<MAXSIZE>$maxsize</MAXSIZE>\n");
 
    my $excludes_string = "";
    if (@excludes) {
       $excludes_string = join("\n", @excludes);
    }
    $quiet || print get_timestamp(), "sending excludes=$excludes_string\n";
-   $socket->send("<EXCLUDE>$excludes_string</EXCLUDE>");
+   $socket->send("<EXCLUDE>$excludes_string</EXCLUDE>\n");
 
    my $matches_string = "";
    if (@matches) {
       $matches_string = join("\n", @matches);
    }
    $quiet || print get_timestamp(), "sending matches=$matches_string\n";
-   $socket->send("<MATCH>$matches_string</MATCH>");
+   $socket->send("<MATCH>$matches_string</MATCH>\n");
 
    $socket->flush(); # flush data when writes are done.
 
@@ -1557,7 +1552,7 @@ sub to_pull {
 
    $quiet || print get_timestamp(), "sending cksum results: ", scalar(@cksums_results), " item(s)\n";
 
-   $socket->send("<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>");
+   $socket->send("<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>\n");
 
    $socket->flush(); # flush data when writes are done.
 
