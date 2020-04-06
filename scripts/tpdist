@@ -639,7 +639,12 @@ sub build_dir_tree {
       }
       chomp @globs;
 
-      $quiet || print get_timestamp(), "resolved globs if any: $path=>", join(' ', @globs), "\n";
+      if (!$quiet) {
+         if ( scalar(@globs) != 1 || $globs[0] ne $path ) {
+            # print only if globs actually made a difference
+            print get_timestamp(), "resolved globs if any: $path=>", join(' ', @globs), "\n";
+         }            
+      }
 
       for my $p (@globs) {
          my $abs_path;
@@ -753,12 +758,12 @@ sub build_dir_tree {
             } else {
                $tree->{$f}->{back} = $back;
             }
+            $tree->{$f}->{front} = $front;
 
             my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks)
              = lstat($f);
 
             $tree->{$f}->{mtime} = $mtime;
-            $tree->{$f}->{front} = $front;
             my $octal_mode = sprintf("0%o", ($mode & 07777));
             $tree->{$f}->{mode} = $octal_mode;
 
@@ -878,7 +883,11 @@ sub expect_socket {
                my $message = "timed out after $opt->{ExpectTimeout} seconds. very likely wrong protocol. expecting $expected_peer_protocol.*";
                print get_timestamp(), "$message\n";
                $socket->send("$message\n");
-               $socket->flush(); sleep 2; # give a little time so that remote can process this message
+
+               # we actually don't need to flush as we already unblocked the socket before calling expect_socket
+               # $socket->flush();
+               
+               sleep 2; # give a little time so that remote can process this message before we close the connection
 
                return undef;
             }
@@ -999,7 +1008,8 @@ sub to_be_pulled {
       }
    }
 
-   print get_timestamp(), "building local_tree using paths: $local_paths_string, relative path base is homedir=$homedir\n";
+   print get_timestamp(), "building local_tree using paths: $local_paths_string\n";
+   print get_timestamp(), "relative path base is homedir=$homedir\n";
 
    my @local_paths = split (/[|]/, $local_paths_string);
 
@@ -1070,6 +1080,11 @@ sub to_be_pulled {
    # we sort reverse so that files come before their parent dir. This way enables
    # us to copy some (not have to be all) files under a dir
    for my $k (reverse (sort (keys %$local_tree))) {
+      my ($remote_size, $remote_type, $remote_test, $remote_mtime, $remote_mode) = @{$remote_tree->{$k}}{qw(
+                  size          type          test          mtime          mode )};
+      my ( $local_size,  $local_type,  $local_test,  $local_mtime,  $local_mode) = @{ $local_tree->{$k}}{qw(
+                  size          type          test          mtime          mode )};
+
       my $skipped_message = $local_tree->{$k}->{skip};
       if ($skipped_message) {
          push @warns, "skipped $k: $skipped_message";
@@ -1079,10 +1094,12 @@ sub to_be_pulled {
       if (!$remote_tree->{$k}) {
          # remote missing this file
         
-         my $size = $local_tree->{$k}->{size};
-         if ($size) {
-            last if $maxsize >=0 && $RequiredSpace+$size > $maxsize;
-            $RequiredSpace += $size;
+         if ($local_size) {
+            if ($maxsize >=0 && $RequiredSpace+$local_size > $maxsize) {
+               print get_timestamp(), "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
+               last;
+            }
+            $RequiredSpace += $local_size;
          }
          $change_by_file->{$k} = "add";
 
@@ -1091,7 +1108,7 @@ sub to_be_pulled {
             $need_mtime_reset->{$parent_dir} = 1;
          }
 
-         if ($local_tree->{$k}->{type} eq 'dir') {
+         if ($local_type eq 'dir') {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
@@ -1102,18 +1119,20 @@ sub to_be_pulled {
          next;
       }
 
-      if ( $remote_tree->{$k}->{type} ne $local_tree->{$k}->{type}) {
+      if ( $remote_type ne $local_type) {
          push @deletes, $k;
 
-         my $size = $local_tree->{$k}->{size};
-         if ($size) {
-            last if $maxsize >=0 && $RequiredSpace+$size > $maxsize;
-            $RequiredSpace += $size;
+         if ($local_size) {
+            if ($maxsize >=0 && $RequiredSpace+$local_size > $maxsize) {
+               print get_timestamp(), "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
+               last;
+            }
+            $RequiredSpace += $local_size;
          }
 
          $change_by_file->{$k} = "newType";
 
-         if ($local_tree->{$k}->{type} eq 'dir') {
+         if ($local_type eq 'dir') {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
@@ -1124,22 +1143,22 @@ sub to_be_pulled {
          next;
       }
 
-      # both sides are same kind type: file, dir, or link
-      if (     $local_tree->{$k}->{type} ne 'link'
-            && $remote_tree->{$k}->{mode} != $local_tree->{$k}->{mode} ) {
-          push @modes, $k;
+      # now that both sides are same kind type: file, dir, or link
+      if ( $local_type ne 'link' && $remote_mode != $local_mode ) {
+         push @modes, $k;
       }
 
       # note: dir and link's sizes are hard-coded, so they will always equal.
       # therefore, we are really only compares file's sizes.
       # that is, only files can have different sizes.
-      if ( $remote_tree->{$k}->{size} != $local_tree->{$k}->{size} ) {
+      if ( $remote_size != $local_size ) {
          # only files can reach here
-         my $size = $local_tree->{$k}->{size};
-
-         if ($size) {
-            last if $maxsize >=0 && $RequiredSpace+$size > $maxsize;
-            $RequiredSpace += $size;
+         if ($local_size) {
+            if ($maxsize >=0 && $RequiredSpace+$local_size > $maxsize) {
+               print get_timestamp(), "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
+               last;
+            }
+            $RequiredSpace += $local_size;
          }
 
          $change_by_file->{$k} = "update";
@@ -1149,34 +1168,34 @@ sub to_be_pulled {
       }
 
       # compare {test} if it is populated
-      # dir's {test} and link's {test} are hardcoded, we are really only compare files, 
-      if (!$local_tree->{$k}->{test} && !$remote_tree->{$k}->{test}) {
+      # because dir's {test} and link's {test} are hardcoded, we are really only compare files, 
+      if (!$local_test && !$remote_test) {
          # if both missing tests, we compare mtime first
          # for fast check (default), if size and mtime match, then no need to update.
          # for deep check, or when mtime not matching (but size matching), resort to
          # cksum.
 
-         if ($remote_tree->{$k}->{mtime} != $local_tree->{$k}->{mtime}) {
+         if ($remote_mtime != $local_mtime) {
             push @need_cksums, $k;
             $need_mtime_reset->{$k} = 1
          } elsif ($deep_check) {
-            # $remote_tree->{$k}->{mtime} == $local_tree->{$k}->{mtime}
+            # $remote_mtime == $local_mtime is true
             push @need_cksums, $k;
          }
-      } elsif ( !$local_tree->{$k}->{test} || !$remote_tree->{$k}->{test}) {
+      } elsif ( !$local_test || !$remote_test) {
          # we reach here if only one test is missing.
          # note: if both tests missing, the logic above would take care of it.
          # not sure what situation will lead us here yet
        
          $change_by_file->{$k} = "update";
-      } elsif ($local_tree->{$k}->{test} ne $remote_tree->{$k}->{test}) {
+      } elsif ($local_test ne $remote_test) {
          # now both tests exist, we can safely compare
          # not sure what situation will lead us here yet
 
          $change_by_file->{$k} = "update";
       } else {
-         # $local_tree->{$k}->{test} eq $remote_tree->{$k}->{test}
-         if ($remote_tree->{$k}->{mtime} != $local_tree->{$k}->{mtime}) {
+         # $local_test eq $remote_test
+         if ($remote_mtime != $local_mtime) {
             $need_mtime_reset->{$k} = 1
          }
       }
