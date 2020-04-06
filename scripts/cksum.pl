@@ -80,7 +80,7 @@ Usage:
 
 Examples:
 
-   cksum.pl /cygdrive/c/users/william/tmp/ps1/List-Exe.ps1
+   cksum.pl ../ps1/List-Exe.ps1
 
 END
 
