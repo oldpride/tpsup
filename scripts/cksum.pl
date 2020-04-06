@@ -7,6 +7,9 @@ use Getopt::Long;
 use strict;
 use Carp;
 
+# THIS IS CRITICAL
+use integer; # for cksum
+
 my $prog = $0; $prog =~ s:.*/::;
 
 my @crctab = (
