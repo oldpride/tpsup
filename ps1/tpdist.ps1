@@ -127,9 +127,10 @@ function to_pull {
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-    
-
    $remote_dirs_string = $remote_dirs -join "|"
+
+   $os = Get-CimInstance Win32_OperatingSystem
+   $uname = "PowerShell| $($os.Caption) $($os.Version)"
 
    send_text $writer "<VERSION>$version</VERSION>`n"
    send_text $writer "<PATH>$remote_dirs_string</PATH>`n"
@@ -138,6 +139,7 @@ function to_pull {
    send_text $writer "<MAXSIZE>-1</MAXSIZE>`n"
    send_text $writer "<EXCLUDE></EXCLUDE>`n"
    send_text $writer "<MATCH></MATCH>`n"
+   send_text $writer "<UNAME>$uname</UNAME>`n"
 
    $writer.Flush()
 
@@ -182,12 +184,12 @@ function to_pull {
       return
    }
 
-   $deletes_string = $captures[0][0];
-   $mtimes_string  = $captures[1][0];
-   $modes_string   = $captures[2][0];
-   $RequiredSpace  = $captures[3][0];
-   $adds_string    = $captures[4][0];
-   $warns_string   = $captures[5][0];
+   $deletes_string =      $captures[0][0];
+   $mtimes_string  =      $captures[1][0];
+   $modes_string   =      $captures[2][0];
+   $RequiredSpace  = [Int]$captures[3][0];
+   $adds_string    =      $captures[4][0];
+   $warns_string   =      $captures[5][0];
 
    $local_dir_abs = get_abs_path $local_dir
    if ( -not (Test-Path -Path $local_dir_abs)) {
@@ -284,7 +286,8 @@ function to_be_pulled {
       '<VERSION>(.+)</VERSION>',
       '<EXCLUDE>(.*)</EXCLUDE>',
       '<MATCH>(.*)</MATCH>',
-      '<DEEP>(.)</DEEP>'
+      '<DEEP>(.)</DEEP>',
+      '<UNAME>(.+)</UNAME>'
    )
 
    $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
@@ -296,23 +299,31 @@ function to_be_pulled {
       return
    }
 
-   $local_paths_string  = $captures[0][0]
-   $remote_tree_block   = $captures[1][0]
-   $maxsize             = $captures[2][0]
-   $remote_version      = $captures[3][0]
-   $exclude_string      = $captures[4][0]
-   $match_string        = $captures[5][0]
-   $deep_check          = $captures[6][0]
+   $local_paths_string  =      $captures[0][0]
+   $remote_tree_block   =      $captures[1][0]
+   $maxsize             = [Int]$captures[2][0]
+   $remote_version      =      $captures[3][0]
+   $exclude_string      =      $captures[4][0]
+   $match_string        =      $captures[5][0]
+   $deep_check          = [Int]$captures[6][0]
+   $uname               =      $captures[7][0]
 
    $remote_version_split = $remote_version -split "[.]";
    $peer_protocol = $remote_version_split[0]
 
    if ($peer_protocol -ne $expected_peer_protocol) {
-      Write-Host $(get_timestamp), "remote used wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol. we closed the connection.\n";
-      $writer.Write("wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol")
+      Write-Host "$(get_timestamp) remote used wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol. we closed the connection.\n";
+      send_text $writer "wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol"
       $writer.Flush()
       return;
    }
+
+   $check_mode = $false
+   if ($uname -match "^Powershell" -or $uname -match "Windows" ) {
+      $check_mode = $true
+   }
+
+   Write-Host "$(get_timestamp) remote uname='$uname'. we set check_mode=$check_mode"
 
    $remote_tree = @{}
 
@@ -357,8 +368,7 @@ function to_be_pulled {
                                                                                matches2=$matches2; 
                                                                                excludes=$excludes; 
                                                                                AllowDenyPatterns = @{}
-                                                                              })
-   
+                                                                              })   
    Write-Verbose "local_tree  = $(ConvertTo-Json  $local_tree)"
    Write-Verbose "maxsize = $maxsize"
 
@@ -366,6 +376,7 @@ function to_be_pulled {
    $change_by_file = @{}
    $diff_by_file = @{}
    $mtimes = @()
+   $modes = @()
    $warns = @()
    $RequiredSpace = 0
    $need_mtime_reset = @{}
@@ -426,19 +437,17 @@ function to_be_pulled {
          continue
       }
 
-      $remote_size    = get_nested_hash $remote_tree @($k, 'size'   )
-      $remote_type    = get_nested_hash $remote_tree @($k, 'type'   )
-      $remote_test    = get_nested_hash $remote_tree @($k, 'test'   )      
-      $remote_mtime   = get_nested_hash $remote_tree @($k, 'mtime'  )
-      $remote_mode    = get_nested_hash $remote_tree @($k, 'mode'   )
-      $remote_winmode = get_nested_hash $remote_tree @($k, 'winmode')
+      $remote_size  = get_nested_hash $remote_tree @($k, 'size' )
+      $remote_type  = get_nested_hash $remote_tree @($k, 'type' )
+      $remote_test  = get_nested_hash $remote_tree @($k, 'test' )      
+      $remote_mtime = get_nested_hash $remote_tree @($k, 'mtime')
+      $remote_mode  = get_nested_hash $remote_tree @($k, 'mode' )
 
-       $local_size    = get_nested_hash  $local_tree @($k, 'size'   )      
-       $local_type    = get_nested_hash  $local_tree @($k, 'type'   )   
-       $local_test    = get_nested_hash  $local_tree @($k, 'test'   )      
-       $local_mtime   = get_nested_hash  $local_tree @($k, 'mtime'  )
-       $local_mode    = get_nested_hash  $local_tree @($k, 'mode'   ) 
-       $local_winmode = get_nested_hash  $local_tree @($k, 'winmode')     
+       $local_size  = get_nested_hash  $local_tree @($k, 'size' )      
+       $local_type  = get_nested_hash  $local_tree @($k, 'type' )   
+       $local_test  = get_nested_hash  $local_tree @($k, 'test' )      
+       $local_mtime = get_nested_hash  $local_tree @($k, 'mtime')
+       $local_mode  = get_nested_hash  $local_tree @($k, 'mode' ) 
 
       if (!$remote_tree[$k]) {
          # remote is missing this file
@@ -463,7 +472,6 @@ function to_be_pulled {
             # to keep and send the mode information separately (from the tar file)
             $modes += $k
          }
-
          continue
       }
 
@@ -480,7 +488,7 @@ function to_be_pulled {
 
          $change_by_file[$k] = "newType"
 
-         if ( $local_type -eq 'dir') {
+         if ( $check_mode -and $local_type -eq 'dir') {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
@@ -492,21 +500,8 @@ function to_be_pulled {
       }
 
       # both sides are same kind type: file, dir, or link
-      if ( $local_type -ne 'link') {
-         if ( $remote_winmode -ne $local_winmode ) {
-            if (!$remote_winmode) {
-                # remote is not a windows machine, use $remote_mode.
-                # we can only compare $local_winmode's read-only bit with $remote_mode's user's write bit
-                # "darhsl" vs "0755"
-                $remote_writeable = ($remote_mode    -match "^.[2367]")
-                 $local_writeable = ( $local_winmode -match "^..r")
-                if ($remote_writeable -ne $local_writeable) {
-                   $modes +=$k
-                }
-            } else {
-                $modes += $k
-            }
-         }
+      if ( $check_mode -and $local_type -ne 'link' -and $remote_winmode -ne $local_winmode ) {
+         $modes += $k
       }
 
       # note: dir and link's sizes are hard-coded, so they will always equal.
@@ -569,17 +564,180 @@ function to_be_pulled {
 
    $need_cksums_string = "<NEED_CKSUMS>" + ($need_cksums -join "`n") + "</NEED_CKSUMS>"
    Write-Host "$(get_timestamp) sending need_cksums request to remote: $($need_cksums.count) items"
-   $writer.Write("$need_cksums_string`n")
+   send_text $writer "$need_cksums_string`n"
    $writer.Flush()
 
    Write-Host "$(get_timestamp) collecting local cksums: $($need_cksums.count) items"
-   $local_cksum_by_file = get_cksums($need_cksums, $local_tree)
+   $local_cksum_by_file = get_cksums $need_cksums $local_tree
 
    # unblock socket before reading
    $socket.Blocking = $false
 
    Write-Host "$(get_timestamp) waiting for remote cksums results"
+
+   $patterns = @('<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>')
+
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
+
+   if (!$captures) {
+      $reader.Dispose()
+      $writer.Dispose()
+      $tcpStream.Close()
+      return
+   }
+
+   $remote_cksums_string  = $captures[0][0]
+
+   $remote_cksum_by_file = @{}
+   if ($remote_cksums_string) {
+      foreach($row in ($remote_cksums_string -split "`n")) {
+         if ($row -match '^(\d+) (.+)$') {
+            $remote_cksum_by_file[$Matches[2]] = $Matches[1]
+         }
+      }
+   }
+
+   foreach ($f in $local_cksum_by_file.Keys) {
+      if ( !$remote_cksum_by_file[$f] ) {
+         Write-Host "ERROR: remote cksum results missing for $f"
+         $change_by_file[$f] = "update"
+      } elseif ($remote_cksum_by_file[$f] -ne $local_cksum_by_file[$f] ) {
+         $change_by_file[$f] = "update"
+         $diff_by_file[$f] = $true # only type=file can get here.
+      } elseif ($remote_tree[$f]['mtime'] -ne $local_tree[$f]['mtime']) {
+         $need_mtime_reset[$f] = $true
+      }
+   }
+
+   foreach ($dir in $need_mtime_reset.Keys) {
+      if ($local_tree[$dir]) {
+         $mtimes += $dir
+      } 
+   }
+
+   # don't unblock socket when writing; doing so would corrupt data.
+   # instead, flush writes manually
+   $socket.Blocking = $true
+
+   $delete_string = "<DELETES>" + (($deletes|sort) -join "`n") + "</DELETES>"
+   Write-Host "$(get_timestamp) sending deletes: $($deletes.Count) item(s)"
+   send_text $writer "$delete_string`n"
+
+   $adds_string = "<ADDS>"
+   $adds_files = @($change_by_file.Keys|sort)
+
+   # align to the left:  "{0, -8}{1,-15}{2,-15}{3,-15}`n" -f "Locale", "Jar", "HelpSet", "Exception"
+   # align to the right: "{0,8}{1,15}{2,15}{3,15}`n" -f "Locale", "Jar", "HelpSet", "Exception"
+   foreach ($f in $adds_files) {
+      $action = $change_by_file[$f]
+      $adds_string += ("{0,6} {1}`n" -f $action, $f)
+   }
+   # "test".TrimEnd("e") # this does nothing
+   # "test".TrimEnd("t") # tes
+   # $adds_string = $adds_string.TrimEnd("`n") # remove the last newline
+   $adds_string += "</ADDS>"
+   Write-Host "$(get_timestamp) sending adds: $($adds_files.Count) item(s)"
+   send_text $writer "$adds_string`n"
+
+   $mtime_string = "<MTIMES>"
+   foreach ($f in $mtimes) {
+      $mt = $local_tree[$f]['mtime']
+      $mtime_string += "$mt $f`n"
+   }
+   $mtime_string += "</MTIMES>"
+
+   Write-Host "$(get_timestamp) sending mtimes: $($mtimes.Count) item(s)"
+   send_text $writer "$mtime_string`n"
+
+   $mode_string = "<MODES>"
+   if ($check_mode) {
+      foreach ($f in $modes) {
+         $mode = $local_tree[$f]['mode']
+         $mode_string += "$mode $f`n"
+      }
+   }
+   $mode_string += "</MODES>`n"
+   Write-Host "$(get_timestamp) sending modes: $($modes.Count) item(s)"
+   send_text $writer "$mode_string`n"
    
+   $warn_string = "<WARNS>" + ($warns -join "`n") + "</WARNS>"
+   Write-Host "$(get_timestamp) sending warns: $($warns.Count) item(s)"
+   send_text $writer "$warn_string`n"
+
+   Write-Host "$(get_timestamp)sending required space: $RequiredSpace"
+   send_text $writer "<SPACE>$RequiredSpace</SPACE>`n"
+
+   $writer.Flush() # flush data when writes are done.
+
+   if (!$change_by_file) {
+      Write-Host "$(get_timestamp) remote doesn't need to add/update any new files"
+      return
+   }
+
+   # unblock socket when reading
+   $socket.Blocking = $false
+
+   Write-Host "$(get_timestamp) waiting for transfer mode from remote"
+ 
+   $patterns = @('please send (data|diff|unpacked)')
+
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
+
+   if (!$captures) {
+      $reader.Dispose()
+      $writer.Dispose()
+      $tcpStream.Close()
+      return
+   }
+
+   $mode = $captures[0][0]  
+
+   $tmp_tar_file = get_tmp_file ".tar" @{chkSpace=($RequiredSpace*2)}
+
+   Write-Host "$(get_timestamp) received tranfer mode: $mode. creating tmp local tar file: $tmp_tar_file"
+
+   $files_to_tar = @()
+
+   if ($mode -eq "diff") {
+      $files_to_tar = ($diff_by_file.Keys|sort)
+   } else {
+      $files_to_tar = $adds_files
+   }
+
+   if (!$files_to_tar) {
+      Write-Host "$(get_timestamp) no need to send anything to remote"
+      return;
+   }
+
+   $files_by_front = @{}
+
+   foreach ($f in $files_to_tar) {
+      if ($local_tree[$f]['type'] -eq 'dir' -and !$local_tree[$f]['DirEmpty'] ) {
+         # Skip non-empty dir because tar'ing dir will also tar the files underneath.
+         # But we include empty dir
+         Write-Verbose "Skipped dir $f because we will add files under it anyway"
+         continue
+      }
+
+      $front = $local_tree[$f]['front']
+      set_hash_of_arrays $files_by_front $front $f
+   }
+
+   $created_tar = $false
+
+   foreach ($front in @($files_by_front.Keys|sort)) {
+      $files = @($files_by_front[$front]|sort)
+      tar_file_list $front $tmp_tar_file $files $created_tar
+      $created_tar = $true
+   }
+
+   if (!$created_tar) {
+      Write-Host "$(get_timestamp) no tar created, close this remote connection";
+      return;
+   }
+
+   Remove-Item $tmp_tar_file
+
 }
 
 
@@ -791,6 +949,14 @@ function build_dir_tree {
                $type = "dir"
                $size = 128   # hard coded 
                set_nested_hash $tree @($f, 'test') 'dir' # hard coded, means no test
+
+               # check whether the dir is empty, need this info when making a tar.
+               # if the directory is empty, we can tar the dir.
+               # if the directory is not empty, and if we don't want to tar all files
+               # in it, we can tar the dir.
+               if ( (Get-ChildItem junkdir|Measure-Object).Count -eq 0) {
+                  set_nested_hash $tree @($f, 'DirEmpty') = $true
+               }
             } else {
                # todo: there may be other unknown file types
                $type = "file"
@@ -801,26 +967,8 @@ function build_dir_tree {
             set_nested_hash $tree @($f, 'size') $size
             set_nested_hash $tree @($f, 'type') $type
 
-            $winmode = $item.Mode    # windows mode "darhsl"
-            $mode    = $null         # unix    mode "drwxrwxrwx"
-            if ($winmode -match '^..r') {
-               # read-only
-               if ($type -eq 'dir') {
-                  $mode = "0500"
-               } else {
-                  $mode = "0400"
-               }
-            } else {
-               # writable
-               if ($type -eq 'dir') {
-                  $mode = "0700"
-               } else {
-                  $mode = "0600"
-               }
-            }
-            set_nested_hash $tree @($f, 'winmode') $winmode
-            set_nested_hash $tree @($f,    'mode')    $mode      
-            
+            $mode = $item.Mode    # windows mode "darhsl" vs unix mode "drwxrwxrwx"
+            set_nested_hash $tree @($f, 'mode') $mode                 
             #ConvertTo-Json $tree     
          }
          Write-Host "$(get_timestamp) checked $file_count files in total"
@@ -834,7 +982,7 @@ function build_dir_tree {
 
 function tar_file_list {
   param (
-      [Parameter(Mandatory = $true)][hashtable]$front = $null,
+      [Parameter(Mandatory = $true)][string]$front = $null,
       [Parameter(Mandatory = $true)][string]$tar = $null,
       [Parameter(Mandatory = $true)][string []]$files = $null,
       [Parameter(Mandatory = $true)][boolean]$create = $null,
@@ -1038,14 +1186,14 @@ function expect_socket {
                 $last_words = $data_str.Substring($data_str.Length - $tail_size + 1)
              }
           }
-          Write-Error "remote side closed connection. Last words: $last_words"
+          Write-Host "remote side closed connection. Last words: $last_words"
           return $null
        }
 
        if ($opt["ExpectTimeout"]) {
           if ($total_wait -gt $opt['ExpectTimeout']) {
              $message = "timed out after $($opt['ExpectTimeout']) seconds. very likely wrong protocol. expecting $expected_peer_protocol.*"
-             Write-Error $message
+             Write-Host $message
              $writer.Write([system.Text.Encoding]::Default.GetBytes($message))
              $writer.Flush();
              sleep 2; # give a little time so that remote can process this messsage
@@ -1169,31 +1317,63 @@ function cksum {
          $index = (0xff -band ($cksum -shr 24)) -bxor $c
          #Write-Host "index=$index"
          $cksum = ([uint64]'0xffffffff' -band ($cksum -shl 8)) -bxor $crctab[$index]
+         #Write-Host "c=$c, index=$index, cksum=$cksum"
       }
    }
    #Set-PsDebug -Trace 0
    $ifd.close()
 
-   Write-Host "size=$size, cksum=$cksum"
+   #Write-Host "size=$size, cksum=$cksum"
 
    # Extend with the length of the data
    while ($size -ne 0) {
       $c = $size -band 0xFF;
       $size = $size -shr 8;
-      $cksum = ([uint64]'0xFFFFFFFF' -band ($cksum -shl 8)) -bxor $crctab[(0xFF -band ($cksum >> 24)) -bxor $c];
-
-      Write-Host "size=$size, cksum=$cksum"
+      $cksum = ([uint64]'0xFFFFFFFF' -band ($cksum -shl 8)) -bxor $crctab[(0xFF -band ($cksum -shr 24)) -bxor $c];
+      #Write-Host "size=$size, cksum=$cksum"
    }
 
    $cksum = (-bnot $cksum) -band [uint64]'0xffffffff'
 
    return $cksum
 }
+#cksum C:\Users\william\tmp\ps1\List-Exe.ps1
 
+function get_cksums {
+   param (
+      [Parameter(Mandatory = $true)][AllowEmptyCollection()][string []]$files = $null,
+      [Parameter(Mandatory = $true)][AllowEmptyCollection()][hashtable]$dir_tree = $null,
+      $opt = $null
+   )
 
-cksum C:\Users\william\tmp\ps1\List-Exe.ps1
+   $cksum_by_file = @{}
 
-exit 1
+   foreach ($f in $files) {
+      $front = get_nested_hash $dir_tree @($f, 'front')
+      if (!$front) {
+         Write-Host "ERROR: missing `$dir_tree['$f']['front']"
+         continue
+      }
+      Write-Verbose "$(get_timestamp) calculating cksum('$front/$f')"
+      $cksum_by_file[$f] = cksum "$front/$f"
+   }
+
+   return $cksum_by_file
+}
+
+function get_tmp_file {
+   param (
+      [Parameter(Mandatory = $true)][AllowEmptyCollection()][string]$extension = $null,
+      $opt = $null
+   )
+
+   # to do check space
+   $tmp_file = [System.IO.Path]::GetTempFileName()
+   $new_name = [System.IO.Path]::ChangeExtension($tmp_file, $extension)
+   Move-Item $tmp_file $new_name
+
+   return $new_name
+}
 
 
 if (!$remainingArgs) {

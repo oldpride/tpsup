@@ -143,16 +143,20 @@ sub cksum {
          # break this into steps for easier troubleshooting.
 	 my $index = (0xFF & ($cksum >> 24)) ^ $c;
 	 $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[$index];
+         $verbose && print "c=$c, index=$index, cksum=$cksum\n";
       }
    }
 
    close $ifd;
+
+   $verbose && print "size=$size, cksum=$cksum\n";
 
    # Extend with the length of the data
    while($size != 0) {
       my $c = $size & 0xFF;
       $size >>= 8;
       $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
+      $verbose && print "size=$size, cksum=$cksum\n";
    }
 
    $cksum = ~ $cksum;

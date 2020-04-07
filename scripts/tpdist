@@ -774,7 +774,10 @@ sub build_dir_tree {
                $tree->{$f}->{size} = 128; # hard coded
                $tree->{$f}->{test} = "dir"; # not much to test
 
-               # check whether the dir is empty, remote side need this info when making a tar
+               # check whether the dir is empty, need this info when making a tar.
+               # if the directory is empty, we can tar the dir.
+               # if the directory is not empty, and if we don't want to tar all files
+               # in it, we can tar the dir.
                my $dfh;
                opendir($dfh, $f);
 
@@ -952,6 +955,7 @@ sub to_be_pulled {
                         '<EXCLUDE>(.*)</EXCLUDE>',
                         '<MATCH>(.*)</MATCH>',
                         '<DEEP>(.)</DEEP>',
+                        '<UNAME>(.+)</UNAME>',
                       ],
                       {verbose=>$verbose, ExpectTimeout=>$timeout}
                      );
@@ -968,6 +972,7 @@ sub to_be_pulled {
    my $exclude_string      = $captures->[4]->[0];
    my $match_string        = $captures->[5]->[0];
    my $deep_check          = $captures->[6]->[0];
+   my $uname               = $captures->[7]->[0];
 
    my ($peer_protocol) = ($version =~ /^(\d+)/);
 
@@ -978,6 +983,13 @@ sub to_be_pulled {
       $socket->close();
       return;
    }
+
+   # we only check modes between compatible platforms
+   my $check_mode = ($uname !~ /^Perl|/i && $uname !~ /Windows/i ) ? 1 : 0;
+
+   print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
+
+   print get_timestamp(), "remote used wrong protocol $peer_protocol, ",
 
    my @excludes;
    if ($exclude_string) {
@@ -1137,14 +1149,15 @@ sub to_be_pulled {
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
             # to keep and send the mode information separately (from the tar file)
-            push @modes, $k;
+            if ($check_mode) {
+               push @modes, $k;
+            }   
          }
-
          next;
       }
 
       # now that both sides are same kind type: file, dir, or link
-      if ( $local_type ne 'link' && $remote_mode != $local_mode ) {
+      if ( $check_mode && $local_type ne 'link' && $remote_mode != $local_mode ) {
          push @modes, $k;
       }
 
@@ -1260,7 +1273,6 @@ sub to_be_pulled {
    # instead, flush writes manually
    $socket->blocking(1);
 
-
    my $delete_string = "<DELETES>" . join("\n", sort(@deletes)) . "</DELETES>\n";
    print get_timestamp(), "sending deletes: ", scalar(@deletes), " item(s)\n";
    $socket->send("$delete_string\n");
@@ -1272,7 +1284,7 @@ sub to_be_pulled {
       my $action = $change_by_file->{$f};
       $adds_string .= sprintf("\%6s \%s\n", $action, $f);
    }
-   $adds_string =~ s:\n$::; # remove the last newline
+   # $adds_string =~ s:\n$::; # remove the last newline
 
    $adds_string .= "</ADDS>\n";
    print get_timestamp(), "sending adds: ", scalar(@adds_files), " item(s)\n"; 
@@ -1289,13 +1301,16 @@ sub to_be_pulled {
    $socket->send("$mtime_string\n");
 
    my $mode_string = "<MODES>";
-   for my $f (@modes) {
-      my $mode = $local_tree->{$f}->{mode};
-      $mode_string .= "$mode $f\n";
+   if ($check_mode) {
+      for my $f (@modes) {
+         my $mode = $local_tree->{$f}->{mode};
+         $mode_string .= "$mode $f\n";
+      }
+      print get_timestamp(), "sending modes: ", scalar(@modes), " item(s)\n";
+   } else {
+      print get_timestamp(), "sending modes: 0 item(s) as we don't check modes\n";
    }
    $mode_string .= "</MODES>\n";
-
-   print get_timestamp(), "sending modes: ", scalar(@modes), " item(s)\n";
    $socket->send("$mode_string\n");
 
    my $warn_string = "<WARNS>" . join("\n", @warns) . "</WARNS>\n";
@@ -1309,7 +1324,7 @@ sub to_be_pulled {
 
    if (!$change_by_file) {
       print get_timestamp(), "remote doesn't need to add/update any new files\n";
-    next;
+      return;
    }
 
    # unblock socket when reading
@@ -1330,7 +1345,7 @@ sub to_be_pulled {
 
    my $mode = $captures->[0]->[0];
 
-   print get_timestamp(), "received remote tranfer mode: $mode. creating local tar file\n";
+   print get_timestamp(), "received remote tranfer mode: $mode. creating tmp local tar file\n";
 
    my $tmp_tar_file = get_tmp_file($tmpdir, "$prog.tar",  {chkSpace=>$RequiredSpace*2});
    my $tmp_tar_list = get_tmp_file($tmpdir, "$prog.list");
@@ -1492,6 +1507,12 @@ sub to_pull {
 
    $quiet || print get_timestamp(), "sending version: $version\n";
    $socket->send("<VERSION>$version</VERSION>\n");
+
+   my $uname = `uname -a`; chomp $uname;
+   $uname = "Perl|$uname";
+
+   $quiet || print get_timestamp(), "sending uname: $uname\n";
+   $socket->send("<UNAME>$uname</UNAME>\n");
 
    $quiet || print get_timestamp(), "sending paths: $paths\n";
    $socket->send("<PATH>$paths</PATH>\n");
@@ -1680,7 +1701,9 @@ sub to_pull {
    }
 
    if (!$adds_string) {
-      $quiet || print get_timestamp(), "nothing to add or update\n";
+      my $message = "nothing to add or update\n";
+      $quiet || print get_timestamp(), $message;
+      $socket->send($message);
    } elsif (!$dryrun) {
       # don't unblock socket when writing; doing so would corrupt data.
       # instead, flush writes manually
@@ -1859,10 +1882,10 @@ sub to_pull {
 # BEGIN logic copied from .../site_perl/String/CRC/Cksum.pm
 use integer; # for cksum
 sub get_cksums {
-   my ($aref, $dir_tree, $opt) = @_;
+   my ($files, $dir_tree, $opt) = @_;
    my $cksum_by_file;
 
-   for my $f (@$aref) {
+   for my $f (@$files) {
       my $front = $dir_tree->{$f}->{front};
       if (!$front) {
          print STDERR "missing \$dir_tree->{$f}->{front}. skipped\n";
