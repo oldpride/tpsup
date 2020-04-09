@@ -237,7 +237,7 @@ if (!$force) {
 my @tally;
 
 for my $job (@jobs) {
-   my $autorep_cmd = "command=autorep -J $job";
+   my $autorep_cmd = "autorep -J $job";
 
    my $before_result;
    my @subjobs;
@@ -247,7 +247,7 @@ for my $job (@jobs) {
       $before_result = autorep_J("command=$autorep_cmd");
    
       while (!$before_result) {
-         print "command=autorep -J $job failed. will try again after 10 seconds\n";
+         print "command=$autorep_cmd failed. will try again after 10 seconds\n";
          sleep 10;
          $before_result = autorep_J("command=$autorep_cmd");
       }

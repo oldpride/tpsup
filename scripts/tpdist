@@ -16,8 +16,8 @@ use POSIX;
 
 my $timeout = 300;
 my $idle = 600;
-my $maxtry = 5;
-my $interval = 30;
+my $maxtry = 3;
+my $interval = 5;
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -115,7 +115,7 @@ Common Switches (for both server and client):
 
    -r|reverse         server-pull/client-push. default is server-push/client-pull             
 
-Server switches:
+Server-0nly Switches:
 
    -allowhost file
    -denyhost file
@@ -136,7 +136,7 @@ Server switches:
    -idle seconds
                       max idle time before close server socket, default to $idle
 
-Pull Side switches:
+Pull-Side-Only Switches:
 
    -n                 dryrun mode, list the filenames only
 
@@ -270,6 +270,11 @@ if ($mode eq 'server') {
    }
 } else {
    usage("first arg must be either 'server' or 'client'");
+}
+
+if ( defined($local_dir) && -e $local_dir  && ! -d $local_dir) {
+   print "ERROR: local_dir=$local_dir is not a directory\n";
+   exit 1;
 }
 
 $quiet || print get_timestamp(), "version=$version, protocol=$expected_peer_protocol\n";
@@ -1067,23 +1072,25 @@ sub to_be_pulled {
    }
 
    # compare local_tree with remote_tree
-   for my $k (sort (keys %$remote_tree)) {
-      if (!$local_tree->{$k}) {
-         # if the back dir is not shown in server side at all, don't delete it on
-         # client side.
-         # for example, assume client command is
-         #    $0 client host port a b
-         # if 'a' doesn't exist on the server side, we should not delete b/a on the
-         # client side
-       
-         my $back = $remote_tree->{$k}->{back};
-
-         if ($back_exists_on_local->{$back}) {
-            push @deletes, $k;
-
-            if ($k =~ m:^(.+)/:) {
-               my $parent_dir = $1;
-               $need_mtime_reset->{$parent_dir} = 1;
+   if ($remote_tree) {
+      for my $k (sort (keys %$remote_tree)) {
+         if (!$local_tree->{$k}) {
+            # if the back dir is not shown in server side at all, don't delete it on
+            # client side.
+            # for example, assume client command is
+            #    $0 client host port a b
+            # if 'a' doesn't exist on the server side, we should not delete b/a on the
+            # client side
+          
+            my $back = $remote_tree->{$k}->{back};
+   
+            if ($back_exists_on_local->{$back}) {
+               push @deletes, $k;
+   
+               if ($k =~ m:^(.+)/:) {
+                  my $parent_dir = $1;
+                  $need_mtime_reset->{$parent_dir} = 1;
+               }
             }
          }
       }
@@ -1092,8 +1099,6 @@ sub to_be_pulled {
    # we sort reverse so that files come before their parent dir. This way enables
    # us to copy some (not have to be all) files under a dir
    for my $k (reverse (sort (keys %$local_tree))) {
-      my ($remote_size, $remote_type, $remote_test, $remote_mtime, $remote_mode) = @{$remote_tree->{$k}}{qw(
-                  size          type          test          mtime          mode )};
       my ( $local_size,  $local_type,  $local_test,  $local_mtime,  $local_mode) = @{ $local_tree->{$k}}{qw(
                   size          type          test          mtime          mode )};
 
@@ -1103,7 +1108,7 @@ sub to_be_pulled {
          next;
       }
 
-      if (!$remote_tree->{$k}) {
+      if (!exists $remote_tree->{$k}) {
          # remote missing this file
         
          if ($local_size) {
@@ -1130,6 +1135,10 @@ sub to_be_pulled {
 
          next;
       }
+
+      # do this only after we knew the key exists in $remote_tree. otherwise, autovivification will insert the key
+      my ($remote_size, $remote_type, $remote_test, $remote_mtime, $remote_mode) = @{$remote_tree->{$k}}{qw(
+                  size          type          test          mtime          mode )};
 
       if ( $remote_type ne $local_type) {
          push @deletes, $k;
@@ -1448,9 +1457,7 @@ sub to_be_pulled {
 }
 
 sub to_pull {
-   my ($socket, $remote_paths_ref, $local_dir, $opt) = @_;
-
-   my @remote_paths = @$remote_paths_ref;
+   my ($socket, $remote_paths, $local_dir, $opt) = @_;
 
    # http://www.perlmonks.org/?node_id=304388
    
@@ -1460,7 +1467,7 @@ sub to_pull {
    my $local_dir_abs = get_abs_path($local_dir);
 
    my @local_paths;
-   for my $remote_path (@remote_paths) {
+   for my $remote_path (@$remote_paths) {
       die "cannot copy root dir '/'" if $remote_path =~ /^[\/]+$/;
 
       $remote_path =~ s:[/]+$::g;       # remove the trailing /
@@ -1503,7 +1510,7 @@ sub to_pull {
    # instead, flush writes manually
    $socket->blocking(1);
 
-   my $paths = join("|", @ARGV);
+   my $paths_string = join("|", @$remote_paths);
 
    $quiet || print get_timestamp(), "sending version: $version\n";
    $socket->send("<VERSION>$version</VERSION>\n");
@@ -1511,19 +1518,21 @@ sub to_pull {
    my $uname = `uname -a`; chomp $uname;
    $uname = "Perl|$uname";
 
-   $quiet || print get_timestamp(), "sending uname: $uname\n";
+   $quiet || print get_timestamp(), "sending prog|uname: $uname\n";
    $socket->send("<UNAME>$uname</UNAME>\n");
 
-   $quiet || print get_timestamp(), "sending paths: $paths\n";
-   $socket->send("<PATH>$paths</PATH>\n");
+   $quiet || print get_timestamp(), "sending paths: $paths_string\n";
+   $socket->send("<PATH>$paths_string</PATH>\n");
 
    $quiet || print get_timestamp(), "sending deep check flag: $deep\n";
    $socket->send("<DEEP>$deep</DEEP>\n");
 
    my $local_tree_block = "";
+   my $local_tree_items = 0;
 
    if ($local_tree) {
       for my $k (sort keys(%$local_tree)) {
+         $local_tree_items ++;
          my $string = "key=$k";
          for my $attr (sort (keys %{$local_tree->{$k}})) {
             $string .= "|$attr=$local_tree->{$k}->{$attr}";
@@ -1532,8 +1541,10 @@ sub to_pull {
       }
    }
 
-   $quiet || print get_timestamp(), "sending local_tree\n";
+   $quiet || print get_timestamp(), "sending local_tree, $local_tree_items items\n";
    $socket->send("<TREE>$local_tree_block</TREE>\n");
+
+   $quiet || print get_timestamp(), "sending maxsize: $maxsize\n";
    $socket->send("<MAXSIZE>$maxsize</MAXSIZE>\n");
 
    my $excludes_string = "";
@@ -1570,18 +1581,19 @@ sub to_pull {
 
    my $need_cksums_string = $captures->[0]->[0];
 
-   $quiet || print get_timestamp(), "received cksum requests, calculating cksums\n";
-
    my @need_cksums;
    my @cksums_results;
    if ($need_cksums_string) {
       @need_cksums = split /\n/, $need_cksums_string;
+      $quiet|| print get_timestamp(), "received cksum requests, ", scalar(@need_cksums), " items. calculating local cksums\n";
 
       my $local_cksums_by_file = get_cksums(\@need_cksums, $local_tree);
 
       for my $f (sort (keys %$local_cksums_by_file)) {
          push @cksums_results, "$local_cksums_by_file->{$f} $f";
       }
+   } else {
+      $quiet || print get_timestamp(), "received cksum requests, 0 items\n";
    }
 
    # don't unblock socket when writing; doing so would corrupt data.
@@ -1625,29 +1637,33 @@ sub to_pull {
    my $adds_string    = $captures->[4]->[0];
    my $warns_string   = $captures->[5]->[0];
     
+   # if local_dir doesn't exist yet, we don't mkdir now because if this is a
+   # dryrun or diff, then we shouldn't create a dir. we will create it later.
+   # But why do we "cd $local_dir_abs" here? because the followed deletes use
+   # the relative path; so does diff.
    if (-d $local_dir_abs) {
       $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
       chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
-   }
 
-   if ($deletes_string) {
-      my @deletes = split /\n/, $deletes_string;
-
-      my $last_delete;
-
-      for my $d (sort @deletes) {
-         if (!$last_delete || $d !~ m:^$last_delete/: ) {
-            # if we already deleted the dir, no need to delete files under it.
-
-            my $cmd = "/bin/rm -fr '$d'";
-            if ($dryrun||$diff) {
-               print "dryrun $cmd\n";
-            } else {
-               print "$cmd\n";
-               system($cmd);
-             }  
-
-            $last_delete = $d;
+      if ($deletes_string) {
+         my @deletes = split /\n/, $deletes_string;
+   
+         my $last_delete;
+   
+         for my $d (sort @deletes) {
+            if (!$last_delete || $d !~ m:^$last_delete/: ) {
+               # if we already deleted the dir, no need to delete files under it.
+   
+               my $cmd = "/bin/rm -fr '$d'";
+               if ($dryrun||$diff) {
+                  print "dryrun $cmd\n";
+               } else {
+                  print "$cmd\n";
+                  system($cmd);
+                }  
+   
+               $last_delete = $d;
+            }
          }
       }
    }
@@ -1678,7 +1694,7 @@ sub to_pull {
          if ($dryrun || $diff) {
             printf "dryrun %7s %s\n", $action_by_file->{$f}, $f;
          } else { 
-            printf "%7s %s\n", $action_by_file->{$f}, $f;
+            printf        "%7s %s\n", $action_by_file->{$f}, $f;
          }
       }
    }

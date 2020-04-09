@@ -1,16 +1,26 @@
 [CmdletBinding(PositionalBinding=$false)]
 
 param (
-    [switch]$v = $false,
-    [switch]$reverse = $false,
-    [switch]$r       = $false,
+    [switch][Alias("v")]$verbose                 = $false,
+    [switch][Alias("r")]$reverse                 = $false,
+    [switch][Alias("n")]$dryrun                  = $false,
+    [switch][Alias("d")]$diff                    = $false,
+    [switch]$KeepTmpFile                         = $false,
+    [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
+    [Alias("x"           )][string []] $excludes = $null, 
+    [Int]$timeout                                = 300,
+    [Int]$idle                                   = 600,
+    [Int]$maxtry                                 = 5,
+    [Int]$interval                               = 30,
+    [Int]$maxsize                                = -1,
+    [switch]$deep                                = $false,      
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
 Set-StrictMode -Version Latest
 #Set-PsDebug -Trace 1
 
-if ($v) {
+if ($verbose) {
    $verbosePreference = "Continue"
 }
 
@@ -19,11 +29,16 @@ $version_split = $version -split "[.]"
 $expected_peer_protocol = $version_split[0]
 Write-Verbose "`$expected_peer_protocol = $expected_peer_protocol"
 
-$reverse = $false
-if ($r -or $reverse) {
-   $reverse = $true
-}
- 
+$AsciiEncoding = new-object System.Text.AsciiEncoding
+$BufferSize = 4*1024*1024
+$buffer = new-object System.Byte[] $BufferSize
+$encoding = new-object System.Text.AsciiEncoding
+$homedir = $HOME
+# https://docs.microsoft.com/en-us/dotnet/api/system.io.path.gettemppath?view=netframework-4.8&tabs=windows
+# C:\Users\UserName\AppData\Local\Temp\ 
+$tmpdir = [System.IO.Path]::GetTempPath()
+$prog = write-Host ($PSCommandPath.Split('/\'))[-1]
+$scriptdir = (Split-Path -Parent $PSCommandPath) 
 
 function usage {
   param([string]$message = $null)
@@ -45,9 +60,53 @@ Usage:
      tpdist server local_port  -reverse remote_port remote_path1 remote_path2 ... local_dir
      tpdist client remote_host remoe_port -reverse
 
-   if remote path is a relative path, it will be relative to remote user's home dir.
+   If remote path is a relative path, it will be relative to remote user's home dir.
+   The current user homedir=$homedir
 
-   -v                  verbose mode.
+Common Swithes
+
+   -v                 verbose mode.
+
+   -KeepTimeFile      default to delete it. tmpdir=$tmpdir
+
+  -r|reverse          server-pull/client-push. default is server-push/client-pull
+
+  -timeout seconds
+                      time to wait for peer to finish a transaction, default to 300
+
+Server-only Switches
+
+  -idle seconds
+                      max idle time before close server socket, default to 600
+
+Pull-Side-Ony Switches
+
+   -n                 dryrun mode, list the filenames only
+
+   -diff              diff mode. Besides listing file names as in dryrun mode, also
+                      run diff if the file is on both sides. This mode will not
+                      change any files.
+
+   -maxsize           get up to this much bytes of total update, this is to limit
+                      the size of update, meaning will drop some changes.
+                      default is -1, meaning no limit.
+
+   -matches2 'pattern1', 'pattern2', ... (separated by ',')
+                      only files that matching this pattern (Perl RegEx style).
+                      can be specified multiple times (in OR logic).
+
+   -excludes 'pattern1', 'pattern2', ... (separated by ',')
+                      exclude files that matching this pattern (Perl RegEx style)
+                      can be specified multiple times (in OR logic).
+
+   -deep              set to always use cksum to check. Default is fast check: if file size
+                      and timestamp matches, we don't use cksum. cksum is time-consumig.
+
+   -maxtry times
+                      retry to connect to server, default to 5
+
+   -interval seconds
+                       time between each retry, default to 30
 
 Examples:
 
@@ -60,7 +119,6 @@ Examples:
      tpdist.ps1 client localhost 5555 'C:/users/william/github/tpsup/ps1' 'C:/users/william/github/tpsup/kdb' /tmp
 
 "
-
    exit 1
 }
 
@@ -68,12 +126,6 @@ Examples:
 function get_timestamp {
   return "{0:yyyyMMdd} {0:HH:mm:ss}" -f (Get-Date)
 }
-
-$AsciiEncoding = new-object System.Text.AsciiEncoding
-$BufferSize = 4*1024*1024
-$buffer = new-object System.Byte[] $BufferSize
-$encoding = new-object System.Text.AsciiEncoding
-$homedir = $HOME
 
 
 function send_text {
@@ -119,33 +171,123 @@ function is_allowed {
 function to_pull {
    param (
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
-      [Parameter(Mandatory = $true)]$remote_dirs = $null,
-      [Parameter(Mandatory = $true)]$local_dirs = $null
+      [Parameter(Mandatory = $true)][string []]$remote_paths = $null,
+      [Parameter(Mandatory = $true)][string]$local_dir = $null
    )
 
    $tcpStream = $tcpConnection.GetStream()
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-   $remote_dirs_string = $remote_dirs -join "|"
+   $socket = $null
+   if ($role -eq "server") {
+      $socket = $tcpConnection.Client
+   } else {
+      $socket = $tcpConnection.Server
+   }
+
+   # block socket before writing
+   $socket.Blocking = $true
+
+   $local_dir.TrimEnd('/\') # remove the trailing /
+   $local_dir_abs = get_abs_path $local_dir
+
+   $local_paths = @()
+   foreach ($remote_path in $remote_paths) {
+      if ( ($remote_path -match '^[a-zA-Z]:[/\]') -or ($remote_path -match '^[/\]') ) {
+         Write-Host "ERROR: cannot copy from root dir. $remote_path is a root dir."
+      }
+
+      $remote_path = $remote_path.Replace('\', '/').TrimEnd('/')   # convert \ to /. remove the ending  /
+
+      # get the last component; we will treat it as a subdir right under local_dir
+      $remote_path -match '[^/]+)$'
+      $back = Matches[1]
+
+      $local_path = "$local_dir/$back"
+
+      # resolve dir/*csv to dir/a.csv, a/b.csv, ...
+      #    example:
+      #       $0 client host port /a/b/c/*.csv d
+      #    we need to check whether we have d/*.csv
+
+      $globs = @(Resolve-Path -Path $local_path|Select -ExpandProperty "Path")
+
+      # if (!@()) {write-Host "no"}
+      if (!$? -or !$globs) { continue }
+
+      foreach ($path in $globs) {
+         my $local_abs = get_abs_path $path
+         if (!$local_abs) { continue }
+         Write-Verbose "$(get_timestamp) remote ($remote_path) -> local ($local_path) -> local abs ($local_abs)"
+         $local_paths += $local_abs;
+      }
+   }
+
+   Write-Verbose "building local tree using abs_path: $($local_paths -join " "), "
+   $local_tree, $other = @(build_dir_tree $local_paths, @{excludes=$excludes;matches2=$matches2})
+   Write-Verbose "local_tree = $(ConvertTo-Json $local_tree)"
+
+   # block socket when writing;flush writes manually
+   $socket.Blocking = $true
+
+   Write-Verbose "sending version: $version"
+   send_text $writer "<VERSION>$version</VERSION>`n"
+
+   $paths_string = $remote_paths -join '|'
+   Write-Verbose "sending paths: $paths_string"
+   send_text $writer "<PATH>$paths_string</PATH>`n"
+
+   $deep_number = 0
+   if ($deep) { $deep_number = 1 }
+   Write-Verbose "sending deep check flag: $deep_number"
+   send_text $writer "<DEEP>$deep_number</DEEP>`n"
+
+   # https://powershellexplained.com/2017-11-20-Powershell-StringBuilder/
+   $local_tree_block = ""
+   $local_tree_items = 0
+   if ($local_tree) {
+      $sb = [System.Text.StringBuilder]::new()
+
+      foreach ($k in @($local_tree.Keys|sort)) {
+         $local_tree_items ++
+         $string = "key=$k";
+         foreach ($attr in @($local_tree[$k].Keys|sort)) {
+            $string += "|$attr=$($local_tree[$k][$attr])";
+         }
+         $sb.Append("$string`n")
+      }
+      $local_tree_block = $sb.ToString()
+   }
+   Write-Verbose "sending local tree, $local_tree_itesm items"
+   send_text $writer "<TREE>$local_tree_block</TREE>`n"
+
+   Write-Verbose "sending maxsize: $maxsize"
+   send_text $writer "<MAXSIZE>$maxsize</MAXSIZE>`n"
+
+   $excludes_string = "";
+   if ($excludes) { $excludes_string = $excludes -join "`n"}
+   Write-Verbose "sending excludes: $excludes_string"
+   send_text $writer "<EXCLUDE>$excludes_string</EXCLUDE>`n"
+
+   $matches2_string = "";
+   if ($matches2) { $mathces2_string = $matches2 -join "`n"}
+   Write-Verbose "sending matches: $matches2_string"
+   send_text $writer "<MATCH>$matches2_string</MATCH>`n"
 
    $os = Get-CimInstance Win32_OperatingSystem
    $uname = "PowerShell| $($os.Caption) $($os.Version)"
-
-   send_text $writer "<VERSION>$version</VERSION>`n"
-   send_text $writer "<PATH>$remote_dirs_string</PATH>`n"
-   send_text $writer "<DEEP>0</DEEP>`n"
-   send_text $writer "<TREE></TREE>`n"
-   send_text $writer "<MAXSIZE>-1</MAXSIZE>`n"
-   send_text $writer "<EXCLUDE></EXCLUDE>`n"
-   send_text $writer "<MATCH></MATCH>`n"
+   Write-Verbose "sending prog|uname: $uname"
    send_text $writer "<UNAME>$uname</UNAME>`n"
 
    $writer.Flush()
 
+   # unblock socket when reading
+   $socket.blocking = $false
+
    $patterns = @('<NEED_CKSUMS>(.*)</NEED_CKSUMS>')
    
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 300})
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
@@ -153,19 +295,40 @@ function to_pull {
       $tcpStream.close()
       return
    }
-
-   Write-Verbose "`$captures = $(ConvertTo-Json $captures)"
-
    $need_cksums_string = $captures[0][0]
+ 
+   $need_cksums = @()
+   $cksums_results = @()
+   if ($need_cksums_string) {
+      $need_cksums = $need_cksums_string -split "`n"
 
-   Write-Verbose "received cksum requests, calculating cksums"
+      Write-Host "$(get_timestamp) received cksum requests, $($need_cksums.Count) items. calculating local cksums"
 
-   # todo
+      $local_cksums_by_file = get_cksums $need_cksums $local_tree
 
-   $cksums_results_string = ""
+      foreach ($f in ($local_cksums_by_file.Keys|sort)) {
+         $cksums_results.Add("$local_cksums_by_file[$f] $f")
+      }
+   } else {
+      Write-Host "$(get_timestamp) received cksum requests, 0 items"
+   }
 
-   send_text $writer "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>"
-   $writer.Flush()
+   # don't unblock socket when writing; doing so would corrupt data.
+   # instead, flush writes manually
+   $socket.Blocking = $true
+
+   $cksums_results_string = $cksums_results -join "`n"
+
+   Write-Host "$(get_timestamp) sending cksum results: $($cksums_results.Count) item(s)"
+
+   send_text $writer "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>`n"
+
+   $writer.Flush() # flush data when writes are done.
+
+   Write-Host "$(get_timestamp) waiting instructions from remote ..."
+
+   # unblock socket when reading
+   $socket.Blocking = $false
 
    $patterns = @('<DELETES>(.*)</DELETES>',
                  '<MTIMES>(.*)</MTIMES>',
@@ -174,8 +337,7 @@ function to_pull {
                  '<ADDS>(.*)</ADDS>',
                  '<WARNS>(.*)</WARNS>')
 
-
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
@@ -191,19 +353,133 @@ function to_pull {
    $adds_string    =      $captures[4][0];
    $warns_string   =      $captures[5][0];
 
-   $local_dir_abs = get_abs_path $local_dir
-   if ( -not (Test-Path -Path $local_dir_abs)) {
-      Write-Host $(get_timestamp) "creating directory $local_dir_abs"
-      try { New-Item -ItemType "directory" -Path $local_dir_abs -Force }
-      catch { Write-Error $_; exit 1}     
+   # if local_dir doesn't exist yet, we don't mkdir now because if this is a
+   # dryrun or diff, then we shouldn't create a dir. we will create it later.
+   # But why do we "cd $local_dir_abs" here? because the followed deletes use
+   # the relative path; so does diff.
+
+   if (Test-Path -Path $local_dir_abs) {
+      Write-Host "$(get_timestamp) cd '$local_dir_abs'"
+      cd $local_dir_abs
+      if (!$?) { Write-Host "ERROR: cd $local_dir_abs failed"; exit 1}
+
+      if ($deletes_string) {
+         $deletes = @($deletes_string -split "`n")
+
+         $last_delete = $null
+
+         foreach ( $d in ($deletes|sort)) {
+            if (!$last_delete -or ! ($d -match "$last_delete") ) {
+               # if we already deleted the dir, no need to delete files under it.
+
+               $cmd = "rm -r -fo '$d'"
+               if ($dryrun -or $diff) {
+                  Write-Host "dryrun $cmd"
+               } else {
+                  Write-Host "$cmd"
+                  Invoke-Expression $cmd
+                }
+
+               $last_delete = $d;
+            }
+         }
+      }
    }
-   Write-Host $(get_timestamp) "cd $local_dir_abs"
 
-   #Set-Location -Path $local_dir_abs
-   cd $local_dir_abs
+   $diff_files = @()
 
-   send_text $writer "please send data`n"
-   $writer.Flush()
+   if ($adds_string) {
+      $action_by_file = @{};
+
+      $adds = @($adds_string -split "`n")
+
+      foreach ($a in $adds) {
+         if ($a -match "^\s*(\S+?) (.+)") {
+            $action = $Matches[1]
+            $file   = $Matches[2]
+
+            if ($action -eq 'update') {$diff_files.Add($file)}
+
+            if ($action_by_file[$file]) { Write-Host "ERROR: $file appeared more than once on remote side" }
+            $action_by_file[$file] = $action
+         } else {
+            Write-Host "ERROR: unexpected format $a. expecting: (add|update|newType) file"
+            exit 1
+         }
+      }
+
+      foreach ($f in ($action_by_file.Keys|sort)) {
+         if ($dryrun -or $diff) {
+            Write-Host ("dryrun {0,7} {1}`n", $action_by_file[$f], $f)
+         } else {
+            Write-Host (       "{0,7} {1}`n", $action_by_file[$f], $f)
+         }
+      }
+   }
+
+   if ($warns_string) {
+      $warns = @($warns_string -split "`n")
+      foreach ($w in $warns) {
+         Write-Host "warning from remote side: $w"
+      }
+   }
+
+   #(Get-WmiObject win32_logicaldisk | Where-Object {$_.DeviceId -eq 'C:'}).FreeSpace
+   # check tmp space
+   $tmpfile = $null
+   try  { 
+      $tmpfile = get_tmp_file ".tar" @{chkSpace=($RequiredSpace*2)}
+   } catch {
+      send_text $writer ($_.Exception.Message + "`n")
+      $writer.Flush()
+      return
+   }
+
+   if (!$adds_string) {
+      $message = "nothing to add or update"
+      Write-Host "$(get_timestamp) $message"
+      send_text $writer "$message`n"
+      # don't return here as we will other work to do
+   } elsif (!$dryrun) {
+      # block socket when writing to avoid corrupt data and flush writes manually
+      $socket.Blocking = $true
+
+      if ($diff) {
+         send_text $writer "please send diff`n"
+      } else {
+         send_text $writer "please send data`n"
+      }
+
+      $writer.Flush()
+
+      $tmp_diff_dir = $null
+      if ($diff) {
+         $tmp_diff_dir = get_tmp_file "_dir" @{isDir=$true; chkSpace=($RequiredSpace*2)}
+         if (! -d $tmp_diff_dir) {
+            my $cmd = "mkdir -p '$tmp_diff_dir'";
+            $quiet || print get_timestamp(), "$cmd\n";
+            $dryrun || system($cmd) && croak "$cmd failed";
+         }
+
+         print get_timestamp(), "cd '$tmp_diff_dir'\n";
+         chdir($tmp_diff_dir) || croak "cd '$tmp_diff_dir' failed";
+      } else {
+         if (! -d $local_dir_abs) {
+            my $cmd = "mkdir -p '$local_dir_abs'";
+            $quiet || print get_timestamp(), "$cmd\n";
+            $dryrun || system($cmd) && croak "$cmd failed";
+         }
+
+         $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
+         chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
+      }
+
+      # unblock socket when reading
+      $socket->blocking(0);
+
+
+
+
 
    $temp_file = [System.IO.Path]::GetTempFileName()
    $tmp_tar_file = [System.IO.Path]::ChangeExtension($temp_file, ".tar")
@@ -290,7 +566,7 @@ function to_be_pulled {
       '<UNAME>(.+)</UNAME>'
    )
 
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
@@ -577,7 +853,7 @@ function to_be_pulled {
 
    $patterns = @('<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>')
 
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
@@ -681,7 +957,7 @@ function to_be_pulled {
  
    $patterns = @('please send (data|diff|unpacked)')
 
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = 3})
+   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
@@ -692,7 +968,14 @@ function to_be_pulled {
 
    $mode = $captures[0][0]  
 
-   $tmp_tar_file = get_tmp_file ".tar" @{chkSpace=($RequiredSpace*2)}
+   $tmp_tar_file = $null
+   try  { 
+      $tmp_tar_file = get_tmp_file ".tar" @{chkSpace=($RequiredSpace*2)}
+   } catch {
+      send_text $writer ($_.Exception.Message + "`n")
+      $writer.Flush()
+      return;
+   }
 
    Write-Host "$(get_timestamp) received tranfer mode: $mode. creating tmp local tar file: $tmp_tar_file"
 
@@ -723,21 +1006,45 @@ function to_be_pulled {
       set_hash_of_arrays $files_by_front $front $f
    }
 
-   $created_tar = $false
+   $need_to_create_tar = $true
+   $tar_created = $false
 
    foreach ($front in @($files_by_front.Keys|sort)) {
       $files = @($files_by_front[$front]|sort)
-      tar_file_list $front $tmp_tar_file $files $created_tar
-      $created_tar = $true
+      tar_file_list $front $tmp_tar_file $files $need_to_create_tar
+      $need_to_create_tar = $false
+      $tar_created = $true     
    }
-
-   if (!$created_tar) {
+ 
+   if (!$tar_created) {
       Write-Host "$(get_timestamp) no tar created, close this remote connection";
-      return;
+      return
    }
 
-   Remove-Item $tmp_tar_file
+   # don't unblock socket when writing; doing so would corrupt data.
+   # instead, flush writes manually
+   $socket.Blocking = $true
 
+   Write-Host "$(get_timestamp) sending tar-format data (mode=$mode) to remote."
+
+   $in_stream = [System.IO.File]::OpenRead($tmp_tar_file)
+
+   $total_size = 0
+   while($size = $in_stream.Read($buffer, 0, $BufferSize)) {
+      $writer.Write($buffer, 0, $size)
+      $total_size += $size
+   }
+
+   $in_stream.close()
+   $socket.close()
+
+   Write-Host "$(get_timestamp) sent total_size=$total_size. closed remote connection"
+
+   if ($KeepTmpFile) {
+      Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept"
+   } else {
+      Remove-Item $tmp_tar_file
+   }
 }
 
 
@@ -789,7 +1096,7 @@ function build_dir_tree {
 
       foreach ($p in $globs) {
          $abs_path = $null
-         if ( ($p -match "^[a-zA-Z]:[/\\]") -or ($p -match "^[/\\]") ) {
+         if ( ($p -match '^[a-zA-Z]:[/\]') -or ($p -match '^[/\]') ) {
             # examples: C://users, C:\\users, //netappsrv/data, \\netappsrv\data
 
             # this is abs path, still simplify it: a/../b -> b
@@ -852,6 +1159,8 @@ function build_dir_tree {
             exit 1
          }
 
+         $front_length = $front.Length
+
          <#
           foreach ($f in @(Get-ChildItem -Recurse tmp)) { ConvertTo-Json $f}
          
@@ -865,6 +1174,10 @@ function build_dir_tree {
           foreach ($f in @(Get-ChildItem -Recurse tmp\ps1\List-Exe.ps1)) { ConvertTo-Json $f}
           foreach ($f in @(Get-ChildItem -Recurse -Directory tmp)) { ConvertTo-Json $f}
           foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.DirectoryName)\$($f.Name) $($f.LastWriteTime)"}
+          foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.Name) $($f.LastWriteTime)"}
+          foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.Name) $($f.LastWriteTime)"}
+
+          Get-ChildItem -Recurse tmp|resolve-path
          
           foreach ($f in @(Get-ChildItem -Recurse tmp)) { 
              write-host "$($f.FullName) $($f.Mode) $($f.length) $($f.LastWriteTime) PSIsContainer=$($f.PSIsContainer) LinkType=$($f.LinkType) Target=$($f.Target)"}
@@ -891,7 +1204,9 @@ function build_dir_tree {
                Write-Host "$(get_timestamp) checked $file_count files"
             }
 
-            $f = $item.FullName
+            $f = $item.FullName.Substring($front_length).replace('\', '/')   # remote $front from full path
+            
+            Write-Host "before f=$f front=$front"
 
             if ($opt["matches2"] -and $opt["matches2"].count -ne 0) {
                $matched = $false
@@ -923,7 +1238,7 @@ function build_dir_tree {
 
             if (!(Test-Path -LiteralPath $f -ErrorAction SilentlyContinue)) {
                set_nested_hash $tree @($f, 'skip') "no access"
-               contiue
+               continue
             }
 
             if (get_nested_hash $tree @($f, 'back')) {         
@@ -985,7 +1300,7 @@ function tar_file_list {
       [Parameter(Mandatory = $true)][string]$front = $null,
       [Parameter(Mandatory = $true)][string]$tar = $null,
       [Parameter(Mandatory = $true)][string []]$files = $null,
-      [Parameter(Mandatory = $true)][boolean]$create = $null,
+      [Parameter(Mandatory = $true)][boolean]$need_to_create_tar = $true,
       [hashtable]$opt = $null
    )
 
@@ -1009,7 +1324,7 @@ function tar_file_list {
    $file_string = @(foreach ($f in $files) {"'$f'"}) -join " "
    $substring = $file_string
    if ($file_string.Length -gt 30) {
-      $substring = "$($file_string.Substring(0,50)) ..."
+      $substring = "$($file_string.Substring(0,50)) ...($($files.Count) items)"
    }
 
    Write-Host "$(get_timestamp) cd $front; tar -cf $tar $substring"
@@ -1018,7 +1333,7 @@ function tar_file_list {
    cd $front
 
    $command = $null
-   if ($create) {
+   if ($need_to_create_tar) {
       # -v switch triggers an error, therefore, we don't use it
       # PS C:\users\william> tar -cvf test.tar "tmp\ps1\List-Exe.ps1"|Out-Null
       # tar : a tmp/ps1/List-Exe.ps1
@@ -1032,7 +1347,9 @@ function tar_file_list {
    } else {
       $command = "tar -uf $tar $file_string"
    }
+   #Set-PsDebug -Trace 1
    Invoke-Expression $command | Out-Host
+   #Set-PsDebug -Trace 0
    
    cd $saved_tar_pwd
 }
@@ -1309,13 +1626,11 @@ function cksum {
 
    #Set-PsDebug -Trace 1
    while($n = $ifd.Read($CksumBuffer, 0, $CksumBufferSize)) {
-      Write-Host "one round"
       $size += $n
 
       for ($i=0; $i -lt $n; $i++) {
          $c = $CksumBuffer[$i]
          $index = (0xff -band ($cksum -shr 24)) -bxor $c
-         #Write-Host "index=$index"
          $cksum = ([uint64]'0xffffffff' -band ($cksum -shl 8)) -bxor $crctab[$index]
          #Write-Host "c=$c, index=$index, cksum=$cksum"
       }
@@ -1363,14 +1678,27 @@ function get_cksums {
 
 function get_tmp_file {
    param (
-      [Parameter(Mandatory = $true)][AllowEmptyCollection()][string]$extension = $null,
-      $opt = $null
+      [Parameter(Mandatory = $true)][string]$basedir = $null,
+      [Parameter(Mandatory = $true)][string]$prefix = $null,
+      [hashtable]$opt = $null
    )
 
-   # to do check space
-   $tmp_file = [System.IO.Path]::GetTempFileName()
-   $new_name = [System.IO.Path]::ChangeExtension($tmp_file, $extension)
-   Move-Item $tmp_file $new_name
+   #Set-PsDebug -Trace 1
+   if ($opt['chkSpace']) {
+      # assume tmp file is from C:
+      $free_space = (Get-WmiObject win32_logicaldisk | Where-Object {$_.DeviceId -eq 'C:'}).FreeSpace
+      if ($free_space -lt $opt['chkSpace']) {
+         Write-Host "ERROR: FreeSpace ($free_space) <  Required space $($opt['chkSpace'])"
+         throw "not enough free tmp space"
+      } else {
+         Write-Verbose     "FreeSpace ($free_space) >= Required space $($opt['chkSpace'])"
+      }
+   }
+
+   $yyyy,$mm,$dd = (Get-Date -format "yyyy-MM-dd").split('-')
+
+   # Set-PsDebug -Trace 0
+
 
    return $new_name
 }
@@ -1415,6 +1743,11 @@ if ($role.ToLower() -eq 'server') {
       $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
       write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
       write-verbose "local_dir=$local_dir"
+
+      if ((Test-Path -Path $local_dir) -and -not (Test-Path -Path $local_dir -PathType Container)) {
+         Write-Host "ERROR: local_dir=$local_dir is not a directory"
+         exit 1
+      }
    }
 
    $listener_port = $remainingArgs[1]
@@ -1486,6 +1819,11 @@ if ($role.ToLower() -eq 'server') {
       $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
       write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
       write-verbose "local_dir=$local_dir"
+
+      if ((Test-Path -Path $local_dir) -and -not (Test-Path -Path $local_dir -PathType Container)) {
+         Write-Host "ERROR: local_dir=$local_dir is not a directory"
+         exit 1
+      }
    }
 
    $remote_host,$remote_port = $remainingArgs[1..2]
