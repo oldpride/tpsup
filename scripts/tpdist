@@ -1463,6 +1463,11 @@ sub to_pull {
    
    $| = 1;
 
+   my $dryrun_string = "";
+   if ($dryrun||$diff) {
+      $dryrun_string = "dryrun";
+   }
+
    $local_dir =~ s:[/]+$::; # remove the trailing /
    my $local_dir_abs = get_abs_path($local_dir);
 
@@ -1691,11 +1696,7 @@ sub to_pull {
       }
 
       for my $f (sort (keys %$action_by_file)) {
-         if ($dryrun || $diff) {
-            printf "dryrun %7s %s\n", $action_by_file->{$f}, $f;
-         } else { 
-            printf        "%7s %s\n", $action_by_file->{$f}, $f;
-         }
+         printf "$dryrun_string %7s %s\n", $action_by_file->{$f}, $f;
       }
    }
 
@@ -1707,9 +1708,9 @@ sub to_pull {
    }
 
    # check tmp space
-   my $tmpfile = get_tmp_file($tmpdir, $prog, {chkSpace=>$RequiredSpace*2});
+   my $tmp_tar_file = get_tmp_file($tmpdir, $prog, {chkSpace=>$RequiredSpace*2});
 
-   if (!$tmpfile) {
+   if (!$tmp_tar_file) {
       $quiet || print get_timestamp(), "space check: not enough space under $tmpdir, requiring ", $RequiredSpace*2, " bytes, disk full?\n";
       exit 1 if !$dryrun;
    } else {
@@ -1740,7 +1741,7 @@ sub to_pull {
          $tmp_diff_dir = get_tmp_file($tmpdir, $prog, {isDir=>'Y', chkSpace=>$RequiredSpace*2});
          if (! -d $tmp_diff_dir) {
             my $cmd = "mkdir -p '$tmp_diff_dir'";
-            $quiet || print get_timestamp(), "$cmd\n";
+            $quiet || print get_timestamp(), "$dryrun_string $cmd\n";
             $dryrun || system($cmd) && croak "$cmd failed";
          }
    
@@ -1749,7 +1750,7 @@ sub to_pull {
       } else {
          if (! -d $local_dir_abs) {
             my $cmd = "mkdir -p '$local_dir_abs'";
-            $quiet || print get_timestamp(), "$cmd\n";
+            $quiet || print get_timestamp(), "$dryrun_string $cmd\n";
             $dryrun || system($cmd) && croak "$cmd failed";
          }
    
@@ -1784,7 +1785,7 @@ sub to_pull {
                # open $fh, "|tar -xvfp -" or die "tar -xvfp - failed";
                # Therefore, we save the output to file.
                #
-               open $fh, ">$tmpfile" or die "cannot write to $tmpfile";
+               open $fh, ">$tmp_tar_file" or die "cannot write to $tmp_tar_file";
                binmode($fh);
             }
 
@@ -1810,16 +1811,16 @@ sub to_pull {
       } else {
          my $tar_verbose = $quiet ? "" : "v";
 
-         my $cmd = ($os_name =~ /^CYGWIN|Msys/i) ? "tar -x${tar_verbose}f  $tmpfile" :
-                                                   "tar -x${tar_verbose}pf $tmpfile";
+         my $cmd = ($os_name =~ /^CYGWIN|Msys/i) ? "tar -x${tar_verbose}f  $tmp_tar_file" :
+                                                   "tar -x${tar_verbose}pf $tmp_tar_file";
          #Msys is Git Bash 
          print get_timestamp(), "$cmd\n" if $verbose;
          system($cmd);
 
          if ($KeepTmpFile) {
-            print get_timestamp(), "tmp file $tmpfile is kept\n";
+            print get_timestamp(), "tmp file $tmp_tar_file is kept\n";
          } else {
-            unlink($tmpfile);
+            unlink($tmp_tar_file);
          }
       }
 
@@ -1856,10 +1857,8 @@ sub to_pull {
       for my $l (@lines) {
          if ($l =~ /^([0-9]+)\s+(\S.*)/) {
             my ($mtime, $f) = ($1, $2);
-            if ($dryrun || $diff) {
-               print "dryrun utime($mtime, $mtime, $f)\n";
-            } else {
-               print "utime($mtime, $mtime, $f)\n";
+            print "$dryrun_string utime($mtime, $mtime, $f)\n";
+            if ( !$dryrun && !$diff) {
                utime($mtime, $mtime, $f) || print "utime($mtime, $mtime, $f) failed\n";
             }
          } else {
@@ -1876,11 +1875,9 @@ sub to_pull {
             my ($mode, $f) = ($1, $2);
    
             #my $octal = sprintf("0%o", $mode);
-          
-            if ($dryrun || $diff) {
-               print "dryrun chmod(oct(\"$mode\"), $f)\n";
-            } else {
-               print "chmod(oct(\"$mode\"), $f)\n";
+            print "$dryrun_string chmod(oct(\"$mode\"), $f)\n";
+
+            if (!$dryrun && !$diff) {
                chmod(oct("$mode"), $f);
             }
          } else {

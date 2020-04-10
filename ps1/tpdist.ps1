@@ -1,10 +1,10 @@
 [CmdletBinding(PositionalBinding=$false)]
 
 param (
-    [switch][Alias("v")]$verbose                 = $false,
-    [switch][Alias("r")]$reverse                 = $false,
-    [switch][Alias("n")]$dryrun                  = $false,
-    [switch][Alias("d")]$diff                    = $false,
+    [switch]$v                                   = $false,
+    [Alias("r")][switch]$reverse                 = $false,
+    [Alias("n")][switch]$dryrun                  = $false,
+    [Alias("d")][switch]$diff                    = $false,
     [switch]$KeepTmpFile                         = $false,
     [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
     [Alias("x"           )][string []] $excludes = $null, 
@@ -20,7 +20,7 @@ param (
 Set-StrictMode -Version Latest
 #Set-PsDebug -Trace 1
 
-if ($verbose) {
+if ($v) {
    $verbosePreference = "Continue"
 }
 
@@ -37,17 +37,23 @@ $homedir = $HOME
 # https://docs.microsoft.com/en-us/dotnet/api/system.io.path.gettemppath?view=netframework-4.8&tabs=windows
 # C:\Users\UserName\AppData\Local\Temp\ 
 $tmpdir = [System.IO.Path]::GetTempPath()
-$prog = write-Host ($PSCommandPath.Split('/\'))[-1]
-$scriptdir = (Split-Path -Parent $PSCommandPath) 
+$prog = ($PSCommandPath.Split('/\'))[-1]
+$scriptdir = (Split-Path -Parent $PSCommandPath)
+
+# to get UNIX-style mtime, which seconds from epoc time.
+# https://stackoverflow.com/questions/4192971/in-powershell-how-do-i-convert-datetime-to-unix-time
+$unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
+# seconds from epoc to now, ie, mtime
+# [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
 
 function usage {
   param([string]$message = $null)
 
   if ($message) {
-     Write-Host $(get_timestamp) $message
+     Write-Host $message
   }
 
-  Write-Host $(get_timestamp) "
+  Write-Host "
 Usage:
 
    tpdist in powershell
@@ -175,6 +181,11 @@ function to_pull {
       [Parameter(Mandatory = $true)][string]$local_dir = $null
    )
 
+   $dryrun_string = ""
+   if ($dryrun -or $diff) {
+      $dryrun_string = "dryrun"
+   }
+
    $tcpStream = $tcpConnection.GetStream()
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
@@ -189,17 +200,19 @@ function to_pull {
    # block socket before writing
    $socket.Blocking = $true
 
-   $local_dir.TrimEnd('/\') # remove the trailing /
+   $local_dir.TrimEnd('/\') # remove the trailing /, literal match, no need to escape
    $local_dir_abs = get_abs_path $local_dir
 
    $local_paths = @()
    foreach ($remote_path in $remote_paths) {
-      if ( ($remote_path -match '^[a-zA-Z]:[/\]') -or ($remote_path -match '^[/\]') ) {
+      # note: ` is escape for powershell, \ is escape for regex
+      if ( ($remote_path -match '^[a-zA-Z]:[/\\]') -or ($remote_path -match '^[/\\]') ) {
          Write-Host "ERROR: cannot copy from root dir. $remote_path is a root dir."
       }
 
-      $remote_path = $remote_path.Replace('\', '/').TrimEnd('/')   # convert \ to /. remove the ending  /
-
+      # convert \ to /. remove the ending  /, literal match, no need to escape
+      $remote_path = $remote_path.Replace('\', '/').TrimEnd('/') 
+        
       # get the last component; we will treat it as a subdir right under local_dir
       $remote_path -match '[^/]+)$'
       $back = Matches[1]
@@ -373,11 +386,9 @@ function to_pull {
                # if we already deleted the dir, no need to delete files under it.
 
                $cmd = "rm -r -fo '$d'"
+               Write-Host "$dryrun_string $cmd"
                if ($dryrun -or $diff) {
-                  Write-Host "dryrun $cmd"
-               } else {
-                  Write-Host "$cmd"
-                  Invoke-Expression $cmd
+                  rm -r -fo $d
                 }
 
                $last_delete = $d;
@@ -409,11 +420,7 @@ function to_pull {
       }
 
       foreach ($f in ($action_by_file.Keys|sort)) {
-         if ($dryrun -or $diff) {
-            Write-Host ("dryrun {0,7} {1}`n", $action_by_file[$f], $f)
-         } else {
-            Write-Host (       "{0,7} {1}`n", $action_by_file[$f], $f)
-         }
+         Write-Host ("$dryrun_string {0,7} {1}`n", $action_by_file[$f], $f)
       }
    }
 
@@ -426,9 +433,9 @@ function to_pull {
 
    #(Get-WmiObject win32_logicaldisk | Where-Object {$_.DeviceId -eq 'C:'}).FreeSpace
    # check tmp space
-   $tmpfile = $null
+   $tmp_tar_file = $null
    try  { 
-      $tmpfile = get_tmp_file ".tar" @{chkSpace=($RequiredSpace*2)}
+      $tmp_tar_file = get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}
    } catch {
       send_text $writer ($_.Exception.Message + "`n")
       $writer.Flush()
@@ -440,7 +447,7 @@ function to_pull {
       Write-Host "$(get_timestamp) $message"
       send_text $writer "$message`n"
       # don't return here as we will other work to do
-   } elsif (!$dryrun) {
+   } elseif (!$dryrun) {
       # block socket when writing to avoid corrupt data and flush writes manually
       $socket.Blocking = $true
 
@@ -454,83 +461,142 @@ function to_pull {
 
       $tmp_diff_dir = $null
       if ($diff) {
-         $tmp_diff_dir = get_tmp_file "_dir" @{isDir=$true; chkSpace=($RequiredSpace*2)}
-         if (! -d $tmp_diff_dir) {
-            my $cmd = "mkdir -p '$tmp_diff_dir'";
-            $quiet || print get_timestamp(), "$cmd\n";
-            $dryrun || system($cmd) && croak "$cmd failed";
-         }
+         $tmp_diff_dir = (get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}) + "_dir"
+         mkdir $tmp_diff_dir
+         if (!$?) { Write-Host "mkdir $tmp_diff_dir failed"; exit 1}
 
-         print get_timestamp(), "cd '$tmp_diff_dir'\n";
-         chdir($tmp_diff_dir) || croak "cd '$tmp_diff_dir' failed";
+         cd $tmp_diff_dir
+         if (!$?) { Write-Host "mkdir $tmp_diff_dir failed"; exit 1}
       } else {
-         if (! -d $local_dir_abs) {
-            my $cmd = "mkdir -p '$local_dir_abs'";
-            $quiet || print get_timestamp(), "$cmd\n";
-            $dryrun || system($cmd) && croak "$cmd failed";
+         if (!(Test-Path $local_dir_abs)) {
+            Write-Host "$(get_timestamp) $dryrun_string mkdir $local_dir_abs"
+            if (!$dryrun) { 
+               mkdir -p $local_dir_abs
+               if (!$?) { Write-Host "mkdir $local_dir_abs failed"; exit 1}
+            }
          }
 
-         $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
-         chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
+         Write-Host "$(get_timestamp) $dryrun_string cd $local_dir_abs"
+         if (!$dryrun) {
+            cd $local_dir_abs
+            if (!$?) { Write-Host "cd $local_dir_abs failed"; exit 1}
+         }
       }
 
       # unblock socket when reading
-      $socket->blocking(0);
+      $socket.Blocking = $false
 
+      Write-Host $(get_timestamp) "waiting for data from remote, will write to $tmp_tar_file"
 
+      # create an FileStream for output
+      $out_stream = $null
+      try   { $out_stream = [System.IO.File]::Create($tmp_tar_file)}
+      catch { Write-Host $(get_timestamp) $_; exit 1}
 
+      $total_size = 0
 
+      while ($tcpConnection.Connected) {     
+          while ($tcpStream.DataAvailable) {
+             $size = $tcpStream.Read($buffer, 0, $BufferSize)
 
-   $temp_file = [System.IO.Path]::GetTempFileName()
-   $tmp_tar_file = [System.IO.Path]::ChangeExtension($temp_file, ".tar")
-   Move-Item $temp_file $tmp_tar_file   
+             if ($size -gt 0 ) {
+                $recv_total_bytes += $size
+                write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"  
+                $out_stream.Write($buffer, 0, $size)            
+             } else {
+                  # this should happen sometimes but never worked.
+                  Write-Host "$(get_timestamp) first time happend. remote closed connection"
+                  exit 1
+             }
+          }
 
-   Write-Host $(get_timestamp) "waiting for data from remote, will write to $tmp_tar_file"
+          if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
+                $tcpConnection.Client.Available -eq 0)) {
+              Write-Host "$(get_timestamp) remote disconnected"
+              break
+          }
 
-   # create an FileStream for output
-   $out_stream = $null
-   try   { $out_stream = [System.IO.File]::Create($tmp_tar_file)}
-   catch { Write-Host $(get_timestamp) $_; exit 1}
+          #start-sleep -Milliseconds 1000
+          sleep 1
+      }
 
-   $total_size = 0
+      $out_stream.flush()
+      $out_stream.dispose()
 
-   while ($tcpConnection.Connected) {     
-      while ($tcpStream.DataAvailable) {
-         $size = $tcpStream.Read($buffer, 0, $BufferSize)
+      Write-Host "$(get_timestamp) received total_size = $total_size"
 
-         if ($size -gt 0 ) {
-            $recv_total_bytes += $size
-            write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"  
-            $out_stream.Write($buffer, 0, $size)            
+      if ($total_size -eq 0) {
+         Write-Host "$(get_timestamp) no new file to add"
+      } else {
+         Write-Host "$(get_timestamp) tar -xf $tmp_tar_file"         
+         # 1. tar -xvf $tmp_tar_file send veriticalut to outp stdout. therefore, use 2 commands instead
+         # 2.need to wait external command to finish before remove the $tmp_tar_file, eg, use |Out_Host
+         #    https://stackoverflow.com/questions/1741490/how-to-tell-powershell-to-wait-for-each-command-to-end-before-starting-the-next
+         tar -xf $tmp_tar_file |Out-Host
+
+         if ($KeepTmpFile) {
+            Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept\n";
          } else {
-              # this never worked.
-              Write-Host $(get_timestamp) "first time happend. remote closed connection"
-              exit 0
+            Write-Verbose "$(get_timestamp) rm $tmp_tar_file"
+            Remove-Item $tmp_tar_file
          }
       }
 
-      if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
-            $tcpConnection.Client.Available -eq 0)) {
-          Write-Host $(get_timestamp) "remote disconnected"
-          break
-      }
+      if ($diff) {
+         Write-Verbose "$(get_timestamp) cd '$old_pwd"
+         $old_pwd
+         if (!$?) { Write-Host "cd $old_pwd failed"; exit 1}
 
-      #start-sleep -Milliseconds 1000
-      sleep 1
+         foreach ($relative_path in $diff_files) {
+            Write-Host "$(get_timestamp) diff (cat '$tmp_diff_dir/$relative_path') (cat '$local_dir_abs/$relative_path')"
+            diff (cat "$tmp_diff_dir/$relative_path") (cat "$local_dir_abs/$relative_path")
+         }
+
+        if ($KeepTmpFile) {
+            Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept\n";
+         } else {
+            Write-Verbose "$(get_timestamp) rm $tmp_tar_file"
+            Remove-Item $tmp_tar_file
+         }
+      }
    }
 
-   $out_stream.flush()
-   $out_stream.dispose()
+   if ($mtimes_string) {
+      $lines = @($mtimes_string -split "`n")
 
-   dir $tmp_tar_file
+      foreach ($l in $lines) {
+         if ($l -match "^([0-9]+)\s+(\S.*)") {
+            $mtime,$f = $Matches[1],$Matches[2]
 
-   # 1. tar -xvf $tmp_tar_file send veriticalut to outp stdout. therefore, use 2 commands instead
-   # 2.need to wait external command to finish before remove the $tmp_tar_file, eg, use |Out_Host
-   #    https://stackoverflow.com/questions/1741490/how-to-tell-powershell-to-wait-for-each-command-to-end-before-starting-the-next
-   tar -tf $tmp_tar_file |Out-Host
-   tar -xf $tmp_tar_file |Out-Host
+            $new_LastWriteTimeUtc = $unixEpochStart.AddSeconds([Int]$mtime)
 
-   Remove-Item $tmp_tar_file
+            Write-Host "$dryrun_string (Get-Item -Path $f).LastWriteTimeUtc = $new_LastWriteTimeUtc"
+            if (!$dryrun -and !$diff) {
+               (Get-Item -Path $f).LastWriteTimeUtc = $new_LastWriteTimeUtc
+            }
+         } else {
+            Write-Host "ERROR: bad mtime format at line: $l"
+         }
+      }
+   }
+
+   if ($modes_string) {
+      $lines = @($modes_string -split "`n")
+
+      foreach ($l in $lines) {
+         if ($l -match "^([0-9]+)\s+(\S.*)") {
+            $mode,$f = $Matches[1..2]
+
+            Write-Host "don't know how to change mode: $mode,$f"
+         } else {
+            Write-Host "ERROR: bad mode format at line: $l"
+         }
+      }
+   }
+
+   if ($warns_string) {
+      print $warns_string, "\n";
+   }
 }
 
 function to_be_pulled {
@@ -803,7 +869,7 @@ function to_be_pulled {
       # compare {test} if it is populated
       # because dir's {test} and link's {test} are hardcoded, we are really only compare files,
 
-      if (!$local_test-and !$remote_test) {
+      if (!$local_test -and !$remote_test) {
          # if both missing tests, we compare mtime first
          # for fast check (default), if size and mtime match, then no need to update.
          # for deep check, or when mtime not matching (but size matching), resort to
@@ -970,7 +1036,7 @@ function to_be_pulled {
 
    $tmp_tar_file = $null
    try  { 
-      $tmp_tar_file = get_tmp_file ".tar" @{chkSpace=($RequiredSpace*2)}
+      $tmp_tar_file = get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}
    } catch {
       send_text $writer ($_.Exception.Message + "`n")
       $writer.Flush()
@@ -1059,12 +1125,6 @@ function build_dir_tree {
       $AllowDenyPatterns = $opt["AllowDenyPatterns"]
    }
    
-   # to get UNIX-style mtime, which seconds from epoc time.
-   # https://stackoverflow.com/questions/4192971/in-powershell-how-do-i-convert-datetime-to-unix-time
-   $unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
-   # seconds from epoc to now
-   # [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
-
    $old_cwd = $pwd   # save pwd as we keep changing dir later
    $tree = @{}
    $other = @{}
@@ -1096,7 +1156,8 @@ function build_dir_tree {
 
       foreach ($p in $globs) {
          $abs_path = $null
-         if ( ($p -match '^[a-zA-Z]:[/\]') -or ($p -match '^[/\]') ) {
+         # note: ` is escape for powershell, \ is escape for regex
+         if ( ($p -match '^[a-zA-Z]:[/\\]') -or ($p -match '^[/\\]') ) {
             # examples: C://users, C:\\users, //netappsrv/data, \\netappsrv\data
 
             # this is abs path, still simplify it: a/../b -> b
@@ -1125,6 +1186,7 @@ function build_dir_tree {
             continue;
          }
 
+         # note: ` is escape for powershell, \ is escape for regex
          if ($abs_path -match '^[/\\]+$') {
             Write-Error "cannot handle $abs_path for $p"
             exit 1
@@ -1141,6 +1203,7 @@ function build_dir_tree {
          $front = $null
          $back  = $null
 
+         # note: ` is escape for powershell, \ is escape for regex
          if ($abs_path -match '^(.*[/\\])(.+)') {
             $front,$back = $Matches[1],$Matches[2]
          } else {
@@ -1175,7 +1238,6 @@ function build_dir_tree {
           foreach ($f in @(Get-ChildItem -Recurse -Directory tmp)) { ConvertTo-Json $f}
           foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.DirectoryName)\$($f.Name) $($f.LastWriteTime)"}
           foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.Name) $($f.LastWriteTime)"}
-          foreach ($f in @(Get-ChildItem -Recurse tmp)) { write-host "$($f.Name) $($f.LastWriteTime)"}
 
           Get-ChildItem -Recurse tmp|resolve-path
          
@@ -1198,15 +1260,15 @@ function build_dir_tree {
          # C:\users\william\tmp\ps1\List-Exe.ps1 -a---- 85 03/22/2020 10:34:15 PSIsContainer=False LinkType=
 
          $file_count = 0
-         :FILES foreach ($item in @(Get-ChildItem -Recurse $back)) {            
+         :FILES foreach ($item in @(Get-Item $back; Get-ChildItem -Recurse $back)) {            
             $file_count ++
-            if ($file_count % 10000 -eq 0) {
+            if ($file_count % 1000 -eq 0) {
                Write-Host "$(get_timestamp) checked $file_count files"
             }
 
             $f = $item.FullName.Substring($front_length).replace('\', '/')   # remote $front from full path
-            
-            Write-Host "before f=$f front=$front"
+
+            Write-Host "f=$f"
 
             if ($opt["matches2"] -and $opt["matches2"].count -ne 0) {
                $matched = $false
@@ -1236,10 +1298,14 @@ function build_dir_tree {
                continue
             }
 
+            Write-Host "f=$f before"
+
             if (!(Test-Path -LiteralPath $f -ErrorAction SilentlyContinue)) {
                set_nested_hash $tree @($f, 'skip') "no access"
                continue
             }
+
+             Write-Host "f=$f after"
 
             if (get_nested_hash $tree @($f, 'back')) {         
                set_nested_hash $tree @($f, 'skip') "duplicate target path: skip $front/$f"               
@@ -1249,10 +1315,18 @@ function build_dir_tree {
             }
             set_nested_hash $tree @($f, 'front') $front
 
-            # $wintime = (Get-Item tmp\ps1\List-Exe.ps1).LastWriteTime
-            $wintime = $item.lastWriteTime
-            $mtime = [int]($wintime - $unixEpochStart).TotalSeconds   # UNIX style, total seconds from epoc
-            set_nested_hash $tree @($f, 'mtime') $mtime
+             Write-Host "f=$f inserted"
+
+
+            # $wintime = (Get-Item tmp\ps1\List-Exe.ps1).LastWriteTimeUtc
+            $wintime = $item.lastWriteTimeUtc
+            # UNIX style, total seconds from epoc. make sure both use UTC time
+            # TotalSeconds is a double, with milliseconds behind the decimal point, and [int] may round it
+            # up if it was greater than 0.5. What we need is to truncate
+            # $mtime = [int]($wintime - $unixEpochStart).TotalSeconds
+            $mtime = [Math]::Truncate(($wintime - $unixEpochStart).TotalSeconds)
+            
+            set_nested_hash $tree @($f, 'mtime') "$mtime" # save it as string because the remote_tree will come in as string too
 
             $type = $null
             $size = 0
@@ -1269,7 +1343,7 @@ function build_dir_tree {
                # if the directory is empty, we can tar the dir.
                # if the directory is not empty, and if we don't want to tar all files
                # in it, we can tar the dir.
-               if ( (Get-ChildItem junkdir|Measure-Object).Count -eq 0) {
+               if ( (Get-ChildItem $f|Measure-Object).Count -eq 0) {
                   set_nested_hash $tree @($f, 'DirEmpty') = $true
                }
             } else {
@@ -1293,6 +1367,16 @@ function build_dir_tree {
    cd $old_cwd
 
    return @($tree, $other)
+}
+
+function diff_f1_f2 {
+  param (
+      [Parameter(Mandatory = $true)][string]$f1 = $null,
+      [Parameter(Mandatory = $true)][string]$f2 = $null,
+      [hashtable]$opt = $null
+   )
+
+   compare-object (get-content $f1) (get-content $f2)
 }
 
 function tar_file_list {
@@ -1676,9 +1760,9 @@ function get_cksums {
    return $cksum_by_file
 }
 
-function get_tmp_file {
+function get_tmp_name {
    param (
-      [Parameter(Mandatory = $true)][string]$basedir = $null,
+      [Parameter(Mandatory = $true)][string]$basedir = "C:\Users\william\AppData\Local\Temp\",
       [Parameter(Mandatory = $true)][string]$prefix = $null,
       [hashtable]$opt = $null
    )
@@ -1695,12 +1779,23 @@ function get_tmp_file {
       }
    }
 
-   $yyyy,$mm,$dd = (Get-Date -format "yyyy-MM-dd").split('-')
+   $yyyy,$mm,$dd,$HH,$MM,$SS = (Get-Date -format "yyyy-MM-dd-HH-MM-SS").split('-')
 
-   # Set-PsDebug -Trace 0
+   # C:\Users\william\AppData\Local\Temp\
+   $tpsuptmp="$basedir/tpsup"
+   $daydir="$tpsuptmp/$yyyy$mm$dd"
 
+   if (!(Test-Path -Path $daydir)) {
+      mkdir $daydir
+      if (!$?) { Write-Host "ERROR: mkdir $daydir failed"; exit 1}
 
-   return $new_name
+      # https://stackoverflow.com/questions/17829785/delete-files-older-than-15-days-using-powershell
+      # remove daydir older than 7 days
+      $cutoff = (Get-Date).AddDays(-7)
+      Get-ChildItem -Path $tpsuptmp | Where-Object { $_.PSIsContainer -and $_.CreationTime -lt $cutoff } | Remove-Item -Force -Recurse
+   }
+
+   return "$daydir/$prefix" + "_" + "$HH$MM$SS"
 }
 
 
