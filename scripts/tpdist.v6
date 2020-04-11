@@ -1823,6 +1823,7 @@ sub expect_socket {
 
             if ($total_wait >= $opt->{ExpectTimeout}) {
                print timestamped(), "expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
+               $socket->send("");
                return (\@matched, \@captures, {status=>'timed out'});
             }
          }

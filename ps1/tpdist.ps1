@@ -9,11 +9,15 @@ param (
     [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
     [Alias("x"           )][string []] $excludes = $null, 
     [Int]$timeout                                = 300,
-    [Int]$idle                                   = 600,
+    [Alias("idle")][Int]$maxidle                 = 600,
     [Int]$maxtry                                 = 5,
     [Int]$interval                               = 30,
     [Int]$maxsize                                = -1,
-    [switch]$deep                                = $false,      
+    [switch]$deep                                = $false,
+    [string]$allowhost                           = $null,
+    [string]$allowfile                           = $null,
+    [string]$denyhost                            = $null,
+    [string]$denyfile                            = $null,   
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
@@ -25,6 +29,8 @@ if ($v) {
 }
 
 $version = "7.0"
+Write-Verbose "version = $version"
+
 $version_split = $version -split "[.]"
 $expected_peer_protocol = $version_split[0]
 Write-Verbose "`$expected_peer_protocol = $expected_peer_protocol"
@@ -33,18 +39,33 @@ $AsciiEncoding = new-object System.Text.AsciiEncoding
 $BufferSize = 4*1024*1024
 $buffer = new-object System.Byte[] $BufferSize
 $encoding = new-object System.Text.AsciiEncoding
+
 $homedir = $HOME
+Write-Verbose "homedir = $homedir"
+
 # https://docs.microsoft.com/en-us/dotnet/api/system.io.path.gettemppath?view=netframework-4.8&tabs=windows
 # C:\Users\UserName\AppData\Local\Temp\ 
 $tmpdir = [System.IO.Path]::GetTempPath()
+Write-Verbose "tmpdir = $tmpdir"
+
 $prog = ($PSCommandPath.Split('/\'))[-1]
+Write-Verbose "prog = $prog"
+
 $scriptdir = (Split-Path -Parent $PSCommandPath)
+Write-Verbose "scriptdir = $scriptdir"
 
 # to get UNIX-style mtime, which seconds from epoc time.
 # https://stackoverflow.com/questions/4192971/in-powershell-how-do-i-convert-datetime-to-unix-time
 $unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
 # seconds from epoc to now, ie, mtime
 # [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
+
+# we cannot copy root dir
+# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/,
+$root_dir_pattern = '^[a-zA-Z]:[/]*$|^[/]+$|^[/]+cygdrive[/]+[^/]+[/]*$';
+
+$old_pwd = $pwd
+Write-Verbose "pwd=$pwd"
 
 function usage {
   param([string]$message = $null)
@@ -80,12 +101,28 @@ Common Swithes
   -timeout seconds
                       time to wait for peer to finish a transaction, default to 300
 
-Server-only Switches
+Passive-side Switches: (To-be Pulled, normal Server state)
 
-  -idle seconds
+   -idle seconds
                       max idle time before close server socket, default to 600
 
-Pull-Side-Ony Switches
+   -allowhost file
+   -denyhost file
+                      file contains allowed/deny host or ip. one per line,
+                      lines stars with # is comment
+                      default:
+                          \$HOME/.tpsup/tpdist_allowhost.txt
+                          \$HOME/.tpsup/tpdist_denyhost.txt
+
+   -allowfile file
+   -denyfile file
+                      file contains allowed/deny dir or file, one per line,
+                      lines stars with # is comment
+                      default:
+                         \$HOME/.tpsup/tpdist_allowfile.txt
+                         \$HOME/.tpsup/tpdist_denyfile.txt
+
+Active-Side Switches: (To Pull, normal Client State)
 
    -n                 dryrun mode, list the filenames only
 
@@ -130,7 +167,7 @@ Examples:
 
 
 function get_timestamp {
-  return "{0:yyyyMMdd} {0:HH:mm:ss}" -f (Get-Date)
+   return "{0:yyyyMMdd} {0:HH:mm:ss}" -f (Get-Date)
 }
 
 
@@ -139,32 +176,108 @@ function send_text {
       [Parameter(Mandatory = $true)]$writer = $null,
       [Parameter(Mandatory = $true)]$text = $null
    )
-
    $writer.Write([system.Text.Encoding]::Default.GetBytes($text))
+}
+
+
+function load_access {
+   param (
+      [Parameter(Mandatory = $true)]$user_specified,
+      [hashtable]$opt = $null
+   )
+   
+   $matrix = @{}
+
+   foreach ($type in @('host', 'file')) {
+      foreach ($access in @('allow', 'deny')) {
+         $key = "${access}${type}"
+
+         $file = $null
+         if ($user_specified[$key]) {
+            $file = $user_specified[$key]
+         } elseif (Test-Path "$homedir/.tpsup/tpdist_$key.txt" -ErrorAction SilentlyContinue) { 
+            $file = "$homedir/.tpsup/tpdist_$key.txt"
+         }
+            
+         if ($file ) {
+            Write-Verbose "reading $file"
+            $patterns = @(read_security_file $file)
+            if ($patterns) {
+               set_nested_hash $matrix @($type,$access) $patterns
+            } else {
+               # why fatal here?
+               # because if a file exists but is empty, for example, if the allow file exists but is
+               # empty, should we allow all or allow none? this becomes ambiguous and prone to error!!
+               Write-Host "FATAL: there is no settings in $file. It may mean 'allow all' or 'deny all'. To avoid ambiguity, either remove file or add settings."
+               exit 1;
+            }
+         }
+      }
+   }
+
+   return $matrix;
+}
+
+
+function read_security_file {
+   param (
+      [Parameter(Mandatory = $true)]$file,
+      [hashtable]$opt = $null
+   )
+
+   if (!(Test-Path $file)) {
+      Write-Host "cannot find $file"
+      exit 1
+   }
+
+   # https://stackoverflow.com/questions/21310538/get-all-lines-containing-a-string-in-a-huge-text-file-as-fast-as-possible
+   # skip blank lines and comment lines
+   # trim blanks at beginning and end of lines
+   # PS C:\Users\william> @("a","a2")|foreach {$_ -replace ("a", "b")} |foreach {$_ -replace ("2", "3")}
+   # b
+   # b3
+   # but the following didn't work
+   # $patterns = @(Get-Content $file | foreach { !($_ -match '^\s*$' -or $_ -match '^\s*#') } | foreach {$_ -replace ('^\s+', '')} | foreach {$_ -replace ('s+$', '')})
+   # resort to old style
+   $patterns = @()
+   $lines = @(Get-Content $file)
+
+   foreach($l in $lines) {
+      # skip blank lines and comment lines
+      if ($l -match '^\s*$' -or $l -match '^\s*#' ) { continue }
+
+      # trim leading and ending blanks
+      $l = $l -replace '^\s+', ''
+      $l = $l -replace '\s+$', ''
+
+      $patterns += $l
+   }
+   
+   return $patterns;
 }
 
 
 function is_allowed {
    param (
-      [Parameter(Mandatory = $true)][string] $string = $null,
-      [Parameter(Mandatory = $true)][hashtable]$AllowDenyPatterns = $null
+      [Parameter(Mandatory = $true)][string] $string,
+      [Parameter(Mandatory = $true)][AllowNull()][hashtable]$AllowDenyPatterns
    )
 
    # handle deny_patterns
-   if ($AllowDenyPatterns["deny"]) {
+   if ($AllowDenyPatterns -and $AllowDenyPatterns["deny"]) {
       foreach ($pattern in $AllowDenyPatterns["deny"]) {
          if ($string -match $pattern) {
-            Write-Verbose "$string is denied by $pattern"
+            Write-Verbose "$string is denied by pattern '$pattern'"
             return $false
          }
       }
    }
    
    # handle allow_patterns
-   if ($AllowDenyPatterns["allow"]) {
+   if ($AllowDenyPatterns -and $AllowDenyPatterns["allow"]) {
       foreach ($pattern in $AllowDenyPatterns["allow"]) {
          if ($string -match $pattern) {
-            Write-Verbose "$string is denied by $pattern"
+            Write-Verbose "$string is allowed by pattern '$pattern'"
             return $true
          }
       }
@@ -176,9 +289,10 @@ function is_allowed {
 
 function to_pull {
    param (
-      [Parameter(Mandatory = $true)]$tcpConnection = $null,
-      [Parameter(Mandatory = $true)][string []]$remote_paths = $null,
-      [Parameter(Mandatory = $true)][string]$local_dir = $null
+      [Parameter(Mandatory = $true)]$tcpConnection,
+      [Parameter(Mandatory = $true)][string []]$remote_paths,
+      [Parameter(Mandatory = $true)][string]$local_dir,
+      [hashtable] $opt = $null
    )
 
    $dryrun_string = ""
@@ -190,12 +304,8 @@ function to_pull {
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-   $socket = $null
-   if ($role -eq "server") {
-      $socket = $tcpConnection.Client
-   } else {
-      $socket = $tcpConnection.Server
-   }
+   # there is no $tcpConnection.Server
+   $socket = $tcpConnection.Client
 
    # block socket before writing
    $socket.Blocking = $true
@@ -205,17 +315,18 @@ function to_pull {
 
    $local_paths = @()
    foreach ($remote_path in $remote_paths) {
-      # note: ` is escape for powershell, \ is escape for regex
-      if ( ($remote_path -match '^[a-zA-Z]:[/\\]') -or ($remote_path -match '^[/\\]') ) {
-         Write-Host "ERROR: cannot copy from root dir. $remote_path is a root dir."
-      }
-
-      # convert \ to /. remove the ending  /, literal match, no need to escape
       $remote_path = $remote_path.Replace('\', '/').TrimEnd('/') 
+
+      if ( $remote_path -match "$root_dir_pattern") {
+         $message = "cannot copy from root dir: $remote_path"
+         Write-Host "ERROR: $message"
+         send_text $writer "$message`n"
+         return
+      }  
         
       # get the last component; we will treat it as a subdir right under local_dir
-      $remote_path -match '[^/]+)$'
-      $back = Matches[1]
+      $remote_path -match '([^/]+)$' | Out-Null
+      $back = $Matches[1]
 
       $local_path = "$local_dir/$back"
 
@@ -224,13 +335,13 @@ function to_pull {
       #       $0 client host port /a/b/c/*.csv d
       #    we need to check whether we have d/*.csv
 
-      $globs = @(Resolve-Path -Path $local_path|Select -ExpandProperty "Path")
+      $globs = @(Resolve-Path -Path $local_path -ErrorAction SilentlyContinue|Select -ExpandProperty "Path")
 
       # if (!@()) {write-Host "no"}
       if (!$? -or !$globs) { continue }
 
       foreach ($path in $globs) {
-         my $local_abs = get_abs_path $path
+         $local_abs = get_abs_path $path
          if (!$local_abs) { continue }
          Write-Verbose "$(get_timestamp) remote ($remote_path) -> local ($local_path) -> local abs ($local_abs)"
          $local_paths += $local_abs;
@@ -238,7 +349,7 @@ function to_pull {
    }
 
    Write-Verbose "building local tree using abs_path: $($local_paths -join " "), "
-   $local_tree, $other = @(build_dir_tree $local_paths, @{excludes=$excludes;matches2=$matches2})
+   $local_tree, $other = @(build_dir_tree $local_paths @{excludes=$excludes;matches2=$matches2})
    Write-Verbose "local_tree = $(ConvertTo-Json $local_tree)"
 
    # block socket when writing;flush writes manually
@@ -266,25 +377,25 @@ function to_pull {
          $local_tree_items ++
          $string = "key=$k";
          foreach ($attr in @($local_tree[$k].Keys|sort)) {
-            $string += "|$attr=$($local_tree[$k][$attr])";
+            $string += "|$attr=$($local_tree[$k][$attr])"
          }
          $sb.Append("$string`n")
       }
       $local_tree_block = $sb.ToString()
    }
-   Write-Verbose "sending local tree, $local_tree_itesm items"
+   Write-Verbose "sending local tree, $local_tree_items items"
    send_text $writer "<TREE>$local_tree_block</TREE>`n"
 
    Write-Verbose "sending maxsize: $maxsize"
    send_text $writer "<MAXSIZE>$maxsize</MAXSIZE>`n"
 
-   $excludes_string = "";
+   $excludes_string = ""
    if ($excludes) { $excludes_string = $excludes -join "`n"}
    Write-Verbose "sending excludes: $excludes_string"
    send_text $writer "<EXCLUDE>$excludes_string</EXCLUDE>`n"
 
-   $matches2_string = "";
-   if ($matches2) { $mathces2_string = $matches2 -join "`n"}
+   $matches2_string = ""
+   if ($matches2) { $matches2_string = $matches2 -join "`n"}
    Write-Verbose "sending matches: $matches2_string"
    send_text $writer "<MATCH>$matches2_string</MATCH>`n"
 
@@ -320,7 +431,7 @@ function to_pull {
       $local_cksums_by_file = get_cksums $need_cksums $local_tree
 
       foreach ($f in ($local_cksums_by_file.Keys|sort)) {
-         $cksums_results.Add("$local_cksums_by_file[$f] $f")
+         $cksums_results += "$local_cksums_by_file[$f] $f"
       }
    } else {
       Write-Host "$(get_timestamp) received cksum requests, 0 items"
@@ -405,22 +516,27 @@ function to_pull {
       $adds = @($adds_string -split "`n")
 
       foreach ($a in $adds) {
+         if ($a -eq '') { continue }
+
          if ($a -match "^\s*(\S+?) (.+)") {
             $action = $Matches[1]
             $file   = $Matches[2]
 
-            if ($action -eq 'update') {$diff_files.Add($file)}
+            if ($action -eq 'update') {$diff_files += $file}
 
             if ($action_by_file[$file]) { Write-Host "ERROR: $file appeared more than once on remote side" }
             $action_by_file[$file] = $action
          } else {
-            Write-Host "ERROR: unexpected format $a. expecting: (add|update|newType) file"
-            exit 1
+            $message = "ERROR: unexpected format $a. expecting: (add|update|newType) file"
+            Write-Host "$message"
+            send_text $writer "$message`n"
+            $writer.flush()
+            return
          }
       }
 
       foreach ($f in ($action_by_file.Keys|sort)) {
-         Write-Host ("$dryrun_string {0,7} {1}`n", $action_by_file[$f], $f)
+         Write-Host ("$dryrun_string {0,7} {1}" -f $action_by_file[$f], $f)
       }
    }
 
@@ -500,8 +616,8 @@ function to_pull {
              $size = $tcpStream.Read($buffer, 0, $BufferSize)
 
              if ($size -gt 0 ) {
-                $recv_total_bytes += $size
-                write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"  
+                $total_size += $size
+                write-verbose "received $size byte(s). total $total_size byte(s)"  
                 $out_stream.Write($buffer, 0, $size)            
              } else {
                   # this should happen sometimes but never worked.
@@ -544,7 +660,6 @@ function to_pull {
 
       if ($diff) {
          Write-Verbose "$(get_timestamp) cd '$old_pwd"
-         $old_pwd
          if (!$?) { Write-Host "cd $old_pwd failed"; exit 1}
 
          foreach ($relative_path in $diff_files) {
@@ -565,6 +680,8 @@ function to_pull {
       $lines = @($mtimes_string -split "`n")
 
       foreach ($l in $lines) {
+         if ($l -eq '') { continue }
+
          if ($l -match "^([0-9]+)\s+(\S.*)") {
             $mtime,$f = $Matches[1],$Matches[2]
 
@@ -584,6 +701,8 @@ function to_pull {
       $lines = @($modes_string -split "`n")
 
       foreach ($l in $lines) {
+         if ($l -eq '') { continue }
+
          if ($l -match "^([0-9]+)\s+(\S.*)") {
             $mode,$f = $Matches[1..2]
 
@@ -593,28 +712,24 @@ function to_pull {
          }
       }
    }
-
-   if ($warns_string) {
-      print $warns_string, "\n";
-   }
 }
 
 function to_be_pulled {
    param (
       [Parameter(Mandatory = $true)]$tcpConnection = $null,
-      $opt = $null
+      [hashtable]$opt = $null
    )
 
+   # somehow, this kills the connection. why???
+   #Write-Verbose "tcpConnection2 = $(ConvertTo-Json $tcpConnection)"
    $tcpStream = $tcpConnection.GetStream()
+   #Write-Verbose "tcpConnection3 = $(ConvertTo-Json $tcpConnection)"
+
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
-   $socket = $null
-   if ($role -eq "server") {
-      $socket = $tcpConnection.Client
-   } else {
-      $socket = $tcpConnection.Server
-   }
+   # there is no $tcpConnection.Server
+   $socket = $tcpConnection.Client
 
    # unblock socket before reading
    $socket.Blocking = $false
@@ -1037,6 +1152,7 @@ function to_be_pulled {
    $tmp_tar_file = $null
    try  { 
       $tmp_tar_file = get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}
+      # Write-Host "tmp_tar_file = $(ConvertTo-Json $tmp_tar_file)"
    } catch {
       send_text $writer ($_.Exception.Message + "`n")
       $writer.Flush()
@@ -1116,7 +1232,7 @@ function to_be_pulled {
 
 function build_dir_tree {
    param (
-      [Parameter(Mandatory = $true)][string []]$paths = $null,
+      [Parameter(Mandatory = $true)][AllowEmptyCollection()][string []]$paths = $null,
       [hashtable]$opt = $null
    )
 
@@ -1268,8 +1384,6 @@ function build_dir_tree {
 
             $f = $item.FullName.Substring($front_length).replace('\', '/')   # remote $front from full path
 
-            Write-Host "f=$f"
-
             if ($opt["matches2"] -and $opt["matches2"].count -ne 0) {
                $matched = $false
                # $hash_of_array = @{ 'a'= @(1,2,3)}
@@ -1277,7 +1391,7 @@ function build_dir_tree {
                foreach ($p in $opt["matches2"]) {
                   if ($f -match $p) {
                      $matched = $true
-                     last
+                     break
                   }
                }
                if (!$matched) {
@@ -1298,14 +1412,10 @@ function build_dir_tree {
                continue
             }
 
-            Write-Host "f=$f before"
-
             if (!(Test-Path -LiteralPath $f -ErrorAction SilentlyContinue)) {
                set_nested_hash $tree @($f, 'skip') "no access"
                continue
             }
-
-             Write-Host "f=$f after"
 
             if (get_nested_hash $tree @($f, 'back')) {         
                set_nested_hash $tree @($f, 'skip') "duplicate target path: skip $front/$f"               
@@ -1314,9 +1424,6 @@ function build_dir_tree {
                set_nested_hash $tree @($f, 'back') $back
             }
             set_nested_hash $tree @($f, 'front') $front
-
-             Write-Host "f=$f inserted"
-
 
             # $wintime = (Get-Item tmp\ps1\List-Exe.ps1).LastWriteTimeUtc
             $wintime = $item.lastWriteTimeUtc
@@ -1741,7 +1848,7 @@ function cksum {
 function get_cksums {
    param (
       [Parameter(Mandatory = $true)][AllowEmptyCollection()][string []]$files = $null,
-      [Parameter(Mandatory = $true)][AllowEmptyCollection()][hashtable]$dir_tree = $null,
+      [Parameter(Mandatory = $true)][hashtable]$dir_tree = $null,
       $opt = $null
    )
 
@@ -1762,10 +1869,12 @@ function get_cksums {
 
 function get_tmp_name {
    param (
-      [Parameter(Mandatory = $true)][string]$basedir = "C:\Users\william\AppData\Local\Temp\",
-      [Parameter(Mandatory = $true)][string]$prefix = $null,
+      [Parameter(Mandatory = $true)][string]$basedir, # "C:\Users\william\AppData\Local\Temp\",
+      [Parameter(Mandatory = $true)][string]$prefix,
       [hashtable]$opt = $null
    )
+
+   $prefix = $prefix.replace(".", "_")   # tpdist.ps1 -> tpdist_ps1
 
    #Set-PsDebug -Trace 1
    if ($opt['chkSpace']) {
@@ -1795,7 +1904,7 @@ function get_tmp_name {
       Get-ChildItem -Path $tpsuptmp | Where-Object { $_.PSIsContainer -and $_.CreationTime -lt $cutoff } | Remove-Item -Force -Recurse
    }
 
-   return "$daydir/$prefix" + "_" + "$HH$MM$SS"
+   return [string]"$daydir/${prefix}_$HH$MM$SS" # must add [string] otherwise powershell converts it to Path object.
 }
 
 
@@ -1812,7 +1921,21 @@ if ($role.ToLower() -ne 'server' -AND $role.ToLower() -ne 'client') {
    usage("Role must be either 'server' or 'client'")
 }
 
-$old_pwd = $pwd
+$user_specified = @{
+   allowfile = $allowfile;
+    denyfile =  $denyfile;
+   allowhost = $allowhost;
+    denyhost =  $denyhost;
+}
+
+$AccessMatrix = load_access $user_specified
+
+# if(@{}) { Write-Host $true} else { Write-Host $false }
+if ($AccessMatrix) {
+   Write-Host "AcccessMatrix = $(ConvertTo-Json $AccessMatrix)"
+} else {
+   Write-Verbose "AcccessMatrix = $(ConvertTo-Json $AccessMatrix)"
+}
 
 if ($role.ToLower() -eq 'server') {
    # this is server
@@ -1822,7 +1945,7 @@ if ($role.ToLower() -eq 'server') {
    }
 
    $local_dir= $null
-   $remote_dirs = $null
+   $remote_dirs = @()
    if (!$reverse) {
        # tpdist server port
       if ($remainingArgs.count -ne 2) {
@@ -1835,7 +1958,7 @@ if ($role.ToLower() -eq 'server') {
       }
 
       $local_dir = $remainingArgs[-1]
-      $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
+      $remote_dirs = $remainingArgs[2..($remainingArgs.count-2)]
       write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
       write-verbose "local_dir=$local_dir"
 
@@ -1860,37 +1983,73 @@ if ($role.ToLower() -eq 'server') {
    try   { $listener.start()     }
    catch { Write-Host $(get_timestamp) $_; exit 1 }
    
-   Write-Host $(get_timestamp) "listener started at port $listener_port"
-
+   Write-Host $(get_timestamp) "listener started at port $listener_port, max_idle=$maxidle seconds"
    # $listener | Get-Member
 
-   $tcpConnection = $null
-
+   $idle = 0
    while ($true) { 
       if ($listener.Pending()) {
+         $idle = 0      #reset idle timer
          $tcpConnection = $listener.AcceptTcpClient()
-         break;
+      
+         # this command somehow will cause tcpConnection disconnected.
+         # Write-Verbose "tcpConnection = $(ConvertTo-Json $tcpConnection)"
+
+         $peer_address = $tcpConnection.client.RemoteEndPoint.Address
+         $peer_port    = $tcpConnection.client.RemoteEndPoint.Port
+         Write-Host "$(get_timestamp) accepted client $peer_address`:$peer_port."
+
+         # [System.Net.Dns]::GetHostAddresses("127.0.0.1")
+         # [System.Net.Dns]::GetHostAddresses("localhost")
+         # [System.Net.Dns]::GetHostbyAddress("127.0.0.1") 
+         # [system.net.dns]::GetHostEntry("127.0.0.1")
+         # [system.net]::GetHostEntry("127.0.0.1")
+         $all_hostnames = @()
+         # https://docs.microsoft.com/en-us/dotnet/api/system.net.dns.gethostbyaddress?view=netframework-4.8
+         # https://docs.microsoft.com/en-us/dotnet/api/system.net.iphostentry?view=netframework-4.8
+         $dns_lookup = [System.Net.Dns]::GetHostByAddress($peer_address)
+         $all_hostnames += $dns_lookup.HostName
+         $all_hostnames += $dns_lookup.Aliases        
+         $all_hostnames += $peer_address
+         if ($peer_address -eq "127.0.0.1") { $all_hostnames += "localhost" }
+         Write-Host "$(get_timestamp) peer names: $all_hostnames"
+
+         $allowed = $true
+         foreach ($h in $all_hostnames) {
+            if ( !(is_allowed $h $AccessMatrix['host']) ) {
+               Write-Host "$(get_timestamp) $peer_address`: $h is not allowed to connect to us"
+               $allowed = $false
+               break
+            }
+         }
+
+         if ($allowed) {       
+             cd $old_pwd   # restore pwd as it might be changed by last loop
+
+             if (!$reverse) {
+                #Write-Verbose "tcpConnection = $(ConvertTo-Json $tcpConnection)"          
+                to_be_pulled $tcpConnection
+             } else {    
+                to_pull $tcpConnection $remote_dirs $local_dir
+             }  
+         }    
+
+         $tcpConnection.Close()
+
+         cd $old_pwd # restore pwd
+
+         Write-Host "`n----------------------------------------------------------------"
+         Write-Host "$(get_timestamp) waiting for next client at port $listener_port, max_idle=$maxidle seconds"
+      } else {
+         $idle += 1
+         if ($idle -gt $maxidle) {
+            Write-Host "$(get_timestamp) no new client connection for $maxidle seconds. Server quits"
+            $listener.Stop()
+            exit 0
+         }
+         sleep 1
       }
-      sleep 1
-   }
-
-   Write-Host $(get_timestamp) "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
-
-   # we only want to accept one client; therefore, close the listener now.
-   # $listener.stop()
-
-   if (!$reverse) {
-      #Write-Host ($tcpConnection | Format-Table|Out-String)
-      #Write-Host $tcpConnection
-      #$tcpConnection |Get-Member
-      #$tcpConnection.Client |Get-Member
-
-      to_be_pulled $tcpConnection
-   } else {    
-      to_pull $tcpConnection $remote_dirs $local_dir
-   }
-
-   $tcpConnection.Close()
+   } 
 } else {
    # this is client
 
@@ -1898,7 +2057,7 @@ if ($role.ToLower() -eq 'server') {
       usage("wrong numnber of args")
    }
 
-   $remote_dirs = $null
+   $remote_dirs = @()
    $local_dir   = $null
 
    if ($reverse) {
@@ -1911,7 +2070,7 @@ if ($role.ToLower() -eq 'server') {
       }
 
       $local_dir = $remainingArgs[-1]
-      $remote_dirs = $remainingArgs[3..($remainingArgs.count-2)]
+      $remote_dirs = $remainingArgs[2..($remainingArgs.count-2)]
       write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
       write-verbose "local_dir=$local_dir"
 
@@ -1930,6 +2089,7 @@ if ($role.ToLower() -eq 'server') {
    catch { Write-Host $(get_timestamp) $_; exit 1 }
 
    write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)"
+   Write-Verbose "tcpConnection = $(ConvertTo-Json $tcpConnection)"
 
    if ($reverse) {
       to_be_pulled $tcpConnection

@@ -21,6 +21,10 @@ my $interval = 5;
 
 my $prog = $0; $prog =~ s:.*/::;
 
+# we cannot copy root dir
+# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/,
+my $root_dir_pattern = '^[a-zA-Z]:[/]*$|^[/]+$|^[/]+cygdrive[/]+[^/]+[/]*$';
+
 my @crctab = (
    0x00000000,
    0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b,
@@ -115,7 +119,7 @@ Common Switches (for both server and client):
 
    -r|reverse         server-pull/client-push. default is server-push/client-pull             
 
-Server-0nly Switches:
+Passive-side Switches: (To-be Pulled, normal Server state)
 
    -allowhost file
    -denyhost file
@@ -136,7 +140,7 @@ Server-0nly Switches:
    -idle seconds
                       max idle time before close server socket, default to $idle
 
-Pull-Side-Only Switches:
+Active-Side Switches: (To Pull, normal Client State)
 
    -n                 dryrun mode, list the filenames only
 
@@ -277,7 +281,7 @@ if ( defined($local_dir) && -e $local_dir  && ! -d $local_dir) {
    exit 1;
 }
 
-$quiet || print get_timestamp(), "version=$version, protocol=$expected_peer_protocol\n";
+$verbose && print "version=$version, protocol=$expected_peer_protocol\n";
 
 umask(022);
 
@@ -289,6 +293,9 @@ my $user_specified = {
 };
 
 my $AccessMatrix = load_access($user_specified);
+if ($verbose || $AccessMatrix) {
+   print "AccessMatrix=", Dumper($AccessMatrix);
+}   
 
 if ($mode eq 'server') {
    # this is a server
@@ -339,21 +346,13 @@ if ($mode eq 'server') {
          print get_timestamp(), "peer_hostnames = ", join(" ", @peer_hostnames), "\n";
       }
 
-      my $allowed;
       for my $h (($peer_address, @peer_hostnames)) {
-         next if ! is_allowed($h, $AccessMatrix->{host}, {verbose=>$verbose});
-         print get_timestamp(), "$peer_address: $h is allowed to connect to us.\n";
-         $allowed ++;
-         last;
-      }
-
-      if (!$allowed) {
-         print get_timestamp(), "$peer_address: (", join(' ', @peer_hostnames), ") not allowed to connect to us.\n";
-         $socket->send("connection is not allowed\n");
-         $socket->flush();
-         sleep 2; #give a little time so that the remote can process the message.
-         $socket->close();
-         next CONNECTION;
+         if (! is_allowed($h, $AccessMatrix->{host}, {verbose=>$verbose}) ) {
+            print get_timestamp(), "$peer_address: $h is not allowed to connect to us.\n";
+            $socket->send("connection is not allowed\n");
+            $socket->close();
+            next CONNECTION;
+         } 
       }
 
       # restore pwd as functions may chdir to other places
@@ -432,7 +431,7 @@ sub load_access {
 
    for my $type (qw(host file)) {
       for my $access (qw(allow deny)) {
-         my $key = "${type}${access}";
+         my $key = "${access}${type}";
          my $file = $user_specified->{$key}                 ? $user_specified->{$key} :
                      (-f "$homedir/.tpsup/tpdist_$key.txt") ? "$homedir/.tpsup/tpdist_$key.txt" :
                                                                undef ;
@@ -444,7 +443,7 @@ sub load_access {
                # why fatal here?
                # because if a file exists but is empty, for example, if the allow file exists but is
                # empty, should we allow all or allow none? this becomes ambiguous and prone to error!!
-               print STDERR "FATAL: there is no settings in $file\n";
+               print STDERR "FATAL: there is no settings in $file. It may mean 'allow all' or 'deny all'. To avoid ambiguity, either remove file or add settings.\n";
                exit 1;
             }
          }
@@ -865,14 +864,19 @@ sub expect_socket {
 
    my $ExpectInterval = $opt->{ExpectInterval} ? $opt->{ExpectInterval} : 30;
 
+   # turn on keepalive to quickly spot disconnection by remote side
+   $socket->setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1);
+
    my $total_data;
    my @matched;
    my @captures;
    my $num_patterns = scalar(@$patterns);
+   my $error_message;
 
    my $select = IO::Select->new($socket) or die "IO::Select $!";
 
    my $total_wait = 0;
+   my $data;
 
    while (1) {
       if (! $select->can_read($ExpectInterval)) {
@@ -882,53 +886,33 @@ sub expect_socket {
             if ($total_wait >= $opt->{ExpectTimeout}) {
                print get_timestamp(), "expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
                
-               for (my $i=0; $i<$num_patterns; $i++) {
-                   print "   pattern=$patterns->[$i]  ",
-                         $matched[$i] ? "matched" : "didn't match",
-                         "\n";
-               }
-
-               my $message = "timed out after $opt->{ExpectTimeout} seconds. very likely wrong protocol. expecting $expected_peer_protocol.*";
-               print get_timestamp(), "$message\n";
-               $socket->send("$message\n");
-
-               # we actually don't need to flush as we already unblocked the socket before calling expect_socket
-               # $socket->flush();
-               
-               sleep 2; # give a little time so that remote can process this message before we close the connection
-
-               return undef;
+               $error_message = "timed out after $opt->{ExpectTimeout} seconds. very likely wrong protocol. expecting $expected_peer_protocol.*";
+               $socket->send("$error_message\n");
+               $socket->flush();
+               last;
             }
          }
 
+         $socket->send("");
          $opt->{verbose} && print get_timestamp(), "no activity from remote in last $ExpectInterval seconds\n";
          next;
       }
 
-      my $data;
       my $size = read($socket, $data, 1024000);
 
       if (!$size) {
-         my $total_size = defined $total_data ? length($total_data) : 0;
-         my $print_size = $total_size - 100 < 0 ? $total_size : 100;
-
-         my $last_words = defined $total_data ?
-                          substr($total_data, $total_size-$print_size, $print_size) : '';
-
-         print get_timestamp(), "remote side closed socket. Last words: $last_words\n";
-         return undef;
+         $error_message = "remote side closed socket";
+         last;
       } else {
          $opt->{verbose} && print get_timestamp(), "received data: $data\n";
          $total_data .= $data;
 
          my $all_matched = 1;
-
          for (my $i=0; $i<$num_patterns; $i++) {
             next if $matched[$i];
 
             if ($total_data =~ /$patterns->[$i]/s) {
-               $opt->{verbose} && print "matched $patterns->[$i]\n";
-
+               $opt->{verbose} && print "   matched $patterns->[$i]\n";
                $matched[$i] = 1;
                $captures[$i] = [$1, $2, $3];  # we normally only need $1.
             } else {
@@ -938,9 +922,29 @@ sub expect_socket {
 
          if ($all_matched) {
             print get_timestamp(), "received complete information from remote\n";
-            return \@captures;
+            last;
          }
       }
+   }
+
+   # turn off keepalive to lower network traffic
+   $socket->setsockopt(SOL_SOCKET, SO_KEEPALIVE, 0);
+
+   if ($error_message) {
+      print get_timestamp(), "$error_message\n";
+      print "   matched so far\n";
+      for (my $i=0; $i<$num_patterns; $i++) {
+           print "      pattern=$patterns->[$i]  ", $matched[$i] ? "matched" : "didn't match", "\n";
+      }
+      my $total_size = defined $total_data ? length($total_data) : 0;
+      my $print_size = $total_size - 100 < 0 ? $total_size : 100;
+
+      my $last_words = defined $total_data ?
+                       substr($total_data, $total_size-$print_size, $print_size) : '';
+      print "   Last words: $last_words\n";
+      return undef;
+   } else {
+      return \@captures;
    }
 }
 
@@ -982,9 +986,9 @@ sub to_be_pulled {
    my ($peer_protocol) = ($version =~ /^(\d+)/);
 
    if ($peer_protocol != $expected_peer_protocol) {
-      print get_timestamp(), "remote used wrong protocol $peer_protocol, ",
-                           "we are expecting protocol $expected_peer_protocol. we closed the connection.\n";
-      $socket->send("wrong protocol $peer_protocol. expecting $expected_peer_protocol (version $expected_peer_protocol.*)\n");
+      my $message = "wrong protocol $peer_protocol. expecting protocol $expected_peer_protocol(.*). closed the connection.\n";
+      print get_timestamp(), "$message\n";
+      $socket->send("$message\n");
       $socket->close();
       return;
    }
@@ -994,7 +998,7 @@ sub to_be_pulled {
 
    print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
 
-   print get_timestamp(), "remote used wrong protocol $peer_protocol, ",
+   print get_timestamp(), "remote used matched protocol $peer_protocol\n";
 
    my @excludes;
    if ($exclude_string) {
@@ -1040,7 +1044,7 @@ sub to_be_pulled {
                                              );
 
    $verbose && print "remote_tree = ", Dumper($remote_tree);
-   $verbose && print  "local_tree = ",  Dumper($local_tree);
+   $verbose && print "local_tree = ",  Dumper($local_tree);
    $verbose && print "maxsize = $maxsize\n";
 
    my @deletes;
@@ -1473,7 +1477,13 @@ sub to_pull {
 
    my @local_paths;
    for my $remote_path (@$remote_paths) {
-      die "cannot copy root dir '/'" if $remote_path =~ /^[\/]+$/;
+      print "here\n";
+      if ($remote_path =~ m!$root_dir_pattern!) {
+         my $message = "cannot copy root dir $remote_path";
+         print "ERROR: $message\n";
+         $socket->send("$message\n");
+         return;
+      }   
 
       $remote_path =~ s:[/]+$::g;       # remove the trailing /
 
@@ -1680,6 +1690,7 @@ sub to_pull {
 
       my @adds = split /\n/, $adds_string;
       for my $a (@adds) {
+         next if !$a;
          if ($a =~ /^\s*(\S+?) (.+)/) {
             my $action = $1;
             my $file = $2;
@@ -1884,10 +1895,6 @@ sub to_pull {
             print "bad mode format at line: $l\n";
          }
       }
-   }
-
-   if ($warns_string) {
-      print $warns_string, "\n";
    }
 }
 
