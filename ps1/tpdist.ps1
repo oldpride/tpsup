@@ -239,7 +239,7 @@ function read_security_file {
    # but the following didn't work
    # $patterns = @(Get-Content $file | foreach { !($_ -match '^\s*$' -or $_ -match '^\s*#') } | foreach {$_ -replace ('^\s+', '')} | foreach {$_ -replace ('s+$', '')})
    # resort to old style
-   $patterns = @()
+   $patterns = New-Object System.Collections.Generic.List[System.String]
    $lines = @(Get-Content $file)
 
    foreach($l in $lines) {
@@ -250,7 +250,7 @@ function read_security_file {
       $l = $l -replace '^\s+', ''
       $l = $l -replace '\s+$', ''
 
-      $patterns += $l
+      $patterns.Add($l)
    }
    
    return $patterns;
@@ -313,7 +313,7 @@ function to_pull {
    $local_dir.TrimEnd('/\') # remove the trailing /, literal match, no need to escape
    $local_dir_abs = get_abs_path $local_dir
 
-   $local_paths = @()
+   $local_paths = New-Object System.Collections.Generic.List[System.String]
    foreach ($remote_path in $remote_paths) {
       $remote_path = $remote_path.Replace('\', '/').TrimEnd('/') 
 
@@ -344,7 +344,7 @@ function to_pull {
          $local_abs = get_abs_path $path
          if (!$local_abs) { continue }
          Write-Verbose "$(get_timestamp) remote ($remote_path) -> local ($local_path) -> local abs ($local_abs)"
-         $local_paths += $local_abs;
+         $local_paths.Add($local_abs)
       }
    }
 
@@ -375,11 +375,12 @@ function to_pull {
 
       foreach ($k in @($local_tree.Keys|sort)) {
          $local_tree_items ++
-         $string = "key=$k";
+         $sb2 = [System.Text.StringBuilder]::new()
+         $sb2.Append("key=$k")
          foreach ($attr in @($local_tree[$k].Keys|sort)) {
-            $string += "|$attr=$($local_tree[$k][$attr])"
+            $sb2.Append("|$attr=$($local_tree[$k][$attr])")
          }
-         $sb.Append("$string`n")
+         $sb.Append("$($sb2.ToString())`n")
       }
       $local_tree_block = $sb.ToString()
    }
@@ -422,7 +423,7 @@ function to_pull {
    $need_cksums_string = $captures[0][0]
  
    $need_cksums = @()
-   $cksums_results = @()
+   $cksums_results = New-Object System.Collections.Generic.List[System.String]
    if ($need_cksums_string) {
       $need_cksums = $need_cksums_string -split "`n"
 
@@ -431,7 +432,7 @@ function to_pull {
       $local_cksums_by_file = get_cksums $need_cksums $local_tree
 
       foreach ($f in ($local_cksums_by_file.Keys|sort)) {
-         $cksums_results += "$local_cksums_by_file[$f] $f"
+         $cksums_results.Add("$local_cksums_by_file[$f] $f")
       }
    } else {
       Write-Host "$(get_timestamp) received cksum requests, 0 items"
@@ -508,7 +509,7 @@ function to_pull {
       }
    }
 
-   $diff_files = @()
+   $diff_files = New-Object System.Collections.Generic.List[System.String]
 
    if ($adds_string) {
       $action_by_file = @{};
@@ -522,7 +523,7 @@ function to_pull {
             $action = $Matches[1]
             $file   = $Matches[2]
 
-            if ($action -eq 'update') {$diff_files += $file}
+            if ($action -eq 'update') {$diff_files.Add($file)}
 
             if ($action_by_file[$file]) { Write-Host "ERROR: $file appeared more than once on remote side" }
             $action_by_file[$file] = $action
@@ -829,18 +830,27 @@ function to_be_pulled {
    Write-Verbose "local_tree  = $(ConvertTo-Json  $local_tree)"
    Write-Verbose "maxsize = $maxsize"
 
-   $deletes = @()
+   # https://powershell.org/2013/09/powershell-performance-the-operator-and-when-to-avoid-it/
+   # powershell's list $a=@() is immutable, meaning, $a.Add("hello") won't work.
+   # we have to use $a += "hello" which creates a new list, and is very inefficient.
+   # powershell suggests to use 
+   # $a = New-Object System.Collections.Generic.List[System.String]
+   # $a.Add("hello")
+   # $a.Add("world")
+   # $a -join "-"
+
+   $deletes = New-Object System.Collections.Generic.List[System.String]
    $change_by_file = @{}
    $diff_by_file = @{}
-   $mtimes = @()
-   $modes = @()
-   $warns = @()
+   $mtimes = New-Object System.Collections.Generic.List[System.String]
+   $modes = New-Object System.Collections.Generic.List[System.String]
+   $warns = New-Object System.Collections.Generic.List[System.String]
    $RequiredSpace = 0
    $need_mtime_reset = @{}
-   $need_cksums = @()
+   $need_cksums = New-Object System.Collections.Generic.List[System.String]
 
    if ($other["errors"]) {
-      $warns += $other["errors"]
+      $warns.Add($other["errors"])
    }
 
    $back_exists_on_local = @{}
@@ -858,7 +868,7 @@ function to_be_pulled {
    if ($other["skipped_back"]) {
       foreach ($back in $other["skipped_back"].keys) {
          $back_exists_on_local[$back] = $true
-         $warns += "skipped $back`: $(get_nested_hash $other @("skipped_back", $back))"
+         $warns.Add("skipped $back`: $(get_nested_hash $other @("skipped_back", $back))")
       }
    }
 
@@ -875,7 +885,7 @@ function to_be_pulled {
          $back = get_nested_hash $remote_tree @($k, 'back')
 
          if ($back_exists_on_local[$back]) {
-            $deletes += $k
+            $deletes.Add($k)
 
             if ($k -match '^(.+)/') {
                $parent_dir = $Matches[1]
@@ -890,7 +900,7 @@ function to_be_pulled {
    foreach ($k in @($local_tree.Keys|sort -descending)) {
       $skipped_message = get_nested_hash $local_tree @($k, 'skip')
       if ($skipped_message) {
-         $warns += "skipped $k`: $skipped_message"
+         $warns.Add("skipped $k`: $skipped_message")
          continue
       }
 
@@ -927,13 +937,13 @@ function to_be_pulled {
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
             # to keep and send the mode information separately (from the tar file)
-            $modes += $k
+            $modes.Add($k)
          }
          continue
       }
 
       if ( $remote_type -ne $local_type) {
-         $deletes += $k
+         $deletes.Add($k)
 
          if ($local_size) {
             if ($maxsize -ge 0 -and $RequiredSpace+$local_size -gt $maxsize) {
@@ -950,7 +960,7 @@ function to_be_pulled {
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
             # to keep and send the mode information separately (from the tar file)
-            $modes += $k
+            $modes.Add($k)
          }
 
          continue
@@ -958,7 +968,7 @@ function to_be_pulled {
 
       # both sides are same kind type: file, dir, or link
       if ( $check_mode -and $local_type -ne 'link' -and $remote_winmode -ne $local_winmode ) {
-         $modes += $k
+         $modes.Add($k)
       }
 
       # note: dir and link's sizes are hard-coded, so they will always equal.
@@ -991,11 +1001,11 @@ function to_be_pulled {
          # cksum.
 
          if ( $remote_mtime -ne $local_mtime) {
-            $need_cksums += $k
+            $need_cksums.Add($k)
             $need_mtime_reset[$k] = $true
          } elseif ($deep_check -eq "1") {
             # $deep_check= "0" or $deep_check= "1"
-            $need_cksums += $k
+            $need_cksums.Add($k)
          }
       } elseif ( !$local_test -or !$remote_test) {
          # we reach here if only one test is missing.
@@ -1068,7 +1078,7 @@ function to_be_pulled {
 
    foreach ($dir in $need_mtime_reset.Keys) {
       if ($local_tree[$dir]) {
-         $mtimes += $dir
+         $mtimes.Add($dir)
       } 
    }
 
@@ -1079,41 +1089,42 @@ function to_be_pulled {
    $delete_string = "<DELETES>" + (($deletes|sort) -join "`n") + "</DELETES>"
    Write-Host "$(get_timestamp) sending deletes: $($deletes.Count) item(s)"
    send_text $writer "$delete_string`n"
-
-   $adds_string = "<ADDS>"
+   
    $adds_files = @($change_by_file.Keys|sort)
-
    # align to the left:  "{0, -8}{1,-15}{2,-15}{3,-15}`n" -f "Locale", "Jar", "HelpSet", "Exception"
    # align to the right: "{0,8}{1,15}{2,15}{3,15}`n" -f "Locale", "Jar", "HelpSet", "Exception"
-   foreach ($f in $adds_files) {
-      $action = $change_by_file[$f]
-      $adds_string += ("{0,6} {1}`n" -f $action, $f)
-   }
+   $a = @(
+       foreach ($f in $adds_files) {
+          $action = $change_by_file[$f]
+          "{0,6} {1}" -f $action, $f
+       }
+   )
    # "test".TrimEnd("e") # this does nothing
    # "test".TrimEnd("t") # tes
    # $adds_string = $adds_string.TrimEnd("`n") # remove the last newline
-   $adds_string += "</ADDS>"
+   $adds_string = "<ADDS>" + ($a -join "`n") + "</ADDS>"
    Write-Host "$(get_timestamp) sending adds: $($adds_files.Count) item(s)"
    send_text $writer "$adds_string`n"
 
-   $mtime_string = "<MTIMES>"
-   foreach ($f in $mtimes) {
-      $mt = $local_tree[$f]['mtime']
-      $mtime_string += "$mt $f`n"
-   }
-   $mtime_string += "</MTIMES>"
-
+   $a = @(
+       foreach ($f in $mtimes) {
+          $mt = $local_tree[$f]['mtime']
+          "$mt $f"
+       }
+   )
+   $mtime_string = "<MTIMES>" + ($a -join "`n") + "</MTIMES>"
    Write-Host "$(get_timestamp) sending mtimes: $($mtimes.Count) item(s)"
    send_text $writer "$mtime_string`n"
-
-   $mode_string = "<MODES>"
-   if ($check_mode) {
-      foreach ($f in $modes) {
-         $mode = $local_tree[$f]['mode']
-         $mode_string += "$mode $f`n"
-      }
-   }
-   $mode_string += "</MODES>`n"
+ 
+   $a = @(
+       if ($check_mode) {
+          foreach ($f in $modes) {
+             $mode = $local_tree[$f]['mode']
+             $mode_string += "$mode $f"
+          }
+       }
+   )
+   $mode_string = "<MODES>" + ($a -join "`n") + "</MODES>`n"
    Write-Host "$(get_timestamp) sending modes: $($modes.Count) item(s)"
    send_text $writer "$mode_string`n"
    
@@ -1121,7 +1132,7 @@ function to_be_pulled {
    Write-Host "$(get_timestamp) sending warns: $($warns.Count) item(s)"
    send_text $writer "$warn_string`n"
 
-   Write-Host "$(get_timestamp)sending required space: $RequiredSpace"
+   Write-Host "$(get_timestamp) sending required space: $RequiredSpace"
    send_text $writer "<SPACE>$RequiredSpace</SPACE>`n"
 
    $writer.Flush() # flush data when writes are done.
@@ -1556,23 +1567,23 @@ function set_hash_of_arrays {
    # we need a self-initialized hash of arrays. therefore, we implement this function
    # https://powershell.org/forums/topic/working-with-hash-of-arrays/
 
-   if ($hash[$key]) {
-      $hash[$key] += $value
-   } else {
-      $hash[$key] = @($value)
+   if (!$hash[$key]) {
+      $hash[$key] = New-Object System.Collections.Generic.List[System.String]
    }
+   $hash[$key].Add($value)
 }
 
 <#
    $test_hash = @{}
    set_hash_of_arrays $test_hash "test_key" "test_value_1"
    set_hash_of_arrays $test_hash "test_key" "test_value_2"
-   ConvertTo-Json 
+   ConvertTo-Json $test_hash
 
-   $array = @()
-   # the following two are the same
-   $array += $test_hash["test_key"]
-   $array += @($test_hash["test_key"])
+   $array = New-Object System.Collections.Generic.List[System.String]
+   # the following flat the array $test_hash["test_key"] into string
+   $array.Add($test_hash["test_key"])
+   $array.Add($test_hash["test_key"])
+   ConvertTo-Json $array
 #>
 
 function set_nested_hash {
