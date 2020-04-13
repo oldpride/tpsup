@@ -1,6 +1,4 @@
-[CmdletBinding(PositionalBinding=$false)]
-
-param (
+[CmdletBinding(PositionalBinding=$false)]param (
     [switch]$v                                   = $false,
     [Alias("r")][switch]$reverse                 = $false,
     [Alias("n")][switch]$dryrun                  = $false,
@@ -8,6 +6,7 @@ param (
     [switch]$KeepTmpFile                         = $false,
     [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
     [Alias("x"           )][string []] $excludes = $null, 
+    [Alias("sz")][switch]$sevenZip               = $false,
     [Int]$timeout                                = 300,
     [Alias("idle")][Int]$maxidle                 = 600,
     [Int]$maxtry                                 = 5,
@@ -67,6 +66,18 @@ $root_dir_pattern = '^[a-zA-Z]:[/]*$|^[/]+$|^[/]+cygdrive[/]+[^/]+[/]*$';
 $old_pwd = $pwd
 Write-Verbose "pwd=$pwd"
 
+# find whether we have tar.exe or 7Zip
+if (! $sevenZip) {
+   if (Get-Command tar.exe -ErrorAction SilentlyContinue) {
+      Write-Verbose "we use tar.exe to tar files"
+   } else {
+      Write-Verbose "cannot find tar.exe. we will try to use 7Zip"
+      $sevenZip = $true
+   }
+}
+
+$sevenZipPath = "$HOME\ps1m\7Zip4Powershell\1.10.0.0\7Zip4PowerShell.psd1"
+
 function usage {
   param([string]$message = $null)
 
@@ -100,6 +111,8 @@ Common Swithes
 
   -timeout seconds
                       time to wait for peer to finish a transaction, default to 300
+
+  -sz|sevenzip        use 7Zip to tar files before transfer. default to try tar.exe first.
 
 Passive-side Switches: (To-be Pulled, normal Server state)
 
@@ -300,7 +313,13 @@ function to_pull {
       $dryrun_string = "dryrun"
    }
 
-   $tcpStream = $tcpConnection.GetStream()
+   $tcpStream = $null
+   try {
+      $tcpStream = $tcpConnection.GetStream()
+   } catch {
+      Write-Host "$_" 
+      exit 1
+   }
    $reader = New-Object System.IO.BinaryReader($tcpStream)
    $writer = New-Object System.IO.BinaryWriter($tcpStream)
 
@@ -376,11 +395,13 @@ function to_pull {
       foreach ($k in @($local_tree.Keys|sort)) {
          $local_tree_items ++
          $sb2 = [System.Text.StringBuilder]::new()
-         $sb2.Append("key=$k")
+         [void]$sb2.Append("key=$k")
          foreach ($attr in @($local_tree[$k].Keys|sort)) {
-            $sb2.Append("|$attr=$($local_tree[$k][$attr])")
+            # https://stackoverflow.com/questions/7801651/powershell-and-stringbuilder
+            # add [void] to avoid unwanted output
+            [void]$sb2.Append("|$attr=$($local_tree[$k][$attr])")
          }
-         $sb.Append("$($sb2.ToString())`n")
+         [void]$sb.Append("$($sb2.ToString())`n")
       }
       $local_tree_block = $sb.ToString()
    }
@@ -499,7 +520,7 @@ function to_pull {
 
                $cmd = "rm -r -fo '$d'"
                Write-Host "$dryrun_string $cmd"
-               if ($dryrun -or $diff) {
+               if (!$dryrun -and !$diff) {
                   rm -r -fo $d
                 }
 
@@ -578,7 +599,15 @@ function to_pull {
 
       $tmp_diff_dir = $null
       if ($diff) {
-         $tmp_diff_dir = (get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}) + "_dir"
+         $tmp_diff_dir = $null
+         try  { 
+            $tmp_diff_dir = (get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}) + "_dir"
+         } catch {
+            send_text $writer ($_.Exception.Message + "`n")
+            $writer.Flush()
+            return
+         }
+         
          mkdir $tmp_diff_dir
          if (!$?) { Write-Host "mkdir $tmp_diff_dir failed"; exit 1}
 
@@ -645,14 +674,24 @@ function to_pull {
       if ($total_size -eq 0) {
          Write-Host "$(get_timestamp) no new file to add"
       } else {
-         Write-Host "$(get_timestamp) tar -xf $tmp_tar_file"         
-         # 1. tar -xvf $tmp_tar_file send veriticalut to outp stdout. therefore, use 2 commands instead
-         # 2.need to wait external command to finish before remove the $tmp_tar_file, eg, use |Out_Host
-         #    https://stackoverflow.com/questions/1741490/how-to-tell-powershell-to-wait-for-each-command-to-end-before-starting-the-next
-         tar -xf $tmp_tar_file |Out-Host
+         if ($sevenZip) {
+            if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
+               Import-Module $sevenZipPath
+            }
+
+            Write-Host "$(get_timestamp) Expand-7Zip $tmp_tar_file $pwd"
+            Expand-7Zip $tmp_tar_file $pwd
+         } else {
+            Write-Host "$(get_timestamp) tar -xf $tmp_tar_file"         
+            # 1. tar -xvf $tmp_tar_file causing error because '-v'. therefore, use 2 commands instead
+            # 2. need to wait external command to finish before remove the $tmp_tar_file, eg, use |Out_Host
+            # https://stackoverflow.com/questions/1741490/how-to-tell-powershell-to-wait-for-each-command-to-end-before-starting-the-next
+            tar -tf $tmp_tar_file |Out-Host
+            tar -xf $tmp_tar_file |Out-Host
+         }
 
          if ($KeepTmpFile) {
-            Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept\n";
+            Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept"
          } else {
             Write-Verbose "$(get_timestamp) rm $tmp_tar_file"
             Remove-Item $tmp_tar_file
@@ -1202,11 +1241,44 @@ function to_be_pulled {
    $need_to_create_tar = $true
    $tar_created = $false
 
-   foreach ($front in @($files_by_front.Keys|sort)) {
-      $files = @($files_by_front[$front]|sort)
-      tar_file_list $front $tmp_tar_file $files $need_to_create_tar
-      $need_to_create_tar = $false
-      $tar_created = $true     
+   if ($sevenZip) {
+      if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
+         Import-Module $sevenZipPath
+      }
+
+      $tmp_7zip_dir = $null
+      try  { 
+         $tmp_7zip_dir = (get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*3)}) + "_dir"
+      } catch {
+         send_text $writer ($_.Exception.Message + "`n")
+         $writer.Flush()
+         return;
+      }
+
+      $old_7zip_dir = $pwd
+      foreach ($front in @($files_by_front.Keys|sort)) {
+         cd $old_7zip_dir  # restore path from last loop
+
+         cd $front
+         
+         foreach ($f in @($files_by_front[$front]|sort)) {
+            if (! (copy_file_structure $f $tmp_7zip_dir) ) {
+               Write-Host "failed to copy $f $tmp_7zip_dir, pwd=$pwd"
+               exit 1
+            }
+            $tar_created = $true
+         }
+      }
+      cd $old_7zip_dir  # restore path from last loop
+
+      Compress-7Zip $tmp_tar_file $tmp_7zip_dir -Format Tar      
+   } else {
+       foreach ($front in @($files_by_front.Keys|sort)) {
+          $files = @($files_by_front[$front]|sort)
+          tar_file_list $front $tmp_tar_file $files $need_to_create_tar
+          $need_to_create_tar = $false
+          $tar_created = $true     
+       }
    }
  
    if (!$tar_created) {
@@ -1240,6 +1312,67 @@ function to_be_pulled {
    }
 }
 
+
+function copy_file_structure {
+   param (
+      [string]$relative = $null,
+      [Parameter(Mandatory = $true, Position=0)][string]$src,
+      [Parameter(Mandatory = $true, Position=1)][string]$dst,
+      [hashtable]$opt = $null
+   )
+
+   Write-Verbose "pwd=$pwd, cp src=$src, dst=$dst"
+   #Set-PsDebug -Trace 1
+
+   $old_pwd = $null
+   if ($relative) {
+      $old_pwd = $pwd
+      cd $relative
+      if (!$?) { exit 1 }
+   }
+
+   # trim the ending \
+   $src = $src.TrimEnd('\')
+   $dst = $dst.TrimEnd('\')
+
+   if (!(Test-Path -Path $src)) {
+      if ($old_pwd) {cd $old_pwd}
+      return $false
+   }
+   
+   if (!(Test-Path -Path $dst -ErrorAction SilentlyContinue)) {
+      mkdir $dst
+      if (!$?) { 
+         if ($old_pwd) {cd $old_pwd}
+         return $false
+      }
+   } elseif (!(Test-Path -Path $dst -PathType Container)) {
+      Write-Host "ERROR: dstr=$dst is not a directory"
+      if ($old_pwd) {cd $old_pwd}
+      return $false
+   }
+
+   $rellength = $pwd.ToString().Length
+
+   @(Get-Item $src; Get-ChildItem $src -Recurse) | foreach {
+      # Write-Verbose "$($_.FullName)"
+      $preserved = $_.Fullname.SubString($rellength)
+      $dstfull = "$dst\$preserved"
+
+      if ($_.Attributes -eq 'Directory' ) {
+         # we need this to copy empty dir
+         New-Item -ItemType Directory -Path $dstfull -Force
+      } else {
+        New-Item -ItemType File -Path $dstfull -Force
+        Copy-Item $_.FullName -destination $dstfull
+      }
+   }
+   if ($old_pwd) {cd $old_pwd}
+   #Set-PsDebug -Trace 0
+   return $true
+}
+
+#copy_file_structure tmp3 tmp4
 
 function build_dir_tree {
    param (
@@ -1940,13 +2073,7 @@ $user_specified = @{
 }
 
 $AccessMatrix = load_access $user_specified
-
-# if(@{}) { Write-Host $true} else { Write-Host $false }
-if ($AccessMatrix) {
-   Write-Host "AcccessMatrix = $(ConvertTo-Json $AccessMatrix)"
-} else {
-   Write-Verbose "AcccessMatrix = $(ConvertTo-Json $AccessMatrix)"
-}
+Write-Verbose "AcccessMatrix = $(ConvertTo-Json $AccessMatrix)"
 
 if ($role.ToLower() -eq 'server') {
    # this is server

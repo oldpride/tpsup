@@ -293,7 +293,7 @@ my $user_specified = {
 };
 
 my $AccessMatrix = load_access($user_specified);
-if ($verbose || $AccessMatrix) {
+if ($verbose)  {
    print "AccessMatrix=", Dumper($AccessMatrix);
 }   
 
@@ -343,6 +343,8 @@ if ($mode eq 'server') {
          my @a = gethostbyaddr(inet_aton("$peer_address"), AF_INET);
          push @peer_hostnames, $a[0] if $a[0];
          push @peer_hostnames, split / /, $a[1] if $a[1];
+         push @peer_hostnames, $peer_address;
+         push @peer_hostnames, "localhost" if $peer_address eq '127.0.0.1';
          print get_timestamp(), "peer_hostnames = ", join(" ", @peer_hostnames), "\n";
       }
 
