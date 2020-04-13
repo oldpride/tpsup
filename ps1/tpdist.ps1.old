@@ -16,9 +16,7 @@
     [string]$allowhost                           = $null,
     [string]$allowfile                           = $null,
     [string]$denyhost                            = $null,
-    [string]$denyfile                            = $null,
-    [Alias("enc")][string]$encrypt_key           = $null,
-    [Parameter(Mandatory = $true, position=0)][string]$role,  
+    [string]$denyfile                            = $null,   
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
@@ -185,72 +183,13 @@ function get_timestamp {
    return "{0:yyyyMMdd} {0:HH:mm:ss}" -f (Get-Date)
 }
 
-$in_count = 0     # incoming bytes count
-$out_count = 0    # outgoing bytes count
-$key_index_by_tag = @{
-    in = 0;
-    out = 0
-}
-
-$key_length = 0;
-$key_array = @();
-if ($encrypt_key) {
-   # [system.Text.Encoding]::Default.GetBytes("abc").GetType()
-   $key_array = @([system.Text.Encoding]::Default.GetBytes($encrypt_key))
-   $key_length = $key_array.Length
-}
-
-function xor_encode {
-   param (
-      [Parameter(Mandatory = $true)][byte[]]$plain_bytes,
-      [Parameter(Mandatory = $true)][string]$tag,
-      [int]$size = -1
-   )
-   
-   if (!$encrypt_key) {
-      return [byte []]$plain_bytes
-   }
-
-   $encrypted_bytes = New-Object 'System.Collections.Generic.List[byte]'
-   $key_index = $key_index_by_tag[$tag]
-
-   $i = 0;
-   foreach ($byte in $plain_bytes){
-      $i ++
-      if ($size -ge 0 -and $i -gt $size) {
-         break
-      }
-       
-      $encrypted_bytes.Add($byte -bxor $key_array[$key_index])     
-
-      $key_index ++
-      if ($key_index -eq $key_length) {
-         $key_index = 0
-      }
-   }
-
-   $key_index_by_tag[$tag] = $key_index
-   return [byte []]$encrypted_bytes.ToArray()
-}
-
 
 function send_text {
    param (
       [Parameter(Mandatory = $true)]$writer = $null,
       [Parameter(Mandatory = $true)]$text = $null
    )
-
-   #Write-Verbose "text = $text, type=$($text.GetType())"
-   $bytes = [system.Text.Encoding]::Default.GetBytes($text)
-   #Write-Verbose "bytes = $bytes, type=$($bytes.GetType())"
-
-   $encoded = [byte []](xor_encode $bytes 'out')
-   #Write-Verbose "encoded = $encoded, type=$($encoded.GetType())"
-
-   $writer.Write($encoded)
-   $size = $bytes.Count
-   $script:out_count += $size
-   Write-Verbose "   sent $size byte(s), total=$script:out_count"
+   $writer.Write([system.Text.Encoding]::Default.GetBytes($text))
 }
 
 
@@ -700,18 +639,16 @@ function to_pull {
       try   { $out_stream = [System.IO.File]::Create($tmp_tar_file)}
       catch { Write-Host $(get_timestamp) $_; exit 1}
 
-      $tar_size = 0
+      $total_size = 0
 
       while ($tcpConnection.Connected) {     
           while ($tcpStream.DataAvailable) {
              $size = $tcpStream.Read($buffer, 0, $BufferSize)
 
              if ($size -gt 0 ) {
-                $tar_size += $size
-                write-verbose "received $size byte(s). subtotal tar_size=$tar_size byte(s)"
-                # $out_stream.Write($buffer, 0, $size)
-                $decoded = xor_encode $buffer 'in' $size
-                $out_stream.Write($decoded, 0, $size)            
+                $total_size += $size
+                write-verbose "received $size byte(s). total $total_size byte(s)"  
+                $out_stream.Write($buffer, 0, $size)            
              } else {
                   # this should happen sometimes but never worked.
                   Write-Host "$(get_timestamp) first time happend. remote closed connection"
@@ -732,9 +669,9 @@ function to_pull {
       $out_stream.flush()
       $out_stream.dispose()
 
-      Write-Host "$(get_timestamp) received tar_size = $tar_size"
+      Write-Host "$(get_timestamp) received total_size = $total_size"
 
-      if ($tar_size -eq 0) {
+      if ($total_size -eq 0) {
          Write-Host "$(get_timestamp) no new file to add"
       } else {
          if ($sevenZip) {
@@ -1357,18 +1294,16 @@ function to_be_pulled {
 
    $in_stream = [System.IO.File]::OpenRead($tmp_tar_file)
 
-   $tar_size = 0
+   $total_size = 0
    while($size = $in_stream.Read($buffer, 0, $BufferSize)) {
-      # $writer.Write($buffer, 0, $size)
-      $encoded = xor_encode $buffer 'out' $size
-      $writer.Write($encoded, 0, $size)
-      $tar_size += $size
+      $writer.Write($buffer, 0, $size)
+      $total_size += $size
    }
 
    $in_stream.close()
    $socket.close()
 
-   Write-Host "$(get_timestamp) sent tar_size=$tar_size. closed remote connection"
+   Write-Host "$(get_timestamp) sent total_size=$total_size. closed remote connection"
 
    if ($KeepTmpFile) {
       Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept"
@@ -1723,7 +1658,7 @@ function tar_file_list {
    # wrap each file name with quotes to take the spaces in filenames
    $file_string = @(foreach ($f in $files) {"'$f'"}) -join " "
    $substring = $file_string
-   if ($file_string.Length -gt 50) {
+   if ($file_string.Length -gt 30) {
       $substring = "$($file_string.Substring(0,50)) ...($($files.Count) items)"
    }
 
@@ -1857,11 +1792,8 @@ function expect_socket {
 
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
-              $script:in_count += $size
-              write-verbose "received $size byte(s), total=$script:in_count. this section size $recv_total_bytes byte(s)"              
-              #$text = $encoding.GetString($buffer, 0, $size)
-              $decoded = xor_encode $buffer 'in' $size
-              $text = $encoding.GetString($decoded, 0, $size) 
+              write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"              
+              $text = $encoding.GetString($buffer, 0, $size)   
               $data_str += $text              
               write-verbose "data_str=$data_str"
 
@@ -1914,8 +1846,7 @@ function expect_socket {
           if ($total_wait -gt $opt['ExpectTimeout']) {
              $message = "timed out after $($opt['ExpectTimeout']) seconds. very likely wrong protocol. expecting $expected_peer_protocol.*"
              Write-Host $message
-             $encoded = xor_encode [system.Text.Encoding]::Default.GetBytes($message) 'out'
-             $writer.Write($encoded)
+             $writer.Write([system.Text.Encoding]::Default.GetBytes($message))
              $writer.Flush();
              sleep 2; # give a little time so that remote can process this messsage
              
@@ -2128,6 +2059,7 @@ if (!$remainingArgs) {
 write-verbose "verbose=$v"
 write-verbose "remainingArgs=$remainingArgs, size=$($remainingArgs.count)"
 
+$role = $remainingArgs[0]
 
 if ($role.ToLower() -ne 'server' -AND $role.ToLower() -ne 'client') {
    usage("Role must be either 'server' or 'client'")
@@ -2154,17 +2086,17 @@ if ($role.ToLower() -eq 'server') {
    $remote_dirs = @()
    if (!$reverse) {
        # tpdist server port
-      if ($remainingArgs.count -ne 1) {
+      if ($remainingArgs.count -ne 2) {
          usage("wrong numnber of args")
       }
    } else {
       # tpdist -reverse server port remote_dir ... local_dir
-      if ($remainingArgs.count -lt 3) {
+      if ($remainingArgs.count -lt 4) {
          usage("wrong numnber of args")
       }
 
       $local_dir = $remainingArgs[-1]
-      $remote_dirs = $remainingArgs[1..($remainingArgs.count-2)]
+      $remote_dirs = $remainingArgs[2..($remainingArgs.count-2)]
       write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
       write-verbose "local_dir=$local_dir"
 
@@ -2174,7 +2106,7 @@ if ($role.ToLower() -eq 'server') {
       }
    }
 
-   $listener_port = $remainingArgs[0]
+   $listener_port = $remainingArgs[1]
    write-verbose "listener_port=$listener_port"
 
    $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
@@ -2196,14 +2128,6 @@ if ($role.ToLower() -eq 'server') {
    while ($true) { 
       if ($listener.Pending()) {
          $idle = 0      #reset idle timer
-
-         #reset key_index
-         $key_index_by_tag['in'] = 0
-         $key_index_by_tag['out'] = 0
-
-         $in_count = 0
-         $out_count = 0
-
          $tcpConnection = $listener.AcceptTcpClient()
       
          # this command somehow will cause tcpConnection disconnected.
@@ -2275,16 +2199,16 @@ if ($role.ToLower() -eq 'server') {
    $local_dir   = $null
 
    if ($reverse) {
-      if ($remainingArgs.count -ne 1) {
+      if ($remainingArgs.count -ne 2) {
          usage("wrong numnber of args")
       }
    } else {
-      if ($remainingArgs.count -lt 4) {
+      if ($remainingArgs.count -lt 5) {
          usage("wrong numnber of args")
       }
 
       $local_dir = $remainingArgs[-1]
-      $remote_dirs = $remainingArgs[1..($remainingArgs.count-2)]
+      $remote_dirs = $remainingArgs[2..($remainingArgs.count-2)]
       write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
       write-verbose "local_dir=$local_dir"
 
@@ -2294,7 +2218,7 @@ if ($role.ToLower() -eq 'server') {
       }
    }
 
-   $remote_host,$remote_port = $remainingArgs[0..1]
+   $remote_host,$remote_port = $remainingArgs[1..2]
    write-verbose "remote_host=$remote_host"
    write-verbose "remote_port=$remote_port"
 

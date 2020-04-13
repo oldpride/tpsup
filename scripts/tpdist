@@ -86,6 +86,8 @@ my $tmpdir = ($os_name =~ /MINGW/i) ? "/tmp" : "/var/tmp"; # Git Bash's os_name 
 my $cygwin;
 $cygwin ++ if $os_name =~ /^CYGWIN/i;
 
+my $encrypt_key;
+
 sub usage {
    my ($message) = @_;
 
@@ -118,6 +120,10 @@ Common Switches (for both server and client):
                       (Solaris/Linux/Cygwin default to /var/tmp, GitBash defaults to /tmp)
 
    -r|reverse         server-pull/client-push. default is server-push/client-pull             
+
+   -enc|encrypt  key_string
+                      use this string to encrypt. client and server must use the same key
+                      in the same time. default is not to encrypt
 
 Passive-side Switches: (To-be Pulled, normal Server state)
 
@@ -152,9 +158,6 @@ Active-Side Switches: (To Pull, normal Client State)
                       the size of update, meaning will drop some changes.
                       default is no limit.
 
-   -unpack            in case we get corrupted file, try this option, not sure
-                      whether this would help though. it converts binary flow to ascii
-
    -match pattern     only files that matching this pattern (Perl RegEx style).
                       can be specified multiple times (in OR logic).
 
@@ -168,9 +171,9 @@ Active-Side Switches: (To Pull, normal Client State)
                       retry to connect to server, default to $maxtry
 
    -interval seconds
-                       time between each retry, default to $interval;
+                      time between each retry, default to $interval;
 
-   -quiet              suppress messages
+   -quiet             suppress messages
 
 Examples:
    # to copy this script to a new host, 'host2', from this host, 'host1'
@@ -204,7 +207,6 @@ my $denyhost;
 my $allowhost;
 my $dryrun;
 my $diff;
-my $unpack;
 my $maxsize = -1; # -1 means no limit
 my @matches;
 my @excludes;
@@ -223,7 +225,6 @@ GetOptions(
    'allowhost=s'     => \$allowhost,
    'n|dryrun'        => \$dryrun,
    'diff'            => \$diff,
-   'unpack'          => \$unpack,
    'deep'            => \$deep,
    'maxsize=s'       => \$maxsize,
    'timeout=s'       => \$timeout,
@@ -233,6 +234,7 @@ GetOptions(
    'match=s'         => \@matches,
    'exclude=s'       => \@excludes,
    'tmpdir=s'        => \$tmpdir,
+   'enc|encrypt=s'   => \$encrypt_key,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV < 2;
@@ -250,6 +252,20 @@ my $homedir = get_homedir();
 $verbose && print STDERR "homedir=$homedir\n";
 
 my $old_pwd = `pwd`; chomp $old_pwd;
+
+my $out_count = 0; # outgoing byte counter
+my $in_count  = 0; # incoming byte counter 
+my $key_index_by_tag = {
+   in => 0,  # encrypt key index for incoming message
+   out => 0, # encrypt key index for outgoing message
+};
+
+my $key_length;
+my @key_array;
+if ($encrypt_key) {
+   @key_array = split //, $encrypt_key;
+   $key_length = scalar(@key_array);
+}
   
 if ($mode eq 'server') {
    $port = shift @ARGV;
@@ -348,10 +364,17 @@ if ($mode eq 'server') {
          print get_timestamp(), "peer_hostnames = ", join(" ", @peer_hostnames), "\n";
       }
 
+      # reset key_index
+      $key_index_by_tag->{in}  = 0; 
+      $key_index_by_tag->{out}  = 0; 
+
+      $in_count  = 0; 
+      $out_count = 0;
+
       for my $h (($peer_address, @peer_hostnames)) {
          if (! is_allowed($h, $AccessMatrix->{host}, {verbose=>$verbose}) ) {
             print get_timestamp(), "$peer_address: $h is not allowed to connect to us.\n";
-            $socket->send("connection is not allowed\n");
+            socket_send($socket, "connection is not allowed\n");
             $socket->close();
             next CONNECTION;
          } 
@@ -889,13 +912,13 @@ sub expect_socket {
                print get_timestamp(), "expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
                
                $error_message = "timed out after $opt->{ExpectTimeout} seconds. very likely wrong protocol. expecting $expected_peer_protocol.*";
-               $socket->send("$error_message\n");
+               socket_send($socket, "$error_message\n");
                $socket->flush();
                last;
             }
          }
 
-         $socket->send("");
+         socket_send($socket, "");
          $opt->{verbose} && print get_timestamp(), "no activity from remote in last $ExpectInterval seconds\n";
          next;
       }
@@ -906,7 +929,9 @@ sub expect_socket {
          $error_message = "remote side closed socket";
          last;
       } else {
-         $opt->{verbose} && print get_timestamp(), "received data: $data\n";
+         $in_count += $size;
+         $data =  xor_encode($data, 'in');
+         $opt->{verbose} && print get_timestamp(), "received $size byte(s), total=$in_count: $data\n";
          $total_data .= $data;
 
          my $all_matched = 1;
@@ -938,11 +963,11 @@ sub expect_socket {
       for (my $i=0; $i<$num_patterns; $i++) {
            print "      pattern=$patterns->[$i]  ", $matched[$i] ? "matched" : "didn't match", "\n";
       }
-      my $total_size = defined $total_data ? length($total_data) : 0;
-      my $print_size = $total_size - 100 < 0 ? $total_size : 100;
+      my $data_size = defined $total_data ? length($total_data) : 0;
+      my $print_size = $data_size - 100 < 0 ? $data_size : 100;
 
       my $last_words = defined $total_data ?
-                       substr($total_data, $total_size-$print_size, $print_size) : '';
+                       substr($total_data, $data_size-$print_size, $print_size) : '';
       print "   Last words: $last_words\n";
       return undef;
    } else {
@@ -990,7 +1015,7 @@ sub to_be_pulled {
    if ($peer_protocol != $expected_peer_protocol) {
       my $message = "wrong protocol $peer_protocol. expecting protocol $expected_peer_protocol(.*). closed the connection.\n";
       print get_timestamp(), "$message\n";
-      $socket->send("$message\n");
+      socket_send($socket, "$message\n");
       $socket->close();
       return;
    }
@@ -1235,9 +1260,11 @@ sub to_be_pulled {
 
    my $need_cksums_string = "<NEED_CKSUMS>" . join("\n", @need_cksums) . "</NEED_CKSUMS>\n";
    print get_timestamp(), "sending need_cksums request to remote: ", scalar(@need_cksums), " items.\n";
-   $socket->send("$need_cksums_string\n");
+   socket_send($socket, "$need_cksums_string\n");
 
    $socket->flush(); # flush data when writes are done.
+  
+   print get_timestamp(), "sending need_cksums request to remote: ", scalar(@need_cksums), " items.\n";
 
    print get_timestamp(), "collecting local cksums: ", scalar(@need_cksums), " items.\n";
    my $local_cksum_by_file = get_cksums(\@need_cksums, $local_tree, {verbose=>$verbose});
@@ -1290,7 +1317,7 @@ sub to_be_pulled {
 
    my $delete_string = "<DELETES>" . join("\n", sort(@deletes)) . "</DELETES>\n";
    print get_timestamp(), "sending deletes: ", scalar(@deletes), " item(s)\n";
-   $socket->send("$delete_string\n");
+   socket_send($socket, "$delete_string\n");
 
    my $adds_string = "<ADDS>";
    my @adds_files = sort (keys %$change_by_file);
@@ -1303,7 +1330,7 @@ sub to_be_pulled {
 
    $adds_string .= "</ADDS>\n";
    print get_timestamp(), "sending adds: ", scalar(@adds_files), " item(s)\n"; 
-   $socket->send("$adds_string\n");
+   socket_send($socket, "$adds_string\n");
 
    my $mtime_string = "<MTIMES>";
    for my $f (@mtimes) {
@@ -1313,7 +1340,7 @@ sub to_be_pulled {
    $mtime_string .= "</MTIMES>\n";
 
    print get_timestamp(), "sending mtimes: ", scalar(@mtimes), " item(s)\n"; 
-   $socket->send("$mtime_string\n");
+   socket_send($socket, "$mtime_string\n");
 
    my $mode_string = "<MODES>";
    if ($check_mode) {
@@ -1326,14 +1353,14 @@ sub to_be_pulled {
       print get_timestamp(), "sending modes: 0 item(s) as we don't check modes\n";
    }
    $mode_string .= "</MODES>\n";
-   $socket->send("$mode_string\n");
+   socket_send($socket, "$mode_string\n");
 
    my $warn_string = "<WARNS>" . join("\n", @warns) . "</WARNS>\n";
    print get_timestamp(), "sending warns: ", scalar(@warns), " item(s)\n";
-   $socket->send("$warn_string\n");
+   socket_send($socket, "$warn_string\n");
 
    print get_timestamp(), "sending required space: $RequiredSpace\n";
-   $socket->send("<SPACE>$RequiredSpace</SPACE>\n");
+   socket_send($socket, "<SPACE>$RequiredSpace</SPACE>\n");
 
    $socket->flush(); # flush data when writes are done.
 
@@ -1349,7 +1376,7 @@ sub to_be_pulled {
 
    $captures = expect_socket(
               $socket,
-              ["please send (data|diff|unpacked)"],
+              ["please send (data|diff)"],
               {verbose=>$verbose, ExpectTimeout=>$timeout}
            );
 
@@ -1430,7 +1457,7 @@ sub to_be_pulled {
    open my $fh, "< $tmp_tar_file" or die "cannot read $tmp_tar_file"; 
    binmode($fh);
 
-   my $total_size = 0;
+   my $tar_size = 0;
 
    while(1) {
       my $data;
@@ -1439,20 +1466,16 @@ sub to_be_pulled {
 
       last if !$size;
 
-      if ($mode eq 'unpacked') { 
-         $socket->send(unpack("H*", $data));
-      } else {
-         $socket->send($data);
-      }
+      socket_send($socket, $data);
 
-      $total_size += $size;
+      $tar_size += $size;
    }
 
    close $fh;
 
    $socket->close();
 
-   print get_timestamp(), "sent total_size=$total_size. closed remote connection\n";
+   print get_timestamp(), "sent tar_size=$tar_size. closed remote connection\n";
 
    if ($KeepTmpFile) {
       print get_timestamp(), "tmp file $tmp_tar_file is kept\n";
@@ -1483,7 +1506,7 @@ sub to_pull {
       if ($remote_path =~ m!$root_dir_pattern!) {
          my $message = "cannot copy root dir $remote_path";
          print "ERROR: $message\n";
-         $socket->send("$message\n");
+         socket_send($socket, "$message\n");
          return;
       }   
 
@@ -1530,19 +1553,19 @@ sub to_pull {
    my $paths_string = join("|", @$remote_paths);
 
    $quiet || print get_timestamp(), "sending version: $version\n";
-   $socket->send("<VERSION>$version</VERSION>\n");
+   socket_send($socket, "<VERSION>$version</VERSION>\n");
 
    my $uname = `uname -a`; chomp $uname;
    $uname = "Perl|$uname";
 
    $quiet || print get_timestamp(), "sending prog|uname: $uname\n";
-   $socket->send("<UNAME>$uname</UNAME>\n");
+   socket_send($socket, "<UNAME>$uname</UNAME>\n");
 
    $quiet || print get_timestamp(), "sending paths: $paths_string\n";
-   $socket->send("<PATH>$paths_string</PATH>\n");
+   socket_send($socket, "<PATH>$paths_string</PATH>\n");
 
    $quiet || print get_timestamp(), "sending deep check flag: $deep\n";
-   $socket->send("<DEEP>$deep</DEEP>\n");
+   socket_send($socket, "<DEEP>$deep</DEEP>\n");
 
    my $local_tree_block = "";
    my $local_tree_items = 0;
@@ -1559,24 +1582,24 @@ sub to_pull {
    }
 
    $quiet || print get_timestamp(), "sending local_tree, $local_tree_items items\n";
-   $socket->send("<TREE>$local_tree_block</TREE>\n");
+   socket_send($socket, "<TREE>$local_tree_block</TREE>\n");
 
    $quiet || print get_timestamp(), "sending maxsize: $maxsize\n";
-   $socket->send("<MAXSIZE>$maxsize</MAXSIZE>\n");
+   socket_send($socket, "<MAXSIZE>$maxsize</MAXSIZE>\n");
 
    my $excludes_string = "";
    if (@excludes) {
       $excludes_string = join("\n", @excludes);
    }
    $quiet || print get_timestamp(), "sending excludes=$excludes_string\n";
-   $socket->send("<EXCLUDE>$excludes_string</EXCLUDE>\n");
+   socket_send($socket, "<EXCLUDE>$excludes_string</EXCLUDE>\n");
 
    my $matches_string = "";
    if (@matches) {
       $matches_string = join("\n", @matches);
    }
    $quiet || print get_timestamp(), "sending matches=$matches_string\n";
-   $socket->send("<MATCH>$matches_string</MATCH>\n");
+   socket_send($socket, "<MATCH>$matches_string</MATCH>\n");
 
    $socket->flush(); # flush data when writes are done.
 
@@ -1621,7 +1644,7 @@ sub to_pull {
 
    $quiet || print get_timestamp(), "sending cksum results: ", scalar(@cksums_results), " item(s)\n";
 
-   $socket->send("<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>\n");
+   socket_send($socket, "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>\n");
 
    $socket->flush(); # flush data when writes are done.
 
@@ -1733,18 +1756,16 @@ sub to_pull {
    if (!$adds_string) {
       my $message = "nothing to add or update\n";
       $quiet || print get_timestamp(), $message;
-      $socket->send($message);
+      socket_send($socket, $message);
    } elsif (!$dryrun) {
       # don't unblock socket when writing; doing so would corrupt data.
       # instead, flush writes manually
       $socket->blocking(1);
 
       if ($diff) {
-         $socket->send("please send diff\n");
-      } elsif ($unpack) {
-         $socket->send("please send unpacked\n");
+         socket_send($socket, "please send diff\n");
       } else {
-         $socket->send("please send data\n");
+         socket_send($socket, "please send data\n");
       }
    
       $socket->flush();
@@ -1777,7 +1798,7 @@ sub to_pull {
       $quiet || print get_timestamp(), "waiting for data from remote\n";
       my $select = IO::Select->new($socket) or die "IO::Select $!";
    
-      my $total_size = 0;
+      my $tar_size = 0;
       my $total_data;
    
       my $fh;
@@ -1787,7 +1808,7 @@ sub to_pull {
    
          my $data;
    
-         my $size = read($socket, $data, 20480);
+         my $size = read($socket, $data, 2048000);
          if (!$size) {
             $verbose && print get_timestamp(), "remote closed connection\n";
              last;
@@ -1802,24 +1823,17 @@ sub to_pull {
                binmode($fh);
             }
 
-            if ($unpack) {
-               my $packed_data = pack("H*", $data);
-               my $packed_size = length($packed_data);
-               $total_size += $packed_size;
-               print {$fh} $packed_data;
-            } else {
-               $total_size += $size;
-               print {$fh} $data;
-            }
+            $tar_size += $size;
+            print {$fh} xor_encode($data, 'in');
          }
       }
 
       close $fh if $fh;
       $socket->close();
 
-      $quiet || print get_timestamp(), "received total_size = $total_size\n" if $verbose;
+      $quiet || print get_timestamp(), "received tar_size = $tar_size\n" if $verbose;
 
-      if ($total_size == 0) {
+      if ($tar_size == 0) {
          $quiet || print get_timestamp(), "no new file to add\n";
       } else {
          my $tar_verbose = $quiet ? "" : "v";
@@ -1858,12 +1872,6 @@ sub to_pull {
       }
    }
 
-   #$ perl -e '{print pack("H*", "31323334"), "\n";}'
-   #1234
-   
-   #$ perl -e '{print unpack("H*", "1234"), "\n";}'
-   #31323334
-   
    if ($mtimes_string) {
       my @lines = split /\n/, $mtimes_string;
 
@@ -1898,6 +1906,38 @@ sub to_pull {
          }
       }
    }
+}
+
+sub socket_send {
+   my ($socket, $plain_str) = @_;
+
+   $socket->send(xor_encode($plain_str, 'out'));
+
+   my $size = length($plain_str);
+   $out_count += $size;
+   $verbose && print "   sent $size bytes, total=$out_count\n";
+}
+
+sub xor_encode {
+   my ($plain_str, $tag) = @_;
+
+   return $plain_str if !$encrypt_key;
+
+   my $encrypted_str = '';
+   my $key_index = $key_index_by_tag->{$tag};
+
+
+   for my $char (split //, $plain_str){
+      $encrypted_str .= chr(ord($char) ^ ord($key_array[$key_index]));
+
+      $key_index ++;
+      if ($key_index == $key_length) {
+         $key_index = 0;
+      }   
+    }
+
+    $key_index_by_tag->{$tag} = $key_index;
+    return $encrypted_str;
 }
 
 ###################################################################################
