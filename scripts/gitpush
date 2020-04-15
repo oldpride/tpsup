@@ -12,7 +12,7 @@ usage:
 
    -f           force without asking for confrimation
    -n           dryrun
-   -m message   commit message, default to 'update'
+   -m message   commit message, default to 'update'.
    -v           versbose
 
 example:
