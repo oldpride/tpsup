@@ -36,14 +36,10 @@ do
       n) dryrun='--dry-run';;
       f) force=Y;;
       v) verbose=Y;;
-      m) echo "here"; commit_message=$OPTARG;;
+      m) commit_message=$OPTARG;;
       *) echo "unknow switch '$o'"; usage;;
    esac 
 done
-
-export commit_message
-
-echo commit_message=$commit_message
 
 shift $((OPTIND-1))
 
