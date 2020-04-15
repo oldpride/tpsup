@@ -1139,9 +1139,9 @@ sub to_be_pulled {
          next;
       }
 
-      if (!exists $remote_tree->{$k}) {
-         # remote missing this file
-        
+      if (!exists $remote_tree->{$k} || $remote_tree->{$k}->{type} ne $local_type) {
+         # remote missing this file or remote is a different type of file: eg, file vs directory
+
          if ($local_size) {
             if ($maxsize >=0 && $RequiredSpace+$local_size > $maxsize) {
                print get_timestamp(), "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
@@ -1149,7 +1149,14 @@ sub to_be_pulled {
             }
             $RequiredSpace += $local_size;
          }
-         $change_by_file->{$k} = "add";
+
+         if (exists $remote_tree->{$k}) {
+            # if remote file exists, remove it as it is different type
+            push @deletes, $k;
+            $change_by_file->{$k} = "newType";
+         } else {
+            $change_by_file->{$k} = "add";
+         } 
 
          if ($k =~ m:^(.+)/:) {
             my $parent_dir = $1;
@@ -1160,41 +1167,19 @@ sub to_be_pulled {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
-            # to keep and send the mode information separately (from the tar file)
-            push @modes, $k;
+            # to keep and send the mode information separately (from the tar file).
+            # so is the mtime.
+            if ($check_mode) {
+               push @modes, $k;
+            }   
+            $need_mtime_reset->{$k} = 1;
          }
-
          next;
       }
 
       # do this only after we knew the key exists in $remote_tree. otherwise, autovivification will insert the key
       my ($remote_size, $remote_type, $remote_test, $remote_mtime, $remote_mode) = @{$remote_tree->{$k}}{qw(
                   size          type          test          mtime          mode )};
-
-      if ( $remote_type ne $local_type) {
-         push @deletes, $k;
-
-         if ($local_size) {
-            if ($maxsize >=0 && $RequiredSpace+$local_size > $maxsize) {
-               print get_timestamp(), "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
-               last;
-            }
-            $RequiredSpace += $local_size;
-         }
-
-         $change_by_file->{$k} = "newType";
-
-         if ($local_type eq 'dir') {
-            # We don't tar dir because that would tar up all files under dir.
-            # But the problem with this approach is that the dir mode
-            # (permission) is then not recorded in the tar file. We will have
-            # to keep and send the mode information separately (from the tar file)
-            if ($check_mode) {
-               push @modes, $k;
-            }   
-         }
-         next;
-      }
 
       # now that both sides are same kind type: file, dir, or link
       if ( $check_mode && $local_type ne 'link' && $remote_mode != $local_mode ) {

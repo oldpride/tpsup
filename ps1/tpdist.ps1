@@ -234,10 +234,37 @@ function xor_encode {
 }
 
 
+Class MyConn {
+   [System.Net.Sockets.TcpClient]$tcpclient = $null
+   [System.Net.Sockets.NetworkStream]$stream = $null
+   [System.Net.Sockets.Socket]$socket = $null
+   [System.IO.BinaryReader]$reader = $null
+   [System.IO.BinaryWriter]$writer = $null
+ 
+   MyConn (
+      [System.Net.Sockets.TcpClient]$tcpclient
+   ) {
+
+      $this.tcpclient = $tcpclient
+      $this.socket = $tcpclient.Client
+
+      try {
+         $this.stream = $tcpclient.GetStream()
+      } catch {
+          Write-Host "$_" 
+          exit 1
+      }
+    
+      $this.reader = New-Object System.IO.BinaryReader($this.stream)
+      $this.writer = New-Object System.IO.BinaryWriter($this.stream)
+   }    
+}
+
+
 function send_text {
    param (
-      [Parameter(Mandatory = $true)]$writer = $null,
-      [Parameter(Mandatory = $true)]$text = $null
+      [Parameter(Mandatory = $true)][System.IO.BinaryWriter]$writer,
+      [Parameter(Mandatory = $true)]$text
    )
 
    #Write-Verbose "text = $text, type=$($text.GetType())"
@@ -363,7 +390,7 @@ function is_allowed {
 
 function to_pull {
    param (
-      [Parameter(Mandatory = $true)]$tcpConnection,
+      [Parameter(Mandatory = $true)][MyConn]$myconn,
       [Parameter(Mandatory = $true)][string []]$remote_paths,
       [Parameter(Mandatory = $true)][string]$local_dir,
       [hashtable] $opt = $null
@@ -374,18 +401,11 @@ function to_pull {
       $dryrun_string = "dryrun"
    }
 
-   $tcpStream = $null
-   try {
-      $tcpStream = $tcpConnection.GetStream()
-   } catch {
-      Write-Host "$_" 
-      exit 1
-   }
-   $reader = New-Object System.IO.BinaryReader($tcpStream)
-   $writer = New-Object System.IO.BinaryWriter($tcpStream)
-
-   # there is no $tcpConnection.Server
-   $socket = $tcpConnection.Client
+   $stream = $myconn.stream
+   $reader = $myconn.reader
+   $writer = $myconn.writer
+   $socket = $myconn.socket
+   $tcpclient = $myconn.tcpclient
 
    # block socket before writing
    $socket.Blocking = $true
@@ -494,12 +514,12 @@ function to_pull {
 
    $patterns = @('<NEED_CKSUMS>(.*)</NEED_CKSUMS>')
    
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
+   $captures = @(expect_socket $myconn $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
       $writer.Dispose()
-      $tcpStream.close()
+      $stream.close()
       return
    }
    $need_cksums_string = $captures[0][0]
@@ -544,12 +564,12 @@ function to_pull {
                  '<ADDS>(.*)</ADDS>',
                  '<WARNS>(.*)</WARNS>')
 
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
+   $captures = @(expect_socket $myconn $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
       $writer.Dispose()
-      $tcpStream.Close()
+      $stream.Close()
       return
    }
 
@@ -632,9 +652,10 @@ function to_pull {
 
    #(Get-WmiObject win32_logicaldisk | Where-Object {$_.DeviceId -eq 'C:'}).FreeSpace
    # check tmp space
-   $tmp_tar_file = $null
+   [String]$tmp_tar_file = $null
    try  { 
-      $tmp_tar_file = get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}
+      # use [String] to prevent powershell automatically convert string to Path
+      $tmp_tar_file = [String](get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)})
    } catch {
       send_text $writer ($_.Exception.Message + "`n")
       $writer.Flush()
@@ -658,11 +679,12 @@ function to_pull {
 
       $writer.Flush()
 
-      $tmp_diff_dir = $null
+      [String]$tmp_diff_dir = $null
       if ($diff) {
          $tmp_diff_dir = $null
          try  { 
-            $tmp_diff_dir = (get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}) + "_dir"
+            # use [String] to prevent powershell automatically convert string to Path
+            $tmp_diff_dir = [String]((get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}) + "_dir")
          } catch {
             send_text $writer ($_.Exception.Message + "`n")
             $writer.Flush()
@@ -702,9 +724,9 @@ function to_pull {
 
       $tar_size = 0
 
-      while ($tcpConnection.Connected) {     
-          while ($tcpStream.DataAvailable) {
-             $size = $tcpStream.Read($buffer, 0, $BufferSize)
+      while ($tcpclient.Connected) {     
+          while ($stream.DataAvailable) {
+             $size = $stream.Read($buffer, 0, $BufferSize)
 
              if ($size -gt 0 ) {
                 $tar_size += $size
@@ -719,8 +741,8 @@ function to_pull {
              }
           }
 
-          if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
-                $tcpConnection.Client.Available -eq 0)) {
+          if ( ($tcpclient.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
+                $tcpclient.Client.Available -eq 0)) {
               Write-Host "$(get_timestamp) remote disconnected"
               break
           }
@@ -819,23 +841,15 @@ function to_pull {
 
 function to_be_pulled {
    param (
-      [Parameter(Mandatory = $true)]$tcpConnection = $null,
+      [Parameter(Mandatory = $true)][MyConn]$tcpclient = $null,
       [hashtable]$opt = $null
    )
 
-   # somehow, this kills the connection. why???
-   #Write-Verbose "tcpConnection2 = $(ConvertTo-Json $tcpConnection)"
-   $tcpStream = $tcpConnection.GetStream()
-   #Write-Verbose "tcpConnection3 = $(ConvertTo-Json $tcpConnection)"
-
-   $reader = New-Object System.IO.BinaryReader($tcpStream)
-   $writer = New-Object System.IO.BinaryWriter($tcpStream)
-
-   # there is no $tcpConnection.Server
-   $socket = $tcpConnection.Client
-
-   # unblock socket before reading
-   $socket.Blocking = $false
+   $stream = $myconn.stream
+   $reader = $myconn.reader
+   $writer = $myconn.writer
+   $socket = $myconn.socket
+   $tcpclient = $myconn.tcpclient
 
    Write-Host $(get_timestamp), "waiting information from remote ...`n";
 
@@ -850,12 +864,12 @@ function to_be_pulled {
       '<UNAME>(.+)</UNAME>'
    )
 
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
+   $captures = @(expect_socket $myconn $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
       $writer.Dispose()
-      $tcpStream.Close()
+      $stream.Close()
       return
    }
 
@@ -1018,8 +1032,8 @@ function to_be_pulled {
        $local_mtime = get_nested_hash  $local_tree @($k, 'mtime')
        $local_mode  = get_nested_hash  $local_tree @($k, 'mode' ) 
 
-      if (!$remote_tree[$k]) {
-         # remote is missing this file
+      if (!$remote_tree[$k] -or $remote_type -ne $local_type) {
+         #  remote missing this file or remote is a different type of file: eg, file vs directory
          if ($local_size) {
             if ($maxsize -ge 0 -and $RequiredSpace+$local_size -gt $maxsize) {
                Write-Host "$(get_timestamp) size cutoff before $k`: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)"
@@ -1027,7 +1041,14 @@ function to_be_pulled {
             }
             $RequiredSpace += $local_size
          }
-         $change_by_file[$k] = "add"
+
+         if ($remote_tree[$k]) {
+            # if remote file exists, remove it as it is different type
+            $deletes.Add($k)
+            $change_by_file[$k] = "newType"
+         } else {
+            $change_by_file[$k] = "add"
+         }
 
          if ($k -match '^(.+)/') {
             $parent_dir = $Matches[1]
@@ -1038,38 +1059,18 @@ function to_be_pulled {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
-            # to keep and send the mode information separately (from the tar file)
-            $modes.Add($k)
+            # to keep and send the mode information separately (from the tar file).
+            # so is mtime
+            if ($check_mode) {
+               $modes.Add($k)
+            } 
+            $need_mtime_reset[$k] = $true
          }
-         continue
-      }
-
-      if ( $remote_type -ne $local_type) {
-         $deletes.Add($k)
-
-         if ($local_size) {
-            if ($maxsize -ge 0 -and $RequiredSpace+$local_size -gt $maxsize) {
-               Write-Host "$(get_timestamp) size cutoff before $k`: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)"
-               break
-            }
-            $RequiredSpace += $local_size
-         }
-
-         $change_by_file[$k] = "newType"
-
-         if ( $check_mode -and $local_type -eq 'dir') {
-            # We don't tar dir because that would tar up all files under dir.
-            # But the problem with this approach is that the dir mode
-            # (permission) is then not recorded in the tar file. We will have
-            # to keep and send the mode information separately (from the tar file)
-            $modes.Add($k)
-         }
-
          continue
       }
 
       # both sides are same kind type: file, dir, or link
-      if ( $check_mode -and $local_type -ne 'link' -and $remote_winmode -ne $local_winmode ) {
+      if ( $check_mode -and $local_type -ne 'link' -and $remote_mode -ne $local_mode ) {
          $modes.Add($k)
       }
 
@@ -1146,12 +1147,12 @@ function to_be_pulled {
 
    $patterns = @('<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>')
 
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
+   $captures = @(expect_socket $myconn $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
       $writer.Dispose()
-      $tcpStream.Close()
+      $stream.Close()
       return
    }
 
@@ -1251,21 +1252,21 @@ function to_be_pulled {
  
    $patterns = @('please send (data|diff|unpacked)')
 
-   $captures = @(expect_socket $tcpConnection $tcpStream $reader $writer $patterns @{ExpectTimeout = $timeout})
+   $captures = @(expect_socket $myconn $patterns @{ExpectTimeout = $timeout})
 
    if (!$captures) {
       $reader.Dispose()
       $writer.Dispose()
-      $tcpStream.Close()
+      $stream.Close()
       return
    }
 
    $mode = $captures[0][0]  
 
-   $tmp_tar_file = $null
+   [String]$tmp_tar_file = $null
    try  { 
-      $tmp_tar_file = get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}
-      # Write-Host "tmp_tar_file = $(ConvertTo-Json $tmp_tar_file)"
+      # use [String] to prevent powershell automatically convert string to Path
+      $tmp_tar_file = [String](get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)})
    } catch {
       send_text $writer ($_.Exception.Message + "`n")
       $writer.Flush()
@@ -1309,9 +1310,10 @@ function to_be_pulled {
          Import-Module $sevenZipPath
       }
 
-      $tmp_7zip_dir = $null
+      [String]$tmp_7zip_dir = $null
       try  { 
-         $tmp_7zip_dir = (get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*3)}) + "_dir"
+         # use [String] to prevent powershell automatically convert string to Path
+         $tmp_7zip_dir = [String]((get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*3)}) + "_dir")
       } catch {
          send_text $writer ($_.Exception.Message + "`n")
          $writer.Flush()
@@ -1836,13 +1838,16 @@ function get_nested_hash {
 
 function expect_socket {
    param (
-      [Parameter(Mandatory = $true)]$tcpConnection = $null,
-      [Parameter(Mandatory = $true)]$tcpStream = $null,
-      [Parameter(Mandatory = $true)][System.IO.BinaryReader]$reader = $null,
-      [Parameter(Mandatory = $true)][System.IO.BinaryWriter]$writer = $null,
+      [Parameter(Mandatory = $true)][MyConn]$myconn = $null,
       [Parameter(Mandatory = $true)][string []]$patterns = $null,
       $opt = $null
    )
+
+   $stream = $myconn.stream
+   $reader = $myconn.reader
+   $writer = $myconn.writer
+   $socket = $myconn.socket
+   $tcpclient = $myconn.tcpclient
 
    $data_str = ""
    $num_patterns = $patterns.count
@@ -1851,9 +1856,9 @@ function expect_socket {
    $other = @{}
    $total_wait = 0
    
-   while ($tcpConnection.Connected) {
-       while ($tcpStream.DataAvailable) {
-           $size = $tcpStream.Read($buffer, 0, $BufferSize)
+   while ($tcpclient.Connected) {
+       while ($stream.DataAvailable) {
+           $size = $stream.Read($buffer, 0, $BufferSize)
 
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
@@ -1895,8 +1900,8 @@ function expect_socket {
    
        # check whether network connection is still connected
        # https://learn-powershell.net/2015/03/29/checking-for-disconnected-connections-with-tcplistener-using-powershell/
-       if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
-            $tcpConnection.Client.Available -eq 0)) {
+       if ( ($tcpclient.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
+            $tcpclient.Client.Available -eq 0)) {
           $last_words = ""
           if ($data_str -ne "") {
              $tail_size = 100
@@ -2101,7 +2106,7 @@ function get_tmp_name {
       }
    }
 
-   $yyyy,$mm,$dd,$HH,$MM,$SS = (Get-Date -format "yyyy-MM-dd-HH-MM-SS").split('-')
+   $yyyy,$mm,$dd,$HH,$MM,$ss = (Get-Date -format "yyyy-MM-dd-HH-MM-ss").split('-')
 
    # C:\Users\william\AppData\Local\Temp\
    $tpsuptmp="$basedir/tpsup"
@@ -2117,7 +2122,7 @@ function get_tmp_name {
       Get-ChildItem -Path $tpsuptmp | Where-Object { $_.PSIsContainer -and $_.CreationTime -lt $cutoff } | Remove-Item -Force -Recurse
    }
 
-   return [string]"$daydir/${prefix}_$HH$MM$SS" # must add [string] otherwise powershell converts it to Path object.
+   return [String]"$daydir/${prefix}_$HH$MM$ss" # must add [string] otherwise powershell converts it to Path object.
 }
 
 
@@ -2204,14 +2209,17 @@ if ($role.ToLower() -eq 'server') {
          $in_count = 0
          $out_count = 0
 
-         $tcpConnection = $listener.AcceptTcpClient()
+         [System.Net.Sockets.TcpClient]$tcpclient = $listener.AcceptTcpClient()
       
-         # this command somehow will cause tcpConnection disconnected.
-         # Write-Verbose "tcpConnection = $(ConvertTo-Json $tcpConnection)"
+         # this command somehow will cause tcpclient disconnected.
+         # Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"
 
-         $peer_address = $tcpConnection.client.RemoteEndPoint.Address
-         $peer_port    = $tcpConnection.client.RemoteEndPoint.Port
+         $peer_address = $tcpclient.client.RemoteEndPoint.Address
+         $peer_port    = $tcpclient.client.RemoteEndPoint.Port
          Write-Host "$(get_timestamp) accepted client $peer_address`:$peer_port."
+
+         # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_classes?view=powershell-7
+         $myconn = [MyConn]::new($tcpclient)
 
          # [System.Net.Dns]::GetHostAddresses("127.0.0.1")
          # [System.Net.Dns]::GetHostAddresses("localhost")
@@ -2232,6 +2240,7 @@ if ($role.ToLower() -eq 'server') {
          foreach ($h in $all_hostnames) {
             if ( !(is_allowed $h $AccessMatrix['host']) ) {
                Write-Host "$(get_timestamp) $peer_address`: $h is not allowed to connect to us"
+               send_text $myconn.writer "$h is not allowed to connect to us"
                $allowed = $false
                break
             }
@@ -2241,14 +2250,14 @@ if ($role.ToLower() -eq 'server') {
              cd $old_pwd   # restore pwd as it might be changed by last loop
 
              if (!$reverse) {
-                #Write-Verbose "tcpConnection = $(ConvertTo-Json $tcpConnection)"          
-                to_be_pulled $tcpConnection
+                #Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"          
+                to_be_pulled $myconn
              } else {    
-                to_pull $tcpConnection $remote_dirs $local_dir
+                to_pull $myconn $remote_dirs $local_dir
              }  
          }    
 
-         $tcpConnection.Close()
+         $tcpclient.Close()
 
          cd $old_pwd # restore pwd
 
@@ -2284,7 +2293,7 @@ if ($role.ToLower() -eq 'server') {
       }
 
       $local_dir = $remainingArgs[-1]
-      $remote_dirs = $remainingArgs[1..($remainingArgs.count-2)]
+      $remote_dirs = $remainingArgs[2..($remainingArgs.count-2)]
       write-verbose "remote_dirs=$remote_dirs, size=$($remote_dirs.count)"
       write-verbose "local_dir=$local_dir"
 
@@ -2298,20 +2307,22 @@ if ($role.ToLower() -eq 'server') {
    write-verbose "remote_host=$remote_host"
    write-verbose "remote_port=$remote_port"
 
-   $tcpConnection = $null
-   try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
+   [System.Net.Sockets.TcpClient]$tcpclient = $null
+   try   {$tcpclient = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
    catch { Write-Host $(get_timestamp) $_; exit 1 }
 
-   write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)"
-   Write-Verbose "tcpConnection = $(ConvertTo-Json $tcpConnection)"
+   $myconn = [MyConn]::new($tcpclient)
+
+   write-verbose "connected server $($tcpclient.client.RemoteEndPoint.Address):$($tcpclient.client.RemoteEndPoint.Port)"
+   #Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"
 
    if ($reverse) {
-      to_be_pulled $tcpConnection
+      to_be_pulled $myconn
    } else {
-      to_pull $tcpConnection $remote_dirs $local_dir
+      to_pull $myconn $remote_dirs $local_dir
    }
 
-   $tcpConnection.Close()
+   $tcpclient.Close()
 
    Write-Host $(get_timestamp) "going back to old pwd: cd $old_pwd"
 
