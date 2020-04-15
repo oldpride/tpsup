@@ -2319,7 +2319,6 @@ if ($role.ToLower() -eq 'server') {
    $myconn = [MyConn]::new($tcpclient, $encrypt_key)
 
    write-verbose "connected server $($tcpclient.client.RemoteEndPoint.Address):$($tcpclient.client.RemoteEndPoint.Port)"
-   #Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"
 
    if ($reverse) {
       to_be_pulled $myconn
