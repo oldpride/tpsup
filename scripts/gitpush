@@ -36,7 +36,7 @@ do
       n) dryrun='--dry-run';;
       f) force=Y;;
       v) verbose=Y;;
-      m) commit_message=$OPTARG;;
+      m) echo "here"; commit_message=$OPTARG;;
       *) echo "unknow switch '$o'"; usage;;
    esac 
 done
