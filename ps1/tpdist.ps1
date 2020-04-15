@@ -185,52 +185,50 @@ function get_timestamp {
    return "{0:yyyyMMdd} {0:HH:mm:ss}" -f (Get-Date)
 }
 
-$in_count = 0     # incoming bytes count
-$out_count = 0    # outgoing bytes count
-$key_index_by_tag = @{
-    in = 0;
-    out = 0
-}
+Class MyCoder {
+   [Int]$index = 0
+   [Byte []]$key_array = $null
+   [Int]$key_length = 0
+   [String]$key_str 
 
-$key_length = 0;
-$key_array = @();
-if ($encrypt_key) {
-   # [system.Text.Encoding]::Default.GetBytes("abc").GetType()
-   $key_array = @([system.Text.Encoding]::Default.GetBytes($encrypt_key))
-   $key_length = $key_array.Length
-}
-
-function xor_encode {
-   param (
-      [Parameter(Mandatory = $true)][byte[]]$plain_bytes,
-      [Parameter(Mandatory = $true)][string]$tag,
-      [int]$size = -1
-   )
-   
-   if (!$encrypt_key) {
-      return [byte []]$plain_bytes
+   MyCoder([String]$key_str){
+      $this.key_str = $key_str     
+      if ($key_str) {
+         $this.key_array = @([system.Text.Encoding]::Default.GetBytes($key_str))
+         $this.key_length = $this.key_array.Length
+         $this.index = 0
+      }
    }
 
-   $encrypted_bytes = New-Object 'System.Collections.Generic.List[byte]'
-   $key_index = $key_index_by_tag[$tag]
-
-   $i = 0;
-   foreach ($byte in $plain_bytes){
-      $i ++
-      if ($size -ge 0 -and $i -gt $size) {
-         break
+   [byte []]xor([byte[]]$plain_bytes, [Int]$size) {
+      if (!$this.key_str) {
+         return [byte[]]$plain_bytes
       }
+
+      $xored_bytes = New-Object 'System.Collections.Generic.List[byte]'
+      
+      $i = 0;
+      foreach ($byte in $plain_bytes){
+         $i ++
+         if ($size -ge 0 -and $i -gt $size) {
+            break
+          }
        
-      $encrypted_bytes.Add($byte -bxor $key_array[$key_index])     
+          $xored_bytes.Add($byte -bxor $this.key_array[$this.index])     
 
-      $key_index ++
-      if ($key_index -eq $key_length) {
-         $key_index = 0
-      }
+          $this.index ++
+          if ($this.index -eq $this.key_length) {
+             $this.index = 0
+          }
+       }
+     
+       return [byte []]$xored_bytes.ToArray()
    }
 
-   $key_index_by_tag[$tag] = $key_index
-   return [byte []]$encrypted_bytes.ToArray()
+   # powershell doesn't support optional parameters. we have to delegate
+   [byte []]xor([byte[]]$plain_bytes) {
+      return $this.xor($plain_bytes, -1)
+   }
 }
 
 
@@ -240,9 +238,15 @@ Class MyConn {
    [System.Net.Sockets.Socket]$socket = $null
    [System.IO.BinaryReader]$reader = $null
    [System.IO.BinaryWriter]$writer = $null
+   [Int] $in_count = 0         # bytes received
+   [Int]$out_count = 0         # bytes sent
+   [String]$key = $null        # encrypt key
+   [MyCoder] $in_coder = $null # encoder for incoming
+   [MyCoder]$out_coder = $null # encoder for outcoming
  
    MyConn (
-      [System.Net.Sockets.TcpClient]$tcpclient
+      [System.Net.Sockets.TcpClient]$tcpclient,
+      [String]$key
    ) {
 
       $this.tcpclient = $tcpclient
@@ -257,27 +261,31 @@ Class MyConn {
     
       $this.reader = New-Object System.IO.BinaryReader($this.stream)
       $this.writer = New-Object System.IO.BinaryWriter($this.stream)
+      $this.in_count = 0
+      $this.out_count = 0
+
+      $this.key = $key
+      $this.in_coder = [MyCoder]::new($key)
+      $this.out_coder = [MyCoder]::new($key)
    }    
 }
 
 
 function send_text {
    param (
-      [Parameter(Mandatory = $true)][System.IO.BinaryWriter]$writer,
+      [Parameter(Mandatory = $true)][MyConn]$myconn,
       [Parameter(Mandatory = $true)]$text
    )
-
-   #Write-Verbose "text = $text, type=$($text.GetType())"
+  
    $bytes = [system.Text.Encoding]::Default.GetBytes($text)
-   #Write-Verbose "bytes = $bytes, type=$($bytes.GetType())"
 
-   $encoded = [byte []](xor_encode $bytes 'out')
-   #Write-Verbose "encoded = $encoded, type=$($encoded.GetType())"
-
-   $writer.Write($encoded)
+   #$encoded = [byte []](xor_encode $bytes 'out')
+   $encoded = [byte []]$myconn.out_coder.xor($bytes)
+   
+   $myconn.writer.Write($encoded)
    $size = $bytes.Count
-   $script:out_count += $size
-   Write-Verbose "   sent $size byte(s), total=$script:out_count"
+   $myconn.out_count += $size
+   Write-Verbose "   sent $size byte(s), total=$($myconn.out_count)"
 }
 
 
@@ -420,7 +428,7 @@ function to_pull {
       if ( $remote_path -match "$root_dir_pattern") {
          $message = "cannot copy from root dir: $remote_path"
          Write-Host "ERROR: $message"
-         send_text $writer "$message`n"
+         send_text $myconn "$message`n"
          return
       }  
         
@@ -456,16 +464,16 @@ function to_pull {
    $socket.Blocking = $true
 
    Write-Verbose "sending version: $version"
-   send_text $writer "<VERSION>$version</VERSION>`n"
+   send_text $myconn "<VERSION>$version</VERSION>`n"
 
    $paths_string = $remote_paths -join '|'
    Write-Verbose "sending paths: $paths_string"
-   send_text $writer "<PATH>$paths_string</PATH>`n"
+   send_text $myconn "<PATH>$paths_string</PATH>`n"
 
    $deep_number = 0
    if ($deep) { $deep_number = 1 }
    Write-Verbose "sending deep check flag: $deep_number"
-   send_text $writer "<DEEP>$deep_number</DEEP>`n"
+   send_text $myconn "<DEEP>$deep_number</DEEP>`n"
 
    # https://powershellexplained.com/2017-11-20-Powershell-StringBuilder/
    $local_tree_block = ""
@@ -487,25 +495,25 @@ function to_pull {
       $local_tree_block = $sb.ToString()
    }
    Write-Verbose "sending local tree, $local_tree_items items"
-   send_text $writer "<TREE>$local_tree_block</TREE>`n"
+   send_text $myconn "<TREE>$local_tree_block</TREE>`n"
 
    Write-Verbose "sending maxsize: $maxsize"
-   send_text $writer "<MAXSIZE>$maxsize</MAXSIZE>`n"
+   send_text $myconn "<MAXSIZE>$maxsize</MAXSIZE>`n"
 
    $excludes_string = ""
    if ($excludes) { $excludes_string = $excludes -join "`n"}
    Write-Verbose "sending excludes: $excludes_string"
-   send_text $writer "<EXCLUDE>$excludes_string</EXCLUDE>`n"
+   send_text $myconn "<EXCLUDE>$excludes_string</EXCLUDE>`n"
 
    $matches2_string = ""
    if ($matches2) { $matches2_string = $matches2 -join "`n"}
    Write-Verbose "sending matches: $matches2_string"
-   send_text $writer "<MATCH>$matches2_string</MATCH>`n"
+   send_text $myconn "<MATCH>$matches2_string</MATCH>`n"
 
    $os = Get-CimInstance Win32_OperatingSystem
    $uname = "PowerShell| $($os.Caption) $($os.Version)"
    Write-Verbose "sending prog|uname: $uname"
-   send_text $writer "<UNAME>$uname</UNAME>`n"
+   send_text $myconn "<UNAME>$uname</UNAME>`n"
 
    $writer.Flush()
 
@@ -548,7 +556,7 @@ function to_pull {
 
    Write-Host "$(get_timestamp) sending cksum results: $($cksums_results.Count) item(s)"
 
-   send_text $writer "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>`n"
+   send_text $myconn "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>`n"
 
    $writer.Flush() # flush data when writes are done.
 
@@ -632,7 +640,7 @@ function to_pull {
          } else {
             $message = "ERROR: unexpected format $a. expecting: (add|update|newType) file"
             Write-Host "$message"
-            send_text $writer "$message`n"
+            send_text $myconn "$message`n"
             $writer.flush()
             return
          }
@@ -657,7 +665,7 @@ function to_pull {
       # use [String] to prevent powershell automatically convert string to Path
       $tmp_tar_file = [String](get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)})
    } catch {
-      send_text $writer ($_.Exception.Message + "`n")
+      send_text $myconn ($_.Exception.Message + "`n")
       $writer.Flush()
       return
    }
@@ -665,16 +673,16 @@ function to_pull {
    if (!$adds_string) {
       $message = "nothing to add or update"
       Write-Host "$(get_timestamp) $message"
-      send_text $writer "$message`n"
+      send_text $myconn "$message`n"
       # don't return here as we will other work to do
    } elseif (!$dryrun) {
       # block socket when writing to avoid corrupt data and flush writes manually
       $socket.Blocking = $true
 
       if ($diff) {
-         send_text $writer "please send diff`n"
+         send_text $myconn "please send diff`n"
       } else {
-         send_text $writer "please send data`n"
+         send_text $myconn "please send data`n"
       }
 
       $writer.Flush()
@@ -686,7 +694,7 @@ function to_pull {
             # use [String] to prevent powershell automatically convert string to Path
             $tmp_diff_dir = [String]((get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}) + "_dir")
          } catch {
-            send_text $writer ($_.Exception.Message + "`n")
+            send_text $myconn ($_.Exception.Message + "`n")
             $writer.Flush()
             return
          }
@@ -732,7 +740,8 @@ function to_pull {
                 $tar_size += $size
                 write-verbose "received $size byte(s). subtotal tar_size=$tar_size byte(s)"
                 # $out_stream.Write($buffer, 0, $size)
-                $decoded = xor_encode $buffer 'in' $size
+                #$decoded = xor_encode $buffer 'in' $size
+                $decoded = $myconn.in_coder.xor($buffer,$size)
                 $out_stream.Write($decoded, 0, $size)            
              } else {
                   # this should happen sometimes but never worked.
@@ -841,7 +850,7 @@ function to_pull {
 
 function to_be_pulled {
    param (
-      [Parameter(Mandatory = $true)][MyConn]$tcpclient = $null,
+      [Parameter(Mandatory = $true)][MyConn]$myconn = $null,
       [hashtable]$opt = $null
    )
 
@@ -887,7 +896,7 @@ function to_be_pulled {
 
    if ($peer_protocol -ne $expected_peer_protocol) {
       Write-Host "$(get_timestamp) remote used wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol. we closed the connection.\n";
-      send_text $writer "wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol"
+      send_text $myconn "wrong protocol $peer_protocol, we are expecting protocol $expected_peer_protocol"
       $writer.Flush()
       return;
    }
@@ -1134,7 +1143,7 @@ function to_be_pulled {
 
    $need_cksums_string = "<NEED_CKSUMS>" + ($need_cksums -join "`n") + "</NEED_CKSUMS>"
    Write-Host "$(get_timestamp) sending need_cksums request to remote: $($need_cksums.count) items"
-   send_text $writer "$need_cksums_string`n"
+   send_text $myconn "$need_cksums_string`n"
    $writer.Flush()
 
    Write-Host "$(get_timestamp) collecting local cksums: $($need_cksums.count) items"
@@ -1191,7 +1200,7 @@ function to_be_pulled {
 
    $delete_string = "<DELETES>" + (($deletes|sort) -join "`n") + "</DELETES>"
    Write-Host "$(get_timestamp) sending deletes: $($deletes.Count) item(s)"
-   send_text $writer "$delete_string`n"
+   send_text $myconn "$delete_string`n"
    
    $adds_files = @($change_by_file.Keys|sort)
    # align to the left:  "{0, -8}{1,-15}{2,-15}{3,-15}`n" -f "Locale", "Jar", "HelpSet", "Exception"
@@ -1207,7 +1216,7 @@ function to_be_pulled {
    # $adds_string = $adds_string.TrimEnd("`n") # remove the last newline
    $adds_string = "<ADDS>" + ($a -join "`n") + "</ADDS>"
    Write-Host "$(get_timestamp) sending adds: $($adds_files.Count) item(s)"
-   send_text $writer "$adds_string`n"
+   send_text $myconn "$adds_string`n"
 
    $a = @(
        foreach ($f in $mtimes) {
@@ -1217,7 +1226,7 @@ function to_be_pulled {
    )
    $mtime_string = "<MTIMES>" + ($a -join "`n") + "</MTIMES>"
    Write-Host "$(get_timestamp) sending mtimes: $($mtimes.Count) item(s)"
-   send_text $writer "$mtime_string`n"
+   send_text $myconn "$mtime_string`n"
  
    $a = @(
        if ($check_mode) {
@@ -1229,14 +1238,14 @@ function to_be_pulled {
    )
    $mode_string = "<MODES>" + ($a -join "`n") + "</MODES>`n"
    Write-Host "$(get_timestamp) sending modes: $($modes.Count) item(s)"
-   send_text $writer "$mode_string`n"
+   send_text $myconn "$mode_string`n"
    
    $warn_string = "<WARNS>" + ($warns -join "`n") + "</WARNS>"
    Write-Host "$(get_timestamp) sending warns: $($warns.Count) item(s)"
-   send_text $writer "$warn_string`n"
+   send_text $myconn "$warn_string`n"
 
    Write-Host "$(get_timestamp) sending required space: $RequiredSpace"
-   send_text $writer "<SPACE>$RequiredSpace</SPACE>`n"
+   send_text $myconn "<SPACE>$RequiredSpace</SPACE>`n"
 
    $writer.Flush() # flush data when writes are done.
 
@@ -1268,7 +1277,7 @@ function to_be_pulled {
       # use [String] to prevent powershell automatically convert string to Path
       $tmp_tar_file = [String](get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)})
    } catch {
-      send_text $writer ($_.Exception.Message + "`n")
+      send_text $myconn ($_.Exception.Message + "`n")
       $writer.Flush()
       return;
    }
@@ -1315,7 +1324,7 @@ function to_be_pulled {
          # use [String] to prevent powershell automatically convert string to Path
          $tmp_7zip_dir = [String]((get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*3)}) + "_dir")
       } catch {
-         send_text $writer ($_.Exception.Message + "`n")
+         send_text $myconn ($_.Exception.Message + "`n")
          $writer.Flush()
          return;
       }
@@ -1362,7 +1371,8 @@ function to_be_pulled {
    $tar_size = 0
    while($size = $in_stream.Read($buffer, 0, $BufferSize)) {
       # $writer.Write($buffer, 0, $size)
-      $encoded = xor_encode $buffer 'out' $size
+      #$encoded = xor_encode $buffer 'out' $size
+      $encoded = $myconn.out_coder.xor($buffer, $size)
       $writer.Write($encoded, 0, $size)
       $tar_size += $size
    }
@@ -1862,10 +1872,11 @@ function expect_socket {
 
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
-              $script:in_count += $size
-              write-verbose "received $size byte(s), total=$script:in_count. this section size $recv_total_bytes byte(s)"              
+              $myconn.in_count += $size
+              write-verbose "received $size byte(s), total=$($myconn.in_count). this section size so far $recv_total_bytes byte(s)"              
               #$text = $encoding.GetString($buffer, 0, $size)
-              $decoded = xor_encode $buffer 'in' $size
+              #$decoded = xor_encode $buffer 'in' $size
+              $decoded = $myconn.in_coder.xor($buffer, $size)
               $text = $encoding.GetString($decoded, 0, $size) 
               $data_str += $text              
               write-verbose "data_str=$data_str"
@@ -1919,7 +1930,8 @@ function expect_socket {
           if ($total_wait -gt $opt['ExpectTimeout']) {
              $message = "timed out after $($opt['ExpectTimeout']) seconds. very likely wrong protocol. expecting $expected_peer_protocol.*"
              Write-Host $message
-             $encoded = xor_encode [system.Text.Encoding]::Default.GetBytes($message) 'out'
+             #$encoded = xor_encode [system.Text.Encoding]::Default.GetBytes($message) 'out'
+             $encoded = $myconn.out_coder.xor([system.Text.Encoding]::Default.GetBytes($message))
              $writer.Write($encoded)
              $writer.Flush();
              sleep 2; # give a little time so that remote can process this messsage
@@ -2122,7 +2134,7 @@ function get_tmp_name {
       Get-ChildItem -Path $tpsuptmp | Where-Object { $_.PSIsContainer -and $_.CreationTime -lt $cutoff } | Remove-Item -Force -Recurse
    }
 
-   return [String]"$daydir/${prefix}_$HH$MM$ss" # must add [string] otherwise powershell converts it to Path object.
+   return [String]"$daydir/${prefix}_${PID}_$HH$MM$ss" # must add [string] otherwise powershell converts it to Path object.
 }
 
 
@@ -2202,13 +2214,6 @@ if ($role.ToLower() -eq 'server') {
       if ($listener.Pending()) {
          $idle = 0      #reset idle timer
 
-         #reset key_index
-         $key_index_by_tag['in'] = 0
-         $key_index_by_tag['out'] = 0
-
-         $in_count = 0
-         $out_count = 0
-
          [System.Net.Sockets.TcpClient]$tcpclient = $listener.AcceptTcpClient()
       
          # this command somehow will cause tcpclient disconnected.
@@ -2219,7 +2224,7 @@ if ($role.ToLower() -eq 'server') {
          Write-Host "$(get_timestamp) accepted client $peer_address`:$peer_port."
 
          # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_classes?view=powershell-7
-         $myconn = [MyConn]::new($tcpclient)
+         $myconn = [MyConn]::new($tcpclient, $encrypt_key)
 
          # [System.Net.Dns]::GetHostAddresses("127.0.0.1")
          # [System.Net.Dns]::GetHostAddresses("localhost")
@@ -2311,7 +2316,7 @@ if ($role.ToLower() -eq 'server') {
    try   {$tcpclient = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
    catch { Write-Host $(get_timestamp) $_; exit 1 }
 
-   $myconn = [MyConn]::new($tcpclient)
+   $myconn = [MyConn]::new($tcpclient, $encrypt_key)
 
    write-verbose "connected server $($tcpclient.client.RemoteEndPoint.Address):$($tcpclient.client.RemoteEndPoint.Port)"
    #Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"
