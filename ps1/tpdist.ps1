@@ -2145,7 +2145,6 @@ if (!$remainingArgs) {
 write-verbose "verbose=$v"
 write-verbose "remainingArgs=$remainingArgs, size=$($remainingArgs.count)"
 
-
 if ($role.ToLower() -ne 'server' -AND $role.ToLower() -ne 'client') {
    usage("Role must be either 'server' or 'client'")
 }

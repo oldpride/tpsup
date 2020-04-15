@@ -12,7 +12,7 @@ usage:
 
    -f           force without asking for confrimation
    -n           dryrun
-   -m           will enter commit message, default to 'update'
+   -m message   commit message, default to 'update'
    -v           versbose
 
 example:
@@ -28,16 +28,15 @@ EOF
 force=N
 verbose=N
 dryrun=''
-message_prompt=N
+commit_message=update
 
-while getopts fnvm o;
+while getopts fnvm: o;
 do
    case "$o" in
       n) dryrun='--dry-run';;
       f) force=Y;;
       v) verbose=Y;;
-      m) message_prompt=Y;;
-      #m) match=$OPTARG;;
+      m) commit_message=$OPTARG;;
       *) echo "unknow switch '$o'"; usage;;
    esac 
 done
@@ -59,12 +58,7 @@ echo ""
    
 ( set -x; git diff --cached --name-only )
 echo ""
-if [ $message_prompt = N ]; then
-   ( set -x; git commit $dryrun -m update )
-else
-   git commit $dryrun
-fi
-
+( set -x; git commit $dryrun -m "$commit_message" )
 echo ""
 ( set -x; git diff --stat --cached origin/master )
 echo ""
