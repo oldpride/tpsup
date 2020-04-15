@@ -41,6 +41,8 @@ do
    esac 
 done
 
+export commit_message
+
 shift $((OPTIND-1))
 
 if [ $# -eq 0 ]; then
