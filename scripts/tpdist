@@ -900,6 +900,7 @@ sub expect_socket {
 
    my $select = IO::Select->new($socket) or die "IO::Select $!";
 
+   my $this_section_recv = 0;
    my $total_wait = 0;
    my $data;
 
@@ -930,8 +931,9 @@ sub expect_socket {
          last;
       } else {
          $in_count += $size;
+         $this_section_recv += $size;
          $data =  xor_encode($data, 'in');
-         $opt->{verbose} && print get_timestamp(), "received $size byte(s), total=$in_count: $data\n";
+         $opt->{verbose} && print get_timestamp(), "received $size byte(s), total=$in_count, this section so far $this_section_recv byte(s): $data\n";
          $total_data .= $data;
 
          my $all_matched = 1;

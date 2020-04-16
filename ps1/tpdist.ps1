@@ -186,7 +186,7 @@ function get_timestamp {
 }
 
 Class MyCoder {
-   [Int]$index = 0
+   [Int]$index = 0  # current char position in $key_str
    [Byte []]$key_array = $null
    [Int]$key_length = 0
    [String]$key_str 
@@ -1865,15 +1865,16 @@ function expect_socket {
    $captures = New-Object object[] $num_patterns 
    $other = @{}
    $total_wait = 0
+   $this_section_recv = 0;
    
    while ($tcpclient.Connected) {
        while ($stream.DataAvailable) {
            $size = $stream.Read($buffer, 0, $BufferSize)
 
            if ($size -gt 0 ) {
-              $recv_total_bytes += $size
+              $this_section_recv += $size
               $myconn.in_count += $size
-              write-verbose "received $size byte(s), total=$($myconn.in_count). this section size so far $recv_total_bytes byte(s)"              
+              write-verbose "received $size byte(s), total=$($myconn.in_count). this section so far $this_section_recv byte(s)"              
               #$text = $encoding.GetString($buffer, 0, $size)
               #$decoded = xor_encode $buffer 'in' $size
               $decoded = $myconn.in_coder.xor($buffer, $size)
