@@ -7,10 +7,8 @@
     [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
     [Alias("x"           )][string []] $excludes = $null, 
     [Alias("sz")][switch]$sevenZip               = $false,
-    [Int]$timeout                                = 300,
-    [Alias("idle")][Int]$maxidle                 = 600,
-    [Int]$maxtry                                 = 5,
-    [Int]$interval                               = 30,
+    [Int]$timeout                                = 300,   # expect will time out if pattern not matched in this much time
+    [Alias("idle")][Int]$maxidle                 = 600,   # listener will quit after this much time of idle
     [Int]$maxsize                                = -1,
     [switch]$deep                                = $false,
     [string]$allowhost                           = $null,
@@ -837,7 +835,7 @@ function to_pull {
       foreach ($l in $lines) {
          if ($l -eq '') { continue }
 
-         if ($l -match "^([0-9]+)\s+(\S.*)") {
+         if ($l -match "^(\S+)\s+(\S.*)") {
             $mode,$f = $Matches[1..2]
 
             Write-Host "don't know how to change mode: $mode,$f"
@@ -2132,7 +2130,7 @@ function get_tmp_name {
    $daydir="$tpsuptmp/$yyyy$mm$dd"
 
    if (!(Test-Path -Path $daydir)) {
-      mkdir $daydir
+      mkdir $daydir|Out-Host  # mkdir will return an object. if we don't take it, it will be returned to the calling function.
       if (!$?) { Write-Host "ERROR: mkdir $daydir failed"; exit 1}
 
       # https://stackoverflow.com/questions/17829785/delete-files-older-than-15-days-using-powershell
