@@ -1204,6 +1204,13 @@ sub to_be_pulled {
          $change_by_file->{$k} = "update";
          $diff_by_file->{$k} ++; # files are diff'able
 
+         # when we untar to update a file, the file's parent dir's timestamp is updated. we need
+         # to restore the timestamp
+         if ($k =~ m:^(.+)/:) {
+            my $parent_dir = $1;
+            $need_mtime_reset->{$parent_dir} = 1;
+         }
+
          next;
       }
 
