@@ -1830,13 +1830,12 @@ sub to_pull {
          #Msys is Git Bash 
          print get_timestamp(), "$cmd\n" if $verbose;
          system($cmd);
-      }
 
-      if ($KeepTmpFile) {
-         print get_timestamp(), "tmp_gar_file $tmp_tar_file is kept\n";
-      } else {
-         print get_timestamp(), "rm tmp_tar_file $tmp_tar_file\n";
-         unlink($tmp_tar_file);
+         if ($KeepTmpFile) {
+            print get_timestamp(), "tmp file $tmp_tar_file is kept\n";
+         } else {
+            unlink($tmp_tar_file);
+         }
       }
 
       if ($diff) {
@@ -1854,7 +1853,7 @@ sub to_pull {
             print get_timestamp(), "tmp_diff_dir '$tmp_diff_dir' is kept\n";
          } else {
             my $cmd = "/bin/rm -fr '$tmp_diff_dir'";
-            print get_timestamp(), "rm tmp_diff_dir: $cmd\n";
+            $verbose && print get_timestamp(), "$cmd\n";
             system($cmd);
          }
       }

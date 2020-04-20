@@ -661,6 +661,7 @@ function to_pull {
    #(Get-WmiObject win32_logicaldisk | Where-Object {$_.DeviceId -eq 'C:'}).FreeSpace
    # check tmp space
    [String]$tmp_tar_file = $null
+   [String]$tmp_diff_dir = $null
    try  { 
       # use [String] to prevent powershell automatically convert string to Path
       $tmp_tar_file = [String](get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)})
@@ -686,10 +687,8 @@ function to_pull {
       }
 
       $writer.Flush()
-
-      [String]$tmp_diff_dir = $null
+      
       if ($diff) {
-         $tmp_diff_dir = $null
          try  { 
             # use [String] to prevent powershell automatically convert string to Path
             $tmp_diff_dir = [String]((get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*2)}) + "_dir")
@@ -723,7 +722,7 @@ function to_pull {
       # unblock socket when reading
       $socket.Blocking = $false
 
-      Write-Host $(get_timestamp) "waiting for data from remote, will write to $tmp_tar_file"
+      Write-Host $(get_timestamp) "waiting for data from remote,`n   will write to $tmp_tar_file"
 
       # create an FileStream for output
       $out_stream = $null
@@ -783,13 +782,13 @@ function to_pull {
             tar -tf $tmp_tar_file |Out-Host
             tar -xf $tmp_tar_file |Out-Host
          }
+      }
 
-         if ($KeepTmpFile) {
-            Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept"
-         } else {
-            Write-Verbose "$(get_timestamp) rm $tmp_tar_file"
-            Remove-Item $tmp_tar_file
-         }
+      if ($KeepTmpFile) {
+          Write-Host "$(get_timestamp) tmp_tar_file $tmp_tar_file is kept"
+      } else {
+          Write-Verbose "$(get_timestamp) remove tmp_tar_file $tmp_tar_file"
+          Remove-Item $tmp_tar_file
       }
 
       if ($diff) {
@@ -802,10 +801,11 @@ function to_pull {
          }
 
         if ($KeepTmpFile) {
-            Write-Host "$(get_timestamp) tmp file $tmp_tar_file is kept\n";
+            Write-Host "$(get_timestamp) tmp_diff_dir $tmp_diff_dir is kept\n";
          } else {
-            Write-Verbose "$(get_timestamp) rm $tmp_tar_file"
-            Remove-Item $tmp_tar_file
+            cd $old_pwd  # get out of the folder before remove it
+            Write-Verbose "$(get_timestamp) remove tmp_diff_dir $tmp_diff_dir"
+            rm -r -fo $tmp_diff_dir
          }
       }
    }
@@ -1099,6 +1099,13 @@ function to_be_pulled {
 
          $change_by_file[$k] = "update"
          $diff_by_file[$k] = $true # files are diff'able
+
+         # in windows, when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
+         # therefore, we need to reset it.
+         if ($k -match '^(.+)/') {
+            $parent_dir = $Matches[1]
+            $need_mtime_reset[$parent_dir] = $true
+         }
 
          continue
       }
@@ -1523,10 +1530,9 @@ function build_dir_tree {
             continue;
          }
 
-         # note: ` is escape for powershell, \ is escape for regex
-         if ($abs_path -match '^[/\\]+$') {
-            Write-Error "cannot handle $abs_path for $p"
-            exit 1
+         if ($abs_path -match $root_dir_pattern) {
+            Write-Error "cannot handle root dir: $abs_path for $p"
+            exit 1; # exit here, not just skip, as mishandle this could remove files.
          }
 
          # $back is the starting point to compare, a relative path
@@ -1544,8 +1550,8 @@ function build_dir_tree {
          if ($abs_path -match '^(.*[/\\])(.+)') {
             $front,$back = $Matches[1],$Matches[2]
          } else {
-            Write-Error "unexpected path $abs_path"
-            exit 1
+            Write-Error "unexpected path format, no '/': $abs_path"
+            exit 1  # exit here, not just skip, as mishandle this could remove files.
          }
 
          if (!(is_allowed $abs_path $AllowDenyPatterns)) {
