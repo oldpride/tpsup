@@ -117,6 +117,9 @@ while (<$ifh>) {
    next if $job =~ /^\s*$/;     # skip blank lines
    next if $job =~ /^\s*#/;     # skip comment
 
+   $job =~ s/^\s+//;     # trim spaces
+   $job =~ s/\s+$//;     # trim spaces
+
    next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
 
    push @jobs, $job;

@@ -7,7 +7,7 @@
     [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
     [Alias("x"           )][string []] $excludes = $null, 
     [Alias("sz")][switch]$sevenZip               = $false,
-    [Int]$timeout                                = 300,   # expect will time out if pattern not matched in this much time
+    [Int]$timeout                                = 300,   # expect will time out if pattern not matched within this much time
     [Alias("idle")][Int]$maxidle                 = 600,   # listener will quit after this much time of idle
     [Int]$maxsize                                = -1,
     [switch]$deep                                = $false,
