@@ -274,10 +274,13 @@ for my $job (@jobs) {
 
    next if $dryrun;
    
-   my $sub_run = 0;
-   my $sub_err = 0;
+   my $sub_run;
+   my $sub_err;
 
    while (1) { 
+      $sub_run = 0;
+      $sub_err = 0;
+
       my $after_result = autorep_J("command=$autorep_cmd");
 
       for my $j (@subjobs) {
@@ -317,7 +320,7 @@ for my $job (@jobs) {
    }
 
    if ($sub_err) {
-       print "Aborting - $sub_err jobs did not complete successfully\n";
+       print "Aborting - $sub_err of $subcount subjobs did not complete successfully\n";
        exit 1;
    }
 }
