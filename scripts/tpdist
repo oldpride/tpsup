@@ -1310,6 +1310,7 @@ sub to_be_pulled {
 
    my $delete_string = "<DELETES>" . join("\n", sort(@deletes)) . "</DELETES>\n";
    print get_timestamp(), "sending deletes: ", scalar(@deletes), " item(s)\n";
+   $verbose && print "   $delete_string\n";
    socket_send($socket, "$delete_string\n");
 
    my $adds_string = "<ADDS>";
@@ -1323,6 +1324,7 @@ sub to_be_pulled {
 
    $adds_string .= "</ADDS>\n";
    print get_timestamp(), "sending adds: ", scalar(@adds_files), " item(s)\n"; 
+   $verbose && print "   $adds_string\n";
    socket_send($socket, "$adds_string\n");
 
    my $mtime_string = "<MTIMES>";
@@ -1333,6 +1335,7 @@ sub to_be_pulled {
    $mtime_string .= "</MTIMES>\n";
 
    print get_timestamp(), "sending mtimes: ", scalar(@mtimes), " item(s)\n"; 
+   $verbose && print "   $mtime_string\n";
    socket_send($socket, "$mtime_string\n");
 
    my $mode_string = "<MODES>";
@@ -1346,13 +1349,16 @@ sub to_be_pulled {
       print get_timestamp(), "sending modes: 0 item(s) as we don't check modes\n";
    }
    $mode_string .= "</MODES>\n";
+   $verbose && print "   $mode_string\n";
    socket_send($socket, "$mode_string\n");
 
    my $warn_string = "<WARNS>" . join("\n", @warns) . "</WARNS>\n";
    print get_timestamp(), "sending warns: ", scalar(@warns), " item(s)\n";
+   $verbose && print "   $warn_string\n";
    socket_send($socket, "$warn_string\n");
 
    print get_timestamp(), "sending required space: $RequiredSpace\n";
+   $verbose && print "   <SPACE>$RequiredSpace</SPACE>\n";
    socket_send($socket, "<SPACE>$RequiredSpace</SPACE>\n");
 
    $socket->flush(); # flush data when writes are done.
@@ -1544,22 +1550,26 @@ sub to_pull {
    $socket->blocking(1);
 
    my $version_string = "<VERSION>$version</VERSION>";
-   $quiet || print get_timestamp(), "sending version: $version_string\n";
+   $quiet || print get_timestamp(), "sending version: $version\n";
+   $verbose && print "   $version_string\n";
    socket_send($socket, "$version_string\n");
 
    my $uname = `uname -a`; chomp $uname;
    $uname = "Perl|$uname";
    my $uname_string = "<UNAME>$uname</UNAME>";
-   $quiet || print get_timestamp(), "sending prog|uname: $uname_string\n";
+   $quiet || print get_timestamp(), "sending prog|uname: $uname\n";
+   $verbose && print "   $uname_string\n";
    socket_send($socket, "$uname_string\n");
 
    my $paths_string = join("|", @$remote_paths);
-   $paths_string = "<PATH>$paths_string</PATH>";
    $quiet || print get_timestamp(), "sending paths: $paths_string\n";
+   $paths_string = "<PATH>$paths_string</PATH>";
+   $verbose && print "   $paths_string\n";
    socket_send($socket, "$paths_string\n");
 
+   $quiet || print get_timestamp(), "sending deep check flag: $deep\n";
    my $deep_string = "<DEEP>$deep</DEEP>";
-   $quiet || print get_timestamp(), "sending deep check flag: $deep_string\n";
+   $verbose && print "   $deep_string\n";
    socket_send($socket, "$deep_string\n");
 
    my $local_tree_block = "";
@@ -1577,27 +1587,30 @@ sub to_pull {
    }
 
    $quiet || print get_timestamp(), "sending local_tree, $local_tree_items items\n";
-   $verbose && print "<TREE>$local_tree_block</TREE>\n";
+   $verbose && print "   <TREE>$local_tree_block</TREE>\n";
    socket_send($socket, "<TREE>$local_tree_block</TREE>\n");
 
+   $quiet || print get_timestamp(), "sending maxsize: $maxsize\n";
    my $maxsize_string = "<MAXSIZE>$maxsize</MAXSIZE>";
-   $quiet || print get_timestamp(), "sending maxsize: $maxsize_string\n";
+   $verbose && print "   $maxsize_string\n";
    socket_send($socket, "$maxsize_string\n");
 
    my $excludes_string = "";
    if (@excludes) {
       $excludes_string = join("\n", @excludes);
    }
-   $excludes_string = "<EXCLUDE>$excludes_string</EXCLUDE>";
    $quiet || print get_timestamp(), "sending excludes: $excludes_string\n";
+   $excludes_string = "<EXCLUDE>$excludes_string</EXCLUDE>";
+   $verbose && print "   $excludes_string\n";
    socket_send($socket, "$excludes_string\n");
 
    my $matches_string = "";
    if (@matches) {
       $matches_string = join("\n", @matches);
    }
-   $matches_string="<MATCH>$matches_string</MATCH>";
    $quiet || print get_timestamp(), "sending matches: $matches_string\n";
+   $matches_string="<MATCH>$matches_string</MATCH>";
+   $verbose && print "   $matches_string\n";
    socket_send($socket, "$matches_string\n");
 
    $socket->flush(); # flush data when writes are done.
@@ -1642,8 +1655,8 @@ sub to_pull {
    my $cksums_results_string = join("\n", @cksums_results);
    $cksums_results_string = "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>";
 
-   $quiet || print get_timestamp(), "sending cksum results: ", scalar(@cksums_results), " item(s) $cksums_results_string\n";
-
+   $quiet || print get_timestamp(), "sending cksum results: ", scalar(@cksums_results), " item(s)\n";
+   $verbose  && print  "   $cksums_results_string\n";
    socket_send($socket, "$cksums_results_string\n");
 
    $socket->flush(); # flush data when writes are done.
