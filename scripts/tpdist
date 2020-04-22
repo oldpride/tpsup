@@ -1254,12 +1254,11 @@ sub to_be_pulled {
 
    my $need_cksums_string = "<NEED_CKSUMS>" . join("\n", @need_cksums) . "</NEED_CKSUMS>\n";
    print get_timestamp(), "sending need_cksums request to remote: ", scalar(@need_cksums), " items.\n";
+   $verbose && print "   $need_cksums_string\n";
    socket_send($socket, "$need_cksums_string\n");
 
    $socket->flush(); # flush data when writes are done.
   
-   print get_timestamp(), "sending need_cksums request to remote: ", scalar(@need_cksums), " items.\n";
-
    print get_timestamp(), "collecting local cksums: ", scalar(@need_cksums), " items.\n";
    my $local_cksum_by_file = get_cksums(\@need_cksums, $local_tree, {verbose=>$verbose});
 
@@ -1544,22 +1543,24 @@ sub to_pull {
    # instead, flush writes manually
    $socket->blocking(1);
 
-   my $paths_string = join("|", @$remote_paths);
-
-   $quiet || print get_timestamp(), "sending version: $version\n";
-   socket_send($socket, "<VERSION>$version</VERSION>\n");
+   my $version_string = "<VERSION>$version</VERSION>";
+   $quiet || print get_timestamp(), "sending version: $version_string\n";
+   socket_send($socket, "$version_string\n");
 
    my $uname = `uname -a`; chomp $uname;
    $uname = "Perl|$uname";
+   my $uname_string = "<UNAME>$uname</UNAME>";
+   $quiet || print get_timestamp(), "sending prog|uname: $uname_string\n";
+   socket_send($socket, "$uname_string\n");
 
-   $quiet || print get_timestamp(), "sending prog|uname: $uname\n";
-   socket_send($socket, "<UNAME>$uname</UNAME>\n");
-
+   my $paths_string = join("|", @$remote_paths);
+   $paths_string = "<PATH>$paths_string</PATH>";
    $quiet || print get_timestamp(), "sending paths: $paths_string\n";
-   socket_send($socket, "<PATH>$paths_string</PATH>\n");
+   socket_send($socket, "$paths_string\n");
 
-   $quiet || print get_timestamp(), "sending deep check flag: $deep\n";
-   socket_send($socket, "<DEEP>$deep</DEEP>\n");
+   my $deep_string = "<DEEP>$deep</DEEP>";
+   $quiet || print get_timestamp(), "sending deep check flag: $deep_string\n";
+   socket_send($socket, "$deep_string\n");
 
    my $local_tree_block = "";
    my $local_tree_items = 0;
@@ -1576,24 +1577,28 @@ sub to_pull {
    }
 
    $quiet || print get_timestamp(), "sending local_tree, $local_tree_items items\n";
+   $verbose && print "<TREE>$local_tree_block</TREE>\n";
    socket_send($socket, "<TREE>$local_tree_block</TREE>\n");
 
-   $quiet || print get_timestamp(), "sending maxsize: $maxsize\n";
-   socket_send($socket, "<MAXSIZE>$maxsize</MAXSIZE>\n");
+   my $maxsize_string = "<MAXSIZE>$maxsize</MAXSIZE>";
+   $quiet || print get_timestamp(), "sending maxsize: $maxsize_string\n";
+   socket_send($socket, "$maxsize_string\n");
 
    my $excludes_string = "";
    if (@excludes) {
       $excludes_string = join("\n", @excludes);
    }
-   $quiet || print get_timestamp(), "sending excludes=$excludes_string\n";
-   socket_send($socket, "<EXCLUDE>$excludes_string</EXCLUDE>\n");
+   $excludes_string = "<EXCLUDE>$excludes_string</EXCLUDE>";
+   $quiet || print get_timestamp(), "sending excludes: $excludes_string\n";
+   socket_send($socket, "$excludes_string\n");
 
    my $matches_string = "";
    if (@matches) {
       $matches_string = join("\n", @matches);
    }
-   $quiet || print get_timestamp(), "sending matches=$matches_string\n";
-   socket_send($socket, "<MATCH>$matches_string</MATCH>\n");
+   $matches_string="<MATCH>$matches_string</MATCH>";
+   $quiet || print get_timestamp(), "sending matches: $matches_string\n";
+   socket_send($socket, "$matches_string\n");
 
    $socket->flush(); # flush data when writes are done.
 
@@ -1635,10 +1640,11 @@ sub to_pull {
    $socket->blocking(1);
 
    my $cksums_results_string = join("\n", @cksums_results);
+   $cksums_results_string = "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>";
 
-   $quiet || print get_timestamp(), "sending cksum results: ", scalar(@cksums_results), " item(s)\n";
+   $quiet || print get_timestamp(), "sending cksum results: ", scalar(@cksums_results), " item(s) $cksums_results_string\n";
 
-   socket_send($socket, "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>\n");
+   socket_send($socket, "$cksums_results_string\n");
 
    $socket->flush(); # flush data when writes are done.
 
