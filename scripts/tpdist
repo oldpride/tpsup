@@ -638,15 +638,19 @@ sub build_dir_tree {
 
    my $AllowDenyPatterns = $opt->{AllowDenyPatterns};
 
-   my $cwd = getcwd();
+   my $saved_cwd = getcwd();
 
    my $tree;
-   my $other;
 
    for my $path (@$paths) {
+      cd $saved_cwd; # start from saved cwd
+      
       if ($opt->{RelativeBase} && $path !~ m:^/: ) {
+         # RelativeBase is from command line and only on the to-pull side.
          print get_timestamp(), "cd '$opt->{RelativeBase}'\n";
          if ( !chdir($opt->{RelativeBase}) ) {
+            # if there is an error, we just print locally, not to send to remote side. 
+            # therefore, we won't add the error into $tree.
             print get_timestamp(), "cd '$opt->{RelativeBase}' failed, $path is skipped.\n";
             next;
          }
@@ -663,7 +667,7 @@ sub build_dir_tree {
       my @globs = `/bin/ls -1d $path`;
       if ($? || !@globs) {
          print get_timestamp(), "/bin/ls -1d $path failed, skipped $path\n";
-         push @{$other->{errors}}, "$path not found";
+         $tree->{$path}->{skip} = "$path not found";
          next;
       }
       chomp @globs;
@@ -684,7 +688,7 @@ sub build_dir_tree {
                $abs_path = get_abs_path("$opt->{RelativeBase}/$p");
                #$abs_path = "$opt->{RelativeBase}/$p";
             } else {
-               $abs_path = get_abs_path("$cwd/$p");
+               $abs_path = get_abs_path("$saved_cwd/$p");
             }
          } else {
             # this is absolute path, still simplify eg. from a/../b to b 
@@ -693,18 +697,25 @@ sub build_dir_tree {
 
          if (!$abs_path) {
             print get_timestamp(), "cannot find abs_path for $p. skipped\n";
-            push @{$other->{errors}}, "cannot find abs_path for $p";
+            $tree->{$p}->{skip} = "cannot find abs_path for $p";
             next;
          }
 
          # -l $abs_path allows a symbolic link pointing to nowhere
          if (! -e $abs_path && ! -l $abs_path) {
             print get_timestamp(), "cannot find $abs_path for $p\n";
-            push @{$other->{errors}}, "cannot find $abs_path for $p";
+            $tree->{$p}->{skip} = "abs path $abs_path for $p not found";
             next;
          }
 
-         croak "cannot handle '/'" if $abs_path =~ m:^/+$:;
+         if ($abs_path =~ m:^/+$:) {
+            if ($p ne $abs_path) {
+               $tree->{$p}->{skip} = "cannot handle root dir: $p, abs=$abs_path";
+            } else {   
+               $tree->{$p}->{skip} = "cannot handle root dir: $p";
+            }
+            next;
+         }
 
          # $back is the starting point to compare, a relative path
          # $front is the parent path (absolute path)
@@ -719,23 +730,33 @@ sub build_dir_tree {
             $front = $1;
             $back = $2;
          } else {
-            croak "unexpected path $abs_path";
+            $tree->{$p}->{skip} = "unexpected abs path: $abs_path. expecting front/back format";
+            next;
          }
 
+         # now that we have clearly identified $back, we should use it as key rather than
+         # $abs_path or $p as key
          if (!is_allowed($abs_path, $AllowDenyPatterns, $opt)) {
-            $other->{skipped_back}->{$back} = "not allowed";
+            $tree->{$back}->{skip} = "not allowed";
             next;
          }
 
          $quiet || print get_timestamp(), "cd '$front'\n";
-         chdir($front) || croak "chdir($front) failed";
+         if (! chdir($front) ) {
+            $tree->{$back}->{skip} = "chdir($front) failed";
+            next;
+         }
 
          my $cmd = "find '$back' -mount -print";
          $quiet || print get_timestamp(), "$cmd\n";
 
          my $file_count = 0;
+         my $fh;
+         if ( ! open($fh, "$cmd |") ) {
+            $tree->{$back}->{skip} = "$cmd failed";
+            next;
+         }
 
-         open my $fh, "$cmd |" or croak "$cmd failed";
          FILES:
          while (<$fh>) {
             my $f = $_;
@@ -775,7 +796,7 @@ sub build_dir_tree {
 
             if ( ! -l $f && ! -r $f ) {
                if (!$cygwin || !test_read_by_open($f)) {
-                  # why cygwin? see comment at test_read_y_open()
+                  # why cygwin? see comment at test_read_by_open()
                   $tree->{$f}->{skip} = "no read access";
                   next;
                }
@@ -849,9 +870,9 @@ sub build_dir_tree {
       }
    }
 
-   chdir($cwd); # restore cwd
+   chdir($saved_cwd); # restore cwd
 
-   return ($tree, $other);
+   return $tree;
 }
 
 sub is_allowed {
@@ -1023,7 +1044,7 @@ sub to_be_pulled {
    }
 
    # we only check modes between compatible platforms
-   my $check_mode = ($uname !~ /^Perl|/i && $uname !~ /Windows/i ) ? 1 : 0;
+   my $check_mode = ($uname !~ /Windows/i ) ? 1 : 0;
 
    print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
 
@@ -1063,7 +1084,10 @@ sub to_be_pulled {
 
    my @local_paths = split (/[|]/, $local_paths_string);
 
-   my ($local_tree, $other) = build_dir_tree(\@local_paths,
+   # on to_be_pulled side, we need check access with AllowDenyPatterns.
+   # matches and excludes are coming from remote side
+   # RelativeBase is coming from command line
+   my $local_tree = build_dir_tree(\@local_paths,
                                               {verbose=>$verbose,
                                                RelativeBase=>$homedir,
                                                AllowDenyPatterns=>$opt->{AllowDenyPatterns},
@@ -1086,38 +1110,20 @@ sub to_be_pulled {
    my $need_mtime_reset;
    my @need_cksums;
 
-   if ($other->{errors}) {
-      push @warns, @{$other->{errors}};
-   }
-
-   my $back_exists_on_local;
-   for my $k (keys %$local_tree) {
-      my $back = $local_tree->{$k}->{back};
-      next if !defined($back);
-      $back_exists_on_local->{$back} = 1;
-   }
-
-   if ($other->{skipped_back}) {
-      for my $back (keys %{$other->{skipped_back}}) {
-         $back_exists_on_local->{$back} = 1;
-         push @warns, "skipped $back: $other->{skipped_back}->{$back}";
-      }
-   }
-
    # compare local_tree with remote_tree
    if ($remote_tree) {
       for my $k (sort (keys %$remote_tree)) {
          if (!$local_tree->{$k}) {
-            # if the back dir is not shown in server side at all, don't delete it on
-            # client side.
-            # for example, assume client command is
+            # if the back dir is not shown in local side at all, don't delete it on
+            # remote side.
+            # for example, assume remote side runs command as
             #    $0 client host port a b
-            # if 'a' doesn't exist on the server side, we should not delete b/a on the
-            # client side
+            # if 'a' doesn't exist on the local side, we (local side) should not tell
+            # remote to delete b/a on the remote side
           
             my $back = $remote_tree->{$k}->{back};
    
-            if ($back_exists_on_local->{$back}) {
+            if ($local_tree->{$back}) {
                push @deletes, $k;
    
                if ($k =~ m:^(.+)/:) {
@@ -1137,6 +1143,8 @@ sub to_be_pulled {
 
       my $skipped_message = $local_tree->{$k}->{skip};
       if ($skipped_message) {
+         # note: we only skip to copy this file to remote side
+         # not to tell the remote side to delete this file: not to add it to @deletes.
          push @warns, "skipped $k: $skipped_message";
          next;
       }
@@ -1308,7 +1316,7 @@ sub to_be_pulled {
    # instead, flush writes manually
    $socket->blocking(1);
 
-   my $delete_string = "<DELETES>" . join("\n", sort(@deletes)) . "</DELETES>\n";
+   my $delete_string = "<DELETES>" . join("\n", sort(@deletes)) . "</DELETES>";
    print get_timestamp(), "sending deletes: ", scalar(@deletes), " item(s)\n";
    $verbose && print "   $delete_string\n";
    socket_send($socket, "$delete_string\n");
@@ -1322,7 +1330,7 @@ sub to_be_pulled {
    }
    # $adds_string =~ s:\n$::; # remove the last newline
 
-   $adds_string .= "</ADDS>\n";
+   $adds_string .= "</ADDS>";
    print get_timestamp(), "sending adds: ", scalar(@adds_files), " item(s)\n"; 
    $verbose && print "   $adds_string\n";
    socket_send($socket, "$adds_string\n");
@@ -1348,12 +1356,13 @@ sub to_be_pulled {
    } else {
       print get_timestamp(), "sending modes: 0 item(s) as we don't check modes\n";
    }
-   $mode_string .= "</MODES>\n";
+   $mode_string .= "</MODES>";
    $verbose && print "   $mode_string\n";
    socket_send($socket, "$mode_string\n");
 
-   my $warn_string = "<WARNS>" . join("\n", @warns) . "</WARNS>\n";
+   my $warn_string = "<WARNS>" . join("\n", @warns) . "</WARNS>";
    print get_timestamp(), "sending warns: ", scalar(@warns), " item(s)\n";
+   print "   ", join("\n   ", @warns), "\n";
    $verbose && print "   $warn_string\n";
    socket_send($socket, "$warn_string\n");
 
@@ -1538,8 +1547,10 @@ sub to_pull {
    }
 
    $quiet || print get_timestamp(), "building local tree using abs_path: ", join(" ", @local_paths), "\n";
-   my ($local_tree, $other)
-          = build_dir_tree(\@local_paths, {verbose=>$verbose,
+
+   # on to_pull side, we don't check access with AllowDenyPatterns.
+   # matches and excludes are coming from command line
+   my $local_tree = build_dir_tree(\@local_paths, {verbose=>$verbose,
                                            excludes=>\@excludes,
                                            matches=>\@matches,
                                           });
@@ -1575,8 +1586,16 @@ sub to_pull {
    my $local_tree_block = "";
    my $local_tree_items = 0;
 
+   my $skipped = 0;
    if ($local_tree) {
       for my $k (sort keys(%$local_tree)) {
+         my $skip_message = $local_tree->{$k}->{skip};
+         if ($skip_message) {
+            # don't send skipped file to remote; this way, remote will not 
+            # tell us to delete them.
+            $skipped ++;
+            next;
+         }
          $local_tree_items ++;
          my $string = "key=$k";
          for my $attr (sort (keys %{$local_tree->{$k}})) {
@@ -1586,7 +1605,7 @@ sub to_pull {
       }
    }
 
-   $quiet || print get_timestamp(), "sending local_tree, $local_tree_items items\n";
+   $quiet || print get_timestamp(), "sending local_tree, $local_tree_items items, skipped $skipped\n";
    $verbose && print "   <TREE>$local_tree_block</TREE>\n";
    socket_send($socket, "<TREE>$local_tree_block</TREE>\n");
 
@@ -1749,11 +1768,9 @@ sub to_pull {
       }
    }
 
-   if ($warns_string) {
-      my @warns = split /\n/, $warns_string;
-      for my $w (@warns) {
-         print "warning from remote side: $w\n";
-      }
+   my @warns = split /\n/, $warns_string;
+   for my $w (@warns) {
+      print "warning from remote side: $w\n";
    }
 
    # check tmp space

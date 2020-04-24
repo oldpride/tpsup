@@ -60,10 +60,8 @@ $unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
 # [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
 
 # we cannot copy root dir
-# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/, or with \
-# note: ` is escape for powershell, \ is escape for regex
-$root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]*$';
-$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]';
+# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/,
+$root_dir_pattern = '^[a-zA-Z]:[/]*$|^[/]+$|^[/]+cygdrive[/]+[^/]+[/]*$';
 
 $old_pwd = $pwd
 Write-Verbose "pwd=$pwd"
@@ -460,7 +458,7 @@ function to_pull {
    }
 
    Write-Verbose "building local tree using abs_path: $($local_paths -join " "), "
-   $local_tree = build_dir_tree $local_paths @{excludes=$excludes;matches2=$matches2}
+   $local_tree, $other = @(build_dir_tree $local_paths @{excludes=$excludes;matches2=$matches2})
    Write-Verbose "local_tree = $(ConvertTo-Json $local_tree)"
 
    # block socket when writing;flush writes manually
@@ -964,11 +962,11 @@ function to_be_pulled {
    # on to_be_pulled side, we need check access with AllowDenyPatterns.
    # matches and excludes are coming from remote side
    # RelativeBase is coming from command line
-   [hashtable]$local_tree = build_dir_tree $local_paths @{ RelativeBase=$homedir;
+   [hashtable]$local_tree,[hashtable]$other = @(build_dir_tree $local_paths @{ RelativeBase=$homedir;
                                                                                matches2=$matches2; 
                                                                                excludes=$excludes; 
                                                                                AllowDenyPatterns = $AccessMatrix['file']
-                                                                              }  
+                                                                              })   
    Write-Verbose "local_tree  = $(ConvertTo-Json  $local_tree)"
    Write-Verbose "maxsize = $maxsize"
 
@@ -991,6 +989,29 @@ function to_be_pulled {
    $need_mtime_reset = @{}
    $need_cksums = New-Object System.Collections.Generic.List[System.String]
 
+   if ($other["errors"]) {
+      $warns.Add($other["errors"])
+   }
+
+   $back_exists_on_local = @{}
+   foreach ($k in $local_tree.keys) {
+      $back = get_nested_hash $local_tree @($k, 'back')
+      # if (0) { Write-Host $true } else {Write-Host $false}
+      # if ("") { Write-Host $true } else {Write-Host $false}
+      # if ("0") { Write-Host $true } else {Write-Host $false}
+      if (! $back) {
+         continue
+      }
+      $back_exists_on_local[$back] = $true
+   }
+
+   if ($other["skipped_back"]) {
+      foreach ($back in $other["skipped_back"].keys) {
+         $back_exists_on_local[$back] = $true
+         $warns.Add("skipped $back`: $(get_nested_hash $other @("skipped_back", $back))")
+      }
+   }
+
    # compare localtree with remote_tree
    foreach ($k in @($remote_tree.Keys|sort)) {
       if (! $local_tree[$k]) {
@@ -1001,7 +1022,7 @@ function to_be_pulled {
          # if 'a' doesn't exist on the local side, we (local side) should not tell
          # remote to delete b/a on the remote side
          $back = get_nested_hash $remote_tree @($k, 'back')
-         if ($local_tree[$back]) {
+         if ($back_exists_on_local[$back]) {
             $deletes.Add($k)
 
             if ($k -match '^(.+)/') {
@@ -1461,14 +1482,12 @@ function build_dir_tree {
       $AllowDenyPatterns = $opt["AllowDenyPatterns"]
    }
    
-   $saved_cwd = $pwd   # save pwd as we keep changing dir later
+   $old_cwd = $pwd   # save pwd as we keep changing dir later
    $tree = @{}
+   $other = @{}   # $other records errors that not belong to a single leaf
 
    foreach ($path in $paths) {
-      cd $saved_cwd   # start from the saved pwd
-
-      if ($opt["RelativeBase"] -and ! ($path -match $abs_pattern)) {
-         # RelativeBase is from command line and only on the to-pull side.
+      if ($opt["RelativeBase"] -and ! ($path -match "^/")) {
          Write-Verbose "cd $($opt["RelativeBase"])"
 
          # in powershell, try{}catch{} only catches terminating errors. 
@@ -1476,8 +1495,6 @@ function build_dir_tree {
          # try/catch. instead, we use $? which is $true/$false, not 0/1
          cd $opt["RelativeBase"]
          if (!$?) {
-            # if there is an error, we just print locally, not to send to remote side.
-            # therefore, we won't add the error into $tree.
             Write-Host "$(get_timestampe) cd $($opt["RelativeBase"]) failed. $path is skipped"
             continue
          }        
@@ -1488,7 +1505,7 @@ function build_dir_tree {
       if (!$?) {
          $message = "dir $path failed. skipped $path"
          Write-Host "$(get_timestamp) $message"
-         set_nested_hash $tree @($path, "skip") $message
+         set_hash_of_arrays $other "error" $message
          continue
       }
 
@@ -1496,7 +1513,8 @@ function build_dir_tree {
 
       foreach ($p in $globs) {
          $abs_path = $null
-         if ( ($p -match $abs_pattern) ) {
+         # note: ` is escape for powershell, \ is escape for regex
+         if ( ($p -match '^[a-zA-Z]:[/\\]') -or ($p -match '^[/\\]') ) {
             # examples: C://users, C:\\users, //netappsrv/data, \\netappsrv\data
 
             # this is abs path, still simplify it: a/../b -> b
@@ -1505,30 +1523,29 @@ function build_dir_tree {
             if ($opt["RelativeBase"]) {
                $abs_path = get_abs_path("$($opt["RelativeBase"])\$p")
             } else {
-               $abs_path = get_abs_path("$saved_cwd\$p")
+               $abs_path = get_abs_path("$cwd\$p")
             }
          }
 
          if (!$abs_path) {
-            $message = "cannot find abs_path for $p"
+            $message = "cannot find abs_path for $p. skipped"
             write-host "$(get_timestamp) $message"
-            set_nested_hash $tree @($p, "skip") $message
+            set_hash_of_arrays $other "error" $message
             continue
          }
 
-         if (! (Test-Path $abs_path) -and ! (Get-ItemProperty $abs_path).LinkType ) {
+         if (! (Test-Path $abs_path) -and ! (Get-ItemProperty william).LinkType ) {
             # https://stackoverflow.com/questions/817794/find-out-whether-a-file-is-a-symbolic-link-in-powershell
             # to-do, not sure windows tar can handle broken symbolic links
-            $message = "abs path $abs_path of $p not found"
+            $message = "cannot find $abs_path for $p. skipped"
             Write-Host "$(get_timestamp) $message"
-            set_nested_hash $tree @($p, "skip") $message
+            set_hash_of_arrays $other "error" $message
             continue
          }
 
          if ($abs_path -match $root_dir_pattern) {
-            $message = "cannot handle root dir: $p, abs=$abs_path"
             Write-Host "$(get_timestamp) $message"
-            set_nested_hash $tree @($p, "skip") $message
+            set_hash_of_arrays $other "error" $message
             continue
          }
 
@@ -1547,16 +1564,14 @@ function build_dir_tree {
          if ($abs_path -match '^(.*[/\\])(.+)') {
             $front,$back = $Matches[1],$Matches[2]
          } else {
-            $message = "unexpected abs path format: $abs_path. expecting front/back"
+            $message = "unexpected path format: $abs_path. expecting front/back"
             Write-Error $message
-            set_nested_hash $tree @($p, "skip") $message
+            set_hash_of_arrays $other "error" $message
             continue
          }
 
-         # now that we have clearly identified $back, we should use it as key rather than
-         # $abs_path or $p as key
          if (!(is_allowed $abs_path $AllowDenyPatterns)) {
-            set_nested_hash $tree @($back, "skip") "not allowed"
+            set_nested_hash $other @("skipped_back", $back) "denied"
             continue
          }
 
@@ -1565,7 +1580,7 @@ function build_dir_tree {
          if (!$?) {
             $message = "cd $front failed"
             Write-Error $message
-            set_nested_hash $tree @($back, "skip") $message
+            set_nested_hash $other @("skipped_back", $back) $message
             continue
          }
 
@@ -1702,9 +1717,9 @@ function build_dir_tree {
       }  
    }
 
-   cd $saved_cwd
+   cd $old_cwd
 
-   return $tree
+   return @($tree, $other)
 }
 
 function diff_f1_f2 {
@@ -1873,6 +1888,7 @@ function expect_socket {
    $num_patterns = $patterns.count
    $matched = New-Object boolean[] $num_patterns
    $captures = New-Object object[] $num_patterns 
+   $other = @{}
    $total_wait = 0
    $this_section_recv = 0;
    
