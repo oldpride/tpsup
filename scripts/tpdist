@@ -643,7 +643,7 @@ sub build_dir_tree {
    my $tree;
 
    for my $path (@$paths) {
-      cd $saved_cwd; # start from saved cwd
+      chdir($saved_cwd); # start from saved cwd
       
       if ($opt->{RelativeBase} && $path !~ m:^/: ) {
          # RelativeBase is from command line and only on the to-pull side.
@@ -1260,7 +1260,7 @@ sub to_be_pulled {
    # instead, flush writes manually 
    $socket->blocking(1);
 
-   my $need_cksums_string = "<NEED_CKSUMS>" . join("\n", @need_cksums) . "</NEED_CKSUMS>\n";
+   my $need_cksums_string = "<NEED_CKSUMS>" . join("\n", @need_cksums) . "</NEED_CKSUMS>";
    print get_timestamp(), "sending need_cksums request to remote: ", scalar(@need_cksums), " items.\n";
    $verbose && print "   $need_cksums_string\n";
    socket_send($socket, "$need_cksums_string\n");
@@ -1340,7 +1340,7 @@ sub to_be_pulled {
       my $mt = $local_tree->{$f}->{mtime}; 
       $mtime_string .= "$mt $f\n";
    }
-   $mtime_string .= "</MTIMES>\n";
+   $mtime_string .= "</MTIMES>";
 
    print get_timestamp(), "sending mtimes: ", scalar(@mtimes), " item(s)\n"; 
    $verbose && print "   $mtime_string\n";
@@ -1470,7 +1470,7 @@ sub to_be_pulled {
    while(1) {
       my $data;
 
-      my $size = read($fh, $data, 10240);
+      my $size = read($fh, $data, 1024000);
 
       last if !$size;
 
