@@ -96,10 +96,10 @@ GetOptions(
    'v|verbose'       => \$verbose,
 ) || usage ("cannot parse command line: $!");
 
-usage("wrong number of args") if @ARGV != 1;
-my $file = shift @ARGV;
-
-print cksum($file), "\n";
+usage("wrong number of args") if ! @ARGV;
+for my $file (@ARGV) {
+   print cksum($file), " $file\n";
+}
 
 exit 0;
 

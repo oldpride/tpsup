@@ -2041,7 +2041,6 @@ $array2[0].getType()
 
 $CksumBufferSize = 4*1024*1024
 $CksumBuffer = new-object System.Byte[] $CksumBufferSize
-
 function cksum {
    param (
       [Parameter(Mandatory = $true)][string]$file = $null,
@@ -2052,13 +2051,11 @@ function cksum {
    $size =0
 
    $ifd = $null
-   try   { $ifd = [System.IO.File]::OpenRead($file) }
-   catch { Write-Host $_; exit 1 } 
+   try   { $ifd = [System.IO.File]::OpenRead($file) } catch { Write-Host $_; exit 1 } 
 
    #Set-PsDebug -Trace 1
    while($n = $ifd.Read($CksumBuffer, 0, $CksumBufferSize)) {
       $size += $n
-
       for ($i=0; $i -lt $n; $i++) {
          $c = $CksumBuffer[$i]
          $index = (0xff -band ($cksum -shr 24)) -bxor $c
@@ -2068,9 +2065,7 @@ function cksum {
    }
    #Set-PsDebug -Trace 0
    $ifd.close()
-
    #Write-Host "size=$size, cksum=$cksum"
-
    # Extend with the length of the data
    while ($size -ne 0) {
       $c = $size -band 0xFF;
@@ -2078,12 +2073,12 @@ function cksum {
       $cksum = ([uint64]'0xFFFFFFFF' -band ($cksum -shl 8)) -bxor $crctab[(0xFF -band ($cksum -shr 24)) -bxor $c];
       #Write-Host "size=$size, cksum=$cksum"
    }
-
    $cksum = (-bnot $cksum) -band [uint64]'0xffffffff'
 
    return $cksum
 }
 #cksum C:\Users\william\tmp\ps1\List-Exe.ps1
+#foreach ($item in @(Get-ChildItem -Recurse C:\Users\william\tmp\ps1)) {cksum $item.FullName}
 
 function get_cksums {
    param (
