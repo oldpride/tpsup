@@ -1003,11 +1003,6 @@ function to_be_pulled {
          $back = get_nested_hash $remote_tree @($k, 'back')
          if ($local_tree[$back]) {
             $deletes.Add($k)
-
-            if ($k -match '^(.+)/') {
-               $parent_dir = $Matches[1]
-               $need_mtime_reset[$parent_dir] = $true
-            }
          }
       }
    }
@@ -1051,11 +1046,6 @@ function to_be_pulled {
             $change_by_file[$k] = "add"
          }
 
-         if ($k -match '^(.+)/') {
-            $parent_dir = $Matches[1]
-            $need_mtime_reset[$parent_dir] = $true
-         }
-
          if ($local_type -eq 'dir') {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
@@ -1092,13 +1082,6 @@ function to_be_pulled {
          $change_by_file[$k] = "update"
          $diff_by_file[$k] = $true # files are diff'able
 
-         # in windows, when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
-         # therefore, we need to reset it.
-         if ($k -match '^(.+)/') {
-            $parent_dir = $Matches[1]
-            $need_mtime_reset[$parent_dir] = $true
-         }
-
          continue
       }
      
@@ -1120,7 +1103,7 @@ function to_be_pulled {
          }
       } elseif ( !$local_test -or !$remote_test) {
          # we reach here if only one test is missing.
-         # note: if both tests missing, the logic above would take care of it.
+         # note: if both tests are missing, the previous logic would have already taken care of it.
          # not sure what situation will lead us here yet
 
          $change_by_file[$k] = "update"
@@ -1134,6 +1117,16 @@ function to_be_pulled {
          if ($remote_mtime -ne $local_mtime) {
             $need_mtime_reset[$k] = $true
          }
+      }
+   }
+
+   # test array merge: $a=1,2; $b=3,4; $a+$b
+   foreach ($k in @($change_by_file.Keys + $deletes)) {
+      # when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
+      # therefore, we need to reset it.
+      if ($k -match '^(.+)/') {
+          $parent_dir = $Matches[1]
+          $need_mtime_reset[$parent_dir] = $true
       }
    }
 

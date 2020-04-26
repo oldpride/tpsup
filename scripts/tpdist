@@ -1125,11 +1125,6 @@ sub to_be_pulled {
    
             if ($local_tree->{$back}) {
                push @deletes, $k;
-   
-               if ($k =~ m:^(.+)/:) {
-                  my $parent_dir = $1;
-                  $need_mtime_reset->{$parent_dir} = 1;
-               }
             }
          }
       }
@@ -1161,17 +1156,12 @@ sub to_be_pulled {
          }
 
          if (exists $remote_tree->{$k}) {
-            # if remote file exists, remove it as it is different type
-            push @deletes, $k;
+            # if remote file exists, it must be of a different type, remove it first and then add
             $change_by_file->{$k} = "newType";
+            push @deletes, $k;
          } else {
             $change_by_file->{$k} = "add";
          } 
-
-         if ($k =~ m:^(.+)/:) {
-            my $parent_dir = $1;
-            $need_mtime_reset->{$parent_dir} = 1;
-         }
 
          if ($local_type eq 'dir') {
             # We don't tar dir because that would tar up all files under dir.
@@ -1212,13 +1202,6 @@ sub to_be_pulled {
          $change_by_file->{$k} = "update";
          $diff_by_file->{$k} ++; # files are diff'able
 
-         # when we untar to update a file, the file's parent dir's timestamp is updated. we need
-         # to restore the timestamp
-         if ($k =~ m:^(.+)/:) {
-            my $parent_dir = $1;
-            $need_mtime_reset->{$parent_dir} = 1;
-         }
-
          next;
       }
 
@@ -1239,7 +1222,7 @@ sub to_be_pulled {
          }
       } elsif ( !$local_test || !$remote_test) {
          # we reach here if only one test is missing.
-         # note: if both tests missing, the logic above would take care of it.
+         # note: if both tests are missing, the previous logic would have already taken care of it.
          # not sure what situation will lead us here yet
        
          $change_by_file->{$k} = "update";
@@ -1253,6 +1236,15 @@ sub to_be_pulled {
          if ($remote_mtime != $local_mtime) {
             $need_mtime_reset->{$k} = 1
          }
+      }
+   }
+
+   for my $k (@deletes, keys(%$change_by_file)) {
+      # when we untar to update a file, the file's parent dir's timestamp is updated. we need
+      # to restore the timestamp
+      if ($k =~ m:^(.+)/:) {
+         my $parent_dir = $1;
+         $need_mtime_reset->{$parent_dir} = 1;
       }
    }
 
