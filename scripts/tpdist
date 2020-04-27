@@ -1103,7 +1103,6 @@ sub to_be_pulled {
    my @deletes;
    my $change_by_file; # this includes both add and update
    my $diff_by_file; # files are diff'able, only when type=file.
-   my @mtimes;
    my @modes;
    my @warns;
    my $RequiredSpace = 0;
@@ -1239,16 +1238,6 @@ sub to_be_pulled {
       }
    }
 
-   for my $k (@deletes, keys(%$change_by_file)) {
-      # when we untar to update a file, the file's parent dir's timestamp is updated. we need
-      # to restore the timestamp
-      if ($k =~ m:^(.+)/:) {
-         my $parent_dir = $1;
-         $need_mtime_reset->{$parent_dir} = 1;
-      }
-   }
-
-   # don't unblock socket when writing; doing so would corrupt data.
    # instead, flush writes manually 
    $socket->blocking(1);
 
@@ -1300,8 +1289,18 @@ sub to_be_pulled {
       }
    }
 
-   for my $dir (keys %$need_mtime_reset) {
-      push @mtimes, $dir if $local_tree->{$dir};
+   for my $k (@deletes, keys(%$change_by_file)) {
+      # when we untar to update a file, the file's parent dir's timestamp is updated. we need
+      # to restore the timestamp
+      if ($k =~ m:^(.+)/:) {
+         my $parent_dir = $1;
+         $need_mtime_reset->{$parent_dir} = 1;
+      }
+   }
+
+   my @mtimes;
+   for my $f (keys %$need_mtime_reset) {
+      push @mtimes, $f if $local_tree->{$f};
    }
 
    # don't unblock socket when writing; doing so would corrupt data.

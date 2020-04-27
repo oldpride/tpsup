@@ -984,7 +984,6 @@ function to_be_pulled {
    $deletes = New-Object System.Collections.Generic.List[System.String]
    $change_by_file = @{}
    $diff_by_file = @{}
-   $mtimes = New-Object System.Collections.Generic.List[System.String]
    $modes = New-Object System.Collections.Generic.List[System.String]
    $warns = New-Object System.Collections.Generic.List[System.String]
    $RequiredSpace = 0
@@ -1120,16 +1119,6 @@ function to_be_pulled {
       }
    }
 
-   # test array merge: $a=1,2; $b=3,4; $a+$b
-   foreach ($k in @($change_by_file.Keys + $deletes)) {
-      # when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
-      # therefore, we need to reset it.
-      if ($k -match '^(.+)/') {
-          $parent_dir = $Matches[1]
-          $need_mtime_reset[$parent_dir] = $true
-      }
-   }
-
    # block socket before writing
    $socket.Blocking = $true
 
@@ -1179,10 +1168,21 @@ function to_be_pulled {
          $need_mtime_reset[$f] = $true
       }
    }
+   
+   # test array merge: $a=1,2; $b=3,4; $a+$b
+   foreach ($k in @($change_by_file.Keys + $deletes)) {
+      # when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
+      # therefore, we need to reset it.
+      if ($k -match '^(.+)/') {
+          $parent_dir = $Matches[1]
+          $need_mtime_reset[$parent_dir] = $true
+      }
+   }
 
-   foreach ($dir in $need_mtime_reset.Keys) {
-      if ($local_tree[$dir]) {
-         $mtimes.Add($dir)
+   $mtimes = New-Object System.Collections.Generic.List[System.String]
+   foreach ($f in $need_mtime_reset.Keys) {
+      if ($local_tree[$f]) {
+         $mtimes.Add($f)
       } 
    }
 
