@@ -60,8 +60,10 @@ $unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
 # [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
 
 # we cannot copy root dir
-# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/,
-$root_dir_pattern = '^[a-zA-Z]:[/]*$|^[/]+$|^[/]+cygdrive[/]+[^/]+[/]*$';
+# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/, or with \
+# note: ` is escape for powershell, \ is escape for regex
+$root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]*$';
+$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]';
 
 $old_pwd = $pwd
 Write-Verbose "pwd=$pwd"
@@ -458,7 +460,7 @@ function to_pull {
    }
 
    Write-Verbose "building local tree using abs_path: $($local_paths -join " "), "
-   $local_tree, $other = @(build_dir_tree $local_paths @{excludes=$excludes;matches2=$matches2})
+   $local_tree = build_dir_tree $local_paths @{excludes=$excludes;matches2=$matches2}
    Write-Verbose "local_tree = $(ConvertTo-Json $local_tree)"
 
    # block socket when writing;flush writes manually
@@ -776,7 +778,12 @@ function to_pull {
       Write-Host "$(get_timestamp) received tar_size = $tar_size"
 
       if ($tar_size -eq 0) {
-         Write-Host "$(get_timestamp) no new file to add"
+         if ($action_by_file.Count -gt 0) {
+            Write-Error "$(get_timestamp) file transfer failed. we shouldn't receive 0 size";
+            return;
+         } else {
+            Write-Host "$(get_timestamp) no new file to add"
+         }
       } else {
          if ($sevenZip) {
             if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
@@ -962,11 +969,11 @@ function to_be_pulled {
    # on to_be_pulled side, we need check access with AllowDenyPatterns.
    # matches and excludes are coming from remote side
    # RelativeBase is coming from command line
-   [hashtable]$local_tree,[hashtable]$other = @(build_dir_tree $local_paths @{ RelativeBase=$homedir;
+   [hashtable]$local_tree = build_dir_tree $local_paths @{ RelativeBase=$homedir;
                                                                                matches2=$matches2; 
                                                                                excludes=$excludes; 
                                                                                AllowDenyPatterns = $AccessMatrix['file']
-                                                                              })   
+                                                                              }  
    Write-Verbose "local_tree  = $(ConvertTo-Json  $local_tree)"
    Write-Verbose "maxsize = $maxsize"
 
@@ -982,35 +989,11 @@ function to_be_pulled {
    $deletes = New-Object System.Collections.Generic.List[System.String]
    $change_by_file = @{}
    $diff_by_file = @{}
-   $mtimes = New-Object System.Collections.Generic.List[System.String]
    $modes = New-Object System.Collections.Generic.List[System.String]
    $warns = New-Object System.Collections.Generic.List[System.String]
    $RequiredSpace = 0
    $need_mtime_reset = @{}
    $need_cksums = New-Object System.Collections.Generic.List[System.String]
-
-   if ($other["errors"]) {
-      $warns.Add($other["errors"])
-   }
-
-   $back_exists_on_local = @{}
-   foreach ($k in $local_tree.keys) {
-      $back = get_nested_hash $local_tree @($k, 'back')
-      # if (0) { Write-Host $true } else {Write-Host $false}
-      # if ("") { Write-Host $true } else {Write-Host $false}
-      # if ("0") { Write-Host $true } else {Write-Host $false}
-      if (! $back) {
-         continue
-      }
-      $back_exists_on_local[$back] = $true
-   }
-
-   if ($other["skipped_back"]) {
-      foreach ($back in $other["skipped_back"].keys) {
-         $back_exists_on_local[$back] = $true
-         $warns.Add("skipped $back`: $(get_nested_hash $other @("skipped_back", $back))")
-      }
-   }
 
    # compare localtree with remote_tree
    foreach ($k in @($remote_tree.Keys|sort)) {
@@ -1022,13 +1005,8 @@ function to_be_pulled {
          # if 'a' doesn't exist on the local side, we (local side) should not tell
          # remote to delete b/a on the remote side
          $back = get_nested_hash $remote_tree @($k, 'back')
-         if ($back_exists_on_local[$back]) {
+         if ($local_tree[$back]) {
             $deletes.Add($k)
-
-            if ($k -match '^(.+)/') {
-               $parent_dir = $Matches[1]
-               $need_mtime_reset[$parent_dir] = $true
-            }
          }
       }
    }
@@ -1072,11 +1050,6 @@ function to_be_pulled {
             $change_by_file[$k] = "add"
          }
 
-         if ($k -match '^(.+)/') {
-            $parent_dir = $Matches[1]
-            $need_mtime_reset[$parent_dir] = $true
-         }
-
          if ($local_type -eq 'dir') {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
@@ -1113,13 +1086,6 @@ function to_be_pulled {
          $change_by_file[$k] = "update"
          $diff_by_file[$k] = $true # files are diff'able
 
-         # in windows, when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
-         # therefore, we need to reset it.
-         if ($k -match '^(.+)/') {
-            $parent_dir = $Matches[1]
-            $need_mtime_reset[$parent_dir] = $true
-         }
-
          continue
       }
      
@@ -1141,7 +1107,7 @@ function to_be_pulled {
          }
       } elseif ( !$local_test -or !$remote_test) {
          # we reach here if only one test is missing.
-         # note: if both tests missing, the logic above would take care of it.
+         # note: if both tests are missing, the previous logic would have already taken care of it.
          # not sure what situation will lead us here yet
 
          $change_by_file[$k] = "update"
@@ -1207,10 +1173,21 @@ function to_be_pulled {
          $need_mtime_reset[$f] = $true
       }
    }
+   
+   # test array merge: $a=1,2; $b=3,4; $a+$b
+   foreach ($k in @($change_by_file.Keys + $deletes)) {
+      # when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
+      # therefore, we need to reset it.
+      if ($k -match '^(.+)/') {
+          $parent_dir = $Matches[1]
+          $need_mtime_reset[$parent_dir] = $true
+      }
+   }
 
-   foreach ($dir in $need_mtime_reset.Keys) {
-      if ($local_tree[$dir]) {
-         $mtimes.Add($dir)
+   $mtimes = New-Object System.Collections.Generic.List[System.String]
+   foreach ($f in $need_mtime_reset.Keys) {
+      if ($local_tree[$f]) {
+         $mtimes.Add($f)
       } 
    }
 
@@ -1482,12 +1459,14 @@ function build_dir_tree {
       $AllowDenyPatterns = $opt["AllowDenyPatterns"]
    }
    
-   $old_cwd = $pwd   # save pwd as we keep changing dir later
+   $saved_cwd = $pwd   # save pwd as we keep changing dir later
    $tree = @{}
-   $other = @{}   # $other records errors that not belong to a single leaf
 
    foreach ($path in $paths) {
-      if ($opt["RelativeBase"] -and ! ($path -match "^/")) {
+      cd $saved_cwd   # start from the saved pwd
+
+      if ($opt["RelativeBase"] -and ! ($path -match $abs_pattern)) {
+         # RelativeBase is from command line and only on the to-pull side.
          Write-Verbose "cd $($opt["RelativeBase"])"
 
          # in powershell, try{}catch{} only catches terminating errors. 
@@ -1495,6 +1474,8 @@ function build_dir_tree {
          # try/catch. instead, we use $? which is $true/$false, not 0/1
          cd $opt["RelativeBase"]
          if (!$?) {
+            # if there is an error, we just print locally, not to send to remote side.
+            # therefore, we won't add the error into $tree.
             Write-Host "$(get_timestampe) cd $($opt["RelativeBase"]) failed. $path is skipped"
             continue
          }        
@@ -1505,7 +1486,7 @@ function build_dir_tree {
       if (!$?) {
          $message = "dir $path failed. skipped $path"
          Write-Host "$(get_timestamp) $message"
-         set_hash_of_arrays $other "error" $message
+         set_nested_hash $tree @($path, "skip") $message
          continue
       }
 
@@ -1513,8 +1494,7 @@ function build_dir_tree {
 
       foreach ($p in $globs) {
          $abs_path = $null
-         # note: ` is escape for powershell, \ is escape for regex
-         if ( ($p -match '^[a-zA-Z]:[/\\]') -or ($p -match '^[/\\]') ) {
+         if ( ($p -match $abs_pattern) ) {
             # examples: C://users, C:\\users, //netappsrv/data, \\netappsrv\data
 
             # this is abs path, still simplify it: a/../b -> b
@@ -1523,29 +1503,30 @@ function build_dir_tree {
             if ($opt["RelativeBase"]) {
                $abs_path = get_abs_path("$($opt["RelativeBase"])\$p")
             } else {
-               $abs_path = get_abs_path("$cwd\$p")
+               $abs_path = get_abs_path("$saved_cwd\$p")
             }
          }
 
          if (!$abs_path) {
-            $message = "cannot find abs_path for $p. skipped"
+            $message = "cannot find abs_path for $p"
             write-host "$(get_timestamp) $message"
-            set_hash_of_arrays $other "error" $message
+            set_nested_hash $tree @($p, "skip") $message
             continue
          }
 
-         if (! (Test-Path $abs_path) -and ! (Get-ItemProperty william).LinkType ) {
+         if (! (Test-Path $abs_path) -and ! (Get-ItemProperty $abs_path).LinkType ) {
             # https://stackoverflow.com/questions/817794/find-out-whether-a-file-is-a-symbolic-link-in-powershell
             # to-do, not sure windows tar can handle broken symbolic links
-            $message = "cannot find $abs_path for $p. skipped"
+            $message = "abs path $abs_path of $p not found"
             Write-Host "$(get_timestamp) $message"
-            set_hash_of_arrays $other "error" $message
+            set_nested_hash $tree @($p, "skip") $message
             continue
          }
 
          if ($abs_path -match $root_dir_pattern) {
+            $message = "cannot handle root dir: $p, abs=$abs_path"
             Write-Host "$(get_timestamp) $message"
-            set_hash_of_arrays $other "error" $message
+            set_nested_hash $tree @($p, "skip") $message
             continue
          }
 
@@ -1564,14 +1545,16 @@ function build_dir_tree {
          if ($abs_path -match '^(.*[/\\])(.+)') {
             $front,$back = $Matches[1],$Matches[2]
          } else {
-            $message = "unexpected path format: $abs_path. expecting front/back"
+            $message = "unexpected abs path format: $abs_path. expecting front/back"
             Write-Error $message
-            set_hash_of_arrays $other "error" $message
+            set_nested_hash $tree @($p, "skip") $message
             continue
          }
 
+         # now that we have clearly identified $back, we should use it as key rather than
+         # $abs_path or $p as key
          if (!(is_allowed $abs_path $AllowDenyPatterns)) {
-            set_nested_hash $other @("skipped_back", $back) "denied"
+            set_nested_hash $tree @($back, "skip") "not allowed"
             continue
          }
 
@@ -1580,7 +1563,7 @@ function build_dir_tree {
          if (!$?) {
             $message = "cd $front failed"
             Write-Error $message
-            set_nested_hash $other @("skipped_back", $back) $message
+            set_nested_hash $tree @($back, "skip") $message
             continue
          }
 
@@ -1717,9 +1700,9 @@ function build_dir_tree {
       }  
    }
 
-   cd $old_cwd
+   cd $saved_cwd
 
-   return @($tree, $other)
+   return $tree
 }
 
 function diff_f1_f2 {
@@ -1888,7 +1871,6 @@ function expect_socket {
    $num_patterns = $patterns.count
    $matched = New-Object boolean[] $num_patterns
    $captures = New-Object object[] $num_patterns 
-   $other = @{}
    $total_wait = 0
    $this_section_recv = 0;
    
@@ -2057,7 +2039,6 @@ $array2[0].getType()
 
 $CksumBufferSize = 4*1024*1024
 $CksumBuffer = new-object System.Byte[] $CksumBufferSize
-
 function cksum {
    param (
       [Parameter(Mandatory = $true)][string]$file = $null,
@@ -2068,13 +2049,11 @@ function cksum {
    $size =0
 
    $ifd = $null
-   try   { $ifd = [System.IO.File]::OpenRead($file) }
-   catch { Write-Host $_; exit 1 } 
+   try   { $ifd = [System.IO.File]::OpenRead($file) } catch { Write-Host $_; exit 1 } 
 
    #Set-PsDebug -Trace 1
    while($n = $ifd.Read($CksumBuffer, 0, $CksumBufferSize)) {
       $size += $n
-
       for ($i=0; $i -lt $n; $i++) {
          $c = $CksumBuffer[$i]
          $index = (0xff -band ($cksum -shr 24)) -bxor $c
@@ -2084,9 +2063,7 @@ function cksum {
    }
    #Set-PsDebug -Trace 0
    $ifd.close()
-
    #Write-Host "size=$size, cksum=$cksum"
-
    # Extend with the length of the data
    while ($size -ne 0) {
       $c = $size -band 0xFF;
@@ -2094,12 +2071,12 @@ function cksum {
       $cksum = ([uint64]'0xFFFFFFFF' -band ($cksum -shl 8)) -bxor $crctab[(0xFF -band ($cksum -shr 24)) -bxor $c];
       #Write-Host "size=$size, cksum=$cksum"
    }
-
    $cksum = (-bnot $cksum) -band [uint64]'0xffffffff'
 
    return $cksum
 }
 #cksum C:\Users\william\tmp\ps1\List-Exe.ps1
+#foreach ($item in @(Get-ChildItem -Recurse C:\Users\william\tmp\ps1)) {cksum $item.FullName}
 
 function get_cksums {
    param (
@@ -2215,23 +2192,23 @@ if ($role.ToLower() -eq 'server') {
       }
    }
 
-   $listener_port = $remainingArgs[0]
-   write-verbose "listener_port=$listener_port"
+    $listener_port = $remainingArgs[0]
+    write-verbose "listener_port=$listener_port"
+     
+    $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
 
-   $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
+    if (-not $listener) {
+        exit 1
+    }
+     
+    # don't use it now. if this is set, the socket will keep listen after the cmd terminates.
+    # $listener.Server.SetSocketOption("Socket", "ReuseAddress", 1)
 
-   if (-not $listener) {
-      exit 1
-   }
+    try   { $listener.start()     }
+    catch { Write-Host $(get_timestamp) $_; exit 1 }
    
-   # don't use it now. if this is set, the socket will keep listen after the cmd terminates.
-   # $listener.Server.SetSocketOption("Socket", "ReuseAddress", 1)
-
-   try   { $listener.start()     }
-   catch { Write-Host $(get_timestamp) $_; exit 1 }
-   
-   Write-Host $(get_timestamp) "listener started at port $listener_port, max_idle=$maxidle seconds"
-   # $listener | Get-Member
+    Write-Host $(get_timestamp) "listener started at port $listener_port, max_idle=$maxidle seconds"
+    # $listener | Get-Member
 
    $idle = 0
    while ($true) { 
@@ -2239,6 +2216,9 @@ if ($role.ToLower() -eq 'server') {
          $idle = 0      #reset idle timer
 
          [System.Net.Sockets.TcpClient]$tcpclient = $listener.AcceptTcpClient()
+
+         # stop listener while serving this client.
+         $listener.Stop()
       
          # this command somehow will cause tcpclient disconnected.
          # Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"

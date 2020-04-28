@@ -187,7 +187,6 @@ Examples:
            (a very short perl program) first by copy-and-paste using an editor
            netsuck host1 4444 > tpdist
 
-   # to use tpdist. Relative path is relative to server side home dir.
    host1\$ dist server 5555
    host2\$ tpdist client host1 5555 tpsup ~
 
