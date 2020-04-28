@@ -39,7 +39,7 @@ $BufferSize = 4*1024*1024
 $buffer = new-object System.Byte[] $BufferSize
 $encoding = new-object System.Text.AsciiEncoding
 
-$homedir = $HOME
+$homedir = $HOME.Replace('\', '/');
 Write-Verbose "homedir = $homedir"
 
 # https://docs.microsoft.com/en-us/dotnet/api/system.io.path.gettemppath?view=netframework-4.8&tabs=windows
@@ -778,7 +778,12 @@ function to_pull {
       Write-Host "$(get_timestamp) received tar_size = $tar_size"
 
       if ($tar_size -eq 0) {
-         Write-Host "$(get_timestamp) no new file to add"
+         if ($action_by_file.Count -gt 0) {
+            Write-Error "$(get_timestamp) file transfer failed. we shouldn't receive 0 size";
+            return;
+         } else {
+            Write-Host "$(get_timestamp) no new file to add"
+         }
       } else {
          if ($sevenZip) {
             if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
@@ -2187,93 +2192,101 @@ if ($role.ToLower() -eq 'server') {
       }
    }
 
-   $listener_port = $remainingArgs[0]
-   write-verbose "listener_port=$listener_port"
+    $listener_port = $remainingArgs[0]
+    write-verbose "listener_port=$listener_port"
 
-   $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
+    while ($true) { 
+        $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
 
-   if (-not $listener) {
-      exit 1
-   }
-   
-   # don't use it now. if this is set, the socket will keep listen after the cmd terminates.
-   # $listener.Server.SetSocketOption("Socket", "ReuseAddress", 1)
+        if (-not $listener) {
+            exit 1
+        }
+     
+        $listener.Server.SetSocketOption("Socket", "ReuseAddress", 1)
 
-   try   { $listener.start()     }
-   catch { Write-Host $(get_timestamp) $_; exit 1 }
-   
-   Write-Host $(get_timestamp) "listener started at port $listener_port, max_idle=$maxidle seconds"
-   # $listener | Get-Member
+        # this is big try-catch-finally is to make the above ReuseAddress to work
+        # https://stackoverflow.com/questions/35322550/is-there-a-way-to-enable-the-so-reuseaddr-socket-option-when-using-system-net-ht
+        try   { 
+            $listener.start()           
+            Write-Host $(get_timestamp) "listener started at port $listener_port, max_idle=$maxidle seconds"
+            Write-Verbose "listener = ConvertTo-Json($listener))"
 
-   $idle = 0
-   while ($true) { 
-      if ($listener.Pending()) {
-         $idle = 0      #reset idle timer
+           $idle = 0
+           [System.Net.Sockets.TcpClient]$tcpclient = $null;
 
-         [System.Net.Sockets.TcpClient]$tcpclient = $listener.AcceptTcpClient()
+           while ($true) { 
+              if ($listener.Pending()) {
+                 $idle = 0      #reset idle timer
+
+                 $tcpclient = $listener.AcceptTcpClient()
+                 break;
+              } else {
+                 $idle += 1
+                 if ($idle -gt $maxidle) {
+                    Write-Host "$(get_timestamp) no new client connection for $maxidle seconds. Server quits"
+                    $listener.Stop()
+                    exit 0
+                 }
+                 sleep 1
+              }
+           }
+       }
+       catch { Write-Host $(get_timestamp) $_; exit 1 }
+       finally { $listener.Stop()}
       
-         # this command somehow will cause tcpclient disconnected.
-         # Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"
+        # this command somehow will cause tcpclient disconnected.
+        #Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"
 
-         $peer_address = $tcpclient.client.RemoteEndPoint.Address
-         $peer_port    = $tcpclient.client.RemoteEndPoint.Port
-         Write-Host "$(get_timestamp) accepted client $peer_address`:$peer_port."
+        $peer_address = $tcpclient.client.RemoteEndPoint.Address
+        $peer_port    = $tcpclient.client.RemoteEndPoint.Port
+        Write-Host "$(get_timestamp) accepted client $peer_address`:$peer_port."
 
-         # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_classes?view=powershell-7
-         $myconn = [MyConn]::new($tcpclient, $encrypt_key)
+        # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_classes?view=powershell-7
+        $myconn = [MyConn]::new($tcpclient, $encrypt_key)
 
-         # [System.Net.Dns]::GetHostAddresses("127.0.0.1")
-         # [System.Net.Dns]::GetHostAddresses("localhost")
-         # [System.Net.Dns]::GetHostbyAddress("127.0.0.1") 
-         # [system.net.dns]::GetHostEntry("127.0.0.1")
-         # [system.net]::GetHostEntry("127.0.0.1")
-         $all_hostnames = @()
-         # https://docs.microsoft.com/en-us/dotnet/api/system.net.dns.gethostbyaddress?view=netframework-4.8
-         # https://docs.microsoft.com/en-us/dotnet/api/system.net.iphostentry?view=netframework-4.8
-         $dns_lookup = [System.Net.Dns]::GetHostByAddress($peer_address)
-         $all_hostnames += $dns_lookup.HostName
-         $all_hostnames += $dns_lookup.Aliases        
-         $all_hostnames += $peer_address
-         if ($peer_address -eq "127.0.0.1") { $all_hostnames += "localhost" }
-         Write-Host "$(get_timestamp) peer names: $all_hostnames"
+        # [System.Net.Dns]::GetHostAddresses("127.0.0.1")
+        # [System.Net.Dns]::GetHostAddresses("localhost")
+        # [System.Net.Dns]::GetHostbyAddress("127.0.0.1") 
+        # [system.net.dns]::GetHostEntry("127.0.0.1")
+        # [system.net]::GetHostEntry("127.0.0.1")
+        $all_hostnames = @()
+        # https://docs.microsoft.com/en-us/dotnet/api/system.net.dns.gethostbyaddress?view=netframework-4.8
+        # https://docs.microsoft.com/en-us/dotnet/api/system.net.iphostentry?view=netframework-4.8
+        $dns_lookup = [System.Net.Dns]::GetHostByAddress($peer_address)
+        $all_hostnames += $dns_lookup.HostName
+        $all_hostnames += $dns_lookup.Aliases        
+        $all_hostnames += $peer_address
+        if ($peer_address -eq "127.0.0.1") { $all_hostnames += "localhost" }
+        Write-Host "$(get_timestamp) peer names: $all_hostnames"
 
-         $allowed = $true
-         foreach ($h in $all_hostnames) {
-            if ( !(is_allowed $h $AccessMatrix['host']) ) {
-               Write-Host "$(get_timestamp) $peer_address`: $h is not allowed to connect to us"
-               send_text_line $myconn "$h is not allowed to connect to us"
-               $allowed = $false
-               break
-            }
-         }
+        $allowed = $true
+        foreach ($h in $all_hostnames) {
+        if ( !(is_allowed $h $AccessMatrix['host']) ) {
+            Write-Host "$(get_timestamp) $peer_address`: $h is not allowed to connect to us"
+            send_text_line $myconn "$h is not allowed to connect to us"
+            $allowed = $false
+            break
+        }
+        }
 
-         if ($allowed) {       
-             cd $old_pwd   # restore pwd as it might be changed by last loop
+        if ($allowed) {       
+            cd $old_pwd   # restore pwd as it might be changed by last loop
 
-             if (!$reverse) {
-                #Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"          
-                to_be_pulled $myconn
-             } else {    
-                to_pull $myconn $remote_dirs $local_dir
-             }  
-         }    
+            if (!$reverse) {
+            #Write-Verbose "tcpclient = $(ConvertTo-Json $tcpclient)"          
+            to_be_pulled $myconn
+            } else {    
+            to_pull $myconn $remote_dirs $local_dir
+            }  
+        }    
 
-         $tcpclient.Close()
+        $tcpclient.Close()
 
-         cd $old_pwd # restore pwd
+        cd $old_pwd # restore pwd
 
-         Write-Host "`n----------------------------------------------------------------"
-         Write-Host "$(get_timestamp) waiting for next client at port $listener_port, max_idle=$maxidle seconds"
-      } else {
-         $idle += 1
-         if ($idle -gt $maxidle) {
-            Write-Host "$(get_timestamp) no new client connection for $maxidle seconds. Server quits"
-            $listener.Stop()
-            exit 0
-         }
-         sleep 1
-      }
-   } 
+        Write-Host "`n----------------------------------------------------------------"
+        Write-Host "$(get_timestamp) waiting for next client at port $listener_port, max_idle=$maxidle seconds" 
+   }
 } else {
    # this is client
 
