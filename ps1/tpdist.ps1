@@ -2136,7 +2136,7 @@ function get_tmp_name {
       Get-ChildItem -Path $basedir | Where-Object { $_.PSIsContainer -and $_.CreationTime -lt $cutoff } | Remove-Item -Force -Recurse
    }
 
-   return [String]"$daydir/${prefix}_${PID}_$HH$MM$ss" # must add [string] otherwise powershell converts it to Path object.
+   return [String]"$daydir/${prefix}_${HH}${MM}${ss}_$PID" # must add [string] otherwise powershell converts it to Path object.
 }
 
 
@@ -2298,7 +2298,7 @@ if ($role.ToLower() -eq 'server') {
    $local_dir   = $null
 
    if ($reverse) {
-      if ($remainingArgs.count -ne 1) {
+      if ($remainingArgs.count -ne 2) {
          usage("wrong numnber of args")
       }
    } else {
