@@ -1293,7 +1293,11 @@ sub to_be_pulled {
       # to restore the timestamp
       if ($k =~ m:^(.+)/:) {
          my $parent_dir = $1;
-         $need_mtime_reset->{$parent_dir} = 1;
+         if (exists $local_tree->{$parent_dir}) {
+            # parent_dir may be filtered out by match/exclude patterns, therefore, we need to
+            # check its existence
+            $need_mtime_reset->{$parent_dir} = 1;
+         }   
       }
    }
 

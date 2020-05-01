@@ -44,13 +44,13 @@ Write-Verbose "homedir = $homedir"
 
 # https://docs.microsoft.com/en-us/dotnet/api/system.io.path.gettemppath?view=netframework-4.8&tabs=windows
 # C:\Users\UserName\AppData\Local\Temp\ 
-$tmpdir = "$([System.IO.Path]::GetTempPath())\tpsup"
+$tmpdir = "$([System.IO.Path]::GetTempPath())\tpsup".Replace('\', '/');
 Write-Verbose "tmpdir = $tmpdir"
 
 $prog = ($PSCommandPath.Split('/\'))[-1]
 Write-Verbose "prog = $prog"
 
-$scriptdir = (Split-Path -Parent $PSCommandPath)
+$scriptdir = (Split-Path -Parent $PSCommandPath).Replace('\', '/');
 Write-Verbose "scriptdir = $scriptdir"
 
 # to get UNIX-style mtime, which seconds from epoc time.
@@ -65,8 +65,8 @@ $unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
 $root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]*$';
 $abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]';
 
-$old_pwd = $pwd
-Write-Verbose "pwd=$pwd"
+$old_pwd = $pwd.ToString().Replace('\', '/');
+Write-Verbose "saved_pwd=$old_pwd"
 
 # find whether we have tar.exe or 7Zip
 if (! $sevenZip) {
@@ -78,7 +78,7 @@ if (! $sevenZip) {
    }
 }
 
-$sevenZipPath = "$HOME\ps1m\7Zip4Powershell\1.10.0.0\7Zip4PowerShell.psd1"
+$sevenZipPath = "$HOME\ps1m\7Zip4Powershell\1.10.0.0\7Zip4PowerShell.psd1".Replace('\', '/');
 
 function usage {
   param([string]$message = $null)
@@ -1179,8 +1179,12 @@ function to_be_pulled {
       # when we untar a file to overwrite an existing file, that file's parent dir timestamp get updated. 
       # therefore, we need to reset it.
       if ($k -match '^(.+)/') {
-          $parent_dir = $Matches[1]
-          $need_mtime_reset[$parent_dir] = $true
+         $parent_dir = $Matches[1]
+         if ($local_tree.ContainsKey($parent_dir)) {
+            # # parent_dir may be filtered out by match/exclude patterns, therefore, we need to
+            # check its existence
+            $need_mtime_reset[$parent_dir] = $true
+         }
       }
    }
 
@@ -1501,9 +1505,9 @@ function build_dir_tree {
             $abs_path = get_abs_path($p)
          } else {
             if ($opt["RelativeBase"]) {
-               $abs_path = get_abs_path("$($opt["RelativeBase"])\$p")
+               $abs_path = get_abs_path("$($opt["RelativeBase"])/$p").Replace('\', '/');
             } else {
-               $abs_path = get_abs_path("$saved_cwd\$p")
+               $abs_path = get_abs_path("$saved_cwd/$p").Replace('\', '/');
             }
          }
 
@@ -1972,7 +1976,7 @@ function get_abs_path {
         $abs_path = $myerror[0].TargetObject
     }
 
-    return $abs_path
+    return $abs_path.toString().Replace('\', '/');
 }
 
 <#
@@ -2207,9 +2211,9 @@ if ($role.ToLower() -eq 'server') {
         # this is big try-catch-finally is to make the above ReuseAddress to work
         # https://stackoverflow.com/questions/35322550/is-there-a-way-to-enable-the-so-reuseaddr-socket-option-when-using-system-net-ht
         try   { 
-            $listener.start()           
+            $listener.start()                     
+            Write-Verbose "listener = $(ConvertTo-Json($listener)))"
             Write-Host $(get_timestamp) "listener started at port $listener_port, max_idle=$maxidle seconds"
-            Write-Verbose "listener = ConvertTo-Json($listener))"
 
            $idle = 0
            [System.Net.Sockets.TcpClient]$tcpclient = $null;
