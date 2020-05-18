@@ -58,8 +58,8 @@ for my $d (@ARGV) {
    my @jars = `ls -1 $d/*.jar`;
    chomp @jars;
 
-   my $regular_jars_by_prefix = {};
-   my $RELEASE_jars_by_prefix = {};
+   my $regular_jars_by_prefix = {};  # must init
+   my $RELEASE_jars_by_prefix = {};  # must init
 
    for my $jar (@jars) {
       my $jars_by_prefix;
