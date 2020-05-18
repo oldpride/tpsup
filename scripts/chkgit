@@ -2,7 +2,7 @@
 
 . $TPSUP/profile
 
-for cmd in tpscripts kdbnotes tpnotes mycpp
+for cmd in tpscripts kdbnotes tpnotes mycpp joomla kivy java
 do 
    echo ""
    echo "------ $cmd -------"
