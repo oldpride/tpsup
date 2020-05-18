@@ -1513,7 +1513,6 @@ sub to_pull {
 
    my @local_paths;
    for my $remote_path (@$remote_paths) {
-      print "here\n";
       if ($remote_path =~ m!$root_dir_pattern!) {
          my $message = "cannot copy root dir $remote_path";
          print "ERROR: $message\n";
