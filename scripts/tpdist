@@ -110,6 +110,8 @@ Common Switches (for both server and client):
 
    -v                 verbose mode.
 
+   -version           print version
+
    -KeepTmpFile       keep tmp file for troubleshooting purpse.
                       default is not to keep tmp file
 
@@ -212,9 +214,11 @@ my @excludes;
 my $deep = 0;
 my $quiet;
 my $reverse;
+my $print_version;
 
 GetOptions(
    'v|verbose'       => \$verbose,
+   'version'         => \$print_version,
    'r|reverse'       => \$reverse,
    'q|quiet'         => \$quiet,
    'KeepTmpFile'     => \$KeepTmpFile,
@@ -235,6 +239,11 @@ GetOptions(
    'tmpdir=s'        => \$tmpdir,
    'enc|encrypt=s'   => \$encrypt_key,
 ) || usage ("cannot parse command line: $!");
+
+if ($print_version) {
+   print "version $version\n";
+   exit 0;
+}
 
 usage("wrong number of args") if @ARGV < 2;
 
