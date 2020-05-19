@@ -28,6 +28,7 @@ if ($v) {
 }
 
 $version = "7.0"
+
 Write-Verbose "version = $version"
 
 $version_split = $version -split "[.]"
@@ -102,6 +103,9 @@ Usage:
 
    If remote path is a relative path, it will be relative to remote user's home dir.
    The current user homedir=$homedir
+
+   to show version
+      tpdist version
 
 Common Swithes
 
@@ -2144,16 +2148,21 @@ function get_tmp_name {
 }
 
 
+if ($role.ToLower() -ne 'server' -AND $role.ToLower() -ne 'client' -AND $role.ToLower() -ne 'version') {
+   usage("Role must be either 'server' or 'client' or 'version'")
+}
+
+if ($role.ToLower() -eq "version") {
+   Write-Host "version $version"
+   exit 0
+}
+
 if (!$remainingArgs) {
    usage("wrong number of args")
 }
 
 write-verbose "verbose=$v"
 write-verbose "remainingArgs=$remainingArgs, size=$($remainingArgs.count)"
-
-if ($role.ToLower() -ne 'server' -AND $role.ToLower() -ne 'client') {
-   usage("Role must be either 'server' or 'client'")
-}
 
 $user_specified = @{
    allowfile = $allowfile;
