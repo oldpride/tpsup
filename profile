@@ -206,6 +206,11 @@ tpscripts () {
    cd "$TPSUP/scripts"
 }
 
+mytp () {
+   # for compatibility with corp settings
+   cd "$TPSUP/scripts"
+}
+
 kdbnotes () {
    cd "$TPSUP/../kdb/notes"
 }
