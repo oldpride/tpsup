@@ -218,6 +218,26 @@ mycpp () {
    cd "$TPSUP/../cpp/cookbook/src"
 }
 
+myjoomla () {
+   cd "$TPSUP/../joomla"
+}
+
+mykivy () {
+   cd "$TPSUP/../kivy"
+}
+
+function myjava  {
+   if [[ $UNAME =~ Msys ]]; then
+      cd /c/users/$USER/eclipse-workspace
+   elif [[ $UNAME =~ Cygwin ]]; then
+      cd /cygdrive/c/users/$USER/eclipse-workspace
+   elif [[ $UNAME =~ Linux ]]; then
+      cd ~/eclipse-workspace
+   else 
+      echo "UNAME='$UNAME' is not supported"
+   fi
+}
+
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    PERL5LIB="$TPSUP/lib/perl:$PERL5LIB"
    PATH="$TPSUP/scripts:$PATH"
