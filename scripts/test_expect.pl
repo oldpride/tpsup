@@ -6,7 +6,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use strict;
-use TPSUP::UTIL qw(get_pw_by_key);
+use TPSUP::LOCK qw(get_entry_by_key);
 
 my $prog = $0; $prog =~ s:.*/::;
 
@@ -48,7 +48,8 @@ my $sftp_host = "sftphost.abc.com";
 
 my $key = "$sftp_user\@$sftp_host";
 
-my $pw = get_pw_by_key($key);
+my $entry = get_entry_by_key($key);
+my $pw = $entry->{decoded};
 
 die "cannot figure out password key=$key" if !$pw;
 

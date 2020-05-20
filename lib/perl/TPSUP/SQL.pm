@@ -11,7 +11,8 @@ our @EXPORT_OK = qw(
 use Carp;
 use DBI;
 use Data::Dumper;
-use TPSUP::UTIL qw(get_tmp_file get_out_fh tpeng_unlock);
+use TPSUP::UTIL qw(get_tmp_file get_out_fh);
+use TPSUP::LOCK qw(tpeng_unlock);
 use TPSUP::CSV qw(parse_csv_file);
 sub unlock_conn {
       

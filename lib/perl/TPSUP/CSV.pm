@@ -150,7 +150,16 @@ sub open_csv {
       }
 
       if ($opt->{requiredColumns}) {
-         for my $c (@{$opt->{requiredColumns}}) { 
+         my $type = ref $opt->{requiredColumns};
+
+         my $requiredColumns;
+         if ($type eq 'ARRAY') {
+            $requiredColumns = $opt->{requiredColumns};
+         } else {
+            @$requiredColumns = split /,/, $opt->{requiredColumns};
+         }
+            
+         for my $c (@$requiredColumns) { 
             if (!defined $pos->{$c}) {
                carp "cannot find column '$c' in csv $csv header: $header";
                return undef;
@@ -1210,6 +1219,7 @@ sub query_csv2 {
       $ref4->{KeyedHash} = $KeyedHash;
       $ref4->{columns} = $ref3->{columns};
    } elsif ($opt->{ReturnType} =~ /^StringKeyedHash=(.+)/) {
+      # StringKeyedHash=name,email
       my $key_string = $1;
 
       my @keys = split /,/, $key_string;
