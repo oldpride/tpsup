@@ -44,6 +44,11 @@ sub get_entry_by_key {
 
    my $map = parse_book($opt);
 
+   if (! exists $map->{$key}) {
+      $entry_by_book_key->{$book}->{$key} = undef;
+      return undef;
+   }
+
    if (@{$map->{$key}} > 1) {
       print STDERR "WARN: duplicate key=$key in $book. selected the first one\n";
    }
