@@ -6,6 +6,7 @@ our @EXPORT_OK = qw(
    tpeng_lock
    tpeng_unlock
    get_entry_by_key
+   tpentry_cmd
 );
 
 use Carp;
@@ -20,7 +21,7 @@ sub tpeng_lock($;$) {
 
    return uri_escape($_[0]^$magic);
 }
-   
+
 sub tpeng_unlock($;$) {
    my $MAGIC = 'AccioConfundoLumosNox';
    my $dec = uri_unescape($_[0]);
@@ -98,6 +99,74 @@ sub get_filename {
    }
 }
 
+sub tpentry_cmd {
+   my ($cmd, $opt) = @_;
+
+   my $rc;
+
+   if (ref($cmd) eq 'ARRAY') {
+      # $cmd is array ref
+
+      # make a copy
+      my @cmd2 = @$cmd;
+
+      my $count = scalar(@cmd2);
+      for (my $i=0; $i<$count; $i++) {
+         # eval/or do/die = try/catch/throw
+         # https://perlmaven.com/fatal-errors-in-external-modules
+         eval {
+            $cmd2[$i] = entry_substitute($cmd2[$i]);
+         } or do {
+            print STDERR "$@\n";
+            return 1;
+         };
+      }
+      $rc = system(@cmd2);   # system() can take both string and array
+   } else {
+      # $cmd is a string
+      # eval/or do/die = try/catch/throw
+      # https://perlmaven.com/fatal-errors-in-external-modules
+      eval {
+         $cmd = entry_substitute($cmd, $opt);
+      } or do {
+         print STDERR "$@\n";
+         return 1;
+      };
+      $rc = system($cmd);   # system() can take both string and array
+   }
+
+   $rc = $rc >> 8;
+
+   return $rc;
+}
+
+sub entry_substitute {
+   my ($string, $opt) = @_;
+
+   while (1) {
+      if ($string =~ /tpentry\{(.+?)\}\{(.+?)\}/) {
+         my $key = $1;
+         my $attr = $2;
+         my $entry = get_entry_by_key($key);
+         if (! defined($entry)) {
+            die "cannot resolve tpentry{$key}";
+         }
+
+         if (! exists $entry->{$attr}) {
+            die "tpentry{$key}: attr=$attr not found";
+         }
+
+         my $value = $entry->{$attr};
+
+         $string =~ s/tpentry\{$key\}\{$attr\}/$value/g;
+      } else {
+         last;
+      }
+   }
+
+   return $string;
+}
+
 ######################################################################################
 # begin: extracted from
 # .../perl5/site_perl/5.10.0/URI/Escape.pm
@@ -150,6 +219,9 @@ sub main {
    use Data::Dumper;
    print "parse_book() =", Dumper(parse_book());
    print "swagger =", Dumper(get_entry_by_key("swagger"));
+
+   my $cmd = "curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php";
+   tpentry_cmd($cmd, {verbose=>1});
 }
 
 main() unless caller();
