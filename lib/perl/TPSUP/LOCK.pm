@@ -53,10 +53,18 @@ sub get_entry_by_key {
       print STDERR "WARN: duplicate key=$key in $book. selected the first one\n";
    }
 
-   $entry_by_book_key->{$book}->{$key} = $map->{$key}->[0];
+   my $ref = $map->{$key}->[0];
 
-   $entry_by_book_key->{$book}->{$key}->{decoded}
-      = tpeng_unlock($entry_by_book_key->{$book}->{$key}->{encoded});
+   my $cmdpattern = $ref->{commandpattern};
+   if (!$cmdpattern || $cmdpattern =~ /^\s*$/) {
+      print STDERR "ERROR: key=$key commandpattern is not defined\n";
+      $entry_by_book_key->{$book}->{$key} = undef;
+      return undef;
+   }
+
+   $ref->{decoded} = tpeng_unlock($ref->{encoded});
+
+   $entry_by_book_key->{$book}->{$key} = $ref;
 
    return $entry_by_book_key->{$book}->{$key};
 }
@@ -75,11 +83,11 @@ sub parse_book {
    croak "$book permissions is $file_mode not expected 0600\n" if "$file_mode" ne "0600";
    
    # example ~/.tpsup/book.csv
-   # key,user,encoded,setting,comment
-   # swagger,sys.admin,%29%06%0F%05%00,a=1;b='john, sam, and joe',test swagger
+   # key,user,encoded,commandpattern,setting,comment
+   # swagger,sys.admin,^/usr/bin/curl$|/sqlplus$,%29%06%0F%05%00,'a=1;b=john, sam, and joe',test swagger
 
    my $result = query_csv2($book, 
-                           {requiredColumns=>"key,user,encoded,setting,comment",
+                           {requiredColumns=>"key,user,encoded,commandpattern,setting,comment",
                             QuotedInput=>1,
                             RemoveInputQuotes=>1,
                             ReturnType=>'StringKeyedHash=key',
@@ -115,12 +123,14 @@ sub tpentry_cmd {
       # make a copy
       my @cmd2 = @$cmd;
 
+      my $executable = $cmd2[0];
+
       my $count = scalar(@cmd2);
       for (my $i=0; $i<$count; $i++) {
          # eval/or do/die = try/catch/throw
          # https://perlmaven.com/fatal-errors-in-external-modules
          eval {
-            $cmd2[$i] = entry_substitute($cmd2[$i]);
+            $cmd2[$i] = entry_substitute($cmd2[$i], $executable, $opt);
          } or do {
             print STDERR "$@\n";
             return 1;
@@ -129,10 +139,14 @@ sub tpentry_cmd {
       $rc = system(@cmd2);   # system() can take both string and array
    } else {
       # $cmd is a string
+
+      my @cmd2 = split /\s/, $cmd, 2;
+      my $executable = $cmd2[0];
+
       # eval/or do/die = try/catch/throw
       # https://perlmaven.com/fatal-errors-in-external-modules
       eval {
-         $cmd = entry_substitute($cmd, $opt);
+         $cmd = entry_substitute($cmd, $executable,  $opt);
       } or do {
          print STDERR "$@\n";
          return 1;
@@ -146,7 +160,7 @@ sub tpentry_cmd {
 }
 
 sub entry_substitute {
-   my ($string, $opt) = @_;
+   my ($string, $executable, $opt) = @_;
 
    while (1) {
       if ($string =~ /tpentry\{(.+?)\}\{(.+?)\}/) {
@@ -154,11 +168,22 @@ sub entry_substitute {
          my $attr = $2;
          my $entry = get_entry_by_key($key);
          if (! defined($entry)) {
-            die "cannot resolve tpentry{$key}";
+            # add "\n" to die so that it will not print line number
+            #    "cannot resolve tpentry{key}"
+            # vs
+            #    "cannot resolve tpentry{key} at LOCK.pm line 179"
+            die "cannot resolve tpentry{$key}\n";
+         }
+
+         # this is and added security feature so that it won't be easy to trick out the
+         # secret, eg,
+         #    tpentry -- echo tpentry{key}{decoded}     
+         if ($executable !~ /$entry->{commandpattern}/) {
+            die "tpentry{$key}: executable=$executable is not allowed to access information.\n";
          }
 
          if (! exists $entry->{$attr}) {
-            die "tpentry{$key}: attr=$attr not found";
+            die "tpentry{$key}: attr=$attr not found\n";
          }
 
          my $value = $entry->{$attr};
@@ -225,7 +250,10 @@ sub main {
    print "parse_book() =", Dumper(parse_book());
    print "swagger =", Dumper(get_entry_by_key("swagger"));
 
-   my $cmd = "curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php";
+   my $cmd = "/usr/bin/curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php";
+   tpentry_cmd($cmd, {verbose=>1});
+
+   $cmd = "curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php";
    tpentry_cmd($cmd, {verbose=>1});
 }
 

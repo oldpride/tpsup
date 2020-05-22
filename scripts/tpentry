@@ -22,11 +22,15 @@ usage:
 
    -b book.csv           this contains the encoded information, example format below
 
-        key,user,encoded,setting,comment
-        swagger,sys.admin,%29%06%0F%05%00,a=1;b='john, sam, and joe',test swagger
+        key,user,encoded,commandpattern,setting,comment
+        swagger,sys.admin,^/usr/bin/curl$|/sqlplus$,%29%06%0F%05%00,a=1;'b=john, sam',test swagger
 examples:
 
+   # this will fail at commandpattern matching
    $prog -- curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php
+
+   # this will work
+   $prog -- /usr/bin/curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php
 
 END
 
