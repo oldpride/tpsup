@@ -27,10 +27,10 @@ usage:
 examples:
 
    # this will fail at commandpattern matching
-   $prog -- curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php
+   $prog -- curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: application/json' https://abc.org/LCA2/index.php | python -m json.tool
 
    # this will work
-   $prog -- /usr/bin/curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: text/plain' https://abc.org/LCA2/index.php
+   $prog -- /usr/bin/curl -u tpentry{swagger}{user}:tpentry{swagger}{decoded} -X GET --header 'Accept: application/json' https://abc.org/LCA2/index.php |python -m json.tool
 
 END
 

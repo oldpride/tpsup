@@ -121,6 +121,7 @@ while (<$ifh>) {
    $job =~ s/\s+$//;     # trim spaces
 
    next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
+   next if defined $ExcludePattern && $job =~ /$ExcludePattern/i;
 
    push @jobs, $job;
    $seen->{$job} ++;
