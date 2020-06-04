@@ -1,8 +1,5 @@
 #!/bin/bash
 
-
-# this doesn't work in term of using right mouse button to paste
-
 font="-fn '-adobe-courier-medium-r-normal--14-*'" 
 
 usage () {
@@ -21,7 +18,7 @@ usage:
    -b      a blank shell, not a login shell, therefore, not sourcing profiles.
            this way will have a virgin env for testing.
 
-   -d      debug mode
+   -d      debug mode. logs to ~/junk.log
 
    -f number
           use Monospace with this font size, eg, 9. normally for ubuntu remote
@@ -60,6 +57,9 @@ fi
 display=$1
 
 [ $debug = Y ] && set -x
+
+scriptsdir=`dirname $0`
+export PATH=$scriptsdir:$PATH;
 
 main () {
    if [ "$display" = auto ]; then
