@@ -148,10 +148,16 @@ if (!$detail) {
 } else {
    for my $job (@jobs) {
       if (!$info->{$job}) {
-         printf  "$job not found\n";
+         print  "$job not found\n";
+      } elsif (!$info->{$job}->{job_type}) {
+         print  "$job detail not found\n";
       } else {
+         print "insert_job: $info->{$job}->{JobName}    job_type: $info->{$job}->{job_type}\n";
          for my $attr (sort keys(%{$info->{$job}})) {
-            printf  "$attr: $info->{$job}->{$attr}\n";
+            if ($attr =~ /^(JobName|job_type|LastStart|LastEnd|Status)$/) {
+               next;
+            }
+            print  "$attr: $info->{$job}->{$attr}\n";
          }
       }
       print "\n";
