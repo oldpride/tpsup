@@ -216,37 +216,11 @@ myperllib () {
    cd "$TPSUP/lib/perl/TPSUP"
 }
 
-kdbnotes () {
-   cd "$TPSUP/../kdb/notes"
-}
+export PROFILE_SITE=$TPSUP/profile.site
 
-mynotes () {
-   cd "$TPSUP/../notes"
-}
-
-mycpp () {
-   cd "$TPSUP/../cpp/cookbook/src"
-}
-
-myjoomla () {
-   cd "$TPSUP/../joomla/php"
-}
-
-mykivy () {
-   cd "$TPSUP/../kivy"
-}
-
-function myjava  {
-   if [[ $UNAME =~ Msys ]]; then
-      cd /c/users/$USER/eclipse-workspace
-   elif [[ $UNAME =~ Cygwin ]]; then
-      cd /cygdrive/c/users/$USER/eclipse-workspace
-   elif [[ $UNAME =~ Linux ]]; then
-      cd ~/eclipse-workspace
-   else 
-      echo "UNAME='$UNAME' is not supported"
-   fi
-}
+if [ -f $PROFILE_SITE ]; then
+   . $PROFILE_SITE
+fi
 
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    PERL5LIB="$TPSUP/lib/perl:$PERL5LIB"
