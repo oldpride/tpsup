@@ -1,6 +1,10 @@
-# copy this to ~/.profile 
+# append this to ~/.profile 
 
 set -o vi
-. ~/github/tpsup/profile
+unset TMOUT
+
+tpsup () { . ~/github/tpsup/profile }
+tpsup # depending on situation, this will be kept off, and will be called on demand
+
 tpscripts
 git status
