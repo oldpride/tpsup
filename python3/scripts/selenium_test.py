@@ -3,15 +3,14 @@
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import NoSuchElementException
 from urllib.parse import urlparse
 
 import argparse
 import sys
 import textwrap
-from pprint import pprint, pformat
+from pprint import pformat
 import os
-import io
-import signal
 
 prog = os.path.basename(sys.argv[0])
 
@@ -102,6 +101,17 @@ args = vars(parser.parse_args())
 if args['verbose']:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
+
+# add chromedriver path on windows
+home_dir = os.path.expanduser("~")
+# sys.path is the module search path
+# sys.path += [ home_dir, r'C:\Program Files (x86)\Google\Chrome\Application']
+os.environ["PATH"] += os.pathsep + os.pathsep.join([home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
+# if args['verbose']:
+#print(sys.path)
+print(os.environ["PATH"])
+
+
 
 headless = args['headless']
 driver = args['driver']
