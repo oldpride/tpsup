@@ -20,9 +20,9 @@ home_dir = os.path.expanduser("~")
 uname = platform.uname()
 system = uname.system
 
-version = platform.python_version()
-assert re.match('^3', version), "must run with python3"
-
+# this is useless as the script cannot even pass compile
+# version = platform.python_version()
+# assert re.match('^3', version), "must run with python3"
 
 driverlog = home_dir + '/selenium_chromedriver.log'
 # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
@@ -43,20 +43,26 @@ usage = textwrap.dedent(f"""
     {prog} host:port
     selenium will connect to an existing running browser, local or remote.
     
+    For Windows, 
+        the chromedriver.exe should be in the PATH or at C:/users/<current_user>
+        the chrome.exe       should be in the PATH or at C:/Program Files (x86)/Google/Chrome/Application
+
     """)
 
 examples = textwrap.dedent(f""" 
 examples:
-    - let selenium to start a local browser automatically
+    3 ways to run the browser
+
+    1. let selenium to start a local browser automatically
     {prog} auto
     {prog} -ba proxy-pac-url=http://pac.abc.net auto
 
-    - start Chrome (c1) on localhost with debug port 9222.
+    2. start Chrome (c1) on localhost with debug port 9222.
     /usr/bin/chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
     --user-data-dir=/tmp/selenium_chrome_browser_dir --remote-debugging-port=9222 
    {prog} localhost:9222
 
-   - start Chrome (c1) on remote PC with debug port 9222.
+   3. start Chrome (c1) on remote PC with debug port 9222.
 
     +------------------+       +---------------------+
     | +---------+      |       |  +---------------+  |
@@ -107,7 +113,7 @@ parser.add_argument(
 parser.add_argument(
     '-driver', dest="driver", default="chromedriver", action='store',
     help="driver, eg, 'chromedriver78', default 'chromedriver', must be in PATH. we use this in case chromedriver and "
-         "chrome browser's version mismatch.")
+         "chrome browser's version mismatch. For Wi")
 
 parser.add_argument(
     '-driverlog', dest="driverlog", default=driverlog, action='store',
@@ -153,17 +159,31 @@ if args['host_port'] == 'auto':
     uname = platform.uname()
     system = uname.system
 
-    if re.match("Linux", system, re.IGNORECASE):
+    # re.match() vs re.search()
+    # re.match(): from the beginning of the string
+    # re.search(): the whole string
+    # re.match(".*abc", ...) = re.search("abc", ...)
+
+    if re.search("Linux", system, re.IGNORECASE):
         browser_options.add_argument('--no-sandbox')  # to be able to run without root
         browser_options.add_argument('--disable-dev_shm-usage')  # to be able to run without root
         browser_options.add_argument('--window-size=960,540 --user-data-dir=/tmp/selenium_chrome_browser_dir')
-    elif re.match("Windows", system, re.IGNORECASE):
+    elif re.search("Windows", system, re.IGNORECASE):
         # add chromedriver path on windows
         home_dir = os.path.expanduser("~")
+        # print(f'home_dir={home_dir}')
+
         # sys.path is the module search path
         # sys.path += [ home_dir, r'C:\Program Files (x86)\Google\Chrome\Application']
-        os.environ["PATH"] += os.pathsep + os.pathsep.join(
-            [home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
+
+        if re.search('cygwin|cygdrive', home_dir, re.IGNORECASE):
+            # because cygwin's home dir is C:\cygwin64\home\, likely not the normal windows's home
+            # dir C:/users/username. use C:/users/username instead
+            os.environ["PATH"] += os.pathsep + os.pathsep.join(
+                [f'C:/Users/{os.environ["USER"]}', r'C:\Program Files (x86)\Google\Chrome\Application'])
+        else:
+            os.environ["PATH"] += os.pathsep + os.pathsep.join(
+                [home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
         # if args['verbose']:
         # print(sys.path)
         print(os.environ["PATH"])
