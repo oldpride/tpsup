@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import time
 from selenium import webdriver
@@ -11,10 +11,22 @@ import sys
 import textwrap
 from pprint import pformat
 import os
+import platform
+import re
 
 prog = os.path.basename(sys.argv[0])
 
-driver_log = "/tmp/selenium_chromedriver.log"
+home_dir = os.path.expanduser("~")
+uname = platform.uname()
+system = uname.system
+
+version = platform.python_version()
+assert re.match('^3', version), "must run with python3"
+
+
+driverlog = home_dir + '/selenium_chromedriver.log'
+# driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
+# Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
 usage = textwrap.dedent(f"""
     run selenium test
@@ -73,6 +85,7 @@ parser = argparse.ArgumentParser(
     prog=sys.argv[0],
     description=usage,
     formatter_class=argparse.RawDescriptionHelpFormatter,
+    # formatter_class=argparse.RawTextHelpFormatter, # this honors \n but messed up indents
     epilog=examples)
 
 parser.add_argument(
@@ -96,41 +109,36 @@ parser.add_argument(
     help="driver, eg, 'chromedriver78', default 'chromedriver', must be in PATH. we use this in case chromedriver and "
          "chrome browser's version mismatch.")
 
+parser.add_argument(
+    '-driverlog', dest="driverlog", default=driverlog, action='store',
+    help="driver log, driver log on Windows must use Windows path, eg, C:/Users/tian/test.log. Even when we run the "
+         "script from Cygwin or GitBash, we still need to use Windows path. "
+         f"On this host, default to {driverlog}")
+
 args = vars(parser.parse_args())
 
 if args['verbose']:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
 
-# add chromedriver path on windows
-home_dir = os.path.expanduser("~")
-# sys.path is the module search path
-# sys.path += [ home_dir, r'C:\Program Files (x86)\Google\Chrome\Application']
-os.environ["PATH"] += os.pathsep + os.pathsep.join([home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
-# if args['verbose']:
-#print(sys.path)
-print(os.environ["PATH"])
-
-
-
 headless = args['headless']
-driver = args['driver']
+driver_name = args['driver']
 
 if args['verbose']:
     cmd = 'ps -ef|grep chromedriver|grep -v grep'
     print(cmd)
     os.system(cmd)
 
-driver_args = ["--verbose", f"--log-path={driver_log}"]  # for chromedriver
+driver_args = ["--verbose", f"--log-path={driverlog}"]  # for chromedriver
 
 if args['verbose']:
-    cmd = f"cat /dev/null {driver_log}"
+    cmd = f"cat /dev/null {driverlog}"
     print(cmd)
     os.system(cmd)
 
     # --pid PID  exits when PID is gone
     # -F         retry file if it doesn't exist
-    cmd = f"tail --pid {os.getpid()} -F -f {driver_log} &"
+    cmd = f"tail --pid {os.getpid()} -F -f {driverlog} &"
     print(cmd)
     os.system(cmd)
 
@@ -142,9 +150,23 @@ if args['host_port'] == 'auto':
     if headless:
         browser_options.add_argument("--headless")
 
-    browser_options.add_argument('--no-sandbox')  # to be able to run without root
-    browser_options.add_argument('--disable-dev_shm-usage')  # to be able to run without root
-    browser_options.add_argument('--window-size=960,540 --user-data-dir=/tmp/selenium_chrome_browser_dir')
+    uname = platform.uname()
+    system = uname.system
+
+    if re.match("Linux", system, re.IGNORECASE):
+        browser_options.add_argument('--no-sandbox')  # to be able to run without root
+        browser_options.add_argument('--disable-dev_shm-usage')  # to be able to run without root
+        browser_options.add_argument('--window-size=960,540 --user-data-dir=/tmp/selenium_chrome_browser_dir')
+    elif re.match("Windows", system, re.IGNORECASE):
+        # add chromedriver path on windows
+        home_dir = os.path.expanduser("~")
+        # sys.path is the module search path
+        # sys.path += [ home_dir, r'C:\Program Files (x86)\Google\Chrome\Application']
+        os.environ["PATH"] += os.pathsep + os.pathsep.join(
+            [home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
+        # if args['verbose']:
+        # print(sys.path)
+        print(os.environ["PATH"])
 
     if args['browserArgs']:
         for arg in args['browserArgs']:
@@ -181,12 +203,16 @@ else:
     #    netpipe 9333 localhost:9222
     # then have chromedriver pointing to pc_address:9333
 
-driver = webdriver.Chrome(driver,  # make sure chromedriver is in the PATH
-                          options=browser_options,  # for chrome browser
-                          service_args=driver_args,  # for chromedriver
-                          )
+# driver = webdriver.Chrome(driver_name,  # make sure chromedriver is in the PATH
+#                           options=browser_options,  # for chrome browser
+#                           service_args=driver_args,  # for chromedriver
+#                           )
 
-time.sleep(2)  # give 1 sec to let the tail set up
+driver = webdriver.Chrome(driver_name, options=browser_options, service_args=driver_args)
+
+#driver = webdriver.Chrome(driver_name, service_args=driver_args)
+
+time.sleep(1)  # give 1 sec to let the tail set up
 
 #print(f'driver.title={driver.title}')
 
