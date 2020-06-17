@@ -112,8 +112,8 @@ parser.add_argument(
 
 parser.add_argument(
     '-driver', dest="driver", default="chromedriver", action='store',
-    help="driver, eg, 'chromedriver78', default 'chromedriver', must be in PATH. we use this in case chromedriver and "
-         "chrome browser's version mismatch. For Wi")
+    help="driver, eg, 'chromedriver78', default 'chromedriver', must be in PATH. Can also use path, for example, "
+         "./chromedriver. we use this in case chromedriver and chrome browser's version mismatch.")
 
 parser.add_argument(
     '-driverlog', dest="driverlog", default=driverlog, action='store',
@@ -128,7 +128,7 @@ if args['verbose']:
     sys.stderr.write(pformat(args) + "\n")
 
 headless = args['headless']
-driver_name = args['driver']
+driver_exe = args['driver']
 
 if args['verbose']:
     cmd = 'ps -ef|grep chromedriver|grep -v grep'
@@ -177,16 +177,16 @@ if args['host_port'] == 'auto':
         # sys.path += [ home_dir, r'C:\Program Files (x86)\Google\Chrome\Application']
 
         if re.search('cygwin|cygdrive', home_dir, re.IGNORECASE):
-            # because cygwin's home dir is C:\cygwin64\home\, likely not the normal windows's home
-            # dir C:/users/username. use C:/users/username instead
+            # because cygwin's home dir is C:\cygwin64\home\<username>, likely not the normal windows's home
+            # dir C:/users/<username>. use C:/users/<username> instead
             os.environ["PATH"] += os.pathsep + os.pathsep.join(
                 [f'C:/Users/{os.environ["USER"]}', r'C:\Program Files (x86)\Google\Chrome\Application'])
         else:
             os.environ["PATH"] += os.pathsep + os.pathsep.join(
                 [home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
-        # if args['verbose']:
-        # print(sys.path)
-        print(os.environ["PATH"])
+        if args['verbose']:
+            # print(sys.path)
+            print(os.environ["PATH"])
 
     if args['browserArgs']:
         for arg in args['browserArgs']:
@@ -228,7 +228,7 @@ else:
 #                           service_args=driver_args,  # for chromedriver
 #                           )
 
-driver = webdriver.Chrome(driver_name, options=browser_options, service_args=driver_args)
+driver = webdriver.Chrome(driver_exe, options=browser_options, service_args=driver_args)
 
 #driver = webdriver.Chrome(driver_name, service_args=driver_args)
 
@@ -250,8 +250,12 @@ try:
 except NoSuchElementException as e:
     print(e)
 else:
+    search_box.clear()
     search_box.send_keys('ChromeDriver')
-    search_box.submit()
+
+    # the following are the same
+    search_box.send_keys(webdriver.common.keys.Keys.RETURN)
+    # search_box.submit()
     if not headless:
         time.sleep(2)  # Let the user actually see something!
 
