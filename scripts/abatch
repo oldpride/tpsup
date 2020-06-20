@@ -60,6 +60,8 @@ description:
 
    -n                  dryrun mode, check-only. will print the command but won't run the jobs.
 
+   -r                  reset caches, ie, time out all caches
+
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.
 
@@ -87,10 +89,12 @@ my $StatusFiles;
 my $UnivPatterns;
 my $force;
 my $dryrun;
+my $reset;
 
 GetOptions(
    'v|verbose'     => \$verbose,
    'n|dryrun'      => \$dryrun,
+   'r|reset'       => \$reset,
    'f|force'       => \$force,
    'm=s'           => \$MatchPattern,
    'x=s'           => \$ExcludePattern,
@@ -128,6 +132,11 @@ while (<$ifh>) {
 }
 
 close $ifh;
+
+if ($reset) {
+   $StatusExpire = 0;
+   $DetailExpire = 0;
+}
 
 my $opt = {
    UnivPatterns => $UnivPatterns,

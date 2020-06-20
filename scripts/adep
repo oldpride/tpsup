@@ -37,6 +37,8 @@ description:
 
    -se n               expire Status cache after n seconds. default $StatusExpire.
 
+   -r                  reset cache, ie, time out all caches
+
    -m matchExpression  eg -m '\$Status !~ /OH|OI/'
 
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
@@ -68,9 +70,11 @@ my $verbose;
 my $DetailFiles;
 my $StatusFiles;
 my $UnivPatterns;
+my $reset;
 
 GetOptions(
    'v|verbose'     => \$verbose,
+   'r|reset'       => \$reset,
    'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
@@ -82,6 +86,11 @@ GetOptions(
 usage("wrong number of args") if @ARGV != 1;
 
 my ($job) = @ARGV;
+
+if ($reset) {
+   $StatusExpire = 0;
+   $DetailExpire = 0;
+}
 
 my $opt = { 
    verbose      => $verbose,

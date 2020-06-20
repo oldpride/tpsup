@@ -39,6 +39,8 @@ description:
 
    -se n               expire Status cache after n seconds. default $StatusExpire.
 
+   -r                  reset cache, ie, time out all caches
+
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
@@ -73,9 +75,11 @@ my $DetailFiles;
 my $StatusFiles;
 my $UnivPatterns;
 my $detail;
+my $reset;
 
 GetOptions(
    'v|verbose'     => \$verbose,
+   'r|reset'       => \$reset,
    'q'             => \$detail,
    'm=s'           => \$MatchPattern,
    'x=s'           => \$ExcludePattern,
@@ -113,6 +117,11 @@ while (<$ifh>) {
 }
 
 close $ifh;
+
+if ($reset) {
+   $StatusExpire = 0;
+   $DetailExpire = 0;
+}
 
 my $opt = {
    UnivPatterns => $UnivPatterns,
