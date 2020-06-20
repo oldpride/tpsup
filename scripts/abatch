@@ -52,6 +52,8 @@ description:
 
    -se n               expire Status cache after n seconds. default $StatusExpire.
 
+   -r                  reset caches, ie, time out all caches
+
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
@@ -59,8 +61,6 @@ description:
    -f                  force to run the jobs without prompt for confirmation.
 
    -n                  dryrun mode, check-only. will print the command but won't run the jobs.
-
-   -r                  reset caches, ie, time out all caches
 
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.
@@ -121,8 +121,12 @@ while (<$ifh>) {
    next if $job =~ /^\s*$/;     # skip blank lines
    next if $job =~ /^\s*#/;     # skip comment
 
-   $job =~ s/^\s+//;     # trim spaces
-   $job =~ s/\s+$//;     # trim spaces
+   #$job =~ s/^\s+//;     # trim spaces
+   #$job =~ s/\s+$//;     # trim spaces
+   $job =~ s/^[^0-9a-zA-Z.#_-]+//;     # trim spaces or bad chars
+   $job =~ s/[^0-9a-zA-Z.#_-]$//;     # trim spaces or bad chars
+
+   next if $job eq '';
 
    next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
    next if defined $ExcludePattern && $job =~ /$ExcludePattern/i;

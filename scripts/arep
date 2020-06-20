@@ -106,8 +106,10 @@ while (<$ifh>) {
    next if $job =~ /^\s*$/;     # skip blank lines
    next if $job =~ /^\s*#/;     # skip comment
 
-   $job =~ s/^\s+//;     # trim spaces
-   $job =~ s/\s+$//;     # trim spaces
+   $job =~ s/^[^0-9a-zA-Z.#_-]+//;     # trim spaces or bad chars
+   $job =~ s/[^0-9a-zA-Z.#_-]$//;     # trim spaces or bad chars
+
+   next if $job eq '';
 
    next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
    next if defined $ExcludePattern && $job =~ /$ExcludePattern/i; 
