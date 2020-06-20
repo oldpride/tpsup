@@ -61,7 +61,8 @@ description:
 
    -prefix             print prefix 'host,stdout/stderr,', on each line for easy parsing.
 
-   Build-in variables  \%{host} (remote host), \%{login} (remote login)
+   Build-in variables  \%{host}  - remote host, 
+                       \%{login} - remote login,
                        \%{yyyy}, \%{mm}, \%{dd}, \%{HH}, \%{MM}, \%{SS}
 
 examples:
