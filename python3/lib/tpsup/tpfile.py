@@ -129,6 +129,7 @@ class TpOutput:
     def __enter__(self):
         if self.filename == '-':
             self.fh = sys.stdout
+            # overwrite a standard function
             self.fh.write = silence_BrokenPipeError(self.fh.write)
         else:
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
