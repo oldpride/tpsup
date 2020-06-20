@@ -215,7 +215,7 @@ sub get_cache_file {
 
       my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = lstat($f);
       my $now_sec = time();
-      my $expire_sec = $opt->{CacheExpire} ? $opt->{CacheExpire} : 3600 * 12;
+      my $expire_sec = defined($opt->{CacheExpire}) ? $opt->{CacheExpire} : 3600 * 12;
 
       return 1 if $now_sec - $mtime > $expire_sec;
 

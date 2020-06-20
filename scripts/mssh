@@ -61,7 +61,10 @@ description:
 
    -prefix             print prefix 'host,stdout/stderr,', on each line for easy parsing.
 
-   Build-in variables  \%{host} (remote host), \%{login} (remote login)
+   -dryrun             dryrun command
+
+   Build-in variables  \%{host}  - remote host, 
+                       \%{login} - remote login,
                        \%{yyyy}, \%{mm}, \%{dd}, \%{HH}, \%{MM}, \%{SS}
 
 examples:
@@ -105,9 +108,11 @@ my @ExcludePatterns;
 my $prefix;
 my $action;
 my $maxcount;
+my $dryrun;
 
 GetOptions(
    'v|verbose'     => \$verbose,
+   'dryrun'        => \$dryrun,
    'l=s'           => \$remote_login,
    'a|action=s'    => \$action,
    'style=s'       => \$style,
@@ -243,6 +248,7 @@ while (1) {
          verbose      => $verbose,
          stdout       => $tmp_stdout,
          stderr       => $tmp_stderr,
+         dryrun       => $dryrun,
       };
 
       my @command;
@@ -295,8 +301,8 @@ while (1) {
          $count ++;
       } elsif ($child_pid == 0) {
          # this is the child
-
          tpssh($action, $host, \@command, $opt);
+         exit 0 if $dryrun;
       } else {
          print STDERR "fork() failed. count=$count, host=$host\n";
          exit 1;
@@ -311,54 +317,56 @@ while (1) {
 
       last if !$kid;
 
-      $info_by_pid->{$kid}->{end}     = get_timestamp();
-      $info_by_pid->{$kid}->{end_sec} = time();
-      $info_by_pid->{$kid}->{rc}      = $rc;
-      $info_by_pid->{$kid}->{duration}
-         = $info_by_pid->{$kid}->{end_sec} - $info_by_pid->{$kid}->{begin_sec};
-
       $count--;
 
-      my $host = $info_by_pid->{$kid}->{host};
-
-      print "host=$host,pid=$kid",
-            ",rc=$rc",
-            ",begin=$info_by_pid->{$kid}->{begin}",
-            ",end=$info_by_pid->{$kid}->{end}",
-            ",duration=$info_by_pid->{$kid}->{duration}",
-            "\n";
-
-      my $row_count = 0;
-
-      for my $output ( qw(stdout stderr) ) {
-         print "\n" if ! $prefix;
-
-         for my $line (`cat $info_by_pid->{$kid}->{$output}`) {
-            $row_count ++;
-
-            if ($prefix) {
-               print "$host,$output,$line";
+      if (!$dryrun) {
+         $info_by_pid->{$kid}->{end}     = get_timestamp();
+         $info_by_pid->{$kid}->{end_sec} = time();
+         $info_by_pid->{$kid}->{rc}      = $rc;
+         $info_by_pid->{$kid}->{duration}
+            = $info_by_pid->{$kid}->{end_sec} - $info_by_pid->{$kid}->{begin_sec};
+   
+         my $host = $info_by_pid->{$kid}->{host};
+   
+         print "host=$host,pid=$kid",
+               ",rc=$rc",
+               ",begin=$info_by_pid->{$kid}->{begin}",
+               ",end=$info_by_pid->{$kid}->{end}",
+               ",duration=$info_by_pid->{$kid}->{duration}",
+               "\n";
+   
+         my $row_count = 0;
+   
+         for my $output ( qw(stdout stderr) ) {
+            print "\n" if ! $prefix;
+   
+            for my $line (`cat $info_by_pid->{$kid}->{$output}`) {
+               $row_count ++;
+   
+               if ($prefix) {
+                  print "$host,$output,$line";
+               } else {
+                  print "$line";
+               }
+            }
+   
+            print "\n" if ! $prefix;
+         }
+   
+         # make sure there is explicit output when in prefix mode; otherwise, we
+         # may fail to notice that ssh command failure
+         if (!$row_count && $prefix) {
+            if ($rc == 0) {
+               print "$host,stdout,\n";         # print a new line to stdout when successful
             } else {
-               print "$line";
+               print "$host,stderr,ssh cmd failed\n";  # print error to stderr when failed
             }
          }
-
-         print "\n" if ! $prefix;
       }
-
-      # make sure there is explicit output when in prefix mode; otherwise, we
-      # may fail to notice that ssh command failure
-      if (!$row_count && $prefix) {
-         if ($rc == 0) {
-            print "$host,stdout,\n";         # print a new line to stdout when successful
-         } else {
-            print "$host,stderr,ssh cmd failed\n";  # print error to stderr when failed
-         }
-      }
+   
+      $verbose && print STDERR "count=$count, todo=", scalar (@todo),
+                               ",total=", scalar(@hosts), "\n";
    }
-
-   $verbose && print STDERR "count=$count, todo=", scalar (@todo),
-                            ",total=", scalar(@hosts), "\n";
 
    last if !$count && !@todo;
 

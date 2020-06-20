@@ -52,6 +52,8 @@ description:
 
    -se n               expire Status cache after n seconds. default $StatusExpire.
 
+   -r                  reset caches, ie, time out all caches
+
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
@@ -87,10 +89,12 @@ my $StatusFiles;
 my $UnivPatterns;
 my $force;
 my $dryrun;
+my $reset;
 
 GetOptions(
    'v|verbose'     => \$verbose,
    'n|dryrun'      => \$dryrun,
+   'r|reset'       => \$reset,
    'f|force'       => \$force,
    'm=s'           => \$MatchPattern,
    'x=s'           => \$ExcludePattern,
@@ -117,8 +121,12 @@ while (<$ifh>) {
    next if $job =~ /^\s*$/;     # skip blank lines
    next if $job =~ /^\s*#/;     # skip comment
 
-   $job =~ s/^\s+//;     # trim spaces
-   $job =~ s/\s+$//;     # trim spaces
+   #$job =~ s/^\s+//;     # trim spaces
+   #$job =~ s/\s+$//;     # trim spaces
+   $job =~ s/^[^0-9a-zA-Z.#_-]+//;     # trim spaces or bad chars
+   $job =~ s/[^0-9a-zA-Z.#_-]$//;     # trim spaces or bad chars
+
+   next if $job eq '';
 
    next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
    next if defined $ExcludePattern && $job =~ /$ExcludePattern/i;
@@ -128,6 +136,11 @@ while (<$ifh>) {
 }
 
 close $ifh;
+
+if ($reset) {
+   $StatusExpire = 0;
+   $DetailExpire = 0;
+}
 
 my $opt = {
    UnivPatterns => $UnivPatterns,
@@ -219,9 +232,12 @@ for my $job (@jobs) {
    }
 }
 
+my $total_job_count = scalar(@jobs);
+my $done_job_count = 0;
+
 print "\n";
 print "----------------------------------.\n";
-print "Total $error errors. $fatal fatal.\n";
+print "Total $total_job_count jobs, $error errors, $fatal fatal.\n";
 
 if ($fatal) {
    exit $error;
@@ -277,6 +293,7 @@ for my $job (@jobs) {
    
    my $sub_run;
    my $sub_err;
+   my $sub_start = strftime("%T", localtime(time()));
 
    while (1) { 
       $sub_run = 0;
@@ -298,7 +315,7 @@ for my $job (@jobs) {
       }
 
       if ($sub_run < $subcount && $sub_err == 0 ) {
-         print "Only $sub_run of $subcount complete. sleep for 10\n";
+         print "Only $sub_run of $subcount subjobs complete since $sub_start. sleep for 10\n";
          sleep 10;
       } else {
          # try to restore the original autorep -J format
@@ -315,6 +332,8 @@ for my $job (@jobs) {
       }
    }
 
+   $done_job_count ++; 
+   print "$done_job_count of $total_job_count complete. sleep for 10\n";
    print_autorep_J_header();
    for my $row (@tally) {
        printf get_autorep_J_format(), @$row;

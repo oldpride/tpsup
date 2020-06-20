@@ -68,12 +68,14 @@ sub tpssh {
                                               "2>$opt->{stderr}" ;
 
    my $cmd;
+   my $dryrun_cmd;
 
    if ($action eq 'scp') {
       my $command = join(' ', @$args);
 
       $cmd =   "scp -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout"
              . " -o BatchMode=yes $extra_ssh $command $stdout $stderr";
+      $dryrun_cmd = "scp $command";
    } elsif ($action eq 'ssh') {
       my $local_login = get_local_login();
    
@@ -153,13 +155,18 @@ EOF
              . " ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout -o BatchMode=yes"
              . " $extra_ssh $remote_login\@$remote_host"
              . " 'mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file' $stdout $stderr";
+      $dryrun_cmd = "ssh $remote_login\@$remote_host " . join(" ", @$args);
    } else {
       croak "unknown action='$action'. expecting 'ssh' or 'scp'";
    }
 
    $verbose && print "cmd = $cmd\n";
 
-   exec("$cmd");
+   if ($opt->{dryrun}) {
+      print "dryrun (not exact) = $dryrun_cmd\n";
+   } else {
+      exec("$cmd");
+   }
 }
 
 1
