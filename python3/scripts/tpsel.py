@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import time
+
+import tpsup.env
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException
@@ -13,13 +15,14 @@ from pprint import pformat
 import os
 import platform
 import re
-import socket
+from tpsup.nettools import is_tcp_open
 
 prog = os.path.basename(sys.argv[0])
 
-home_dir = os.path.expanduser("~")
-uname = platform.uname()
-system = uname.system
+myenv = tpsup.env.Env()
+myenv.adapt()
+home_dir = myenv.home_dir
+system = myenv.system
 
 # this is useless as the script cannot even pass compile
 # version = platform.python_version()
@@ -161,21 +164,10 @@ host_port = args["host_port"]
 # try to connect the browser in case already exists
 browser_options.debugger_address = host_port
 
-
-def is_tcp_open(_host, _port):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(2)                                      #2 Second Timeout
-    result = sock.connect_ex((_host, int(_port)))
-    if result == 0:
-        return True
-    else:
-        return False
-
-
 driver = None
 sys.stderr.write(f'check browser port at {host_port}\n')
 if is_tcp_open(host, port):
-    print(f'{host_port} is open. chromedriver is connecting to it\n', file=sys.stderr)
+    sys.stderr.write(f'{host_port} is open. chromedriver is connecting to it\n')
 
     try:
         driver = webdriver.Chrome(driver_exe, options=browser_options, service_args=driver_args)
@@ -184,10 +176,10 @@ if is_tcp_open(host, port):
 
 if driver is None:
     if host != 'localhost' and host != '127.0.0.1' and host != '':
-        print("cannot connect remote browser. quit\n",  file=sys.stderr)
+        sys.stderr.write("cannot connect remote browser. quit\n")
         sys.exit(1)
     else:
-        print("cannot connect local browser. we will start it up\n", file=sys.stderr)
+        sys.stderr.write("cannot connect local browser. we will start it up\n")
 
     if headless:
         browser_options.add_argument("--headless")

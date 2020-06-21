@@ -248,18 +248,31 @@ p2env () {
 }
 
 p3env () {
-   if ! [ -e /usr/bin/python3 ]; then
-      return
+   if [ "X$1" = "X-q" ]; then
+      quiet=Y
+   else
+      quiet=N
    fi
 
-   python () {
-      /usr/bin/python3 "$@"
-   }
+   v1=`python --version`
+   if [ $? != 0 ]; then
+      return;
+   fi
 
-   pip () {
-      /usr/bin/pip3 "$@"
-   }
-
+   if echo $v1 |grep "Python 3" >/dev/null; then
+      python=python
+      [ $quiet = Y ] || echo "python is $v1"
+   else 
+      v2=`python3 --version`
+      if [ $? != 0 ]; then
+         [ $quiet = Y ] || echo "we only have $v1"
+         return
+      else
+         [ $quiet = Y ] || echo "python3 is $v2"
+         python=python3
+      fi
+   fi
+      
    export PYTHONPATH="$TPSUP/python3/lib:$PYTHONPATH"
    export       PATH="$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH"
    reduce
@@ -383,7 +396,7 @@ functions () {
    echo "to see detail: typeset -f"
 }
 
-p3env  # default to python 3
+# p3env -q # default to python 3
 
 alias p2c="python2 -m py_compile"
 alias p3c="python3 -m py_compile"
