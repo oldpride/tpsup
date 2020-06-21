@@ -138,7 +138,7 @@ pythonenv () {
 
       export PYTHONPATH="/Users/$USER/github/tpsup/python$expected_version/lib;$PYTHONPATH"
    else
-      export PYTHONPATH="$TPSUP/python3/lib:$PYTHONPATH"
+      export PYTHONPATH="$TPSUP/python$expected_version/lib:$PYTHONPATH"
    fi
 
    [ $quiet = Y ] || echo  PYTHONPATH=$PYTHONPATH
