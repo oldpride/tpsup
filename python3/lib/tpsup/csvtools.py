@@ -86,10 +86,14 @@ def filter_dicts(dict_iter, columns, **opt):
     if verbose:
         sys.stderr.write(f'opt =\n{pformat(opt)}\n')
 
-    out_fields = list(columns)  # make a copy to avoid changing original parameter
+    if columns is not None:
+        out_fields = list(columns)  # make a copy to avoid changing original parameter
+    else:
+        out_fields = []
 
-    if 'ExportExps' in opt:
-        out_fields.extend(dict(opt['ExportExps']).keys())
+    ExportExps = opt.get('ExportExps', {})
+    if ExportExps is not None:
+        out_fields.extend(dict(ExportExps).keys())
 
     # import pdb; pdb.set_trace();
 
@@ -194,7 +198,15 @@ class QueryCsv:
             # This part puzzled me quite a while because I couldn't figure out why the header line was gone4
             # and not yield by the __iter__()
 
-        self.columns.extend(dict(self.opt.get('ExportExps', {})).keys())
+            if self.columns is None:
+                self.columns = []
+                # this is to avoid this error when the input happened to be empty
+                #   File "/usr/lib/python3.6/csv.py", line 143, in writeheader
+                #     header = dict(zip(self.fieldnames, self.fieldnames))
+                # TypeError: zip argument #1 must support iteration
+        ExportExps = self.opt.get('ExportExps', {})
+        if ExportExps is not None:
+            self.columns.extend(dict(ExportExps).keys())
 
         return self
 
@@ -264,7 +276,7 @@ class QueryCsv:
             # print("output() called by a context manager")
             rows = self
             # output_rows()
-            write_dictlist_to_csv(self, self.columns, filename)
+            write_dictlist_to_csv(self, self.columns, filename, **opt)
         else:
             # print("output() not called by a context manager")
             # if self.tpi not initiated, __enter__() must not have been called, then we must not be called by a
@@ -277,7 +289,7 @@ class QueryCsv:
             #     QueryCsv(...).output(...)
             with self as rows:
                 # output_rows()
-                write_dictlist_to_csv(self, self.columns, filename)
+                write_dictlist_to_csv(self, self.columns, filename, **opt)
 
 
 def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
@@ -288,7 +300,9 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
     # 'rows', on the other side, is defined in the function, not in a function of a function.
 
     def output_rows_to_ofh():
-        delimiter = opt.get('delimiter', ',')
+        delimiter = opt.get('OutDelimiter', ',')
+        if delimiter is None:
+            delimiter = ','
         # print("type=", type(ofh)) print("tree=", inspect.getmro(type(ofh)))
         # tree = (<class 'gzip.GzipFile'>, < class '_compression.BaseStream' >, < class 'io.BufferedIOBase' >,
         # < class '_io._BufferedIOBase' >, < class 'io.IOBase' >, < class '_io._IOBase' >, < class 'object' > )

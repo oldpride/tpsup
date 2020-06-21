@@ -4,9 +4,9 @@
 import argparse
 import sys
 import textwrap
-from pprint import pprint, pformat
+from pprint import pformat
 
-from tpsup.csvwrapper import query_csv
+import tpsup.csvtools
 
 usage = textwrap.dedent("""
     parse csv file like perl-version tpcsv
@@ -36,6 +36,7 @@ examples:
     tpcsv.py -me 're.search(r"\\\\w", r["alpha"])' tpcsv_py_test.csv
     tpcsv.py -me 're.search( "\\\\w", r["alpha"])' tpcsv_py_test.csv
     
+    # use temporary expression. the first doesn't print; the second one does
     tpcsv.py -te "a2=r['alpha']+'z'" -te n2="int(r['number'])+100"              tpcsv_py_test.csv
     tpcsv.py -te "a2=r['alpha']+'z'" -te n2="int(r['number'])+100" -f number,n2 tpcsv_py_test.csv
     
@@ -48,6 +49,9 @@ examples:
     
     tpcsv.py         tpcsv_py_test_skip_header.csv
     tpcsv.py -skip 2 tpcsv_py_test_skip_header.csv
+    
+    # test empty file
+    tpcsv.py tpcsv_py_test_empty.csv
     
     """)
 
@@ -126,4 +130,9 @@ if args['verbose'] >= 1:
 # a function. You should use **kwargs if you want to handle named arguments
 # in a function.
 
-query_csv(**args);
+#query_csv(**args);
+
+with tpsup.csvtools.QueryCsv(
+              **args) as qc:
+    args.pop('filename')
+    qc.output(filename=args['Output'], **args)

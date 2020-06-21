@@ -85,7 +85,8 @@ def strings_to_compilable_patterns(strings: List, compiled_list_name: str, **opt
     """ convert list of strings into a list of (to-be) compilable patterns"""
 
     statements = [f'{compiled_list_name} = [']
-    statements.extend([f'    re.compile("{s}"),' for s in strings])
+    if strings is not None:
+        statements.extend([f'    re.compile("{s}"),' for s in strings])
     statements.extend([f']'])
 
     return '\n'.join(statements)
@@ -97,10 +98,12 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
     statements = [f'def {func_name}(r):']
 
     if logic == 'and':
-        statements.extend([f'    if not ({s}): return False' for s in strings])
+        if strings is not None:
+            statements.extend([f'    if not ({s}): return False' for s in strings])
         statements.append(f'    return True')
     elif logic == 'or':
-        statements.extend([f'    if ({s}): return True' for s in strings])
+        if strings is not None:
+            statements.extend([f'    if ({s}): return True' for s in strings])
         statements.append(f'    return False')
     else:
         raise RuntimeError(f'unknown logic={logic}')

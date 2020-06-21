@@ -77,6 +77,7 @@ class TpInput:
             if line_number == 1 and self.need_header:
                 # csv module needs the header line
                 yield line
+                continue
 
             matched = 1
             for compiled in self.match_patterns:
@@ -97,6 +98,7 @@ class TpInput:
             if excluded:
                 continue
 
+            #print(f'iamhere {line}')
             yield line
         return
 

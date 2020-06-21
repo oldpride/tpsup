@@ -7,7 +7,7 @@ from pprint import pprint, pformat
 import os
 import io
 
-from tpsup.fix import dump_fix_message
+from tpsup.fixtools import dump_fix_message
 
 prog = os.path.basename(sys.argv[0])
 
