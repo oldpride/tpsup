@@ -122,7 +122,7 @@ pythonenv () {
       return;
    fi
 
-   echo "actual_version = $actual_version"
+   # echo "actual_version = $actual_version"
 
    if [[ $actual_version =~ "Python $expected_version" ]]; then
       python=`which python`
