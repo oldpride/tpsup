@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
-
+#!/usr/bin/env python
 
 import argparse
 import sys
 import textwrap
 from pprint import pformat
-
+# print(sys.path)
 import tpsup.csvtools
 
 usage = textwrap.dedent("""

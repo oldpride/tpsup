@@ -96,10 +96,11 @@ p3env () {
    fi
 
    if [[ $UNAME =~ Cygwin ]]; then
-      export PYTHONPATH="/Users/$USER/github/tpsup/python3/lib:$PYTHONPATH"
+      export PYTHONPATH="/Users/$USER/github/tpsup/python3/lib;$PYTHONPATH"
       # cygwin converts PYTHONPATH's /cygdrive/c/users/william/github/... 
       # into sys.path C:/cygdrive/c/users/william/github/... 
       # therefore, we drop the front two parts: /cygdrive/c
+      # Also Note: use semi-colon ; as separator
    else
       export PYTHONPATH="$TPSUP/python3/lib:$PYTHONPATH"
    fi
