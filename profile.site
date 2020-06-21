@@ -117,13 +117,13 @@ pythonenv () {
       fi
    fi
 
-   actual_version=`python --version 2>&1`
+   python=`which python`
    if [ $? != 0 ]; then
       return;
    fi
 
-   python=`which python`
-   [ $quiet = Y ] || echo "$python is $actual_version"
+   actual_version=`"$python" --version 2>&1`
+   [ $quiet = Y ] || echo "'$python' is $actual_version"
 
    if ! [[ $actual_version =~ "Python $expected_version" ]]; then
       echo "cannot find python version $expected_version in $PATH"
