@@ -224,23 +224,6 @@ else
    PATH="$TPSUP/autopath:$PATH"
 fi
 
-p2env () {
-   python () {
-      /usr/bin/python "$@"
-   }
-
-   pip () {
-      /usr/bin/pip "$@"
-   }
-
-   export PYTHONPATH=$TPSUP/python2/lib:$PYTHONPATH
-   export PATH=$TPSUP/python2/scripts:$PATH
-   reduce
-
-   # export the function
-   set -a
-}
-
 itrs () {
    local usage args yyyymmdd yyyy mm dd
    usage="

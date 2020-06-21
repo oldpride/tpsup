@@ -69,30 +69,68 @@ usage:
    # export https_proxy=http://host:port
 }
 
-p3env () {
-   if [ "X$1" = "X-q" ]; then
-      quiet=Y
-   else
-      quiet=N
+pythonenv () {
+   local OPTIND OPTARG o quiet usage expected_version actual_version
+
+   usage="usage: pythonenv [-q] 2|3"
+
+   quiet=N
+
+   while getopts q o;
+   do
+      case "$o" in
+         q) quiet=Y;;
+         *) echo "unknow switch. $usage">&2; return 1;;
+      esac
+   done
+
+   shift $((OPTIND-1))
+
+   if [ $# -ne 1 ]; then
+      echo "wrong number of args: expected 1, actual $#"
+      echo $usage
+      return
    fi
 
-   v1=`python --version`
+   expected_version=$1
+
+   if [[ $UNAME =~ Linux ]]; then
+      # for linux, /usr/bin/python is versio 2, /usr/bin/python3 is version 3
+      # we make a symbolic of $TPSUP/python3/linux/bin/python from /usr/bin/python3
+      # so that our shell script can have a consistent "#!/usr/bin/env python"
+      if [ $expected_version = 3 ]; then
+         export PATH="$TPSUP/python${expected_version}/linux/bin:$PATH"
+      elif [ $expected_version = 2 ]; then
+         export PATH="/usr/bin/:$PATH"
+      fi
+   elif [[ $UNAME =~ Cygwin ]]; then
+      if [ $expected_version = 3 ]; then
+         export PATH="/cygdrive/c/Program Files/Python37:$PATH"
+      elif [ $expected_version = 2 ]; then
+         export PATH="/cygdrive/c/Program Files/Python27:$PATH"
+      fi
+   elif [[ $UNAME =~ Msys ]]; then
+      if [ $expected_version = 3 ]; then
+         export PATH="/c/Program Files/Python37:$PATH"
+      elif [ $expected_version = 2 ]; then
+         export PATH="/c/Program Files/Python27:$PATH"
+      fi
+   fi
+
+   actual_version=`python --version 2>&1`
    if [ $? != 0 ]; then
       return;
    fi
 
-   if echo $v1 |grep "Python 3" >/dev/null; then
-      python=python
-      [ $quiet = Y ] || echo "python is $v1"
+   echo "actual_version = $actual_version"
+
+   if [[ $actual_version =~ "Python $expected_version" ]]; then
+      python=`which python`
+      [ $quiet = Y ] || echo "$python is $actual_version"
    else
-      v2=`python3 --version`
-      if [ $? != 0 ]; then
-         [ $quiet = Y ] || echo "we only have $v1"
-         return
-      else
-         [ $quiet = Y ] || echo "python3 is $v2"
-         python=python3
-      fi
+      set +x
+      echo "cannot find python version $expected_version in $PATH"
+      return
    fi
 
    if [[ $UNAME =~ Cygwin ]]; then
@@ -101,19 +139,25 @@ p3env () {
       # therefore, we drop the front two parts: /cygdrive/c
       # Also Note: use semi-colon ; as separator
 
-      export PYTHONPATH="/Users/$USER/github/tpsup/python3/lib;$PYTHONPATH"
+      export PYTHONPATH="/Users/$USER/github/tpsup/python$expected_version/lib;$PYTHONPATH"
    else
       export PYTHONPATH="$TPSUP/python3/lib:$PYTHONPATH"
    fi
 
    export PATH="$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH"
 
-   if [[ $UNAME =~ Linux ]]; then
-      # for linux, /usr/bin/python is versio 2, /usr/bin/python3 is version 3
-      # we make a symbolic of $TPSUP/python3/linux/bin/python from /usr/bin/python3
-      # so that our shell script can have a consistent "#!/usr/bin/env python"
-      export PATH="$TPSUP/python3/linux/bin:$PATH"
-   fi
+   if [[ $UNAME =~ Cygwin ]]; then
+      if [ $quiet = N ]; then
+         echo "On Cygwin, use relative path or windows path. eg," 
+         echo "                                               ./tpcsv.py"
+         echo "   python                                      ./tpcsv.py"
+         echo "   C:/Users/william/github/tpsup/python3/scripts/tpcsv.py"
+         echo "Absolute path doesn't work, eg"
+         echo "                                                            tpcsv.py"
+         echo "   python                                                   tpcsv.py"
+         echo "   /cygdrive/c/Users/william/github/tpsup/python3/lib/tpsup/tpcsv.py"
+      fi    
+   fi    
 
    reduce
 
@@ -121,5 +165,13 @@ p3env () {
    set -a
 }
 
-p3env
+p2env () {
+   pythonenv $@ 2 
+}
+
+p3env () {
+   pythonenv $@ 3 
+}
+
+p3env -q
 
