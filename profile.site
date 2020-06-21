@@ -141,6 +141,8 @@ pythonenv () {
       export PYTHONPATH="$TPSUP/python3/lib:$PYTHONPATH"
    fi
 
+   [ $quiet = Y ] || echo  PYTHONPATH=$PYTHONPATH
+
    export PATH="$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH"
 
    if [[ $UNAME =~ Cygwin ]]; then

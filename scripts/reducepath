@@ -7,6 +7,8 @@ use Getopt::Long;
 
 my $prog = $0; $prog =~ s:.*/::;
 
+my $delimiter = ":";
+
 sub usage {
    my ($message) = @_;
 
@@ -19,8 +21,9 @@ Usage:
 
    reduce the path by removing the duplicates
 
-   -v verbose mode
-   -q quiet
+   -v          verbose mode
+   -q          quiet
+   -d string   delimiter. defaut to "$delimiter". but for PYTHONPATH in Cygwin, it is semi-colon ;
 
 Examples:
 
@@ -41,6 +44,7 @@ my $quiet;
 GetOptions(
    'v|verbose' => \$verbose,
    'q|quiet'   => \$quiet,
+   'd=s'       => \$delimiter,
    ) || usage ("cannot parse command line: $!");
 usage("wrong number of args") if @ARGV != 1;
 
@@ -48,7 +52,7 @@ my ($old_path) = @ARGV;
 
 print STDERR "old_path=$old_path\n" if !$quiet;
 
-my @old = split /:/, $old_path;
+my @old = split /$delimiter/, $old_path;
 
 my $seen;
 
@@ -67,7 +71,7 @@ for my $p (@old) {
    $i++;
 }
 
-my $new_path = join(":", @new);
+my $new_path = join($delimiter, @new);
 
 print STDERR "new_path=$new_path\n" if !$quiet;
 

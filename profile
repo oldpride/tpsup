@@ -182,9 +182,14 @@ reduce () {
    export             PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PATH"`
    export          MANPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$MANPATH"`
    export         PERL5LIB=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PERL5LIB"`
-   export       PYTHONPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PYTHONPATH"`
    export     LD_LOAD_PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$LD_LOAD_PATH"`
    export  LD_LIBRARY_PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$LD_LIBRARY_PATH"`
+
+   if [[ $UNAME =~ Cygwin ]]; then
+      export PYTHONPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q -d ";" "$PYTHONPATH"`
+   else   
+      export PYTHONPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q        "$PYTHONPATH"`
+   fi
 }
 
 # https://askubuntu.com/questions/98782/how-to-run-an-alias-in-a-shell-script
