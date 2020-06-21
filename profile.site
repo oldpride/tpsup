@@ -101,7 +101,7 @@ pythonenv () {
       if [ $expected_version = 3 ]; then
          export PATH="$TPSUP/python${expected_version}/linux/bin:$PATH"
       elif [ $expected_version = 2 ]; then
-         export PATH="/usr/bin/:$PATH"
+         export PATH="/usr/bin:$PATH"
       fi
    elif [[ $UNAME =~ Cygwin ]]; then
       if [ $expected_version = 3 ]; then
@@ -122,13 +122,10 @@ pythonenv () {
       return;
    fi
 
-   # echo "actual_version = $actual_version"
+   python=`which python`
+   [ $quiet = Y ] || echo "$python is $actual_version"
 
-   if [[ $actual_version =~ "Python $expected_version" ]]; then
-      python=`which python`
-      [ $quiet = Y ] || echo "$python is $actual_version"
-   else
-      set +x
+   if ! [[ $actual_version =~ "Python $expected_version" ]]; then
       echo "cannot find python version $expected_version in $PATH"
       return
    fi
