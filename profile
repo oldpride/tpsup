@@ -241,40 +241,6 @@ p2env () {
    set -a
 }
 
-p3env () {
-   if [ "X$1" = "X-q" ]; then
-      quiet=Y
-   else
-      quiet=N
-   fi
-
-   v1=`python --version`
-   if [ $? != 0 ]; then
-      return;
-   fi
-
-   if echo $v1 |grep "Python 3" >/dev/null; then
-      python=python
-      [ $quiet = Y ] || echo "python is $v1"
-   else 
-      v2=`python3 --version`
-      if [ $? != 0 ]; then
-         [ $quiet = Y ] || echo "we only have $v1"
-         return
-      else
-         [ $quiet = Y ] || echo "python3 is $v2"
-         python=python3
-      fi
-   fi
-      
-   export PYTHONPATH="$TPSUP/python3/lib:$PYTHONPATH"
-   export       PATH="$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH"
-   reduce
-
-   # export the function
-   set -a
-}
-
 itrs () {
    local usage args yyyymmdd yyyy mm dd
    usage="
