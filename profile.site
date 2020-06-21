@@ -36,4 +36,5 @@ function myjava  {
       echo "UNAME='$UNAME' is not supported"
    fi
 }
-
+ 
+p3env
