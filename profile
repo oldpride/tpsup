@@ -216,12 +216,6 @@ myperllib () {
    cd "$TPSUP/lib/perl/TPSUP"
 }
 
-export PROFILE_SITE=$TPSUP/profile.site
-
-if [ -f $PROFILE_SITE ]; then
-   . $PROFILE_SITE
-fi
-
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    PERL5LIB="$TPSUP/lib/perl:$PERL5LIB"
    PATH="$TPSUP/scripts:$PATH"
@@ -322,38 +316,6 @@ example:  itrs less '/apps/log/<today %Y%m%d>.log'
    eval "$args"
 }
 
-tpproxy () {
-   local usage
-   usage="
-usage:
-   tpproxy is a bash function.
-   tpproxy check
-   tpproxy set
-"
-
-   if [ "X$1" = "Xcheck" ]; then
-      echo "http_proxy=$http_proxy"
-      echo "https_proxy=$https_proxy"
-   elif [ "X$1" = "Xset" ]; then
-      #export http_proxy=$http_proxy
-      #export https_proxy=$https_proxy
-      echo "tpproxy is not implemented on yet" >&2
-   else
-      echo "http_proxy=$http_proxy" >&2
-      echo "https_proxy=$https_proxy" >&2
-      echo "$usage" >&2
-   fi
-
-   # to make wget/curl work behind firewall
-
-   # export http_proxy=http://user:password@host:port
-   # export https_proxy=http://user:password@host:port
-
-   # for authencationless proxy
-   # export http_proxy=http://host:port
-   # export https_proxy=http://host:port
-}
-
 diffalias () {
    local usage
    usage="
@@ -446,4 +408,10 @@ set -o vi
 if !stty erase  2>/dev/null; then
    :
 fi  
+
+export PROFILE_SITE=$TPSUP/profile.site
+
+if [ -f $PROFILE_SITE ]; then
+   . $PROFILE_SITE
+fi
 

@@ -36,5 +36,39 @@ function myjava  {
       echo "UNAME='$UNAME' is not supported"
    fi
 }
+
+tpproxy () {
+   local usage
+   usage="
+usage:
+   tpproxy is a bash function.
+   tpproxy check
+   tpproxy set
+"
+
+   if [ "X$1" = "Xcheck" ]; then
+      echo "http_proxy=$http_proxy"
+      echo "https_proxy=$https_proxy"
+   elif [ "X$1" = "Xset" ]; then
+      #export http_proxy=$http_proxy
+      #export https_proxy=$https_proxy
+      echo "tpproxy is not implemented on yet" >&2
+   else
+      echo "http_proxy=$http_proxy" >&2
+      echo "https_proxy=$https_proxy" >&2
+      echo "$usage" >&2
+   fi
+
+   # to make wget/curl work behind firewall
+
+   # export http_proxy=http://user:password@host:port
+   # export https_proxy=http://user:password@host:port
+
+   # for authencationless proxy
+   # export http_proxy=http://host:port
+   # export https_proxy=http://host:port
+}
+
  
 p3env
+
