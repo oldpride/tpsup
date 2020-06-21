@@ -1,19 +1,13 @@
-import sys
-import re
-from pprint import pprint, pformat
-
-print(sys.path)
-
-from tpsup.util import strings_to_compilable_patterns, load_module, stringdict_to_funcdict,\
-    strings_to_compilable_func, silence_BrokenPipeError
 import csv
-import io
-import gzip
-import pkgutil
 import inspect
+import io
 import os
-from typing import Dict, List
+import pkgutil
+import sys
+from pprint import pformat
 from tpsup.tpfile import TpInput, TpOutput
+from tpsup.util import load_module, stringdict_to_funcdict, \
+    strings_to_compilable_func, silence_BrokenPipeError
 
 
 def main():
