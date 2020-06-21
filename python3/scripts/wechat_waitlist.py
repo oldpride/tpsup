@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # copied from Lei Chen (Leo) and modified by me
 

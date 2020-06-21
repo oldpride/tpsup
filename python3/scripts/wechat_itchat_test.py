@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # as of 2020/03/03, wechat blocked most users's web interface. itchat doesn't work anymore.
 
