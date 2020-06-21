@@ -16,23 +16,25 @@ try:
 except ImportError:
     pass
 
-from pprint import pprint, pformat
-import os
-import sys
-from os.path import expanduser
-import tpsup.csvtools
-from tpsup.util import tpsup_unlock
-import re
-import tpsup.csvtools
-from typing import List, Dict
 import itertools
+import os
+import re
+import sys
+from typing import List
+
+import tpsup.csvtools
+import tpsup.csvtools
+import tpsup.env
+from tpsup.util import tpsup_unlock
 
 
 class Conn:
     def __init__(self, nickname: str, **opt):
         connfile = opt.get('connfile', None)
         if connfile is None:
-            connfile = expanduser("~") + "/.tpsup/conn.csv"
+            # connfile = expanduser("~") + "/.tpsup/conn.csv"
+            home_dir = tpsup.env.Env().home_dir
+            connfile = home_dir + "/.tpsup/conn.csv"
 
         self.connfile = connfile
 
