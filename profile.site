@@ -141,7 +141,9 @@ pythonenv () {
       export PYTHONPATH="$TPSUP/python$expected_version/lib:$PYTHONPATH"
    fi
 
-   [ $quiet = Y ] || echo  PYTHONPATH=$PYTHONPATH
+   reduce
+
+   [ $quiet = Y ] || echo PYTHONPATH=$PYTHONPATH
 
    export PATH="$TPSUP/python3/scripts:$TPSUP/python3/examples:$PATH"
 
@@ -158,7 +160,6 @@ pythonenv () {
       fi    
    fi    
 
-   reduce
 
    # export the function
    set -a
