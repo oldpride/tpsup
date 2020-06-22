@@ -25,6 +25,7 @@ class Env:
         self.isCygwin = False
         self.environ = os.environ
         self.PATH = os.environ.get('PATH', '')
+        self.python_version = platform.python_version()
 
         if re.search("Windows", self.system, re.IGNORECASE):
             # GitBash signature
