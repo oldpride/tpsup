@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from tpsup.nettools import is_tcp_open
+import tpsup.pstools
 import os.path
 
 
@@ -19,8 +20,9 @@ import os.path
 
 class SeleniumEnv:
     def __init__(self, host_port: str, **opt):
+        global cmd
         (self.host, self.port) = host_port.split(':', 2)
-        verbose = opt.get('verbose', 0)
+        self.verbose = opt.get('verbose', 0)
         self.env = tpsup.env.Env()
         self.env.adapt()
         home_dir = self.env.home_dir
@@ -46,9 +48,10 @@ class SeleniumEnv:
 
         os.environ["PATH"] += os.pathsep + os.pathsep.join([home_dir])
         # chromedriver remembers chrome.exe's path, therefore, we don't need to set it
-        # if my_env.isWindows:
-        #     # add chrome.exe's path
-        #     #os.environ["PATH"] += os.pathsep + os.pathsep.join([r'C:\Program Files (x86)\Google\Chrome\Application'])
+        #if self.env.isWindows:
+            # add chrome.exe's path
+        os.environ["PATH"] += os.pathsep + os.pathsep.join([f'C:/Users/{os.environ["USER"]}',
+                                                                r'C:\Program Files (x86)\Google\Chrome\Application'])
 
         if not re.search('[\\/]', self.driver_exe):
             # no path specified, then we are totally rely on $PATH
@@ -62,19 +65,12 @@ class SeleniumEnv:
 
         self.driver_args = ["--verbose", f"--log-path={self.driverlog}"]  # for chromedriver
 
-        if verbose:
+        if self.verbose:
             # print(sys.path)
             sys.stderr.write(f'pwd={os.getcwd()}\n')
             sys.stderr.write(f'PATH={os.environ["PATH"]}\n')
 
-            driver_basename = os.path.basename(self.driver_exe)
-            sys.stderr.write(f'Find any running {driver_basename}')
-            if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
-                cmd = f'ps -ef|grep -i {driver_basename}|grep -v grep'
-            elif self.env.isWindows:
-                cmd = f'tasklist /fi Imagename eq {driver_basename}*'
-            sys.stderr.write(cmd)
-            os.system(cmd)
+            self.print_running_driver()
 
             if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
                 # display the beginning of the log file as 'tail' only display the later part
@@ -129,8 +125,8 @@ class SeleniumEnv:
 
         if self.driver is None:
             # by doing one of the following, we tell chromedriver to start a browser
-            self.browser_options.debugger_address = None
-            # browser_options = Options() # reset the browser options
+            # self.browser_options.debugger_address = None
+            self.browser_options = Options()  # reset the browser options
 
             if self.host.lower() != 'localhost' and self.host != '127.0.0.1' and self.host != '':
                 if self.dryrun:
@@ -145,14 +141,21 @@ class SeleniumEnv:
                 else:
                     sys.stderr.write("\n")
 
-            if re.search("Linux", system, re.IGNORECASE):
+            if self.env.isLinux:
                 self.browser_options.add_argument('--no-sandbox')  # to be able to run without root
                 self.browser_options.add_argument('--disable-dev_shm-usage')  # to be able to run without root
 
+            if self.env.isCygwin and self.headless:
+                # some how only in Cygwin and only in headless mode, selenium needs --user-data-dir to use \, not /
+                # C:\Users\william\selenium_chrome_test vs C:/Users/william/selenium_chrome_test
+                self.browser_options.add_argument(f'--user-data-dir={self.chromedir}'.replace('/', r'\''))
+            else:
+                self.browser_options.add_argument(f'--user-data-dir={self.chromedir}')
+
             self.browser_options.add_argument('--window-size=960,540')
-            self.browser_options.add_argument(f'--user-data-dir={self.chromedir}')
             self.browser_options.add_argument(f'--remote-debugging-port={self.port}')
             # browser_options.add_argument(f'--remote-debugging-address=127.0.0.1')
+
             for arg in opt.get('browserArgs', []):
                 self.browser_options.add_argument(f'--{arg}')
                 # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
@@ -163,6 +166,9 @@ class SeleniumEnv:
                                                options=self.browser_options,  # for chrome browser
                                                service_args=self.driver_args,  # for chromedriver
                                                )
+                sys.stderr.write('started\n')
+                #if self.headless:
+                #    time.sleep(1)  # throttle for the headless mode
 
     def get_driver(self):
         return self.driver
@@ -176,19 +182,9 @@ class SeleniumEnv:
             self.driver.quit()
             self.driver = None
 
-    def find_running_drivers(self):
+    def print_running_drivers(self):
         driver_basename = os.path.basename(self.driver_exe)
-
-def find_running_drivers(env: tpsup.env.Env, driver_basename: str):
-    driver_basename = os.path.basename(self.driver_exe)
-    sys.stderr.write(f'Find any running {driver_basename}')
-
-    if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
-        cmd = f'ps -ef|grep -i {driver_basename}|grep -v grep'
-    elif self.env.isWindows:
-        cmd = f'tasklist /fi Imagename eq {driver_basename}*'
-    sys.stderr.write(cmd)
-    os.system(cmd)
+        tpsup.pstools.ps_grep_basename(driver_basename, env=self.env, verbose=self.verbose)
 
 
 def main():

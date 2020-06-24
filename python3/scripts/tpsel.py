@@ -125,7 +125,8 @@ for mod_file in args['mod_files']:
             module.run(seleniumEnv)
 
 seleniumEnv.quit()
-seleniumEnv.find_running_drivers()
+time.sleep(1)
+seleniumEnv.print_running_drivers()
 
 if args['verbose']:
     print(f'driverlog file {seleniumEnv.driverlog}')

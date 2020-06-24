@@ -195,8 +195,9 @@ if args['host_port'] == 'auto':
             os.environ["PATH"] += os.pathsep + os.pathsep.join(
                 [home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
         if args['verbose']:
-            # print(sys.path)
-            print(os.environ["PATH"])
+            sys.stderr.write(f"sys.path={sys.path}\n")
+            sys.stderr.write(f"home_dir={home_dir}\n")
+            sys.stderr.write(f"PATH={os.environ['PATH']}\n")
 
     if args['browserArgs']:
         for arg in args['browserArgs']:
@@ -242,7 +243,7 @@ driver = webdriver.Chrome(driver_exe, options=browser_options, service_args=driv
 
 #driver = webdriver.Chrome(driver_name, service_args=driver_args)
 
-time.sleep(1)  # give 1 sec to let the tail set up
+time.sleep(1)  # give 1 sec to let the tail set up and also to throttle the headless mode
 
 #print(f'driver.title={driver.title}')
 

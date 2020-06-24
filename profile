@@ -221,6 +221,11 @@ myperllib () {
    cd "$TPSUP/lib/perl/TPSUP"
 }
 
+winhome () {
+   # for cygwin, which home is not C:/USERS/$USERNAME
+   cd "C:/USERS/$USERNAME"
+}
+
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    PERL5LIB="$TPSUP/lib/perl:$PERL5LIB"
    PATH="$TPSUP/scripts:$PATH"

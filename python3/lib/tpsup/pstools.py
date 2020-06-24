@@ -14,6 +14,7 @@ def ps_grep_basename(basename: str, **opt):
     if env is None:
         env = tpsup.env.Env()
 
+    # "ps -ef" in GitBash and Cygwin can only see its own processes
     # if env.isLinux or env.isGitBash or env.isCygwin:
     if env.isLinux:
         cmd = f'ps -ef|grep -i {basename}|grep -v grep'
