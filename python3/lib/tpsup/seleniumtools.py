@@ -21,11 +21,12 @@ class SeleniumEnv:
     def __init__(self, host_port: str, **opt):
         (self.host, self.port) = host_port.split(':', 2)
         verbose = opt.get('verbose', 0)
-        my_env = tpsup.env.Env()
-        my_env.adapt()
-        home_dir = my_env.home_dir
-        system = my_env.system
+        self.env = tpsup.env.Env()
+        self.env.adapt()
+        home_dir = self.env.home_dir
+        system = self.env.system
 
+        self.dryrun = opt.get('dryrun', False)
         self.driverlog = home_dir + '/selenium_chromedriver.log'
         self.chromedir = home_dir + '/selenium_chrome_test'
         # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
@@ -63,19 +64,19 @@ class SeleniumEnv:
 
         if verbose:
             # print(sys.path)
-            sys.stderr.write(f'pwd={os.getcwd()}')
-            sys.stderr.write(f'PATH={os.environ["PATH"]}')
+            sys.stderr.write(f'pwd={os.getcwd()}\n')
+            sys.stderr.write(f'PATH={os.environ["PATH"]}\n')
 
             driver_basename = os.path.basename(self.driver_exe)
             sys.stderr.write(f'Find any running {driver_basename}')
-            if my_env.isLinux or my_env.isGitBash or my_env.isCygwin:
+            if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
                 cmd = f'ps -ef|grep -i {driver_basename}|grep -v grep'
-            elif my_env.isWindows:
+            elif self.env.isWindows:
                 cmd = f'tasklist /fi Imagename eq {driver_basename}*'
             sys.stderr.write(cmd)
             os.system(cmd)
 
-            if my_env.isLinux or my_env.isGitBash or my_env.isCygwin:
+            if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
                 # display the beginning of the log file as 'tail' only display the later part
                 # use /dev/null to avoid error message in case the log file has not been created
                 cmd = f"cat /dev/null {self.driverlog}"
@@ -87,7 +88,7 @@ class SeleniumEnv:
                 cmd = f"tail --pid {os.getpid()} -F -f {self.driverlog} &"
                 sys.stderr.write(cmd)
                 os.system(cmd)
-            elif my_env.isWindows:
+            elif self.env.isWindows:
                 # windows doesn't have a way to do "tail -f file &"
                 # 1. from cmd.exe, we would have to call powershell to use "tail -f" equivalent, but will
                 #    have difficulty to make the process background.
@@ -113,13 +114,16 @@ class SeleniumEnv:
         self.connected_existing_browser = False
         if is_tcp_open(self.host, self.port):
             sys.stderr.write(f'{host_port} is open. let chromedriver to connect to it\n')
-            try:
-                self.driver = webdriver.Chrome(self.driver_exe, options=self.browser_options,
-                                               service_args=self.driver_args)
-                sys.stderr.write(f'chromedriver has connected to chrome at {host_port}\n')
-                self.connected_existing_browser = True
-            except Exception as e:
-                print(e)
+            if self.dryrun:
+                sys.stderr.write(f'this is dryrun; we will not start chromedriver\n')
+            else:
+                try:
+                    self.driver = webdriver.Chrome(self.driver_exe, options=self.browser_options,
+                                                   service_args=self.driver_args)
+                    sys.stderr.write(f'chromedriver has connected to chrome at {host_port}\n')
+                    self.connected_existing_browser = True
+                except Exception as e:
+                    print(e)
         else:
             sys.stderr.write(f'{host_port} is not open.\n')
 
@@ -129,13 +133,17 @@ class SeleniumEnv:
             # browser_options = Options() # reset the browser options
 
             if self.host.lower() != 'localhost' and self.host != '127.0.0.1' and self.host != '':
-                sys.stderr.write("cannot connect to remote browser. quit\n")
-                sys.exit(1)
+                if self.dryrun:
+                    sys.stderr.write("cannot connect to remote browser, but this is dryrun, so we continue\n")
+                else:
+                    raise RuntimeError("cannot connect to remote browser.")
             else:
-                sys.stderr.write("cannot connect local browser. we will start it up\n")
-
-            if self.headless:
-                self.browser_options.add_argument("--headless")
+                sys.stderr.write("cannot connect local browser. we will start it up")
+                if self.headless:
+                    self.browser_options.add_argument("--headless")
+                    sys.stderr.write(" in headless mode\n")
+                else:
+                    sys.stderr.write("\n")
 
             if re.search("Linux", system, re.IGNORECASE):
                 self.browser_options.add_argument('--no-sandbox')  # to be able to run without root
@@ -148,14 +156,13 @@ class SeleniumEnv:
             for arg in opt.get('browserArgs', []):
                 self.browser_options.add_argument(f'--{arg}')
                 # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
-
-            try:
+            if self.dryrun:
+                sys.stderr.write("this is dryrun, therefore, we don't start a webdriver, nor a browser\n")
+            else:
                 self.driver = webdriver.Chrome(self.driver_exe,  # make sure chromedriver is in the PATH
                                                options=self.browser_options,  # for chrome browser
                                                service_args=self.driver_args,  # for chromedriver
                                                )
-            except Exception as e:
-                pass
 
     def get_driver(self):
         return self.driver
@@ -168,6 +175,20 @@ class SeleniumEnv:
         if self.driver is not None:
             self.driver.quit()
             self.driver = None
+
+    def find_running_drivers(self):
+        driver_basename = os.path.basename(self.driver_exe)
+
+def find_running_drivers(env: tpsup.env.Env, driver_basename: str):
+    driver_basename = os.path.basename(self.driver_exe)
+    sys.stderr.write(f'Find any running {driver_basename}')
+
+    if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
+        cmd = f'ps -ef|grep -i {driver_basename}|grep -v grep'
+    elif self.env.isWindows:
+        cmd = f'tasklist /fi Imagename eq {driver_basename}*'
+    sys.stderr.write(cmd)
+    os.system(cmd)
 
 
 def main():

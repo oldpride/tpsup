@@ -5,11 +5,11 @@ import os
 import sys
 import textwrap
 from pprint import pformat
-from urllib.parse import urlparse
 import tpsup.env
 import tpsup.seleniumtools
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
+from tpsup.util import load_module
+import traceback
+import time
 
 prog = os.path.basename(sys.argv[0])
 
@@ -42,6 +42,9 @@ usage = textwrap.dedent(f"""
 
 examples = textwrap.dedent(f""" 
 examples:
+    {prog} -dryrun         tpsel_test_google.py
+    {prog}                 tpsel_test_google.py
+    {prog} --headless      tpsel_test_google.py
     """)
 
 parser = argparse.ArgumentParser(
@@ -81,6 +84,13 @@ parser.add_argument(
          "script from Cygwin or GitBash, we still need to use Windows path. "
          f"On this host, default to {driverlog}")
 
+parser.add_argument(
+   '-dryrun', '--dryrun', dest='dryrun', action='store_true', default=False, help='dryrun mode')
+
+parser.add_argument(
+    'mod_files', default=[], action='append',
+    help='selenium module files')
+
 args = vars(parser.parse_args())
 
 if args['verbose']:
@@ -91,43 +101,32 @@ seleniumEnv = tpsup.seleniumtools.SeleniumEnv(**args)
 
 driver = seleniumEnv.get_driver()
 
-if driver is None:
+if driver is None and not args['dryrun']:
     sys.exit(1)
 
-seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
+for mod_file in args['mod_files']:
+    with open(mod_file, 'r') as f:
+        source = f.read()
+        module = None
+        try:
+            module = load_module(source)
+        except Exception as e:
+            traceback.print_exc(file=sys.stderr) # e.printStackTrace equivalent in python
+            module = None
 
-# print(f'driver.title={driver.title}')
+        if module is None:
+            sys.stderr.write(f"failed to compile: {mod_file}\n")
+            continue
 
-url = 'http://www.google.com/'
-driver.get(url)
-
-seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
-
-# https://dev.to/endtest/a-practical-guide-for-finding-elements-with-selenium-4djf
-# in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,
-# in the source code window, right click -> copy -> ...
-search_box = driver.find_element_by_name('q')
-
-search_box.clear()
-search_box.send_keys('ChromeDriver')
-
-# the following are the same
-search_box.send_keys(webdriver.common.keys.Keys.RETURN)
-# search_box.submit()
-
-seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
-
-for tag_a in driver.find_elements_by_tag_name('a'):
-    link = None
-    try:
-        url = tag_a.get_attribute('href')
-    except NoSuchElementException as e:
-        pass
-    else:
-        # print(f'url={url}')
-        print(f'hostname = {urlparse(url).hostname}')
+        if args['dryrun']:
+            sys.stderr.write(f"dryrun mode: {mod_file} compiled successfully\n")
+        else:
+            sys.stderr.write(f"running: {mod_file}\n")
+            module.run(seleniumEnv)
 
 seleniumEnv.quit()
+seleniumEnv.find_running_drivers()
 
-print(f'driverlog file {seleniumEnv.driverlog}')
-print(f'chromedir dir  {seleniumEnv.chromedir}')
+if args['verbose']:
+    print(f'driverlog file {seleniumEnv.driverlog}')
+    print(f'chromedir dir  {seleniumEnv.chromedir}')
