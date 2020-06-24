@@ -1,18 +1,15 @@
 #!/usr/bin/env python
 
-import time
-import tpsup.env
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import NoSuchElementException
-from urllib.parse import urlparse
 import argparse
+import os
 import sys
 import textwrap
 from pprint import pformat
-import os
-import re
-from tpsup.nettools import is_tcp_open
+from urllib.parse import urlparse
+import tpsup.env
+import tpsup.seleniumtools
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 
 prog = os.path.basename(sys.argv[0])
 
@@ -69,7 +66,7 @@ parser.add_argument(
     help="port of the browser. default to " + f"{default_hostport}")
 
 parser.add_argument(
-    '-ba', '--browserArgs', action="append",
+    '-ba', '--browserArgs', action="append", default=[],
     help='extra args to browser command, eg, -ba proxy-pac-url=http://pac.abc.net. can set multiple times.')
 
 parser.add_argument(
@@ -90,112 +87,35 @@ if args['verbose']:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
 
-headless = args['headless']
-driver_exe = args['driver']
+seleniumEnv = tpsup.seleniumtools.SeleniumEnv(**args)
 
-if args['verbose']:
-    cmd = 'ps -ef|grep chromedriver|grep -v grep'
-    print(cmd)
-    os.system(cmd)
-
-driver_args = ["--verbose", f"--log-path={driverlog}"]  # for chromedriver
-
-if args['verbose']:
-    cmd = f"cat /dev/null {driverlog}"
-    print(cmd)
-    os.system(cmd)
-
-    # --pid PID  exits when PID is gone
-    # -F         retry file if it doesn't exist
-    cmd = f"tail --pid {os.getpid()} -F -f {driverlog} &"
-    print(cmd)
-    os.system(cmd)
-
-# chrome_options will be used on chrome browser's command line not chromedriver's commandline
-browser_options = Options()
-
-host_port = args["host_port"]
-(host, port) = host_port.split(':')
-
-# try to connect the browser in case already exists.
-# by setting this, we tell chromedriver not to start a browser
-browser_options.debugger_address = host_port
-
-driver = None
-sys.stderr.write(f'check browser port at {host_port}\n')
-if is_tcp_open(host, port):
-    sys.stderr.write(f'{host_port} is open. chromedriver is connecting to it\n')
-
-    try:
-        driver = webdriver.Chrome(driver_exe, options=browser_options, service_args=driver_args)
-    except Exception as e:
-        print(e)
+driver = seleniumEnv.get_driver()
 
 if driver is None:
-    # by doing one of the following, we tell chromedriver to start a browser
-    browser_options.debugger_address = None
-    # browser_options = Options() # reset the browser options
+    sys.exit(1)
 
-    if host != 'localhost' and host != '127.0.0.1' and host != '':
-        sys.stderr.write("cannot connect remote browser. quit\n")
-        sys.exit(1)
-    else:
-        sys.stderr.write("cannot connect local browser. we will start it up\n")
-
-    if headless:
-        browser_options.add_argument("--headless")
-
-    if re.search("Linux", system, re.IGNORECASE):
-        browser_options.add_argument('--no-sandbox')  # to be able to run without root
-        browser_options.add_argument('--disable-dev_shm-usage')  # to be able to run without root
-        browser_options.add_argument('--window-size=960,540')
-        browser_options.add_argument('---user-data-dir=/tmp/selenium_chrome_browser_dir')
-    elif re.search("Windows", system, re.IGNORECASE):
-        os.environ["PATH"] += os.pathsep + os.pathsep.join(
-            [home_dir, r'C:\Program Files (x86)\Google\Chrome\Application'])
-        if args['verbose']:
-            # print(sys.path)
-            print(os.environ["PATH"])
-
-    browser_options.add_argument(f'--remote-debugging-port={port}')
-    # browser_options.add_argument(f'--remote-debugging-address=127.0.0.1')
-    if args['browserArgs']:
-        for arg in args['browserArgs']:
-            browser_options.add_argument(f'--{arg}')
-            # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
-
-    driver = webdriver.Chrome(driver_exe,  # make sure chromedriver is in the PATH
-                              options=browser_options,  # for chrome browser
-                              service_args=driver_args,  # for chromedriver
-                              )
-
-
-time.sleep(1)  # give 1 sec to let the tail set up
+seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
 
 # print(f'driver.title={driver.title}')
 
 url = 'http://www.google.com/'
 driver.get(url)
 
-if not headless:
-    time.sleep(2)  # Let the user actually see something!
+seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
 
-try:
-    # https://dev.to/endtest/a-practical-guide-for-finding-elements-with-selenium-4djf
-    # in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,
-    # in the source code window, right click -> copy -> ...
-    search_box = driver.find_element_by_name('q')
-except NoSuchElementException as e:
-    print(e)
-else:
-    search_box.clear()
-    search_box.send_keys('ChromeDriver')
+# https://dev.to/endtest/a-practical-guide-for-finding-elements-with-selenium-4djf
+# in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,
+# in the source code window, right click -> copy -> ...
+search_box = driver.find_element_by_name('q')
 
-    # the following are the same
-    search_box.send_keys(webdriver.common.keys.Keys.RETURN)
-    # search_box.submit()
-    if not headless:
-        time.sleep(2)  # Let the user actually see something!
+search_box.clear()
+search_box.send_keys('ChromeDriver')
+
+# the following are the same
+search_box.send_keys(webdriver.common.keys.Keys.RETURN)
+# search_box.submit()
+
+seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
 
 for tag_a in driver.find_elements_by_tag_name('a'):
     link = None
@@ -207,10 +127,7 @@ for tag_a in driver.find_elements_by_tag_name('a'):
         # print(f'url={url}')
         print(f'hostname = {urlparse(url).hostname}')
 
-# because we want to keep the browser running, we don't run either of the following command which closes the browser
-# driver.quit()
-# driver.dispose()
-# driver.close()
+seleniumEnv.quit()
 
-# list all the log files for debug purpose
-os.system("ls -ld /tmp/selenium_*")
+print(f'driverlog file {seleniumEnv.driverlog}')
+print(f'chromedir dir  {seleniumEnv.chromedir}')

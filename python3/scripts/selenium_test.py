@@ -25,6 +25,7 @@ system = uname.system
 # assert re.match('^3', version), "must run with python3"
 
 driverlog = home_dir + '/selenium_chromedriver.log'
+chromedir = home_dir + '/chrome_test'
 # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
 # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
@@ -58,8 +59,16 @@ examples:
     {prog} -ba proxy-pac-url=http://pac.abc.net auto
 
     2. start Chrome (c1) on localhost with debug port 9222.
-    /usr/bin/chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
-    --user-data-dir=/tmp/selenium_chrome_browser_dir --remote-debugging-port=9222 
+    From Linux,
+        /usr/bin/chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
+        --user-data-dir=~/chrome_test --remote-debugging-port=9222 
+    From Cygwin or GitBash,
+        'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe' --window-size=960,540 \
+        --user-data-dir=C:/users/$USERNAME/chrome_test --remote-debugging-port=9222
+    From cmd.exe, (have to use double quotes)
+        "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe" --window-size=960,540 \
+        --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=9222
+
    {prog} localhost:9222
 
    3. start Chrome (c1) on remote PC with debug port 9222.
@@ -167,7 +176,8 @@ if args['host_port'] == 'auto':
     if re.search("Linux", system, re.IGNORECASE):
         browser_options.add_argument('--no-sandbox')  # to be able to run without root
         browser_options.add_argument('--disable-dev_shm-usage')  # to be able to run without root
-        browser_options.add_argument('--window-size=960,540 --user-data-dir=/tmp/selenium_chrome_browser_dir')
+        browser_options.add_argument('--window-size=960,540')
+        browser_options.add_argument(f'--user-data-dir={chromedir}')
     elif re.search("Windows", system, re.IGNORECASE):
         # add chromedriver path on windows
         home_dir = os.path.expanduser("~")

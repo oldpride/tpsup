@@ -23,23 +23,31 @@ class Env:
         self.home_dir = os.path.expanduser("~")
         self.isGitBash = False
         self.isCygwin = False
+        self.isLinux = False
+        self.isWindows = False
         self.environ = os.environ
         self.PATH = os.environ.get('PATH', '')
         self.python_version = platform.python_version()
+        self.ls = 'ls'
 
         if re.search("Windows", self.system, re.IGNORECASE):
-            # GitBash signature
-            # MSYSTEM=MINGW64
+            self.isWindows = True
             if os.environ.get('MSYSTEM', '') == 'MINGW64':
+                # GitBash signature
+                # MSYSTEM=MINGW64
                 self.isGitBash = True
-
-            # Cygwin signature: /cygdrive/c/... in PATH PATH=/cygdrive/c/Program Files (x86)/Common
-            # Files/Oracle/Java/javapath:/cygdrive/c/Program Files/Python37/Scripts:...
-            if re.search('cygdrive|cygwin', self.PATH, re.IGNORECASE):
+            elif re.search('cygdrive|cygwin', self.PATH, re.IGNORECASE):
+                # Cygwin signature: /cygdrive/c/... in PATH PATH=/cygdrive/c/Program Files (x86)/Common
+                # Files/Oracle/Java/javapath:/cygdrive/c/Program Files/Python37/Scripts:...
                 self.isCygwin = True
+
                 # because cygwin's home dir is C:\cygwin64\home\<username>, likely not the normal windows's home
                 # dir C:/users/<username>. use C:/users/<username> instead
                 self.home_dir = f'C:/Users/{os.environ["USER"]}'
+            else:
+                self.ls = 'dir'
+        if re.search("Linux", self.system, re.IGNORECASE):
+            self.isLinux = True
 
     def __str__(self):
         strings = []
