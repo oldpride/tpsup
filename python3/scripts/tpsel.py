@@ -23,13 +23,34 @@ driverlog = home_dir + '/selenium_chromedriver.log'
 # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
 usage = textwrap.dedent(f"""
-    run selenium test
+    run selenium test modules
     
     +----------+      +--------------+     +----------------+
     | selenium +----->+ chromedriver +---->+ chrome browser +---->internet
     +----------+      +--------------+     +----------------+
     
     selenium will always start a chromedriver locally.
+
+    If there is a chrome browser already started at the host:port, this script will start a chromedriver
+    and direct the chromedriver to connect to the host:port. After the script is done, the chromedriver
+    will be automatically shut down but the browser will live on.
+
+    If there is no browser at the host:port, this script will start a chromedriver, and the chromedriver
+    will start a chrome browser which will listen at the host:port. chromedriver will shut down the
+    browser when the script is done. The shutdown call is automatically registered, and so far no 
+    successful practice to disable it.
+
+    To manually start a local browser at port 19999
+        From Linux,
+            /usr/bin/chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
+            --user-data-dir=~/chrome_test --remote-debugging-port=19999 
+        From Cygwin or GitBash,
+            'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe' --window-size=960,540 \
+            --user-data-dir=C:/users/$USERNAME/chrome_test --remote-debugging-port=19999
+        From cmd.exe, (have to use double quotes)
+            "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe" --window-size=960,540 \
+            --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=19999
+
     For Linux
         chromedriver should be in the path or at ~
         chromium-browser should be in path

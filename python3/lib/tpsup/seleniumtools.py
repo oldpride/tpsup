@@ -48,9 +48,9 @@ class SeleniumEnv:
 
         os.environ["PATH"] += os.pathsep + os.pathsep.join([home_dir])
         # chromedriver remembers chrome.exe's path, therefore, we don't need to set it
-        #if self.env.isWindows:
-            # add chrome.exe's path
-        os.environ["PATH"] += os.pathsep + os.pathsep.join([f'C:/Users/{os.environ["USER"]}',
+        if self.env.isWindows:
+            # add home_dir and chrome.exe's path
+            os.environ["PATH"] += os.pathsep + os.pathsep.join([f'C:/Users/{os.environ["USERNAME"]}',
                                                                 r'C:\Program Files (x86)\Google\Chrome\Application'])
 
         if not re.search('[\\/]', self.driver_exe):
