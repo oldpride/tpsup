@@ -59,12 +59,14 @@ print('\n')
 
 import inspect
 print('trying to find $module path')
-print('\n')
-
 import $module
 print(inspect.getfile($module))
+print('\n')
 " |python
 
 if [ $? -eq 0 ]; then
-   pip freeze |grep $module
+   echo "trying to find $module package"
+   # pip binary will deprecated. use pip module instead
+   python -m pip freeze |grep $module
+   echo ""
 fi
