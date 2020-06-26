@@ -1,0 +1,6 @@
+logical,prod,bcp,comment
+# supposed to be logical name, physical prod and name, but we use linux1 twice because this
+# is all I have
+linux1,linux1.fios-router.home,LAPTOP-4DDGKLFF,test_app
+
+# can have comment and blank lines
