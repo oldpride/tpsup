@@ -78,7 +78,7 @@ while (<$fh>) {
       #print "OK:    $logical $logical_ip match $side $physical $physical_ip\n";
       printf  "OK:    %-30s matches %-4s %-30s %-16s\n", $logical, $side, $physical, $physical_ip;
    } else {
-      print "ERROR: $logical $logical_ip don't match $side $physical $physical_ip\n";
+      print "ERROR: $logical $logical_ip doesn't match $side $physical $physical_ip\n";
       $error ++;
    }
 }
