@@ -75,9 +75,9 @@ while (<$fh>) {
    my $physical_ip = get_ipv4($physical);
 
    if ($logical_ip && $physical_ip && $logical_ip eq $physical_ip) {
-      print "OK:    logical ($logical $logical_ip) and $side ($physical $physical_ip) match\n";
+      print "OK:    $logical $logical_ip match $side $physical $physical_ip\n";
    } else {
-      print "ERROR: logical ($logical $logical_ip) and $side ($physical $physical_ip) don't  match\n";
+      print "ERROR: $logical $logical_ip don't match $side $physical $physical_ip\n";
       $error ++;
    }
 }
