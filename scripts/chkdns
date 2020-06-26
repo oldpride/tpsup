@@ -118,8 +118,13 @@ sub get_ipv4 {
    # SOCK_SEQPACKET (reliable sequenced packet service), or
    # SOCK_RAW (raw protocols atop the network layer).
 
-   my @ahosts = `getent ahosts $hostname`;
+   my $cmd = "getent ahosts $hostname"
+   ;
+   my @ahosts = `$cmd`;
+
    chomp @ahosts;
+
+   $verbose && print "cmd = $cmd\n   ", join("\n   ", @ahosts), "\n"; 
 
    for my $line (@ahosts) {
       if ( $line =~ /^(\d+[.]\d+[.]\d+[.]\d+)\s/) {
@@ -127,6 +132,6 @@ sub get_ipv4 {
       }
    }
 
-   print "WARN:   cannot find ipv4 for $hostname\n", join("\n  ", @ahosts), "\n"; 
+   print "WARN:   cannot find ipv4 for $hostname\n   ", join("\n   ", @ahosts), "\n"; 
    return "";
 }
