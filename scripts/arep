@@ -136,6 +136,11 @@ my $opt = {
    StatusFiles  => $StatusFiles,
 };
 
+# for get_dependency(), try not to expire again_
+my $opt2 = {%$opt};
+$opt2->{DetailExpire} = 999999;
+$opt2->{StatusExpire} = 999999; 
+
 my $info = query_jobs($opt);
 
 my $exists_box_job;
@@ -162,7 +167,7 @@ if (!$detail) {
          next if ! exists $info->{$job}->{job_type};
 
          if ($info->{$job}->{job_type} eq 'BOX') {
-            my $dependency = get_dependency($job, $opt);
+            my $dependency = get_dependency($job, $opt2); 
             if ($dependency->{down}) {
                for my $dep (@{$dependency->{down}}) {
                   if ($dep->{reason} eq 'box_child') {
