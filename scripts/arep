@@ -63,6 +63,9 @@ examples:
    $prog    -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
    $prog -q -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
 
+   - take from stdin
+   $prog -
+
 END
 
    exit 1;
@@ -154,6 +157,23 @@ if (!$detail) {
       } else {
          printf get_autorep_J_format(),
             $job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
+         # print "info = ", Dumper($info->{$job});
+
+         next if ! exists $info->{$job}->{job_type};
+
+         if ($info->{$job}->{job_type} eq 'BOX') {
+            my $dependency = get_dependency($job, $opt);
+            if ($dependency->{down}) {
+               for my $dep (@{$dependency->{down}}) {
+                  if ($dep->{reason} eq 'box_child') {
+                     my $childname = $dep->{detail}->{JobName};
+                     printf get_autorep_J_format(),
+                        " $childname", $info->{$childname}->{LastStart}, 
+                        $info->{$childname}->{LastEnd}, $info->{$childname}->{Status};
+                  }
+               }
+            }
+         }
       }
    }
 } else {
