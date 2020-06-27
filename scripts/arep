@@ -137,10 +137,14 @@ my $opt = {
    verbose      => $verbose,
 };
 
+$verbose && print "opt = ", Dumper($opt);
+
 # for get_dependency(), try not to expire again_
 my $opt2 = {%$opt};
 $opt2->{DetailExpire} = 999999;
 $opt2->{StatusExpire} = 999999; 
+
+$verbose && print "opt2 = ", Dumper($opt2);
 
 my $info = query_jobs($opt);
 
