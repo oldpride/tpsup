@@ -211,16 +211,6 @@ tpscripts () {
    cd "$TPSUP/scripts"
 }
 
-mytp () {
-   # for compatibility with corp settings
-   cd "$TPSUP/scripts"
-}
-
-myperllib () {
-   # for compatibility with corp settings
-   cd "$TPSUP/lib/perl/TPSUP"
-}
-
 winhome () {
    # for cygwin, which home is not C:/USERS/$USERNAME
    cd "C:/USERS/$USERNAME"

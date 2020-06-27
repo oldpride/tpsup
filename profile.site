@@ -2,12 +2,27 @@ kdbnotes () {
    cd "$TPSUP/../kdb/notes"
 }
 
-mynotes () {
-   cd "$TPSUP/../notes"
+myandroid () {
+   export ANDROID_HOME=${HOME}/Android/Sdk
+   export PATH="${ANDROID_HOME}/tools:${PATH}"
+   export PATH="${ANDROID_HOME}/emulator:${PATH}"
+   export PATH="${ANDROID_HOME}/platform-tools:${PATH}"
 }
 
 mycpp () {
    cd "$TPSUP/../cpp/cookbook/src"
+}
+
+myjava () {
+   if [[ $UNAME =~ Msys ]]; then
+      cd /c/users/$USER/eclipse-workspace
+   elif [[ $UNAME =~ Cygwin ]]; then
+      cd /cygdrive/c/users/$USER/eclipse-workspace
+   elif [[ $UNAME =~ Linux ]]; then
+      cd ~/eclipse-workspace
+   else 
+      echo "UNAME='$UNAME' is not supported"
+   fi
 }
 
 myjoomla () {
@@ -18,23 +33,18 @@ mykivy () {
    cd "$TPSUP/../kivy"
 }
 
-myandroid () {
-   export ANDROID_HOME=${HOME}/Android/Sdk
-   export PATH="${ANDROID_HOME}/tools:${PATH}"
-   export PATH="${ANDROID_HOME}/emulator:${PATH}"
-   export PATH="${ANDROID_HOME}/platform-tools:${PATH}"
+mynotes () {
+   cd "$TPSUP/../notes"
 }
 
-function myjava  {
-   if [[ $UNAME =~ Msys ]]; then
-      cd /c/users/$USER/eclipse-workspace
-   elif [[ $UNAME =~ Cygwin ]]; then
-      cd /cygdrive/c/users/$USER/eclipse-workspace
-   elif [[ $UNAME =~ Linux ]]; then
-      cd ~/eclipse-workspace
-   else 
-      echo "UNAME='$UNAME' is not supported"
-   fi
+myperllib () {
+   # for compatibility with corp settings
+   cd "$TPSUP/lib/perl/TPSUP"
+}
+
+mytp () {
+   # for compatibility with corp settings
+   cd "$TPSUP/scripts"
 }
 
 tpproxy () {
