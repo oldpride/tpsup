@@ -207,21 +207,6 @@ sub get_cache_file {
        
    $file .= "$sub_filename" . ".txt";
 
-   sub need_refresh {
-      my ($f) = @_;
-      return 1 if $opt->{Refresh};
-
-      return 1 if ! -f $f;
-
-      my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = lstat($f);
-      my $now_sec = time();
-      my $expire_sec = defined($opt->{CacheExpire}) ? $opt->{CacheExpire} : 3600 * 12;
-
-      return 1 if $now_sec - $mtime > $expire_sec;
-
-      return 0;
-   }
-
    if (!need_refresh($file)) {
       $opt->{verbose} && print STDERR "we will use cached $file\n";
       return $file;
@@ -235,6 +220,20 @@ sub get_cache_file {
    return $file;
 }
 
+sub need_refresh {
+   my ($file, $opt) = @_;
+   return 1 if $opt->{Refresh};
+
+   return 1 if ! -f $file;
+
+   my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = lstat($file);
+   my $now_sec = time();
+   my $expire_sec = defined($opt->{CacheExpire}) ? $opt->{CacheExpire} : 3600 * 12;
+
+   return 1 if $now_sec - $mtime > $expire_sec;
+
+   return 0;
+}
 
 sub get_univ_patterns {
     my ($opt) = @_;
