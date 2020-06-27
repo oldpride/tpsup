@@ -134,6 +134,7 @@ my $opt = {
    StatusExpire => $StatusExpire,
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
+   verbose      => $verbose,
 };
 
 # for get_dependency(), try not to expire again_
