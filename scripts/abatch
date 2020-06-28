@@ -12,8 +12,10 @@ use TPSUP::UTIL    qw(get_in_fh);
 
 my $prog = $0; $prog =~ s:.*/::;
 
-my $DetailExpire = 300;
-my $StatusExpire = 1;
+my $DetailExpire = 24*3600;
+my $interval = 10;
+my $interval_limit = 60;
+my $StatusExpire = $interval-1;
 
 sub usage {
    my ($message) = @_;
@@ -39,6 +41,9 @@ description:
    After the check, the script will prompt for whether to proceed to run. (use -f to skip
    the prompt.)
 
+   The running job is checked in $interval seconds; if not done after, $interval increases
+   10 seconds for the next round, all the way up to $interval_limit seconds.
+
    If the script aborted halfway, you can comment out the jobs already ran and start
    again.
 
@@ -48,11 +53,7 @@ description:
 
    -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
 
-   -de n               expire Detail cache after n seconds. default $DetailExpire.
-
-   -se n               expire Status cache after n seconds. default $StatusExpire.
-
-   -r                  reset caches, ie, time out all caches
+   -r                  reset caches on start, ie, time out all caches
 
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
@@ -70,7 +71,8 @@ description:
 
 examples:
 
-   $prog abatch_test.txt
+   $prog abatch_test.txt    # take from file
+   $prog -                  # take from STDIN
 
    - test without autosys
    $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
@@ -101,8 +103,6 @@ GetOptions(
    'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
-   'de=s'          => \$DetailExpire,
-   'se=s'          => \$StatusExpire,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -137,20 +137,24 @@ while (<$ifh>) {
 
 close $ifh;
 
-if ($reset) {
-   $StatusExpire = 0;
-   $DetailExpire = 0;
-}
-
 my $opt = {
    UnivPatterns => $UnivPatterns,
    DetailExpire => $DetailExpire,
    StatusExpire => $StatusExpire,
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
+   verbose      => 1,
 };
 
-my $info = query_jobs($opt);
+my $info;
+if ($reset) {
+   my $opt2 = {%$opt};
+   $opt2->{DetailExpire} = 0; 
+   $opt2->{StatusExpire} = 0; 
+   $info = query_jobs($opt2);
+} else {
+   $info = query_jobs($opt);
+}
 
 my $exists_box_job;
 
@@ -268,7 +272,7 @@ for my $job (@jobs) {
    
       while (!$before_result) {
          print "command=$autorep_cmd failed. will try again after 10 seconds\n";
-         sleep 10;
+         sleep $interval;
          $before_result = autorep_J("command=$autorep_cmd");
       }
    
@@ -295,6 +299,9 @@ for my $job (@jobs) {
    my $sub_err;
    my $sub_start = strftime("%T", localtime(time()));
 
+   my $sub_interval = $interval;
+   my $sub_round = 0;
+
    while (1) { 
       $sub_run = 0;
       $sub_err = 0;
@@ -315,11 +322,12 @@ for my $job (@jobs) {
       }
 
       if ($sub_run < $subcount && $sub_err == 0 ) {
-         print "Only $sub_run of $subcount subjobs complete since $sub_start. sleep for 10\n";
-         sleep 10;
+         print "Only $sub_run of $subcount subjobs complete since $sub_start. sleep for $sub_interval\n";
+         sleep $sub_interval;
+         $sub_interval += 10;
+         $sub_interval = $interval_limit if $sub_interval > $interval_limit;
       } else {
-         # try to restore the original autorep -J format
-         # start with the main job 
+         # try to restore the original autorep -J format, starting with the main job 
          push @tally, [$job, $after_result->{$job}->{LastStart}, $after_result->{$job}->{LastEnd}, $after_result->{$job}->{Status}];
 
          # then list the rest jobs with indent

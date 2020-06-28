@@ -12,8 +12,9 @@ use TPSUP::UTIL    qw(get_in_fh);
 
 my $prog = $0; $prog =~ s:.*/::;
 
-my $DetailExpire = 300;
-my $StatusExpire = 1;
+my $interval     = 15;
+my $DetailExpire = 24*3600;
+my $StatusExpire = $interval - 1;
 
 sub usage {
    my ($message) = @_;
@@ -30,23 +31,17 @@ description:
    the file, one job per line.
    The file allows comments (#) and blank lines.
 
-   -x  ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
+   -x ExcludePattern   perl regex pattern, exclude job matched this pattern, case insensitive
 
-   -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
+   -m MatchPattern     perl regex pattern, only run job matching this pattern, case insensitive
 
-   -u  UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
+   -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
 
-   -de n               expire Detail cache after n seconds. default $DetailExpire.
-
-   -se n               expire Status cache after n seconds. default $StatusExpire.
-
-   -r                  reset caches, ie, time out all caches
+   -i interval         check interval in seconds
 
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
-
-   -n                  dryrun mode, check-only. will print the command but won't run the jobs.
 
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.
@@ -56,7 +51,8 @@ description:
 
 examples:
 
-   $prog abatch_test.txt
+   $prog abatch_test.txt  # take from file
+   $prog -                # take from STDIN
 
    - test without autosys
    $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
@@ -73,9 +69,6 @@ my $ExcludePattern;
 my $DetailFiles;
 my $StatusFiles;
 my $UnivPatterns;
-my $force;
-my $dryrun;
-my $reset;
 
 GetOptions(
    'v|verbose'     => \$verbose,

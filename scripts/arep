@@ -13,7 +13,7 @@ use TPSUP::UTIL    qw(get_in_fh);
 my $prog = $0; $prog =~ s:.*/::;
 
 my $DetailExpire = 300;
-my $StatusExpire = 10;
+my $StatusExpire = 15;
 
 sub usage {
    my ($message) = @_;
@@ -36,8 +36,10 @@ description:
    -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
 
    -de n               expire Detail cache after n seconds. default $DetailExpire.
+                       mainly for testing purpose.
 
    -se n               expire Status cache after n seconds. default $StatusExpire.
+                       mainly for testing purpose.
 
    -r                  reset cache, ie, time out all caches
 
@@ -57,15 +59,12 @@ description:
 
 examples:
 
-   $prog abatch_test.txt
+   $prog abatch_test.txt   # take from file
+   $prog -                 # take from STDIN
 
    - test without autosys
    $prog    -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
    $prog -q -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
-
-   - take from stdin
-   $prog -
-
 END
 
    exit 1;
