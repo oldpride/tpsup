@@ -29,9 +29,9 @@ description:
    Run autorep for jobs listed in a file, joblist.txt. Within the file, one job per line.
    The file allows comments (#) and blank lines.
 
-   -x  ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
+   -xp ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
 
-   -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
+   -mp MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
 
    -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
 
@@ -83,8 +83,8 @@ GetOptions(
    'v|verbose'     => \$verbose,
    'r|reset'       => \$reset,
    'q'             => \$detail,
-   'm=s'           => \$MatchPattern,
-   'x=s'           => \$ExcludePattern,
+   'mp=s'          => \$MatchPattern,
+   'xp=s'          => \$ExcludePattern,
    'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,

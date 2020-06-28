@@ -102,9 +102,20 @@ sub autorep_J {
       }
    }
    
+   my $last_parent;
    for my $line (@$autorep_array) {
-      if ( $line =~ /^\s*(\S+?)\s+?(\S.{18})\s+?(\S.{18})\s+?(\S+)\s+/ ) {
-         @{$result->{$1}}{qw(JobName LastStart LastEnd Status)} = ($1, $2, $3, $4);
+      if ( $line =~ /^(\s{0,1})(\S+?)\s+?(\S.{18})\s+?(\S.{18})\s+?(\S+)\s+/ ) {
+         @{$result->{$2}}{qw(JobName LastStart LastEnd Status)} = ($2, $3, $4, $5);
+         my $indent = $1;
+         my $job    = $2;
+         if ($indent) {
+            if ($last_parent) {
+               push @{$result->{$last_parent}->{children}}, $job; 
+               $result->{$job}->{parent} = $last_parent; 
+            }
+         } else {
+            $last_parent = $job;
+         }
       } else {
          print STDERR "unsupported format at line: $line\n";
       }
