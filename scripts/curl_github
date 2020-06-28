@@ -69,7 +69,7 @@ fi
 
 (set -x; /usr/bin/curl $flags https://raw.githubusercontent.com/oldpride/$proj/master/$relative_path > $file.github)
 
-if [ `cat $file.github |wc -l` -eq 1 -a "`cat $file.github`" = '404: Not Found' ]; then
+if [[ `head -c 20 $file.github` =~ '^404: Not Found' ]]; then
    echo ""
    cat $file.github
    /bin/rm -f $file.github
