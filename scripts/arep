@@ -13,7 +13,7 @@ use TPSUP::UTIL    qw(get_in_fh);
 my $prog = $0; $prog =~ s:.*/::;
 
 my $DetailExpire = 300;
-my $StatusExpire = 1;
+my $StatusExpire = 10;
 
 sub usage {
    my ($message) = @_;
