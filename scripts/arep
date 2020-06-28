@@ -30,8 +30,12 @@ description:
    The file allows comments (#) and blank lines.
 
    -xp ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
+                       this is to filter input file
 
    -mp MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
+                       this is to filter input file
+
+   -me MatchExpression perl regex, eg, -me '\$Status !~ /OH|OI/'. can set multiple times
 
    -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
 
@@ -73,6 +77,7 @@ END
 my $verbose;
 my $MatchPattern;
 my $ExcludePattern;
+my @JobExps;
 my $DetailFiles;
 my $StatusFiles;
 my $UnivPatterns;
@@ -85,6 +90,7 @@ GetOptions(
    'q'             => \$detail,
    'mp=s'          => \$MatchPattern,
    'xp=s'          => \$ExcludePattern,
+   'me=s'          => \@JobExps,
    'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
@@ -128,8 +134,15 @@ my $opt = {
    StatusExpire => $StatusExpire,
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
+   JobExps      => \@JobExps,
    verbose      => $verbose,
 };
+
+if (!$detail) {
+   $opt->{StatusOnly} = 1;
+} else {
+   $opt->{DetailOnly} = 1;
+}
 
 my $info;
 if ($reset) {

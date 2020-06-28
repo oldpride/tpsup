@@ -35,7 +35,7 @@ description:
    
    -r                  reset cache, ie, time out all caches
 
-   -me matchExpression eg -m '\$Status !~ /OH|OI/'
+   -me matchExpression eg -me '\$Status !~ /OH|OI/'
 
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.

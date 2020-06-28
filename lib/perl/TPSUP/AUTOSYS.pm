@@ -42,6 +42,7 @@ sub get_autosys_fh {
    return $in_fh;
 }
 
+
 sub autorep_J {
    my ($input, $opt) = @_;
 
@@ -122,6 +123,47 @@ sub autorep_J {
    }
 
    return $result;
+}
+
+my $need_by_expression_input;
+
+sub expression_need {
+   my ($expression, $opt) = @_;
+
+   return       $need_by_expression_input->{$expression}
+      if exists $need_by_expression_input->{$expression};
+
+   my $status_has;
+   for my $attr ({qw(JobName LastStart LastEnd Status)}) {
+      $status_has->{$attr} = 1;
+   } 
+
+   my @a = split /\$/, $expression;
+   my $need;
+
+   for my $str (@a) {
+      # has to start with at least 3 alphabets 
+      if ($str =~ /^([a-zA-Z]{3,})/) {
+         my $attr = $1;
+         if ($status_has->{$attr}) {
+            # check whether status query result already has this.
+            # if yes, we don't have to use job detail. 
+            $need->{status} = 1; 
+            if ($opt->{verbose}) {
+               print STDERR "need job status to find \$$attr in '$expression'\n";
+            }
+         } else {
+            $need->{detail} = 1; 
+            if ($opt->{verbose}) {
+               print STDERR "need job detail to find \$$attr in '$expression'\n";
+            }
+         }
+      }
+   }
+
+   $need_by_expression_input->{$expression} = $need;
+
+   return $need;
 }
 
 sub autorep_q_J {
@@ -265,15 +307,37 @@ sub get_univ_patterns {
     return get_setting_from_env('UNIV_PATTERNS', 'TPAUTOSYS', get_homedir_by_user() . "/.tpautosys");
 }
 
-
 sub query_jobs {
    my ($opt) = @_;
+
+   my $need_job_detail = 1;
+   my $need_job_status = 1;
+
+   if ($opt->{StatusOnly}) {
+      $need_job_detail = 0;
+      if (exists $opt->{JobExps}) {
+         for my $exp (@{$opt->{JobExps}}) {
+            my $need = expression_need($exp, $opt);
+            $need_job_detail = $need->{detail};
+         }
+      }
+   } elsif ($opt->{DetailOnly}) {
+      $need_job_status = 0;
+      if (exists $opt->{JobExps}) {
+         for my $exp (@{$opt->{JobExps}}) {
+            my $need = expression_need($exp, $opt);
+            $need_job_status = $need->{status};
+         }
+      }
+   }
+
+   $opt->{verbose} && print STDERR "need_job_detail=$need_job_detail, need_job_status=$need_job_status\n";
 
    my $DetailFiles  = $opt->{DetailFiles};
    my $StatusFiles  = $opt->{StatusFiles};
    my $UnivPatterns = $opt->{UnivPatterns};
 
-   if (!$DetailFiles || !$StatusFiles) {
+   if ( (!$DetailFiles && $need_job_detail) || (!$StatusFiles && $need_job_status) ) {
       if (!$UnivPatterns) {
           $UnivPatterns = get_univ_patterns($opt);
       }
@@ -282,76 +346,80 @@ sub query_jobs {
    my $detail_ref; 
    my $status_ref; 
 
-   if ($DetailFiles) {
-      for my $file (split /,/, $DetailFiles) {
-         $file =~ s/\s+//;
-         $file =~ s/\s+$//;
-         my $new = autorep_q_J("file=$file", $opt);
-
-         next if ! $new;
-
-         if ($detail_ref) {
-            $detail_ref = {%$detail_ref, %$new};
-         } else {
-            $detail_ref = $new;
+   if ($need_job_detail) {
+      if ($DetailFiles) {
+         for my $file (split /,/, $DetailFiles) {
+            $file =~ s/\s+//;
+            $file =~ s/\s+$//;
+            my $new = autorep_q_J("file=$file", $opt);
+   
+            next if ! $new;
+   
+            if ($detail_ref) {
+               $detail_ref = {%$detail_ref, %$new};
+            } else {
+               $detail_ref = $new;
+            }
          }
-      }
-   } elsif ($UnivPatterns) {
-      # APP1%|APP2%
-      for my $pattern (split /,/, $UnivPatterns) {
-         my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
-                                              CacheExpire=>$opt->{DetailExpire},
-                                              %$opt,
-                                   });  
-
-         my $new = autorep_q_J("file=$file", $opt);
-
-         next if ! $new;
-
-         if ($detail_ref) {
-            $detail_ref = {%$detail_ref, %$new};
-         } else {
-            $detail_ref = $new;
+      } elsif ($UnivPatterns) {
+         # APP1%|APP2%
+         for my $pattern (split /,/, $UnivPatterns) {
+            my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
+                                                 CacheExpire=>$opt->{DetailExpire},
+                                                 %$opt,
+                                      });  
+   
+            my $new = autorep_q_J("file=$file", $opt);
+   
+            next if ! $new;
+   
+            if ($detail_ref) {
+               $detail_ref = {%$detail_ref, %$new};
+            } else {
+               $detail_ref = $new;
+            }
          }
+      } else {
+         confess "don't know how to find universe: neither DetailFiles nor UnivPatterns is defined.";
       }
-   } else {
-      confess "don't know how to find universe: neither DetailFiles nor UnivPatterns is defined.";
    }
-
-   if ($StatusFiles) {
-      for my $file (split /,/, $StatusFiles) {
-         $file =~ s/\s+//;
-         $file =~ s/\s+$//;
-         my $new = autorep_J("file=$file", $opt);
-
-         next if ! $new;
-
-         if ($status_ref) {
-            $status_ref = {%$status_ref, %$new};
-         } else {
-            $status_ref = $new;
+   
+   if ($need_job_status) {
+      if ($StatusFiles) {
+         for my $file (split /,/, $StatusFiles) {
+            $file =~ s/\s+//;
+            $file =~ s/\s+$//;
+            my $new = autorep_J("file=$file", $opt);
+   
+            next if ! $new;
+   
+            if ($status_ref) {
+               $status_ref = {%$status_ref, %$new};
+            } else {
+               $status_ref = $new;
+            }
          }
+      } elsif ($UnivPatterns) {
+         # APP1%|APP2%
+         for my $pattern (split /,/, $UnivPatterns) {
+            my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
+                                                 CacheExpire=>$opt->{StatusExpire},
+                                                 %$opt,
+                                      });  
+   
+             my $new = autorep_J("file=$file", $opt);
+   
+             next if ! $new;
+   
+             if ($status_ref) {
+                $status_ref = {%$status_ref, %$new};
+             } else {
+                $status_ref = $new;
+             }
+         }
+      } else {
+         confess "don't know how to find universe: neither StatusFiles nor UnivPatterns is defined.";
       }
-   } elsif ($UnivPatterns) {
-      # APP1%|APP2%
-      for my $pattern (split /,/, $UnivPatterns) {
-         my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
-                                              CacheExpire=>$opt->{StatusExpire},
-                                              %$opt,
-                                   });  
-
-          my $new = autorep_J("file=$file", $opt);
-
-          next if ! $new;
-
-          if ($status_ref) {
-             $status_ref = {%$status_ref, %$new};
-          } else {
-             $status_ref = $new;
-          }
-      }
-   } else {
-      confess "don't know how to find universe: neither StatusFiles nor UnivPatterns is defined.";
    }
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
@@ -366,13 +434,25 @@ sub query_jobs {
 
    my $return_ref;
 
+   my $seen_job;
+
    for my $job (keys %$status_ref) {
+      $seen_job->{$job} ++;
+   }
+       
+   for my $job (keys %$detail_ref) {
+      $seen_job->{$job} ++;
+   }
+       
+   for my $job (keys %$seen_job, ) {
       my $r; 
 
-      if (exists $detail_ref->{$job}) {
+      if (exists $status_ref->{$job} && exists $detail_ref->{$job} ) {
          $r = { %{$status_ref->{$job}}, %{$detail_ref->{$job}} };
-      } else {
+      } elsif ($status_ref->{$job})  {
          $r = $status_ref->{$job};
+      } else {
+         $r = $detail_ref->{$job};
       }
 
       $r->{JobName} = $job;
