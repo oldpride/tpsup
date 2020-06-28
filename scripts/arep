@@ -177,7 +177,7 @@ if (!$detail) {
       if (!$info->{$job}) {
          printf get_autorep_J_format(), $job,  "not found", "", "";
       } else {
-         printf print_autorep_J_job($info, $job, "", $opt);
+         print_autorep_J_job($info, $job, "", $opt);
       }
    }
 } else {

@@ -6,7 +6,7 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 use TPSUP::AUTOSYS qw(get_dependency query_jobs print_autorep_J_header
-                      get_autorep_J_format autorep_J);
+                      get_autorep_J_format autorep_J print_autorep_J_job);
 use TPSUP::UTIL    qw(get_in_fh);
 # use Carp::Always;
 
@@ -15,7 +15,7 @@ my $prog = $0; $prog =~ s:.*/::;
 my $DetailExpire = 24*3600;
 my $interval = 10;
 my $interval_limit = 60;
-my $StatusExpire = $interval-1;
+my $StatusExpire = 0;  
 
 sub usage {
    my ($message) = @_;
@@ -52,8 +52,6 @@ description:
    -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
 
    -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
-
-   -r                  reset caches on start, ie, time out all caches
 
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
@@ -130,32 +128,15 @@ close $ifh;
 
 my $opt = {
    UnivPatterns => $UnivPatterns,
-   DetailExpire => $DetailExpire,
-   StatusExpire => $StatusExpire,
+   StatusExpire => 0,  # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
+   Jobs         => \@jobs,
+   StatusOnly   => 1,  # only need to query status, ie, autorep -J
    verbose      => $verbose,
 };
 
-my $info;
-if ($reset) {
-   my $opt2 = {%$opt};
-   $opt2->{DetailExpire} = 0; 
-   $opt2->{StatusExpire} = 0; 
-   $info = query_jobs($opt2);
-} else {
-   $info = query_jobs($opt);
-}
-
-my $exists_box_job;
-
-for my $job (keys %$info) {
-   my $box_name = $info->{box_name};
-
-   if ($box_name) {
-      $exists_box_job->{$box_name}->{$job} ++;
-   }
-}
+my $info = query_jobs($opt);
 
 my $error = 0;
 my $bad_by_job;
@@ -190,7 +171,6 @@ for my $job (@jobs) {
 
 my $sub_interval = $interval;
 
-
 while (1) {
    my $need_next_round = 0;
 
@@ -200,28 +180,7 @@ while (1) {
       if ($bad_by_job->{$job}) {
          printf get_autorep_J_format(), $job,  $bad_by_job->{$job}, "", "";
       } else {
-         printf get_autorep_J_format(),
-            $job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
-         # print "info = ", Dumper($info->{$job});
-
-         $need_next_round ++ if $info->{$job}->{Status} =~ /^(RU|ST)$/;
-
-         next if ! exists $info->{$job}->{job_type};
-
-         if ($info->{$job}->{job_type} eq 'BOX') {
-            my $dependency = get_dependency($job, $opt);
-            if ($dependency->{down}) {
-               for my $dep (@{$dependency->{down}}) {
-                  if ($dep->{reason} eq 'box_child') {
-                     my $childname = $dep->{detail}->{JobName};
-                     printf get_autorep_J_format(),
-                        " $childname", $info->{$childname}->{LastStart},
-                        $info->{$childname}->{LastEnd}, $info->{$childname}->{Status};
-                     $need_next_round ++ if $info->{$childname}->{Status} =~ /^(RU|ST)$/;
-                  }
-               }
-            }
-         }
+         print_autorep_J_job($info, $job, "", $opt);
       }
    }
 

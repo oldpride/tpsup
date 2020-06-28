@@ -3,6 +3,3 @@ filter_data
 update_DBMS
 test_job3_failed
 test_box1
-test_job1
-test_job2
-test_job4

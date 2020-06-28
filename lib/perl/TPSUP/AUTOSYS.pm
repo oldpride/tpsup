@@ -650,7 +650,21 @@ sub get_dependency {
    
          # this job is a box
          if ($children_by_box->{$job}) {
-            push @next_level, ['box_child', $children_by_box->{$job}];
+            # for this example, one box has two children
+            #    test_box1
+            #     test_job1
+            #     test_job2
+            # when we find the downstream dependency of test_job1, we should get
+            #    test_job1, self
+            #      test_box1, box_parent
+            # not
+            #    test_job1, self
+            #      test_box1, box_parent
+            #        test_job2, box_child
+            # the following 'if' takes care of this.
+            if ($reason ne "box_parent") {
+               push @next_level, ['box_child', $children_by_box->{$job}];
+            }
          }
 
          my $i = 1;

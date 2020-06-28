@@ -143,6 +143,7 @@ my $opt = {
    StatusExpire => $StatusExpire,
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
+   Jobs         => \@jobs, # narrow the query to these jobs
    verbose      => $verbose,
 };
 
@@ -219,19 +220,20 @@ for my $job (@jobs) {
             push @downDeps, "$dep->{detail}->{JobName} ($dep->{reason})";
          }
 
-         if ($seen->{$dep->{detail}->{JobName}}) {
+         if ($seen->{$dep->{detail}->{JobName}} && $dep->{reason} ne 'box_parent') {
             push @willRunAgain, $dep->{detail}->{JobName};
          }
       }
    }
     
    if (@downDeps) {
-      print "   ERROR: $job has dependencies: ", join(" ", @downDeps), "\n";
+      print "   ERROR: $job has downstream dependencies: ", join(" ", @downDeps), "\n";
       $error ++;
    }
 
    if (@willRunAgain) {
-      print "   ERROR: $job triggers other jobs in the list: ", join(" ", @willRunAgain), "\n";
+      print "   FATAL: $job triggers other jobs in the list: ", join(" ", @willRunAgain), "\n";
+      $fatal ++;
       $error ++;
    }
 }
