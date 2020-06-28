@@ -140,6 +140,7 @@ my $opt = {
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
    JobExps      => \@JobExps,
+   Jobs         => \@jobs,
    verbose      => $verbose,
 };
 

@@ -307,10 +307,45 @@ sub need_refresh {
    return 0;
 }
 
+
 sub get_univ_patterns {
     my ($opt) = @_;
     return $opt->{UnivPatterns} if $opt->{UnivPatterns};
     return get_setting_from_env('UNIV_PATTERNS', 'TPAUTOSYS', get_homedir_by_user() . "/.tpautosys");
+}
+
+
+sub find_needed_patterns {
+   my ($jobs, $patterns, $opt) = @_;
+
+   my $need_pattern;
+   my $pattern_by_job;
+
+   for my $pattern (@$patterns) {
+      # change % to .*,  _ to . 
+      my $regex = $pattern;
+      $regex =~ s/\%/.*/g;
+      $regex =~ s/_/./g;
+
+      my $compiled = qr/$regex/;
+
+      for my $job (@$jobs) {
+         if ($job =~ /$compiled/) {
+            $need_pattern->{$pattern} ++;
+            $pattern_by_job->{$job} = $pattern;
+         }
+      }
+   }
+
+   for my $job (@$jobs) {
+      if (!exists $pattern_by_job->{$job}) {
+         print STDERR "WARN: job $job is not converted by ", join(",", @$patterns), "\n";
+      }
+   }
+
+   my @needed_patterns = keys %$need_pattern;
+
+   return \@needed_patterns;
 }
 
 sub query_jobs {
@@ -368,8 +403,17 @@ sub query_jobs {
             }
          }
       } elsif ($UnivPatterns) {
-         # APP1%|APP2%
-         for my $pattern (split /,/, $UnivPatterns) {
+         # APP1%,APP2%
+         my @patterns = split /,/, $UnivPatterns;
+
+         my $needed_patterns;
+         if (exists $opt->{Jobs}) {
+            $needed_patterns = find_needed_patterns($opt->{Jobs}, \@patterns);      
+         } else {
+            $needed_patterns = \@patterns;
+         }
+
+         for my $pattern (@$needed_patterns) {
             my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
                                                  CacheExpire=>$opt->{DetailExpire},
                                                  %$opt,
@@ -406,8 +450,17 @@ sub query_jobs {
             }
          }
       } elsif ($UnivPatterns) {
-         # APP1%|APP2%
-         for my $pattern (split /,/, $UnivPatterns) {
+         # APP1%,APP2%
+         my @patterns = split /,/, $UnivPatterns;
+
+         my $needed_patterns;
+         if (exists $opt->{Jobs}) {
+            $needed_patterns = find_needed_patterns($opt->{Jobs}, \@patterns);      
+         } else {
+            $needed_patterns = \@patterns;
+         }
+
+         for my $pattern (@$needed_patterns) {
             my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
                                                  CacheExpire=>$opt->{StatusExpire},
                                                  %$opt,
