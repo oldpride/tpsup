@@ -180,6 +180,9 @@ sub get_in_fh {
    
    if (!defined($input) || $input eq '-') {
       $in_fh = \*STDIN;
+      if (-t STDIN) {
+         print STDERR "hit Enter and then Control+D to finish input on commmand line\n";
+      }
       $opt->{verbose} && print STDERR "get_in_fh() opened STDIN\n";
    } else {
       my $cmd;

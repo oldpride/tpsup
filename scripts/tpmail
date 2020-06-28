@@ -169,6 +169,11 @@ if (@cc) {
 
 my $msg = MIME::Lite->new(%$new_opt);
 
+if (-t STDIN) {
+   # this is on command line
+   print STDERR "type Enter then type Control+D to finish\n";
+}
+
 my @lines = <STDIN>;
 my $message;
 
