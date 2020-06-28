@@ -124,7 +124,7 @@ while (<$ifh>) {
    #$job =~ s/^\s+//;     # trim spaces
    #$job =~ s/\s+$//;     # trim spaces
    $job =~ s/^[^0-9a-zA-Z.#_-]+//;     # trim spaces or bad chars
-   $job =~ s/[^0-9a-zA-Z.#_-]$//;     # trim spaces or bad chars
+   $job =~ s/[^0-9a-zA-Z.#_-]+$//;     # trim spaces or bad chars
 
    next if $job eq '';
 

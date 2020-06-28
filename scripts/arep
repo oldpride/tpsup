@@ -122,11 +122,6 @@ while (<$ifh>) {
 
 close $ifh;
 
-if ($reset) {
-   $StatusExpire = 0;
-   $DetailExpire = 0;
-}
-
 my $opt = {
    UnivPatterns => $UnivPatterns,
    DetailExpire => $DetailExpire,
@@ -136,16 +131,15 @@ my $opt = {
    verbose      => $verbose,
 };
 
-$verbose && print "opt = ", Dumper($opt);
-
-# for get_dependency(), try not to expire again_
-my $opt2 = {%$opt};
-$opt2->{DetailExpire} = 999999;
-$opt2->{StatusExpire} = 999999; 
-
-$verbose && print "opt2 = ", Dumper($opt2);
-
-my $info = query_jobs($opt);
+my $info;
+if ($reset) {
+   my $opt2 = {%$opt};
+   $opt2->{DetailExpire} = 0;
+   $opt2->{StatusExpire} = 0;
+   $info = query_jobs($opt2);
+} else {
+   $info = query_jobs($opt);
+}
 
 my $exists_box_job;
 
@@ -171,7 +165,7 @@ if (!$detail) {
          next if ! exists $info->{$job}->{job_type};
 
          if ($info->{$job}->{job_type} eq 'BOX') {
-            my $dependency = get_dependency($job, $opt2); 
+            my $dependency = get_dependency($job, $opt); 
             if ($dependency->{down}) {
                for my $dep (@{$dependency->{down}}) {
                   if ($dep->{reason} eq 'box_child') {
