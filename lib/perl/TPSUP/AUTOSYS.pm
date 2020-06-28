@@ -241,8 +241,8 @@ sub need_refresh {
    if ($staleness > $expire_sec) {
       print STDERR "$file (staleness=$now_sec-$mtime=$staleness) expired after $expire_sec seconds\n";
       return 1;
-   } else {
-      print STDERR "$file (staleness=$now_sec-$mtime=$staleness<$expire_sec) not expired\n";
+   #} else {
+   #   print STDERR "$file (staleness=$now_sec-$mtime=$staleness<$expire_sec) not expired\n";
    }
 
    return 0;
