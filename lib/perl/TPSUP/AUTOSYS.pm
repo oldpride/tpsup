@@ -223,12 +223,12 @@ sub get_cache_file {
 sub need_refresh {
    my ($file, $opt) = @_;
    if ($opt->{Refresh}) {
-      print STDERR "\$opt->{Refresh}=$opt->{Refresh}\n";
+      $opt->{verbose} && print STDERR "\$opt->{Refresh}=$opt->{Refresh}\n";
       return 1;
    }
 
    if (! -f $file) {
-      print STDERR "$file doesn't exist yet\n";
+      $opt->{verbose} && print STDERR "$file doesn't exist yet\n";
       return 1;
    }
 
@@ -239,7 +239,7 @@ sub need_refresh {
    my $staleness = $now_sec - $mtime;
 
    if ($staleness > $expire_sec) {
-      print STDERR "$file (staleness=$now_sec-$mtime=$staleness) expired after $expire_sec seconds\n";
+      $opt->{verbose} && print STDERR "$file (staleness=$now_sec-$mtime=$staleness) expired after $expire_sec seconds\n";
       return 1;
    #} else {
    #   print STDERR "$file (staleness=$now_sec-$mtime=$staleness<$expire_sec) not expired\n";
