@@ -358,7 +358,8 @@ if !stty erase  2>/dev/null; then
    :
 fi  
 
-export PROFILE_SITE=$TPSUP/profile.site
+# when sync to customized site, exclude *.site files
+export PROFILE_SITE=$HOME/profile.site
 
 if [ -f $PROFILE_SITE ]; then
    . $PROFILE_SITE
