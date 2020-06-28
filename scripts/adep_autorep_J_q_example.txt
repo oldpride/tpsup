@@ -79,3 +79,42 @@ machine: juno
 owner: jerry@juno
 permission:
 alarm_if_fail: 1
+
+/* ---------- test_box3 -------------*/
+  
+insert_job: test_box3 job_type: BOX
+machine: juno
+data_conditions: 0
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+
+/* ---------- test_job7 -------------*/
+  
+insert_job: test_job7 job_type: CMD
+box_name: test_box3
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+
+/* ---------- test_box4 -------------*/
+  
+insert_job: test_box4 job_type: BOX
+machine: juno
+data_conditions: 0
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+
+/* ---------- test_job8 -------------*/
+  
+insert_job: test_job8 job_type: CMD
+box_name: test_box4
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+

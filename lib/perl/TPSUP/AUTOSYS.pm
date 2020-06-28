@@ -11,6 +11,7 @@ our @EXPORT_OK = qw(
       get_dependency
       get_univ_patterns
       print_autorep_J_header
+      print_autorep_J_job
       query_jobs
 );
       
@@ -103,20 +104,25 @@ sub autorep_J {
       }
    }
    
-   my $last_parent;
+   my $last_by_indentLength;
    for my $line (@$autorep_array) {
-      if ( $line =~ /^(\s{0,1})(\S+?)\s+?(\S.{18})\s+?(\S.{18})\s+?(\S+)\s+/ ) {
+      if ( $line =~ /^(\s*)(\S+?)\s+?(\S.{18})\s+?(\S.{18})\s+?(\S+)\s+/ ) {
          @{$result->{$2}}{qw(JobName LastStart LastEnd Status)} = ($2, $3, $4, $5);
          my $indent = $1;
          my $job    = $2;
-         if ($indent) {
-            if ($last_parent) {
-               push @{$result->{$last_parent}->{children}}, $job; 
-               $result->{$job}->{parent} = $last_parent; 
+
+         my $indentLength = length($indent);
+
+         if ($indentLength) {
+            my $parent = $last_by_indentLength->{$indentLength-1};
+
+            if ($parent) {
+               push @{$result->{$parent}->{status_box_children}}, $job; 
+               $result->{$job}->{status_box_parent} = $parent; 
             }
-         } else {
-            $last_parent = $job;
          }
+
+         $last_by_indentLength->{$indentLength} = $job;  
       } else {
          print STDERR "unsupported format at line: $line\n";
       }
@@ -648,6 +654,19 @@ sub print_autorep_J_header {
    printf get_autorep_J_format(), "Job Name", "Last Start", "Last End", "Status";
    printf "\n";
    printf get_autorep_J_format(), "-"x50,     "-"x19,        "-"x19,    "-"x2;
+}
+
+sub print_autorep_J_job {
+   my ($info, $job, $indent, $opt) = @_;
+
+   printf get_autorep_J_format(),
+      $indent.$job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
+
+   if (exists $info->{$job}->{status_box_children}) {
+      for my $child (@{$info->{$job}->{status_box_children}}) {
+         print_autorep_J_job($info, $child, $indent . " ", $opt);
+      }
+   }
 }
 
 sub main {

@@ -5,8 +5,13 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw(get_dependency query_jobs print_autorep_J_header
-                      get_autorep_J_format autorep_J);
+use TPSUP::AUTOSYS qw(get_dependency 
+                      query_jobs
+                      autorep_J
+                      get_autorep_J_format
+                      print_autorep_J_header
+                      print_autorep_J_job
+                      );
 use TPSUP::UTIL    qw(get_in_fh);
 # use Carp::Always;
 
@@ -171,25 +176,7 @@ if (!$detail) {
       if (!$info->{$job}) {
          printf get_autorep_J_format(), $job,  "not found", "", "";
       } else {
-         printf get_autorep_J_format(),
-            $job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
-         # print "info = ", Dumper($info->{$job});
-
-         next if ! exists $info->{$job}->{job_type};
-
-         if ($info->{$job}->{job_type} eq 'BOX') {
-            my $dependency = get_dependency($job, $opt); 
-            if ($dependency->{down}) {
-               for my $dep (@{$dependency->{down}}) {
-                  if ($dep->{reason} eq 'box_child') {
-                     my $childname = $dep->{detail}->{JobName};
-                     printf get_autorep_J_format(),
-                        " $childname", $info->{$childname}->{LastStart}, 
-                        $info->{$childname}->{LastEnd}, $info->{$childname}->{Status};
-                  }
-               }
-            }
-         }
+         printf print_autorep_J_job($info, $job, "", $opt);
       }
    }
 } else {
