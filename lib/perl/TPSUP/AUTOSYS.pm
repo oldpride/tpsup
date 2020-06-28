@@ -207,7 +207,7 @@ sub get_cache_file {
        
    $file .= "$sub_filename" . ".txt";
 
-   if (!need_refresh($file)) {
+   if (!need_refresh($file, $opt)) {
       $opt->{verbose} && print STDERR "we will use cached $file\n";
       return $file;
    }
@@ -222,15 +222,26 @@ sub get_cache_file {
 
 sub need_refresh {
    my ($file, $opt) = @_;
-   return 1 if $opt->{Refresh};
+   if ($opt->{Refresh}) {
+      print STDERR "\$opt->{Refresh}=$opt->{Refresh}\n";
+      return 1;
+   }
 
-   return 1 if ! -f $file;
+   if (! -f $file) {
+      print STDERR "$file doesn't exist yet\n";
+      return 1;
+   }
 
    my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = lstat($file);
    my $now_sec = time();
    my $expire_sec = defined($opt->{CacheExpire}) ? $opt->{CacheExpire} : 3600 * 12;
 
-   return 1 if $now_sec - $mtime > $expire_sec;
+   my $staleness = $now_sec - $mtime;
+
+   if ($staleness > $expire_sec) {
+      print STDERR "$file (staleness=$now_sec-$mtime=$staleness) expired after $expire_sec seconds\n";
+      return 1;
+   }
 
    return 0;
 }
