@@ -67,7 +67,7 @@ echo "$files"
 if [ $action = diff ]; then
    for f in `echo "$files"|egrep -v '/$'`
    do
-      echo "
+      echo ""
       (set -x; diff $depot_dir/$f $github_dir/$f)
    done
 fi
