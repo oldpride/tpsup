@@ -70,7 +70,7 @@ if [ $action = diff ]; then
    for f in `echo "$files" |awk '{print $2}'|egrep -v '/$'`
    do
       echo ""
-      (set -x; diff $depot_dir/$f $github_dir/$f)
+      (set -x; diff $depot_dir/$f $site_dir/$f)
    done
 fi
 
