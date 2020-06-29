@@ -8,6 +8,7 @@ usage () {
 usage:
 
    $0 check
+   $0 diff         # check and then diff
    $0 sync
 
    -d depot_dir     where you should see <depot_dir>/tpsup. 
@@ -47,7 +48,7 @@ action=$1
 cd $depot_dir/tpsup || exit 1
 git pull 
 
-if [ $action = check ]; then
+if [ $action = check -o $action = diff ]; then
    flag="-n"
 elif [ $action = sync ]; then
    flag=""
@@ -62,5 +63,13 @@ set -x
 files=`(set -x;rsync $flag -av --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ $depot_dir/tpsup $site_dir/)`
 
 echo "$files"
+
+if [ $action = diff ]; then
+   for f in `echo "$files"|egrep -v '/$'`
+   do
+      echo "
+      (set -x; diff $depot_dir/$f $github_dir/$f)
+   done
+fi
 
 
