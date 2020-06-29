@@ -57,15 +57,17 @@ else
    usage
 fi
 
-set -x
-
-# --existing will only update existing files
-files=`(set -x;rsync $flag -av --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ $depot_dir/tpsup $site_dir/)`
+# --existing           only to update existing files
+# --exclude='*[.]site' to skips site-specific files
+# --exclude='[.]git*'  to skip .git/ and .gitignore
+# -i                   to print item to be changed
+files=`(set -x;rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ --exclude='*[.]site' $depot_dir/tpsup $site_dir/)`
 
 echo "$files"
 
 if [ $action = diff ]; then
-   for f in `echo "$files"|egrep -v '/$'`
+   # skip dir
+   for f in `echo "$files|awk '{print $2}'"|egrep -v '/$'`
    do
       echo ""
       (set -x; diff $depot_dir/$f $github_dir/$f)
