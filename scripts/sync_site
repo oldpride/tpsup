@@ -59,5 +59,8 @@ fi
 set -x
 
 # --existing will only update existing files
-rsync $flag -av --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ $depot_dir/tpsup $site_dir/
+files=`(set -x;rsync $flag -av --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ $depot_dir/tpsup $site_dir/)`
+
+echo "$files"
+
 
