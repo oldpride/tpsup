@@ -272,7 +272,7 @@ sub get_cache_file {
    }
 
    my $cmd = "autorep $QuerySwitch $pattern > $file";
-   print STDERR "running cmd=$cmd\n";
+   $opt->{verbose} && print STDERR "running cmd=$cmd\n";
    system($cmd);
    confess "cmd=$cmd failed: $!" if $?;
 

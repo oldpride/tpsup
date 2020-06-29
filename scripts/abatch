@@ -194,14 +194,14 @@ for my $job (@jobs) {
    printf get_autorep_J_format(), $job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
 
    if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
-      print "   FATAL: $job is in $info->{$job}->{Status} mode.\n";
+      print "   FATAL: in $info->{$job}->{Status} mode.\n";
       $error ++;
       $fatal ++;
       next;
    }
 
    if ($info->{$job}->{Status} =~ /^(RU)$/) {
-      print "   ERROR: $job is in $info->{$job}->{Status} mode.\n";
+      print "   ERROR: in $info->{$job}->{Status} mode.\n";
       $error ++;
       next;
    }
@@ -227,12 +227,12 @@ for my $job (@jobs) {
    }
     
    if (@downDeps) {
-      print "   ERROR: $job has downstream dependencies: ", join(" ", @downDeps), "\n";
+      print "   ERROR: downstream dependencies:\n      ", join("\n      ", @downDeps), "\n";
       $error ++;
    }
 
    if (@willRunAgain) {
-      print "   FATAL: $job triggers other jobs in the list: ", join(" ", @willRunAgain), "\n";
+      print "   FATAL: triggers other jobs in the list:\n      ", join("\n      ", @willRunAgain), "\n";
       $fatal ++;
       $error ++;
    }
