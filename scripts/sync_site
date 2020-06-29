@@ -13,6 +13,7 @@ usage:
 
    -d depot_dir     where you should see <depot_dir>/tpsup. 
                     default to $depot_dir. 
+                    this is the dir to do clone tpsup from github.com
 
    -s site_dir      where you should see  <site_dir>/tpsup.
                     dfault to $site_dir
@@ -56,8 +57,8 @@ fi
 # --exclude='*[.]site' to skips site-specific files
 # --exclude='[.]git*'  to skip .git/ and .gitignore
 # -i                   to print item to be changed, ie, --itemize-changes
-# --out-fomrat="%f"    to print out the file/dir name only for -i
-files=`(set -x;rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ --exclude='*[.]site' --out-fomrat="%f" $depot_dir/tpsup $site_dir/)`
+# --out-format="%f"    to print out the file/dir name only for -i
+files=`(set -x;rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ --exclude='*[.]site' --out-format="%f" $depot_dir/tpsup $site_dir/)`
 
 echo "$files"
 
