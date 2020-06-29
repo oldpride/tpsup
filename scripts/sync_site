@@ -43,6 +43,7 @@ action=$1
 
 cd $depot_dir/tpsup || exit 1
 git pull 
+echo ""
 
 if [ $action = check -o $action = diff ]; then
    flag="-n"
@@ -60,6 +61,7 @@ fi
 # --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
 files=`(set -x;rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/)`
 
+echo ""
 echo "$files"
 
 if [ $action = diff ]; then
