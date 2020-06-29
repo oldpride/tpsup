@@ -67,7 +67,7 @@ echo "$files"
 
 if [ $action = diff ]; then
    # skip dir
-   for f in `echo "$files|awk '{print $2}'"|egrep -v '/$'`
+   for f in `echo "$files" |awk '{print $2}'|egrep -v '/$'`
    do
       echo ""
       (set -x; diff $depot_dir/$f $github_dir/$f)
