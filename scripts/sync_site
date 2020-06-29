@@ -1,0 +1,61 @@
+#!/bin/bash
+
+depot_dir=~/depot
+site_dir=~/github
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 check
+   $0 sync
+
+   -d depot_dir     where you should see <depot_dir>/tpsup. 
+                    default to $depot_dir. 
+
+   -s site_dir      where you should see  <site_dir>/tpsup.
+                    dfault to $site_dir
+
+example:
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+
+while getopts vs:d: o;
+do
+   case "$o" in
+      d) depot_dir="$OPTARG";;
+      s)  site_dir="$OPTARG";;
+      v) verbose=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+action=$1
+
+cd $depot_dir/tpsup || exit 1
+git pull 
+
+if [ $action = check ]; then
+   flag="-n"
+elif [ $action = sync ]; then
+   flag=""
+else
+   echo "unknown action='$action'"
+   usage
+fi
+
+set -x
+rsync $flag -av --existing $depot_dir/tpsup $site_dir/
+
