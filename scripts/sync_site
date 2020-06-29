@@ -8,7 +8,7 @@ usage () {
 usage:
 
    $0 check
-   $0 diff         # check and then diff
+   $0 diff          # check and then diff
    $0 sync
 
    -d depot_dir     where you should see <depot_dir>/tpsup. 
@@ -17,21 +17,16 @@ usage:
    -s site_dir      where you should see  <site_dir>/tpsup.
                     dfault to $site_dir
 
-example:
-
 EOF
 
    exit 1
 }
 
-verbose=N
-
-while getopts vs:d: o;
+while getopts s:d: o;
 do
    case "$o" in
       d) depot_dir="$OPTARG";;
       s)  site_dir="$OPTARG";;
-      v) verbose=Y;;
       *) echo "unknow switch '$o'"; usage;;
    esac
 done
