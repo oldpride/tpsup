@@ -57,8 +57,8 @@ fi
 # --exclude='*[.]site' to skips site-specific files
 # --exclude='[.]git*'  to skip .git/ and .gitignore
 # -i                   to print item to be changed, ie, --itemize-changes
-# --out-format="%f"    to print out the file/dir name only for -i
-files=`(set -x;rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ --exclude='*[.]site' --out-format="%f" $depot_dir/tpsup $site_dir/)`
+# --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
+files=`(set -x;rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='.sw*' --exclude='[.]idea' --exclude=__pychche__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/)`
 
 echo "$files"
 
