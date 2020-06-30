@@ -28,24 +28,12 @@ usage:
    
 description:
 
-   Run autosys jobs listed in a file, joblist.txt. Within the file, one job per line.
-   The file allows comments (#) and blank lines.
+   Watch autosys jobs listed in a file, joblist.txt, to complete. 
 
-   Before running autosys jobs. The script will check them first:
-      validate job's existence.
-      print the current job status.
-      spot jobs in OH (on-hold), OI (on-ice), or RU (running).
-      spot jobs that have downstream dependency. 
-      spot jobs that will trigger another job in the same list.
-
-   After the check, the script will prompt for whether to proceed to run. (use -f to skip
-   the prompt.)
+   Within the file, one job per line. The file allows comments (#) and blank lines.
 
    The running job is checked in $interval seconds; if not done after, $interval increases
    10 seconds for the next round, all the way up to $interval_limit seconds.
-
-   If the script aborted halfway, you can comment out the jobs already ran and start
-   again.
 
    -x  ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
 
