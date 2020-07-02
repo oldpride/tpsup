@@ -11,6 +11,10 @@ usage:
 
    -d       debug mode
 
+   added crontab
+   $ crontab -l
+   50 5 * * * /home/tian/github/tpsup/scripts/sftp_lca sftp >/tmp/sftp.log 2>&1
+
 example:
 
    $0 check
@@ -81,3 +85,5 @@ tpentry -- /usr/bin/sshpass -p tpentry{livin80}{decoded} sftp livin80@livingston
 EOF
 
 [ $? -ne 0 ] && alert "sftp failed"
+
+(set -x; ls -l $dir)
