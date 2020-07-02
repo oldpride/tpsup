@@ -1,0 +1,83 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 check
+   $0 auto
+
+   -d       debug mode
+
+example:
+
+   $0 check
+   $0 auto
+
+EOF
+   exit 1
+}
+
+debug=N
+
+while getopts d o;
+do
+   case "$o" in
+      #b) loginshell="";;
+      d) debug=Y;;
+      #f) font="-fa Monospace -fs $OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+action=$1
+
+. /home/tian/github/tpsup/profile
+
+alert () {
+   message=$1
+   #echo "$message" | tpmail -s " $prog failed" tianhua_han@yahoo.com 
+   # my ubuntu linux1 cannot send email
+   echo $message
+   echo "`date +%Y/%m/%d-%H:%M:%S` $0 $message" >> /home/tian/error.log 
+   exit 1
+}
+
+[ $debug = Y ] && set -x
+
+cd /media/sdcard/tian/LCA || alert "cd /media/sdcard failed"
+
+yyyymmdd=`date +%Y%m%d`
+
+dir=/media/sdcard/tian/LCA/$yyyymmdd
+
+if [ $action = check ]; then
+   (set -x; ls -l $dir)
+   exit 0
+elif [ $action != sftp ]; then
+   echo "unknown action='$action'"
+   usage
+fi
+
+if ! [ -d $dir ]; then
+   find /media/sdcard/tian/LCA -maxdepth 1 -mtime +100 -exec /bin/rm -fr {} \;
+   mkdir $dir
+fi
+
+cd $dir || alert "cd $dir failed"
+
+tpentry -- /usr/bin/sshpass -p tpentry{livin80}{decoded} sftp livin80@livingstonchinese.org <<EOF
+   get backup/daily/LCA2.tar.gz
+   get backup/daily/livin80_joom218.sql
+EOF
+
+[ $? -ne 0 ] && alert "sftp failed"
