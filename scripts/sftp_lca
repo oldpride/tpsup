@@ -11,10 +11,6 @@ usage:
 
    -d       debug mode
 
-   added crontab
-   $ crontab -l
-   50 5 * * * /home/tian/github/tpsup/scripts/sftp_lca sftp >/tmp/sftp.log 2>&1
-
 example:
 
    $0 check
@@ -45,24 +41,24 @@ fi
 
 action=$1
 
-. /home/tian/github/tpsup/profile
+. ~/github/tpsup/profile
 
 alert () {
    message=$1
-   #echo "$message" | tpmail -s " $prog failed" tianhua_han@yahoo.com 
+   #echo "$message" | tpmail -s " $prog failed" tech@livingstonchinese.org 
    # my ubuntu linux1 cannot send email
    echo $message
-   echo "`date +%Y/%m/%d-%H:%M:%S` $0 $message" >> /home/tian/error.log 
+   echo "`date +%Y/%m/%d-%H:%M:%S` $0 $message" >> ~/error.log 
    exit 1
 }
 
 [ $debug = Y ] && set -x
 
-cd /media/sdcard/tian/LCA || alert "cd /media/sdcard failed"
+cd /media/sdcard/LCA || alert "cd /media/sdcard failed"
 
 yyyymmdd=`date +%Y%m%d`
 
-dir=/media/sdcard/tian/LCA/$yyyymmdd
+dir=/media/sdcard/LCA/$yyyymmdd
 
 if [ $action = check ]; then
    (set -x; ls -l $dir)
@@ -73,7 +69,7 @@ elif [ $action != sftp ]; then
 fi
 
 if ! [ -d $dir ]; then
-   find /media/sdcard/tian/LCA -maxdepth 1 -mtime +100 -exec /bin/rm -fr {} \;
+   find /media/sdcard/LCA -maxdepth 1 -mtime +100 -exec /bin/rm -fr {} \;
    mkdir $dir
 fi
 

@@ -47,6 +47,10 @@ mytp () {
    cd "$TPSUP/scripts"
 }
 
+lca () {
+   cd /media/sdcard/LCA/`date +%Y%m%d` && ls -l
+}
+
 tpproxy () {
    local usage
    usage="
