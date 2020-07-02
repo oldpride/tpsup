@@ -7,14 +7,14 @@ usage () {
 usage:
 
    $0 check
-   $0 auto
+   $0 sftp
 
    -d       debug mode
 
 example:
 
    $0 check
-   $0 auto
+   $0 sftp
 
 EOF
    exit 1
@@ -75,7 +75,9 @@ fi
 
 cd $dir || alert "cd $dir failed"
 
-tpentry -- /usr/bin/sshpass -p tpentry{livin80}{decoded} sftp livin80@livingstonchinese.org <<EOF
+# after ssh-key based auth working, no need for tpentry/sshpass ... 
+# tpentry -- /usr/bin/sshpass -p tpentry{livin80}{decoded} sftp livin80@livingstonchinese.org <<EOF
+sftp livin80@livingstonchinese.org <<EOF
    get backup/daily/LCA2.tar.gz
    get backup/daily/livin80_joom218.sql
 EOF
