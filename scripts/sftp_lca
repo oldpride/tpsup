@@ -69,7 +69,7 @@ elif [ $action != sftp ]; then
 fi
 
 if ! [ -d $dir ]; then
-   find /media/sdcard/LCA -maxdepth 1 -mtime +100 -exec /bin/rm -fr {} \;
+   find /media/sdcard/LCA -maxdepth 1 -mtime +200 -exec /bin/rm -fr {} \;
    mkdir $dir
 fi
 
