@@ -27,7 +27,7 @@ if [ -f "/usr/bin/$generic" ]; then
    /usr/bin/$generic "$@"
 fi
 
-TPSUP=$(cd `dirname $0`/../../../Linux3`$scripts_dir/trimpath $scripts_dir/..`
+TPSUP=$(cd `dirname $0`/../../../Linux3`$scripts_dir/trimpath $scripts_dir/..`)
 
 ROOT=$TPSUP/Linux/Linux3
 
