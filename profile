@@ -322,12 +322,12 @@ wbar () {
    # window bar
    TERM=xterm
    export TERM
-   if [ "X$TERM" == Xxterm ]; then
+   if [[ $TERM =~ ^xterm|^vt ]]; then
       PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
    fi
 }
 
-if [ "X$TERM" = Xxterm -o "X$TERM" = "Xvt100" ]; then
+if [[ $TERM =~ ^xterm|^vt ]]; then
    PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
    export PROMPT_COMMAND
 
