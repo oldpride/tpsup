@@ -1,14 +1,52 @@
 #!/bin/bash
 
-debug=N
-if [ "X$1" = "X-debug" ]; then
-   debug=Y
-fi
+# to test,
+#    xterm.linux 
+#
+#    default try sequence
+#        native binary, ie, /usr/bin/xxx
+#        linux 3.10
+#        linux 2
+#
+# switches, must be on the front
+#    -debug
+#    -3.10       only try linux3.10 binary. skip the rest
+#    -2          only try linux2 binary.    skip the rest
+#    -trace      used only when -3.10 or -2, run strace with the binary
 
+debug=N
 trace=N
-if [ "X$1" = "X-trace" ]; then
-   trace=Y
-fi
+try_native=Y
+try_linux2=Y
+try_linux3_10=Y
+
+while :
+do
+   if [ "X$1" = "X-debug" ]; then
+      debug=Y
+      set -x
+      shift
+      continue;
+   elif [ "X$1" = "X-trace" ]; then
+      trace=Y
+      shift
+      continue;
+   elif [ "X$1" = "X-3.10" ]; then
+      try_native=N
+      try_linux3_10=Y
+      try_linux2=N
+      shift;
+      continue;
+   elif [ "X$1" = "X-2" ]; then
+      try_native=N
+      try_linux3_10=N
+      try_linux2=Y
+      shift;
+      continue;
+   else
+      break
+   fi
+done
 
 scripts_dir=`dirname $0`
 prog=`basename $0`
@@ -22,31 +60,79 @@ generic=`echo $prog|cut -d. -f1`
 # xterm.linux -----> xterm
 # xrdb.linux ------> xrdb
 
-if [ -f "/usr/bin/$generic" ]; then
-   # if localhost already installed xterm/xrdb, use it
-   /usr/bin/$generic "$@"
+if [ $try_native = Y ]; then
+   # try native
+   if [ -f "/usr/bin/$generic" ]; then
+      # if localhost already installed xterm/xrdb, use it
+      /usr/bin/$generic "$@"
+      exit $?
+   fi
 fi
 
-TPSUP=$(cd `dirname $0`/../../../Linux3`$scripts_dir/trimpath $scripts_dir/..`)
+run_os_binary () {
+   expected_os_version=$1
 
-ROOT=$TPSUP/Linux/Linux3
+   actual_os_version=`uname -a|awk '{print $3}'|cut -d. -f1,2`
+   # tian@linux1:/home/tian/github/notes$ uname -a
+   # Linux linux1 4.15.0-108-generic #109-Ubuntu SMP Fri Jun 19 11:33:10 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
 
-if [ $debug = Y ]; then
-   set -x
-   # to ldd:
-   LD_TRACE_LOADED_OBJECTS=1 $ROOT/lib64/ld-linux-x86-64.so.2 --library-path $ROOT/lib64 $ROOT/usr/bin/xterm
-   echo "
-   On RedHat/Sussex, all linked libs should be under /usr/lib64 or /lib64.
-   If you see /usr/lib or /lib, that will be wrong as these are 32-bit libs. 
-   " 
+   if [ $expected_os_version = 3.10 -o $expected_os_version = 2 ]; then
+      ld_version=2.17
+      ld_linux_x86_64_version=2
+   else 
+      echo "unsupported expected_os_version=$expected_os_version" >&2
+      exit 1
+   fi
+
+   ROOT=`cd $scripts_dir/../../../Linux/$expected_os_version && pwd -P`
+   rc=$?
+
+   if [ $rc -ne 0 ]; then
+      return
+   fi
+
+   export XFILESEARCHPATH=$ROOT/usr/share/X11/app-defaults/%N
+   export XLOCALEDIR=$ROOT/usr/share/X11/locale
+
+   if [ $actual_os_version = $expected_os_version ]; then
+      # this is a native os
+      export LD_LIBRARY_PATH=$ROOT/usr/lib64
+
+      $ROOT/usr/bin/$generic "$@"
+      rc=$?
+   else
+      #  note the ld version 
+      if [ $debug = Y ]; then
+         # this is ldd only, just to dump the lib info, not to run the $generic: xterm or xrdb.
+         LD_TRACE_LOADED_OBJECTS=1 $ROOT/lib64/ld-linux-x86-64.so.$ld_linux_x86_64_version --library-path $ROOT/lib64 $ROOT/usr/bin/$generic 
+         echo "
+         On RedHat/Sussex, all linked libs should be under /usr/lib64 or /lib64.
+         If you see /usr/lib or /lib, that will be wrong as these are 32-bit libs. 
+         " 
+      fi
+      
+      # now we will run the command
+      if [ $trace = Y ]; then
+         # to trace: (note: don not use $ROOT/usr/bin/strace)
+         strace $ROOT/lib64/ld-linux-x86-64.so.$ld_linux_x86_64_version --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+      else
+         $ROOT/lib64/ld-$ld_version.so --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+      fi
+      
+   fi
+
+   if [ $rc -eq 0 ]; then
+      # this worked. no need to try the next
+      exit $rc
+   fi
+}
+
+if [ $try_linux3_10 = Y ]; then
+   run_os_binary 3.10
 fi
 
-export XFILESEARCHPATH=$ROOT/usr/share/X11/app-defaults/%N
-export XLOCALEDIR=$ROOT/usr/share/X11/locale
-
-if [ $trace = Y ]; then
-   # to trace: (note: don not use $ROOT/usr/bin/strace)
-   strace $ROOT/lib64/ld-linux-x86-64.so.2 --library-path $ROOT/lib64 $ROOT/usr/bin/xterm "$@"
-else
-   $ROOT/lib64/ld-2.17.so --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+if [ $try_linux2 = Y ]; then
+   run_os_binary 2
 fi
+
+exit 1
