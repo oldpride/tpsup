@@ -328,20 +328,39 @@ wbar () {
 }
 
 if [[ $TERM =~ ^xterm|^vt ]]; then
-   PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
+   # we use PROMPT_COMMAND to manage title bar, it will not replace PS1.
+
+   # on GitBash/Cygwin or home linux host, we normally don't ssh. therefore, no need for 
+   # ${USER}@${HOSTNAME}
+
+   if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} = linux1 ]]; then
+      PROMPT_COMMAND='echo -ne "\033]0;${PWD}\007"'
+   else 
+      PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
+   fi 
+
    export PROMPT_COMMAND
 
    vi () {
       local file
       file="$@"
-      echo -ne "\033]0;${USER}@${HOSTNAME}: vi $@\007"
+      if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} = linux1 ]]; then
+         echo -ne "\033]0;vi $@\007"
+      else
+         echo -ne "\033]0;${USER}@${HOSTNAME}: vi $@\007"
+      fi
+
       /usr/bin/vi "$@"
    }
 
    less () {
       local file
       file="$@"
-      echo -ne "\033]0;${USER}@${HOSTNAME}: less $@\007"
+      if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} = linux1 ]]; then
+         echo -ne "\033]0;less $@\007"
+      else
+         echo -ne "\033]0;${USER}@${HOSTNAME}: less $@\007"
+      fi
       /usr/bin/less "$@"
    }
 
