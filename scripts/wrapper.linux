@@ -71,6 +71,7 @@ fi
 
 run_os_binary () {
    expected_os_version=$1
+   shift
 
    actual_os_version=`uname -a|awk '{print $3}'|cut -d. -f1,2`
    # tian@linux1:/home/tian/github/notes$ uname -a
@@ -115,10 +116,11 @@ run_os_binary () {
       if [ $trace = Y ]; then
          # to trace: (note: don not use $ROOT/usr/bin/strace)
          strace $ROOT/lib64/ld-linux-x86-64.so.$ld_linux_x86_64_version --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+         rc=$?
       else
          $ROOT/lib64/ld-$ld_version.so --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+         rc=$?
       fi
-      
    fi
 
    if [ $rc -eq 0 ]; then
@@ -128,11 +130,11 @@ run_os_binary () {
 }
 
 if [ $try_linux3_10 = Y ]; then
-   run_os_binary 3.10
+   run_os_binary 3.10 "$@"
 fi
 
 if [ $try_linux2 = Y ]; then
-   run_os_binary 2
+   run_os_binary 2 "$@"
 fi
 
 exit 1
