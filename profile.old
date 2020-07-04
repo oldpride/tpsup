@@ -171,8 +171,6 @@ else
 fi
 
 reduce () {
-   # this function takes about 2 seconds
-
    local REDUCEPATHCMD
 
    REDUCEPATHCMD="$TPSUP/scripts/reducepath"
@@ -343,20 +341,26 @@ if [[ $TERM =~ ^xterm|^vt ]]; then
 
    export PROMPT_COMMAND
 
-   local cmd
-   for cmd in vi vim less su
-   do
-      # eval'ed command looks like this
-      #    vi () { echo -ne "\033]0;${USER}@${HOSTNAME}: vi $@\007"; /usr/bin/vi "$@"; }
-
-      # set -x
+   vi () {
       if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} = linux1 ]]; then
-         eval "$cmd () { echo -ne \"\\033]0;\"               \"$cmd \$@\\007\"; /usr/bin/$cmd \"\$@\"; }"
+         echo -ne "\033]0;vi $@\007"
       else
-         eval "$cmd () { echo -ne \"\\033]0;\$USER@\$HOSTNAME: $cmd \$@\\007\"; /usr/bin/$cmd \"\$@\"; }"
+         echo -ne "\033]0;${USER}@${HOSTNAME}: vi $@\007"
       fi
-      # set +x
-   done
+
+      /usr/bin/vi "$@"
+   }
+
+   less () {
+      if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} = linux1 ]]; then
+         echo -ne "\033]0;less $@\007"
+      else
+         echo -ne "\033]0;${USER}@${HOSTNAME}: less $@\007"
+      fi
+      /usr/bin/less "$@"
+   }
+
+   # unset -f func to unset a function.
 fi
 
 # https://stackoverflow.com/questions/6920402/in-a-bash-script-how-to-run-bash-functions-defined-outside

@@ -155,7 +155,7 @@ pythonenv () {
       export PYTHONPATH="$TPSUP/python$expected_version/lib:$PYTHONPATH"
    fi
 
-   reduce
+   reduce  # this takes about 2 seconds
 
    [ $quiet = Y ] || echo PYTHONPATH=$PYTHONPATH
 
@@ -184,5 +184,5 @@ p3env () {
    pythonenv $@ 3 
 }
 
-p3env -q
+p3env -q  # this command takes about 2 seconds as it calls reduce()
 
