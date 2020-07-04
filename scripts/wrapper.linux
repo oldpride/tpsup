@@ -12,7 +12,8 @@
 #    -debug
 #    -3.10       only try linux3.10 binary. skip the rest
 #    -2          only try linux2 binary.    skip the rest
-#    -trace      used only when -3.10 or -2, run strace with the binary
+#    -trace      used only when binary version (eg linux 2) mismatch with actual version
+#                (eg, linux 3.10)
 
 debug=N
 trace=N
@@ -77,14 +78,6 @@ run_os_binary () {
    # tian@linux1:/home/tian/github/notes$ uname -a
    # Linux linux1 4.15.0-108-generic #109-Ubuntu SMP Fri Jun 19 11:33:10 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
 
-   if [ $expected_os_version = 3.10 -o $expected_os_version = 2 ]; then
-      ld_version=2.17
-      ld_linux_x86_64_version=2
-   else 
-      echo "unsupported expected_os_version=$expected_os_version" >&2
-      exit 1
-   fi
-
    ROOT=`cd $scripts_dir/../../../Linux/$expected_os_version && pwd -P`
    rc=$?
 
@@ -102,6 +95,22 @@ run_os_binary () {
       $ROOT/usr/bin/$generic "$@"
       rc=$?
    else
+      # this is not a native os, we have to play with the linkers
+
+      # we need to find the exact version under $ROOT
+      # ld_version,                 as 2.17 in  /lib64/ld-2.17.so
+      # ld_linux_x86_64_version,    as 2    in  /lib64/lib64/ld-linux-x86-64.so.2
+      if [ $expected_os_version = 3.10 ]; then
+         ld_version=2.17
+         ld_linux_x86_64_version=2
+      elif [ $expected_os_version = 2 ]; then
+         ld_version=2.12
+         ld_linux_x86_64_version=2
+      else 
+         echo "unsupported expected_os_version=$expected_os_version" >&2
+         exit 1
+      fi
+
       #  note the ld version 
       if [ $debug = Y ]; then
          # this is ldd only, just to dump the lib info, not to run the $generic: xterm or xrdb.
