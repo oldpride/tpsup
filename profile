@@ -367,11 +367,3 @@ set -o vi
 if !stty erase  2>/dev/null; then
    :
 fi  
-
-# when sync to customized site, exclude *.site files
-export PROFILE_SITE=$TPSUP/profile.site
-
-if [ -f $PROFILE_SITE ]; then
-   . $PROFILE_SITE
-fi
-
