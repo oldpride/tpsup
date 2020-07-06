@@ -145,8 +145,8 @@ pythonenv () {
    fi
 
    if [[ $UNAME =~ Cygwin ]]; then
-      # cygwin converts PYTHONPATH's /cygdrive/c/users/william/github/... 
-      # into sys.path C:/cygdrive/c/users/william/github/... 
+      # cygwin converts PYTHONPATH's /cygdrive/c/users/$USERNAME/sitedir/github/... 
+      # into sys.path C:/cygdrive/c/users/$USERNAME/sitedir/github/... 
       # therefore, we drop the front two parts: /cygdrive/c
       # Also Note: use semi-colon ; as separator
 
@@ -163,13 +163,14 @@ pythonenv () {
 
    if [[ $UNAME =~ Cygwin && $quiet = N ]]; then
       echo "On Cygwin, use relative path or windows path. eg," 
-      echo "                                               ./tpcsv.py"
-      echo "   python                                      ./tpcsv.py"
-      echo "   C:/Users/william/github/tpsup/python3/scripts/tpcsv.py"
+      echo "                                                         :w
+      ./tpcsv.py"
+      echo "   python                                                ./tpcsv.py"
+      echo "   C:/Users/$USERNAME/sitedir/github/tpsup/python3/scripts/tpcsv.py"
       echo "Absolute path doesn't work, eg"
-      echo "                                                            tpcsv.py"
-      echo "   python                                                   tpcsv.py"
-      echo "   /cygdrive/c/Users/william/github/tpsup/python3/lib/tpsup/tpcsv.py"
+      echo "                                                                      tpcsv.py"
+      echo "   python                                                             tpcsv.py"
+      echo "   /cygdrive/c/Users/$USERNAME/sitedir/github/tpsup/python3/lib/tpsup/tpcsv.py"
    fi    
 
    # export the function

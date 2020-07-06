@@ -17,6 +17,8 @@ on Linux
    #!/usr/bin/python3
    ...
    
+   tian@linux1:/home/tian/github/tpsup/python3/behave/examples/features$ behave .
+   or
    tian@linux1:/home/tian/github/tpsup/python3/behave/examples$ behave features
    Feature: Sample Snippets test # features/myFeature.feature:1
      As a developer
@@ -42,6 +44,8 @@ on windows
    C:\Users\william\github\tpsup\python3\behave\examples>where behave
    C:\Program Files\Python37\Scripts\behave.exe
    
+   C:\Users\william\github\tpsup\python3\behave\examples\features>behave .
+   or
    C:\Users\william\github\tpsup\python3\behave\examples>behave features
    
    DevTools listening on ws://127.0.0.1:65001/devtools/browser/725806c8-6a3e-4fa2-8b7d-69cfbca57378

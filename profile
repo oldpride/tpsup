@@ -37,7 +37,7 @@ else
       return
    else
       echo "You used wrong bash (check version). please exit and find a newer version instead !!!" >&2
-      echo " Or you can export BASH_SOURCE=/home/tian/github/tpsup/profile or something similar" >&2
+      echo " Or you can export BASH_SOURCE=/home/tian/sitedir/github/tpsup/profile or something similar" >&2
       return
    fi
 fi
@@ -343,7 +343,6 @@ if [[ $TERM =~ ^xterm|^vt ]]; then
 
    export PROMPT_COMMAND
 
-   local cmd
    for cmd in vi vim less su
    do
       # eval'ed command looks like this
