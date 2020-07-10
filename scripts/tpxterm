@@ -95,7 +95,7 @@ main () {
          DISPLAY_SWITCH=""
       fi
    else
-      DISPLAY_SWITCH="-display $1"
+      DISPLAY_SWITCH="-display $display"
    fi
    
    OS=`uname`
