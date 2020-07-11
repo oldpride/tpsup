@@ -1,0 +1,4 @@
+localhost
+inet6:localhost
+linux1
+inet6:linux1
