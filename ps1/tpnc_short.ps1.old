@@ -6,12 +6,11 @@ param (
     [string]$outfile = $null,
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
-Set-StrictMode -Version Latest
-if ($v) { $verbosePreference = "Continue" }
-write-verbose "verbose=$v"
-write-verbose "listener=$l"
-write-verbose "remainingArgs=$remainingArgs"
-if ($remainingArgs) { write-verbose "remainingArgs size=$($remainingArgs.count)" }
+if ($v) {
+   write-host "verbose=$v"
+   write-host "listener=$l"
+   write-host "remaining=$remainingArgs, size=$($remainingArgs.count)"
+}
 function usage {
   param([string]$message = $null)
   if ($message) { write-host $message }
@@ -50,7 +49,7 @@ catch [System.InvalidOperationException] {
    $hasConsole = $false
    Write-Host "You are likely running this script from Cygwin. In Cygwin use the perl version of tpnc is much better."
 }
-write-verbose "hasConsole = $hasConsole"
+if ($v) { write-host "hasConsole = $hasConsole" }
 function SendAndReceive {
    param ([Parameter(Mandatory = $true)]$tcpConnection = $null)
    $infile_sent = $false
@@ -76,7 +75,7 @@ function SendAndReceive {
            $size = $tcpStream.Read($buffer, 0, 1024)
            if ($size -gt 0 ) {
               $recv_total_bytes += $size
-              write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"
+              if ($v) { write-host "received $size byte(s). total $recv_total_bytes byte(s)" }
               if ($outfile) {
                  $out_stream.Write($buffer, 0, $size)
               } else {
@@ -103,7 +102,7 @@ function SendAndReceive {
              $in_buffer = new-object System.Byte[] 1024
              while($size = $in_stream.Read($in_buffer, 0, 1024)) {
                 $send_total_bytes += $size
-                Write-Verbose "read $size bytes from file and sending out. total send $send_total_bytes bytes"
+                if ($v) {Write-Host "read $size bytes from file and sending out. total send $send_total_bytes bytes"}
                 $writer.Write($in_buffer, 0, $size)
              }
              $writer.flush()
@@ -119,13 +118,12 @@ function SendAndReceive {
              if ([Console]::KeyAvailable) { $read_stdin = $true }
           } else { $read_stdin = $true }
           if ($read_stdin) {
-             Write-Host -n "hit 'enter' to receive and to send : "
-             $line = Read-Host 
+             $line = Read-Host -prompt "hit 'enter' to receive and to send"
              $line += "`n"
              $bytes = [system.Text.Encoding]::Default.GetBytes($line)
              $size = $bytes.Length
              $send_total_bytes += $size
-             Write-Verbose "sending $size byte(s). total $send_total_bytes bytes"
+             if ($v) {Write-Host "sending $size byte(s). total $send_total_bytes bytes"}
              $writer.Write($bytes) | Out-Null
              $writer.flush() | Out-Null
           }          
@@ -138,34 +136,35 @@ function SendAndReceive {
 }
 $listener_port = $l
 if ($listener_port) {
-   if ($remainingArgs -AND $remainingArgs.count -ne 0) { usage("wrong numnber of args") }
-   write-verbose "listener_port=$listener_port"
+   if ($remainingArgs.count -ne 0) { usage("wrong numnber of args") }
+   if ($v) { write-host "listener_port=$listener_port" }
    $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
    if (-not $listener) { exit 1 }
    try   { $listener.start()     }
    catch { write-host $_; exit 1 }
    write-host "listener started at port $listener_port"
    $tcpConnection = $null
-   while ($true) { 
-      if ($listener.Pending()) {
-         $tcpConnection = $listener.AcceptTcpClient()
-         break;
-      }
-      start-sleep -Milliseconds 1000
+   try {
+      $tcpConnection = $listener.AcceptTcpClient()
+   } catch {
+      write-host $_
+      exit 1
    }
    write-host "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
    $listener.stop()
    SendAndReceive($tcpConnection)
    $tcpConnection.Close()
 } else {
-   if (!$remainingArgs -OR $remainingArgs.count -ne 2) { usage("wrong numnber of args") }
+   if ($remainingArgs.count -ne 2) { usage("wrong numnber of args") }
    $remote_host,$remote_port = $remainingArgs
-   write-verbose "remote_host=$remote_host"
-   write-verbose "remote_port=$remote_port"
+   if ($v) {
+      write-host "remote_host=$remote_host"
+      write-host "remote_port=$remote_port"
+   }
    $tcpConnection = $null
    try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
    catch { Write-Host $_; exit 1 }
-   write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+   if ($v) { write-host "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)." }
    SendAndReceive($tcpConnection)
    $tcpConnection.Close()
 }
