@@ -44,7 +44,7 @@ do
    #(set -x; git status)
    #echo ""
    #(set -x; git fetch --dry-run)
-   fetch=$(git fetch --dry-run)
+   fetch=$(git fetch --dry-run 2>&1)
    if [ -n "$fetch" ]; then
       (set -x; git fetch --dry-run)
       if [ $check_only = N ]; then
