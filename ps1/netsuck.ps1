@@ -15,12 +15,18 @@ Usage:
 "
    exit 1
 }
-if ($remainingArgs.count -ne 2) { usage("wrong numnber of args") }
+if (!$remainingArgs -or $remainingArgs.count -ne 2) { usage("wrong numnber of args") }
 $host1,$port1 = $remainingArgs
 $tcpConn = $null
 try {$tcpConn=New-Object System.Net.Sockets.TcpClient($host1, $port1)} catch {Write-Host $_; exit 1}
 $out_stream = $null
-if ($outfile) {try {$out_stream=[System.IO.File]::Create($outfile)} catch {Write-Host $_; exit 1}}
+if ($outfile) {
+   if ( ! ($outfile -match '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]')) {
+      $outfile="$pwd\$outfile"
+   }
+   Write-host "outfile=$outfile"
+   try {$out_stream=[System.IO.File]::Create($outfile)} catch {Write-Host $_; exit 1}
+}
 $tcpStream = $tcpConn.GetStream()
 $reader = New-Object System.IO.BinaryReader($tcpStream)
 $buffer = new-object System.Byte[] 1024
