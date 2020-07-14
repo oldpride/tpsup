@@ -1,0 +1,14 @@
+#!/bin/bash
+
+. $TPSUP/profile
+
+for cmd in tpscripts kdbnotes mynotes mycpp myjoomla mykivy myjava mysite
+do 
+   echo ""
+   echo "------ $cmd -------"
+   echo ""
+   $cmd 2>/dev/null || continue
+   (set -x; git status)
+   echo ""
+   (set -x; git fetch --dry-run)
+done

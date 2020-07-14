@@ -1,5 +1,23 @@
 #!/bin/bash
 
+check_only=N
+
+while getopts n: o;
+do
+   case "$o" in
+      #d) depot_dir="$OPTARG";;
+      n) check_only=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
 . $TPSUP/profile
 
 for cmd in tpscripts kdbnotes mynotes mycpp myjoomla mykivy myjava mysite
@@ -8,7 +26,29 @@ do
    echo "------ $cmd -------"
    echo ""
    $cmd 2>/dev/null || continue
-   (set -x; git status)
-   echo ""
-   (set -x; git fetch --dry-run)
+   #(set -x; git status)
+   #echo ""
+   #(set -x; git fetch --dry-run)
+   fetch=$(git fetch --dry-run)
+   if [ -n "$fetch" ]; then
+      (set -x; git fetch --dry-run)
+      if [ $check_only = N ]; then
+         echo "git pull? Y|N ? [N]"
+         read answer
+
+         if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+            echo "Answer is "$answer". Therefore, skipped $f."
+	 else
+	    git pull       
+         fi
+      fi
+   fi
+
+   status=$(git status --porcelain)
+   if [ -n "$status" ]; then
+      (set -x; git status)
+      if [ $check_only = N ]; then
+	 gitpush all    
+      fi
+   fi
 done
