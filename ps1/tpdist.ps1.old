@@ -16,8 +16,7 @@
     [string]$denyhost                            = $null,
     [string]$denyfile                            = $null,
     [Alias("enc")][string]$encrypt_key           = $null,
-    #[Parameter(Mandatory = $true, position=0)][string]$role,
-    [Parameter(position=0)][string]$role = "unknown", 
+    [Parameter(Mandatory = $true, position=0)][string]$role = "unknown",  
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
@@ -179,7 +178,7 @@ Examples:
   as a client
      tpdist.ps1 client localhost 5555 /cygdrive/c/Users/william/github/tpsup/ps1 tmp 
 
-     tpdist.ps1 client localhost 5555 'C:/users/william/sitebase/github/tpsup/ps1' 'C:/users/william/sitebase/github/tpsup/kdb' tmp
+     tpdist.ps1 client localhost 5555 'C:/users/william/github/tpsup/ps1' 'C:/users/william/github/tpsup/kdb' /tmp
 
 "
    exit 1

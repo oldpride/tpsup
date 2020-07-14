@@ -94,6 +94,23 @@ catch [System.InvalidOperationException] {
 
 write-verbose "hasConsole = $hasConsole"
 
+$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]'
+
+if ($outfile) {
+   if ( ! ($outfile -match $abs_pattern) ) {
+      $outfile="$pwd\$outfile"
+   }
+   Write-host "outfile=$outfile"
+}
+
+if ($infile) {
+   if ( ! ($infile -match $abs_pattern) ) {
+      $infile="$pwd\$infile"
+   }
+   Write-host "infile=$infile"
+}
+
+
 function SendAndReceive {
    param ([Parameter(Mandatory = $true)]$tcpConnection = $null)
 
@@ -101,7 +118,7 @@ function SendAndReceive {
    $infile_wait_maxloop = 5
    $infile_wait_already = 0
 
-   $out_stream = $null
+   [System.IO.FileStream] $out_stream = $null
    if ($outfile) {
       try   { 
          # cannot use OpenWrite, because it cannot handle existing file correctly
@@ -187,6 +204,7 @@ function SendAndReceive {
        if ($infile) {
           if (-Not $infile_sent) {
              $in_stream = $null
+
              if ($infile) {
                 try   { $in_stream = [System.IO.File]::OpenRead($infile) }
                 catch { Write-Host $_; exit 1 } 
@@ -247,6 +265,10 @@ function SendAndReceive {
    $reader.Close()
    $writer.Close()
 
+   if ($outfile) {
+      $out_stream.Close();
+   }
+
    return
 }
 
@@ -268,6 +290,8 @@ if ($listener_port) {
    if (-not $listener) {
       exit 1
    }
+
+   $listener.Server.SetSocketOption("Socket", "ReuseAddress", 1)
    
    try   { $listener.start()     }
    catch { write-host $_; exit 1 }
