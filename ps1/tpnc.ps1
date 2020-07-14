@@ -266,6 +266,9 @@ function SendAndReceive {
    $writer.Close()
 
    if ($outfile) {
+      # without this, 'dir' will show 0 size on outfile and 'type' command cannot open
+      # out file for about 1 minute after command exits.
+      # 'type <outfile>' will give "device busy" error.
       $out_stream.Close();
    }
 
