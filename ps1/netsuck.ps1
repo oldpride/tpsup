@@ -10,21 +10,17 @@ function usage {
   write-host "
 Usage:
   powershell -ExecutionPolicy Bypass -File ./netsuck.ps1 remote_host remote_port
-
   As a client, pull in data from a remote server 
-
   -outfile path       output to a file. default to stdout.
 "
    exit 1
 }
 if ($remainingArgs.count -ne 2) { usage("wrong numnber of args") }
 $host1,$port1 = $remainingArgs
-
 $tcpConn = $null
 try {$tcpConn=New-Object System.Net.Sockets.TcpClient($host1, $port1)} catch {Write-Host $_; exit 1}
 $out_stream = $null
 if ($outfile) {try {$out_stream=[System.IO.File]::Create($outfile)} catch {Write-Host $_; exit 1}}
-
 $tcpStream = $tcpConn.GetStream()
 $reader = New-Object System.IO.BinaryReader($tcpStream)
 $buffer = new-object System.Byte[] 1024
