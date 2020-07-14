@@ -59,25 +59,21 @@ echo ""
 ( set -x; git diff --cached --name-only )
 echo ""
 ( set -x; git commit $dryrun -m "$commit_message" )
-rc=$?
+echo ""
+( set -x; git diff --stat --cached origin/master )
 echo ""
 
-if [ $rc -eq 0 ]; then
-   ( set -x; git diff --stat --cached origin/master )
-   echo ""
-   
-   if [ $force = N ]; then
-      echo "Do you want to push the changes Y|N ? [N]"
-      read answer
-   
-      if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
-          echo "Answer is "$answer". Therefore, skipped $f."
-          exit 0
-      fi
+if [ $force = N ]; then
+   echo "Do you want to push the changes Y|N ? [N]"
+   read answer
+
+   if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+       echo "Answer is "$answer". Therefore, skipped $f."
+       exit 0
    fi
-   
-   echo ""
-   ( set -x; git push $dryrun )
-   echo ""
-   ( set -x; git status )
 fi
+
+echo ""
+( set -x; git push $dryrun )
+echo ""
+( set -x; git status )
