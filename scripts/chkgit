@@ -55,7 +55,7 @@ do
          if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
             echo "Answer is "$answer". Not done"
 	 else
-	    git pull       
+            (set -x; git pull)
          fi
       fi
    fi
@@ -73,8 +73,8 @@ do
          if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
             echo "Answer is "$answer". Not done"
 	 else
-            git add -A
-            git commit -m update	    
+            (set -x; git add -A)
+	    (set -x; git commit -m update)
          fi
       fi
    fi
