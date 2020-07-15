@@ -93,10 +93,8 @@ do
 	 else
             (set -x; git add -A)
 	    (set -x; git commit -m update)
-         
-    
-    
-    fi
+	    (set -x; git push)
+         fi
       fi
    fi
 done
