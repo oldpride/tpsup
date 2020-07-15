@@ -45,8 +45,26 @@ do
    #echo ""
    #(set -x; git fetch --dry-run)
    fetch=$(git fetch --dry-run 2>&1)
+   need_pull=N
    if [ -n "$fetch" ]; then
+      need_pull=Y
       (set -x; git fetch --dry-run)
+   fi
+
+   # tian@linux1:/home/tian/sitebase/github/notes$ git status --show-stash
+   # On branch master
+   # Your branch and 'origin/master' have diverged,
+   # and have 3 and 3 different commits each, respectively.
+   #   (use "git pull" to merge the remote branch into yours)
+   # 
+   # nothing to commit, working tree clean
+
+   if git status | grep 'use "git pull"' >/dev/null; then
+      need_pull=Y
+      (set -x; git status)
+   fi
+
+   if [ $need_pull = Y ]; then
       if [ $check_only = N ]; then
 	 echo ""
          echo "git pull? Y|N ? [N]"
@@ -75,7 +93,10 @@ do
 	 else
             (set -x; git add -A)
 	    (set -x; git commit -m update)
-         fi
+         
+    
+    
+    fi
       fi
    fi
 done
