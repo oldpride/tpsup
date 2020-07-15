@@ -60,8 +60,10 @@ do
    fi
 
    status=$(git status --porcelain)
-   if [ -n "$status" ]; then
+   diff=$(git diff --stat --cached origin/master)
+   if [ -n "$status" -o -n "$diff" ]; then
       (set -x; git status)
+      (set -x; git diff --stat --cached origin/master)
       if [ $check_only = N ]; then
 	 gitpush all    
       fi
