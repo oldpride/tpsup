@@ -9,6 +9,7 @@ if [[ $UNAME =~ Msys ]]; then
    export PATH=$PATH:/c/cygwin64/bin
 elif [[ $UNAME =~ Cygwin ]]; then
    export PATH=$PATH:/cygdrive/c/cygwin64/bin
+fi
 
 # can also hardcode windows path
 #'C:/cygwin64/bin/xterm' -display :0 \
