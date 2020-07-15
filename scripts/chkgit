@@ -48,11 +48,12 @@ do
    if [ -n "$fetch" ]; then
       (set -x; git fetch --dry-run)
       if [ $check_only = N ]; then
+	 echo ""
          echo "git pull? Y|N ? [N]"
          read answer
 
          if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
-            echo "Answer is "$answer". Therefore, skipped $f."
+            echo "Answer is "$answer". Not done"
 	 else
 	    git pull       
          fi
@@ -65,7 +66,16 @@ do
       (set -x; git status)
       (set -x; git diff --stat --cached origin/master)
       if [ $check_only = N ]; then
-	 gitpush all    
+	 echo ""
+         echo "git push? Y|N ? [N]"
+         read answer
+
+         if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+            echo "Answer is "$answer". Not done"
+	 else
+            git add -A
+            git commit -m update	    
+         fi
       fi
    fi
 done
