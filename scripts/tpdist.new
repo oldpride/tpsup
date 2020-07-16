@@ -219,6 +219,7 @@ my $deep = 0;
 my $quiet;
 my $reverse;
 my $print_version;
+my $onefile;
 
 GetOptions(
    'v|verbose'       => \$verbose,
@@ -242,6 +243,7 @@ GetOptions(
    'exclude=s'       => \@excludes,
    'tmpdir=s'        => \$tmpdir,
    'enc|encrypt=s'   => \$encrypt_key,
+   'onefile'         => \$onefile,
 ) || usage ("cannot parse command line: $!");
 
 if ($print_version) {
