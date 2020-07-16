@@ -154,15 +154,15 @@ Class MyTar {
          $octal = $tmpl[$f]['octal']
          #$bytes = $this._buffer[$offset, $offset + $size]
          [String] $string = [System.Text.Encoding]::ASCII.GetString($this._buffer, $offset, $size)
-         #$string = $string.TrimEnd('\0')
-         $index = $string.IndexOf('\0');
+         #$string = $string.Trim([char]0)
+         $index = $string.IndexOf([char]0);
          if ($index -ge 0) { $string = $string.Remove($index) }
          
          $length = $string.Length
 
-         $offset += $size
+         
 
-         Write-Verbose "field=$f, size=$size, octal=$octal, string=$string, length=$length"
+         Write-Verbose "field=$f, offset=$([String]::Format('0x{0:x}', $offset)), size=$size, octal=$octal, string=$string, length=$length"
 
          #continue
          if ($f -eq 'size') {
@@ -173,7 +173,9 @@ Class MyTar {
             $entry[$f] = [Convert]::ToInt64($string, 8)
          } else {
             $entry[$f] = $string
-         }        
+         }     
+         
+         $offset += $size   
       }
 
       Write-Verbose "entry = $(ConvertTo-Json($entry)))"
