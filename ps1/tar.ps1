@@ -84,34 +84,100 @@ Class MyTar {
    [Int] $_bufferSize = 4*1024*1024
    [System.Byte[]]$_buffer= $null
    [Int] $_HEAD = 512
+   [Int] $_BLOCK = 512
+   [System.Byte[]]$_endBlock = $null
+   [System.Byte[]]$_headEnd = $null
 
    MyTar([String]$file){
       $this._file = $file
       $this._buffer = new-object System.Byte[] $this._bufferSize
+      $this._endBlock = new-object System.Byte[] $this._HEAD    # tar end block is an empty block
+      $this._headEnd = new-object System.Byte[] 12   # tar HEAD end block with 12 empty bytes
    }
 
    [object []]read() {
-      $data = New-Object 'System.Collections.Generic.List[object]'
-      $buffer = $this._buffer
-      $buffersize = $this._bufferSize
+      # $data = New-Object 'System.Collections.Generic.List[object]'
+      $data = @()
       $HEAD = $this._HEAD
-      $file = $this._file
  
       $handle = $null
-      try { $handle = [System.IO.File]::OpenRead($file) } catch { Write-Host $_; exit 1 } 
+      try { $handle = [System.IO.File]::OpenRead($this._file) } catch { Write-Host $_; exit 1 } 
+
+      [bigInt] $offset = 0
 
       #Set-PsDebug -Trace 1
-      while ( $n = $handle.Read($buffer, 0, $HEAD)) {
+      while ( $n = $handle.Read($this._buffer, 0, $HEAD)) {
          Write-Verbose "read $n bytes"
 
          if ($n -ne $HEAD) {
-            $this._error = "Cannot read enough bytes from the tarfile"
+            Write-Host "Cannot read enough bytes from the tarfile: imcomplete HEAD at offset=$([String]::Format('0x{0:x}', $offset))"
             return $null
+         } 
+
+         if ($this.compare_array($this._buffer[0..511], $this._endBlock)) {
+            # a empty block means tar end
+            Write-Verbose "hit ending empty block at offset=$([String]::Format('0x{0:x}', $offset))"
+            break
+         }       
+
+         [hashtable] $entry = $this.parse_chunk()        
+         Write-Verbose "entry = $(ConvertTo-Json($entry))"
+         Write-Verbose "type = $($this.get_type($entry['type']))"
+
+         if (!$entry) {
+            Write-Host "Couldn't read HEAD chunk at offset=$([String]::Format('0x{0:x}', $offset))"
+            next
          }
 
-         [hashtable] $entry = $this.parse_chunk()
-         exit 1
+         $offset += $n
 
+         $entry_type = $this.get_type($entry['type'])
+
+         if ($entry_type -eq 'LABEL') {
+            # skip labels
+            continue
+         }
+
+         if ($entry_type -eq 'FILE' -or $entry_type -eq 'LONGLINK') {
+            $block = $this.BLOCK_SIZE($entry['size'])          
+            
+            if ( $entry['name'] -eq 'pax_global_header' -or $entry['type'] -match '^(x|g)$' ) {
+               # skip PAX header
+               $this_block = 64 * 512
+               $amt = $block
+               while ($amt -gt 0) {
+                  if ($this_block -gt $amt) {
+                     $this_block = $amt
+                  }
+
+                  $n2 = $handle.Read($this._buffer, 0, $this_block)
+                  if ($n2 -lt $this_block) {
+                     Write-Host "Read error on tarfile (missing data) at offset=$([String]::Format('0x{0:x}', $offset)). Expected $this_block vs actual $n2 "
+                     return $null
+                  }
+
+                  $offset += $this_block
+                  $amt    -= $this_block
+               }           
+            } else {
+               $this_block = 64 * 512
+               $amt = $block
+               while ($amt -gt 0) {
+                  if ($this_block -gt $amt) {
+                     $this_block = $amt
+                  }
+
+                  $n2 = $handle.Read($this._buffer, 0, $this_block)
+                  if ($n2 -lt $this_block) {
+                     Write-Host "Read error on tarfile (missing data) at offset=$([String]::Format('0x{0:x}', $offset)). Expected $this_block vs actual $n2 "
+                     return $null
+                  }
+
+                  $offset += $this_block
+                  $amt    -= $this_block
+               }
+            }
+         }
       }
    
       #Set-PsDebug -Trace 0
@@ -120,7 +186,49 @@ Class MyTar {
       return $data
    }
 
+   <#
+   [bool]compare_array([object[]]$a1, [object[]]$a2) {
+      # https://stackoverflow.com/questions/9598173/comparing-array-variables-in-powershell
+      # $areEqual = @(Compare-Object $firstFolder $secondFolder -SyncWindow 0).Length -eq 0
+      # This will return an array of differences between the two arrays or $null when the
+      # arrays are equal. More precisely, the resulting array will contain an object for
+      # each item that exists only in one array and not the other. The -SyncWindow 0 
+      # argument will make the order in which the items appear in the arrays count as a
+      # difference.
+      $areEqual = @(Compare-Object $a1 $a2 -SyncWindow 0).Length -eq 0
+      return $areEqual
+
+   }
+   #>
+
+   [bool]compare_array([byte[]]$a1, [byte[]]$a2) {
+      if ($a1.Length -ne $a2.Length ) {
+         return $false
+      }
+
+      for ($i=0; $i -lt $a1.Length; $i++) {
+         if ($a1[$i] -ne $a2[$i]) {
+            return $false
+         }
+      }
+
+      return $true
+   }
+
    [object] parse_chunk () {
+
+      ### according to the posix spec, the last 12 bytes of the header are
+      ### null bytes, to pad it to a 512 byte block. That means if these
+      ### bytes are NOT null bytes, it's a corrupt header. See:
+      ### www.koders.com/c/fidCE473AD3D9F835D690259D60AD5654591D91D5BA.aspx
+      ### line 111
+      # todo: optimize the code
+
+      if (! $this.compare_array($this._buffer[-12..-1], $this._headEnd)) {
+         Write-Host  "Invalid header block, ending 12 bytes should be empty \\0"
+         return $null
+      } 
+
       # https://powershellexplained.com/2016-11-06-powershell-hashtable-everything-you-wanted-to-know-about/
       # fancy hashtable
 
@@ -154,13 +262,11 @@ Class MyTar {
          $octal = $tmpl[$f]['octal']
          #$bytes = $this._buffer[$offset, $offset + $size]
          [String] $string = [System.Text.Encoding]::ASCII.GetString($this._buffer, $offset, $size)
-         #$string = $string.Trim([char]0)
+         #$string = $string.Trim([char]0) # this only trims the ending zeros
          $index = $string.IndexOf([char]0);
          if ($index -ge 0) { $string = $string.Remove($index) }
          
-         $length = $string.Length
-
-         
+         $length = $string.Length   
 
          Write-Verbose "field=$f, offset=$([String]::Format('0x{0:x}', $offset)), size=$size, octal=$octal, string=$string, length=$length"
 
@@ -178,12 +284,61 @@ Class MyTar {
          $offset += $size   
       }
 
-      Write-Verbose "entry = $(ConvertTo-Json($entry)))"
-
       return $entry
    }
 
+   [string] get_type ([string] $char) {
+      [hashtable] $type_by_char = @{
+         "0"="FILE"
+         "1"="HARDLINK"
+         "2"="SYMLINK"
+         "3"="CHARDEV"
+         "4"="BLOCKDEV"
+         "5"="DIR"
+         "6"="FIFO"
+         "8"="SOCKET"
+         "9"="UNKNOWN"
+         "L"="LONGLINK"
+         "V"="LABEL"
+      }
 
+      if ($type_by_char.Contains($char)) {
+        return $type_by_char[$char]
+      } else {
+        return "UNKNOWN"
+      }
+   }
+
+   [string] get_typechar ([string] $type) {
+      [hashtable] $char_by_type = @{
+         "FILE"="0"
+         "HARDLINK"="1"
+         "SYMLINK"="2"
+         "CHARDEV"="3"
+         "BLOCKDEV"="4"
+         "DIR"="5"
+         "FIFO"="6"
+         "SOCKET"="8"
+         "UNKNOWN"="9"
+         "LONGLINK"="L"
+         "LABEL"="V"
+      }
+
+      if ($char_by_type.Contains($type)) {
+        return $char_by_type[$type]
+      } else {
+        return "UNKNOWN"
+      }
+   }
+
+   [Int64] BLOCK_SIZE ([Int64] $size) {
+      [Int64] $n = $size/$this._BLOCK
+      if ($size % $this._BLOCK) {
+         $n += 1
+      }
+
+      return $n*$this._BLOCK
+   }
 
 }
 
@@ -203,4 +358,5 @@ if ($file) {
 }
 $tar = [MyTar]::new($file)
 $tar.read()
+
 exit 0
