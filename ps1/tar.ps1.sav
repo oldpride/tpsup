@@ -77,13 +77,6 @@ Usage:
 # /usr/share/perl5/5.30/Archive/Tar.pm
 # /usr/share/perl5/5.30/Archive/Tar/File.pm
 
-Class TarConstant {
-   static [Int] $HEAD = 512
-   # https://www.sans.org/blog/powershell-byte-array-and-hex-functions/
-   # in Powershell, Byte and System.Byte are the same.
-   static [Byte[]]$HeadBlockEnd = 0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0
-   
-}
 
 Class Tar {
    [Byte []]$_data = $null
@@ -106,8 +99,7 @@ Class Tar {
    [object []]read() {
       # $data = New-Object 'System.Collections.Generic.List[object]'
       $data = @()
-      #$HEAD = $this._HEAD
-      $HEAD = [TarConstant]::HEAD
+      $HEAD = $this._HEAD
  
       $handle = $null
       try { $handle = [System.IO.File]::OpenRead($this._file) } catch { Write-Host $_; exit 1 } 
@@ -211,9 +203,6 @@ Class Tar {
    #>
 
    [bool]compare_array([byte[]]$a1, [byte[]]$a2) {
-      $areEqual =@(Compare-Object $a1 $a2 -SyncWindow 0).Length -eq 0
-      return $areEqual
-      <#
       if ($a1.Length -ne $a2.Length ) {
          return $false
       }
@@ -225,7 +214,6 @@ Class Tar {
       }
 
       return $true
-      #>
    }
 
    [object] parse_chunk () {
