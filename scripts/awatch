@@ -165,6 +165,7 @@ while (1) {
    print_autorep_J_header();
 
    my $info = query_jobs($opt);
+   my $failed = 0;
 
    for my $job (@jobs) {
       if ($bad_by_job->{$job}) {
@@ -172,13 +173,17 @@ while (1) {
       } else {
          print_autorep_J_job($info, $job, "", $opt);
 	 if ($info ->{$job}->{Status} =~ /^(RU|ST|AC)$/) {  
-            $need_next_round ++
+            $need_next_round ++;
+         }
+
+	 if ($info ->{$job}->{Status} =~ /^(TE|FA)$/) {  
+            $failed ++;
          }
       }
    }
 
    last if ! $need_next_round;
-   print "$need_next_round jobs not completed. $error errors so far. sleep for $sub_interval\n";
+   print "$need_next_round jobs not completed. $failed failed so far. sleep for $sub_interval\n";
    sleep $sub_interval;
    $sub_interval += 10;
    $sub_interval = $interval_limit if $sub_interval > $interval_limit;
