@@ -151,10 +151,10 @@ for my $job (@jobs) {
       next;
    }
 
-   if ($info->{$job}->{Status} =~ /^(RU|ST)$/) {
+   #if ($info->{$job}->{Status} =~ /^(RU|ST|AC)$/) {
       push @jobs_to_watch, $job;
       next;
-   }
+   #}
 }
 
 my $sub_interval = $interval;
@@ -164,11 +164,16 @@ while (1) {
 
    print_autorep_J_header();
 
+   my $info = query_jobs($opt);
+
    for my $job (@jobs) {
       if ($bad_by_job->{$job}) {
          printf get_autorep_J_format(), $job,  $bad_by_job->{$job}, "", "";
       } else {
          print_autorep_J_job($info, $job, "", $opt);
+	 if ($info ->{$job}->{Status} =~ /^(RU|ST|AC)$/) {  
+            $need_next_round = 1
+         }
       }
    }
 
