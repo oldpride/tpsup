@@ -156,6 +156,7 @@ for my $job (@jobs) {
 }
 
 my $sub_interval = $interval;
+my $failed;
 
 while (1) {
    my $need_next_round = 0;
@@ -163,7 +164,7 @@ while (1) {
    print_autorep_J_header();
 
    my $info = query_jobs($opt);
-   my $failed = 0;
+   $failed = 0;
 
    for my $job (@jobs) {
       if ($bad_by_job->{$job}) {
@@ -188,10 +189,6 @@ while (1) {
    $info = query_jobs($opt);
 }
    
-if ($error) {
-   print "ERROR: total $error errors\n";
-} else {
-   print "OK:    All good.\n";
-}
+print "ERROR: total $failed failed, $error errors\n";
 
 exit $error;
