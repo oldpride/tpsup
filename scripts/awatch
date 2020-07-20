@@ -5,7 +5,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw(get_dependency query_jobs print_autorep_J_header
+use TPSUP::AUTOSYS qw( query_jobs print_autorep_J_header
                       get_autorep_J_format autorep_J print_autorep_J_job);
 use TPSUP::UTIL    qw(get_in_fh);
 # use Carp::Always;
@@ -145,16 +145,14 @@ for my $job (@jobs) {
       next;
    }
 
-   #if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
-   #   print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
-   #   $error ++;
-   #   next;
-   #}
+   if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+      $bad_by_job->{$job} = "bad status: $info->{$job}->{Status}";
+      print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
+      $error ++;
+      next;
+   }
 
-   #if ($info->{$job}->{Status} =~ /^(RU|ST|AC)$/) {
-   #   push @jobs_to_watch, $job;
-   #   next;
-   #}
+   push @jobs_to_watch, $job;
 }
 
 my $sub_interval = $interval;
