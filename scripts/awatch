@@ -172,7 +172,7 @@ while (1) {
       } else {
          print_autorep_J_job($info, $job, "", $opt);
 	 if ($info ->{$job}->{Status} =~ /^(RU|ST|AC)$/) {  
-            $need_next_round = 1
+            $need_next_round ++
          }
       }
    }
