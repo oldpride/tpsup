@@ -145,15 +145,15 @@ for my $job (@jobs) {
       next;
    }
 
-   if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
-      print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
-      $error ++;
-      next;
-   }
+   #if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+   #   print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
+   #   $error ++;
+   #   next;
+   #}
 
    #if ($info->{$job}->{Status} =~ /^(RU|ST|AC)$/) {
-      push @jobs_to_watch, $job;
-      next;
+   #   push @jobs_to_watch, $job;
+   #   next;
    #}
 }
 
