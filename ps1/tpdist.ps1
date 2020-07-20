@@ -7,6 +7,7 @@
     [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
     [Alias("x"           )][string []] $excludes = $null, 
     [Alias("sz")][switch]$sevenZip               = $false,
+    [Alias("mytar")][switch]$mytar               = $false,
     [Int]$timeout                                = 300,   # expect will time out if pattern not matched witin this much time
     [Alias("idle")][Int]$maxidle                 = 600,   # listener will quit after this much time of idle
     [Int]$maxsize                                = -1,
@@ -71,7 +72,7 @@ $old_pwd = $pwd.ToString().Replace('\', '/');
 Write-Verbose "saved_pwd=$old_pwd"
 
 # find whether we have tar.exe or 7Zip
-if (! $sevenZip) {
+if (! $sevenZip -and !$mytar) {
    if (Get-Command tar.exe -ErrorAction SilentlyContinue) {
       Write-Verbose "we use tar.exe to tar files"
    } else {
@@ -797,6 +798,7 @@ function to_pull {
 
             Write-Host "$(get_timestamp) Expand-7Zip $tmp_tar_file $pwd"
             Expand-7Zip $tmp_tar_file $pwd
+         } elseif ($mytar) {
          } else {
             Write-Host "$(get_timestamp) tar -xf $tmp_tar_file"         
             # 1. tar -xvf $tmp_tar_file causing error because '-v'. therefore, use 2 commands instead

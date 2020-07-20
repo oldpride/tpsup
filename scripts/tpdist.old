@@ -23,8 +23,7 @@ my $prog = $0; $prog =~ s:.*/::;
 
 # we cannot copy root dir
 # root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/,
-my $root_dir_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)$';
-my $abs_path_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)';
+my $root_dir_pattern = '^[a-zA-Z]:[/]*$|^[/]+$|^[/]+cygdrive[/]+[^/]+[/]*$';
 
 my @crctab = (
    0x00000000,
@@ -128,12 +127,6 @@ Common Switches (for both server and client):
                       use this string to encrypt. client and server must use the same key
                       in the same time. default is not to encrypt
 
-   -PreserveFullPath  don't simplify full path, for example, windows network path
-   -p                    //linux1.fios-router.home/tian
-                      should be preserved as it is, not to be treated as
-                          /linux1.fios-router.home/tian
-                      noramlly we don't need this as the code is trying to sort it out
-
 Passive-side Switches: (To-be Pulled, normal Server state)
 
    -allowhost file
@@ -222,7 +215,6 @@ my $deep = 0;
 my $quiet;
 my $reverse;
 my $print_version;
-my $PreserveFullPath;
 
 GetOptions(
    'v|verbose'       => \$verbose,
@@ -246,7 +238,6 @@ GetOptions(
    'exclude=s'       => \@excludes,
    'tmpdir=s'        => \$tmpdir,
    'enc|encrypt=s'   => \$encrypt_key,
-   'p|PreserveFullPath'=> \$PreserveFullPath,
 ) || usage ("cannot parse command line: $!");
 
 if ($print_version) {
@@ -611,46 +602,40 @@ sub get_tmp_file {
 sub get_abs_path {
    my ($path) = @_;
 
-   # we have to write our own get_abs_path because the default abs_path resolves # symbolic links, which is undesirable here.  # $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";' # /home/tian/tpsup/autopath # $ perl -e 'use Cwd 'abs_path'; print abs_path("./tpsup/scripts/../autopath"), "\n";' # /home/tian/tpsup/autopath
+   # we have to write our own get_abs_path because the default abs_path resolves
+   # symbolic links, which is undesirable here.
+
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";'
+   # /home/tian/tpsup/autopath
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("./tpsup/scripts/../autopath"), "\n";'
+   # /home/tian/tpsup/autopath
    # $ perl -e 'use Cwd 'abs_path'; print abs_path(".//tpsup/scripts/../autopath/"), "\n";'
    # /home/tian/tpsup/autopath
 
    croak "path is no defined" if !$path;
 
-   if ($path !~ /$abs_path_pattern/)  {
+#   {
+#      # If the path is dir and already exists, using "cd path; pwd" to find abs is the best way.
+#      # This also fixed this problem with the network path in windows, which starts with "//".
+#      # for example
+#      #    william@tianpc://linux1.fios-router.home/tian$ tpdist client localhost 5555 test.txt .
+#      #    ...
+#      #    20200717 16:07:09 cd '//linux1.fios-router.home/tian'
+#      #    ...
+#      my $saved_pwd = getcwd(); # save current path
+#      chdir($path);
+#      if ($?==0) {
+#         my $abs = getcwd(); 
+#         chdir($saved_pwd);
+#         return $abs;
+#      }
+#   }
+
+   if ($path !~ m:^/:) {
       my $cwd = getcwd();
       $path = "$cwd/$path";
    }
    
-   {
-      # If the path is dir and already exists, using "cd path; pwd" to find abs is the best way.
-      # This also fixed this problem with the network path in windows, which starts with "//".
-      # for example
-      #    william@tianpc://linux1.fios-router.home/tian$ tpdist client localhost 5555 test.txt .
-      #    ...
-      #    20200717 16:07:09 cd '//linux1.fios-router.home/tian'
-      #    ...
-      my $saved_pwd = getcwd(); # save current path
-      if (chdir($path)) {
-         my $abs = getcwd(); 
-         chdir($saved_pwd); # restore pwd before returning
-         return $abs;
-      }
-   }
-
-   if ($PreserveFullPath) {
-      return $path;
-   }
-   # to test the Preserve switch, with vs without -p
-   #    william@tianpc://linux1.fios-router.home/tian$ tpdist -p server 5555
-   #    william@tianpc:/c/Users/william$ tpdist client localhost 5555 //linux1.fios-router.home/tian/test.txt .
-
-   my $is_network_path = 0;
-   if ($path =~ m:^//:) {
-      # eg //linux1.fios-router.home/tian
-      $is_network_path = 1;
-   }
-
    my @a1 = split /\/+/, $path;
    shift @a1; # shift away the undef before the first /
 
@@ -669,9 +654,7 @@ sub get_abs_path {
       }
    }
 
-   my $newpath = $is_network_path ? '//' : '/';
-   $newpath .= join('/', @a2);
-
+   my $newpath = '/' . join('/', @a2);
    return $newpath;
 }
 
@@ -750,7 +733,7 @@ sub build_dir_tree {
             next;
          }
 
-         if ($abs_path =~ m!$root_dir_pattern!) {
+         if ($abs_path =~ m:^/+$:) {
             if ($p ne $abs_path) {
                $tree->{$p}->{skip} = "cannot handle root dir: $p, abs=$abs_path";
             } else {   
