@@ -172,6 +172,12 @@ reduce () {
    # this function takes about 2 seconds
 
    local REDUCEPATHCMD
+   local REDUCE_PATH
+   local CMD_BY_VAR
+   local VAR
+   local VARS
+
+   REDUCE_VAR=$1
 
    REDUCEPATHCMD="$TPSUP/scripts/reducepath"
    
@@ -179,16 +185,25 @@ reduce () {
       return
    fi 
 
-   export             PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PATH"`
-   export          MANPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$MANPATH"`
-   export         PERL5LIB=`$PERL_BINARY "$REDUCEPATHCMD" -q "$PERL5LIB"`
-   export     LD_LOAD_PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$LD_LOAD_PATH"`
-   export  LD_LIBRARY_PATH=`$PERL_BINARY "$REDUCEPATHCMD" -q "$LD_LIBRARY_PATH"`
+   declare -A CMD_BY_VAR  # declare associative array
 
+   VARS="PATH MANPATH PERL5LIB LD_LOAD_PATH LD_LIBRARY_PATH PYTHONPATH" 
+   for VAR in $VARS
+   do
+      CMD_BY_VAR[$VAR]="export $VAR=\`$PERL_BINARY '$REDUCEPATHCMD' -q \"\$$VAR\"\`"
+   done
+   
    if [[ $UNAME =~ Cygwin ]]; then
-      export PYTHONPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q -d ";" "$PYTHONPATH"`
-   else   
-      export PYTHONPATH=`$PERL_BINARY "$REDUCEPATHCMD" -q        "$PYTHONPATH"`
+      CMD_BY_VAR[PYTHONPATH]="export PYTHONPATH=\`$PERL_BINARY '$REDUCEPATHCMD' -q -d ';' \"\$PYTHONPATH\"\`"
+   fi
+
+   if [ "X$REDUCE_VAR" = "X" ]; then
+      for VAR in $VARS
+      do
+          eval ${CMD_BY_VAR[$VAR]}
+      done
+   else
+          eval ${CMD_BY_VAR[$REDUCE_VAR]}
    fi
 }
 
