@@ -5,7 +5,14 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use Carp::Always;  # this is very wordy
+
+BEGIN {
+   if ( $ENV{PERL5LIB} !~ m:/cygdrive|/c/: ) {
+      # cygwin and gitbash don't have this module      
+      require Carp::Always;  # this is very wordy
+   }
+}
+
 use Archive::Tar;  # use the one under tpsup/lib/perltest. run perltestenv to set up PERL5LIB
 
 my $prog = $0; $prog =~ s:.*/::;
@@ -22,6 +29,8 @@ sub usage {
    print << "END";
 usage:
 
+   first run perltestenv to set up PERL5LIB
+
    $prog -t -v -f file.tar
    $prog -x -v -f file.tar
    
@@ -35,6 +44,8 @@ examples:
 
    $prog -t -v -f ~/sambashare/junk.tar
    $prog -x -v -f ~/sambashare/junk.tar
+
+   $prog -t -v -f //linux1/tian/junk.tar
 
 END
 
