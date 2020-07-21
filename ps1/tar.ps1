@@ -1,16 +1,19 @@
 [CmdletBinding(PositionalBinding=$false)]param (
-    [switch]$v = $false,
-    [switch]$x = $extract,
-    [switch]$t = $list,
-    [switch]$c = $create,
-    [Parameter(position=0)][string]$file = "unknown", 
+    [switch]$v = $false,   # verbose 
+    [switch]$x = $false,   # extract a tar file
+    [switch]$t = $false,   # list table of contents
+    [switch]$c = $false,   # create a tar file
+    [switch]$a = $false,   # append a tar file
+
+    [switch]$d = $false,   # debug mode. $Debug is a revserved word; therefore we cannot use it.
+    [Parameter(position=0)][string]$f = "unknown", 
     [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
 )
 
 Set-StrictMode -Version Latest
 #Set-PsDebug -Trace 1
 
-if ($v) {
+if ($d) {
    $verbosePreference = "Continue"
 }
 
@@ -42,11 +45,7 @@ $unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
 # seconds from epoc to now, ie, mtime
 # [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
 
-# we cannot copy root dir
-# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/, or with \
-# note: ` is escape for powershell, \ is escape for regex
-$root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]*$';
-$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]';
+
 
 $old_pwd = $pwd.ToString().Replace('\', '/');
 Write-Verbose "saved_pwd=$old_pwd"
@@ -63,10 +62,41 @@ function usage {
   Write-Host "
 Usage:
 
-   $prog -xvf tar_test.tar
-   $prog -cvf test.tar dir1 dir2
-   $prog -tvf tar_test.tar
+   $prog -x -v -f tar_test.tar
+   $prog -c -v -f test.tar dir1 dir2
+   $prog -t -v -f tar_test.tar
     
+   -d      debug mode
+
+Example:
+
+   # tar abs path should keep abs path
+   PS> \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -d -c -v -f \\linux1\tian\junk.tar \Users\william\testdir
+   C:\Users\william\testdir\
+   C:\Users\william\testdir\a.txt
+   C:\Users\william\testdir\dir_b\
+   C:\Users\william\testdir\dir_b\c.txt
+
+   # tar subfolder should keep subfolder
+   PS> cd \Users\william\
+   PS> \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -d -c -v -f \\linux1\tian\junk.tar testdir
+   testdir\
+   testdir\a.txt
+   testdir\dir_b\
+   testdir\dir_b\c.txt
+   testdir\link_a.txt
+   
+   # tarcurrent folder should start from items underneathk
+   PS> cd \Users\william\testedir                                              
+   PS> \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -d -c -v -f \\linux1\tian\junk.tar .
+   .\
+   .\a.txt
+   .\dir_b\
+   .\dir_b\c.txt
+
+   .                                            
+   \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -t -v -f \\linux1\tian\junk.tar .                                                                        
+
 "
    exit 1
 }
@@ -75,144 +105,36 @@ Usage:
 # /usr/share/perl5/5.30/Archive/Tar.pm
 # /usr/share/perl5/5.30/Archive/Tar/File.pm
 
-Class Tar {
+# tar command source code
+# https://github.com/Distrotech/tar/blob/distrotech-tar/src/list.c
+
+# file command source code has a tar.h
+# https://github.com/file/file/blob/master/src/tar.h
+
+Class TpTar {
    # https://www.sans.org/blog/powershell-byte-array-and-hex-functions/
    # in Powershell, Byte and System.Byte are the same.
    # this marks the end of tar file. It is an empty block.
    # As it has 512 bytes, hardcode doesn't look nice, therefore will init later
    #[Byte[]]$EndBlock = $0x0,0x0,.... repeat 512 times
    [Byte[]]$EndBlock = $null 
-   [String]$file = 'Unknown'  
-   [Byte[]]$Buffer= $null
+   [String]$tarfile = 'Unknown'  
    [Int] $HeadSize = 512
    [Int] $BlockSize = 512
-   [Int] $BufferSize = 1024*512
-   [bigInt] $offset = 0
+   [Int] $BufferSize = 10*1024*512
 
-   Tar([String]$file){
-      $this.file = $file
-      $this.Buffer = new-object System.Byte[] $this.BufferSize
-      $this.EndBlock = new-object System.Byte[] $this.BlockSize    # tar end block is an empty block
-   }
+   # seconds from epoc to now, ie, mtime
+   [DateTime] $UnixEpochDateTime
+   [System.TimeZoneInfo] $TZ
+   # we cannot copy root dir
+   # root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/, or with \
+   # note: ` is escape for powershell, \ is escape for regex
+   [String] $root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]*$';
+   [String] $abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]';
 
-   [object []]read([String]$action) {     
-      $handle = $null
-      try { $handle = [System.IO.File]::OpenRead($this.file) } catch { Write-Host $_; return $null } 
-
-      $this.offset = 0
-
-      #Set-PsDebug -Trace 1
-      while ( $n = $handle.Read($this.Buffer, 0, $this.HeadSize)) {
-         Write-Verbose "read $n bytes"
-
-         if ($n -ne $this.HeadSize) {
-            Write-Host "Cannot read enough bytes from the tarfile: imcomplete HEAD at offset=$([String]::Format('0x{0:x}', $this.offset))"
-            return $null
-         } 
-
-         $BlockEndIndex = $this.HeadSize-1
-         if ([Tar]::compare_array($this.Buffer[0..$BlockEndIndex], $this.EndBlock)) {
-            # a empty block means tar end
-            Write-Verbose "hit ending empty block at offset=$([String]::Format('0x{0:x}', $this.offset))"
-            break
-         }       
-
-         [hashtable] $entry = $this.parse_chunk()        
-         Write-Verbose "entry = $(ConvertTo-Json($entry))"
-
-         $this.offset += $n
-
-         if (!$entry) {
-            Write-Host "Couldn't read HEAD chunk at offset=$([String]::Format('0x{0:x}', $this.offset))"a
-            continue
-         }        
-
-         $entry_type = $this.get_type_desc($entry['type'])
-
-         $mode1=$null
-
-         if ($entry_type -eq 'DIR' ) {
-            $mode1="d"
-         } else {
-            $mode1="-"
-         }
-
-         Write-Host( "{0,-1}{1,-4}{2,-17}{3,-15}`n" -f $mode1, [Convert]::ToString($entry['mode'],8), 2, 1) #"$entry['uid']/$entry['gid']", 1
-
-
-
-
-
-         if ($entry_type -eq 'LABEL') {
-            # skip labels
-            continue
-         }
-
-         if ($entry_type -eq 'FILE' -or $entry_type -eq 'LONGLINK') {
-            $need_size = $this.compute_need_size($entry['size'])          
-            
-            [bool] $skip = 0
-            if ( $entry['name'] -eq 'pax_global_header' -or $entry['type'] -match '^(x|g)$' ) {
-               # skip PAX header
-               $skip = 1
-            }
-
-            $attempt_size = $this.BufferSize
-            $amount_left = $need_size
-            while ($amount_left -gt 0) {
-               if ($attempt_size -gt $amount_left) {
-                   $attempt_size = $amount_left
-               }
-
-               $n2 = $handle.Read($this.Buffer, 0, $attempt_size)
-               if ($n2 -lt $attempt_size) {
-                  Write-Host "Read error on tarfile (missing data) at offset=$([String]::Format('0x{0:x}', $this.offset)). Expected $attempt_size vs actual $n2 "
-                  return $null
-               }
-
-               $this.offset += $attempt_size
-               $amount_left -= $attempt_size
-            }                      
-         }
-      }
-   
-      #Set-PsDebug -Trace 0
-      $handle.close()
-      
-      return $null
-   }
-
-   static [bool] compare_array([byte[]]$a1, [byte[]]$a2) {
-      # https://stackoverflow.com/questions/9598173/comparing-array-variables-in-powershell
-      # $areEqual = @(Compare-Object $firstFolder $secondFolder -SyncWindow 0).Length -eq 0
-      # This will return an array of differences between the two arrays or $null when the
-      # arrays are equal. More precisely, the resulting array will contain an object for
-      # each item that exists only in one array and not the other. The -SyncWindow 0 
-      # argument will make the order in which the items appear in the arrays count as a
-      # difference.
-      $areEqual =@(Compare-Object $a1 $a2 -SyncWindow 0).Length -eq 0
-      return $areEqual
-   }
-
-   [object] parse_chunk () {
-      ### according to the posix spec, the last 12 bytes of the header are
-      ### null bytes, to pad it to a 512 byte block. That means if these
-      ### bytes are NOT null bytes, it's a corrupt header. See:
-      ### www.koders.com/c/fidCE473AD3D9F835D690259D60AD5654591D91D5BA.aspx
-      ### line 111
-      [Byte[]]$HeadBlockEnd = 0x0,0x0,0x0,0x0,
-                              0x0,0x0,0x0,0x0,
-                              0x0,0x0,0x0,0x0
-
-      if (! [Tar]::compare_array($this.Buffer[-12..-1], $HeadBlockEnd)) {
-         Write-Host  "Invalid head block starting at offset=$([String]::Format('0x{0:x}', $this.offset)). This block's ending 12 bytes should be empty \\0"
-         return $null
-      } 
-
-      # https://powershellexplained.com/2016-11-06-powershell-hashtable-everything-you-wanted-to-know-about/
-      # fancy hashtable
-
-      [hashtable] $tmpl = @{
+   # https://powershellexplained.com/2016-11-06-powershell-hashtable-everything-you-wanted-to-know-about/
+   # fancy hashtable
+   static [hashtable] $template = @{
         name        = @{ octal=0; size=100} # string
         mode        = @{ octal=1; size=8  }
         uid         = @{ octal=1; size=8  }
@@ -228,19 +150,342 @@ Class Tar {
         gname       = @{ octal=0; size=32 } # string                        
         devmajor    = @{ octal=1; size=8  } 
         devminor    = @{ octal=1; size=8  }
-        prefix      = @{ octal=0; size=155*12; numeric=0 } # 155 x 12
+        prefix      = @{ octal=0; size=155*12} # 155 x 12
+   }
+   # must in order, cannot skip
+   static [String []] $handled_fields = @('name', 'mode', 'uid', 'gid','size', 'mtime', 'chksum', 'type', 'linkname', 'magic', 'version', 'uname', 'gname')
+   
+   TpTar([String]$tarfile){
+      if ($tarfile -match $this.abs_pattern) {
+         $this.tarfile = $tarfile
+      } else {
+         $this.tarfile = "$pwd\" + $tarfile
+      }
+      
+      $this.EndBlock = new-object System.Byte[] $this.BlockSize    # tar end block is an empty block
+      $this.UnixEpochDateTime = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
+
+      $strCurrentTimeZone = (Get-WmiObject win32_timezone).StandardName
+      $this.TZ = [System.TimeZoneInfo]::FindSystemTimeZoneById($strCurrentTimeZone)
+   }
+
+   [Hashtable]read([String]$action, [hashtable]$opt = $null) {
+      [bool] $verbose = $opt.ContainsKey('verbose') -and $opt['verbose']
+      [Hashtable] $result = @{ error=0; offset=0}
+      [bigInt] $previous_offset = 0
+
+      $Buffer = new-object System.Byte[] $this.BufferSize
+
+      [String] $print_prefix = ""
+      if ($action -eq 'extract') {
+         $print_prefix = "extracting "
+      } elseif ($action -eq 'go-to-end') {
+         $print_prefix = "passed"
+      
       }
 
+      # we need to reset dir timestamp after extracted files under them.
+      # therefore, we use this hashtable to save the information and use it later
+      [hashtable] $mtimeDateTime_by_dir = @{}
+           
+      [System.IO.FileStream]$ifh = $null
+      try { $ifh = [System.IO.File]::OpenRead($this.tarfile) } catch { Write-Host $_; $result['error'] += 1; return $result } 
+
+      [Int] $skipped_blocks = 0
+      [Int] $skipped_from   = 0
+      #Set-PsDebug -Trace 1
+      while ( $n = $ifh.Read($Buffer, 0, $this.HeadSize)) {
+         Write-Verbose "read $n bytes"
+
+         if ($n -ne $this.HeadSize) {
+            Write-Host("ERROR: cannot read enough bytes from the tarfile: imcomplete HEAD at offset=0x{0:x}" -f $result['offset'])
+            $result['error'] += 1
+            return $result
+         } 
+
+         $BlockEndIndex = $this.HeadSize-1
+         if ([TpTar]::compare_array($Buffer[0..$BlockEndIndex], $this.EndBlock)) {
+            if ($skipped_blocks) {
+               Write-Verbose("skipped $skipped_blocks blocks from 0x{0:x}" -f $skipped_from)
+            }
+            # a empty block means tar end
+            Write-Verbose("found ending empty block at offset=0x{0:x}" -f $result['offset'])
+            break
+         }       
+
+         Write-Verbose("parsing head block at offset=0x{0:x}" -f $result['offset'])
+
+         [hashtable] $entry = [TpTar]::parse_head($Buffer[0..$BlockEndIndex])        
+         Write-Verbose "entry = $(ConvertTo-Json($entry))"
+
+         $previous_offset =  $result['offset']
+         $result['offset'] += $n
+       
+         if (!$entry) {
+            if (!$skipped_blocks) {
+               # alert only once then just count the skipped blocks
+               Write-Host("Error: Couldn't read HEAD block at offset=0x{0:x}. skipped" -f $previous_offset)
+               $result['error'] += 1
+               $skipped_from = $previous_offset
+            }
+            $skipped_blocks += 1
+
+            # we don't return as we may find another block readable later
+            continue
+         } else {
+            if ($skipped_blocks) {
+               # we have just skipped some blocks.
+               Write-Host("skipped total $skipped_blocks blocks from 0x{0:x}. Find a readable block at offset=0x{1:x}" -f $skipped_from, $result['offset'])
+               $skipped_blocks = 0
+            }
+         }      
+
+         $entry_type = [TpTar]::get_type_desc($entry['type'])
+
+         [DateTime] $mtimeDateTime = $this.UnixEpochDateTime.AddSeconds($entry['mtime'])
+
+         if ($verbose) {
+            $mode1=$null
+            if ($entry_type -eq 'DIR' ) {
+                $mode1="d"
+             } else {
+                $mode1="-"
+             }
+
+             $filename = $entry['name']
+             if ($entry['linkname']) {
+                $filename += " -> "
+                $filename += $entry['linkname']
+             }                   
+ 
+             $mtimeLocal = [System.TimeZoneInfo]::ConvertTimeFromUtc($mtimeDateTime, $this.TZ)
+
+             # drwxr-xr-x william/None      0 2020-07-16 08:18 testdir/
+             # -rw-r--r-- william/None     15 2020-07-16 08:16 testdir/a.txt
+             # drwxr-xr-x william/None      0 2020-07-16 08:18 testdir/dir_b/
+             # -rw-r--r-- william/None     15 2020-07-16 08:18 testdir/dir_b/c.txt
+             # lrwxrwxrwx william/None      0 2020-07-16 08:17 testdir/link_a.txt -> a.txt
+
+             Write-Host( "$print_prefix{0,-1}{1,-4} {2,-15} {3,10} {4, -17} {5}" -f 
+                         $mode1, 
+                         #[Convert]::ToString($entry['mode'],8),
+                         [TpTar]::get_string_from_mode($entry['mode']),
+                         "$($entry['uid'])/$($entry['gid'])",
+                         $entry['size'], $mtimeLocal.ToString("yyyy-MM-dd HH:mm"), 
+                         $filename
+             )
+         } else {
+             Write-Host("$print_prefix{0}" -f $entry['name'])
+         }
+
+         if ($entry_type -eq 'LABEL') {
+            # skip labels
+            Write-Verbose("skipped LABEL block at offset=0x{0:x}" -f $previous_offset)
+            continue
+         }
+
+         #if ($entry_type -eq 'FILE' -or $entry_type -eq 'LONGLINK') {
+         if ($entry['size']) {
+            # for any object with non-zero size
+            $file_size = $entry['size']
+            $need_size = $this.compute_need_size($file_size)  
+            $attempt_size = $this.BufferSize
+            $need_size_left = $need_size
+            $file_size_left = $file_size      
+            
+            [String] $skip = $null
+            if ( $entry['name'] -eq 'pax_global_header' -or $entry['type'] -match '^(x|g)$' ) {
+               # skip PAX header
+               $skip = "PAX_HEAD" 
+            }
+
+            if ( $entry_type -ne  'FILE' ) {
+               # for non-zero sized object, I only know how to handle plain FILE
+               $skip = "$entry_type " + $entry['type']
+            }
+
+            [System.IO.FileStream]$out_stream = $null
+
+            [String] $filename = $null
+            if ($entry['name'] -match $this.abs_pattern) {
+               $filename = $entry['name']
+            } else {
+               $filename = "$pwd\" + $entry['name']
+            }
+
+            if ($skip) {
+                Write-Host("skip head block at 0x{0:x} and skip content at 0x{1:x}, size=0x{2:x} ({3}). reason: {4}" -f 
+                          $previous_offset,
+                          $result['offset'], 
+                          $need_size,
+                          $need_size,
+                          $skip
+                         )
+            } elseif ($action -eq 'extract') {
+                 # create an FileStream for output
+                 Write-Verbose "write to $filename"
+                 try   { $out_stream = [System.IO.File]::Create($filename)}
+                 catch { Write-Host $_; $result['error']+=1; return $result}
+            }
+
+            while ($need_size_left -gt 0) {
+               if ($attempt_size -gt $need_size_left) {
+                   $attempt_size = $need_size_left
+               }
+
+               $n2 = $ifh.Read($Buffer, 0, $attempt_size)
+
+ 
+
+               if ($n2 -lt $attempt_size) {
+                  Write-Host("ERROR: read error on tarfile (missing data) at offset=0x{0:x}. Expected $attempt_size vs actual $n2 " -f $result['offset'])
+                  $result['error']+=1
+
+                  return $result
+               }
+
+               if (!$skip -and $action -eq 'extract') {
+                  if ($file_size_left -lt $attempt_size) {
+                     # last block of data
+                     $out_stream.Write($Buffer, 0, $file_size_left)
+                  } else {
+                     $out_stream.Write($Buffer, 0, $attempt_size)
+                  }
+               }
+
+               $previous_offset = $result['offset']
+               $result['offset'] += $attempt_size
+
+               $need_size_left -= $attempt_size
+               $file_size_left -= $attempt_size
+            }
+
+            if ($out_stream) {
+                 $out_stream.flush()
+                 $out_stream.dispose()
+            }
+
+            if ($action -eq 'extract') {
+                # update file timestamp
+                Write-Verbose "set mtime on $filename"
+                (Get-Item -Path $filename).LastWriteTimeUtc = $mtimeDateTime
+            }                
+         } elseif ($entry_type -eq 'DIR') {
+            if ($action -eq 'extract') {
+
+               [String] $dir = $null
+
+               if ($entry['name'] -match $this.abs_pattern) {
+                  $dir = $entry['name']
+               } else {
+                  $dir = "$pwd\" + $entry['name']
+               }
+
+               if ($action -eq 'extract') {
+                   if (Test-Path $dir) {
+                      Write-Verbose "dir=$dir already exists"
+                   } else {
+                      Write-Verbose "mkdir -p $dir"
+                      mkdir -p $dir
+                   }
+               }
+
+               # will set mtime on dir after all files are extracted
+               $mtimeDateTime_by_dir[$dir] = $mtimeDateTime
+            }
+         } else {
+            $result['error'] += 1
+            Write-Host("ERROR: cannot handle head block at offset=0x{0:x} type='{1}' desc='{2}' name='{3}', size=0x{4:x} ({5})" -f
+                       $previous_offset, 
+                       $entry['type'], $entry_type, $entry['name'],
+                       $entry['size'],
+                       $entry['size']
+                      )
+            if ($entry_type -eq 'SYMLINK') {
+               Write-Host("ERROR: suggest to replace symlink with a copy. {0} -> {1}" -f $entry['name'], $entry['linkname'])                        
+            }
+         }
+      }
+   
+      #Set-PsDebug -Trace 0
+      $ifh.close()
+
+      if ($action -eq 'extract') {
+          foreach ($dir in @($mtimeDateTime_by_dir.Keys|sort)){
+             $mtimeDateTime = $mtimeDateTime_by_dir[$dir]
+             Write-Verbose "set mtime on $dir"
+             (Get-Item -Path $dir).LastWriteTimeUtc = $mtimeDateTime
+          }
+      }
+
+      return $result
+   }
+
+   static [bool] compare_array([byte[]]$a1, [byte[]]$a2) {
+      # https://stackoverflow.com/questions/9598173/comparing-array-variables-in-powershell
+      # $areEqual = @(Compare-Object $firstFolder $secondFolder -SyncWindow 0).Length -eq 0
+      # This will return an array of differences between the two arrays or $null when the
+      # arrays are equal. More precisely, the resulting array will contain an object for
+      # each item that exists only in one array and not the other. The -SyncWindow 0 
+      # argument will make the order in which the items appear in the arrays count as a
+      # difference.
+      $areEqual =@(Compare-Object $a1 $a2 -SyncWindow 0).Length -eq 0
+      return $areEqual
+   }
+
+   static [String] get_string_from_mode([Int]$mode) {
+      [String] $string = ""
+      for($i=0; $i -lt 3; $i++) {
+         [String] $sub_string = ""
+         if ($mode -band 4) {
+            $sub_string += "r"
+         } else {
+            $sub_string += "-"
+         }
+
+         if ($mode -band 2) {
+            $sub_string += "w"
+         } else {
+            $sub_string += "-"
+         }
+
+         if ($mode -band 1) {
+            $sub_string += "x"
+         } else {
+            $sub_string += "-"
+         }
+
+         $string = $sub_string + $string
+         $mode = $mode -shr 3 # right shift 3 bits
+      }
+
+      return $string
+   }
+
+   static [object] parse_head ([Byte[]] $Buffer) {
+      ### according to the posix spec, the last 12 bytes of the header are
+      ### null bytes, to pad it to a 512 byte block. That means if these
+      ### bytes are NOT null bytes, it's a corrupt header. See:
+      ### www.koders.com/c/fidCE473AD3D9F835D690259D60AD5654591D91D5BA.aspx
+      ### line 111
+      [Byte[]]$HeadBlockEnd = 0x0,0x0,0x0,0x0,
+                              0x0,0x0,0x0,0x0,
+                              0x0,0x0,0x0,0x0
+
+      if (! [TpTar]::compare_array($Buffer[-12..-1], $HeadBlockEnd)) {
+         Write-Host  "Invalid head block. This block's ending 12 bytes should be empty \\0"
+         return $null
+      } 
+
       # must in order, cannot skip
-      [String []] $handled_fields = @('name', 'mode', 'uid', 'gid','size', 'mtime', 'chksum', 'type', 'linkname')
 
       [hashtable] $entry = @{}
 
       $relative_offset = 0
-      foreach ($f in $handled_fields) {
-         $size = $tmpl[$f]['size']
-         $octal = $tmpl[$f]['octal']
-         [String] $string = [System.Text.Encoding]::ASCII.GetString($this.Buffer, $relative_offset, $size)
+      foreach ($f in [TpTar]::handled_fields) {
+         $size = [TpTar]::template[$f]['size']
+         $octal = [TpTar]::template[$f]['octal']
+         [String] $string = [System.Text.Encoding]::ASCII.GetString($Buffer, $relative_offset, $size)
 
          # this only trims the ending 0x0es. 
          #$string = $string.Trim([char]0) 
@@ -251,12 +496,23 @@ Class Tar {
 
          Write-Verbose "field=$f, rel_offset=$([String]::Format('0x{0:x}', $relative_offset)), size=$size, octal=$octal, string=$string, length=$($string.Length)"
 
-         if ($f -eq 'size') {
-            # todo: should convert to bigint
-            $entry[$f] = [Convert]::ToInt64($string,8)
-         } elseif ($octal) {
-            #$string = "00000755"
-            $entry[$f] = [Convert]::ToInt64($string, 8)
+         if ( $f -eq 'name' -or $f -eq 'mode' ) {
+            if (!$string) {
+               Write-Host "bad field='$f'"
+               return $null
+            }
+         }
+
+         if ($string) {
+             if ($f -eq 'size') {
+                # todo: should convert to bigint
+                $entry[$f] = [Convert]::ToInt64($string,8)
+             } elseif ($octal) {
+                #$string = "00000755"
+                $entry[$f] = [Convert]::ToInt64($string, 8)
+             } else {
+                $entry[$f] = $string
+             }
          } else {
             $entry[$f] = $string
          }     
@@ -267,7 +523,7 @@ Class Tar {
       return $entry
    }
 
-   [string] get_type_desc ([string] $char) {
+   static [string] get_type_desc ([string] $char) {
       [hashtable] $desc_by_char = @{
          "0"="FILE"
          "1"="HARDLINK"
@@ -289,7 +545,7 @@ Class Tar {
       }
    }
 
-   [string] get_type_char ([string] $desc) {
+   static [string] get_type_char ([string] $desc) {
       [hashtable] $char_by_desc = @{
          "FILE"="0"
          "HARDLINK"="1"
@@ -318,20 +574,292 @@ Class Tar {
       }
       return $n*$this.BlockSize
    }
-}
 
+   [HashTable] init_write_block ([String]$action) {
+      [Hashtable] $ret = @{
+         error=0
+         ofh=$null
+         offset=0
+      }
 
-if ($file -eq 'unknown') {
-      usage("wrong numnber of args")
-}
+      if ($action -eq 'create') {
+         Write-Verbose("overwrite to {0}" -f $this.tarfile)
+      } elseif ($action -eq 'append') {
+         Write-Verbose "append to $this.tarfile"
+         # we need to read till before the ending block\
+         [Hashtable] $result = $this.read('go-to-end', @{})      
+         Write-Verbose ("found the end at 0x{0:x}" -f $result['offset'])
+         $ret['offset'] = $result['offset']
+      } else {
+         Write-Host "unsupported action='$action'"
+         exit 1
+      }
 
-if ($file) {
-   if ( ! ($file -match $abs_pattern) ) {
-      $file="$pwd\$file"
+      [System.IO.FileStream] $ofh = $null    
+      try {$ofh = [System.IO.File]::OpenWrite($this.tarfile)}
+      catch {Write-Host $_; exit 1}
+      $ret['ofh']    = $ofh
+
+      # https://docs.microsoft.com/en-us/dotnet/api/system.io.seekorigin?view=netcore-3.1
+      # seek origin: 0 beginning, 1 current, 2 end.
+      $expected_postion = $ret['offset']
+      $actual_position = $ofh.Seek($expected_postion, 0)
+
+      if ($actual_position -ne $expected_postion) {
+         Write-Host "failed to go to 0x{0:x}. we are at 0x{1:x}" -f $expected_postion, $actual_position
+         exit 1
+      }
+      
+      return $ret
    }
-   Write-host "file=$file"
+   
+   # https://github.com/Distrotech/tar/blob/273975bec1ff7d591d7ab8a63c08a02a285ffad3/src/list.c
+   static [String] get_abs_path ([String] $path) {
+      # https://stackoverflow.com/questions/3038337/powershell-resolve-path-that-might-not-exist
+      $myerror = $null
+      $abs_path = Resolve-Path $path -ErrorAction SilentlyContinue -ErrorVariable myerror
+      if (-not($abs_path)) {
+          $abs_path = $myerror[0].TargetObject
+       }
+
+       return $abs_path.toString()
+    }
+
+   [Int]write([String]$action, [String []]$in_paths, [hashtable]$opt = $null) {
+      [bool] $verbose = $opt.ContainsKey('verbose') -and $opt['verbose']
+      [Int] $error = 0
+     
+      Write-Verbose "in_paths = $(ConvertTo-Json($in_paths))"
+
+      [Byte []]$Buffer = new-object System.Byte[] $this.BufferSize
+      [System.IO.FileStream] $ofh = $null
+
+      [String] $saved_pwd = $pwd
+      [Int] $pwd_length = $saved_pwd.length
+
+      $file_count = 0
+      foreach ($in_path in $in_paths) {
+         [bool] $was_abs_path = $false
+         if ($in_path -match $this.abs_pattern) {
+            $was_abs_path = $true
+         }
+             
+         [String] $in_abs_path = [TpTar]::get_abs_path($in_path)
+         
+         Write-Verbose "Recursively checking $in_path, abs path is $in_abs_path, saved_pwd=$saved_pwd, length=$pwd_length"       
+         
+         [bool] $started_from_dot = $false # are we running tar -c -v -f junk.tar .
+
+         foreach ($item in @(Get-Item $in_abs_path; Get-ChildItem -Recurse $in_abs_path)) {
+            $file_count ++
+            if ($file_count % 1000 -eq 0) {
+               Write-Host "checked $file_count files"
+            }
+         
+            $fullName = $item.FullName
+
+            Write-Verbose "checking $fullName"
+
+            if (!(Test-Path -LiteralPath $fullName -ErrorAction SilentlyContinue)) {
+               Write-Host "ERROR: $fullName no access. skipped"
+               continue
+            } 
+
+            [Hashtable] $prepared = @{
+               mode = "0755"
+               uid  = "1"
+               gid  = "1"
+               chksum = "        " # must keep chksum empty because chksum calculator assumes chksum not set yet
+               linkname =''
+               magic = 'ustar'
+               version = '00'
+               uname = 'dummy'
+               gname = 'dummy'
+            }
+
+            # replace \ with / to make the tar file portable to linux
+            if ($was_abs_path) {
+               # if given full path, we use full path
+               $prepared['name'] = $item.FullName.Replace('\', '/')
+            } else {
+               # if given relative path, we use relative path
+               $prepared['name'] = $item.FullName.Substring($pwd_length).Replace('\', '/'); # remove $front from fullname
+               if ($prepared['name'] -eq '') {
+                  $prepared['name'] = './'
+                  $started_from_dot = $true
+               } elseif ($prepared['name'] -match '^/') {
+                  # this is not the abs path. it looks like an abs path now because we choped the front part, eg, /a/b -> /b
+                  if ($started_from_dot) {                    
+                     # /b -> ./b
+                     $prepared['name'] = "." + $prepared['name']
+                  } else {
+                     # /b -> b
+                     $prepared['name'] = $prepared['name'].Substring(1)
+                  }
+               }
+            }
+
+            [String] $type = $null
+
+            if ($item.LinkType) {
+               Write-Host "ERROR: $fullName is a link, we cannot handle it. skipped"
+               continue
+            } elseif ($item.PSIsContainer) {
+               $type = "DIR"              
+               $prepared['size'] = '0'
+            } else {
+               # todo: there may be other unknown file types
+               $type = "FILE"
+               $prepared['size'] = [Convert]::ToString($item.Length,8)
+            }
+
+            $prepared['type'] = [TpTar]::get_type_char($type)
+
+            $wintime = $item.lastWriteTimeUtc
+            $mtime = [Math]::Truncate(($wintime - $this.UnixEpochDateTime).TotalSeconds)
+            $prepared['mtime'] = [Convert]::ToString($mtime, 8)  # need to convert number to a octal string
+
+            # wipe out the first block in Buffer. we will build head block in buffer first.
+            [System.Buffer]::BlockCopy($this.EndBlock, 0, $Buffer, 0, $this.HeadSize)
+            
+            $relative_offset = 0   # offset in head block
+            foreach ($f in [TpTar]::handled_fields) {
+               $size  = [TpTar]::template[$f]['size']
+               $octal = [TpTar]::template[$f]['octal']
+
+               if ( -not $prepared.ContainsKey($f) ) {
+                  $prepared[$f] = ''
+               }
+               [byte []]$bytes = $null
+               if ($f -eq 'chksum') {
+                  # hard copy the placeholder for chksum
+                  $bytes = [system.Text.Encoding]::Default.GetBytes($prepared[$f])
+               } elseif ($octal -or $f -eq 'size') {
+                  # octal numbers are padded with '0' on the left. Minus 1 is end the string with 0x0
+                  $bytes = [system.Text.Encoding]::Default.GetBytes($prepared[$f].PadLeft($size-1,'0'))
+               } else {
+                  # strings don't need padding
+                  $bytes = [system.Text.Encoding]::Default.GetBytes($prepared[$f])
+               }
+               $length = $bytes.Count
+               if ($length -gt $size) {
+                   Write-Host("$f={0} size $length is greater than limit $size" -f $prepared[$f])
+                   exit 1
+               }
+
+               [System.Buffer]::BlockCopy($bytes, 0, $Buffer, $relative_offset, $length)
+               $relative_offset += $size             
+            }
+
+            # at last calculate chksum. this is to add all signed char of the head block, assuming
+            # the chksum field were all filled with 0x0 before the calculation
+            [Int64] $chksum = 0;
+            foreach ($signed_char in @([sbyte[]]$Buffer[0..511])) {
+               $chksum += $signed_char
+            }           
+            
+            [Int] $chksum_size = [TpTar]::template['chksum']['size']
+            [String] $chksum_string = [Convert]::ToString($chksum, 8).PadLeft($chksum_size-1, '0')
+            Write-Verbose "chksum=$chksum, octal string=$chksum_string"
+            [byte []]$bytes = [system.Text.Encoding]::Default.GetBytes($chksum_string)
+            $length = $bytes.Count
+            [System.Buffer]::BlockCopy($bytes, 0, $Buffer, 0x94, $length)
+      
+            # this set up the $this.out_fh and set the position
+            # we delayed top open the file at the last moment, because once we open the tar file, we
+            # could destroy the existing file.
+            if (!$ofh) {
+               [Hashtable] $result = $this.init_write_block($action)
+               $ofh = $result['ofh']
+            }
+
+            # record the head position so that we can roll back later
+            # https://docs.microsoft.com/en-us/dotnet/api/system.io.seekorigin?view=netcore-3.1
+            # seek origin: 0 beginning, 1 current, 2 end.        
+            [Int64] $saved_FileStream_postion = $ofh.Seek(0 ,1)
+
+            Write-Verbose("this head block started at 0x{0:x}" -f $saved_FileStream_postion)
+
+            # write the head block into the tar file
+            $ofh.Write($Buffer, 0, $this.HeadSize)
+
+            if ($type -eq 'FILE') {        
+               [System.IO.FileStream]$ifh = $null
+
+               try { $ifh = [System.IO.File]::OpenRead($fullname) } 
+               catch { 
+                   Write-Host $_; 
+                   Write-Host "ERROR: cannot read $fullname. skipped";
+                   Write-Verbose("restored write position in FileStream to 0x{0:x}" -f $saved_FileStream_postion)
+                   $ofh.Seek($saved_FileStream_postion ,0)
+                   $error += 1; 
+                   Continue 
+               } 
+
+               while ( $n = $ifh.Read($Buffer, 0, $this.BufferSize)) {
+                  Write-Verbose "read and write $n bytes"
+                  $ofh.Write($Buffer, 0, $n)
+
+
+                  [Int] $extra = $n % $this.BlockSize;
+                  if ( $extra -ne 0 ) {
+                      [Int] $pad_size = $this.BlockSize - $extra
+                      Write-Verbose "pad $pad_size 0x0 bytes"
+                      # EndBlock are all 0x0 bytes
+                      $n2 = $ofh.Write($this.EndBlock, 0, $pad_size)
+                  }
+               }
+            }
+
+            Write-Host $prepared['name']
+         }
+      }
+      
+      # end with two blank blocks
+      [Int64] $current_FileStream_postion = $ofh.Seek(0 ,1)
+      Write-Verbose ("writing two ending blocks at 0x{0:x}" -f $current_FileStream_postion)
+      $n3 = $ofh.Write($this.EndBlock, 0, $this.HeadSize)    
+      $n3 = $ofh.Write($this.EndBlock, 0, $this.HeadSize)
+      $ofh.Close()
+      $ofh.dispose()
+      $ofh = $null
+
+      return $error
+   }
 }
-$tar = [Tar]::new($file)
-$tar.read('list')
+
+if ($f -eq 'unknown') {
+   usage("wrong numnber of args")
+}
+
+Write-Verbose "pwd=$pwd, file=$f"
+
+$tar = [TpTar]::new($f)
+
+$opt = @{ verbose=$v }
+
+if ($t) {
+   Write-Host "list table of contents from tar file"
+   [hashtable] $result = $tar.read('list', $opt)
+   exit $result['error']
+} elseif ($x) {
+   Write-Host "extract from tar file"
+   [hashtable] $result = $tar.read('extract', $opt)
+   exit $result['error']
+} elseif ($c) {
+   Write-Host "create a tar file"
+   if (!$remainingArgs) {
+      usage("wrong numnber of args")
+   }
+   exit $tar.write('create', $remainingArgs, $opt)
+} elseif ($a) {
+   Write-Host "append to a tar file"
+   if (!$remainingArgs) {
+      usage("wrong numnber of args")
+   }
+   exit $tar.write('append', $remainingArgs, $opt)
+} else {
+   usage("missing an action switch: a, c, l, x")
+} 
 
 exit 0
