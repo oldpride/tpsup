@@ -208,9 +208,9 @@ Class TpTar {
             if ($skipped_blocks) {
                Write-Verbose("skipped $skipped_blocks blocks from 0x{0:x}" -f $skipped_from)
             }
-            # a empty block means tar end
-            Write-Verbose("found ending empty block at offset=0x{0:x}" -f $result['offset'])
-            break
+            # a empty ending block only means a previous tar ended here. doesn't mean an ending of the whole tar file
+            Write-Verbose("found previous tar's ending empty block at offset=0x{0:x}. skipped" -f $result['offset'])
+            continue
          }       
 
          Write-Verbose("parsing head block at offset=0x{0:x}" -f $result['offset'])
@@ -335,12 +335,9 @@ Class TpTar {
 
                $n2 = $ifh.Read($Buffer, 0, $attempt_size)
 
- 
-
                if ($n2 -lt $attempt_size) {
                   Write-Host("ERROR: read error on tarfile (missing data) at offset=0x{0:x}. Expected $attempt_size vs actual $n2 " -f $result['offset'])
                   $result['error']+=1
-
                   return $result
                }
 
@@ -582,34 +579,36 @@ Class TpTar {
          offset=0
       }
 
+      [System.IO.FileStream] $ofh = $null 
       if ($action -eq 'create') {
          Write-Verbose("overwrite to {0}" -f $this.tarfile)
+         try {$ofh = [System.IO.File]::Create($this.tarfile)}
+         catch {Write-Host $_; exit 1}
       } elseif ($action -eq 'append') {
          Write-Verbose "append to $this.tarfile"
          # we need to read till before the ending block\
          [Hashtable] $result = $this.read('go-to-end', @{})      
          Write-Verbose ("found the end at 0x{0:x}" -f $result['offset'])
          $ret['offset'] = $result['offset']
+
+         try {$ofh = [System.IO.File]::OpenWrite($this.tarfile)}
+         catch {Write-Host $_; exit 1}
+
+         # https://docs.microsoft.com/en-us/dotnet/api/system.io.seekorigin?view=netcore-3.1
+         # seek origin: 0 beginning, 1 current, 2 end.
+         $expected_postion = $ret['offset']
+         $actual_position = $ofh.Seek($expected_postion, 0)
+
+         if ($actual_position -ne $expected_postion) {
+            Write-Host "failed to go to 0x{0:x}. we are at 0x{1:x}" -f $expected_postion, $actual_position
+            exit 1
+         }        
       } else {
          Write-Host "unsupported action='$action'"
          exit 1
       }
-
-      [System.IO.FileStream] $ofh = $null    
-      try {$ofh = [System.IO.File]::OpenWrite($this.tarfile)}
-      catch {Write-Host $_; exit 1}
-      $ret['ofh']    = $ofh
-
-      # https://docs.microsoft.com/en-us/dotnet/api/system.io.seekorigin?view=netcore-3.1
-      # seek origin: 0 beginning, 1 current, 2 end.
-      $expected_postion = $ret['offset']
-      $actual_position = $ofh.Seek($expected_postion, 0)
-
-      if ($actual_position -ne $expected_postion) {
-         Write-Host "failed to go to 0x{0:x}. we are at 0x{1:x}" -f $expected_postion, $actual_position
-         exit 1
-      }
-      
+    
+      $ret['ofh'] = $ofh
       return $ret
    }
    
@@ -730,23 +729,27 @@ Class TpTar {
                if ( -not $prepared.ContainsKey($f) ) {
                   $prepared[$f] = ''
                }
-               [byte []]$bytes = $null
+               
+               [String] $string = $null
                if ($f -eq 'chksum') {
                   # hard copy the placeholder for chksum
-                  $bytes = [system.Text.Encoding]::Default.GetBytes($prepared[$f])
+                  $string = $prepared[$f]
                } elseif ($octal -or $f -eq 'size') {
                   # octal numbers are padded with '0' on the left. Minus 1 is end the string with 0x0
-                  $bytes = [system.Text.Encoding]::Default.GetBytes($prepared[$f].PadLeft($size-1,'0'))
+                  $string = $prepared[$f].PadLeft($size-1,'0')
                } else {
                   # strings don't need padding
-                  $bytes = [system.Text.Encoding]::Default.GetBytes($prepared[$f])
+                  $string = $prepared[$f]
                }
+
+               [byte []]$bytes = [system.Text.Encoding]::Default.GetBytes($string)
                $length = $bytes.Count
                if ($length -gt $size) {
                    Write-Host("$f={0} size $length is greater than limit $size" -f $prepared[$f])
                    exit 1
                }
 
+               Write-Verbose("rel_offset=0x{0:x} field={1}, string={2}, length={3}, " -f $relative_offset, $f, $string, $length)
                [System.Buffer]::BlockCopy($bytes, 0, $Buffer, $relative_offset, $length)
                $relative_offset += $size             
             }
@@ -760,10 +763,13 @@ Class TpTar {
             
             [Int] $chksum_size = [TpTar]::template['chksum']['size']
             [String] $chksum_string = [Convert]::ToString($chksum, 8).PadLeft($chksum_size-1, '0')
-            Write-Verbose "chksum=$chksum, octal string=$chksum_string"
+            
             [byte []]$bytes = [system.Text.Encoding]::Default.GetBytes($chksum_string)
             $length = $bytes.Count
+            Write-Verbose "rel_offset=0x94, chksum=$chksum, octal string=$chksum_string, length=$length"
             [System.Buffer]::BlockCopy($bytes, 0, $Buffer, 0x94, $length)
+            [Int] $chksum_end_index = 0x94 + $length
+            $Buffer[$chksum_end_index] = 0x0
       
             # this set up the $this.out_fh and set the position
             # we delayed top open the file at the last moment, because once we open the tar file, we
@@ -778,7 +784,7 @@ Class TpTar {
             # seek origin: 0 beginning, 1 current, 2 end.        
             [Int64] $saved_FileStream_postion = $ofh.Seek(0 ,1)
 
-            Write-Verbose("this head block started at 0x{0:x}" -f $saved_FileStream_postion)
+            Write-Verbose("the above will write to head block at 0x{0:x}" -f $saved_FileStream_postion)
 
             # write the head block into the tar file
             $ofh.Write($Buffer, 0, $this.HeadSize)
@@ -796,6 +802,7 @@ Class TpTar {
                    Continue 
                } 
 
+               Write-Verbose("start writing data block(s) at 0x{0:x}" -f $ofh.Seek(0 ,1))
                while ( $n = $ifh.Read($Buffer, 0, $this.BufferSize)) {
                   Write-Verbose "read and write $n bytes"
                   $ofh.Write($Buffer, 0, $n)
