@@ -1,56 +1,3 @@
-[CmdletBinding(PositionalBinding=$false)]param (
-    [switch]$v = $false,   # verbose 
-    [switch]$x = $false,   # extract a tar file
-    [switch]$t = $false,   # list table of contents
-    [switch]$c = $false,   # create a tar file
-    [switch]$a = $false,   # append a tar file
-
-    [switch]$d = $false,   # debug mode. $Debug is a revserved word; therefore we cannot use it.
-    [Parameter(position=0)][string]$f = "unknown", 
-    [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
-)
-
-Set-StrictMode -Version Latest
-#Set-PsDebug -Trace 1
-
-if ($d) {
-   $verbosePreference = "Continue"
-}
-
-$version = "0.0"
-Write-Verbose "version = $version"
-
-$HeadSize = 512   # tar head size
-$BufferSize = 16*1024
-$buffer = new-object System.Byte[] $BufferSize
-$encoding = new-object System.Text.AsciiEncoding
-
-$homedir = $HOME.Replace('\', '/');
-Write-Verbose "homedir = $homedir"
-
-# https://docs.microsoft.com/en-us/dotnet/api/system.io.path.gettemppath?view=netframework-4.8&tabs=windows
-# C:\Users\UserName\AppData\Local\Temp\ 
-$tmpdir = "$([System.IO.Path]::GetTempPath())\tpsup".Replace('\', '/');
-Write-Verbose "tmpdir = $tmpdir"
-
-$prog = ($PSCommandPath.Split('/\'))[-1]
-Write-Verbose "prog = $prog"
-
-$scriptdir = (Split-Path -Parent $PSCommandPath).Replace('\', '/');
-Write-Verbose "scriptdir = $scriptdir"
-
-# to get UNIX-style mtime, which seconds from epoc time.
-# https://stackoverflow.com/questions/4192971/in-powershell-how-do-i-convert-datetime-to-unix-time
-$unixEpochStart = new-object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
-# seconds from epoc to now, ie, mtime
-# [int]([DateTime]::UtcNow - $unixEpochStart).TotalSeconds
-
-
-
-$old_pwd = $pwd.ToString().Replace('\', '/');
-Write-Verbose "saved_pwd=$old_pwd"
-
-# https://www.sans.org/blog/powershell-byte-array-and-hex-functions/
 
 function usage {
   param([string]$message = $null)
@@ -840,38 +787,75 @@ Class TpTar {
    }
 }
 
-if ($f -eq 'unknown') {
-   usage("wrong numnber of args")
+function TpTar {
+  <#
+  param (
+      [Parameter(Mandatory = $true)][string]$front = $null,
+      [Parameter(Mandatory = $true)][string]$tar = $null,
+      [Parameter(Mandatory = $true)][string []]$files = $null,
+      [Parameter(Mandatory = $true)][boolean]$need_to_create_tar = $true,
+      [hashtable]$opt = $null
+   )
+[CmdletBinding(PositionalBinding=$false)]
+#>
+    param (
+        [switch]$v = $false,   # verbose 
+        [switch]$x = $false,   # extract a tar file
+        [switch]$t = $false,   # list table of contents
+        [switch]$c = $false,   # create a tar file
+        [switch]$a = $false,   # append a tar file
+        [switch]$d = $false,   # debug mode. $Debug is a revserved word; therefore we cannot use it.
+        [Parameter(position=0)][string]$f = "unknown", 
+        [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
+    )
+
+    if ($f -eq 'unknown') {
+       usage("wrong numnber of args")
+    }
+
+    Set-StrictMode -Version Latest
+    #Set-PsDebug -Trace 1
+
+    if ($d) {
+       $verbosePreference = "Continue"
+    }
+
+    $version = "0.0"
+    Write-Verbose "version = $version"
+
+    Write-Verbose "pwd=$pwd, file=$f"
+
+    $tar = [TpTar]::new($f)
+
+    $opt = @{ verbose=$v }
+
+    if ($t) {
+       Write-Host "list table of contents from tar file"
+       [hashtable] $result = $tar.read('list', $opt)
+       exit $result['error']
+    } elseif ($x) {
+       Write-Host "extract from tar file"
+       [hashtable] $result = $tar.read('extract', $opt)
+       exit $result['error']
+    } elseif ($c) {
+       Write-Host "create a tar file"
+       if (!$remainingArgs) {
+          usage("wrong numnber of args")
+       }
+       exit $tar.write('create', $remainingArgs, $opt)
+    } elseif ($a) {
+       Write-Host "append to a tar file"
+       if (!$remainingArgs) {
+          usage("wrong numnber of args")
+       }
+       exit $tar.write('append', $remainingArgs, $opt)
+    } else {
+       usage("missing an action switch: a, c, l, x")
+    } 
+
+    # don't run exit. this will exit the calling shell
+    # exit 0
+    return
 }
 
-Write-Verbose "pwd=$pwd, file=$f"
-
-$tar = [TpTar]::new($f)
-
-$opt = @{ verbose=$v }
-
-if ($t) {
-   Write-Host "list table of contents from tar file"
-   [hashtable] $result = $tar.read('list', $opt)
-   exit $result['error']
-} elseif ($x) {
-   Write-Host "extract from tar file"
-   [hashtable] $result = $tar.read('extract', $opt)
-   exit $result['error']
-} elseif ($c) {
-   Write-Host "create a tar file"
-   if (!$remainingArgs) {
-      usage("wrong numnber of args")
-   }
-   exit $tar.write('create', $remainingArgs, $opt)
-} elseif ($a) {
-   Write-Host "append to a tar file"
-   if (!$remainingArgs) {
-      usage("wrong numnber of args")
-   }
-   exit $tar.write('append', $remainingArgs, $opt)
-} else {
-   usage("missing an action switch: a, c, l, x")
-} 
-
-exit 0
+Export-ModuleMember -Function TpTar
