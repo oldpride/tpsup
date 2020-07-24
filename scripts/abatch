@@ -8,6 +8,7 @@ use Carp;
 use TPSUP::AUTOSYS qw(get_dependency query_jobs print_autorep_J_header
                       get_autorep_J_format autorep_J);
 use TPSUP::UTIL    qw(get_in_fh);
+use POSIX qw(strftime);
 # use Carp::Always;
 
 my $prog = $0; $prog =~ s:.*/::;
