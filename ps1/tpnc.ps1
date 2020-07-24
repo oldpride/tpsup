@@ -7,38 +7,38 @@
    tpnc.ps1 [-remote_host] <string> [-remote_port] <string> [-v] [<CommonParameters>]
 #>
 
-[CmdletBinding(PositionalBinding=$false)]
+[CmdletBinding(PositionalBinding = $false)]
 
-param (
+param(
     [switch]$v = $false,
     [string]$l = $null,
-    [string]$infile  = $null,
+    [string]$infile = $null,
     [string]$outfile = $null,
-    [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
+    [Parameter(ValueFromRemainingArguments = $true)] $remainingArgs = $null
 )
 
 Set-StrictMode -Version Latest
 #Set-PsDebug -Trace 1
 
 if ($v) {
-   $verbosePreference = "Continue"
-}   
+    $verbosePreference = "Continue"
+}
 
-write-verbose "verbose=$v"
-write-verbose "listener=$l"
-write-verbose "remainingArgs=$remainingArgs"
+Write-Verbose "verbose=$v"
+Write-Verbose "listener=$l"
+Write-Verbose "remainingArgs=$remainingArgs"
 if ($remainingArgs) {
-   write-verbose "remainingArgs size=$($remainingArgs.count)"
-}   
+    Write-Verbose "remainingArgs size=$($remainingArgs.count)"
+}
 
 function usage {
-  param([string]$message = $null)
+    param([string]$message = $null)
 
-  if ($message) {
-     write-host $message
-  }
+    if ($message) {
+        Write-Host $message
+    }
 
-  write-host "
+    Write-Host "
 Usage:
 
   Netcat in powershell
@@ -80,81 +80,81 @@ Examples:
 
 "
 
-   exit 1
+    exit 1
 }
 
 $hasConsole = $true
-try { 
-   [Console]::KeyAvailable | Out-null
+try {
+    [Console]::KeyAvailable | Out-Null
 }
-catch [System.InvalidOperationException] {
-   $hasConsole = $false
-   Write-Host "You are likely running this script from Cygwin. In Cygwin use the perl version of tpnc is much better."
+catch [System.InvalidOperationException]{
+    $hasConsole = $false
+    Write-Host "You are likely running this script from Cygwin. In Cygwin use the perl version of tpnc is much better."
 }
 
-write-verbose "hasConsole = $hasConsole"
+Write-Verbose "hasConsole = $hasConsole"
 
 $abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]'
 
 if ($outfile) {
-   if ( ! ($outfile -match $abs_pattern) ) {
-      $outfile="$pwd\$outfile"
-   }
-   Write-host "outfile=$outfile"
+    if (!($outfile -match $abs_pattern)) {
+        $outfile = "$pwd\$outfile"
+    }
+    Write-Host "outfile=$outfile"
 }
 
 if ($infile) {
-   if ( ! ($infile -match $abs_pattern) ) {
-      $infile="$pwd\$infile"
-   }
-   Write-host "infile=$infile"
+    if (!($infile -match $abs_pattern)) {
+        $infile = "$pwd\$infile"
+    }
+    Write-Host "infile=$infile"
 }
 
 
 function SendAndReceive {
-   param ([Parameter(Mandatory = $true)]$tcpConnection = $null)
+    param([Parameter(Mandatory = $true)] $tcpConnection = $null)
 
-   $infile_sent = $false
-   $infile_wait_maxloop = 5
-   $infile_wait_already = 0
+    $infile_sent = $false
+    $infile_wait_maxloop = 5
+    $infile_wait_already = 0
 
-   [System.IO.FileStream] $out_stream = $null
-   if ($outfile) {
-      try   { 
-         # cannot use OpenWrite, because it cannot handle existing file correctly
-         #   $out_stream = [System.IO.File]::OpenWrite($outfile)
-         #
-         # " 
-         #   If you overwrite a longer string (such as "This is a test of the OpenWrite method") with
-         #   a shorter string (such as "Second run"), the file will contain a mix of the strings
-         #   ("Second runtest of the OpenWrite method").
-         # "
-         #$out_stream = [System.IO.File]::Open($outfile, FileMode.Create)
-         $out_stream = [System.IO.File]::Create($outfile)
-      } catch {
-         Write-Host $_; exit 1
-      } 
-   }
+    [System.IO.FileStream]$out_stream = $null
+    if ($outfile) {
+        try {
+            # cannot use OpenWrite, because it cannot handle existing file correctly
+            #   $out_stream = [System.IO.File]::OpenWrite($outfile)
+            #
+            # " 
+            #   If you overwrite a longer string (such as "This is a test of the OpenWrite method") with
+            #   a shorter string (such as "Second run"), the file will contain a mix of the strings
+            #   ("Second runtest of the OpenWrite method").
+            # "
+            #$out_stream = [System.IO.File]::Open($outfile, FileMode.Create)
+            $out_stream = [System.IO.File]::Create($outfile)
+        } catch {
+            Write-Host $_; exit 1
+        }
+    }
 
-   $tcpStream = $tcpConnection.GetStream()
+    $tcpStream = $tcpConnection.GetStream()
 
-   # to transfer binary files, we have to use BinaryReader/BinaryWriter
-   # https://stackoverflow.com/questions/10353913/streamreader-vs-binaryreader.
-   # StreamReader/StreamWriter only works binary representation of text.
-   #   $reader = New-Object System.IO.StreamReader($tcpStream)
-   #   $writer = New-Object System.IO.StreamWriter($tcpStream)
-   #   $writer.AutoFlush = $true
+    # to transfer binary files, we have to use BinaryReader/BinaryWriter
+    # https://stackoverflow.com/questions/10353913/streamreader-vs-binaryreader.
+    # StreamReader/StreamWriter only works binary representation of text.
+    #   $reader = New-Object System.IO.StreamReader($tcpStream)
+    #   $writer = New-Object System.IO.StreamWriter($tcpStream)
+    #   $writer.AutoFlush = $true
 
-   $reader = New-Object System.IO.BinaryReader($tcpStream)
-   $writer = New-Object System.IO.BinaryWriter($tcpStream)
+    $reader = New-Object System.IO.BinaryReader ($tcpStream)
+    $writer = New-Object System.IO.BinaryWriter ($tcpStream)
 
-   $buffer = new-object System.Byte[] 1024
-   $encoding = new-object System.Text.AsciiEncoding 
+    $buffer = New-Object System.Byte[] 1024
+    $encoding = New-Object System.Text.AsciiEncoding
 
-   $recv_total_bytes = 0
-   $send_total_bytes = 0
+    $recv_total_bytes = 0
+    $send_total_bytes = 0
 
-   <#
+    <#
      TcpClient.Connected isn't really useful
 
      The Connected property gets the connection state of the Client socket as of the last I/O operation.
@@ -168,178 +168,178 @@ function SendAndReceive {
      and gracefully handle failed transmissions
    #>
 
-   while ($tcpConnection.Connected) {
-       # empty input queue first
-       while ($tcpStream.DataAvailable)
-       {
-           $size = 0
-           $size = $tcpStream.Read($buffer, 0, 1024)
+    while ($tcpConnection.Connected) {
+        # empty input queue first
+        while ($tcpStream.DataAvailable)
+        {
+            $size = 0
+            $size = $tcpStream.Read($buffer,0,1024)
 
-           if ($size -gt 0 ) {
-              $recv_total_bytes += $size
+            if ($size -gt 0) {
+                $recv_total_bytes += $size
 
-              write-verbose "received $size byte(s). total $recv_total_bytes byte(s)"
+                Write-Verbose "received $size byte(s). total $recv_total_bytes byte(s)"
 
-              if ($outfile) {
-                 $out_stream.Write($buffer, 0, $size)
-              } else {
-                 $text = $encoding.GetString($buffer, 0, $size)   
-                 write-host -n $text
-              }
-           } else {
-              # this never worked.
-              write-host "first time happend. remote closed connection"
-              exit 0
-           }
-       }
-   
-       # check whether network connection is still connected
-       # https://learn-powershell.net/2015/03/29/checking-for-disconnected-connections-with-tcplistener-using-powershell/
-       if ( ($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -AND
-            $tcpConnection.Client.Available -eq 0)) {
-          write-host "remote disconnected"
-          break
-       }
+                if ($outfile) {
+                    $out_stream.Write($buffer,0,$size)
+                } else {
+                    $text = $encoding.GetString($buffer,0,$size)
+                    Write-Host -n $text
+                }
+            } else {
+                # this never worked.
+                Write-Host "first time happend. remote closed connection"
+                exit 0
+            }
+        }
 
-       if ($infile) {
-          if (-Not $infile_sent) {
-             $in_stream = $null
+        # check whether network connection is still connected
+        # https://learn-powershell.net/2015/03/29/checking-for-disconnected-connections-with-tcplistener-using-powershell/
+        if (($tcpConnection.Client.Poll(1,[System.Net.Sockets.SelectMode]::SelectRead) -and
+                $tcpConnection.Client.Available -eq 0)) {
+            Write-Host "remote disconnected"
+            break
+        }
 
-             if ($infile) {
-                try   { $in_stream = [System.IO.File]::OpenRead($infile) }
-                catch { Write-Host $_; exit 1 } 
-             }
+        if ($infile) {
+            if (-not $infile_sent) {
+                $in_stream = $null
 
-             $in_buffer = new-object System.Byte[] 1024
+                if ($infile) {
+                    try { $in_stream = [System.IO.File]::OpenRead($infile) }
+                    catch { Write-Host $_; exit 1 }
+                }
 
-             while($size = $in_stream.Read($in_buffer, 0, 1024)) {
+                $in_buffer = New-Object System.Byte[] 1024
+
+                while ($size = $in_stream.Read($in_buffer,0,1024)) {
+                    $send_total_bytes += $size
+                    Write-Verbose "read $size bytes from file and sending out. total send $send_total_bytes bytes"
+                    $writer.Write($in_buffer,0,$size)
+                }
+                $writer.Flush()
+
+                $infile_sent = $true
+            } else {
+                # wait a little bit in case the remote wants to send reply
+                if ($infile_wait_already -ge $infile_wait_maxloop) {
+                    break
+                } else {
+                    $infile_wait_already++
+                }
+            }
+        } else {
+            $read_stdin = $false
+
+            if ($hasConsole) {
+                # https://powershell.one/tricks/input-devices/detect-key-press
+                if ([Console]::KeyAvailable) {
+                    $read_stdin = $true
+                }
+            } else {
+                $read_stdin = $true
+            }
+
+            if ($read_stdin) {
+                # -prompt doesn't work in Cygwin
+                # $line = Read-Host -prompt "hit 'enter' to receive and to send"
+                Write-Host -n "hit 'enter' to receive and to send : "
+                $line = Read-Host
+                $line += "`n"
+
+                # convert text to bytes before sending over
+                $bytes = [System.Text.Encoding]::Default.GetBytes($line)
+                $size = $bytes.Length
+
                 $send_total_bytes += $size
-                Write-Verbose "read $size bytes from file and sending out. total send $send_total_bytes bytes"
-                $writer.Write($in_buffer, 0, $size)
-             }
-             $writer.flush()
+                Write-Verbose "sending $size byte(s). total $send_total_bytes bytes"
 
-             $infile_sent = $true
-          } else {
-             # wait a little bit in case the remote wants to send reply
-             if ($infile_wait_already -ge $infile_wait_maxloop) {
-                break
-             } else {
-                $infile_wait_already ++
-             }
-          }
-       } else {
-          $read_stdin = $false
+                $writer.Write($bytes) | Out-Null
+                $writer.Flush() | Out-Null
+            }
+        }
 
-          if ($hasConsole) {
-             # https://powershell.one/tricks/input-devices/detect-key-press
-             if ([Console]::KeyAvailable) {
-                 $read_stdin = $true
-             }
-          } else {
-             $read_stdin = $true
-          } 
+        Start-Sleep -Milliseconds 500
+    }
 
-          if ($read_stdin) {
-             # -prompt doesn't work in Cygwin
-             # $line = Read-Host -prompt "hit 'enter' to receive and to send"
-             Write-Host -n "hit 'enter' to receive and to send : "
-             $line = Read-Host 
-             $line += "`n"
-             
-             # convert text to bytes before sending over
-             $bytes = [system.Text.Encoding]::Default.GetBytes($line)
-             $size = $bytes.Length
+    $reader.close()
+    $writer.close()
 
-             $send_total_bytes += $size
-             Write-Verbose "sending $size byte(s). total $send_total_bytes bytes"
+    if ($outfile) {
+        # without this, 'dir' will show 0 size on outfile and 'type' command cannot open
+        # out file for about 1 minute after command exits.
+        # 'type <outfile>' will give "device busy" error.
+        $out_stream.close();
+    }
 
-             $writer.Write($bytes) | Out-Null
-             $writer.flush() | Out-Null
-          }          
-       }
-   
-       start-sleep -Milliseconds 500
-   }
-
-   $reader.Close()
-   $writer.Close()
-
-   if ($outfile) {
-      # without this, 'dir' will show 0 size on outfile and 'type' command cannot open
-      # out file for about 1 minute after command exits.
-      # 'type <outfile>' will give "device busy" error.
-      $out_stream.Close();
-   }
-
-   return
+    return
 }
 
 $listener_port = $l
 
 if ($listener_port) {
-   # this is server
+    # this is server
 
-   if ($remainingArgs -AND $remainingArgs.count -ne 0) {
-      usage("wrong numnber of args")
-   }
+    if ($remainingArgs -and $remainingArgs.Count -ne 0) {
+        usage ("wrong numnber of args")
+    }
 
-   write-verbose "listener_port=$listener_port"
+    Write-Verbose "listener_port=$listener_port"
 
-   # https://learn-powershell.net/2014/02/22/building-a-tcp-server-using-powershell/
+    # https://learn-powershell.net/2014/02/22/building-a-tcp-server-using-powershell/
 
-   $listener=new-object System.Net.Sockets.TcpListener([system.net.ipaddress]::any, $listener_port)
+    $listener = New-Object System.Net.Sockets.TcpListener ([system.net.ipaddress]::any,$listener_port)
 
-   if (-not $listener) {
-      exit 1
-   }
+    if (-not $listener) {
+        exit 1
+    }
 
-   $listener.Server.SetSocketOption("Socket", "ReuseAddress", 1)
-   
-   try   { $listener.start()     }
-   catch { write-host $_; exit 1 }
-   
-   write-host "listener started at port $listener_port"
+    $listener.Server.SetSocketOption("Socket","ReuseAddress",1)
 
-   $tcpConnection = $null
+    try { $listener.start() }
+    catch { Write-Host $_; exit 1 }
 
-   while ($true) { 
-      if ($listener.Pending()) {
-         $tcpConnection = $listener.AcceptTcpClient()
-         break;
-      }
-      start-sleep -Milliseconds 1000
-   }
+    Write-Host "listener started at port $listener_port"
 
-   write-host "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+    $tcpConnection = $null
 
-   # we only want to accept one client; therefore, close the listener now.
-   $listener.stop()
+    while ($true) {
+        if ($listener.Pending()) {
+            $tcpConnection = $listener.AcceptTcpClient()
+            break;
+        }
+        Start-Sleep -Milliseconds 1000
+    }
 
-   SendAndReceive($tcpConnection)
-   
-   $tcpConnection.Close()
+    Write-Host "accepted client $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+
+    # we only want to accept one client; therefore, close the listener now.
+    $listener.Stop()
+
+    SendAndReceive ($tcpConnection)
+
+    $tcpConnection.close()
 } else {
-   # this is client
+    # this is client
 
-   if (!$remainingArgs -OR $remainingArgs.count -ne 2) {
-      usage("wrong numnber of args")
-   }
+    if (!$remainingArgs -or $remainingArgs.Count -ne 2) {
+        usage ("wrong numnber of args")
+    }
 
-   $remote_host,$remote_port = $remainingArgs
+    $remote_host,$remote_port = $remainingArgs
 
-   write-verbose "remote_host=$remote_host"
-   write-verbose "remote_port=$remote_port"
+    Write-Verbose "remote_host=$remote_host"
+    Write-Verbose "remote_port=$remote_port"
 
-   $tcpConnection = $null
-   try   {$tcpConnection = New-Object System.Net.Sockets.TcpClient($remote_host, $remote_port)}
-   catch { Write-Host $_; exit 1 }
+    $tcpConnection = $null
+    try { $tcpConnection = New-Object System.Net.Sockets.TcpClient ($remote_host,$remote_port) }
+    catch { Write-Host $_; exit 1 }
 
-   write-verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
+    Write-Verbose "connected server $($tcpConnection.client.RemoteEndPoint.Address):$($tcpConnection.client.RemoteEndPoint.Port)."
 
-   SendAndReceive($tcpConnection)
+    SendAndReceive ($tcpConnection)
 
-   $tcpConnection.Close()
+    $tcpConnection.close()
 }
 
 exit 0
