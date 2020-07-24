@@ -1,6 +1,6 @@
 
 function usage {
-  param([string]$message = $null)
+  param([string] $prog = $null, [string]$message = $null)
 
   if ($message) {
      Write-Host $message
@@ -17,8 +17,18 @@ Usage:
 
 Example:
 
+   # Import the module
+   PS> Import-Module   $cmd
+   PS> Import-Module ./$cmd
+
+   # Run the command from powershell
+   PS> $cmd -d -t -v -f \\linux1\tian\junk.tar
+   
+   # Run the command from cmd prompt
+   C:> powershell -ExecutionPolicy Bypass -NoLogo -NonInteractive -NoProfile -WindowStyle Hidden -Command `"Import-Module <module_path>\$cmd; TpTar -d -c -v -f \\linux1\tian\junk.tar`"
+
    # tar abs path should keep abs path
-   PS> \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -d -c -v -f \\linux1\tian\junk.tar \Users\william\testdir
+   PS> $cmd -d -c -v -f \\linux1\tian\junk.tar \Users\william\testdir
    C:\Users\william\testdir\
    C:\Users\william\testdir\a.txt
    C:\Users\william\testdir\dir_b\
@@ -26,26 +36,24 @@ Example:
 
    # tar subfolder should keep subfolder
    PS> cd \Users\william\
-   PS> \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -d -c -v -f \\linux1\tian\junk.tar testdir
+   PS> $cmd -d -c -v -f \\linux1\tian\junk.tar testdir
    testdir\
    testdir\a.txt
    testdir\dir_b\
    testdir\dir_b\c.txt
    testdir\link_a.txt
    
-   # tarcurrent folder should start from items underneathk
+   # tar current folder should start from items underneathk
    PS> cd \Users\william\testedir                                              
-   PS> \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -d -c -v -f \\linux1\tian\junk.tar .
+   PS> $cmd -d -c -v -f \\linux1\tian\junk.tar .
    .\
    .\a.txt
    .\dir_b\
-   .\dir_b\c.txt
-
-   .                                            
-   \Users\william\sitebase\github\tpsup\ps1\tar.ps1 -t -v -f \\linux1\tian\junk.tar .                                                                        
+   .\dir_b\c.txt                                                                        
 
 "
-   exit 1
+   # don't exit as exit will kill the calling shell
+   throw "check usage"
 }
 
 # only mimiced features of perl implementation of tar, Archive::Tar
@@ -216,7 +224,7 @@ Class TpTar {
                          $mode1, 
                          #[Convert]::ToString($entry['mode'],8),
                          [TpTar]::get_string_from_mode($entry['mode']),
-                         "$($entry['uid'])/$($entry['gid'])",
+                         "$($entry['uname'])/$($entry['gname'])",
                          $entry['size'], $mtimeLocal.ToString("yyyy-MM-dd HH:mm"), 
                          $filename
              )
@@ -528,8 +536,8 @@ Class TpTar {
       [System.IO.FileStream] $ofh = $null 
       if ($action -eq 'create') {
          Write-Verbose("overwrite to {0}" -f $this.tarfile)
-         try {$ofh = [System.IO.File]::Create($this.tarfile)}
-         catch {Write-Host $_; exit 1}
+         $ofh = [System.IO.File]::Create($this.tarfile)
+         # don't catch this error, let it bomb out
       } elseif ($action -eq 'append') {
          Write-Verbose "append to $this.tarfile"
          # we need to read till before the ending block\
@@ -537,8 +545,8 @@ Class TpTar {
          Write-Verbose ("found the end at 0x{0:x}" -f $result['offset'])
          $ret['offset'] = $result['offset']
 
-         try {$ofh = [System.IO.File]::OpenWrite($this.tarfile)}
-         catch {Write-Host $_; exit 1}
+         $ofh = [System.IO.File]::OpenWrite($this.tarfile)
+         # don't catch this error, let it bomb out
 
          # https://docs.microsoft.com/en-us/dotnet/api/system.io.seekorigin?view=netcore-3.1
          # seek origin: 0 beginning, 1 current, 2 end.
@@ -546,12 +554,10 @@ Class TpTar {
          $actual_position = $ofh.Seek($expected_postion, 0)
 
          if ($actual_position -ne $expected_postion) {
-            Write-Host "failed to go to 0x{0:x}. we are at 0x{1:x}" -f $expected_postion, $actual_position
-            exit 1
+            throw("failed to go to 0x{0:x}. we are at 0x{1:x}" -f $expected_postion, $actual_position)
          }        
       } else {
-         Write-Host "unsupported action='$action'"
-         exit 1
+         throw "unsupported action='$action'"
       }
     
       $ret['ofh'] = $ofh
@@ -697,8 +703,7 @@ Class TpTar {
                [byte []]$bytes = [system.Text.Encoding]::Default.GetBytes($string)
                $length = $bytes.Count
                if ($length -gt $size) {
-                   Write-Host("$f={0} size $length is greater than limit $size" -f $prepared[$f])
-                   exit 1
+                   throw("$f={0} size $length is greater than limit $size" -f $prepared[$f])
                }
 
                Write-Verbose("rel_offset=0x{0:x} field={1}, string={2}, length={3}, " -f $relative_offset, $f, $string, $length)
@@ -809,8 +814,10 @@ function TpTar {
         [Parameter(ValueFromRemainingArguments = $true)]$remainingArgs = $null
     )
 
+    [String] $cmd = $MyInvocation.MyCommand
+
     if ($f -eq 'unknown') {
-       usage("wrong numnber of args")
+       usage($cmd, "wrong numnber of args")
     }
 
     Set-StrictMode -Version Latest
@@ -829,33 +836,47 @@ function TpTar {
 
     $opt = @{ verbose=$v }
 
+    # https://stackoverflow.com/questions/58968118/how-to-return-non-zero-exit-code-from-a-powershell-module-function-without-closi
+    # use throw to indicate failure. otherwise, successful.
     if ($t) {
-       Write-Host "list table of contents from tar file"
+       if (!$remainingArgs) {
+          usage("wrong numnber of args")
+       }
+       Write-Verbose "list table of contents from tar file"
        [hashtable] $result = $tar.read('list', $opt)
-       exit $result['error']
+       if ($result['error']) {
+          throw("got some errors")
+       }
     } elseif ($x) {
-       Write-Host "extract from tar file"
+       Write-Verbose "extract from tar file"
        [hashtable] $result = $tar.read('extract', $opt)
-       exit $result['error']
+       if ($result['error']) {
+          throw("got some errors")
+       }
     } elseif ($c) {
-       Write-Host "create a tar file"
+       Write-Verbose "create a tar file"
        if (!$remainingArgs) {
           usage("wrong numnber of args")
        }
-       exit $tar.write('create', $remainingArgs, $opt)
+       $error = $tar.write('create', $remainingArgs, $opt)
+       if ($error) {
+          throw("got some errors")
+       }
     } elseif ($a) {
-       Write-Host "append to a tar file"
+       Write-Verbose "append to a tar file"
        if (!$remainingArgs) {
           usage("wrong numnber of args")
        }
-       exit $tar.write('append', $remainingArgs, $opt)
+       $error = $tar.write('append', $remainingArgs, $opt)
+       if ($error) {
+          throw("got some errors")
+       }
     } else {
        usage("missing an action switch: a, c, l, x")
     } 
 
     # don't run exit. this will exit the calling shell
     # exit 0
-    return
 }
 
 Export-ModuleMember -Function TpTar

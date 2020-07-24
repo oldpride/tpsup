@@ -7,7 +7,7 @@
     [Alias("m", "matches")][string []] $matches2 = $null, # $Matches is a reserved word, so we use $matches2
     [Alias("x"           )][string []] $excludes = $null, 
     [Alias("sz")][switch]$sevenZip               = $false,
-    [switch]$mytar                               = $false,
+    [switch]$tpTar                               = $false,
     [Int]$timeout                                = 300,   # expect will time out if pattern not matched witin this much time
     [Alias("idle")][Int]$maxidle                 = 600,   # listener will quit after this much time of idle
     [Int]$maxsize                                = -1,
@@ -71,17 +71,54 @@ $abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]';
 $old_pwd = $pwd.ToString().Replace('\', '/');
 Write-Verbose "saved_pwd=$old_pwd"
 
-# find whether we have tar.exe or 7Zip
-if (! $sevenZip -and !$mytar) {
-   if (Get-Command tar.exe -ErrorAction SilentlyContinue) {
-      Write-Verbose "we use tar.exe to tar files"
-   } else {
-      Write-Verbose "cannot find tar.exe. we will try to use 7Zip"
-      $sevenZip = $true
+function add_path {
+    param([Parameter(Mandatory = $true)][string]$var,
+          [Parameter(Mandatory = $true)][string]$value
+          )
+
+    [String] $old_string = (Get-Item -Path "Env:$var").Value
+    $parts = $old_string -split ';'
+
+    if (! ($parts -contains $value)) {
+      Write-Verbose "adding to `$Env:PSModulePath: $value"
+      $Env:PSModulePath += ";$value"
    }
 }
 
-$sevenZipPath = "$HOME\ps1m\7Zip4Powershell\1.10.0.0\7Zip4PowerShell.psd1".Replace('\', '/');
+add_path "PSModulePath" $HOME
+add_path "PSModulePath" $scriptdir.Replace('/', '\')
+add_path "PSModulePath" "$HOME\ps1m\7Zip4Powershell\1.10.0.0"
+
+Write-Verbose("`$Env:PSModulePath = {0}" -f $Env:PSModulePath)
+
+if ($sevenZip -or $tpTar) {
+   [String] $TestCmd = $null
+   [String] $Module = $null
+   
+   if ($sevenZip) {
+      $TestCmd = "Expand-7Zip"
+      $Modul   = "7Zip4PowerShell"
+   } else {
+      $TestCmd = "TpTar"
+      $Module  = "TpTar"
+   }
+
+    if (-not (Get-Command $TestCmd -ErrorAction Ignore)) {
+        Import-Module $Module
+    }
+
+    Write-Verbose("$Module is from {0}" -f (Get-Module $Module).Path)
+} else {
+   # we must use windows Tar.exe
+   if (Get-Command tar.exe -ErrorAction SilentlyContinue) {
+      Write-Verbose "we use tar.exe to tar files"
+   } else {
+      Write-Host "ERROR: cannot find tar.exe. Please try -tpTar or -sevenZip"
+      exit 1
+   }
+} 
+
+
 
 function usage {
   param([string]$message = $null)
@@ -793,12 +830,33 @@ function to_pull {
       } else {
          if ($sevenZip) {
             if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
-               Import-Module $sevenZipPath
+               Import-Module $sevenZipModule
             }
 
-            Write-Host "$(get_timestamp) Expand-7Zip $tmp_tar_file $pwd"
-            Expand-7Zip $tmp_tar_file $pwd
-         } elseif ($mytar) {
+            Write-Verbose("$sevenZipModule is from {0}" -f (Get-Module $sevenZipModule).Path)
+
+            [String] $cmd = "Expand-7Zip $tmp_tar_file $pwd"
+            Write-Host "$(get_timestamp) $cmd"
+            Invoke-Expression $cmd  # Invoke-Expression is unix-"eval" equivalent
+            if (!$?) {
+               Write-Host "cmd failed: $cmd"
+               return;
+            }
+         } elseif ($tptar) {
+            if (-not (Get-Command TpTar -ErrorAction Ignore)) {
+               Import-Module $tpTarModule
+            }
+
+            Write-Verbose("$tpTarModule is from {0}" -f (Get-Module $tpTarModule).Path)
+
+            [String] $cmd = "TpTar -x -v -f $tmp_tar_file"
+            Write-Host "$(get_timestamp) cd $pwd; $cmd"
+            # apparently no need to cd $pwd when we run it
+            Invoke-Expression $cmd  # Invoke-Expression is unix-"eval" equivalent
+            if (!$?) {
+               Write-Host "cmd failed: cd $pwd; $cmd."
+               return;
+            }
          } else {
             Write-Host "$(get_timestamp) tar -xf $tmp_tar_file"         
             # 1. tar -xvf $tmp_tar_file causing error because '-v'. therefore, use 2 commands instead
@@ -996,6 +1054,7 @@ function to_be_pulled {
    $deletes = New-Object System.Collections.Generic.List[System.String]
    $change_by_file = @{}
    $diff_by_file = @{}
+   $cannot_by_file = @{}
    $modes = New-Object System.Collections.Generic.List[System.String]
    $warns = New-Object System.Collections.Generic.List[System.String]
    $RequiredSpace = 0
@@ -1039,6 +1098,11 @@ function to_be_pulled {
        $local_mtime = get_nested_hash  $local_tree @($k, 'mtime')
        $local_mode  = get_nested_hash  $local_tree @($k, 'mode' ) 
 
+      if ($local_type -eq 'link') {
+         # windows cannot handle link without admin access. so we don't touch links
+         $cannot_by_file[$k] = 'link'
+      }
+
       if (!$remote_tree[$k] -or $remote_type -ne $local_type) {
          #  remote missing this file or remote is a different type of file: eg, file vs directory
          if ($local_size) {
@@ -1071,7 +1135,7 @@ function to_be_pulled {
          continue
       }
 
-      # both sides are same kind type: file, dir, or link
+      # at this point, both sides are same kind type: file, dir, or link
       if ( $check_mode -and $local_type -ne 'link' -and $remote_mode -ne $local_mode ) {
          $modes.Add($k)
       }
@@ -1210,15 +1274,23 @@ function to_be_pulled {
    Write-Host "$(get_timestamp) sending deletes: $($deletes.Count) item(s)"
    send_text_line $myconn $delete_string
    
-   $adds_files = @($change_by_file.Keys|sort)
+   $adds_files = New-Object System.Collections.Generic.List[System.String]
+   $a          = New-Object System.Collections.Generic.List[System.String]
    # align to the left:  "{0, -8}{1,-15}{2,-15}{3,-15}`n" -f "Locale", "Jar", "HelpSet", "Exception"
    # align to the right: "{0,8}{1,15}{2,15}{3,15}`n" -f "Locale", "Jar", "HelpSet", "Exception"
-   $a = @(
-       foreach ($f in $adds_files) {
-          $action = $change_by_file[$f]
-          "{0,6} {1}" -f $action, $f
-       }
-   )
+   
+   foreach ($f in @($change_by_file.Keys|sort)) {
+      $action = $change_by_file[$f]
+
+      if ($cannot_by_file.ContainsKey($f)) {
+        [String] $reason_for_cannot = $cannot_by_file[$f]
+        "{0,6} {1} {2}" -f $action, $f, "skipped because of $reason_for_cannot"
+      } else {
+        $adds_files.Add($f)
+        $a.Add(("{0,6} {1}" -f $action, $f))
+      }
+   }
+   
    # "test".TrimEnd("e") # this does nothing
    # "test".TrimEnd("t") # tes
    # $adds_string = $adds_string.TrimEnd("`n") # remove the last newline
@@ -1322,38 +1394,58 @@ function to_be_pulled {
    $need_to_create_tar = $true
    $tar_created = $false
 
-   if ($sevenZip) {
-      if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
-         Import-Module $sevenZipPath
+   if ($sevenZip -or $tptar) {
+      if ($sevenZip) {
+          if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
+             Import-Module $sevenZipModule
+          }
+      } else {
+          if (-not (Get-Command TpTar -ErrorAction Ignore)) {
+             Import-Module $tpTarModule
+          }
       }
 
-      [String]$tmp_7zip_dir = $null
+      [String]$tmp_tar_dir = $null
       try  { 
          # use [String] to prevent powershell automatically convert string to Path
-         $tmp_7zip_dir = [String]((get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*3)}) + "_dir")
+         $tmp_tar_dir = [String]((get_tmp_name $tmpdir $prog @{chkSpace=($RequiredSpace*3)}) + "_dir")
       } catch {
          send_text_line $myconn $_.Exception.Message
          $writer.Flush()
          return;
       }
-
-      $old_7zip_dir = $pwd
+      
+      [String] $old_tar_dir = $pwd
       foreach ($front in @($files_by_front.Keys|sort)) {
-         cd $old_7zip_dir  # restore path from last loop
+         cd $old_tar_dir  # restore path from last loop
 
          cd $front
          
          foreach ($f in @($files_by_front[$front]|sort)) {
-            if (! (copy_file_structure $f $tmp_7zip_dir) ) {
-               Write-Host "failed to copy $f $tmp_7zip_dir, pwd=$pwd"
-               exit 1
+            if (! (copy_file_structure $f $tmp_tar_dir) ) {
+               Write-Host "failed to copy $f $tmp_tar_dir, pwd=$pwd"
+               Continue
             }
             $tar_created = $true
          }
       }
-      cd $old_7zip_dir  # restore path from last loop
-
-      Compress-7Zip $tmp_tar_file $tmp_7zip_dir -Format Tar      
+      cd $old_tar_dir  # restore path from last loop
+ 
+      if ($sevenZip) {
+          Write-Verbose("Compress-7Zip $tmp_tar_file $tmp_tar_dir -Format Tar")
+          Compress-7Zip $tmp_tar_file $tmp_tar_dir -Format Tar
+          if (!$?) {
+             Write-Host "cmd failed: Compress-7Zip $tmp_tar_file $tmp_tar_dir -Format Tar"
+          }
+      } else {
+          Write-Verbose("cd $tmp_tar_dir; TpTar -c -v -f $tmp_tar_file .")
+          cd $tmp_tar_dir
+          TpTar -c -v -f $tmp_tar_file $tmp_tar_dir
+          if (!$?) {
+             Write-Host "cmd failed: cd $tmp_tar_dir; TpTar -c -v -f $tmp_tar_file $tmp_tar_dir"
+          }
+          cd $old_tar_dir  # restore path
+      }   
    } else {
        foreach ($front in @($files_by_front.Keys|sort)) {
           $files = @($files_by_front[$front]|sort)
@@ -1439,8 +1531,10 @@ function copy_file_structure {
 
    $rellength = $pwd.ToString().Length
 
-   @(Get-Item $src; Get-ChildItem $src -Recurse) | foreach {
-      # Write-Verbose "$($_.FullName)"
+   # we are called one item a time, don't do -Recurse
+   #@(Get-Item $src; Get-ChildItem $src -Recurse) | foreach {
+   @(Get-Item $src) | foreach {
+      # Write-Verbose "checking $($_.FullName)"
       $preserved = $_.Fullname.SubString($rellength)
       $dstfull = "$dst\$preserved"
 
@@ -1448,16 +1542,28 @@ function copy_file_structure {
          # we need this to copy empty dir
          New-Item -ItemType Directory -Path $dstfull -Force
       } else {
+        # only pick plain file
         New-Item -ItemType File -Path $dstfull -Force
+        if (!$?) {
+           Write-Host "ERROR: cmd failed: New-Item -ItemType File -Path $dstfull -Force. skipped"
+           return $false
+        }
         Copy-Item $_.FullName -destination $dstfull
+        if (!$?) {
+           # remove the failed file. otherwise, this file would got into the tar file and we would
+           # get this error when extracting tar: 
+           #    Expand-7Zip : startIndex cannot be larger than length of string.
+           Write-Host "ERROR: cmd failed: Copy-Item $_.FullName -destination $dstfull. Removed $dstfull"
+           Remove-Item $dstfull -Force
+           return $falase
+        }
+        # Write-Verbose("Copy-Item {0} -destination $dstfull" -f $_.FullName)
       }
    }
    if ($old_pwd) {cd $old_pwd}
    #Set-PsDebug -Trace 0
    return $true
 }
-
-#copy_file_structure tmp3 tmp4
 
 function build_dir_tree {
    param (
@@ -1677,7 +1783,9 @@ function build_dir_tree {
 
             $type = $null
             $size = 0
-            if ($item.LinkType) {
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+               # we cannot use $item.LinkType to check link because only link created by windows mklink
+               # command will set LinkType, cygwin "ln -s" will not set this. ReparsePoint is more reliable
                $type = "link"
                $size = 128   #hard coded
                set_nested_hash $tree @($f, 'test') $item.Target
