@@ -97,7 +97,7 @@ if ($sevenZip -or $tpTar) {
 
     if ($sevenZip) {
         $TestCmd = "Expand-7Zip"
-        $Modul = "7Zip4PowerShell"
+        $Module = "7Zip4PowerShell"
     } else {
         $TestCmd = "TpTar"
         $Module = "TpTar"
@@ -117,8 +117,6 @@ if ($sevenZip -or $tpTar) {
         exit 1
     }
 }
-
-
 
 function usage {
     param([string]$message = $null)
@@ -157,7 +155,11 @@ Common Swithes
   -timeout seconds
                       time to wait for peer to finish a transaction, default to 300
 
-  -sz|sevenzip        use 7Zip to tar files before transfer. default to try tar.exe first.
+  -sz|sevenzip        use 7Zip to handel tar files. default to use tar.exe. Make sure 
+                      7Zip4PowerShell/7Zip4PowerShell.psd1 is in `$PSModulePath, `$Home, or script dir
+
+  -tpTar              use TpTar to handel tar files. default to use tar.exe. Make sure 
+                      TpTar/TpTar.psm1 is in `$PSModulePath, `$Home, or script dir
 
 Passive-side Switches: (To-be Pulled, normal Server state)
 
@@ -169,16 +171,16 @@ Passive-side Switches: (To-be Pulled, normal Server state)
                       file contains allowed/deny host or ip. one per line,
                       lines stars with # is comment
                       default:
-                          \$HOME/.tpsup/tpdist_allowhost.txt
-                          \$HOME/.tpsup/tpdist_denyhost.txt
+                          `$HOME/.tpsup/tpdist_allowhost.txt
+                          `$HOME/.tpsup/tpdist_denyhost.txt
 
    -allowfile file
    -denyfile file
                       file contains allowed/deny dir or file, one per line,
                       lines stars with # is comment
                       default:
-                         \$HOME/.tpsup/tpdist_allowfile.txt
-                         \$HOME/.tpsup/tpdist_denyfile.txt
+                         `$HOME/.tpsup/tpdist_allowfile.txt
+                         `$HOME/.tpsup/tpdist_denyfile.txt
 
 Active-Side Switches: (To Pull, normal Client State)
 
@@ -192,7 +194,7 @@ Active-Side Switches: (To Pull, normal Client State)
                       the size of update, meaning will drop some changes.
                       default is -1, meaning no limit.
 
-   -matches2 'pattern1', 'pattern2', ... (separated by ',')
+   -matches  'pattern1', 'pattern2', ... (separated by ',')
                       only files that matching this pattern (Perl RegEx style).
                       can be specified multiple times (in OR logic).
 
@@ -325,7 +327,6 @@ function send_text_line {
 
     $bytes = [System.Text.Encoding]::Default.GetBytes("$text`n")
 
-    #$encoded = [byte []](xor_encode $bytes 'out')
     $encoded = [byte []]$myconn.out_coder.xor($bytes)
 
     $myconn.writer.Write($encoded)
@@ -634,12 +635,12 @@ function to_pull {
         return
     }
 
-    $deletes_string = $captures[0][0];
-    $mtimes_string = $captures[1][0];
-    $modes_string = $captures[2][0];
-    $RequiredSpace = [int]$captures[3][0];
-    $adds_string = $captures[4][0];
-    $warns_string = $captures[5][0];
+    $deletes_string = $captures[0][0]
+    $mtimes_string = $captures[1][0]
+    $modes_string = $captures[2][0]
+    $RequiredSpace = [int]$captures[3][0]
+    $adds_string = $captures[4][0]
+    $warns_string = $captures[5][0]
 
     # if local_dir doesn't exist yet, we don't mkdir now because if this is a
     # dryrun or diff, then we shouldn't create a dir. we will create it later.
@@ -728,7 +729,7 @@ function to_pull {
         $message = "nothing to add or update"
         Write-Host "$(get_timestamp) $message"
         send_text_line $myconn $message
-        # don't return here as we will other work to do
+        # don't return here as we will have other work to do
     } elseif (!$dryrun) {
         # block socket when writing to avoid corrupt data and flush writes manually
         $socket.Blocking = $true
@@ -828,38 +829,24 @@ function to_pull {
                 Write-Host "$(get_timestamp) no new file to add"
             }
         } else {
-            if ($sevenZip) {
-                if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
-                    Import-Module $sevenZipModule
+            [string]$cmd = $null
+            if ($sevenZip -or $tpTar) {
+                if ($sevenZip) {
+                    $cmd = "Expand-7Zip $tmp_tar_file $pwd"
+                } else {
+                    $cmd = "TpTar -x -v -f $tmp_tar_file"
                 }
 
-                Write-Verbose ("$sevenZipModule is from {0}" -f (Get-Module $sevenZipModule).Path)
-
-                [string]$cmd = "Expand-7Zip $tmp_tar_file $pwd"
                 Write-Host "$(get_timestamp) $cmd"
-                Invoke-Expression $cmd # Invoke-Expression is unix-"eval" equivalent
+                # Invoke-Expression is unix-"eval" equivalent
+                Invoke-Expression $cmd
                 if (!$?) {
                     Write-Host "cmd failed: $cmd"
                     return;
                 }
-            } elseif ($tptar) {
-                if (-not (Get-Command TpTar -ErrorAction Ignore)) {
-                    Import-Module $tpTarModule
-                }
-
-                Write-Verbose ("$tpTarModule is from {0}" -f (Get-Module $tpTarModule).Path)
-
-                [string]$cmd = "TpTar -x -v -f $tmp_tar_file"
-                Write-Host "$(get_timestamp) cd $pwd; $cmd"
-                # apparently no need to cd $pwd when we run it
-                Invoke-Expression $cmd # Invoke-Expression is unix-"eval" equivalent
-                if (!$?) {
-                    Write-Host "cmd failed: cd $pwd; $cmd."
-                    return;
-                }
             } else {
                 Write-Host "$(get_timestamp) tar -xf $tmp_tar_file"
-                # 1. tar -xvf $tmp_tar_file causing error because '-v'. therefore, use 2 commands instead
+                # 1. tar -xvf $tmp_tar_file causing error because of '-v'. therefore, use 2 commands instead
                 # 2. need to wait external command to finish before remove the $tmp_tar_file, eg, use |Out_Host
                 # https://stackoverflow.com/questions/1741490/how-to-tell-powershell-to-wait-for-each-command-to-end-before-starting-the-next
                 tar -tf $tmp_tar_file | Out-Host
@@ -1270,6 +1257,10 @@ function to_be_pulled {
     # instead, flush writes manually
     $socket.Blocking = $true
 
+    foreach ($d in ($deletes | sort)) {
+       "   delete $d"
+    }
+
     $delete_string = "<DELETES>" + (($deletes | sort) -join "`n") + "</DELETES>"
     Write-Host "$(get_timestamp) sending deletes: $($deletes.Count) item(s)"
     send_text_line $myconn $delete_string
@@ -1288,6 +1279,7 @@ function to_be_pulled {
         } else {
             $adds_files.Add($f)
             $a.Add(("{0,6} {1}" -f $action,$f))
+            "{0,6} {1}" -f $action,$f
         }
     }
 
@@ -1395,16 +1387,8 @@ function to_be_pulled {
     $tar_created = $false
 
     if ($sevenZip -or $tptar) {
-        if ($sevenZip) {
-            if (-not (Get-Command Expand-7Zip -ErrorAction Ignore)) {
-                Import-Module $sevenZipModule
-            }
-        } else {
-            if (-not (Get-Command TpTar -ErrorAction Ignore)) {
-                Import-Module $tpTarModule
-            }
-        }
-
+        # 7Zip and TpTar cannot take a list of files as input, therefore, we have to 
+        # build a staging dir for them
         [string]$tmp_tar_dir = $null
         try {
             # use [String] to prevent powershell automatically convert string to Path
@@ -1422,6 +1406,9 @@ function to_be_pulled {
             cd $front
 
             foreach ($f in @($files_by_front[$front] | sort)) {
+                # 1. copy one entry at a time, no recursive. Therefore, it is a dir
+                # we only mkdir, not copy anything under it.
+                # 2. we can only copy relative path
                 if (!(copy_file_structure $f $tmp_tar_dir)) {
                     Write-Host "failed to copy $f $tmp_tar_dir, pwd=$pwd"
                     continue
@@ -1431,21 +1418,19 @@ function to_be_pulled {
         }
         cd $old_tar_dir # restore path from last loop
 
+        [String]$cmd = $null
         if ($sevenZip) {
-            Write-Verbose ("Compress-7Zip $tmp_tar_file $tmp_tar_dir -Format Tar")
-            Compress-7Zip $tmp_tar_file $tmp_tar_dir -Format tar
-            if (!$?) {
-                Write-Host "cmd failed: Compress-7Zip $tmp_tar_file $tmp_tar_dir -Format Tar"
-            }
+            $cmd = "Compress-7Zip $tmp_tar_file $tmp_tar_dir -Format Tar"
         } else {
-            Write-Verbose ("cd $tmp_tar_dir; TpTar -c -v -f $tmp_tar_file .")
-            cd $tmp_tar_dir
-            TpTar -c -v -f $tmp_tar_file $tmp_tar_dir
-            if (!$?) {
-                Write-Host "cmd failed: cd $tmp_tar_dir; TpTar -c -v -f $tmp_tar_file $tmp_tar_dir"
-            }
-            cd $old_tar_dir # restore path
+            $cmd = "cd $tmp_tar_dir; TpTar -c -v -f $tmp_tar_file ."
         }
+  
+        Write-Verbose $cmd
+        Invoke-Expression $cmd
+        if (!$?) {
+            Write-Host "cmd failed: $cmd"
+        }
+        cd $old_tar_dir # restore path
     } else {
         foreach ($front in @($files_by_front.Keys | sort)) {
             $files = @($files_by_front[$front] | sort)
@@ -1491,6 +1476,9 @@ function to_be_pulled {
 
 
 function copy_file_structure {
+    # 1. copy one entry at a time, no recursive. Therefore, it is a dir
+    # we only mkdir, not copy anything under it.
+    # 2. we can only copy relative path   
     param(
         [string]$relative = $null,
         [Parameter(Mandatory = $true,position = 0)] [string]$src,
@@ -1542,7 +1530,7 @@ function copy_file_structure {
             # we need this to copy empty dir
             New-Item -ItemType Directory -Path $dstfull -Force
         } else {
-            # only pick plain file
+            # only pick plain file; link should already be filtered out in upstream
             New-Item -ItemType File -Path $dstfull -Force
             if (!$?) {
                 Write-Host "ERROR: cmd failed: New-Item -ItemType File -Path $dstfull -Force. skipped"
