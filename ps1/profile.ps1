@@ -1,3 +1,14 @@
+# add the following in $profile, eg,
+# function global:tpsup {
+#     . C:\Users\william\sitebase\github\tpsup\ps1\profile.ps1
+# }
+# profiles are:
+#    C:\Users\william\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1
+#    C:\Users\william\Documents\WindowsPowerShell\Microsoft.PowerShellISE_profile.ps1
+
+$global:TPPS1=(Split-Path -Parent $PSCommandPath)
+
+<#
 $env:Path = "C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program Files\Python37\Scripts\" +
 ";C:\Program Files\Python37\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem" +
 ";C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\" +
@@ -8,6 +19,21 @@ $env:Path = "C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program
 ";C:\Users\william\AppData\Local\Android\Sdk\emulator" +
 ";;C:\Program Files\JetBrains\PyCharm Community Edition 2019.1.3\bin" +
 ";C:\users\william\sitebase\github\tpsup\ps1"
+#>
+
+$env:Path = $env:Path + 
+    ";C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program Files\Python37\Scripts\" +
+    ";C:\Program Files\Python37\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem" +
+    ";C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\" +
+    ";C:\Program Files\Git\cmd;C:\Program Files\Intel\WiFi\bin\" +
+    ";C:\Program Files\Common Files\Intel\WirelessCommon\;C:\Program Files\PuTTY\" +
+    ";C:\Users\william\AppData\Local\Microsoft\WindowsApps" +
+    ";C:\Users\william\AppData\Local\Android\Sdk\platform-tools" +
+    ";C:\Users\william\AppData\Local\Android\Sdk\emulator" +
+    ";;C:\Program Files\JetBrains\PyCharm Community Edition 2019.1.3\bin" +
+    ";$TPPS1"
+
+$env:PSModulePath += ";$TPPS1" + ";$HOME"
 
 [Environment]::SetEnvironmentVariable("Path",$env:Path,"User")
 #[Environment]::GetEnvironmentVariable("Path", "User")
@@ -90,12 +116,12 @@ function global:reimport {
 }
 
 function global:tpsup {
-    .$profile
+    . $TPPS1/profile.ps1
 }
 
 function global:siteenv {
     # only global-scope var/function/alias will be effective after this function exits
-    .$profile
+    . $TPPS1/profile.ps1
 }
 
 function global:head {
@@ -111,19 +137,35 @@ function global:voff {
 
 function global:AddPath {
     param([string]$var = $null,
-        [string]$value = $null
+        [string]$value = $null,
+        [switch]$v     = $false
     )
     if (!$value) {
         # Both !0 and !$null are $true, but $value is casted to string, therefore, $value can only be $null here.
         Write-Host "Usage: AddPath Var Value"
         return
     }
-    [string]$old_string = (Get-Item -Path "Env:$var").Value
-    $parts = $old_string -split ';'
 
+    if ($v) {
+        $verbosePreference = "Continue"
+    }
+
+    [string]$string = (Get-Item -Path "Env:$var").Value
+    Write-Verbose "old `$Env:$var=$string"
+    $parts = $string -split ';'
+
+    $added = 0 
     if (!($parts -contains $value)) {
-        Write-Verbose "adding to `$Env:PSModulePath: $value"
-        $Env:PSModulePath += ";$value"
+        Write-Verbose "adding to `$Env:$var $value"
+        $string += ";$value"
+        $added ++
+    }
+
+    if ($added) {
+        Write-Verbose "new `$Env:$var=$string"
+        Set-Item -Path "Env:$var" -Value "$string"
+    } else {
+        Write-Verbose "no change `$Env:$var"
     }
 }
 
@@ -145,6 +187,10 @@ function global:beaut {
             Edit-DTWBeautifyScript -IndentType Fourspaces -NewLine LF $f
         }
     }
+}
+
+function global:env {
+    Get-ChildItem Env:
 }
 
 function global:reduce {
@@ -210,6 +256,9 @@ function global:reduce {
         }
     }
 }
+
+reduce "Path"
+reduce "PSModulePath"
 
 # set vi editor mode
 # this works for powershell not powershell ISE
