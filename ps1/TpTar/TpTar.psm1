@@ -84,8 +84,8 @@ class TpTar{
     # we cannot copy root dir
     # root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/, or with \
     # note: ` is escape for powershell, \ is escape for regex
-    [string]$root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]*$';
-    [string]$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+[^\\/]+[\\/]';
+    [string]$root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+|[^\\/]+[\\/]*$';
+    [string]$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+|[^\\/]+[\\/]';
 
     # https://powershellexplained.com/2016-11-06-powershell-hashtable-everything-you-wanted-to-know-about/
     # fancy hashtable
@@ -114,14 +114,51 @@ class TpTar{
         if ($tarfile -match $this.abs_pattern) {
             $this.tarfile = $tarfile
         } else {
-            $this.tarfile = "$pwd\" + $tarfile
+            $this.tarfile = "$pwd\$tarfile"
+            # PS C:\Users\william> cd \\linux1\tian
+            # PS Microsoft.PowerShell.Core\FileSystem::\\linux1\tian> $pwd
+            # Path
+            # ----
+            # Microsoft.PowerShell.Core\FileSystem::\\linux1\tian
+            $this.tarfile = $this.tarfile -replace ("Microsoft.PowerShell.Core.FileSystem::", "")
         }
+
+        Write-Verbose("tarfile = {0}" -f $this.tarfile)
 
         $this.EndBlock = New-Object System.Byte[] $this.BlockSize # tar end block is an empty block
         $this.UnixEpochDateTime = New-Object DateTime 1970,1,1,0,0,0,([DateTimeKind]::Utc)
 
         $strCurrentTimeZone = (Get-WmiObject win32_timezone).StandardName
         $this.TZ = [System.TimeZoneInfo]::FindSystemTimeZoneById($strCurrentTimeZone)
+    }
+
+    static print_exception ($e) {
+        # https://stackoverflow.com/questions/38419325/catching-full-exception-message
+        $formatstring = "{0} : {1}`n{2}`n" +
+        "    + CategoryInfo          : {3}`n" +
+        "    + FullyQualifiedErrorId : {4}`n"
+
+        $fields = $e.InvocationInfo.MyCommand,
+        $e.ErrorDetails,
+        $e.InvocationInfo.PositionMessage,
+        $e.CategoryInfo.ToString(),
+        $e.FullyQualifiedErrorId
+
+        Write-Host -ForegroundColor Red -BackgroundColor Black ($formatstring -f $fields)
+
+        # [TpTar]::ResolveError($_)
+    }
+
+    static ResolveError ($ErrorRecord) {
+       # tried stack trace, too wordy
+       # https://stackoverflow.com/questions/795751/can-i-get-detailed-exception-stacktrace-in-powershell
+       $ErrorRecord | Format-List * -Force |Out-Host
+       $ErrorRecord.InvocationInfo |Format-List * | Out-Host
+       $Exception = $ErrorRecord.Exception
+       for ($i = 0; $Exception; $i++, ($Exception = $Exception.InnerException))
+       {   "$i" * 80
+           $Exception |Format-List * -Force | Out-Host
+       }
     }
 
     [hashtable] read ([string]$action,[hashtable]$opt = $null) {
@@ -143,7 +180,16 @@ class TpTar{
         [hashtable]$mtimeDateTime_by_dir = @{}
 
         [System.IO.FileStream]$ifh = $null
-        try { $ifh = [System.IO.File]::OpenRead($this.tarfile) } catch { Write-Host $_; $result['error'] += 1; return $result }
+        $ifh = [System.IO.File]::OpenRead($this.tarfile)
+        # don't catch the error, let it boomb out
+        <#
+        try { $ifh = [System.IO.File]::OpenRead($this.tarfile) }
+        catch {
+            [TpTar]::print_exception($_)
+            $result['error'] += 1
+            return $result
+        }
+        #>
 
         [int]$skipped_blocks = 0
         [int]$skipped_from = 0
@@ -278,8 +324,12 @@ class TpTar{
                 } elseif ($action -eq 'extract') {
                     # create an FileStream for output
                     Write-Verbose "write to $filename"
+                    $out_stream = [System.IO.File]::Create($filename)
+                    # don't catch the error, let it boomb out
+                    <#
                     try { $out_stream = [System.IO.File]::Create($filename) }
-                    catch { Write-Host $_; $result['error'] += 1; return $result }
+                    catch {[TpTar]::print_exception($_); $result['error'] += 1; return $result }
+                    #>
                 }
 
                 while ($need_size_left -gt 0) {
@@ -469,6 +519,30 @@ class TpTar{
             }
 
             $relative_offset += $size
+        }
+
+        [hashtable] $sum = [TpTar]::compute_head_block_chksum($Buffer[0..511])
+        Write-Verbose "sum = $(ConvertTo-Json $sum)"
+        $signed_sum = $sum['signed']
+        $unsigned_sum = $sum['unsigned']
+
+        if ($entry['chksum'] -eq $sum['signed']) {
+            Write-Verbose("chksum=0{0} matched signed sum=0{1}" -f 
+                            [Convert]::ToString($entry['chksum'],8), 
+                            [Convert]::ToString($sum['signed'],8)
+            )
+        } elseif ($entry['chksum'] -eq $sum['unsigned']) {
+            Write-Verbose("chksum=0{0} matched unsigned sum=0{1}" -f
+                            [Convert]::ToString($entry['chksum'],8), 
+                            [Convert]::ToString($sum['unsigned'],8)
+            )
+        } else {
+            Write-Verbose("chksum=0{0} doesn't match either signed sum=0{1} or unsigned sum=0{2}" -f 
+                           [Convert]::ToString($entry['chksum'],8),
+                           [Convert]::ToString($sum['signed'],8),
+                           [Convert]::ToString($sum['unsigned'],8)
+                          )
+            return $null
         }
 
         return $entry
@@ -712,18 +786,18 @@ class TpTar{
                 }
 
                 # at last calculate chksum. this is to add all signed char of the head block, assuming
-                # the chksum field were all filled with 0x0 before the calculation
-                [int64]$chksum = 0;
-                foreach ($signed_char in @([sbyte[]]$Buffer[0..511])) {
-                    $chksum += $signed_char
-                }
+                # the chksum field were all filled with spaces before the calculation
+                [hashtable]$sum = [TpTar]::compute_head_block_chksum($Buffer[0..511])
+                Write-Verbose "sum = $(ConvertTo-Json($sum))"
 
+                [int64]$chksum = $sum['sgined']                
                 [int]$chksum_size = [TpTar]::template['chksum']['size']
                 [string]$chksum_string = [Convert]::ToString($chksum,8).PadLeft($chksum_size - 1,'0')
 
                 [byte []]$bytes = [System.Text.Encoding]::Default.GetBytes($chksum_string)
                 $length = $bytes.Count
                 Write-Verbose "rel_offset=0x94, chksum=$chksum, octal string=$chksum_string, length=$length"
+
                 [System.Buffer]::BlockCopy($bytes,0,$Buffer,0x94,$length)
                 [int]$chksum_end_index = 0x94 + $length
                 $Buffer[$chksum_end_index] = 0x0
@@ -751,7 +825,7 @@ class TpTar{
 
                     try { $ifh = [System.IO.File]::OpenRead($fullname) }
                     catch {
-                        Write-Host $_;
+                        [TpTar]::print_exception($_);
                         Write-Host "ERROR: cannot read $fullname. skipped";
                         Write-Verbose ("restored write position in FileStream to 0x{0:x}" -f $saved_FileStream_postion)
                         $ofh.Seek($saved_FileStream_postion,0)
@@ -789,6 +863,40 @@ class TpTar{
         $ofh = $null
 
         return $error
+    }
+
+    static [hashtable] compute_head_block_chksum ([Byte []]$block) {
+        [int64]$signed_sum = 0
+        [int64]$unsigned_sum = 0
+
+        [byte []]$chksum_placeholder = [System.Text.Encoding]::Default.GetBytes("        ") # 8 spaces
+
+        $chksum_begin = 0x94
+        $before_chksum_begin = $chksum_begin - 1
+
+        foreach ($byte in @([Byte []]$block[0..$before_chksum_begin])) {
+            $signed_sum += [sbyte]$byte
+            $unsigned_sum += $byte
+        }
+
+        foreach ($byte in @([Byte []]$chksum_placeholder)) {
+            $signed_sum += [sbyte]$byte
+            $unsigned_sum += $byte
+        }
+
+        $after_chksum_end = 0x94 + 8
+
+        foreach ($byte in @([Byte []]@($block[$after_chksum_end..511]))) {
+            $signed_sum += [sbyte]$byte
+            $unsigned_sum += $byte
+        }
+
+        $result = @{
+            signed = $signed_sum
+            unsigned = $unsigned_sum
+        }
+
+        return $result
     }
 }
 
@@ -839,38 +947,23 @@ function TpTar {
     # https://stackoverflow.com/questions/58968118/how-to-return-non-zero-exit-code-from-a-powershell-module-function-without-closi
     # use throw to indicate failure. otherwise, successful.
     if ($t) {
-        if (!$remainingArgs) {
-            usage ("wrong numnber of args")
-        }
         Write-Verbose "list table of contents from tar file"
-        [hashtable]$result = $tar.Read('list',$opt)
-        if ($result['error']) {
-            throw ("got some errors")
-        }
+        $result = $tar.Read('list',$opt)
     } elseif ($x) {
         Write-Verbose "extract from tar file"
-        [hashtable]$result = $tar.Read('extract',$opt)
-        if ($result['error']) {
-            throw ("got some errors")
-        }
+        $tar.Read('extract',$opt)
     } elseif ($c) {
         Write-Verbose "create a tar file"
         if (!$remainingArgs) {
             usage ("wrong numnber of args")
         }
-        $error = $tar.Write('create',$remainingArgs,$opt)
-        if ($error) {
-            throw ("got some errors")
-        }
+        $tar.Write('create',$remainingArgs,$opt)
     } elseif ($a) {
         Write-Verbose "append to a tar file"
         if (!$remainingArgs) {
             usage ("wrong numnber of args")
         }
-        $error = $tar.Write('append',$remainingArgs,$opt)
-        if ($error) {
-            throw ("got some errors")
-        }
+        $tar.Write('append',$remainingArgs,$opt)
     } else {
         usage ("missing an action switch: a, c, l, x")
     }

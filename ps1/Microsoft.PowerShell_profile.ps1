@@ -75,6 +75,20 @@ function global:modules {
     Write-Host "to see detail: Get-Module <mod name>|ConvertTo-Json)"
 }
 
+function global:reimport {
+    param(
+        [string]$module = $null
+    )
+
+    if (!$module) {
+        Write-Host "Usage: reimport <module>"
+        # don't exit
+        return
+    }
+    Remove-Module $module
+    Import-Module $module
+}
+
 function global:tpsup {
     .$profile
 }
