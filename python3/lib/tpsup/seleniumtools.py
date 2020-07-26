@@ -21,7 +21,7 @@ import os.path
 class SeleniumEnv:
     def __init__(self, host_port: str, **opt):
         global cmd
-        (self.host, self.port) = host_port.split(':', 2)
+        (self.host, self.port) = host_port.split(':', 1)
         self.verbose = opt.get('verbose', 0)
         self.env = tpsup.env.Env()
         self.env.adapt()
