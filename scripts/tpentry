@@ -21,6 +21,7 @@ usage:
    $prog ${prog}_switches -- cmd cmd_switches
 
    -b book.csv           this contains the encoded information, example format below
+                         default to ~/.tpsup/book.csv
 
         key,user,encoded,commandpattern,setting,comment
         swagger,sys.admin,^/usr/bin/curl$|/sqlplus$,%29%06%0F%05%00,a=1;'b=john, sam',test swagger
