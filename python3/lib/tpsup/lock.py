@@ -119,7 +119,8 @@ class EntryBook:
         if not os.path.exists(file):
             raise RuntimeError(f'{file} not found')
 
-        if self.env.isLinux or self.env.isCygwin or self.env.isGitBash:
+        #if self.env.isLinux or self.env.isCygwin or self.env.isGitBash:
+        if self.env.isLinux:
             st = os.stat(file)
             file_perm = st.st_mode & 0o777
             if file_perm != 0o600:
