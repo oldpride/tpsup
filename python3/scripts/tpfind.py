@@ -214,7 +214,7 @@ def main():
         epilog=examples)
 
     parser.add_argument(
-        'paths', default=None, action='append',
+        'paths', default=None, nargs=argparse.REMAINDER,
         help='input path')
 
     parser.add_argument(

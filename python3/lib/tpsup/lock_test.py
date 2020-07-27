@@ -5,19 +5,19 @@ import sys
 import pprint
 import time
 
-import tpsup.util
+import tpsup.lock
 
 
-class TestUtil(unittest.TestCase):
+class TestLock(unittest.TestCase):
     def test_tpsup_lock(self, verbose=0):
-        actual_string = tpsup.util.tpsup_lock('Hello@123')
+        actual_string = tpsup.lock.tpsup_lock('Hello@123')
 
         expected_string = "%09%06%0F%05%00%03%5E%5CU"
 
         self.assertEqual(actual_string, expected_string)
 
     def test_tpsup_unlock(self, verbose=0):
-        actual_string = tpsup.util.tpsup_unlock('%09%06%0F%05%00%03%5E%5CU')
+        actual_string = tpsup.lock.tpsup_unlock('%09%06%0F%05%00%03%5E%5CU')
 
         expected_string = "Hello@123"
 

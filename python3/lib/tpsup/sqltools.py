@@ -25,7 +25,7 @@ from typing import List
 import tpsup.csvtools
 import tpsup.csvtools
 import tpsup.env
-from tpsup.util import tpsup_unlock
+from tpsup.lock import tpsup_unlock
 
 
 class Conn:
@@ -36,10 +36,16 @@ class Conn:
             home_dir = tpsup.env.Env().home_dir
             connfile = home_dir + "/.tpsup/conn.csv"
 
-        self.connfile = connfile
-
         if not os.path.exists(connfile):
             raise RuntimeError(f'connection file {connfile} not found')
+
+        st = os.stat(connfile)
+        file_perm = st.st_mode & 0o777
+
+        if file_perm != 0o600:
+            raise RuntimeError(f'{connfile} permission is {file_perm:o}; required 600')
+
+        self.connfile = connfile
 
         opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
 
@@ -65,7 +71,7 @@ class Conn:
                 self.__dict__[key.lower()] = value
 
         self.string = self.dbi_string
-        self.unlocked_password = tpsup.util.tpsup_unlock(self.locked_password)
+        self.unlocked_password = tpsup_unlock(self.locked_password)
 
     def __str__(self):
         strings = []

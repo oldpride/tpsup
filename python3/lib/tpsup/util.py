@@ -123,104 +123,6 @@ def load_module(source: str, new_module_name=None):
     return mod
 
 
-def tpsup_lock(plain: str, *, salt=None):
-    """ encode a string """
-    _MAGIC = 'AccioConfundoLumosNox'
-    length = len(plain)
-    if not salt:
-        salt = _MAGIC
-
-    # https://www.pythoncentral.io/use-python-multiply-strings/
-    multiplied_salt = length * salt
-
-    # https://guide.freecodecamp.org/python/is-there-a-way-to-substri
-    # ng-a-string-in-python/
-    magic = multiplied_salt[0:length]
-
-    # encrypted = []
-    # for i in range(0,length):
-    #    encrypted[i] = magic[i] A plain[i]
-
-    # https://stackoverflow.com/questions/2612720/how-to-do-bitwis
-    # e-exclusive-or-of-two-strings-in-python
-    encrypted = ''.join(chr(ord(a) ^ ord(b)) for a, b in zip(magic, plain))
-
-    escaped = uri_escape(encrypted)
-
-    return escaped
-
-
-def tpsup_unlock(string: str, *, salt=None):
-    """ decode a string """
-    _MAGIC = 'AccioConfundoLumosNox'
-    unescaped = uri_unescape(string)
-    if not salt:
-        salt = _MAGIC
-
-    length = len(unescaped)
-
-    # https://www.pythoncentral.io/use-python-multiply-strings/
-    multiplied_salt = length * salt
-
-    # https://guide.freecodecamp.org/python/is-there-a-way-to-substr
-    # ing-a-string-in-python/
-    magic = multiplied_salt[0:length]
-
-    plain = ''.join(chr(ord(a) ^ ord(b)) for a, b in zip(magic, unescaped))
-
-    return plain
-
-
-def uri_escape(string):
-    """ convert wierd chars into utl-styple string """
-    escape = {}
-
-    for i in range(0, 256):
-        escape[chr(i)] = "%%%02X" % i
-
-        # RFC3986 = '[AA-Za-z0-9\-\._~]';
-        # compiled = re.compile(RFC3986)
-        # result = re.sub(r"[^A-Za-z0-9\\-\\._~]", escape[r"\1"], string)
-
-    escaped = []
-
-    for c in list(string):
-        ord_c = ord(c)
-        if ((ord('A') <= ord_c <= ord('Z'))
-                or (ord('a') <= ord_c <= ord('z'))
-                or (ord('0') <= ord_c <= ord('9'))
-                or ord_c == ord('-') or ord_c == ord('.')
-                or ord_c == ord('_') or ord_c == ord('~')):
-            escaped.append(c)
-        else:
-            escaped.append(escape[c])
-
-    result = ''.join(escaped)
-
-    return result
-
-
-def uri_unescape(string):
-    """ restore the string """
-    # the following is the same as
-    # return urllib.unquote(string).decode('utf8')
-
-    _hexdig = '0123456789ABCDEFabcdef'
-    _hextochr = dict((a + b, chr(int(a + b, 16)))
-                     for a in _hexdig for b in _hexdig)
-
-    res = string.split('%')
-    for i in range(1, len(res)):
-        item = res[i]
-        try:
-            res[i] = _hextochr[item[:2]] + item[2:]
-        except KeyError:
-            res[i] = '%' + item
-        except UnicodeDecodeError:
-            res[i] = chr(int(item[:2], 16)) + item[2:]
-    return "".join(res)
-
-
 def silence_BrokenPipeError(func):
     @functools.wraps(func)
     def silenced(*args, **kwargs):
@@ -235,10 +137,7 @@ def silence_BrokenPipeError(func):
 
 
 def main():
-    plain = 'Hello@123'
-    encoded = tpsup_lock(plain)
-    decoded = tpsup_unlock(encoded)
-    print(f"plain='{plain}' encoded='{encoded}' decoded='{decoded}'")
+    print(f"not done")
 
 
 if __name__ == '__main__':
