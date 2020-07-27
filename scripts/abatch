@@ -25,8 +25,9 @@ sub usage {
    print << "END";
 usage:
 
-   $prog joblist.txt
-   
+   $prog    jobllist1.txt joblist2.txt ...
+   $prog -J job1 job2 ...
+ 
 description:
 
    Run autosys jobs listed in a file, joblist.txt. Within the file, one job per line.
@@ -64,6 +65,10 @@ description:
 
    -n                  dryrun mode, check-only. will print the command but won't run the jobs.
 
+   -v                  verbose mode
+
+   -J                  args are jobnames. default to filenames
+
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.
 
@@ -72,13 +77,14 @@ description:
 
 examples:
 
-   $prog abatch_test.txt    # take from file
-   $prog -                  # take from STDIN
+   $prog abatch_test_good.txt    # take from file
+   $prog -                       # take from STDIN
 
    - test without autosys
    $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
    $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
 
+   $prog -n -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt -J test_box1 filter_data
 END
 
    exit 1;
@@ -93,12 +99,14 @@ my $UnivPatterns;
 my $force;
 my $dryrun;
 my $reset;
+my $arg_is_job;
 
 GetOptions(
    'v|verbose'     => \$verbose,
    'n|dryrun'      => \$dryrun,
    'r|reset'       => \$reset,
    'f|force'       => \$force,
+   'J'             => \$arg_is_job,
    'm=s'           => \$MatchPattern,
    'x=s'           => \$ExcludePattern,
    'u=s'           => \$UnivPatterns,
@@ -106,37 +114,45 @@ GetOptions(
    'sf=s'          => \$StatusFiles,
 ) || usage("cannot parse command line: $!");
 
-usage("wrong number of args") if @ARGV != 1;
-
-my ($file) = @ARGV;
+usage("wrong number of args") if ! @ARGV;
 
 my @jobs;
+
 my $seen;
-
-my $ifh = get_in_fh($file);
-
-while (<$ifh>) {
-   chomp $_;
-   my $job = $_;
-
-   next if $job =~ /^\s*$/;     # skip blank lines
-   next if $job =~ /^\s*#/;     # skip comment
-
-   #$job =~ s/^\s+//;     # trim spaces
-   #$job =~ s/\s+$//;     # trim spaces
-   $job =~ s/^[^0-9a-zA-Z.#_-]+//;     # trim spaces or bad chars
-   $job =~ s/[^0-9a-zA-Z.#_-]+$//;     # trim spaces or bad chars
-
-   next if $job eq '';
-
-   next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
-   next if defined $ExcludePattern && $job =~ /$ExcludePattern/i;
-
-   push @jobs, $job;
-   $seen->{$job} ++;
+if ($arg_is_job) {
+   @jobs = @ARGV;
+   for my $j (@jobs) {
+      $seen->{$j} ++;
+   }
+} else {
+   for my $file (@ARGV) {
+      
+      my $ifh = get_in_fh($file);
+      
+      while (<$ifh>) {
+         chomp $_;
+         my $job = $_;
+      
+         next if $job =~ /^\s*$/;     # skip blank lines
+         next if $job =~ /^\s*#/;     # skip comment
+      
+         #$job =~ s/^\s+//;     # trim spaces
+         #$job =~ s/\s+$//;     # trim spaces
+         $job =~ s/^[^0-9a-zA-Z.#_-]+//;     # trim spaces or bad chars
+         $job =~ s/[^0-9a-zA-Z.#_-]+$//;     # trim spaces or bad chars
+      
+         next if $job eq '';
+      
+         next if defined   $MatchPattern && $job !~   /$MatchPattern/i; 
+         next if defined $ExcludePattern && $job =~ /$ExcludePattern/i;
+      
+         push @jobs, $job;
+         $seen->{$job} ++;
+      }
+      
+      close $ifh;
+   }
 }
-
-close $ifh;
 
 my $opt = {
    UnivPatterns => $UnivPatterns,
