@@ -30,22 +30,25 @@ from tpsup.lock import tpsup_unlock
 
 class Conn:
     def __init__(self, nickname: str, **opt):
+        env = tpsup.env.Env()
         connfile = opt.get('connfile', None)
         if connfile is None:
             # connfile = expanduser("~") + "/.tpsup/conn.csv"
-            home_dir = tpsup.env.Env().home_dir
+            home_dir = env.home_dir
             connfile = home_dir + "/.tpsup/conn.csv"
 
         if not os.path.exists(connfile):
             raise RuntimeError(f'connection file {connfile} not found')
 
-        st = os.stat(connfile)
-        file_perm = st.st_mode & 0o777
+        if env.isLinux:
+            st = os.stat(connfile)
+            file_perm = st.st_mode & 0o777
 
-        if file_perm != 0o600:
-            raise RuntimeError(f'{connfile} permission is {file_perm:o}; required 600')
+            if file_perm != 0o600:
+                raise RuntimeError(f'{connfile} permission is {file_perm:o}; required 600')
 
         self.connfile = connfile
+        self.env      = env
 
         opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
 
