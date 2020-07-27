@@ -200,8 +200,9 @@ class EntryBook:
         for i in range(0, len(command_list)):
             command_list[i] = self.entry_substitute(command_list[i], executable, verbose=verbose)
 
-        if verbose:  # DISABLE VERBOSE to avoid show password
-            sys.stderr.write(f"command_list =\n{pformat(command_list)}\n")
+        # DISABLE VERBOSE to avoid show password
+        # if verbose:
+        #    sys.stderr.write(f"command_list =\n{pformat(command_list)}\n")
 
         # os.system run with a string, not a List
         #return os.system(command_list)
