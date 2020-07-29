@@ -13,8 +13,9 @@ Scenario: open URL
 Scenario: login
     Given the page url is "https://livingstonchinese.org/LCA2/"
     Then  I expect that the url is "https://livingstonchinese.org/LCA2/"
-    When  I click on the name "Submit"
-    And   I expect that the url is not "https://livingstonchinese.org/"
+    When I enter my credentials
+    When I click login
+    Then I should see the login message
 
 
 #Scenario: click on link
