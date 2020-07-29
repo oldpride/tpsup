@@ -87,6 +87,7 @@ function add_path {
 
 add_path "PSModulePath" $HOME
 add_path "PSModulePath" $scriptdir.Replace('/','\')
+add_path "PSModulePath" "."    # use '.' to add current path in powershell when unix use empty string ''
 add_path "PSModulePath" "$HOME\ps1m\7Zip4Powershell\1.10.0.0"
 
 Write-Verbose ("`$Env:PSModulePath = {0}" -f $Env:PSModulePath)

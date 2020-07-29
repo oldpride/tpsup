@@ -33,7 +33,7 @@ $env:Path = $env:Path +
     ";;C:\Program Files\JetBrains\PyCharm Community Edition 2019.1.3\bin" +
     ";$TPPS1"
 
-$env:PSModulePath += ";$TPPS1" + ";$HOME"
+#$env:PSModulePath += ";$TPPS1" + ";$HOME"
 
 [Environment]::SetEnvironmentVariable("Path",$env:Path,"User")
 #[Environment]::GetEnvironmentVariable("Path", "User")
