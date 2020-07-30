@@ -157,10 +157,12 @@ Common Swithes
                       time to wait for peer to finish a transaction, default to 300
 
   -sz|sevenzip        use 7Zip to handel tar files. default to use tar.exe. Make sure 
-                      7Zip4PowerShell/7Zip4PowerShell.psd1 is in `$PSModulePath, `$Home, or script dir
+                      7Zip4PowerShell/7Zip4PowerShell.psd1 is in `$PSModulePath, `$Home,
+                      script dir, or current path
 
   -tpTar              use TpTar to handel tar files. default to use tar.exe. Make sure 
-                      TpTar/TpTar.psm1 is in `$PSModulePath, `$Home, or script dir
+                      TpTar/TpTar.psm1 is in `$PSModulePath, `$Home, script dir, or 
+                      current path.
 
 Passive-side Switches: (To-be Pulled, normal Server state)
 
