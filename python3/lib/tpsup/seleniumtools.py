@@ -167,15 +167,15 @@ class SeleniumEnv:
                                                service_args=self.driver_args,  # for chromedriver
                                                )
                 sys.stderr.write('started\n')
-                #if self.headless:
+                # if self.headless:
                 #    time.sleep(1)  # throttle for the headless mode
 
     def get_driver(self):
         return self.driver
 
-    def delay_for_viewer(self):
+    def delay_for_viewer(self, seconds: int = 1):
         if not self.headless:
-            time.sleep(1)  # Let the user actually see something!
+            time.sleep(seconds)  # Let the user actually see something!
 
     def quit(self):
         if self.driver is not None:
@@ -198,7 +198,7 @@ def main():
     #     From cmd.exe, (have to use double quotes)
     #         "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe" --window-size=960,540 \
     #         --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=19999
-    
+
     seleniumEnv = SeleniumEnv("localhost:19999", verbose=1)
     driver = seleniumEnv.get_driver()
     print(f'driver.title={driver.title}')
