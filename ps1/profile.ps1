@@ -296,3 +296,6 @@ function global:p3env {
     addpath PYTHONPATH "$TPSUP\python3\lib" 
 }
 
+function global:p3scripts {
+    cd  "$TPSUP\python3\scripts" 
+}
