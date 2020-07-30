@@ -66,6 +66,12 @@ examples:
     {prog} -dryrun         tpsel_test_google.py
     {prog}                 tpsel_test_google.py
     {prog} --headless      tpsel_test_google.py
+
+    platform specifics
+        in Linux, Windows GitBash
+            {prog} tpsel_test_google.py
+        in Windows, cygwin, cmd.exe, or powerhell
+            python {prog} tpsel_test_google.py
     """)
 
 parser = argparse.ArgumentParser(
