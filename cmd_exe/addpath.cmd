@@ -1,18 +1,32 @@
 @echo off
 
-if '%*'=='' (
-   echo "usage: addpath new_part"
+REM batch script doesn't have a $# equivalent. the following script is the best so far
+set argC=0
+for %%x in (%*) do Set /A argC+=1
+rem echo %argC%
+
+REM batch script has no != operator. use NOT == instead
+if NOT %argC% == 2 (
+   echo ERROR:   addpath wrong number of args. got %argC%, expected 2. args=%*
+   echo usage:   addpath var_name new_part
+   echo example: addpath PYTHONPATH %userprofile%\siteenv\github\tpsup\python3\lib
    exit /b
 )
 
-rem echo path=%path%
+rem bat variable of variable, ie, unix eval equivalent
+rem https://stackoverflow.com/questions/29696734/how-to-put-variable-value-inside-another-variable-name-in-batch
 
-setlocal
-set new=%1
+setlocal EnableDelayedExpansion
+
+set var=%1
+set new=%2
+
+set value=!%var%!
+
 set need=Y
 rem how to split %path% which is delimited by ;
 rem https://stackoverflow.com/questions/14879105/windows-path-variable-how-to-split-on-in-cmd-shell-again
-for %%i in ("%path:;="; "%") do (
+for %%i in ("%value:;="; "%") do (
    rem %%i is double-quoted, eg, "C:\Users\william\AppData\Local\Android\Sdk\emulator" 
    rem therefore, when compare strings later, we need to use double quote on the other party too.
    rem echo checking %%i 
@@ -21,7 +35,7 @@ for %%i in ("%path:;="; "%") do (
    rem bat doesn't support OR/AND logic
    rem https://stackoverflow.com/questions/2143187/logical-operators-and-or-in-dos-batch
    if %%i=="%new%" (
-      echo path already has %%i
+      echo %var% already has %%i
       set need=N
 
       rem break out from loop
@@ -36,11 +50,14 @@ for %%i in ("%path:;="; "%") do (
 )
 :endloop1
 
-if '%need%'=='Y' (
-   rem set path=a;b need double quotes. otherwise error: \Common was unexpected at this time.
-   endlocal
-   set "path=%path%;%new%"
-   echo appended %new% to path
+if '%need%'=='N' (
+   exit /b
 )
-endlocal
 
+rem how pass variable from set local to global
+rem https://stackoverflow.com/questions/15494688/batch-script-make-setlocal-variable-accessed-by-other-batch-files
+endlocal & (
+   rem set path=a;b need double quotes. otherwise error: \Common was unexpected at this time.
+   set "%var%=%value%;%new%"
+   echo appended %new% to %var% 
+)

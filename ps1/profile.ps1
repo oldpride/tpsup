@@ -7,6 +7,7 @@
 #    C:\Users\william\Documents\WindowsPowerShell\Microsoft.PowerShellISE_profile.ps1
 
 $global:TPPS1=(Split-Path -Parent $PSCommandPath)
+$global:TPSUP=(Split-Path -Parent $TPPS1)
 
 <#
 $env:Path = "C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program Files\Python37\Scripts\" +
@@ -150,18 +151,29 @@ function global:AddPath {
         $verbosePreference = "Continue"
     }
 
-    [string]$string = (Get-Item -Path "Env:$var").Value
-    Write-Verbose "old `$Env:$var=$string"
-    $parts = $string -split ';'
-
+    [string]$string = $null    
+    try {
+        $string = (Get-Item -Path "Env:$var").Value
+        Write-Verbose "old `$Env:$var=$string"
+    } catch {
+        $string = ""
+        Write-Verbose "Env:$Var doesn't exist"
+    }   
+    
     $added = 0 
-    if (!($parts -contains $value)) {
-        Write-Verbose "adding to `$Env:$var $value"
-        $string += ";$value"
+    if ($string -eq ""){
+        $string += "$value"
         $added ++
+    } else {
+        $parts = $string -split ';'
+        if (!($parts -contains $value)) {   
+            $string += ";$value"
+            $added ++
+        }
     }
 
     if ($added) {
+        Write-Verbose "adding to `$Env:$var $value"
         Write-Verbose "new `$Env:$var=$string"
         Set-Item -Path "Env:$var" -Value "$string"
     } else {
@@ -270,4 +282,17 @@ Set-PSReadLineOption -EditMode vi
 
 #Write-Host "To reload profile: siteenv"
 #Write-Host "To auto complete var/function/command: tab"
+
+function global:selenium {
+    # add path for chrome and chromedriver
+    addpath Path "C:\Program Files (x86)\Google\Chrome\Application"   
+    get-command chrome
+
+    addpath Path $HOME  
+    get-command chromedriver
+}
+
+function global:p3env {
+    addpath PYTHONPATH "$TPSUP\python3\lib" 
+}
 
