@@ -84,8 +84,8 @@ class TpTar{
     # we cannot copy root dir
     # root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/, or with \
     # note: ` is escape for powershell, \ is escape for regex
-    [string]$root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+|[^\\/]+[\\/]*$';
-    [string]$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+|[^\\/]+[\\/]';
+    [string]$root_dir_pattern = '^[a-zA-Z]:[\\/]*$|^[\\/]+$|^[\\/]+cygdrive[\\/]+|[\\/]+[\\/]*$';
+    [string]$abs_pattern = '^[a-zA-Z]:[\\/]|^[\\/]+|^[\\/]+cygdrive[\\/]+|[\\/]+[\\/]';
 
     # https://powershellexplained.com/2016-11-06-powershell-hashtable-everything-you-wanted-to-know-about/
     # fancy hashtable
@@ -285,8 +285,9 @@ class TpTar{
             }
 
             #if ($entry_type -eq 'FILE' -or $entry_type -eq 'LONGLINK') {
-            if ($entry['size']) {
+            # if ($entry['size']) {
                 # for any object with non-zero size
+            if ($entry_type -eq 'FILE') {               
                 $file_size = $entry['size']
                 $need_size = $this.compute_need_size($file_size)
                 $attempt_size = $this.BufferSize
@@ -324,6 +325,16 @@ class TpTar{
                 } elseif ($action -eq 'extract') {
                     # create an FileStream for output
                     Write-Verbose "write to $filename"
+
+                    if ($filename -match '^(.+)/') {                     
+                        $parent_dir = $Matches[1]
+                        if (!(Test-Path -LiteralPath $parent_dir -PathType Container -ErrorAction SilentlyContinue )) {
+                            Write-Verbose "mkdir -p $parent_dir"
+                            New-Item -ItemType Directory -Path $parent_dir -Force
+                            # powershell's "New-Item -ItemType Directory" does recursive mkdir automatically
+                        }
+                    }
+
                     $out_stream = [System.IO.File]::Create($filename)
                     # don't catch the error, let it boomb out
                     <#
@@ -364,9 +375,7 @@ class TpTar{
                 if ($out_stream) {
                     $out_stream.Flush()
                     $out_stream.Dispose()
-                }
 
-                if ($action -eq 'extract') {
                     # update file timestamp
                     Write-Verbose "set mtime on $filename"
                     (Get-Item -Path $filename).LastWriteTimeUtc = $mtimeDateTime
@@ -506,10 +515,17 @@ class TpTar{
 
             if ($string) {
                 if ($f -eq 'size') {
+                    # remove space. Windows Tar command sometimes put a space char after the number.
+                    $index = $string.IndexOf([char]" ");
+                    if ($index -ge 0) { $string = $string.Remove($index) }
+
                     # todo: should convert to bigint
                     $entry[$f] = [Convert]::ToInt64($string,8)
                 } elseif ($octal) {
-                    #$string = "00000755"
+                    # remove space. Windows Tar command sometimes put a space char after the number.
+                    $index = $string.IndexOf([char]" ");
+                    if ($index -ge 0) { $string = $string.Remove($index) }
+
                     $entry[$f] = [Convert]::ToInt64($string,8)
                 } else {
                     $entry[$f] = $string

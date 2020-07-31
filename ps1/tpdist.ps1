@@ -860,7 +860,7 @@ function to_pull {
         if ($KeepTmpFile) {
             Write-Host "$(get_timestamp) tmp_tar_file $tmp_tar_file is kept"
         } else {
-            Write-Verbose "$(get_timestamp) remove tmp_tar_file $tmp_tar_file"
+            Write-Verbose "$(get_timestamp) rm tmp_tar_file=$tmp_tar_file"
             Remove-Item $tmp_tar_file
         }
 

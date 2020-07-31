@@ -1,4 +1,4 @@
-" link this file to ~/.vimrc and ~/.virc (cygwin vi only uses ~/virc)
+" link this file to ~/.vimrc and ~/.virc (cygwin vi only uses ~/.virc)
 
 " https://vi.stackexchange.com/questions/4141/how-to-indent-as-spaces-instead-of-tab
 " tabstop:          Width of tab character
