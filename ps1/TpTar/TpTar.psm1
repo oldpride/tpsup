@@ -195,7 +195,7 @@ class TpTar{
         [int]$skipped_from = 0
         #Set-PsDebug -Trace 1
         while ($n = $ifh.Read($Buffer,0,$this.HeadSize)) {
-            Write-Verbose "read $n bytes"
+            Write-Verbose("read $n bytes at 0x{0:x}" -f $result['offset'])
 
             if ($n -ne $this.HeadSize) {
                 Write-Host ("ERROR: cannot read enough bytes from the tarfile: imcomplete HEAD at offset=0x{0:x}" -f $result['offset'])
@@ -217,6 +217,12 @@ class TpTar{
 
             [hashtable]$entry = [TpTar]::parse_head($Buffer[0..$BlockEndIndex])
             Write-Verbose "entry = $(ConvertTo-Json($entry))"
+
+            if ($entry -eq $null) {
+                Write-Host ("ERROR: cannot parse HEAD block at offset=0x{0:x}" -f $result['offset'])
+                $result['error'] += 1
+                return $result
+            }
 
             $previous_offset = $result['offset']
             $result['offset'] += $n
@@ -285,14 +291,19 @@ class TpTar{
             }
 
             #if ($entry_type -eq 'FILE' -or $entry_type -eq 'LONGLINK') {
-            # if ($entry['size']) {
-                # for any object with non-zero size
-            if ($entry_type -eq 'FILE') {               
+            if ($entry['size']) {
+                # for any object with non-zero size             
                 $file_size = $entry['size']
                 $need_size = $this.compute_need_size($file_size)
                 $attempt_size = $this.BufferSize
                 $need_size_left = $need_size
                 $file_size_left = $file_size
+
+                Write-Verbose("file_size=0x{0:x}, need_size=0x{1:x}, next head block offset=0x{2:x}" -f 
+                              $file_size,
+                              $need_size,
+                              $result['offset']+$need_size
+                              )
 
                 [string]$skip = $null
                 if ($entry['name'] -eq 'pax_global_header' -or $entry['type'] -match '^(x|g)$') {
@@ -609,10 +620,8 @@ class TpTar{
     }
 
     [int64] compute_need_size ([int64]$size) {
-        [int64]$n = $size / $this.BlockSize
-        if ($size % $this.BlockSize) {
-            $n += 1
-        }
+        # force to round up
+        [int64]$n = [int64][Math]::Ceiling($size / $this.BlockSize)
         return $n * $this.BlockSize
     }
 
