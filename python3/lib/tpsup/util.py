@@ -125,13 +125,22 @@ def load_module(source: str, new_module_name=None):
 
 
 def run_module_file(mod_file: str, **opt):
+    verbose = opt.get('verbose', 0)
+
+    if mod_file is None:
+        if verbose:
+            print('mod_file is None. skipped', file=sys.stderr)
+            if verbose > 1:
+                traceback.print_stack() # default to stderr, set file=sys.stdout for stdout
+        return
+
     with open(mod_file, 'r') as f:
         source = f.read()
         module = None
         try:
             module = load_module(source)
         except Exception:
-            traceback.print_exc(file=sys.stderr)  # e.printStackTrace equivalent in python
+            traceback.print_stack()  # e.printStackTrace equivalent in python
             module = None
 
         if module is None:

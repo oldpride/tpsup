@@ -2,6 +2,8 @@
 
 import argparse
 import os
+import socket
+import socketserver
 import sys
 import textwrap
 from pprint import pformat
@@ -23,6 +25,16 @@ driverlog = home_dir + '/selenium_chromedriver.log'
 # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
 usage = textwrap.dedent(f"""
+    batch mode
+        {prog} mod_file [args]
+        {prog} -modOnly mod_file1 mod_file2
+
+    server mode
+        {prog} listener_port [init_mod_file args]
+
+    client mode
+        {prog} serverHost:port mod_file [args]
+
     run selenium test modules
     
     +----------+      +--------------+     +----------------+
@@ -62,7 +74,7 @@ usage = textwrap.dedent(f"""
     """)
 
 examples = textwrap.dedent(f""" 
-examples:
+batch mode examples:
     {prog}                 tpsel_test_google.py
     {prog} -dryrun         tpsel_test_google.py
     {prog} --headless      tpsel_test_google.py
@@ -75,6 +87,13 @@ examples:
             {prog} tpsel_test_google.py
         in Windows, cygwin, cmd.exe, or powerhell
             python {prog} tpsel_test_google.py
+
+server mode examples:
+    {prog}  -server 29999
+    {prog}  -server 29999  tpsel_test_login.py
+
+client mode examples:
+    {prog}  -client localhost:29999  tpsel_test_login.py -- -u tester
     """)
 
 parser = argparse.ArgumentParser(
@@ -83,7 +102,7 @@ parser = argparse.ArgumentParser(
     description=usage,
     # formatter_class=argparse.RawTextHelpFormatter, # this honors \n but messed up indents
     formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+)
 
 parser.add_argument(
     '--headless', action='store_true', default=False,
@@ -116,14 +135,26 @@ parser.add_argument(
          f"On this host, default to {driverlog}")
 
 parser.add_argument(
-   '-dryrun', '--dryrun', dest='dryrun', action='store_true', default=False, help='dryrun mode')
+    '-dryrun', '--dryrun', dest='dryrun', action='store_true', default=False, help='dryrun mode')
 
 parser.add_argument(
-   '-modOnly', '--modOnly', dest='modOnly', action='store_true', default=False, help='remaining args are mod files')
+    '-server', dest="listenerPort", default=None, action='store',
+    help=f"run {prog} in server mode at this listener port, eg, 29999"
+         "server will first run the mod_files before accept client"
+         "default is batch mode")
 
 parser.add_argument(
-    'mod_file', default=None, action='store',
-    help='selenium module file')
+    '-client', dest="serverHostPort", default=None, action='store',
+    help=f"run {prog} in client mode, sending the mod_files and args to server, eg, localhost:29999"
+         "client mode will not start webdriver and browser"
+         "default is batch mode")
+
+parser.add_argument(
+    '-modOnly', '--modOnly', dest='modOnly', action='store_true', default=False, help='remaining args are mod files')
+
+parser.add_argument(
+    'mod_file', default=None, nargs='?', action='store',
+    help='python file')
 
 parser.add_argument(
     # args=argparse.REMAINDER indicates optional remaining args and stored in a List
@@ -133,9 +164,37 @@ parser.add_argument(
 args = vars(parser.parse_args())
 # default to parse command line args. we can also parse any list: args = vars(parser.parse_args(['hello', 'world'))
 
-if args['verbose']:
+verbose = args['verbose']
+
+if verbose:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
+
+serverHostPort = args.get('serverHostPort', None)
+if serverHostPort:
+    # this is client mode
+    host, port = serverHostPort.split(':')
+    data = "hello world"
+
+    # https: // docs.python.org / 3 / library / socketserver.html
+    # Create a socket (SOCK_STREAM means a TCP socket)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        # Connect to server and send data
+        sock.connect((host, int(port)))
+        sock.sendall(bytes(data + "\n", "utf-8"))
+
+        # Receive data from the server and shut down
+        received = str(sock.recv(1024), "utf-8")
+
+    print("Sent:     {}".format(data))
+    print("Received: {}".format(received))
+    sys.exit(0)
+
+if not args['listenerPort'] and not args['mod_file']:
+    print(f"ERROR: {prog} in non-server mode must specify at least one mod_file", file=sys.stderr)
+    # parser.print_help()   # long version help
+    parser.print_usage()    # short version help
+    sys.exit(1)
 
 seleniumEnv = tpsup.seleniumtools.SeleniumEnv(**args)
 
@@ -147,11 +206,38 @@ if driver is None and not args['dryrun']:
 if args['modOnly']:
     # all optional args at the end are module files
     for mod_file in [args['mod_file']] + args['remainingArgs']:
-        run_module_file(mod_file, seleniumEnv=seleniumEnv)
+        run_module_file(mod_file, seleniumEnv=seleniumEnv, verbose=verbose)
 else:
     # all optional args at the end are args to the preceding mod_file
     mod_file = args['mod_file']
-    run_module_file(mod_file, seleniumEnv=seleniumEnv, argList=args['remainingArgs'])
+    run_module_file(mod_file, seleniumEnv=seleniumEnv, verbose=verbose, argList=args['remainingArgs'])
+
+
+class MyTCPHandler(socketserver.BaseRequestHandler):
+    """
+    The request handler class for our server.
+
+    It is instantiated once per connection to the server, and must
+    override the handle() method to implement communication to the
+    client.
+    """
+
+    def handle(self):
+        # self.request is the TCP socket connected to the client
+        self.data = self.request.recv(1024).strip()
+        print("{} wrote:".format(self.client_address[0]))
+        print(self.data)
+        # just send back the same data, but upper-cased
+        self.request.sendall(self.data.upper())
+
+listenerPort = args.get('listenerPort', None)
+if (listenerPort):
+    # this is server mode
+    # 0.0.0.0 means all interfaces
+    # https://stackoverflow.com/questions/8033552/python-socket-bind-to-any-ip
+    with socketserver.TCPServer(('0.0.0.0', int(listenerPort)), MyTCPHandler) as server:
+        # Activate the server; this will keep running until you interrupt the program with Ctrl-C
+        server.serve_forever()
 
 seleniumEnv.quit()
 time.sleep(1)

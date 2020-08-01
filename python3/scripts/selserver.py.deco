@@ -119,6 +119,11 @@ parser.add_argument(
     help='selserver listener port')
 
 parser.add_argument(
+    # args=argparse.REMAINDER indicates optional remaining args and stored in a List
+    'remainingArgs', nargs=argparse.REMAINDER,
+    help='remaining args. Can be mod_file if -modOnly set, or default to args to the preceding mod_file, start with --')
+
+parser.add_argument(
     # this is the rest positional args, indicated by 'append'. nargs="*' means optional.
     # the default is actually [[]]. So when we process it, we cannot assume the List is always str.
     'init_mod_files', default=[], action='append', nargs='*',

@@ -2,6 +2,7 @@ import re
 
 import argparse
 import sys
+from pprint import pformat
 
 import tpsup.seleniumtools
 from selenium import webdriver
@@ -13,14 +14,15 @@ from tpsup.lock import EntryBook
 def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
+    mod_file = opt.get('mod_file', 'mod_file')
 
     argList = opt.get('argList', [])
     if verbose:
-        print(f'argList={argList}', file=sys.stderr)
+        sys.stderr.write(f"{mod_file}argList=\n")
+        sys.stderr.write(pformat(argList) + "\n")
     if argList:
-        prog = opt.get('mod_file', 'mod_file')
         parser = argparse.ArgumentParser(
-            prog=prog,
+            prog=mod_file,
         )
         parser.add_argument(
             '-u', dest='username', default=username, action='store',

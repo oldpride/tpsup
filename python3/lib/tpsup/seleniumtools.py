@@ -72,31 +72,32 @@ class SeleniumEnv:
 
             self.print_running_drivers()
 
-            if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
-                # display the beginning of the log file as 'tail' only display the later part
-                # use /dev/null to avoid error message in case the log file has not been created
-                cmd = f"cat /dev/null {self.driverlog}"
-                sys.stderr.write(cmd)
-                os.system(cmd)
+            if self.verbose > 1:
+                if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
+                    # display the beginning of the log file as 'tail' only display the later part
+                    # use /dev/null to avoid error message in case the log file has not been created
+                    cmd = f"cat /dev/null {self.driverlog}"
+                    sys.stderr.write(cmd)
+                    os.system(cmd)
 
-                # --pid PID  exits when PID is gone
-                # -F         retry file if it doesn't exist
-                cmd = f"tail --pid {os.getpid()} -F -f {self.driverlog} &"
-                sys.stderr.write(cmd)
-                os.system(cmd)
-            elif self.env.isWindows:
-                # windows doesn't have a way to do "tail -f file &"
-                # 1. from cmd.exe, we would have to call powershell to use "tail -f" equivalent, but will
-                #    have difficulty to make the process background.
-                # https://stackoverflow.com/questions/185575/powershell-equivalent-of-bash-ampersand-for-forking-running-background-proce
-                # https://stackoverflow.com/questions/187587/a-windows-equivalent-of-the-unix-tail-command
-                # powershell.exe start-job -ScriptBlock { get-content C:/users/william/selenium_chromedriver.log -wait -tail 1 }
-                #
-                # 2. from powershell, Start-Job can easily run a ScriptBlock in background, but the output will
-                #    not come back to foreground.
-                # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/start-job?view=powershell-7#:~:text=The%20Start%2DJob%20cmdlet%20starts,an%20extended%20time%20to%20finish.
-                # start-job -ScriptBlock { get-content C:/users/william/selenium_chromedriver.log -wait -tail 1 }
-                pass
+                    # --pid PID  exits when PID is gone
+                    # -F         retry file if it doesn't exist
+                    cmd = f"tail --pid {os.getpid()} -F -f {self.driverlog} &"
+                    sys.stderr.write(cmd)
+                    os.system(cmd)
+                elif self.env.isWindows:
+                    # windows doesn't have a way to do "tail -f file &"
+                    # 1. from cmd.exe, we would have to call powershell to use "tail -f" equivalent, but will
+                    #    have difficulty to make the process background.
+                    # https://stackoverflow.com/questions/185575/powershell-equivalent-of-bash-ampersand-for-forking-running-background-proce
+                    # https://stackoverflow.com/questions/187587/a-windows-equivalent-of-the-unix-tail-command
+                    # powershell.exe start-job -ScriptBlock { get-content C:/users/william/selenium_chromedriver.log -wait -tail 1 }
+                    #
+                    # 2. from powershell, Start-Job can easily run a ScriptBlock in background, but the output will
+                    #    not come back to foreground.
+                    # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/start-job?view=powershell-7#:~:text=The%20Start%2DJob%20cmdlet%20starts,an%20extended%20time%20to%20finish.
+                    # start-job -ScriptBlock { get-content C:/users/william/selenium_chromedriver.log -wait -tail 1 }
+                    pass
 
         # chrome_options will be used on chrome browser's command line not chromedriver's commandline
         self.browser_options = Options()
