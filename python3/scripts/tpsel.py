@@ -7,7 +7,7 @@ import textwrap
 from pprint import pformat
 import tpsup.env
 import tpsup.seleniumtools
-from tpsup.util import load_module
+from tpsup.util import run_module_file
 import traceback
 import time
 
@@ -63,9 +63,12 @@ usage = textwrap.dedent(f"""
 
 examples = textwrap.dedent(f""" 
 examples:
-    {prog} -dryrun         tpsel_test_google.py
     {prog}                 tpsel_test_google.py
+    {prog} -dryrun         tpsel_test_google.py
     {prog} --headless      tpsel_test_google.py
+
+    {prog}                 tpsel_test_login.py -- -u tester
+    {prog} -modOnly        tpsel_test_google.py tpsel_test_login.py
 
     platform specifics
         in Linux, Windows GitBash
@@ -116,10 +119,19 @@ parser.add_argument(
    '-dryrun', '--dryrun', dest='dryrun', action='store_true', default=False, help='dryrun mode')
 
 parser.add_argument(
-    'mod_files', default=[], action='append',
-    help='selenium module files')
+   '-modOnly', '--modOnly', dest='modOnly', action='store_true', default=False, help='remaining args are mod files')
+
+parser.add_argument(
+    'mod_file', default=None, action='store',
+    help='selenium module file')
+
+parser.add_argument(
+    # args=argparse.REMAINDER indicates optional remaining args and stored in a List
+    'remainingArgs', nargs=argparse.REMAINDER,
+    help='remaining args. Can be mod_file if -modOnly set, or default to args to the preceding mod_file, start with --')
 
 args = vars(parser.parse_args())
+# default to parse command line args. we can also parse any list: args = vars(parser.parse_args(['hello', 'world'))
 
 if args['verbose']:
     sys.stderr.write("args =\n")
@@ -132,25 +144,14 @@ driver = seleniumEnv.get_driver()
 if driver is None and not args['dryrun']:
     sys.exit(1)
 
-for mod_file in args['mod_files']:
-    with open(mod_file, 'r') as f:
-        source = f.read()
-        module = None
-        try:
-            module = load_module(source)
-        except Exception:
-            traceback.print_exc(file=sys.stderr)  # e.printStackTrace equivalent in python
-            module = None
-
-        if module is None:
-            sys.stderr.write(f"failed to compile: {mod_file}\n")
-            continue
-
-        if args['dryrun']:
-            sys.stderr.write(f"dryrun mode: {mod_file} compiled successfully\n")
-        else:
-            sys.stderr.write(f"running: {mod_file}\n")
-            module.run(seleniumEnv)
+if args['modOnly']:
+    # all optional args at the end are module files
+    for mod_file in [args['mod_file']] + args['remainingArgs']:
+        run_module_file(mod_file, seleniumEnv=seleniumEnv)
+else:
+    # all optional args at the end are args to the preceding mod_file
+    mod_file = args['mod_file']
+    run_module_file(mod_file, seleniumEnv=seleniumEnv, argList=args['remainingArgs'])
 
 seleniumEnv.quit()
 time.sleep(1)

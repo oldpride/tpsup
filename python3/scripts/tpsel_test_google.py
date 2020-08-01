@@ -3,7 +3,7 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from urllib.parse import urlparse
 
-def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv):
+def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     driver = seleniumEnv.get_driver()
 
     # print(f'driver.title={driver.title}')

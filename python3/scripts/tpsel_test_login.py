@@ -1,14 +1,36 @@
 import re
 
+import argparse
+import sys
+
 import tpsup.seleniumtools
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from urllib.parse import urlparse
-
 from tpsup.lock import EntryBook
 
 
-def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv):
+def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
+    username = "lca_editor"  # change this to the username associated with your account
+    verbose = opt.get('verbose', 0)
+
+    argList = opt.get('argList', [])
+    if verbose:
+        print(f'argList={argList}', file=sys.stderr)
+    if argList:
+        prog = opt.get('mod_file', 'mod_file')
+        parser = argparse.ArgumentParser(
+            prog=prog,
+        )
+        parser.add_argument(
+            '-u', dest='username', default=username, action='store',
+            help='login user')
+        args = vars(parser.parse_args(argList))
+        username=args['username']
+
+    entryBook = EntryBook()
+    password = entryBook.get_entry_by_key(username).get('decoded')
+
     driver = seleniumEnv.get_driver()
 
     # print(f'driver.title={driver.title}')
@@ -21,10 +43,6 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv):
     assert expected_url == actual_url
 
     seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
-
-    entryBook = EntryBook()
-    username = "lca_editor"  # change this to the username associated with your account
-    password = entryBook.get_entry_by_key(username).get('decoded')
 
     # https://dev.to/endtest/a-practical-guide-for-finding-elements-with-selenium-4djf
     # in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,

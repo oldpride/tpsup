@@ -2,6 +2,7 @@ import functools
 import inspect
 import re
 import sys
+import traceback
 import types
 from pprint import pformat
 from typing import Dict, List
@@ -122,6 +123,26 @@ def load_module(source: str, new_module_name=None):
     exec(code, mod.__dict__)
     return mod
 
+
+def run_module_file(mod_file: str, **opt):
+    with open(mod_file, 'r') as f:
+        source = f.read()
+        module = None
+        try:
+            module = load_module(source)
+        except Exception:
+            traceback.print_exc(file=sys.stderr)  # e.printStackTrace equivalent in python
+            module = None
+
+        if module is None:
+            sys.stderr.write(f"failed to compile: {mod_file}\n")
+            return
+
+        if opt.get('dryrun', False):
+            sys.stderr.write(f"dryrun mode: {mod_file} compiled successfully\n")
+        else:
+            sys.stderr.write(f"running: {mod_file}\n")
+            module.run(mod_file=mod_file, **opt)  # pycharm had a warning here. I set to ignore
 
 def silence_BrokenPipeError(func):
     @functools.wraps(func)
