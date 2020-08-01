@@ -10,6 +10,7 @@ import tpsup.seleniumtools
 from tpsup.util import load_module
 import traceback
 import time
+import socketserver
 
 prog = os.path.basename(sys.argv[0])
 
@@ -63,9 +64,7 @@ usage = textwrap.dedent(f"""
 
 examples = textwrap.dedent(f""" 
 examples:
-    {prog} -dryrun         tpsel_test_google.py
-    {prog}                 tpsel_test_google.py
-    {prog} --headless      tpsel_test_google.py
+    {prog} 29999 init.py
 
     platform specifics
         in Linux, Windows GitBash
@@ -116,8 +115,14 @@ parser.add_argument(
    '-dryrun', '--dryrun', dest='dryrun', action='store_true', default=False, help='dryrun mode')
 
 parser.add_argument(
-    'mod_files', default=[], action='append',
-    help='selenium module files')
+    'listener_port', default=None, action='store',
+    help='selserver listener port')
+
+parser.add_argument(
+    # this is the rest positional args, indicated by 'append'. nargs="*' means optional.
+    # the default is actually [[]]. So when we process it, we cannot assume the List is always str.
+    'init_mod_files', default=[], action='append', nargs='*',
+    help='run these init files (.py) right after server starts up, eg, prep work. optional')
 
 args = vars(parser.parse_args())
 
@@ -132,7 +137,10 @@ driver = seleniumEnv.get_driver()
 if driver is None and not args['dryrun']:
     sys.exit(1)
 
-for mod_file in args['mod_files']:
+for mod_file in args['init_mod_files']:
+    if not mod_file:
+        # as mentioned before, the default of args['init_mod_files'] is [[]]
+        continue
     with open(mod_file, 'r') as f:
         source = f.read()
         module = None

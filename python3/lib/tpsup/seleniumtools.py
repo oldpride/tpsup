@@ -70,7 +70,7 @@ class SeleniumEnv:
             sys.stderr.write(f'pwd={os.getcwd()}\n')
             sys.stderr.write(f'PATH={os.environ["PATH"]}\n')
 
-            self.print_running_driver()
+            self.print_running_drivers()
 
             if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
                 # display the beginning of the log file as 'tail' only display the later part
