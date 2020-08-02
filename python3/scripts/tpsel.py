@@ -183,6 +183,7 @@ if serverHostPort:
         sock.connect((host, int(port)))
         sock.sendall(bytes(data + "\n", "utf-8"))
 
+
         # Receive data from the server and shut down
         received = str(sock.recv(1024), "utf-8")
 
