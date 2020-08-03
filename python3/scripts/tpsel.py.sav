@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
-import json
 import os
-import select
 import socket
 import socketserver
 import sys
@@ -11,9 +9,7 @@ import textwrap
 from pprint import pformat
 import tpsup.env
 import tpsup.seleniumtools
-import tpsup.coder
-import tpsup.nettools
-from tpsup.util import run_module, tplog, print_exception, tplog_exception
+from tpsup.util import run_module_file
 import traceback
 import time
 
@@ -154,10 +150,6 @@ parser.add_argument(
          "default is batch mode")
 
 parser.add_argument(
-    '-key', dest="key", default=None, action='store',
-    help="used in client or server mode to encrypt data communication. without it, data will not be encrypted")
-
-parser.add_argument(
     '-modOnly', '--modOnly', dest='modOnly', action='store_true', default=False, help='remaining args are mod files')
 
 parser.add_argument(
@@ -173,58 +165,30 @@ args = vars(parser.parse_args())
 # default to parse command line args. we can also parse any list: args = vars(parser.parse_args(['hello', 'world'))
 
 verbose = args['verbose']
-key = args['key']
 
 if verbose:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
 
-# python socket programming
-# https://docs.python.org/3/howto/sockets.html
-
-serverHostPort = args['serverHostPort']
+serverHostPort = args.get('serverHostPort', None)
 if serverHostPort:
     # this is client mode is serverHostPort is defined
     host, port = serverHostPort.split(':')
-    maxtry = args.get("maxtry", 5)
-    interval = args.get("interval", 3)
+    data = "hello world"
+
+    # https: // docs.python.org / 3 / library / socketserver.html
+    # Create a socket (SOCK_STREAM means a TCP socket)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        ensock = None
-        for i in range(0, maxtry):
-            try:
-                sock.connect((host, int(port)))
-                ensock = tpsup.nettools.encryptedsocket(sock, key)
-                break
-            except Exception as e:
-                tplog(f'{i+1} try out of {maxtry} failed to connect: {e}', file=sys.stderr)
-                if i+1 < maxtry:
-                    tplog(f'will retry after {interval}', file=sys.stderr)
-                    time.sleep(interval)
-                else:
-                    break
-        if ensock:
-            request = {}
+        # Connect to server and send data
+        sock.connect((host, int(port)))
+        sock.sendall(bytes(data + "\n", "utf-8"))
 
-            # read the entire file
-            with open(args['mod_file'], 'r') as f:
-                request['module'] = f.read()
 
-            request['args'] = args['remainingArgs']
-            request['accept'] = 'json'
+        # Receive data from the server and shut down
+        received = str(sock.recv(1024), "utf-8")
 
-            request_str = json.dumps(request)
-            request_bytes = bytes(request_str, "utf-8")
-            tplog(f"Sending {len(request_bytes)} bytes", file=sys.stderr)
-            ensock.sendall(request_bytes)
-
-            # https://stackoverflow.com/questions/35113723/when-why-to-use-s-shutdownsocket-shut-wr
-            # shut down the send channel so that the other side recv() won't wait forever
-            ensock.socket.shutdown(socket.SHUT_WR)
-
-            tplog("Sent. waiting response")
-            received = str(ensock.recv(1024), "utf-8")
-            tplog(f"Received: {len(received)}")
-
+    print("Sent:     {}".format(data))
+    print("Received: {}".format(received))
     sys.exit(0)
 
 if not args['listenerPort'] and not args['mod_file']:
@@ -243,85 +207,43 @@ if driver is None and not args['dryrun']:
 if args['modOnly']:
     # all optional args at the end are module files
     for mod_file in [args['mod_file']] + args['remainingArgs']:
-        run_module(mod_file, mod_is_file=True, seleniumEnv=seleniumEnv, verbose=verbose)
+        run_module_file(mod_file, seleniumEnv=seleniumEnv, verbose=verbose)
 else:
     # all optional args at the end are args to the preceding mod_file
     mod_file = args['mod_file']
-    run_module(mod_file, mod_is_file=True, seleniumEnv=seleniumEnv, verbose=verbose, argList=args['remainingArgs'])
+    run_module_file(mod_file, seleniumEnv=seleniumEnv, verbose=verbose, argList=args['remainingArgs'])
+
+
+class MyTCPHandler(socketserver.BaseRequestHandler):
+    """
+    The request handler class for our server.
+
+    It is instantiated once per connection to the server, and must
+    override the handle() method to implement communication to the
+    client.
+    """
+
+    def handle(self):
+        # self.request is the TCP socket connected to the client
+        self.data = self.request.recv(1024).strip()
+        print("{} wrote:".format(self.client_address[0]))
+        print(self.data)
+        # just send back the same data, but upper-cased
+        self.request.sendall(self.data.upper())
 
 listenerPort = args.get('listenerPort', None)
 if (listenerPort):
-    data = "hello client"
     # this is server mode
     # 0.0.0.0 means all interfaces
-    serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # bind the socket to a public host, and a well-known port
-    serversocket.bind(('0.0.0.0', int(listenerPort)))  # 0.0.0.0 means all interfaces
-    # become a server socket
-    serversocket.listen(5)
-    listener_max_idle = 3600
-    while True:
-        serversocket.settimeout(listener_max_idle)  # this only affects serversocket
-        try:
-            tplog(f"waiting for new client connection. time out after {listener_max_idle} idle seconds")
-            (clientsocket, address) = serversocket.accept()
-        except socket.timeout as e:
-            tplog(print_exception(e, file=str))
-            tplog(f"server exit after {listener_max_idle} idle seconds")
-            serversocket.close()
-            sys.exit(0)
-        tplog(f"accepted client socket {clientsocket}")
-
-        # https://stackoverflow.com/questions/2719017/how-to-set-timeout-on-pythons-socket-recv-method
-        # using select() or poll() to control timeout is better than socket.settimeout()
-        in_coder = tpsup.coder.Coder(key)
-        out_coder = tpsup.coder.Coder(key)
-
-        clientsocket.setblocking(0)
-
-        receive_timeout = 6
-        sleep_between_polling = 2
-        wait_so_far = 0
-        received_bytearray = bytearray()
-        while wait_so_far < receive_timeout:
-            ready = select.select([clientsocket], [], [], 0)  # timeout is 0 but we will sleep later
-            if ready[0]:
-                data = clientsocket.recv(40960)
-                if data == b'':
-                    tplog(f"client connection is closed")
-                    break
-                # there may be other scenarios we need to handle, for example, The other side has reset
-                # the socket. You'll get an exception.
-                received_bytearray.extend(data)
-            else:
-                time.sleep(sleep_between_polling)
-                wait_so_far += sleep_between_polling
-        if wait_so_far >= receive_timeout:
-            tplog(f"recv() timed out after {wait_so_far} seconds, did not reach EOF of client socket")
-        else:
-            tplog(f"reached EOF of client socket")
-        tplog(f"received total {len(received_bytearray)} bytes")
-
-        decoded_bytearray = in_coder.xor(received_bytearray)
-        decoded_str = str(decoded_bytearray, 'utf-8')
-        request = json.loads(decoded_str, object_hook=dict)
-
-        for k in ('module', 'args', 'accept'):
-            if not k in request:
-                tplog(f"{decoded_str} missing key='{k}")
-                sys.exit(1)
-
-        # don't let client request to bump out our server
-        try:
-            run_module(request['module'], seleniumEnv=seleniumEnv, verbose=verbose, argList=request['args'])
-        except Exception as e:
-            tplog_exception(e)
-
+    # https://stackoverflow.com/questions/8033552/python-socket-bind-to-any-ip
+    with socketserver.TCPServer(('0.0.0.0', int(listenerPort)), MyTCPHandler) as server:
+        # Activate the server; this will keep running until you interrupt the program with Ctrl-C
+        server.serve_forever()
 
 seleniumEnv.quit()
 time.sleep(1)
 seleniumEnv.print_running_drivers()
 
 if args['verbose']:
-    tplog(f'driverlog file {seleniumEnv.driverlog}')
-    tplog(f'chromedir dir  {seleniumEnv.chromedir}')
+    print(f'driverlog file {seleniumEnv.driverlog}')
+    print(f'chromedir dir  {seleniumEnv.chromedir}')
