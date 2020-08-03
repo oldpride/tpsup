@@ -272,38 +272,9 @@ if (listenerPort):
             sys.exit(0)
         tplog(f"accepted client socket {clientsocket}")
 
-        # https://stackoverflow.com/questions/2719017/how-to-set-timeout-on-pythons-socket-recv-method
-        # using select() or poll() to control timeout is better than socket.settimeout()
-        in_coder = tpsup.coder.Coder(key)
-        out_coder = tpsup.coder.Coder(key)
-
-        clientsocket.setblocking(0)
-
-        receive_timeout = 6
-        sleep_between_polling = 2
-        wait_so_far = 0
-        received_bytearray = bytearray()
-        while wait_so_far < receive_timeout:
-            ready = select.select([clientsocket], [], [], 0)  # timeout is 0 but we will sleep later
-            if ready[0]:
-                data = clientsocket.recv(40960)
-                if data == b'':
-                    tplog(f"client connection is closed")
-                    break
-                # there may be other scenarios we need to handle, for example, The other side has reset
-                # the socket. You'll get an exception.
-                received_bytearray.extend(data)
-            else:
-                time.sleep(sleep_between_polling)
-                wait_so_far += sleep_between_polling
-        if wait_so_far >= receive_timeout:
-            tplog(f"recv() timed out after {wait_so_far} seconds, did not reach EOF of client socket")
-        else:
-            tplog(f"reached EOF of client socket")
-        tplog(f"received total {len(received_bytearray)} bytes")
-
-        decoded_bytearray = in_coder.xor(received_bytearray)
-        decoded_str = str(decoded_bytearray, 'utf-8')
+        ensock = tpsup.nettools.encryptedsocket(clientsocket, key)
+        decoded_bytes = ensock.recv_all(timeout=6)
+        decoded_str = str(decoded_bytes, 'utf-8')
         request = json.loads(decoded_str, object_hook=dict)
 
         for k in ('module', 'args', 'accept'):
@@ -312,10 +283,23 @@ if (listenerPort):
                 sys.exit(1)
 
         # don't let client request to bump out our server
+        result = None
+        exception = None
         try:
-            run_module(request['module'], seleniumEnv=seleniumEnv, verbose=verbose, argList=request['args'])
+            result = run_module(request['module'], seleniumEnv=seleniumEnv, verbose=verbose, argList=request['args'])
         except Exception as e:
             tplog_exception(e)
+            exception = e
+
+        if request['accept'] == 'json':
+            reply = {}
+            reply['result'] = result
+            reply['exception'] = e
+            reply_str = json.dumps(reply)
+            reply_bytes = bytes(reply_str, "utf-8")
+
+
+
 
 
 seleniumEnv.quit()

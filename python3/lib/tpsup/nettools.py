@@ -1,8 +1,10 @@
 import functools
+import select
 import socket
 import sys
 import time
 from pprint import pformat
+from tpsup.util import tplog
 
 import tpsup.coder
 
@@ -95,6 +97,8 @@ class encryptedsocket:
         """
         return self.in_coder.xor(self.socket.recv(size))
 
+
+
     def recv_string(self, size) -> str:
         """ size is max size"""
         return self.recv(size).decode('utf-8')
@@ -107,6 +111,49 @@ class encryptedsocket:
 
     # python socket has no flush()
     #   https: // stackoverflow.com / questions / 4407835 / python - socket - flush
+
+    def recv_all(self, timeout: int = 6, **opt) -> bytes:
+        """ this is actually use unblocked recv() to re-implement a blocked recv().
+        The possible benefits:
+        - sock.recv(size)'s size is limited, we can use a loop to recv() bigger file. In this
+        loop pattern, socket.settimeout() looks awkward. socket.settimeout() seems better for
+        small data
+        """
+
+        # getblocking()/setblocking() is implemented by gettimeout()/settimeout. no getblocking() before 3.7
+        saved_timeout = self.socket.gettimeout()
+        # saved_blocking = self.socket.getblocking()
+
+        # unblock
+        self.socket.setblocking(0)
+
+        sleep_between_polling = 1
+        wait_so_far = 0
+        received_bytearray = bytearray()
+        while wait_so_far < timeout:
+            ready = select.select([self.socket], [], [], 1)  # timeout is 0 but we will sleep later
+            if ready[0]:
+                data = self.socket.recv(4096)
+                if data == b'':
+                    tplog(f"client connection is closed")
+                    break
+                # there may be other scenarios we need to handle, for example, The other side has reset
+                # the socket. You'll get an exception.
+                received_bytearray.extend(self.in_coder.xor(data))
+            else:
+                time.sleep(sleep_between_polling)
+                wait_so_far += sleep_between_polling
+        if wait_so_far >= timeout:
+            tplog(f"recv() timed out after {wait_so_far} seconds, did not reach EOF of client socket")
+        else:
+            tplog(f"reached EOF of client socket")
+        tplog(f"received total {len(received_bytearray)} bytes")
+
+        # getblocking()/setblocking() is implemented by gettimeout()/settimeout. no getblocking() before 3.7
+        self.socket.settimeout(saved_timeout)
+        # self.socket.setblocking(saved_blocking) # restoring blocking setting
+
+        return bytes(received_bytearray)
 
 
 def main():
