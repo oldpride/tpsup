@@ -18,6 +18,7 @@ import traceback
 import time
 
 prog = os.path.basename(sys.argv[0])
+script_dir = os.path.dirname(sys.argv[0])
 
 my_env = tpsup.env.Env()
 my_env.adapt()
@@ -79,22 +80,23 @@ usage = textwrap.dedent(f"""
 
 examples = textwrap.dedent(f""" 
 batch mode examples:
-    {prog}                 tpsel_test_google.py
-    {prog} -dryrun         tpsel_test_google.py
-    {prog} --headless      tpsel_test_google.py
+    {prog}                 tpsel_base/test_google.py
+    {prog} -dryrun         tpsel_base/test_google.py
+    {prog} --headless      tpsel_base/test_google.py
 
-    {prog}                 tpsel_test_login.py -- -u tester
-    {prog} -modOnly        tpsel_test_google.py tpsel_test_login.py
+    {prog}                 tpsel_base/test_login.py -- -u tester
+    {prog} -modOnly        tpsel_base/test_google.py tpsel_base/test_login.py
 
     platform specifics
         in Linux, Windows GitBash
-            {prog} tpsel_test_google.py
-        in Windows, cygwin, cmd.exe, or powerhell
-            python {prog} tpsel_test_google.py
+            {prog} tpsel_base/test_google.py
+        in Windows, cygwin, cmd.exe, or powershell
+            python {prog} tpsel_base/test_google.py
 
 server mode examples:
     {prog}  -server 29999
-    {prog}  -server 29999  tpsel_test_login.py
+    {prog}  -server 29999  tpsel_base/test_login.py
+    {prog}  -server 29999  -base tpsel_base
 
 client mode examples:
     {prog}  -client localhost:29999  tpsel_test_login.py -- -u tester
@@ -148,6 +150,11 @@ parser.add_argument(
          "default is batch mode")
 
 parser.add_argument(
+    '-base', dest="base", default=None, action='store',
+    help=f"in server mode, all modules asked by client are located in this place. "
+         f"default to $TPSELBASE if set; otherwise, {script_dir}/tpsel_base. ")
+
+parser.add_argument(
     '-client', dest="serverHostPort", default=None, action='store',
     help=f"run {prog} in client mode, sending the mod_files and args to server, eg, localhost:29999"
          "client mode will not start webdriver and browser"
@@ -173,57 +180,35 @@ args = vars(parser.parse_args())
 # default to parse command line args. we can also parse any list: args = vars(parser.parse_args(['hello', 'world'))
 
 verbose = args['verbose']
-key = args['key']
+key: str = args['key']  # python casting, type hint, typing hint
 
 if verbose:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
 
-# python socket programming
-# https://docs.python.org/3/howto/sockets.html
-
 serverHostPort = args['serverHostPort']
 if serverHostPort:
-    # this is client mode is serverHostPort is defined
+    # this is client mode if serverHostPort is defined
     host, port = serverHostPort.split(':')
-    maxtry = args.get("maxtry", 5)
-    interval = args.get("interval", 3)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        ensock = None
-        for i in range(0, maxtry):
-            try:
-                sock.connect((host, int(port)))
-                ensock = tpsup.nettools.encryptedsocket(sock, key)
-                break
-            except Exception as e:
-                tplog(f'{i+1} try out of {maxtry} failed to connect: {e}', file=sys.stderr)
-                if i+1 < maxtry:
-                    tplog(f'will retry after {interval}', file=sys.stderr)
-                    time.sleep(interval)
-                else:
-                    break
-        if ensock:
-            request = {}
+    ensock = tpsup.nettools.encryptedsocket(key, established_socket=serverHostPort)
 
-            # read the entire file
-            with open(args['mod_file'], 'r') as f:
-                request['module'] = f.read()
+    request = {
+        'mod_file': args['mod_file'],
+        'args': args['remainingArgs'],
+        'accept': 'json',
+    }
 
-            request['args'] = args['remainingArgs']
-            request['accept'] = 'json'
+    request_str = json.dumps(request)
+    request_bytes = bytes(request_str, "utf-8")
+    tplog(f"Sending {len(request_bytes)} bytes", file=sys.stderr)
+    ensock.send_and_encode(request_bytes)
 
-            request_str = json.dumps(request)
-            request_bytes = bytes(request_str, "utf-8")
-            tplog(f"Sending {len(request_bytes)} bytes", file=sys.stderr)
-            ensock.sendall(request_bytes)
+    # shut down the send channel so that the other side recv() won't wait forever
+    ensock.send_shutdown()
 
-            # https://stackoverflow.com/questions/35113723/when-why-to-use-s-shutdownsocket-shut-wr
-            # shut down the send channel so that the other side recv() won't wait forever
-            ensock.socket.shutdown(socket.SHUT_WR)
-
-            tplog("Sent. waiting response")
-            received = str(ensock.recv(1024), "utf-8")
-            tplog(f"Received: {len(received)}")
+    tplog("Sent. waiting response")
+    received = str(ensock.recv_and_decode(), "utf-8")
+    tplog(f"Received: {len(received)}")
 
     sys.exit(0)
 

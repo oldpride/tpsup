@@ -5,6 +5,7 @@ import sys
 import time
 from pprint import pformat
 from tpsup.util import tplog
+from typing import Union
 
 import tpsup.coder
 
@@ -17,6 +18,7 @@ def is_tcp_open(_host: str, _port: str):
         return True
     else:
         return False
+
 
 # abandoned the design to subclass socket.socket
 # reason:
@@ -57,10 +59,34 @@ def is_tcp_open(_host: str, _port: str):
 
 class encryptedsocket:
     """ encrypt an existing socket"""
-    def __init__(self, sock: socket.socket, key: str = None, **opt):
-        if not sock:
-            raise RuntimeError('socket is not initialized yet')
-        self.socket = sock
+
+    # python class doesn't support multiple constructors
+    def __init__(self, key:str, established_socket: socket.socket = None, host_port: str = None, maxtry: int = 5, try_interval: int = 3, **opt):
+        if established_socket:
+            self.socket = established_socket
+        elif host_port:
+            host, port = host_port.split(':')
+            if not port:
+                raise RuntimeError(f"bad format at host_port='{host_port}'; expected host:port")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if sock:
+                for i in range(0, maxtry):
+                    try:
+                        sock.connect((host, int(port)))
+                        self.socket = sock
+                        break
+                    except Exception as e:
+                        tplog(f'{i + 1} try out of {maxtry} failed to connect: {e}', file=sys.stderr)
+                        if i + 1 < maxtry:
+                            tplog(f'will retry after {try_interval}', file=sys.stderr)
+                            time.sleep(try_interval)
+                        else:
+                            raise RuntimeError(f"failed to connect to {host}:{port} in {maxtry} tries")
+            else:
+                raise RuntimeError(socket.error)
+        else:
+            raise RuntimeError("neither established_socket nor host_port specified")
+
         if key is None or key == '':
             key = None
         self.key = key
@@ -68,40 +94,18 @@ class encryptedsocket:
         self.in_coder = tpsup.coder.Coder(key)
         self.out_coder = tpsup.coder.Coder(key)
 
-    def sendall(self, data: bytes, size: int = -1) -> None:
-        ''' mimic socket.sendall(bytes[,flags])
-        https://docs.python.org/3/library/socket.html
-        '''
-        self.socket.sendall(self.out_coder.xor(data, size=size))
-        '''
-        socket.send() vs socket.sendall()
+    def send_string(self, string: str, coding: str = 'utf-8', **opt) -> None:
+        self.send_and_encode(string.encode(coding), **opt)
 
-        socket.send(bytes[, flags]) 
-        Send data to the socket. Returns the number of bytes sent. Applications are responsible
-        for checking that all data has been sent; if only some of the data was transmitted, the application
-        needs to attempt delivery of the remaining data.
-
-        socket.sendall(bytes[, flags]) 
-        Send data to the socket. Unlike send(), this method continues to 
-        send data from bytes until either all data has been sent or an error occurs. None is returned on success. On 
-        error, an exception is raised, and there is no way to determine how much data, if any, was successfully sent. 
-        '''
-
-    def send_string(self, string: str) -> None:
-        self.sendall(string.encode('utf-8'))
-
-    def recv(self, size: int, flags=0) -> bytes:
-        """socket.recv(bufsize[, flags])
-        https://docs.python.org/3/library/socket.html
-        size is the max size
-        """
-        return self.in_coder.xor(self.socket.recv(size))
-
-
-
-    def recv_string(self, size) -> str:
+    def recv_string(self, coding: str = 'utf-8', **opt) -> str:
         """ size is max size"""
-        return self.recv(size).decode('utf-8')
+        return self.recv_and_decode().decode(coding)
+
+    def send_shutdown(self):
+        self.socket.shutdown(socket.SHUT_WR)
+
+    def recv_shutdown(self):
+        self.socket.shutdown(socket.SHUT_RD)
 
     def close(self):
         self.socket.close()
@@ -110,50 +114,128 @@ class encryptedsocket:
         self.out_coder = None
 
     # python socket has no flush()
-    #   https: // stackoverflow.com / questions / 4407835 / python - socket - flush
+    #     https: // stackoverflow.com / questions / 4407835 / python - socket - flush
 
-    def recv_all(self, timeout: int = 6, **opt) -> bytes:
+    def recv_and_decode(self, timeout: int = 6, maxsize=1024 * 1024 * 1024, **opt) -> bytes:
         """ this is actually use unblocked recv() to re-implement a blocked recv().
         The possible benefits:
-        - sock.recv(size)'s size is limited, we can use a loop to recv() bigger file. In this
+        - sock.recv(buffer_size)'s buffer_size is limited, we can use a loop to recv() bigger file. In this
         loop pattern, socket.settimeout() looks awkward. socket.settimeout() seems better for
         small data
+        - decrypt the incoming data with smaller chunks, ie, in buffer_size
         """
+
+        # https://docs.python.org/3/library/socket.html
 
         # getblocking()/setblocking() is implemented by gettimeout()/settimeout. no getblocking() before 3.7
         saved_timeout = self.socket.gettimeout()
-        # saved_blocking = self.socket.getblocking()
+        # saved_blocking = self.socket.getblocking() this only available when version >= 3.7
 
         # unblock
-        self.socket.setblocking(0)
+        self.socket.setblocking(0)  # None: blocking mode; 0: non-blocking mode; positive floating: timeout mode.
 
-        sleep_between_polling = 1
+        polling_interval = 1
         wait_so_far = 0
         received_bytearray = bytearray()
         while wait_so_far < timeout:
-            ready = select.select([self.socket], [], [], 1)  # timeout is 0 but we will sleep later
+            ready = select.select([self.socket], [], [], polling_interval)  # last arg is timeout in seconds
             if ready[0]:
                 data = self.socket.recv(4096)
+                # there may be exceptions here
                 if data == b'':
-                    tplog(f"client connection is closed")
+                    tplog(f"Remote connection is closed during our recv()")
                     break
-                # there may be other scenarios we need to handle, for example, The other side has reset
-                # the socket. You'll get an exception.
                 received_bytearray.extend(self.in_coder.xor(data))
+                if len(data) > maxsize:
+                    tplog(f"Received {len(data)} bytes already exceeded maxsize {maxsize}. Stopped receiving.")
+                    break
             else:
-                time.sleep(sleep_between_polling)
-                wait_so_far += sleep_between_polling
+                # time.sleep(polling_interval)  # no need sleep here if we already blocked at select()
+                wait_so_far += polling_interval
         if wait_so_far >= timeout:
-            tplog(f"recv() timed out after {wait_so_far} seconds, did not reach EOF of client socket")
-        else:
-            tplog(f"reached EOF of client socket")
-        tplog(f"received total {len(received_bytearray)} bytes")
+            tplog(f"recv() timed out after {wait_so_far} seconds")
+        tplog(f"Received total {len(received_bytearray)} bytes")
 
         # getblocking()/setblocking() is implemented by gettimeout()/settimeout. no getblocking() before 3.7
         self.socket.settimeout(saved_timeout)
         # self.socket.setblocking(saved_blocking) # restoring blocking setting
 
         return bytes(received_bytearray)
+
+    def send_and_encode(self, data: bytes, timeout: int = 6, **opt) -> int:
+        """ this is actually use unblocked send() to re-implement a blocked sendall().
+        The possible benefits:
+        - add encryption
+        """
+
+        # https://docs.python.org/3/library/socket.html
+        #         socket.send() vs socket.sendall()
+        #
+        #         socket.send(bytes[, flags])
+        #         Send data to the socket. Returns the number of bytes sent. Applications are responsible
+        #         for checking that all data has been sent; if only some of the data was transmitted, the application
+        #         needs to attempt delivery of the remaining data.
+        #
+        #         socket.sendall(bytes[, flags])
+        #         Send data to the socket. Unlike send(), this method continues to
+        #         send data from bytes until either all data has been sent or an error occurs. None is returned on success. On
+        #         error, an exception is raised, and there is no way to determine how much data, if any, was successfully sent.
+
+        saved_timeout = self.socket.gettimeout()
+        # saved_blocking = self.socket.getblocking() this only available when version >= 3.7
+
+        # unblock
+        self.socket.setblocking(0)  # None: blocking mode; 0: non-blocking mode; positive floating: timeout mode.
+        # this is the same as self.socket.settimeout(0)
+
+        polling_interval = 1
+        wait_so_far = 0
+        total_sent = 0
+        data_length = len(data)
+
+        while total_sent < data_length:
+            buffer_size = 4096
+            new_end = total_sent + buffer_size
+            if new_end > data_length:
+                new_end = data_length
+                buffer_size = new_end - total_sent
+
+            buffer_bytes = self.out_coder.xor(data[total_sent:new_end])
+
+            buffer_sent = 0
+            while buffer_sent < buffer_size:
+                ready = select.select([], [self.socket], [], polling_interval)
+                if ready[1]:
+                    sent = self.socket.send(buffer_bytes[buffer_sent:])
+                    # there may be exceptions here
+                    if sent == 0:
+                        tplog(f"Remote connection is closed during our send()")
+                        break
+                    buffer_sent += sent
+                    total_sent += sent
+                else:
+                    wait_so_far += polling_interval
+                    if wait_so_far >= timeout:
+                        tplog(f"send() timed out after {wait_so_far} seconds")
+                        break
+            else:
+                # the above loop did NOT break = the above loop condition was False = the loop ended naturally
+                # python's way to break nested loop (double loop)
+                # https://stackoverflow.com/questions/653509/breaking-out-of-nested-loops
+                continue
+            break # the above loop DID break = the above loop condition was still True = the loop didn't end naturally
+
+        missing = data_length - total_sent
+        if missing > 0:
+            tplog(f"Sent total {total_sent} bytes. failed to send {missing} bytes")
+        else:
+            tplog(f"Sent all {total_sent} bytes")
+
+        # getblocking()/setblocking() is implemented by gettimeout()/settimeout. no getblocking() before 3.7
+        self.socket.settimeout(saved_timeout)
+        # self.socket.setblocking(saved_blocking) # restoring blocking setting
+
+        return total_sent
 
 
 def main():
@@ -163,9 +245,9 @@ def main():
         print("usage: prog client|server")
         sys.exit(1)
 
-    key="abc"
-    host="localhost"
-    port='3333'
+    key = "abc"
+    host = "localhost"
+    port = '3333'
 
     # https://docs.python.org/3/howto/sockets.html
 
@@ -175,28 +257,23 @@ def main():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect((host, int(port)))
             ensock = encryptedsocket(sock, key)
-            ensock.sendall(bytes(data + "\n", "utf-8"))
-            # Receive data from the server and shut down
-            received = str(ensock.recv(1024), "utf-8")
+            ensock.send_string(data + "\n")
+            ensock.send_shutdown()
+            received = ensock.recv_string()
 
         print("Sent:     {}".format(data))
         print("Received: {}".format(received))
     elif sys.argv[1] == 'server':
         data = "hello client"
-        # create an INET, STREAMing socket
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # bind the socket to a public host, and a well-known port
-        serversocket.bind(('0.0.0.0',int(port)))  # 0.0.0.0 means all interfaces
-        # become a server socket
+        serversocket.bind(('0.0.0.0', int(port)))  # 0.0.0.0 means all interfaces
         serversocket.listen(5)
         while True:
-            # accept connections from outside
             (clientsocket, address) = serversocket.accept()
             print(f"accepted client socket {clientsocket}")
             ensock = encryptedsocket(clientsocket, key)
-            ensock.sendall(bytes(data + "\n", "utf-8"))
-            # Receive data from the server and shut down
-            received = str(ensock.recv(1024), "utf-8")
+            received = ensock.recv_string()
+            ensock.send_string(data)
 
             print("Sent:     {}".format(data))
             print("Received: {}".format(received))
