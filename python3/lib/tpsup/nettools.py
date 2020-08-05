@@ -73,6 +73,7 @@ class encryptedsocket:
                 for i in range(0, maxtry):
                     try:
                         sock.connect((host, int(port)))
+                        tplog(f"connected to {sock}")
                         self.socket = sock
                         break
                     except Exception as e:

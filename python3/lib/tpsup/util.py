@@ -127,7 +127,7 @@ def load_module(source: str, new_module_name=None):
     return mod
 
 
-def run_module(mod: str, mod_is_file=False, **opt):
+def run_module(mod: str, mod_type: str = 'string', **opt):
     verbose = opt.get('verbose', 0)
 
     if mod is None:
@@ -137,11 +137,13 @@ def run_module(mod: str, mod_is_file=False, **opt):
                 traceback.print_stack() # default to stderr, set file=sys.stdout for stdout
         return
 
-    if mod_is_file:
+    if mod_type == 'file':
         with open(mod, 'r') as f:
             source = f.read()
-    else:
+    elif mod_type == 'string':
         source = mod
+    else:
+        raise RuntimeError(f'unsupported mod_type={mod_type}')
 
     module = None
     try:

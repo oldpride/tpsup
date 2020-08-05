@@ -189,8 +189,7 @@ if verbose:
 serverHostPort = args['serverHostPort']
 if serverHostPort:
     # this is client mode if serverHostPort is defined
-    host, port = serverHostPort.split(':')
-    ensock = tpsup.nettools.encryptedsocket(key, established_socket=serverHostPort)
+    ensock = tpsup.nettools.encryptedsocket(key, host_port=serverHostPort)
 
     request = {
         'mod_file': args['mod_file'],
@@ -234,6 +233,12 @@ else:
     mod_file = args['mod_file']
     run_module(mod_file, mod_is_file=True, seleniumEnv=seleniumEnv, verbose=verbose, argList=args['remainingArgs'])
 
+base = args['base']
+if not base:
+    base = my_env.environ.get('TPSEL_BASE')
+if not base:
+    base = f"{script_dir}/tpsel_base"
+
 listenerPort = args.get('listenerPort', None)
 if (listenerPort):
     data = "hello client"
@@ -245,8 +250,9 @@ if (listenerPort):
     # become a server socket
     serversocket.listen(5)
     listener_max_idle = 3600
+    serversocket.settimeout(listener_max_idle)  # this only affects serversocket
     while True:
-        serversocket.settimeout(listener_max_idle)  # this only affects serversocket
+        clientsocket = None
         try:
             tplog(f"waiting for new client connection. time out after {listener_max_idle} idle seconds")
             (clientsocket, address) = serversocket.accept()
@@ -257,12 +263,13 @@ if (listenerPort):
             sys.exit(0)
         tplog(f"accepted client socket {clientsocket}")
 
-        ensock = tpsup.nettools.encryptedsocket(clientsocket, key)
-        decoded_bytes = ensock.recv_all(timeout=6)
-        decoded_str = str(decoded_bytes, 'utf-8')
+        ensock = tpsup.nettools.encryptedsocket(key, established_socket=clientsocket)
+        decoded_bytes = ensock.recv_and_decode()
+        tplog(f"received {len(decoded_bytes)} bytes")
+        decoded_str = ensock.in_coder.xor(decoded_bytes)
         request = json.loads(decoded_str, object_hook=dict)
 
-        for k in ('module', 'args', 'accept'):
+        for k in ('mod_file', 'args', 'accept'):
             if not k in request:
                 tplog(f"{decoded_str} missing key='{k}")
                 sys.exit(1)
@@ -271,7 +278,8 @@ if (listenerPort):
         result = None
         exception = None
         try:
-            result = run_module(request['module'], seleniumEnv=seleniumEnv, verbose=verbose, argList=request['args'])
+            result = run_module(f"{base}/{request['mod_file']}", mod_type='file', seleniumEnv=seleniumEnv,
+                                verbose=verbose, argList=request['args'])
         except Exception as e:
             tplog_exception(e)
             exception = e
@@ -279,13 +287,12 @@ if (listenerPort):
         if request['accept'] == 'json':
             reply = {}
             reply['result'] = result
-            reply['exception'] = e
+            reply['exception'] = exception
             reply_str = json.dumps(reply)
             reply_bytes = bytes(reply_str, "utf-8")
-
-
-
-
+            tplog(f"sending {len(reply_bytes)} bytes to client and closing connection")
+            ensock.send_and_encode(reply_bytes)
+            ensock.close()
 
 seleniumEnv.quit()
 time.sleep(1)
