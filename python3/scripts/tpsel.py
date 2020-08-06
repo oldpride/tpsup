@@ -97,10 +97,10 @@ batch mode examples:
 server mode examples:
     {prog}  -server 29999
     {prog}  -server 29999  tpsel_base/test_login.py
-    {prog}  -server 29999  -base tpsel_base
+    {prog}  -server 29999  -base {script_dir}/tpsel_base
 
 client mode examples:
-    {prog}  -client localhost:29999  tpsel_test_login.py -- -u tester
+    {prog}  -client localhost:29999  test_login.py -- -u tester
 
     """)
 
@@ -208,8 +208,15 @@ if serverHostPort:
     ensock.send_shutdown()
 
     tplog("Sent. waiting response")
-    received = str(ensock.recv_and_decode(), "utf-8")
-    tplog(f"Received: {len(received)}")
+    received_bytes = ensock.recv_and_decode(timeout=60) # this needs a long wait
+
+    tplog(f"Received: {len(received_bytes)}")
+
+    if request['accept'] == 'json':
+        tplog(f" bytes {received_bytes}")
+        received_str = str(received_bytes, 'utf-8')
+        received_structure = json.loads(received_str)
+        tplog(f"Received data structure: {pformat(received_structure)}")
 
     sys.exit(0)
 
@@ -264,18 +271,21 @@ if (listenerPort):
 
         # don't let client request to bump out our server
         result = None
-        exception = None
+        exception_str = None
         try:
             result = run_module(f"{base}/{request['mod_file']}", mod_type='file', seleniumEnv=seleniumEnv,
                                 verbose=verbose, argList=request['args'])
         except Exception as e:
             tplog_exception(e)
-            exception = e
+            # Exception's scope is only here, so we have to save it into a string
+            exception_str = tpsup.util.print_exception(e, file=str)
 
         if request['accept'] == 'json':
             reply = {}
             reply['result'] = result
-            reply['exception'] = exception
+            reply['exception'] = exception_str
+
+            tplog(f"reply = {pformat(reply)}")
             reply_str = json.dumps(reply)
             reply_bytes = bytes(reply_str, "utf-8")
             tplog(f"sending {len(reply_bytes)} bytes to client and closing connection")

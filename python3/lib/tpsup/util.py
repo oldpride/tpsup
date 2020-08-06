@@ -160,7 +160,7 @@ def run_module(mod: str, mod_type: str = 'string', **opt):
         sys.stderr.write(f"dryrun mode: {mod} compiled successfully\n")
     else:
         sys.stderr.write(f"running: {mod}\n")
-        module.run(mod_file=mod, **opt)  # pycharm had a warning here. I set to ignore
+        return module.run(mod_file=mod, **opt)  # pycharm had a warning here. I set to ignore
 
 
 def silence_BrokenPipeError(func):

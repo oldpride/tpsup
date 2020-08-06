@@ -56,8 +56,8 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     seleniumEnv.delay_for_viewer(1)  # delay to mimic humane slowness
     driver.find_element_by_id('modlgn-passwd').send_keys(password)
 
-    frameinfo = getframeinfo(currentframe())
-    print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
+    # frameinfo = getframeinfo(currentframe())
+    # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)  # print line number
 
     # from Edge/Chrome, right click the item -> inspect
     # because login button has no "id", so I used xpath. xpath is very sensitive to changes in the page
@@ -67,14 +67,16 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     # this doesn't work as 'button' is a grand-child of form-login-sutmit
     # driver.find_element_by_id('form-login-submit').click()
 
-    frameinfo = getframeinfo(currentframe())
-    print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
+    # frameinfo = getframeinfo(currentframe())
+    # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
 
     elem = driver.find_element_by_xpath('//*[@id=\"login-form\"]')
     welcomeText = elem.text
 
-    frameinfo = getframeinfo(currentframe())
-    print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
+    # frameinfo = getframeinfo(currentframe())
+    # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
 
     print(f"We see: {welcomeText}")
     assert re.search("^Hi ", welcomeText)
+
+    return welcomeText
