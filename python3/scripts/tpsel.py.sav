@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+import json
 import os
+import select
 import socket
 import socketserver
 import sys
@@ -9,11 +11,14 @@ import textwrap
 from pprint import pformat
 import tpsup.env
 import tpsup.seleniumtools
-from tpsup.util import run_module_file
+import tpsup.coder
+import tpsup.nettools
+from tpsup.util import run_module, tplog, print_exception, tplog_exception
 import traceback
 import time
 
 prog = os.path.basename(sys.argv[0])
+script_dir = os.path.dirname(sys.argv[0])
 
 my_env = tpsup.env.Env()
 my_env.adapt()
@@ -75,22 +80,23 @@ usage = textwrap.dedent(f"""
 
 examples = textwrap.dedent(f""" 
 batch mode examples:
-    {prog}                 tpsel_test_google.py
-    {prog} -dryrun         tpsel_test_google.py
-    {prog} --headless      tpsel_test_google.py
+    {prog}                 tpsel_base/test_google.py
+    {prog} -dryrun         tpsel_base/test_google.py
+    {prog} --headless      tpsel_base/test_google.py
 
-    {prog}                 tpsel_test_login.py -- -u tester
-    {prog} -modOnly        tpsel_test_google.py tpsel_test_login.py
+    {prog}                 tpsel_base/test_login.py -- -u tester
+    {prog} -modOnly        tpsel_base/test_google.py tpsel_base/test_login.py
 
     platform specifics
         in Linux, Windows GitBash
-            {prog} tpsel_test_google.py
-        in Windows, cygwin, cmd.exe, or powerhell
-            python {prog} tpsel_test_google.py
+            {prog} tpsel_base/test_google.py
+        in Windows, cygwin, cmd.exe, or powershell
+            python {prog} tpsel_base/test_google.py
 
 server mode examples:
     {prog}  -server 29999
-    {prog}  -server 29999  tpsel_test_login.py
+    {prog}  -server 29999  tpsel_base/test_login.py
+    {prog}  -server 29999  -base tpsel_base
 
 client mode examples:
     {prog}  -client localhost:29999  tpsel_test_login.py -- -u tester
@@ -144,10 +150,19 @@ parser.add_argument(
          "default is batch mode")
 
 parser.add_argument(
+    '-base', dest="base", default=None, action='store',
+    help=f"in server mode, all modules asked by client are located in this place. "
+         f"default to $TPSELBASE if set; otherwise, {script_dir}/tpsel_base. ")
+
+parser.add_argument(
     '-client', dest="serverHostPort", default=None, action='store',
     help=f"run {prog} in client mode, sending the mod_files and args to server, eg, localhost:29999"
          "client mode will not start webdriver and browser"
          "default is batch mode")
+
+parser.add_argument(
+    '-key', dest="key", default=None, action='store',
+    help="used in client or server mode to encrypt data communication. without it, data will not be encrypted")
 
 parser.add_argument(
     '-modOnly', '--modOnly', dest='modOnly', action='store_true', default=False, help='remaining args are mod files')
@@ -165,30 +180,35 @@ args = vars(parser.parse_args())
 # default to parse command line args. we can also parse any list: args = vars(parser.parse_args(['hello', 'world'))
 
 verbose = args['verbose']
+key: str = args['key']  # python casting, type hint, typing hint
 
 if verbose:
     sys.stderr.write("args =\n")
     sys.stderr.write(pformat(args) + "\n")
 
-serverHostPort = args.get('serverHostPort', None)
+serverHostPort = args['serverHostPort']
 if serverHostPort:
-    # this is client mode is serverHostPort is defined
-    host, port = serverHostPort.split(':')
-    data = "hello world"
+    # this is client mode if serverHostPort is defined
+    ensock = tpsup.nettools.encryptedsocket(key, host_port=serverHostPort)
 
-    # https: // docs.python.org / 3 / library / socketserver.html
-    # Create a socket (SOCK_STREAM means a TCP socket)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        # Connect to server and send data
-        sock.connect((host, int(port)))
-        sock.sendall(bytes(data + "\n", "utf-8"))
+    request = {
+        'mod_file': args['mod_file'],
+        'args': args['remainingArgs'],
+        'accept': 'json',
+    }
 
+    request_str = json.dumps(request)
+    request_bytes = bytes(request_str, "utf-8")
+    tplog(f"Sending {len(request_bytes)} bytes", file=sys.stderr)
+    ensock.send_and_encode(request_bytes)
 
-        # Receive data from the server and shut down
-        received = str(sock.recv(1024), "utf-8")
+    # shut down the send channel so that the other side recv() won't wait forever
+    ensock.send_shutdown()
 
-    print("Sent:     {}".format(data))
-    print("Received: {}".format(received))
+    tplog("Sent. waiting response")
+    received = str(ensock.recv_and_decode(), "utf-8")
+    tplog(f"Received: {len(received)}")
+
     sys.exit(0)
 
 if not args['listenerPort'] and not args['mod_file']:
@@ -207,43 +227,81 @@ if driver is None and not args['dryrun']:
 if args['modOnly']:
     # all optional args at the end are module files
     for mod_file in [args['mod_file']] + args['remainingArgs']:
-        run_module_file(mod_file, seleniumEnv=seleniumEnv, verbose=verbose)
+        run_module(mod_file, mod_is_file=True, seleniumEnv=seleniumEnv, verbose=verbose)
 else:
     # all optional args at the end are args to the preceding mod_file
     mod_file = args['mod_file']
-    run_module_file(mod_file, seleniumEnv=seleniumEnv, verbose=verbose, argList=args['remainingArgs'])
+    run_module(mod_file, mod_is_file=True, seleniumEnv=seleniumEnv, verbose=verbose, argList=args['remainingArgs'])
 
-
-class MyTCPHandler(socketserver.BaseRequestHandler):
-    """
-    The request handler class for our server.
-
-    It is instantiated once per connection to the server, and must
-    override the handle() method to implement communication to the
-    client.
-    """
-
-    def handle(self):
-        # self.request is the TCP socket connected to the client
-        self.data = self.request.recv(1024).strip()
-        print("{} wrote:".format(self.client_address[0]))
-        print(self.data)
-        # just send back the same data, but upper-cased
-        self.request.sendall(self.data.upper())
+base = args['base']
+if not base:
+    base = my_env.environ.get('TPSEL_BASE')
+if not base:
+    base = f"{script_dir}/tpsel_base"
 
 listenerPort = args.get('listenerPort', None)
 if (listenerPort):
+    data = "hello client"
     # this is server mode
     # 0.0.0.0 means all interfaces
-    # https://stackoverflow.com/questions/8033552/python-socket-bind-to-any-ip
-    with socketserver.TCPServer(('0.0.0.0', int(listenerPort)), MyTCPHandler) as server:
-        # Activate the server; this will keep running until you interrupt the program with Ctrl-C
-        server.serve_forever()
+    serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # bind the socket to a public host, and a well-known port
+    serversocket.bind(('0.0.0.0', int(listenerPort)))  # 0.0.0.0 means all interfaces
+    # become a server socket
+    serversocket.listen(5)
+    listener_max_idle = 3600
+
+    while True:
+        serversocket.settimeout(listener_max_idle)  # this only affects serversocket
+
+        # https://stackoverflow.com/questions/15189888/python-socket-accept-in-the-main-thread-prevents-quitting
+        # on windows, socket.accept() cannot be interrupted
+        clientsocket = None
+        tplog(f"waiting for new client connection. time out after {listener_max_idle} idle seconds")
+        try:
+            (clientsocket, address) = serversocket.accept()
+        except socket.timeout as e:
+            tplog(print_exception(e, file=str))
+            tplog(f"server exit after {listener_max_idle} idle seconds")
+            serversocket.close()
+            sys.exit(0)
+        tplog(f"accepted client socket {clientsocket}")
+
+        ensock = tpsup.nettools.encryptedsocket(key, established_socket=clientsocket)
+        decoded_bytes = ensock.recv_and_decode()
+        tplog(f"received {len(decoded_bytes)} bytes")
+        decoded_str = ensock.in_coder.xor(decoded_bytes)
+        request = json.loads(decoded_str, object_hook=dict)
+
+        for k in ('mod_file', 'args', 'accept'):
+            if not k in request:
+                tplog(f"{decoded_str} missing key='{k}")
+                sys.exit(1)
+
+        # don't let client request to bump out our server
+        result = None
+        exception = None
+        try:
+            result = run_module(f"{base}/{request['mod_file']}", mod_type='file', seleniumEnv=seleniumEnv,
+                                verbose=verbose, argList=request['args'])
+        except Exception as e:
+            tplog_exception(e)
+            exception = e
+
+        if request['accept'] == 'json':
+            reply = {}
+            reply['result'] = result
+            reply['exception'] = exception
+            reply_str = json.dumps(reply)
+            reply_bytes = bytes(reply_str, "utf-8")
+            tplog(f"sending {len(reply_bytes)} bytes to client and closing connection")
+            ensock.send_and_encode(reply_bytes)
+            ensock.close()
 
 seleniumEnv.quit()
 time.sleep(1)
 seleniumEnv.print_running_drivers()
 
 if args['verbose']:
-    print(f'driverlog file {seleniumEnv.driverlog}')
-    print(f'chromedir dir  {seleniumEnv.chromedir}')
+    tplog(f'driverlog file {seleniumEnv.driverlog}')
+    tplog(f'chromedir dir  {seleniumEnv.chromedir}')

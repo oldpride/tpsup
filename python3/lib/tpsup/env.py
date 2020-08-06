@@ -67,7 +67,6 @@ def main():
     print(myenv)
 
     sys.stdout.flush()
-
     myenv.adapt()
 
     sys.stderr.write("1\n")

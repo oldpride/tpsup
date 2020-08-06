@@ -14,6 +14,7 @@ import tpsup.seleniumtools
 import tpsup.coder
 import tpsup.nettools
 from tpsup.util import run_module, tplog, print_exception, tplog_exception
+import tpsup.tpsocketserver
 import traceback
 import time
 
@@ -100,6 +101,7 @@ server mode examples:
 
 client mode examples:
     {prog}  -client localhost:29999  tpsel_test_login.py -- -u tester
+
     """)
 
 parser = argparse.ArgumentParser(
@@ -241,29 +243,15 @@ if not base:
 
 listenerPort = args.get('listenerPort', None)
 if (listenerPort):
-    data = "hello client"
-    # this is server mode
-    # 0.0.0.0 means all interfaces
-    serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # bind the socket to a public host, and a well-known port
-    serversocket.bind(('0.0.0.0', int(listenerPort)))  # 0.0.0.0 means all interfaces
-    # become a server socket
-    serversocket.listen(5)
+    listener = tpsup.tpsocketserver.tpsocketserver(listenerPort)
     listener_max_idle = 3600
-    serversocket.settimeout(listener_max_idle)  # this only affects serversocket
     while True:
-        clientsocket = None
-        try:
-            tplog(f"waiting for new client connection. time out after {listener_max_idle} idle seconds")
-            (clientsocket, address) = serversocket.accept()
-        except socket.timeout as e:
-            tplog(print_exception(e, file=str))
-            tplog(f"server exit after {listener_max_idle} idle seconds")
-            serversocket.close()
+        ensock = listener.accept(key=key, timeout=listener_max_idle)  # this timeout only only affects listener\
+        if not ensock:
+            listener.close()
             sys.exit(0)
-        tplog(f"accepted client socket {clientsocket}")
+        tplog(f"accepted client socket {ensock}")
 
-        ensock = tpsup.nettools.encryptedsocket(key, established_socket=clientsocket)
         decoded_bytes = ensock.recv_and_decode()
         tplog(f"received {len(decoded_bytes)} bytes")
         decoded_str = ensock.in_coder.xor(decoded_bytes)

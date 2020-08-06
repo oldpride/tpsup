@@ -3,8 +3,10 @@ import select
 import socket
 import sys
 import time
+import selectors
 from pprint import pformat
 from tpsup.util import tplog
+import tpsup.env
 from typing import Union
 
 import tpsup.coder
@@ -239,6 +241,7 @@ class encryptedsocket:
         return total_sent
 
 
+
 def main():
     print(f'sys.args={pformat(sys.argv)}')
 
@@ -256,8 +259,7 @@ def main():
         data = 'hello server'
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect((host, int(port)))
-            ensock = encryptedsocket(sock, key)
+            ensock = encryptedsocket(key, host_port=f"{host}:{port}")
             ensock.send_string(data + "\n")
             ensock.send_shutdown()
             received = ensock.recv_string()
@@ -270,14 +272,14 @@ def main():
         serversocket.bind(('0.0.0.0', int(port)))  # 0.0.0.0 means all interfaces
         serversocket.listen(5)
         while True:
+            print(f"waiting for client at port {port}")
             (clientsocket, address) = serversocket.accept()
             print(f"accepted client socket {clientsocket}")
-            ensock = encryptedsocket(clientsocket, key)
+            ensock = encryptedsocket(key, established_socket=clientsocket)
             received = ensock.recv_string()
-            ensock.send_string(data)
-
-            print("Sent:     {}".format(data))
             print("Received: {}".format(received))
+            ensock.send_string(data)
+            print("Sent:     {}".format(data))
             ensock.close()
 
 
