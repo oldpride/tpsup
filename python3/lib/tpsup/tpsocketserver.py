@@ -25,19 +25,22 @@ class tpsocketserver:
         self.socket.bind((address, int(port)))
         self.socket.listen(backlog)
 
-    def accept(self, key: str = None, timeout: int = 3600) -> Union[tpsup.nettools.encryptedsocket, None]:
-        tplog(f"waiting for new client connection. time out after {timeout} idle seconds")
+    def accept(self, key: str = None, timeout: int = 3600, **opt) -> Union[tpsup.nettools.encryptedsocket, None]:
+        verbose = opt.get('verbose', 0)
+        if verbose:
+            tplog(f"waiting for new client connection. time out after {timeout} idle seconds")
         selector = _ServerSelector()
         selector.register(self.socket, selectors.EVENT_READ)
         poll_interval = 1
         waited_so_far = 0
         while waited_so_far < timeout:
-            # print("looping")
+            if verbose > 2:
+                print("looping")
             ready = selector.select(poll_interval)
             if ready:
                 (clientsocket, address) = self.socket.accept()
-
-                tplog(f"accepted client socket {clientsocket}, address={address}")
+                if verbose:
+                    tplog(f"accepted client socket {clientsocket}, address={address}")
                 return tpsup.nettools.encryptedsocket(established_socket=clientsocket, key=key)
             else:
                 waited_so_far += poll_interval

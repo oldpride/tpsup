@@ -70,6 +70,7 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     # frameinfo = getframeinfo(currentframe())
     # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
 
+    xpath='//*[@id=\"login-form\"]'
     elem = driver.find_element_by_xpath('//*[@id=\"login-form\"]')
     welcomeText = elem.text
 
@@ -77,6 +78,12 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
 
     print(f"We see: {welcomeText}")
-    assert re.search("^Hi ", welcomeText)
+    # assert re.search("^Hi ", welcomeText)
+    error = None
+    pattern = "^Hi "
+    if not re.search(pattern, welcomeText):
+        error = f"xpath='{xpath}' failed to match pattern '{pattern}'"
 
-    return welcomeText
+    result = {'error': error, 'data' : welcomeText }
+
+    return result

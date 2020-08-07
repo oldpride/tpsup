@@ -26,6 +26,7 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     # search_box.submit()
 
     seleniumEnv.delay_for_viewer()  # give 1 sec to let the tail set up
+    urls = list(str)
 
     for tag_a in driver.find_elements_by_tag_name('a'):
        link = None
@@ -35,5 +36,10 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
            pass
        else:
            # print(f'url={url}')
+           urls.append(url)
            print(f'hostname = {urlparse(url).hostname}')
 
+    error = None
+
+    result = {'error': error, 'data': urls}
+    return result

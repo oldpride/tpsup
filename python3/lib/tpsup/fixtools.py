@@ -12,12 +12,12 @@ tag_by_version_field = {}
 desc_by_version_tag_value = {}
 
 module_name_by_version = {
-    '4.0': 'tpsup.fix_4_0',
-    '4.1': 'tpsup.fix_4_1',
-    '4.2': 'tpsup.fix_4_2',
-    '4.3': 'tpsup.fix_4_3',
-    '4.4': 'tpsup.fix_4_4',
-    '5.0': 'tpsup.fix_5_0_SP2',
+    '4.0': 'tpsup.fix.fix_4_0',
+    '4.1': 'tpsup.fix.fix_4_1',
+    '4.2': 'tpsup.fix.fix_4_2',
+    '4.3': 'tpsup.fix.fix_4_3',
+    '4.4': 'tpsup.fix.fix_4_4',
+    '5.0': 'tpsup.fix.fix_5_0_SP2',
 }
 
 

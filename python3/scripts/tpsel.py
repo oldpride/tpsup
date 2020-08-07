@@ -253,8 +253,10 @@ if (listenerPort):
     listener = tpsup.tpsocketserver.tpsocketserver(listenerPort)
     listener_max_idle = 3600
     while True:
+        tplog(f"waiting for new client connection. will time out after {listener_max_idle} idle seconds")
         ensock = listener.accept(key=key, timeout=listener_max_idle)  # this timeout only only affects listener\
         if not ensock:
+            tplog(f"timed out after {listener_max_idle} idle seconds")
             listener.close()
             sys.exit(0)
         tplog(f"accepted client socket {ensock}")
