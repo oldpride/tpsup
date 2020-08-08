@@ -43,6 +43,9 @@ class SeleniumEnv:
         #     chromedriver.exe should be in the PATH or at C:/users/<username>
         #     chrome.exe       C:/Program Files (x86)/Google/Chrome/Application, hardcoded in chromedriver
 
+        self.download_dir = f"{self.env.home_dir}/Downloads/seleniumtools"
+        os.makedirs(self.download_dir, exist_ok=True)
+
         self.headless = opt.get('headless', False)
         self.driver_exe = opt.get('driver', 'chromedriver')
 
@@ -156,6 +159,13 @@ class SeleniumEnv:
             self.browser_options.add_argument('--window-size=960,540')
             self.browser_options.add_argument(f'--remote-debugging-port={self.port}')
             # browser_options.add_argument(f'--remote-debugging-address=127.0.0.1')
+
+            self.browser_options.add_experimental_option("prefs", {
+                "download.default_directory": self.download_dir,
+                "download.prompt_for_download": False,
+                "download.directory_upgrade": True,
+                "safebrowsing.enabled": True
+            })
 
             for arg in opt.get('browserArgs', []):
                 self.browser_options.add_argument(f'--{arg}')

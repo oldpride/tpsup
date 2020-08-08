@@ -11,3 +11,5 @@ rem       set PATH="%PATH:%userprofile%/site..."
 rem set PATH=%PATH%;%userprofile%/sitebase/github/tpsup/cmd_exe
 
 %userprofile%/sitebase/github/tpsup/cmd_exe/tpsup
+
+p3env

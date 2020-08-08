@@ -39,7 +39,7 @@ usage = textwrap.dedent(f"""
         {prog} listener_port [init_mod_file args]
 
     client mode
-        {prog} serverHost:port mod_file [args]
+        {prog} serverHost:port server_mod_file [args]
 
     run selenium test modules
     
@@ -96,11 +96,11 @@ batch mode examples:
 
 server mode examples:
     {prog}  -server 29999
-    {prog}  -server 29999  tpsel_base/test_login.py
+    {prog}  -server 29999  tpsel_base/test_login.py -- -u tester
     {prog}  -server 29999  -base {script_dir}/tpsel_base
 
 client mode examples:
-    {prog}  -client localhost:29999  test_login.py -- -u tester
+    {prog}  -client localhost:29999 test_login.py -- -u tester
 
     """)
 
@@ -167,6 +167,10 @@ parser.add_argument(
     help="used in client or server mode to encrypt data communication. without it, data will not be encrypted")
 
 parser.add_argument(
+    '-accept', dest="accept", default="json", action='store',
+    help="used in client to specify accept file type: json, tar. default to json")
+
+parser.add_argument(
     '-modOnly', '--modOnly', dest='modOnly', action='store_true', default=False, help='remaining args are mod files')
 
 parser.add_argument(
@@ -196,7 +200,7 @@ if serverHostPort:
     request = {
         'mod_file': args['mod_file'],
         'args': args['remainingArgs'],
-        'accept': 'json',
+        'accept': args['accept'],
     }
 
     request_str = json.dumps(request)
@@ -217,6 +221,8 @@ if serverHostPort:
         received_str = str(received_bytes, 'utf-8')
         received_structure = json.loads(received_str)
         tplog(f"Received data structure: {pformat(received_structure)}")
+    elif request['accept'] == 'tar':
+        tplog(f" bytes {received_bytes}")
 
     sys.exit(0)
 

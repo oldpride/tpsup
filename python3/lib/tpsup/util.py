@@ -3,7 +3,9 @@ import inspect
 import io
 import os
 import re
+import signal
 import sys
+import time
 import traceback
 import types
 from pprint import pformat
@@ -177,6 +179,31 @@ def silence_BrokenPipeError(func):
     return silenced
 
 
+def timeout_func_on_unix(timeout: int, func):
+    """
+    timeout wrapper. not work well in thread.
+    https://stackoverflow.com/questions/492519/timeout-on-a-function-call
+
+    NOT WORKING ON WINDOWS
+    https://stackoverflow.com/questions/52779920/why-is-signal-sigalrm-not-working-in-python-on-windows
+    in short, windows doesn't implement SIGALRM
+    """
+    @functools.wraps(func)
+    def timed_func(*args, **kwargs):
+        def handler(signum, frame):
+            print("Forever is over!")
+            raise RuntimeError("end of time")
+
+        try:
+            signal.signal(signal.SIGALRM, handler)
+        except AttributeError as e:
+            print("Windows cannot use signal.SIGALRM")
+            raise e
+        signal.alarm(timeout)
+        return func(*args, **kwargs)
+    return timed_func
+
+
 def tplog(message:str= None, file=sys.stderr, **opt):
     if message is None:
         message = ''
@@ -218,14 +245,25 @@ def tplog_exception(e: Exception, **opt):
 
 
 def main():
+    print('----- test tplog')
     tplog('hello world')
 
+    print('------ test print_exception')
     try:
         raise RuntimeError("test exception")
     except Exception as e:
         print_exception(e)
         tplog(print_exception(e, file=str))
 
+    print('------- test timeout_func(). should fail on windows as windows has no SIGALRM')
+    def sleep_10():
+        for i in range(10):
+            time.sleep(1)
+            print('tick')
+        print('done')
+
+    sleep_5 = timeout_func_on_unix(5, sleep_10)
+    sleep_5()
 
 if __name__ == '__main__':
     main()
