@@ -10,7 +10,7 @@ import traceback
 from pprint import pformat
 from typing import Union, Callable
 
-from tpsup.util import print_exception
+from tpsup.util import print_exception, tplog
 
 
 def top_level_sleep_and_tick(duration: int, *args, **opt)-> str:
@@ -85,6 +85,8 @@ def timeout_wrapper(func):
         conn.close()
     return wrapper_func
 
+_timeout_child_global = None
+
 def timeout_child(conn: multiprocessing.connection.Connection, func, *args, **kwargs):
     """
     wrapper function for timeout_func
@@ -94,7 +96,7 @@ def timeout_child(conn: multiprocessing.connection.Connection, func, *args, **kw
     :param kwargs:
     :return:
     """
-    print(f"func={func}")
+    tplog(f"func={func}")
     conn.send(func(*args, **kwargs))
     conn.close()
 
@@ -114,6 +116,7 @@ def timeout_func(timeout: int, func, *args, **kwargs):
     https://github.com/bitranox/wrapt_timeout_decorator/blob/master/wrapt_timeout_decorator/wrap_function_multiprocess.py
     """
 
+    tplog(f"func={func}")
     parent_conn, child_conn = multiprocessing.Pipe()
 
     # how to pass args and kwargs
@@ -166,10 +169,10 @@ def copy_func(f: Callable, global_dict=None, name=None):
     fn.__qualname__ = name
     return fn
 
-_timeout_child_global_name = None
+
 
 def main():
-    global _timeout_child_global_name
+    global _timeout_child_global
 
     print('------- test timeout_func_unix(). should work on Unix and fail on windows')
     try:
@@ -214,17 +217,17 @@ def main():
     # https://stackoverflow.com/questions/10802002/why-deepcopy-doesnt-create-new-references-to-lambda-function
     #_timeout_child_global_name = copy.deepcopy(local_sleep_and_tick)
 
-    _timeout_child_global_name = copy_func(local_sleep_and_tick, global_dict=globals(), name="_timeout_child_global_name")
+    _timeout_child_global = copy_func(local_sleep_and_tick, global_dict=globals(), name="_timeout_child_global")
 
-    print(_timeout_child_global_name)
+    print(_timeout_child_global)
 
     print("run once without timeout")
-    _timeout_child_global_name(1, message="1 sec")
+    _timeout_child_global(1, message="1 sec")
 
     print("run with timeout")
     try:
         # timeout_func(2, local_sleep_and_tick, 10, message="should timeout")
-        timeout_func(2, _timeout_child_global_name, 10, message="should timeout")
+        timeout_func(2, _timeout_child_global, 10, message="should timeout")
         '''
         Even used a global name _timeout_child_global_name, the function is still not pickle'able, because
              Note that functions (built-in and user-defined) are pickled by “fully qualified” name reference, 

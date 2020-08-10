@@ -1,14 +1,9 @@
 import functools
 import inspect
 import io
-import multiprocessing
-import multiprocessing.connection
 import os
-import pickle
 import re
-import signal
 import sys
-import time
 import traceback
 import types
 from pprint import pformat
@@ -117,9 +112,17 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
     return '\n'.join(statements)
 
 
-# learned from Cookbook with modification from Stackoverflow.
-def load_module(source: Union[str, types.CodeType], new_module_name=None):
-    """ compile the source code into executable using an external module"""
+
+def load_module(source: Union[str, types.CodeType, types.FunctionType],
+                new_module_name=None,
+                function_name:str = "default_function"
+    ) -> types.ModuleType:
+    """
+    compile the source code into executable using an external module
+        str:  source code
+        types.FunctionType: defined function
+        types.CodeType: func.__code__
+    """
     if new_module_name is None:
         new_module_name = inspect.stack()[1][3]
     # https://stackoverflow.com/questions/32175693/python-importlibs-analogue-for-imp-new-module
@@ -131,15 +134,20 @@ def load_module(source: Union[str, types.CodeType], new_module_name=None):
     # Python variables are scoped to the innermost function, class, or module in which they're assigned. Control
     # blocks like if and while blocks don't count
     if source_type == str:
+        # learned from Cookbook
         code = compile(source, new_module_name, 'exec')
-    elif source_type == types.CodeType:
-        code = source
     else:
-        code = None
+        # create a blank module and we will insert function afterwards
+        code = compile("", new_module_name, 'exec')
 
     mod.__file__ = new_module_name
     mod.__package__ = ''
     exec(code, mod.__dict__)
+    if source_type == types.FunctionType:
+        setattr(mod, function_name, source)
+    elif source_type == types.CodeType:
+        f = types.FunctionType(source, {}, function_name, None, None )
+        f.__qualname__ = function_name
     return mod
 
 
@@ -234,8 +242,6 @@ def tplog_exception(e: Exception, **opt):
     tplog(print_exception(e, file=str), **opt)
 
 
-
-
 def main():
     print('------ test tplog')
     tplog('hello world')
@@ -247,7 +253,7 @@ def main():
         print_exception(e)
         tplog(print_exception(e, file=str))
 
-    print('------ test load_module() by source code')
+    print('------ test load_module() by source code (str)')
     source = """
 def f(n: int) -> int:
     print(f'{n}+1={n+1}')
@@ -257,14 +263,19 @@ def f(n: int) -> int:
     print(f"{pformat(dir(mod))}")
     mod.f(2)
 
-    print('------ test load_module() by compiled code')
-
     def f(n: int) -> int:
         print(f'{n}+1={n+1}')
         return n+1
 
-    mod = load_module(f.__code__)
+    print('------ test load_module() by an existing function (types.FunctionType)')
+    mod = load_module(f, function_name="f_in_module")
     print(f"{pformat(dir(mod))}")
+    mod.f_in_module(2)
+
+    print("------ test load_module() by an existing function's __code__ (types.CodeType)")
+    mod = load_module(f.__code__, function_name="f_in_module")
+    print(f"{pformat(dir(mod))}")
+    mod.f_in_module(2)
 
 
 if __name__ == '__main__':
