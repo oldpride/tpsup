@@ -8,6 +8,7 @@ setlocal
    for %%I in ("%CMD_DIR%\..") do set "TPSUP=%%~fI"
 endlocal & (
    set "CMD_DIR=%CMD_DIR%"
+   set TPSUP=%TPSUP%
 )
 
 echo TPSUP=%TPSUP%

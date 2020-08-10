@@ -1,7 +1,10 @@
 import functools
 import inspect
 import io
+import multiprocessing
+import multiprocessing.connection
 import os
+import pickle
 import re
 import signal
 import sys
@@ -10,7 +13,7 @@ import traceback
 import types
 from pprint import pformat
 from time import strftime, gmtime
-from typing import Dict, List
+from typing import Dict, List, Union
 
 
 # https://docs.python.org/3/library/typing.html
@@ -115,14 +118,25 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
 
 
 # learned from Cookbook with modification from Stackoverflow.
-def load_module(source: str, new_module_name=None):
+def load_module(source: Union[str, types.CodeType], new_module_name=None):
     """ compile the source code into executable using an external module"""
     if new_module_name is None:
         new_module_name = inspect.stack()[1][3]
     # https://stackoverflow.com/questions/32175693/python-importlibs-analogue-for-imp-new-module
     # mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
     mod = sys.modules.setdefault(new_module_name, types.ModuleType(new_module_name))
-    code = compile(source, new_module_name, 'exec')
+
+    source_type = type(source)
+
+    # Python variables are scoped to the innermost function, class, or module in which they're assigned. Control
+    # blocks like if and while blocks don't count
+    if source_type == str:
+        code = compile(source, new_module_name, 'exec')
+    elif source_type == types.CodeType:
+        code = source
+    else:
+        code = None
+
     mod.__file__ = new_module_name
     mod.__package__ = ''
     exec(code, mod.__dict__)
@@ -179,30 +193,6 @@ def silence_BrokenPipeError(func):
     return silenced
 
 
-def timeout_func_on_unix(timeout: int, func):
-    """
-    timeout wrapper. not work well in thread.
-    https://stackoverflow.com/questions/492519/timeout-on-a-function-call
-
-    NOT WORKING ON WINDOWS
-    https://stackoverflow.com/questions/52779920/why-is-signal-sigalrm-not-working-in-python-on-windows
-    in short, windows doesn't implement SIGALRM
-    """
-    @functools.wraps(func)
-    def timed_func(*args, **kwargs):
-        def handler(signum, frame):
-            print("Forever is over!")
-            raise RuntimeError("end of time")
-
-        try:
-            signal.signal(signal.SIGALRM, handler)
-        except AttributeError as e:
-            print("Windows cannot use signal.SIGALRM")
-            raise e
-        signal.alarm(timeout)
-        return func(*args, **kwargs)
-    return timed_func
-
 
 def tplog(message:str= None, file=sys.stderr, **opt):
     if message is None:
@@ -244,8 +234,10 @@ def tplog_exception(e: Exception, **opt):
     tplog(print_exception(e, file=str), **opt)
 
 
+
+
 def main():
-    print('----- test tplog')
+    print('------ test tplog')
     tplog('hello world')
 
     print('------ test print_exception')
@@ -255,15 +247,25 @@ def main():
         print_exception(e)
         tplog(print_exception(e, file=str))
 
-    print('------- test timeout_func(). should fail on windows as windows has no SIGALRM')
-    def sleep_10():
-        for i in range(10):
-            time.sleep(1)
-            print('tick')
-        print('done')
+    print('------ test load_module() by source code')
+    source = """
+def f(n: int) -> int:
+    print(f'{n}+1={n+1}')
+    return n+1
+"""
+    mod = load_module(source)
+    print(f"{pformat(dir(mod))}")
+    mod.f(2)
 
-    sleep_5 = timeout_func_on_unix(5, sleep_10)
-    sleep_5()
+    print('------ test load_module() by compiled code')
+
+    def f(n: int) -> int:
+        print(f'{n}+1={n+1}')
+        return n+1
+
+    mod = load_module(f.__code__)
+    print(f"{pformat(dir(mod))}")
+
 
 if __name__ == '__main__':
     main()

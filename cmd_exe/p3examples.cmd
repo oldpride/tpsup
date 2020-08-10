@@ -1,1 +1,1 @@
-cd C:/Users/william/sitebase/github/tpsup/python3/examples
+cd %TPSUP%/python3/examples
