@@ -6,8 +6,9 @@ import pkgutil
 import sys
 from pprint import pformat
 from tpsup.tpfile import TpInput, TpOutput
-from tpsup.util import load_module, stringdict_to_funcdict, \
-    strings_to_compilable_func, silence_BrokenPipeError
+from tpsup.util import silence_BrokenPipeError
+from tpsup.modtools import load_module, stringdict_to_funcdict, strings_to_compilable_func, \
+    strings_to_compilable_patterns
 
 
 def main():

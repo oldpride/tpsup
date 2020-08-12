@@ -1,14 +1,9 @@
-import sys
-import re
-from pprint import pprint, pformat
-from tpsup.util import strings_to_compilable_patterns, load_module, stringdict_to_funcdict,\
-    strings_to_compilable_func, silence_BrokenPipeError
-import io
 import gzip
-import pkgutil
-import inspect
 import os
-from typing import Dict, List
+import sys
+from pprint import pprint
+from tpsup.modtools import strings_to_compilable_patterns, load_module
+from tpsup.util import silence_BrokenPipeError
 
 
 class TpInput:

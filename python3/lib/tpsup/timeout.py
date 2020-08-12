@@ -1,52 +1,31 @@
 import functools
-import functools
 import multiprocessing
 import multiprocessing.connection
 import os
 import signal
-import sys
 import time
 import traceback
 from pprint import pformat
 from typing import Union, Callable
+import types
 
-from tpsup.util import print_exception, tplog
 
+from tpsup.util import print_exception, tplog, tplog_exception
 
-def top_level_sleep_and_tick(duration: int, *args, **opt)-> str:
-    """
-    this is a test function. used to be in main(), but I got error
-        AttributeError: Can't pickle local object 'main.<locals>.sleep_and_tick'
-    reason:
-        Pickling actually only saves the name of a function and unpickling
-        requires re-importing the function by name. For that to work, the
-        function needs to be defined at the top-level, nested functions won't
-        be importable by the child and already trying to pickle them raises an
-        exception
-    therefore, I moved it outside
-    :param duration:
-    :return:
-    """
-    print(f"args = {pformat(args)}")
-    print(f"opt = {pformat(opt)}")
-
-    for i in range(duration):
-        time.sleep(1)
-        print('tick')
-    message = f"pid={os.getpid()}"
-    print(message)
-    return message
+# multiprocessing.set_start_method('spawn')
 
 class TimeoutException(Exception):
     """
     to pass data using Exception
     https://stackoverflow.com/questions/16466406/passing-an-object-with-an-exception
     """
-    def __init__(self, timeout: Union[int, float]=None,  *args):
+
+    def __init__(self, timeout: Union[int, float] = None, child_pid = None, *args):
         super().__init__(timeout, *args)
         self.timeout = timeout  # used to save partial result
+        self.child_pid = child_pid  # pid of the child process
 
-def timeout_func_on_unix(timeout: int, func):
+def timeout_func_on_unix(timeout: int, func, *args, **kwargs):
     """
     timeout wrapper. not work well in thread.
     https://stackoverflow.com/questions/492519/timeout-on-a-function-call
@@ -73,21 +52,8 @@ def timeout_func_on_unix(timeout: int, func):
         return func(*args, **kwargs)
     return timed_func
 
-def timeout_wrapper(func):
-    """
-    somehow the wrapped function is not pickleable
-    :param func:
-    :return:
-    """
-    @functools.wraps(func)
-    def wrapper_func(conn: multiprocessing.connection.Connection, *args, **kwargs):
-        conn.send(func(*args, **kwargs))
-        conn.close()
-    return wrapper_func
 
-_timeout_child_global = None
-
-def timeout_child(conn: multiprocessing.connection.Connection, func, *args, **kwargs):
+def timeout_child(conn: multiprocessing.connection.Connection, func: types.FunctionType, *args, **kwargs):
     """
     wrapper function for timeout_func
     :param conn:
@@ -96,11 +62,41 @@ def timeout_child(conn: multiprocessing.connection.Connection, func, *args, **kw
     :param kwargs:
     :return:
     """
-    tplog(f"func={func}")
-    conn.send(func(*args, **kwargs))
+    verbose = kwargs.get('verbose', 0)
+    if verbose:
+        tplog(f"func={func}")
+    if not func:
+        # https://stackoverflow.com/questions/43369648/cant-get-attribute-function-inner-on-module-mp-main-from-e-python
+        # when the multiprocessing library copies your main module, it won't run it as the __main__ script and
+        # therefore anything defined inside the if __name__ == '__main__' is not defined in the child process
+        # namespace. Hence, the AttributeError
+        message = f"both func={func} is not initialized. note: func cannot be defined in __main__"
+        tb = pformat(traceback.format_stack()) # outside exception use format_stack()
+        conn.send(RuntimeError(f"{message}\n{tb}"))
+    else:
+        result = None
+        try:
+            result = func(*args, **kwargs)
+            conn.send(result)
+        except Exception as e:
+            tb = pformat(traceback.format_exc()) # within exception use format_exc()
+            conn.send(RuntimeError(f"child process error\n{tb}"))
     conn.close()
 
-def timeout_func(timeout: int, func, *args, **kwargs):
+# typing.Callable vs types.FunctionType
+# https://stackoverflow.com/questions/55873205/using-type-hint-annotation-using-types-functiontype-vs-typing-callable
+#
+# The types module predates PEP 484 annotations and was created mostly to make runtime introspection
+# of objects easier. For example, to determine if some value is a function, you can run isinstance(my_var,
+# types.FunctionType).
+#
+# The typing module contains type hints that are specifically intended to assist static analysis tools such
+# as mypy. For example, suppose you want to indicate that a parameter must be a function that accepts two
+# ints and returns a str. You can do so like this:
+#
+# type hint use typing.Callable is better then types.FunctionType
+# def timeout_func(timeout: int, func: types.FunctionType, *args, **kwargs):
+def timeout_func(timeout: int, func: Callable, *args, **kwargs):
     """
     time out a func. signal.ALRM not working on Windows. therefore this
     https://stackoverflow.com/questions/492519/timeout-on-a-function-call
@@ -116,84 +112,92 @@ def timeout_func(timeout: int, func, *args, **kwargs):
     https://github.com/bitranox/wrapt_timeout_decorator/blob/master/wrapt_timeout_decorator/wrap_function_multiprocess.py
     """
 
-    tplog(f"func={func}")
-    parent_conn, child_conn = multiprocessing.Pipe()
+    # multiprocessing cannot run child with function defined in __main__
+    #   https://stackoverflow.com/questions/43369648/cant-get-attribute-function-inner-on-module-mp-main-from-e-python
+    #   when the multiprocessing library copies your main module, it won't run it as the __main__ script
+    #   and therefore anything defined inside the if __name__ == '__main__' is not defined in the child
+    #   process namespace. Hence, the AttributeError
+    # I tried to reload module or delay import module to work around this. neither worked.
+    # re-import failed to work around
+    #   importlib.reload(multiprocessing)
+    #   importlib.reload(multiprocessing.connection)
+    # delayed import failed to work around
+    #   import multiprocessing
+    #   import multiprocessing.connection
+
+    # the parent process can always see the process defined in __main__
+    #   tplog(getattr(sys.modules['__mp_main__'], 'local_sleep_and_tick'))
+
+    parent_conn, child_conn = multiprocessing.Pipe(duplex=False)
 
     # how to pass args and kwargs
     #   https://stackoverflow.com/questions/38908663/python-multiprocessing-how-to-pass-kwargs-to-function
+    # p = multiprocessing.Process(target=timeout_child, args=(child_conn, func, *args), kwargs=kwargs)
     p = multiprocessing.Process(target=timeout_child, args=(child_conn, func, *args), kwargs=kwargs)
+
+    # kill child after parent exits
+    # https://stackoverflow.com/questions/25542110/kill-child-process-if-parent-is-killed-in-python
+    p.daemon = True
+
     p.start()
 
     # Wait for timeout seconds or until process finishes
     p.join(timeout)
+    tplog("after timeout")
 
     # If thread is still active
     if p.is_alive():
         message = f"timed out after {timeout}"
-        print(message, file=sys.stderr)
+        tplog(message)
         traceback.print_stack()  # default to stderr, set file=sys.stdout for stdout
 
         # Terminate
         p.terminate()
-        p.join(1.0)
-        raise TimeoutException(timeout=timeout)
-    else:
-        result = parent_conn.recv()
+        p.join(0.5)
         parent_conn.close()
-        return result
+        raise TimeoutException(timeout=timeout, child_pid=p.pid)
+    else:
+        result = None
+        if parent_conn.poll(0.1):
+            # recv() is a blocked call, therefore, poll() first
+            result = parent_conn.recv()
+            parent_conn.close()
+            if isinstance(result, Exception):
+                raise result
+            else:
+                # child finished and returned anything
+                return result
+        else:
+            # child finished but didn't return anything
+            parent_conn.close()
 
-
-
-import types
-import copy
-def copy_func(f: Callable, global_dict=None, name=None):
+def module_sleep_and_tick(duration: int, *args, **opt) -> str:
     """
-    return a function with same code, globals, defaults, closure, and
-    name (or provide a new name)
+    this is local function:
+    https://stackoverflow.com/questions/36994839/i-can-pickle-local-objects-if-i-use-a-derived-class
 
-    https://stackoverflow.com/questions/6527633/how-can-i-make-a-deepcopy-of-a-function-in-python/30714299#30714299
     """
-    if not name:
-        name =f.__name__
+    print(f"args = {pformat(args)}")
+    print(f"opt = {pformat(opt)}")
 
-    if not global_dict:
-        global_dict = globals()
-    # https://stackoverflow.com/questions/48629236/how-does-pythons-types-functiontype-create-dynamic-functions
-    #fn = types.FunctionType(f.__code__, f.__globals__, name, f.__defaults__, f.__closure__)
-    fn = types.FunctionType(f.__code__, global_dict, name, f.__defaults__, f.__closure__)
-
-    #if name:
-    #    fn.__name__ = name
-    # in case f was given attrs (note this dict is a shallow copy):
-    fn.__dict__.update(f.__dict__)
-    fn.__qualname__ = name
-    return fn
-
-
+    for i in range(duration):
+        time.sleep(1)
+        print('tick')
+    message = f"pid={os.getpid()}"
+    print(message)
+    return message
 
 def main():
-    global _timeout_child_global
-
     print('------- test timeout_func_unix(). should work on Unix and fail on windows')
     try:
-        sleep_5 = timeout_func_on_unix(5, top_level_sleep_and_tick)
+        sleep_5 = timeout_func_on_unix(5, module_sleep_and_tick, 2)
         sleep_5(10)
     except Exception as e:
+        # error on Windows
+        # AttributeError: module 'signal' has no attribute 'SIGALRM'
         print_exception(e)
 
-    print('------- test timeout_func(). should work on both Unix and windows')
-    print('------- test timeout_func(). 1. finished before timeout')
-    try:
-        timeout_func(5, top_level_sleep_and_tick, 2, message ="should finish before timeout")
-    except TimeoutException as e:
-        print_exception(e)
-    print('------- test timeout_func(). 2. timed out')
-    try:
-        timeout_func(2, top_level_sleep_and_tick, 10, message ="should timeout")
-    except TimeoutException as e:
-        print_exception(e)
-
-    def local_sleep_and_tick(duration: int, *args, **opt)-> str:
+    def main_sleep_and_tick(duration: int, *args, **opt) -> str:
         """
         this is local function:
         https://stackoverflow.com/questions/36994839/i-can-pickle-local-objects-if-i-use-a-derived-class
@@ -209,35 +213,24 @@ def main():
         print(message)
         return message
 
-    print('------- test timeout_func(). 3. local function timed out')
-    # this is useless, as it only copies the function name, not the code
-    #_timeout_child_global_name = copy.deepcopy(local_sleep_and_tick)
-
-    # this doesn't work either as deepcopy cannot copy functions
-    # https://stackoverflow.com/questions/10802002/why-deepcopy-doesnt-create-new-references-to-lambda-function
-    #_timeout_child_global_name = copy.deepcopy(local_sleep_and_tick)
-
-    _timeout_child_global = copy_func(local_sleep_and_tick, global_dict=globals(), name="_timeout_child_global")
-
-    print(_timeout_child_global)
-
-    print("run once without timeout")
-    _timeout_child_global(1, message="1 sec")
-
-    print("run with timeout")
+    b = main_sleep_and_tick
+    print(f"type={type(module_sleep_and_tick)}")
+    print('------- test timeout_func(). 1. with function defined in module, should work but will time out')
     try:
-        # timeout_func(2, local_sleep_and_tick, 10, message="should timeout")
-        timeout_func(2, _timeout_child_global, 10, message="should timeout")
-        '''
-        Even used a global name _timeout_child_global_name, the function is still not pickle'able, because
-             Note that functions (built-in and user-defined) are pickled by “fully qualified” name reference, 
-             not by value. This means that only the function name is pickled, along with the name of the module the 
-             function is defined in. Neither the function’s code, nor any of its function attributes are pickled. Thus 
-             the defining module must be importable in the unpickling environment, and the module must contain the named 
-             object, otherwise an exception will be raised. 
-        '''
+        result = timeout_func(2, module_sleep_and_tick, 10, message="should timeout")
+        tplog(f"{pformat(result)}")
     except TimeoutException as e:
-        print_exception(e)
+        tplog_exception(e)
+        tplog("got expected exception\n\n")
+
+    print('------- test timeout_func(). 2. with function defined in main, should fail with pickle error')
+    try:
+        result = timeout_func(2, main_sleep_and_tick, 10, message="should timeout")
+        tplog(f"{pformat(result)}")
+    except AttributeError as e:
+        # AttributeError: Can't pickle local object 'main.<locals>.main_sleep_and_tick'
+        tplog_exception(e)
+        tplog("got expected exception\n\n")
 
 if __name__ == '__main__':
     main()

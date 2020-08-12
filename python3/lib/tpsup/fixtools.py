@@ -1,11 +1,11 @@
+import importlib
 import re
 import sys
-from pprint import pprint, pformat
-from typing import Dict, List
 from collections import ChainMap
-import inspect
-import importlib
-from tpsup.util import load_module
+from pprint import pprint
+from typing import Dict
+
+from tpsup.modtools import load_module
 
 field_by_version_tag = {}
 tag_by_version_field = {}

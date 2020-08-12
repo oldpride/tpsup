@@ -8,7 +8,7 @@ from inspect import currentframe, getframeinfo
 import os
 import time
 
-from tpsup.util import strings_to_funcs, load_module
+from tpsup.modtools import strings_to_funcs, load_module
 import platform
 
 if platform.system().lower().startswith("lin"):
@@ -253,6 +253,10 @@ def main():
 
     if args['verbose']:
         sys.stderr.write(f"args =\n{pformat(args)}\n")
+
+    if len(args['paths']) == 0 :
+        parser.print_help(file=sys.stderr)
+        sys.exit(1)
 
     # https://pythontips.com/2013/08/04/args-and-kwargs-in-python-explained/
     # *args and **kwargs allow you to pass a variable number of arguments to a function.
