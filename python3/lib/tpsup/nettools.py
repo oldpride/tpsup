@@ -1,4 +1,6 @@
 import functools
+import mmap
+import os
 import select
 import socket
 import sys
@@ -119,7 +121,7 @@ class encryptedsocket:
     # python socket has no flush()
     #     https: // stackoverflow.com / questions / 4407835 / python - socket - flush
 
-    def recv_and_decode(self, timeout: int = 6, maxsize=1024 * 1024 * 1024, **opt) -> bytes:
+    def recv_and_decode(self, timeout: int = 6, maxsize=1024 * 1024 * 1024, file:str = None, **opt) -> Union[bytes, int]:
         """ this is actually use unblocked recv() to re-implement a blocked recv().
         The possible benefits:
         - sock.recv(buffer_size)'s buffer_size is limited, we can use a loop to recv() bigger file. In this
@@ -127,6 +129,12 @@ class encryptedsocket:
         small data
         - decrypt the incoming data with smaller chunks, ie, in buffer_size
         """
+
+        if file:
+            # receive data will write to this file
+            fh = open(file, 'wb')
+        else:
+            fh = None
 
         # https://docs.python.org/3/library/socket.html
 
@@ -139,6 +147,7 @@ class encryptedsocket:
 
         polling_interval = 1
         wait_so_far = 0
+        total_size = 0
         received_bytearray = bytearray()
         while wait_so_far < timeout:
             ready = select.select([self.socket], [], [], polling_interval)  # last arg is timeout in seconds
@@ -148,28 +157,48 @@ class encryptedsocket:
                 if data == b'':
                     tplog(f"Remote connection is closed during our recv()")
                     break
-                received_bytearray.extend(self.in_coder.xor(data))
-                if len(data) > maxsize:
-                    tplog(f"Received {len(data)} bytes already exceeded maxsize {maxsize}. Stopped receiving.")
+
+                if fh:
+                    fh.write(self.in_coder.xor(data))
+                else:
+                    received_bytearray.extend(self.in_coder.xor(data))
+
+                total_size += len(data)
+                if total_size > maxsize:
+                    tplog(f"Received {total_size} bytes already exceeded maxsize {maxsize}. Stopped receiving.")
                     break
             else:
                 # time.sleep(polling_interval)  # no need sleep here if we already blocked at select()
                 wait_so_far += polling_interval
+        if fh:
+            fh.close()
         if wait_so_far >= timeout:
             tplog(f"recv() timed out after {wait_so_far} seconds")
-        tplog(f"Received total {len(received_bytearray)} bytes")
+        tplog(f"Received total {total_size} bytes")
 
         # getblocking()/setblocking() is implemented by gettimeout()/settimeout. no getblocking() before 3.7
         self.socket.settimeout(saved_timeout)
         # self.socket.setblocking(saved_blocking) # restoring blocking setting
 
-        return bytes(received_bytearray)
+        if file:
+            return total_size
+        else:
+            return bytes(received_bytearray)
 
-    def send_and_encode(self, data: bytes, timeout: int = 6, **opt) -> int:
+    def send_and_encode(self, data: Union[bytes, str], data_is_file: bool = False, timeout: int = 6, **opt) -> int:
         """ this is actually use unblocked send() to re-implement a blocked sendall().
         The possible benefits:
         - add encryption
         """
+
+        file = None
+        fd = None
+        if data_is_file:
+            file = data
+            size = os.path.getsize(file)
+            fd = os.open(file, os.O_RDWR) # fd is int
+            data = mmap.mmap(fd, size, access=mmap.ACCESS_READ)
+            print(f"data type = {type(data)}")  #
 
         # https://docs.python.org/3/library/socket.html
         #         socket.send() vs socket.sendall()
@@ -228,6 +257,9 @@ class encryptedsocket:
                 continue
             break # the above loop DID break = the above loop condition was still True = the loop didn't end naturally
 
+        if fd:
+            os.close(fd)
+
         missing = data_length - total_sent
         if missing > 0:
             tplog(f"Sent total {total_sent} bytes. failed to send {missing} bytes")
@@ -241,29 +273,29 @@ class encryptedsocket:
         return total_sent
 
 
-
 def main():
     print(f'sys.args={pformat(sys.argv)}')
 
     if len(sys.argv) < 2:
-        print("usage: prog client|server")
+        print("usage: prog client|server|clientfile|serverfile")
         sys.exit(1)
 
     key = "abc"
     host = "localhost"
     port = '3333'
 
+    env = tpsup.env.Env()
+    tmpdir = env.tmpdir
+
     # https://docs.python.org/3/howto/sockets.html
 
     if sys.argv[1] == 'client':
         data = 'hello server'
-
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             ensock = encryptedsocket(key, host_port=f"{host}:{port}")
             ensock.send_string(data + "\n")
             ensock.send_shutdown()
             received = ensock.recv_string()
-
         print("Sent:     {}".format(data))
         print("Received: {}".format(received))
     elif sys.argv[1] == 'server':
@@ -272,7 +304,7 @@ def main():
         serversocket.bind(('0.0.0.0', int(port)))  # 0.0.0.0 means all interfaces
         serversocket.listen(5)
         while True:
-            print(f"waiting for client at port {port}")
+            print(f"waiting for client at port {port}. Control-C won't work on Windows until client connects")
             (clientsocket, address) = serversocket.accept()
             print(f"accepted client socket {clientsocket}")
             ensock = encryptedsocket(key, established_socket=clientsocket)
@@ -281,6 +313,38 @@ def main():
             ensock.send_string(data)
             print("Sent:     {}".format(data))
             ensock.close()
+            break # because control-c doesn't interrupt accept() on windows, we only test one loop
+    elif sys.argv[1] == 'clientfile':
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ensock = encryptedsocket(key, host_port=f"{host}:{port}")
+            recv_file = f"{env.tmpdir}/test_client.txt"
+            send_file = "runtest.bash"
+            print(f"sent send_file={send_file}, file_size={os.path.getsize(send_file)}")
+            size = ensock.send_and_encode(send_file, data_is_file=True)
+            ensock.send_shutdown()
+            print(f"sent size={size}")
+            print(f"receiving")
+            size = ensock.recv_and_decode(file=recv_file)
+            print(f"received recv_file={recv_file}, size={size}, file_size={os.path.getsize(recv_file)}")
+            ensock.close()
+    elif sys.argv[1] == 'serverfile':
+        serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serversocket.bind(('0.0.0.0', int(port)))  # 0.0.0.0 means all interfaces
+        serversocket.listen(5)
+        while True:
+            print(f"waiting for client at port {port}. Control-C won't work on Windows until client connects")
+            (clientsocket, address) = serversocket.accept()
+            print(f"accepted client socket {clientsocket}")
+            ensock = encryptedsocket(key, established_socket=clientsocket)
+            recv_file = f"{env.tmpdir}/test_server.txt"
+            send_file = "csvtools_test.csv"
+            size = ensock.recv_and_decode(file=recv_file)
+            print(f"received recv_file={recv_file}, size={size}, file_size={os.path.getsize(recv_file)}")
+            print(f"sent send_file={send_file}, file_size={os.path.getsize(send_file)}")
+            size = ensock.send_and_encode(send_file, data_is_file=True)
+            print(f"sent size={size}")
+            ensock.close()
+            break # because control-c doesn't interrupt accept() on windows, we only test one loop
 
 
 if __name__ == '__main__':

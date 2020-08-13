@@ -80,7 +80,7 @@ def timeout_child(conn: multiprocessing.connection.Connection, func: types.Funct
             conn.send(result)
         except Exception as e:
             tb = pformat(traceback.format_exc()) # within exception use format_exc()
-            conn.send(RuntimeError(f"child process error\n{tb}"))
+            conn.send(RuntimeError(f"child process exception, pid={os.getpid()}\n{tb}"))
     conn.close()
 
 # typing.Callable vs types.FunctionType
@@ -143,11 +143,10 @@ def timeout_func(timeout: int, func: Callable, *args, **kwargs):
 
     # Wait for timeout seconds or until process finishes
     p.join(timeout)
-    tplog("after timeout")
 
     # If thread is still active
     if p.is_alive():
-        message = f"timed out after {timeout}"
+        message = f"timed out after {timeout} second(s), terminating pid={p.pid}"
         tplog(message)
         traceback.print_stack()  # default to stderr, set file=sys.stdout for stdout
 
@@ -187,10 +186,14 @@ def module_sleep_and_tick(duration: int, *args, **opt) -> str:
     print(message)
     return message
 
+def test_child_exception():
+    time.sleep(1)
+    raise RuntimeError("test exception")
+
 def main():
     print('------- test timeout_func_unix(). should work on Unix and fail on windows')
     try:
-        sleep_5 = timeout_func_on_unix(5, module_sleep_and_tick, 2)
+        sleep_5 = timeout_func_on_unix(2, module_sleep_and_tick, 3)
         sleep_5(10)
     except Exception as e:
         # error on Windows
@@ -215,20 +218,29 @@ def main():
 
     b = main_sleep_and_tick
     print(f"type={type(module_sleep_and_tick)}")
-    print('------- test timeout_func(). 1. with function defined in module, should work but will time out')
+    print('------- test timeout_func(). with function defined in module, should work but will time out')
     try:
         result = timeout_func(2, module_sleep_and_tick, 10, message="should timeout")
-        tplog(f"{pformat(result)}")
+        tplog(f"result={pformat(result)}")
     except TimeoutException as e:
         tplog_exception(e)
         tplog("got expected exception\n\n")
 
-    print('------- test timeout_func(). 2. with function defined in main, should fail with pickle error')
+    print('------- test timeout_func(). with function defined in main, may work on unix but should fail on windows '
+          'with pickle error')
     try:
         result = timeout_func(2, main_sleep_and_tick, 10, message="should timeout")
-        tplog(f"{pformat(result)}")
+        tplog(f"result={pformat(result)}")
     except AttributeError as e:
         # AttributeError: Can't pickle local object 'main.<locals>.main_sleep_and_tick'
+        tplog_exception(e)
+        tplog("got expected exception\n\n")
+
+    print('\n------- test timeout_func(). child will raise exception')
+    try:
+        result = timeout_func(3, test_child_exception)
+        tplog(f"result={pformat(result)}")
+    except TimeoutException as e:
         tplog_exception(e)
         tplog("got expected exception\n\n")
 

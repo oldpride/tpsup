@@ -1,8 +1,9 @@
 import types
+from typing import Optional, Callable, Union
 
-fv: types.FunctionType = None
+fv: Optional[types.FunctionType] = None
 
-def f():
+def f(f2: Optional[Callable] = None):
     print("hello world")
 
 fv = f

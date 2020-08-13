@@ -10,6 +10,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from tpsup.nettools import is_tcp_open
 import tpsup.pstools
+import tpsup.tptmp
 import os.path
 
 
@@ -19,7 +20,7 @@ import os.path
 
 
 class SeleniumEnv:
-    def __init__(self, host_port: str, **opt):
+    def __init__(self, host_port: str, page_load_timeout:int = 15, **opt):
         global cmd
         (self.host, self.port) = host_port.split(':', 1)
         self.verbose = opt.get('verbose', 0)
@@ -27,6 +28,8 @@ class SeleniumEnv:
         self.env.adapt()
         home_dir = self.env.home_dir
         system = self.env.system
+
+        self.page_load_timeout = page_load_timeout
 
         self.dryrun = opt.get('dryrun', False)
         self.driverlog = home_dir + '/selenium_chromedriver.log'
@@ -43,8 +46,9 @@ class SeleniumEnv:
         #     chromedriver.exe should be in the PATH or at C:/users/<username>
         #     chrome.exe       C:/Program Files (x86)/Google/Chrome/Application, hardcoded in chromedriver
 
-        self.download_dir = f"{self.env.home_dir}/Downloads/seleniumtools"
-        os.makedirs(self.download_dir, exist_ok=True)
+        # self.download_dir = f"{self.env.home_dir}/Downloads/seleniumtools"
+        download_dir = tpsup.tptmp.tptmp(base=f"{self.env.home_dir}/Downloads").get_nowdir(suffix='selenium')
+        self.download_dir = self.env.adjpath(download_dir)
 
         self.headless = opt.get('headless', False)
         self.driver_exe = opt.get('driver', 'chromedriver')
@@ -160,6 +164,7 @@ class SeleniumEnv:
             self.browser_options.add_argument(f'--remote-debugging-port={self.port}')
             # browser_options.add_argument(f'--remote-debugging-address=127.0.0.1')
 
+            # for file download
             self.browser_options.add_experimental_option("prefs", {
                 "download.default_directory": self.download_dir,
                 "download.prompt_for_download": False,
@@ -180,6 +185,11 @@ class SeleniumEnv:
                 sys.stderr.write('started\n')
                 # if self.headless:
                 #    time.sleep(1)  # throttle for the headless mode
+
+                # set timeout
+                # https://stackoverflow.com/questions/17533024/how-to-set-selenium-python-webdriver-default-timeout
+                self.driver.set_page_load_timeout(self.page_load_timeout)   # for chromedriver.
+                # other driver use implicitly_wait()
 
     def get_driver(self):
         return self.driver

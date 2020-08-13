@@ -4,7 +4,7 @@ import types
 import copy
 from typing import Callable
 from pprint import pformat
-import tpsup.util
+import tpsup.modtools
 
 def copy_func(f: Callable, name=None):
     """
@@ -44,5 +44,5 @@ f2 = copy_func(f1, name="f2")
 print(f"f1={f1}")
 print(f"f2={f2}")
 
-mod = tpsup.util.load_module(f1.__code__)
+mod = tpsup.modtools.load_module(f1.__code__)
 mod.f1()

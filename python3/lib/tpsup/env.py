@@ -26,9 +26,10 @@ class Env:
         self.isLinux = False
         self.isWindows = False
         self.environ = os.environ
+        self.user = os.getlogin()
         self.PATH = os.environ.get('PATH', '')
         self.python_version = platform.python_version()
-        self.ls = 'ls'
+        self.ls_cmd = 'ls'
 
         if re.search("Windows", self.system, re.IGNORECASE):
             self.isWindows = True
@@ -36,18 +37,21 @@ class Env:
                 # GitBash signature
                 # MSYSTEM=MINGW64
                 self.isGitBash = True
+                self.tmpdir = "/tmp"
             elif re.search('cygdrive|cygwin', self.PATH, re.IGNORECASE):
                 # Cygwin signature: /cygdrive/c/... in PATH PATH=/cygdrive/c/Program Files (x86)/Common
                 # Files/Oracle/Java/javapath:/cygdrive/c/Program Files/Python37/Scripts:...
                 self.isCygwin = True
-
+                self.tmpdir = "/tmp"
                 # because cygwin's home dir is C:\cygwin64\home\<username>, likely not the normal windows's home
                 # dir C:/users/<username>. use C:/users/<username> instead
                 self.home_dir = f'C:/Users/{os.environ["USER"]}'
             else:
-                self.ls = 'dir'
+                self.ls_cmd = 'dir'
+                self.tmpdir = f'C:/Users/{os.environ["USERNAME"]}/AppData/Local/Temp'
         if re.search("Linux", self.system, re.IGNORECASE):
             self.isLinux = True
+            self.tmpdir = "/tmp"
 
     def __str__(self):
         strings = []
@@ -61,6 +65,14 @@ class Env:
             # overwrite the standard function
             sys.stderr.write = flush_rightaway(sys.stderr.write)
 
+    def adjpath(self, path:str):
+        if self.isWindows and not (self.isCygwin or self.isGitBash):
+            return path.replace('/', '\\')
+        else:
+            return path.replace('\\', '/')
+
+    def ls(self, path):
+        os.system(f"{self.ls_cmd} {self.adjpath(path)}")
 
 def main():
     myenv = Env()
@@ -74,6 +86,10 @@ def main():
     sys.stderr.write("2\n")
     time.sleep(2);
     sys.stderr.write("3\n")
+
+    for path in ("/a/b/c", r"\a\b\c"):
+        print(f"converted path={path} to os standard path={myenv.adjpath(path)}")
+
 
 
 if __name__ == '__main__':

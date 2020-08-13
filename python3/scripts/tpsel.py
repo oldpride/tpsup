@@ -3,20 +3,20 @@
 import argparse
 import json
 import os
-import select
-import socket
-import socketserver
 import sys
+import tarfile
 import textwrap
-from pprint import pformat
-import tpsup.env
-import tpsup.seleniumtools
-import tpsup.coder
-import tpsup.nettools
-from tpsup.util import run_module, tplog, print_exception, tplog_exception
-import tpsup.tpsocketserver
-import traceback
 import time
+from pprint import pformat
+
+import tpsup.env
+import tpsup.nettools
+import tpsup.seleniumtools
+import tpsup.tpsocketserver
+from tpsup.modtools import run_module
+from tpsup.util import tplog, tplog_exception
+import tpsup.tptmp
+import tpsup.tartools
 
 prog = os.path.basename(sys.argv[0])
 script_dir = os.path.dirname(sys.argv[0])
@@ -194,6 +194,8 @@ if verbose:
 
 serverHostPort = args['serverHostPort']
 if serverHostPort:
+    tmpdir = tpsup.tptmp.tptmp().get_nowdir()
+
     # this is client mode if serverHostPort is defined
     ensock = tpsup.nettools.encryptedsocket(key, host_port=serverHostPort)
 
@@ -212,17 +214,30 @@ if serverHostPort:
     ensock.send_shutdown()
 
     tplog("Sent. waiting response")
-    received_bytes = ensock.recv_and_decode(timeout=60) # this needs a long wait
-
-    tplog(f"Received: {len(received_bytes)}")
-
     if request['accept'] == 'json':
-        tplog(f" bytes {received_bytes}")
+        received_bytes = ensock.recv_and_decode(timeout=60) # this needs a long wait
+        tplog(f"received {received_bytes} bytes")
         received_str = str(received_bytes, 'utf-8')
         received_structure = json.loads(received_str)
         tplog(f"Received data structure: {pformat(received_structure)}")
     elif request['accept'] == 'tar':
-        tplog(f" bytes {received_bytes}")
+        tar_name = f"{tmpdir}/reply.tar"
+        recv_size = ensock.recv_and_decode(timeout=60, file=tar_name)
+        tplog(f"received size={recv_size}, file={tar_name}, file_size={os.path.getsize(tar_name)}")
+        exception_str = None
+        try:
+            exception_str = tpsup.tartools.extract_tar_to_string(tar_name, "exception.txt")
+        except KeyError:
+            pass
+
+        if exception_str:
+            print(f"received exception={exception_str}")
+        else:
+            dir = f"{my_env.home_dir}/selenium"
+            print(f"extracting files to {dir}")
+            with tarfile.open(tar_name, 'r') as tar:
+                tar.extractall(dir)
+
 
     sys.exit(0)
 
@@ -267,6 +282,9 @@ if (listenerPort):
             sys.exit(0)
         tplog(f"accepted client socket {ensock}")
 
+        # one tmpdir for each client
+        tmpdir = tpsup.tptmp.tptmp().get_nowdir()
+
         decoded_bytes = ensock.recv_and_decode()
         tplog(f"received {len(decoded_bytes)} bytes")
         decoded_str = ensock.in_coder.xor(decoded_bytes)
@@ -299,6 +317,22 @@ if (listenerPort):
             tplog(f"sending {len(reply_bytes)} bytes to client and closing connection")
             ensock.send_and_encode(reply_bytes)
             ensock.close()
+        if request['accept'] == 'tar':
+            tar_name = f"{tmpdir}/result.tar"
+
+            if exception_str:
+                short_name = "exception.txt"
+                tplog(f"creating {tar_name} containing {short_name} form exception_str")
+                tpsup.tartools.create_tar_from_string(tar_name, short_name, exception_str)
+            else:
+                download_dir = result
+                tplog(f"creating {tar_name} from {download_dir}")
+                tpsup.tartools.create_tar_from_dir_root(tar_name, download_dir)
+
+            tplog(f"sending {tar_name}, size={os.path.getsize(tar_name)} to client and closing connection")
+            ensock.send_and_encode(tar_name, data_is_file=True)
+            ensock.close()
+
 
 seleniumEnv.quit()
 time.sleep(1)

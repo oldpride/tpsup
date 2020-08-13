@@ -1,15 +1,24 @@
-import argparse
 import os
+import re
+
+import argparse
 import shutil
 import sys
+import tarfile
 import time
 import urllib.request
 from pprint import pformat
+from inspect import currentframe, getframeinfo
 
 import tpsup.seleniumtools
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from urllib.parse import urlparse
+from tpsup.lock import EntryBook
 
 
 def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
+    username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
 
@@ -55,22 +64,12 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     #elem = driver.find_element_by_css_selector("#content > div.item-page > div:nth-child(4) > pre:nth-child(15) > span > a")
     elem = driver.find_element_by_partial_link_text("view LCA By Law")
 
-    is_download_link = False
-    if not is_download_link:
-        src = elem.get_attribute("href")
-        urllib.request.urlretrieve(src, f"{seleniumEnv.download_dir}/lca.pdf")
-        return
-    else:
-        elem.click()
-        time.sleep(float(args['wait']))
+    src = elem.get_attribute("href")
+    env = seleniumEnv.env
+    download_dir = seleniumEnv.download_dir
 
-        # control file name
-        # https://stackoverflow.com/questions/34548041/selenium-give-file-name-when-downloading
-        filename = max([seleniumEnv.download_dir + "/" + f for f in os.listdir(seleniumEnv.download_dir)],
-                       key=os.path.getctime)
-        renamed = args['renamed']
-        if renamed:
-            shutil.move(filename, os.path.join(seleniumEnv.download_dir, renamed))
-            return renamed
-        else:
-            return filename
+    shortname = "lca.pdf"
+    urllib.request.urlretrieve(src, f"{download_dir}/{shortname}")
+
+    return download_dir
+

@@ -1,0 +1,45 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 module_name class
+
+   find a python class's mro
+
+examples:
+
+   $0 mmap mmap
+
+EOF
+   exit 1
+}
+
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+module=$1
+class=$1
+
+module=`echo $module|sed -e 's://*:.:g; s/::*/./g; s/[.]py$//'`
+
+echo "normalized module: $module"
+
+echo ""
+# 'which' will not report function. 'type' will report both function and binary path
+type python
+
+# declare -F
+python --version
+echo ""
+
+echo "
+import inspect
+import $module
+print(f'inspect.getmro($module.$class)')
+print(inspect.getmro($module.$class))
+" |python
