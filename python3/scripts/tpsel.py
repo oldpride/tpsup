@@ -101,7 +101,7 @@ server mode examples:
 
 client mode examples:
     {prog}  -client localhost:29999 test_login.py -- -u tester
-
+    {prog}  -client localhost:29999 -accept tar test_urlretrieve.py
     """)
 
 parser = argparse.ArgumentParser(

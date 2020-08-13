@@ -61,6 +61,7 @@ class tptmp:
         # else use retention_sec
 
         base = self.base
+        print(f"base={base}")
         now = time.time()
         for f in os.listdir(base):
             fullname = os.path.join(base, f)
@@ -71,7 +72,7 @@ class tptmp:
                     print(f"dryrun: removing {fullname}")
                 else:
                     print(f"removing {fullname}")
-                    shutil.rmtree(fullname)
+                    # shutil.rmtree(fullname)
 
 def main():
     mytmp = tptmp()
