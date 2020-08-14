@@ -77,7 +77,12 @@ class encryptedsocket:
                 for i in range(0, maxtry):
                     try:
                         sock.connect((host, int(port)))
-                        tplog(f"connected to {sock}")
+                        # tplog(f"connected to {sock}")
+                        # __init__ connected to <socket.socket fd=3, family=AddressFamily.AF_INET,
+                        # type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 36690), raddr=('127.0.0.1', 29999)>
+                        laddr = sock.getsockname()
+                        raddr = sock.getpeername()
+                        tplog(f"connected socket: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
                         self.socket = sock
                         break
                     except Exception as e:
