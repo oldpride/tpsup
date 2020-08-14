@@ -82,7 +82,7 @@ class encryptedsocket:
                         # type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 36690), raddr=('127.0.0.1', 29999)>
                         laddr = sock.getsockname()
                         raddr = sock.getpeername()
-                        tplog(f"connected socket: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
+                        tplog(f"connected: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
                         self.socket = sock
                         break
                     except Exception as e:

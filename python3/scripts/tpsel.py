@@ -234,7 +234,7 @@ if serverHostPort:
             print(f"received exception={exception_str}")
         else:
             dir = f"{my_env.home_dir}/selenium"
-            print(f"extracting files to {dir}")
+            tplog(f"extracting files to {dir}")
             with tarfile.open(tar_name, 'r') as tar:
                 tar.extractall(dir)
 
@@ -320,14 +320,21 @@ if (listenerPort):
         if request['accept'] == 'tar':
             tar_name = f"{tmpdir}/result.tar"
 
+            if not exception_str:
+                download_dir = result
+                tplog(f"creating {tar_name} from {download_dir}")
+                try:
+                    tpsup.tartools.create_tar_from_dir_root(tar_name, download_dir)
+                except Exception as e:
+                    exception_str = tpsup.util.print_exception(e, file=str) + \
+                                    f"\ntar_name={tar_name}\ndownload_dir={download_dir}"
+                    if isinstance(e, TypeError):
+                        exception_str += "\n\nshould you instead use: -accept json ?"
+
             if exception_str:
                 short_name = "exception.txt"
                 tplog(f"creating {tar_name} containing {short_name} form exception_str")
                 tpsup.tartools.create_tar_from_string(tar_name, short_name, exception_str)
-            else:
-                download_dir = result
-                tplog(f"creating {tar_name} from {download_dir}")
-                tpsup.tartools.create_tar_from_dir_root(tar_name, download_dir)
 
             tplog(f"sending {tar_name}, size={os.path.getsize(tar_name)} to client and closing connection")
             ensock.send_and_encode(tar_name, data_is_file=True)

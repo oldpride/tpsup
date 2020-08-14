@@ -47,7 +47,7 @@ class SeleniumEnv:
         #     chrome.exe       C:/Program Files (x86)/Google/Chrome/Application, hardcoded in chromedriver
 
         # self.download_dir = f"{self.env.home_dir}/Downloads/seleniumtools"
-        download_dir = tpsup.tptmp.tptmp(base=f"{self.env.home_dir}/Downloads").get_nowdir(suffix='selenium')
+        download_dir = tpsup.tptmp.tptmp(base=f"{self.env.home_dir}/Downloads/selenium").get_nowdir(suffix='selenium')
         self.download_dir = self.env.adjpath(download_dir)
 
         self.headless = opt.get('headless', False)
@@ -59,7 +59,6 @@ class SeleniumEnv:
             # add home_dir and chrome.exe's path
             os.environ["PATH"] += os.pathsep + os.pathsep.join([f'C:/Users/{os.environ["USERNAME"]}',
                                                                 r'C:\Program Files (x86)\Google\Chrome\Application'])
-
         if not re.search('[\\/]', self.driver_exe):
             # no path specified, then we are totally rely on $PATH
             path = which(self.driver_exe)
