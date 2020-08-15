@@ -55,10 +55,23 @@ FOR /F "tokens=1,2,3" %%a IN ('tasklist /NH ^| findstr "%pattern%"') DO (
    rem from tasklist /NH
    rem    browser_broker.exe           27816 Console                    1      7,896 K
   
-   echo killing %%a %%b %%c
-
+   rem %%a is program name
    rem %%b is pid
-   kill %%b
+   rem %%c is Console or Service
+   echo killing %%a %%b %%c and its children
+
+   rem echo immediate child processes:
+   rem wmic process where (ParentProcessId=%b) get Caption,ProcessId 
+   rem > wmic process where (ParentProcessId=20488) get Caption,ProcessId
+   rem Caption     ProcessId
+   rem chrome.exe  26568
+   
+   call pstree %%b 
+
+   taskkill /F /PID %%b /T
+   rem /F     force
+   rem /PID   kill by PID
+   rem /T     also kill child processes 
 )
 
 endlocal
