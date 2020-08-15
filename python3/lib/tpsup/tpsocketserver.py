@@ -44,7 +44,6 @@ class tpsocketserver:
                 return tpsup.nettools.encryptedsocket(established_socket=clientsocket, key=key)
             else:
                 waited_so_far += poll_interval
-
         return None
 
     def close(self):

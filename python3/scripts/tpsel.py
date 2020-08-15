@@ -237,8 +237,6 @@ if serverHostPort:
             tplog(f"extracting files to {dir}")
             with tarfile.open(tar_name, 'r') as tar:
                 tar.extractall(dir)
-
-
     sys.exit(0)
 
 if not args['listenerPort'] and not args['mod_file']:
@@ -279,7 +277,7 @@ if (listenerPort):
         if not ensock:
             tplog(f"timed out after {listener_max_idle} idle seconds")
             listener.close()
-            sys.exit(0)
+            break
         tplog(f"accepted client socket {ensock}")
 
         # one tmpdir for each client
@@ -290,12 +288,18 @@ if (listenerPort):
         decoded_str = ensock.in_coder.xor(decoded_bytes)
         request = json.loads(decoded_str, object_hook=dict)
 
+        request_validated = True
         for k in ('mod_file', 'args', 'accept'):
             if not k in request:
                 tplog(f"{decoded_str} missing key='{k}")
-                sys.exit(1)
+                request_validated = False
+                break
+        if not request_validated:
+            # don't let client request to bump out our server
+            ensock.close()
+            continue
 
-        # don't let client request to bump out our server
+
         result = None
         exception_str = None
         try:
@@ -339,7 +343,6 @@ if (listenerPort):
             tplog(f"sending {tar_name}, size={os.path.getsize(tar_name)} to client and closing connection")
             ensock.send_and_encode(tar_name, data_is_file=True)
             ensock.close()
-
 
 seleniumEnv.quit()
 time.sleep(1)
