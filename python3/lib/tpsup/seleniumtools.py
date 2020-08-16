@@ -14,6 +14,7 @@ import tpsup.pstools
 import tpsup.tptmp
 import os.path
 from bs4 import BeautifulSoup
+from tpsup.util import tplog
 
 
 # +----------+      +--------------+     +----------------+
@@ -208,7 +209,7 @@ class SeleniumEnv:
         driver_basename = os.path.basename(self.driver_exe)
         tpsup.pstools.ps_grep_basename(driver_basename, env=self.env, verbose=self.verbose)
 
-    def get_attrs(self, element: WebElement, method:str = 'bs4'):
+    def get_attrs(self, element: WebElement, method:str = 'bs4', verbose:int=0):
         """
         get list of attributes from an element.
         https://stackoverflow.com/questions/27307131/selenium-webdriver-how-do-i-find-all-of-an-elements-attributes
@@ -217,15 +218,28 @@ class SeleniumEnv:
         :param method:
         :return:
         """
+        """
+        note: for html '<div class="login-greeting">Hi LCA Editor Tester,</div>'
+        bs4 will give: {'class': ['login-greeting']}
+        js  will give: {'class':  'login-greeting' }  
+        """
         if method == 'bs4':
-            html = element.get_attribute('outerHTML')
+            html: str = element.get_attribute('outerHTML')
+            if verbose:
+                tplog(f"outerHTML={html}")
             if html:
-                attrs = BeautifulSoup(html, 'html.parser').attrs
+                attrs = {}
+                soup = BeautifulSoup(html, 'html.parser')
+                # https://www.crummy.com/software/BeautifulSoup/bs4/doc/#attributes
+                for element in soup():
+                    # soup() is a generator
+                    # element.attrs is a dict
+                    attrs.update(element.attrs)
                 return attrs
             else:
                 return {}
         elif method == 'js':
-            # java script
+            # java script. duplicate attributes will be overwritten
             js_script = 'var items = {}; ' \
                         'for (index = 0; index < arguments[0].attributes.length; ++index) { ' \
                         '   items[arguments[0].attributes[index].name] = arguments[0].attributes[index].value' \

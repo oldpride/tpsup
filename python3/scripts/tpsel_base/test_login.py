@@ -68,10 +68,11 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
         greeting_css = '#login-form > div.login-greeting'
         try:
             greeting_elem = driver.find_element_by_css_selector(greeting_css)
-            attrs = seleniumEnv.get_attrs(greeting_elem, method='bs4')
-            tplog(f"attrs by bs4 = {pformat(attrs)}")
-            attrs = seleniumEnv.get_attrs(greeting_elem, method='js')
-            tplog(f"attrs by js = {pformat(attrs)}")
+            if verbose:
+                attrs = seleniumEnv.get_attrs(greeting_elem, method='bs4')
+                tplog(f"attrs by bs4 = {pformat(attrs)}")
+                attrs = seleniumEnv.get_attrs(greeting_elem, method='js')
+                tplog(f"attrs by js = {pformat(attrs)}")
             greeting_text = greeting_elem.text
             tplog(f"greeting_text='{greeting_text}' at css='{greeting_css}'")
         except Exception as e:
