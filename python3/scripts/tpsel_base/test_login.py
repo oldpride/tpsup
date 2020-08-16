@@ -55,7 +55,7 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
 
     logout_elem = None
     logout_css_selector = '#login-form > div.logout-button > input.btn.btn-primary'
-    # logout_css_selector = '#login-form>div.junk'
+
     try:
         logout_elem = driver.find_element_by_css_selector(logout_css_selector)
     except NoSuchElementException:
@@ -65,11 +65,18 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
         tplog(f"found logout button, meaning someone already logged in. css_selector='{logout_css_selector}'")
         need_to_logout = True
         greeting_text = None
+        greeting_css = '#login-form > div.login-greeting'
         try:
-            greeting_text = logout_elem.text
+            greeting_elem = driver.find_element_by_css_selector(greeting_css)
+            attrs = seleniumEnv.get_attrs(greeting_elem, method='bs4')
+            tplog(f"attrs by bs4 = {pformat(attrs)}")
+            attrs = seleniumEnv.get_attrs(greeting_elem, method='js')
+            tplog(f"attrs by js = {pformat(attrs)}")
+            greeting_text = greeting_elem.text
+            tplog(f"greeting_text='{greeting_text}' at css='{greeting_css}'")
         except Exception as e:
             print_exception(e)
-            tplog(f"cannot find greeting_text. need to log out")
+            tplog(f"cannot find greeting_text at css='{greeting_css}'. need to log out")
         if greeting_text:
             greeting_pattern = "^Hi (.+),"
             m = re.search(greeting_pattern,greeting_text)
@@ -77,13 +84,15 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
                 username = m.group(1)
                 expected_username = "LCA Editor Tester"
                 if not username == expected_username:
-                    tplog(f"greeting_text={greeting_text}, not matching expected username={username}. need to log out")
+                    tplog(f"username='{username}' did not match expected username='{expected_username}'. need to log out")
                 else:
                     need_to_logout = False
-                    tplog(f"greeting_text={greeting_text}, matched expected username={username}. no need to log in again")
+                    tplog(f"username='{username}' matched expected username='{expected_username}'. no need to log in again")
             else:
-                tplog(f"greeting_text={greeting_text}, not matching expected greeting_pattern={greeting_pattern}. "
+                tplog(f"greeting_text='{greeting_text}', not matching expected greeting_pattern='{greeting_pattern}'. "
                       f"need to log out")
+        else:
+            tplog(f"cannot find greeting_text at css_selector={greeting_css}. need to log out")
 
         if need_to_logout:
             need_to_login = True

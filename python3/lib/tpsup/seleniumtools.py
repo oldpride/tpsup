@@ -8,10 +8,12 @@ import tpsup.env
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.remote.webelement import WebElement
 from tpsup.nettools import is_tcp_open
 import tpsup.pstools
 import tpsup.tptmp
 import os.path
+from bs4 import BeautifulSoup
 
 
 # +----------+      +--------------+     +----------------+
@@ -206,6 +208,33 @@ class SeleniumEnv:
         driver_basename = os.path.basename(self.driver_exe)
         tpsup.pstools.ps_grep_basename(driver_basename, env=self.env, verbose=self.verbose)
 
+    def get_attrs(self, element: WebElement, method:str = 'bs4'):
+        """
+        get list of attributes from an element.
+        https://stackoverflow.com/questions/27307131/selenium-webdriver-how-do-i-find-all-of-an-elements-attributes
+        somehow, webdriver doesn't have an API for this
+        :param element:
+        :param method:
+        :return:
+        """
+        if method == 'bs4':
+            html = element.get_attribute('outerHTML')
+            if html:
+                attrs = BeautifulSoup(html, 'html.parser').attrs
+                return attrs
+            else:
+                return {}
+        elif method == 'js':
+            # java script
+            js_script = 'var items = {}; ' \
+                        'for (index = 0; index < arguments[0].attributes.length; ++index) { ' \
+                        '   items[arguments[0].attributes[index].name] = arguments[0].attributes[index].value' \
+                        '};' \
+                        'return items;'
+            attrs = self.driver.execute_script(js_script, element)
+            return attrs
+        else:
+            raise RuntimeError(f"unsupported method={method}. accepted: bs4 or js")
 
 def main():
     # if need to manually start Chrome (c1) on localhost with debug port 19999,
