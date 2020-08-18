@@ -1,50 +1,44 @@
-import os
-import re
-
 import argparse
-import shutil
 import sys
-import tarfile
-import time
 import urllib.request
 from pprint import pformat
-from inspect import currentframe, getframeinfo
 
 import tpsup.seleniumtools
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from urllib.parse import urlparse
-from tpsup.lock import EntryBook
+from tpsup.util import tplog
 
 
 def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
-    username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
 
     argList = opt.get('argList', [])
-    args = None
+
     if verbose:
         sys.stderr.write(f"{mod_file} argList=\n")
         sys.stderr.write(pformat(argList) + "\n")
-    if argList:
-        parser = argparse.ArgumentParser(
-            prog=mod_file,
-        )
-        parser.add_argument(
-            '-js', dest='use_javascript', default=False, action='store_true',
-            help='use javascript')
 
-        parser.add_argument(
-            '-wait', dest='wait', default=5, action='store', type=int,
-            help='rename the file. default not to rename')
+    parser = argparse.ArgumentParser(
+        prog=mod_file,
+    )
+    parser.add_argument(
+        '-js', dest='use_javascript', default=False, action='store_true',
+        help='use javascript')
 
-        parser.add_argument(
-            '-rename', dest='renamed', default=None, action='store',
-            help='rename the file. default not to rename')
+    parser.add_argument(
+        '-wait', dest='wait', default=5, action='store', type=int,
+        help='rename the file. default not to rename')
 
-        args = vars(parser.parse_args(argList))
-        username=args['username']
+    parser.add_argument(
+        '-rename', dest='renamed', default=None, action='store',
+        help='rename the file. default not to rename')
+
+    args = vars(parser.parse_args(argList))
+
+    if not verbose:
+        verbose = args.get('verbose',0)
+
+    if verbose:
+        tplog(f"args = {pformat(args)}")
 
     driver = seleniumEnv.get_driver()
 
@@ -72,4 +66,3 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     urllib.request.urlretrieve(src, f"{download_dir}/{shortname}")
 
     return download_dir
-

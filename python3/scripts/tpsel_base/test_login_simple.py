@@ -1,16 +1,10 @@
-import re
-
 import argparse
+import re
 import sys
 from pprint import pformat
-from inspect import currentframe, getframeinfo
-import selenium.common
-
 import tpsup.seleniumtools
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from urllib.parse import urlparse
 from tpsup.lock import EntryBook
+from tpsup.util import tplog
 
 
 def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
@@ -22,15 +16,22 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     if verbose:
         sys.stderr.write(f"{mod_file}argList=\n")
         sys.stderr.write(pformat(argList) + "\n")
-    if argList:
-        parser = argparse.ArgumentParser(
-            prog=mod_file,
-        )
-        parser.add_argument(
-            '-u', dest='username', default=username, action='store',
-            help='login user')
-        args = vars(parser.parse_args(argList))
-        username=args['username']
+
+    parser = argparse.ArgumentParser(
+        prog=mod_file,
+    )
+    parser.add_argument(
+        '-u', dest='username', default=username, action='store',
+        help='login user')
+    args = vars(parser.parse_args(argList))
+
+    if not verbose:
+        verbose = args.get('verbose',0)
+
+    if verbose:
+        tplog(f"args = {pformat(args)}")
+
+    username=args['username']
 
     entryBook = EntryBook()
     password = entryBook.get_entry_by_key(username).get('decoded')
@@ -52,19 +53,12 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     # in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,
     # in the source code window, right click -> copy -> ...
 
-    found_login = True
-    try:
-        # from Edge/Chrome, right click the item -> inspect
-        login_elem = driver.find_element_by_id('modlgn-username')
-        login_elem.send_keys(username)
-        seleniumEnv.delay_for_viewer(1)  # delay to mimic humane slowness
-        password_elem = driver.find_element_by_id('modlgn-passwd')
-        password_elem.send_keys(password)
-    except selenium.common.exceptions.NoSuchElementException:
-        found_login = False
-
-    if ! found_login:
-
+    # from Edge/Chrome, right click the item -> inspect
+    login_elem = driver.find_element_by_id('modlgn-username')
+    login_elem.send_keys(username)
+    seleniumEnv.delay_for_viewer(1)  # delay to mimic humane slowness
+    password_elem = driver.find_element_by_id('modlgn-passwd')
+    password_elem.send_keys(password)
 
     # frameinfo = getframeinfo(currentframe())
     # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)  # print line number

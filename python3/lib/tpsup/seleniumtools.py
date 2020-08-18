@@ -219,6 +219,7 @@ class SeleniumEnv:
 
     def quit(self):
         if self.driver is not None:
+            self.driver.close()
             self.driver.quit()
             self.driver = None
 

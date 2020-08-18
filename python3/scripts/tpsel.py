@@ -305,7 +305,6 @@ if (listenerPort):
             ensock.close()
             continue
 
-
         result = None
         exception_str = None
         try:

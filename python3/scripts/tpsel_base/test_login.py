@@ -16,20 +16,27 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
-
     argList = opt.get('argList', [])
+
     if verbose:
         sys.stderr.write(f"{mod_file}argList=\n")
         sys.stderr.write(pformat(argList) + "\n")
-    if argList:
-        parser = argparse.ArgumentParser(
-            prog=mod_file,
-        )
-        parser.add_argument(
-            '-u', dest='username', default=username, action='store',
-            help='login user')
-        args = vars(parser.parse_args(argList))
-        username=args['username']
+
+    parser = argparse.ArgumentParser(
+        prog=mod_file,
+    )
+    parser.add_argument(
+        '-u', dest='username', default=username, action='store',
+        help='login user')
+    args = vars(parser.parse_args(argList))
+
+    if not verbose:
+        verbose = args.get('verbose',0)
+
+    if verbose:
+        tplog(f"args = {pformat(args)}")
+
+    username=args['username']
 
     entryBook = EntryBook()
     password = entryBook.get_entry_by_key(username).get('decoded')
