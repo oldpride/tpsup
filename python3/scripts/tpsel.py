@@ -351,6 +351,7 @@ if (listenerPort):
             ensock.send_and_encode(tar_name, data_is_file=True)
             ensock.close()
 
+
 seleniumEnv.quit()
 time.sleep(1)
 seleniumEnv.print_running_drivers()

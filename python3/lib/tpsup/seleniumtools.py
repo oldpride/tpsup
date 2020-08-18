@@ -50,7 +50,7 @@ class SeleniumEnv:
         #     chrome.exe       C:/Program Files (x86)/Google/Chrome/Application, hardcoded in chromedriver
 
         # self.download_dir = f"{self.env.home_dir}/Downloads/seleniumtools"
-        self.download_dir = tpsup.tptmp.tptmp(base=os.path.join(self.env.home_dir, "Downloads/selenium")).\
+        self.download_dir = tpsup.tptmp.tptmp(base=os.path.join(self.env.home_dir, "Downloads", "selenium")).\
             get_nowdir(suffix='selenium')
 
         self.headless = opt.get('headless', False)
@@ -60,7 +60,7 @@ class SeleniumEnv:
         # chromedriver remembers chrome.exe's path, therefore, we don't need to set it
         if self.env.isWindows:
             # add home_dir and chrome.exe's path
-            os.environ["PATH"] += os.pathsep + os.pathsep.join([f'C:/Users/{os.environ["USERNAME"]}',
+            os.environ["PATH"] += os.pathsep + os.pathsep.join([f'C:\\Users\\{os.environ["USERNAME"]}',
                                                                 r'C:\Program Files (x86)\Google\Chrome\Application'])
         if not re.search('[\\/]', self.driver_exe):
             # no path specified, then we are totally rely on $PATH
@@ -168,12 +168,12 @@ class SeleniumEnv:
             # browser_options.add_argument(f'--remote-debugging-address=127.0.0.1')
 
             # for file download
-            # self.browser_options.add_experimental_option("prefs", {
-            #     "download.default_directory": self.download_dir,
-            #     "download.prompt_for_download": False,
-            #     "download.directory_upgrade": True,
-            #     "safebrowsing.enabled": True
-            # })
+            self.browser_options.add_experimental_option("prefs", {
+                "download.default_directory": self.download_dir,
+                "download.prompt_for_download": False,
+                "download.directory_upgrade": True,
+                "safebrowsing.enabled": True
+            })
             # I got this error and later download failed
             #     DevTools listening on ws://127.0.0.1:19999/devtools/browser/153a7200-8f2d-4b66-a4ec-2462b9912e17
             #     [28432:12376:0817/154016.816:ERROR:CONSOLE(1)] "Refused to execute inline event handler because it
