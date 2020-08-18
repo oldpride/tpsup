@@ -26,10 +26,10 @@ class tptmp:
         self.base = base
         if not self.base:
             env = tpsup.env.Env()
-            self.base = f"{env.tmpdir}/tmp_{env.user}"
+            self.base = os.path.join(env.tmpdir, f"tmp_{env.user}")
 
         yyyymmdd = strftime("%Y%m%d", localtime())
-        self.dailydir = f"{self.base}/{yyyymmdd}"
+        self.dailydir = os.path.join(self.base, yyyymmdd)
 
     def get_dailydir(self):
         if not os.path.exists(self.dailydir):
@@ -46,9 +46,9 @@ class tptmp:
             suffix = self.suffix
 
         if suffix:
-            nowdir = f"{dailydir}/{HHMMSS}_{suffix}"
+            nowdir = os.path.join(dailydir, f"{HHMMSS}_{suffix}")
         else:
-            nowdir = f"{dailydir}/{HHMMSS}"
+            nowdir = os.path.join(dailydir, HHMMSS)
         os.makedirs(nowdir, exist_ok=True)
         return nowdir
 

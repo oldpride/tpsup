@@ -48,7 +48,7 @@ class Env:
                 self.home_dir = f'C:/Users/{os.environ["USER"]}'
             else:
                 self.ls_cmd = 'dir'
-                self.tmpdir = f'C:/Users/{os.environ["USERNAME"]}/AppData/Local/Temp'
+                self.tmpdir = f"C:\\Users\\{os.environ['USERNAME']}\\AppData\\Local\\Temp"
         if re.search("Linux", self.system, re.IGNORECASE):
             self.isLinux = True
             self.tmpdir = "/tmp"

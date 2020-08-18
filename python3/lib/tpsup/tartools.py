@@ -75,18 +75,18 @@ def main():
 
     env = tpsup.env.Env()
 
-    dir = env.adjpath(f"{env.home_dir}/testdir")
-    tar_name = env.adjpath(f"{env.home_dir}/junk.tar")
+    dir = os.path.join(env.home_dir, "testdir")
+    tar_name = os.path.join(env.home_dir, "junk.tar")
     print(f"\n----------- create {tar_name} from a dir root {dir}")
     create_tar_from_dir_root(tar_name, dir)
 
     test_str = "hello world"
-    tar_name = env.adjpath(f"{env.home_dir}/junk2.tar")
+    tar_name = os.path.join(env.home_dir, "junk2.tar")
     short_name = "short.txt"
     print(f"\n----------- create {tar_name} containing {short_name} from a test string: {test_str}")
     create_tar_from_string(tar_name, short_name, test_str)
 
-    tar_name = env.adjpath(f"{env.home_dir}/junk2.tar")
+    tar_name = os.path.join(env.home_dir, "junk2.tar")
     short_name = "short.txt"
     print(f"\n----------- extract {tar_name}'s {short_name} to a string")
     print(f"{extract_tar_to_string(tar_name, short_name)}")

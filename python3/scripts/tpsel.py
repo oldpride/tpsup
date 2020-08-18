@@ -26,7 +26,7 @@ my_env.adapt()
 home_dir = my_env.home_dir
 system = my_env.system
 
-driverlog = home_dir + '/selenium_chromedriver.log'
+driverlog = os.path.join(home_dir, 'selenium_chromedriver.log')
 # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
 # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
@@ -102,6 +102,7 @@ server mode examples:
 client mode examples:
     {prog}  -client localhost:29999 test_login.py -- -u tester
     {prog}  -client localhost:29999 -accept tar test_urlretrieve.py
+    {prog}  -client localhost:29999 -accept tar test_download.py
     """)
 
 parser = argparse.ArgumentParser(
@@ -194,6 +195,11 @@ if verbose:
 
 serverHostPort = args['serverHostPort']
 if serverHostPort:
+
+    if args['mod_file'] is None:
+        sys.stderr.write("ERROR: wrong number of args. expecting mod_file")
+        sys.exit(1)
+
     tmpdir = tpsup.tptmp.tptmp().get_nowdir()
 
     # this is client mode if serverHostPort is defined
@@ -221,7 +227,7 @@ if serverHostPort:
         received_structure = json.loads(received_str)
         tplog(f"Received data structure: {pformat(received_structure)}")
     elif request['accept'] == 'tar':
-        tar_name = f"{tmpdir}/reply.tar"
+        tar_name = os.path.join(tmpdir, "reply.tar")
         recv_size = ensock.recv_and_decode(timeout=60, file=tar_name)
         tplog(f"received size={recv_size}, file={tar_name}, file_size={os.path.getsize(tar_name)}")
         exception_str = None
@@ -233,7 +239,7 @@ if serverHostPort:
         if exception_str:
             print(f"received exception={exception_str}")
         else:
-            dir = f"{my_env.home_dir}/selenium"
+            dir = os.path.join(my_env.home_dir, "selenium")
             tplog(f"extracting files to {dir}")
             with tarfile.open(tar_name, 'r') as tar:
                 tar.extractall(dir)
@@ -265,7 +271,7 @@ base = args['base']
 if not base:
     base = my_env.environ.get('TPSEL_BASE')
 if not base:
-    base = f"{script_dir}/tpsel_base"
+    base = os.path.join(script_dir, "tpsel_base")
 
 listenerPort = args.get('listenerPort', None)
 if (listenerPort):
@@ -303,7 +309,8 @@ if (listenerPort):
         result = None
         exception_str = None
         try:
-            result = run_module(f"{base}/{request['mod_file']}", mod_type='file', seleniumEnv=seleniumEnv,
+            result = run_module(os.path.join(base,request['mod_file']),
+                                mod_type='file', seleniumEnv=seleniumEnv,
                                 verbose=verbose, argList=request['args'])
         except Exception as e:
             tplog_exception(e)
@@ -322,7 +329,7 @@ if (listenerPort):
             ensock.send_and_encode(reply_bytes)
             ensock.close()
         if request['accept'] == 'tar':
-            tar_name = f"{tmpdir}/result.tar"
+            tar_name = os.path.join(tmpdir, "result.tar")
 
             if not exception_str:
                 download_dir = result

@@ -35,8 +35,8 @@ class SeleniumEnv:
         self.page_load_timeout = page_load_timeout
 
         self.dryrun = opt.get('dryrun', False)
-        self.driverlog = home_dir + '/selenium_chromedriver.log'
-        self.chromedir = home_dir + '/selenium_chrome_test'
+        self.driverlog = os.path.join(home_dir, 'selenium_chromedriver.log')
+        self.chromedir = os.path.join(home_dir, 'selenium_chrome_test')
         # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
         # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
@@ -50,8 +50,8 @@ class SeleniumEnv:
         #     chrome.exe       C:/Program Files (x86)/Google/Chrome/Application, hardcoded in chromedriver
 
         # self.download_dir = f"{self.env.home_dir}/Downloads/seleniumtools"
-        download_dir = tpsup.tptmp.tptmp(base=f"{self.env.home_dir}/Downloads/selenium").get_nowdir(suffix='selenium')
-        self.download_dir = self.env.adjpath(download_dir)
+        self.download_dir = tpsup.tptmp.tptmp(base=os.path.join(self.env.home_dir, "Downloads/selenium")).\
+            get_nowdir(suffix='selenium')
 
         self.headless = opt.get('headless', False)
         self.driver_exe = opt.get('driver', 'chromedriver')
@@ -154,6 +154,7 @@ class SeleniumEnv:
             if self.env.isLinux:
                 self.browser_options.add_argument('--no-sandbox')  # to be able to run without root
                 self.browser_options.add_argument('--disable-dev_shm-usage')  # to be able to run without root
+                self.browser_options.add_argument(f'--user-data-dir={self.chromedir}')
 
             if self.env.isCygwin and self.headless:
                 # some how only in Cygwin and only in headless mode, selenium needs --user-data-dir to use \, not /
@@ -167,12 +168,28 @@ class SeleniumEnv:
             # browser_options.add_argument(f'--remote-debugging-address=127.0.0.1')
 
             # for file download
-            self.browser_options.add_experimental_option("prefs", {
-                "download.default_directory": self.download_dir,
-                "download.prompt_for_download": False,
-                "download.directory_upgrade": True,
-                "safebrowsing.enabled": True
-            })
+            # self.browser_options.add_experimental_option("prefs", {
+            #     "download.default_directory": self.download_dir,
+            #     "download.prompt_for_download": False,
+            #     "download.directory_upgrade": True,
+            #     "safebrowsing.enabled": True
+            # })
+            # I got this error and later download failed
+            #     DevTools listening on ws://127.0.0.1:19999/devtools/browser/153a7200-8f2d-4b66-a4ec-2462b9912e17
+            #     [28432:12376:0817/154016.816:ERROR:CONSOLE(1)] "Refused to execute inline event handler because it
+            #     violates the following Content Security Policy directive: "script-src 'strict-dynamic'
+            #     'sha256-1+GSDjMMklBjZY0QiWq+tGupCvajw4Xbn46ect2mZgM='
+            #     'sha256-2mX1M62Fd0u8q0dQY2mRsK5S1NS9jJuQAvyE8tD0dkQ='
+            #     'sha256-EtIKSV82ixJHE3AzqhoiVbUGKG+Kd8XS0fFToow29o0='
+            #     'sha256-QSyFltV9X3gkyBrg+SMfKvZNXmqPQc6K4B6OYhTuXmw='
+            #     'sha256-4M0jdrILwm/h3mCRbjIF07jAlCbI0ZbyLjQL/9HVhwE='
+            #     'sha256-CbH+xPsBKQxVw5d9blISLDeuMSe1M+dJ4xfArFynIfw='
+            #     'sha256-C9ctze2LhHtwL+fcPVPkmVRYjQgXTGs4xfBAzlQwGWk='
+            #     'sha256-yVmlm9txUAL9c9wAcTXYqdk4zxtPoJO/pyl4aKclgK8='". Either the 'unsafe-inline' keyword,
+            #     a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. ",
+            #     source: chrome-search://local-ntp/local-ntp.html (1)
+
+            # https://stackoverflow.com/questions/36324333/refused-to-execute-inline-event-handler-because-it-violates-csp-sandbox
 
             for arg in opt.get('browserArgs', []):
                 self.browser_options.add_argument(f'--{arg}')

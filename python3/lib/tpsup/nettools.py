@@ -83,6 +83,7 @@ class encryptedsocket:
                         laddr = sock.getsockname()
                         raddr = sock.getpeername()
                         tplog(f"connected: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
+                        tplog(f"connected: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
                         self.socket = sock
                         break
                     except Exception as e:
@@ -203,7 +204,7 @@ class encryptedsocket:
             size = os.path.getsize(file)
             fd = os.open(file, os.O_RDWR) # fd is int
             data = mmap.mmap(fd, size, access=mmap.ACCESS_READ)
-            print(f"data type = {type(data)}")  #
+            # tplog(f"data type = {type(data)}")  #
 
         # https://docs.python.org/3/library/socket.html
         #         socket.send() vs socket.sendall()
