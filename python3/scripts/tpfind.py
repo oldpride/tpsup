@@ -246,8 +246,8 @@ def main():
         help="print the paths that the script has browsed")
 
     parser.add_argument(
-        '-v', '--verbose', action="store_true",
-        help='print some detail')
+        '-v', '--verbose', default=0, action="count",
+        help='verbose level: -v, -vv, -vvv')
 
     args = vars(parser.parse_args())
 

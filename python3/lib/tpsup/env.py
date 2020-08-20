@@ -30,6 +30,8 @@ class Env:
         self.PATH = os.environ.get('PATH', '')
         self.python_version = platform.python_version()
         self.ls_cmd = 'ls'
+        self.hostname = platform.node()
+        # self.hostname = platform.node().split('.')[0]  # short name
 
         if re.search("Windows", self.system, re.IGNORECASE):
             self.isWindows = True
