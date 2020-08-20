@@ -63,6 +63,8 @@ def main():
 
     with pidfile('test') as pf:
         myenv.ls(pf)
+        with open(pf, 'r') as f:
+            print(f.readline())
 
     print(f"\n---------- this should fail -------------")
     test_pid = os.getpid()
