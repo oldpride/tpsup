@@ -4,13 +4,14 @@ import argparse
 import sys
 import textwrap
 from pprint import pformat
-from inspect import currentframe, getframeinfo
+# from inspect import currentframe, getframeinfo
 import os
 import time
 import pyautogui
 import tpsup.pidfile
 
 prog = os.path.basename(sys.argv[0])
+
 
 # https://docs.python.o
 def main():
@@ -46,14 +47,24 @@ def main():
     if verbose:
         sys.stderr.write(f"args =\n{pformat(args)}\n")
 
-    if interval <= 0 :
+    if interval <= 0:
         parser.print_help(file=sys.stderr)
         sys.exit(1)
 
     interval = args['interval']
 
-    with tpsup.pidfile.pidfile(prog) as pf:
-        old_mX, old_mY = pyautogui.position() # mouse position
+    # 0,0       X increases -->
+    # +---------------------------+
+    # |                           | Y increases
+    # |                           |     |
+    # |   1920 x 1080 screen      |     |
+    # |                           |     V
+    # |                           |
+    # |                           |
+    # +---------------------------+ 1919, 1079
+
+    with tpsup.pidfile.pidfile(prog):
+        old_mX, old_mY = pyautogui.position()  # mouse position
 
         if verbose:
             print(f"mouse is at ({old_mX}, {old_mY})", file=sys.stderr)
@@ -61,7 +72,7 @@ def main():
         # save a reference point as where we started
         X0, Y0 = old_mX, old_mY
 
-        while(True):
+        while True:
             time.sleep(interval)
             mX, mY = pyautogui.position()
             if verbose:
@@ -69,6 +80,9 @@ def main():
 
             if mX == old_mX and mY == old_mY:
                 # user idle
+                if verbose:
+                    print(f"user idle", file=sys.stderr)
+
                 if mX > X0:
                     mX -= 1
                 else:
@@ -80,13 +94,18 @@ def main():
 
                 if verbose:
                     print(f"mv mouse to ({mX}, {mY})", file=sys.stderr)
-                pyautogui.move(mX, mY)
+                pyautogui.moveTo(mX, mY, 0.1)  # (X, Y, Duration) Duration minimum 0.1 second
+                # pyautogui.move(delta_X, delta_Y)
+
                 old_mX = mX
                 old_mY = mY
             else:
                 # user not idle, then not to interfere
-                old_mX, old_mY = pyautogui.position()
-                X0, Y0 = old_mX, old_mY
+                if verbose:
+                    print(f"user active", file=sys.stderr)
+
+                old_mX, old_mY = mX, mY
+                X0, Y0 = mX, mY
 
 
 if __name__ == '__main__':

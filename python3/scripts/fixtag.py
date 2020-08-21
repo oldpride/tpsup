@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 import argparse
+import io
+import os
 import sys
 import textwrap
-from pprint import pprint, pformat
-import os
-import io
+from pprint import pformat
 
 from tpsup.fixtools import dump_fix_message
 
@@ -37,8 +37,8 @@ examples:
     """)
 
 parser = argparse.ArgumentParser(
-    prog=sys.argv[0],
     description=usage,
+    prog=sys.argv[0],
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
 
@@ -93,4 +93,4 @@ else:
     fh = open(infile, 'rb')
 
 for line in fh:
-    dump_fix_message(line, **args);
+    dump_fix_message(line, **args)
