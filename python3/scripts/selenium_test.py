@@ -224,7 +224,8 @@ else:
 
     # 2. test with a remote browser
     # start Chrome (c1) on PC with debug port 9222.
-    # "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir=%USERPROFILE%\ChromeTest
+    # "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+    # --user-data-dir=%USERPROFILE%\ChromeTest
     #
     # on the same pc, start another chrome (c2) in normal way. In chrome c2, enter http://localhost:9222
     # you should see "inspected page". click the first link, it will bring up devTools.
@@ -241,11 +242,11 @@ else:
 
 driver = webdriver.Chrome(driver_exe, options=browser_options, service_args=driver_args)
 
-#driver = webdriver.Chrome(driver_name, service_args=driver_args)
+# driver = webdriver.Chrome(driver_name, service_args=driver_args)
 
 time.sleep(1)  # give 1 sec to let the tail set up and also to throttle the headless mode
 
-#print(f'driver.title={driver.title}')
+# print(f'driver.title={driver.title}')
 
 url = 'http://www.google.com/'
 driver.get(url)
@@ -277,7 +278,7 @@ for tag_a in driver.find_elements_by_tag_name('a'):
     except NoSuchElementException as e:
         pass
     else:
-        #print(f'url={url}')
+        # print(f'url={url}')
         print(f'hostname = {urlparse(url).hostname}')
 
 driver.quit()
