@@ -135,6 +135,10 @@ main () {
       -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
    
    elif [ $OS = Linux ]; then
+      if [ -d /usr/share/terminfo ]; then
+         export TERMINFO=/usr/share/terminfo
+      fi
+
       eval "$nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 $font \
       -fg white -bg black -title $title -sl 10000 -sb $loginshell \
       -xrm 'XTerm*selectToClipboard: true' \
