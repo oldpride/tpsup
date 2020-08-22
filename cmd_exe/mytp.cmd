@@ -1,1 +1,1 @@
-cd %TPSUP%/cmd_exe
+cd /D %TPSUP%/cmd_exe

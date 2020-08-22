@@ -1,1 +1,1 @@
-cd %userprofile%/sitebase/github/tpsup/cmd_exe
+cd /D %userprofile%/sitebase/github/tpsup/cmd_exe

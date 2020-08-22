@@ -1,1 +1,1 @@
-cd %UserProfile%\AppData\Local\Temp
+cd /D %UserProfile%\AppData\Local\Temp

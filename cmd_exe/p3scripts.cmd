@@ -1,1 +1,1 @@
-cd %TPSUP%/python3/scripts
+cd /D %TPSUP%/python3/scripts
