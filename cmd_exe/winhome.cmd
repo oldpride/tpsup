@@ -1,2 +1,2 @@
 @echo off
-mycd %userprofile%
+cd /D %userprofile%

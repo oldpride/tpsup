@@ -1,1 +1,1 @@
-cd C:/Users/william/github/tpsup/ps1
+cd /D %TPSUP%/ps1
