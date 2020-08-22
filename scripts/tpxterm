@@ -139,7 +139,7 @@ main () {
          export TERMINFO=/usr/share/terminfo
       fi
 
-      eval "$nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 $font \
+      eval "$nohup xterm.linux $DISPLAY_SWITCH -geom 95x44 $font \
       -fg white -bg black -title $title -sl 10000 -sb $loginshell \
       -xrm 'XTerm*selectToClipboard: true' \
       -xrm 'XTerm.vt100.translations: #override \\\
