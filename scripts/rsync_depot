@@ -50,7 +50,7 @@ cd $depot_dir/tpsup || exit 1
 
 # use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
 unset LD_LIBRARY_PATH
-if [ $local_only=N ]; then
+if [ $local_only = N ]; then
    git pull 
 fi
 echo ""
