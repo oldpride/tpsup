@@ -18,16 +18,21 @@ usage:
    -s site_dir      where you should see  <site_dir>/tpsup.
                     dfault to $site_dir
 
+   -l               local sync from local depot dir to tpsup dir, without "git pull"
+
 EOF
 
    exit 1
 }
 
-while getopts s:d: o;
+local_only=N
+
+while getopts s:d:l o;
 do
    case "$o" in
       d) depot_dir="$OPTARG";;
-      s)  site_dir="$OPTARG";;
+      s) site_dir="$OPTARG";;
+      l) local_only=Y;;
       *) echo "unknow switch '$o'"; usage;;
    esac
 done
@@ -45,7 +50,9 @@ cd $depot_dir/tpsup || exit 1
 
 # use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
 unset LD_LIBRARY_PATH
-git pull 
+if [ $local_only=N ]; then
+   git pull 
+fi
 echo ""
 
 if [ $action = check -o $action = diff ]; then
