@@ -35,7 +35,7 @@ fi
 
 . $TPSUP/profile
 
-for cmd in tpscripts kdbnotes mynotes mycpp myjoomla mykivy myjava mysite
+for cmd in kdbnotes mycpp myjava myjoomla mykivy mynotes myps1 mysite mytp
 do 
    echo ""
    echo "------ $cmd -------"
