@@ -9,35 +9,12 @@
 $global:TPPS1=(Split-Path -Parent $PSCommandPath)
 $global:TPSUP=(Split-Path -Parent $TPPS1)
 
-<#
-$env:Path = "C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program Files\Python37\Scripts\" +
-";C:\Program Files\Python37\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem" +
-";C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\" +
-";C:\Program Files\Git\cmd;C:\Program Files\Intel\WiFi\bin\" +
-";C:\Program Files\Common Files\Intel\WirelessCommon\;C:\Program Files\PuTTY\" +
-";C:\Users\william\AppData\Local\Microsoft\WindowsApps" +
-";C:\Users\william\AppData\Local\Android\Sdk\platform-tools" +
-";C:\Users\william\AppData\Local\Android\Sdk\emulator" +
-";;C:\Program Files\JetBrains\PyCharm Community Edition 2019.1.3\bin" +
-";C:\users\william\sitebase\github\tpsup\ps1"
-#>
-
-$env:Path = $env:Path + 
-    ";C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program Files\Python37\Scripts\" +
-    ";C:\Program Files\Python37\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem" +
-    ";C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\" +
-    ";C:\Program Files\Git\cmd;C:\Program Files\Intel\WiFi\bin\" +
-    ";C:\Program Files\Common Files\Intel\WirelessCommon\;C:\Program Files\PuTTY\" +
-    ";C:\Users\william\AppData\Local\Microsoft\WindowsApps" +
-    ";C:\Users\william\AppData\Local\Android\Sdk\platform-tools" +
-    ";C:\Users\william\AppData\Local\Android\Sdk\emulator" +
-    ";;C:\Program Files\JetBrains\PyCharm Community Edition 2019.1.3\bin" +
-    ";$TPPS1"
-
-#$env:PSModulePath += ";$TPPS1" + ";$HOME"
-
-[Environment]::SetEnvironmentVariable("Path",$env:Path,"User")
-#[Environment]::GetEnvironmentVariable("Path", "User")
+# don't update $env:var directly as it is like setx: it permanently set the variable. for example
+#   $env:Path += ";$TPPS1"
+#   $env:PSModulePath += ";$TPPS1" + ";$HOME"
+# instead, use the following command to set it in the process level
+#   [System.Environment]::SetEnvironmentVariable('var', 'value',[System.EnvironmentVariableTarget]::Process)
+# the above command is wrapped in addpath.
 
 # https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/add-pssnapin?view=powershell-5.1
 # Get-PSSnapin
@@ -47,7 +24,9 @@ function global:myps1 {
     cd $env:USERPROFILE\sitebase\github\tpsup\ps1
 }
 
+#Set-PsDebug -Trace 1
 Remove-Item -Path Alias:cd -ErrorAction Ignore
+#get-command cd
 function global:cd {
     param([string]$new = $null)
 
@@ -68,6 +47,7 @@ function global:cd {
         $Env:old_pwd = $saved_pwd
     }
 }
+#Set-PsDebug -Trace 0
 
 function global:restorecd {
     Remove-Item -Path Function:cd
@@ -125,15 +105,40 @@ function global:siteenv {
     . $TPPS1/profile.ps1
 }
 
+<#
+# we created a head.ps1
 function global:head {
     # unix head equivalent
     param([string]$file = $null)
     Get-Content $file -TotalCount 10
 }
+#>
 
 function global:voff {
     # turn off verbose
     $global:verbosePreference = "SilentlyContinue"
+}
+
+function global:unset {
+    Write-Host "
+    To unset a function: Remove-Item -Path Function:func_name
+    "
+}
+
+function global:findscope {
+    param([string]$var = $null,
+        [switch]$v     = $false
+    )
+    
+    if (!$var) {
+        Write-Host "ERROR: wrong number of args"
+        Write-Host "USAGE: findscope var_name"
+        return
+    }
+
+    Write-Host "Machine Scope: $([System.Environment]::GetEnvironmentVariable($var,[System.EnvironmentVariableTarget]::Machine))`n"
+    Write-Host "User    Scope: $([System.Environment]::GetEnvironmentVariable($var,[System.EnvironmentVariableTarget]::User))`n"
+    Write-Host "Process Scope: $([System.Environment]::GetEnvironmentVariable($var,[System.EnvironmentVariableTarget]::Process))`n"
 }
 
 function global:AddPath {
@@ -175,7 +180,9 @@ function global:AddPath {
     if ($added) {
         Write-Verbose "adding to `$Env:$var $value"
         Write-Verbose "new `$Env:$var=$string"
-        Set-Item -Path "Env:$var" -Value "$string"
+        # this will set User-level (scope), basically permanent set. but we only want temporary setting, for this process and children
+        # Set-Item -Path "Env:$var" -Value "$string"
+        [System.Environment]::SetEnvironmentVariable($var, $string,[System.EnvironmentVariableTarget]::Process)
     } else {
         Write-Verbose "no change `$Env:$var"
     }
@@ -269,6 +276,10 @@ function global:reduce {
     }
 }
 
+# "The call operator (&) always uses a new scope. Instead, use the dot source (.) operator:"
+# https://stackoverflow.com/questions/63551546/powershell-remove-item-not-working-from-a-function
+# TODO, replace the following with "." source. 
+addpath Path $TPPS1
 reduce "Path"
 reduce "PSModulePath"
 
