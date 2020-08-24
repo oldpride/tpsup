@@ -51,7 +51,7 @@ rem    (the last line does not appear empty to your for /f %%i loop as it contai
 rem    that for /f skips lines that are really empty).
 rem note to use ^ to escape > and |
 rem
-FOR /F "tokens=1,2 skip=1" %%d IN ('pschildren %pid% 2^>null ^| findstr /r /v "^$"') DO  (
+FOR /F "tokens=1,2 skip=1" %%d IN ('pschildren %pid% 2^>nul ^| findstr /r /v "^$"') DO  (
    rem %%d is program name, %%e is pid
    echo. level=%level% %%d %%e
 
