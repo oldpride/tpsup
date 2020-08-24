@@ -9,6 +9,7 @@ import os
 import time
 import pyautogui
 import tpsup.pidfile
+from tpsup.util import tplog
 
 prog = os.path.basename(sys.argv[0])
 
@@ -67,21 +68,22 @@ def main():
         old_mX, old_mY = pyautogui.position()  # mouse position
 
         if verbose:
-            print(f"mouse is at ({old_mX}, {old_mY})", file=sys.stderr)
+            tplog(f"mouse is at ({old_mX}, {old_mY})", prefix='time')
 
         # save a reference point as where we started
         X0, Y0 = old_mX, old_mY
 
         while True:
+            tplog(f"sleep {interval} sec", prefix='time')
             time.sleep(interval)
             mX, mY = pyautogui.position()
             if verbose:
-                print(f"mouse is at ({mX}, {mY})", file=sys.stderr)
+                tplog(f"mouse is at ({mX}, {mY})", prefix='time')
 
             if mX == old_mX and mY == old_mY:
                 # user idle
                 if verbose:
-                    print(f"user idle", file=sys.stderr)
+                    tplog(f"user idle", prefix='time')
 
                 if mX > X0:
                     mX -= 1
@@ -93,7 +95,7 @@ def main():
                     mY += 1
 
                 if verbose:
-                    print(f"mv mouse to ({mX}, {mY})", file=sys.stderr)
+                    tplog(f"mv mouse to ({mX}, {mY})", prefix='time')
                 pyautogui.moveTo(mX, mY, 0.1)  # (X, Y, Duration) Duration minimum 0.1 second
                 # pyautogui.move(delta_X, delta_Y)
 
@@ -102,7 +104,7 @@ def main():
             else:
                 # user not idle, then not to interfere
                 if verbose:
-                    print(f"user active", file=sys.stderr)
+                    tplog(f"user active", prefix='time')
 
                 old_mX, old_mY = mX, mY
                 X0, Y0 = mX, mY

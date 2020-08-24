@@ -21,21 +21,31 @@ def silence_BrokenPipeError(func):
     return silenced
 
 
-def tplog(message:str= None, file=sys.stderr, **opt):
+def tplog(message:str= None, file=sys.stderr, prefix:str="time,caller"):
     if message is None:
         message = ''
-    timestamp = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
-    # print(pformat(caller)) *o
-    # FrameInfo(frame=<frame object at 0x7f0ce4e87af8>, filename='util.py', lineno=176, function='tplog',
-    # code_context=['    caller = inspect.stack()\n'], index=0),
-    # FrameInfo(frame=<frame object at 0x7f0ce4a84048>, filename='util.py', lineno=182, function='main',
-    # code_context=["    tplog('test')\n"], index=0),
-    # FrameInfo(frame=<frame object at 0x12e3428>, filename='util.py', lineno=185, function='<module>',
-    # code_context=['    main()\n'], index=0)]
-    caller = inspect.stack()[1]
+    need_prefix = set(prefix.split(','))
 
-    print(f"{timestamp} {os.path.basename(caller.filename)},{caller.lineno},{caller.function} {message}", file=file, **opt)
+    if 'time' in need_prefix:
+        timestamp_part = f'{strftime("%Y-%m-%d %H:%M:%S", gmtime())} '
+    else:
+        timestamp_part = ''
+
+    if 'caller' in need_prefix:
+        # print(pformat(caller)) *o
+        # FrameInfo(frame=<frame object at 0x7f0ce4e87af8>, filename='util.py', lineno=176, function='tplog',
+        # code_context=['    caller = inspect.stack()\n'], index=0),
+        # FrameInfo(frame=<frame object at 0x7f0ce4a84048>, filename='util.py', lineno=182, function='main',
+        # code_context=["    tplog('test')\n"], index=0),
+        # FrameInfo(frame=<frame object at 0x12e3428>, filename='util.py', lineno=185, function='<module>',
+        # code_context=['    main()\n'], index=0)]
+        caller = inspect.stack()[1]
+        caller_part = f'{os.path.basename(caller.filename)},{caller.lineno},{caller.function} '
+    else:
+        caller_part = ''
+
+    print(f"{timestamp_part}{caller_part}{message}", file=file)
 
 
 def print_exception(e: Exception, stacktrace=True, **opt):
@@ -62,10 +72,13 @@ def tplog_exception(e: Exception, **opt):
 
 
 def main():
-    print('------ test tplog')
+    print('\n------ test tplog')
     tplog('hello world')
 
-    print('------ test print_exception')
+    print('\n------ test a short version of tplog')
+    tplog('hello world', prefix='time')
+
+    print('\n------ test print_exception')
     try:
         raise RuntimeError("test exception")
     except Exception as e:
