@@ -6,9 +6,10 @@ set argC=0
 for %%x in (%*) do Set /A argC+=1
 @rem echo %argC%
 
+@REM ^ is the escape char
 @REM batch script has no != operator. use NOT == instead
 if %argC% == 0 (
-   @echo ERROR: wrong number of args. got %argC%, expected >=1. args=%*
+   @echo ERROR: wrong number of args. got %argC%, expected ^>=1. args=%*
    @echo userage: 
    @echo    wc -l README.txt
    @echo    type README.txt ^| wc -l
