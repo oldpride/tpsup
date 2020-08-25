@@ -166,6 +166,9 @@ function global:AddPath {
     }   
     
     $added = 0 
+    # powershell is fundamentally case-insensitive
+    #    PS> "a" -eq "A"
+    #    True
     if ($string -eq ""){
         $string += "$value"
         $added ++
