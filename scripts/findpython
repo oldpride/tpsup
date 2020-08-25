@@ -40,7 +40,7 @@ EOF
 
 find_python_module () {
    local PYTHON module
-   PYTHON=$1
+   PYTHON="$1"
    module=$2
 
    module=`echo $module|sed -e 's://*:.:g; s/::*/./g; s/[.]py$//'`
@@ -49,10 +49,10 @@ find_python_module () {
    
    echo ""
    # 'which' will not report function. 'type' will report both function and binary path
-   type $PYTHON
-   
+   type "$PYTHON"
+
    # declare -F
-   $PYTHON --version
+   "$PYTHON" --version
    echo ""
    
    echo "
@@ -66,15 +66,16 @@ print('trying to find $module path')
 import $module
 print(inspect.getfile($module))
 print('\n')
-   " | $PYTHON
+   " | "$PYTHON"
    
    if [ $? -eq 0 ]; then
       echo "trying to find $module package"
       # pip binary will deprecated. use pip module instead
-      $PYTHON -m pip freeze |grep $module
+      "$PYTHON" -m pip freeze |grep $module
       echo ""
    fi
 }
+
 
 PYTHON=python
 
@@ -101,7 +102,19 @@ if [ $PYTHON = ALL ]; then
    UNAME=`uname -a`
    if [[ $UNAME =~ Msys ]] || [[ $UNAME =~ Cygwin ]] ; then
       # GitBash or Cygwin 
-      sleep 1
+
+      # $ where python
+      # C:\Program Files\Python37\python.exe
+      # C:\Users\william\AppData\Local\Microsoft\WindowsApps\python.exe
+
+      # 1. convert \ to /. 
+      # 2. must remove "\r" at the end. 
+      where python |sed -e 's:\\:/:g;s:\r::g' | while read p
+      do
+          echo ""
+          echo -- "-------------- testing $p -----------------"
+          find_python_module "$p" "$module"
+      done
    elif [[ $UNAME =~ Linux ]]; then
       # $ whereis python
       # python: /usr/bin/python2.7-config /usr/bin/python3.8 /usr/bin/python 
