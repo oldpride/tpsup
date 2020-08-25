@@ -1,0 +1,72 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 module_name
+
+   find a python module's path
+
+examples:
+
+   $0 os
+   $0 cx_Oracle
+   $0 pwd
+
+   - test with a specific python
+   PATH=/usr/bin       ./findpython pwd
+   PATH=/usr/local/bin ./findpython pwd
+
+   - format for convenience
+   $0 urllib3.request
+   $0 urllib3.request.py
+   $0 urllib3/request.py
+
+   - format in perl style
+   $0 urllib3::request
+   $0 urllib3::request.py
+
+EOF
+   exit 1
+}
+
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+module=$1
+
+module=`echo $module|sed -e 's://*:.:g; s/::*/./g; s/[.]py$//'`
+
+echo "normalized module: $module"
+
+echo ""
+# 'which' will not report function. 'type' will report both function and binary path
+type python
+
+# declare -F
+python --version
+echo ""
+
+echo "
+import sys
+print('search path: ')
+print('\n   '.join(sys.path))
+print('\n')
+
+import inspect
+print('trying to find $module path')
+import $module
+print(inspect.getfile($module))
+print('\n')
+" |python
+
+if [ $? -eq 0 ]; then
+   echo "trying to find $module package"
+   # pip binary will deprecated. use pip module instead
+   python -m pip freeze |grep $module
+   echo ""
+fi
