@@ -9,7 +9,12 @@ import tpsup.env
 
 
 def tpsup_lock(plain: str, *, salt=None):
-    """ encode a string """
+    """ encode a string
+    >>> tpsup_lock("hello world")
+    '%29%06%0F%05%00c%18%01%14%19%0A'
+    >>> tpsup_unlock("%29%06%0F%05%00c%18%01%14%19%0A")
+    'hello world'
+    """
     _MAGIC = 'AccioConfundoLumosNox'
     length = len(plain)
     if not salt:
@@ -268,10 +273,14 @@ def main():
     env = tpsup.env.Env()
 
     if env.isWindows:
-        string = '"C:\Program Files\Python37\python.exe" -h'
+        string = '"C:\Program Files\Python37\python.exe" --version'
         print(f"string={string}")
         EntryBook().run_cmd(string, verbose=1)
 
+    print(f"\ndoctest started. we should see no output if successful.")
+    import doctest
+    doctest.testmod()
+    print(f"\ndoctest ended. we should see no output if successful.")
 
 if __name__ == '__main__':
     main()

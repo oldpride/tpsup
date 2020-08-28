@@ -9,14 +9,16 @@ import os
 import time
 import pyautogui
 import tpsup.pidfile
-from tpsup.util import tplog
+# from tpsup.util import tplog
+from tpsup.tplog import get_logger
 
+logger = get_logger()
 prog = os.path.basename(sys.argv[0])
 
 
 # https://docs.python.o
 def main():
-    usage = textwrap.dedent(""""\
+    usage = textwrap.dedent(""""
         keep screen alive
         """)
 
@@ -47,6 +49,7 @@ def main():
 
     if verbose:
         sys.stderr.write(f"args =\n{pformat(args)}\n")
+        logger.setLevel(level='DEBUG')
 
     if interval <= 0:
         parser.print_help(file=sys.stderr)
@@ -67,23 +70,20 @@ def main():
     with tpsup.pidfile.pidfile(prog):
         old_mX, old_mY = pyautogui.position()  # mouse position
 
-        if verbose:
-            tplog(f"mouse is at ({old_mX}, {old_mY})", prefix='time')
+        logger.debug(f"mouse is at ({old_mX}, {old_mY})")
 
         # save a reference point as where we started
         X0, Y0 = old_mX, old_mY
 
         while True:
-            tplog(f"sleep {interval} sec", prefix='time')
+            logger.debug(f"sleep {interval} sec")
             time.sleep(interval)
             mX, mY = pyautogui.position()
-            if verbose:
-                tplog(f"mouse is at ({mX}, {mY})", prefix='time')
+            logger.debug(f"mouse is at ({mX}, {mY})")
 
             if mX == old_mX and mY == old_mY:
                 # user idle
-                if verbose:
-                    tplog(f"user idle", prefix='time')
+                logger.debug(f"user idle")
 
                 if mX > X0:
                     mX -= 1
@@ -94,8 +94,7 @@ def main():
                 else:
                     mY += 1
 
-                if verbose:
-                    tplog(f"mv mouse to ({mX}, {mY})", prefix='time')
+                logger.debug(f"mv mouse to ({mX}, {mY})")
                 pyautogui.moveTo(mX, mY, 0.1)  # (X, Y, Duration) Duration minimum 0.1 second
                 # pyautogui.move(delta_X, delta_Y)
 
@@ -103,8 +102,7 @@ def main():
                 old_mY = mY
             else:
                 # user not idle, then not to interfere
-                if verbose:
-                    tplog(f"user active", prefix='time')
+                logger.debug(f"user active")
 
                 old_mX, old_mY = mX, mY
                 X0, Y0 = mX, mY
