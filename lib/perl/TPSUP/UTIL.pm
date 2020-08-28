@@ -437,7 +437,7 @@ sub should_do_it {
       }
 
       if ($answer !~ /^\s*[yY]/) {
-         print STDERR "Your answer is '$answer', not 'Yes'; won't do this";
+         print STDERR "Your answer is '$answer', not 'Yes'; won't do this\n";
          return 0;
       } else {
          return 1;
