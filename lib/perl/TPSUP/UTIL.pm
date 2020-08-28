@@ -40,6 +40,7 @@ our @EXPORT_OK = qw(
    get_timestamp
    get_setting_from_env
    get_setting_from_profile
+   should_do_it
 );
 
 
@@ -373,13 +374,8 @@ sub cp_file2_to_file1 {
       }
    }
       
-   if (!$opt->{NoPrompt}) {
-      print "Do you want to make this change? Y/N [N]\n";
-      my $answer = readline(*STDIN);
-      
-      if ($answer !~ /^\s*[yY]/) {
-         return "You didn't answer yes, meaning not to change";
-      }
+   if (!should_do_it({FORCE=>$opt->{NoPrompt}})){
+      return "You didn't answer yes, meaning not to change";
    }
       
    if (!$opt->{NoBackup}) {
@@ -419,6 +415,36 @@ sub backup_file1_to_file2 {
    return $rc;
 }
    
+sub should_do_it {
+   my ($opt) = @_;
+
+   if ($opt->{DRYRUN}) {
+      print STDERR "DRY-RUN or CHECK ONLY\n";
+      return 0;
+   }
+
+   if ($opt->{FORCE}) {
+      return 1;
+   } else {
+      my $default = $opt->{DEFAULT} ? $opt->{DEFAULT} : 'N';
+      print "Do you want to do this? Y/N [$default]\n";
+      my $answer = readline(*STDIN);
+      
+      chomp $answer;
+
+      if ($answer eq '') {
+         $answer = $default;
+      }
+
+      if ($answer !~ /^\s*[yY]/) {
+         print STDERR "Your answer is '$answer', not 'Yes'; won't do this";
+         return 0;
+      } else {
+         return 1;
+      }
+   }
+}
+      
 sub get_abs_path {
    my ($path) = @_;
    
