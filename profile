@@ -133,6 +133,9 @@ if [[ $UNAME =~ Msys ]]; then
    alias python2='winpty "/c/Program Files/Python27/python"'
    alias python3='winpty "/c/Program Files/Python37/python"'
 elif [[ $UNAME =~ Cygwin ]]; then
+   export WINHOME=$(cd $USERPROFILE; pwd -P)
+   export CHOME=$(cd "C:/Users/$USER"; pwd -P)
+
    alias     ework='cd /cygdrive/c/users/$USER/eclipse-workspace'
    alias downloads='cd /cygdrive/c/users/$USER/downloads'
 
