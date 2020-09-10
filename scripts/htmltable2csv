@@ -113,13 +113,17 @@ sub print_row {
 
    my @array;
       
+   # the xml parser converts an empty cell <td></td> into a empty hash {}.
+   # we replace the empty hash {} with empty string
    if ($quote_style eq 'double') {
-      @array = map { qq("$_") } @{$row};
+      @array = map { ref($_) eq 'HASH' ? qq("") : qq("$_") } @{$row};
    } elsif ($quote_style eq 'single') {
-      @array = map { qq('$_') } @{$row};
+      @array = map { ref($_) eq 'HASH' ? qq('') : qq('$_') } @{$row};
    } else {
-      @array = @{$row};
+      @array = map { ref($_) eq 'HASH' ? '' : $_ } @{$row};
    }
    print {$out_fh} join($delimiter, @array), "\n";
 }
    
+
+
