@@ -33,7 +33,9 @@ usage:
    -skip n               skip the first n lines of the file, because some
                          files may comments above header.
 
-   -h h1,h2,...          treat the file as a header-less file and use this header
+   -h h1,h2,...          treat the file as a header-less file and use this header. 
+                         can be used mulitple times to give column multiple meanings.
+                         (see example)
 
    -f field1,field2,...
                          default to all fields
@@ -43,6 +45,8 @@ examples:
    $prog henry tpcsv2_test.csv
 
    $prog -delimiter '|' -header alpha,number,string,value henry tpcsv2_test_noheader.csv
+
+   $prog -delimiter '|' -h alpha,number,string,value -h a,n,s,v henry tpcsv2_test_noheader.csv
 
 END
 
@@ -55,7 +59,7 @@ my $delimiter = ',';
 my $fields;
 my $skiplines;
 my $row;
-my $header;
+my @headers;
 
 GetOptions(
    'verbose'     => \$verbose,
@@ -64,7 +68,7 @@ GetOptions(
    'fields=s'    => \$fields,
    'row=s'       => \$row,
    'skip=s'      => \$skiplines,
-   'header=s'    => \$header,
+   'header=s'    => \@headers,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV || @ARGV >2;
@@ -92,8 +96,11 @@ if ($fields) {
    $opt->{requiredColumns} = \@requiredColumns;
 }
 
-if ($header) {
-   $opt->{SetInputHeader} = $header;
+# @headers is array of strings
+# ("h1,h2,h3", "c1,c2,c3", "firstname,lastname,age")
+
+if (@headers) {
+   $opt->{SetInputHeader} = $headers[0];
    $opt->{InputNoHeader}  = 1;
 }
 
@@ -107,6 +114,31 @@ if (!@ARGV || $ARGV[0] eq '-') {
 die "cannot parse input" if !$ref;
 
 my ($ifh, $columns, $pos) = @{$ref}{qw(fh columns pos)};
+
+my @combined_columns; 
+if (@headers >1) {
+   # convert 
+   #    ("h1,h2,h3", "c1,c2,c3", "firstname,lastname,age")
+   # to
+   #    ("h1|c1|firstname", "h2|c2|lastname", "h3|c3|age")
+
+   my $dimension = scalar(@headers);
+   my $columnsList;
+   
+   for (my $i=0; $i<scalar(@headers); $i++) {
+      @{$columnsList->[$i]} = split /,/, $headers[$i];
+   }
+
+   my $numColumns = scalar(@{$columnsList->[0]});
+   for (my $j=0; $j<$numColumns; $j ++) {
+      my @slice;
+      for (my $i=0; $i<scalar(@headers); $i++) {
+         push @slice, defined $columnsList->[$i]->[$j] ? $columnsList->[$i]->[$j] : '';
+      }
+
+      push @combined_columns, join("|", @slice);
+   }
+}
 
 if ($csv) {
    if (@requiredColumns) {
@@ -159,7 +191,11 @@ while (<$ifh>) {
          }
       } else {
          for (my $i=0; $i<scalar(@$columns); $i++) {
-            printf "%25s '%s'\n", $columns->[$i], defined($a[$i]) ? "$a[$i]" : '';
+            if (@headers>1) {
+               printf "%25s '%s'\n", $combined_columns[$i], defined($a[$i]) ? "$a[$i]" : '';
+            } else {
+               printf "%25s '%s'\n", $columns->[$i], defined($a[$i]) ? "$a[$i]" : '';
+            }
          }
       }
 
