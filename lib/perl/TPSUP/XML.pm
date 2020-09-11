@@ -189,6 +189,8 @@ sub query_xml {
                $string = "$1\n";
             }
    
+            $string =~ s/&(?![a-z][a-z][a-z];)/&amp;/g;
+
             #print $string;
          
             my $r;
@@ -222,16 +224,31 @@ sub query_xml {
       # input is a single XML, can be multi-lines
       my $r;
          
+      my $string ="";
+
       if (defined $opt->{AddRootNode}) {
-         my $string = "<$opt->{AddRootNode}>\n";
-         $string .= `cat $file`;
-         $string .= "\n";
-         $string .= "</$opt->{AddRootNode}>";
-         
-         $r = XMLin($string, ForceArray=>$ForceArray, KeyAttr=>$KeyAttr);
-      } else {
-         $r = XMLin($file, ForceArray=>$ForceArray, KeyAttr=>$KeyAttr);
+         $string .= "<$opt->{AddRootNode}>\n";
       }
+
+      $string .= `cat $file`;
+      $string .= "\n";
+
+      if (defined $opt->{AddRootNode}) {
+         $string .= "</$opt->{AddRootNode}>";
+      }
+
+      # bare & is allowed in some HTML but not in XML
+      #   https://stackoverflow.com/questions/3493405/do-i-really-need-to-encode-as-amp
+      # As we use our xml module to parse html, we need to escape &: 
+      #   convert & into &amp; but leave existing &amp; alone.
+      # this needs regex lookahead feature
+      #    https://www.regular-expressions.info/lookaround.html
+      # negative look-ahead: 
+      #    "match a q not followed by a u. q(?!u).
+
+      $string =~ s/&(?![a-z][a-z][a-z];)/&amp;/g;
+         
+      $r = XMLin($string, ForceArray=>$ForceArray, KeyAttr=>$KeyAttr);
          
       $opt->{verbose} && print "r = ", Dumper($r);
          
