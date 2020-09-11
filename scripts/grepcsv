@@ -33,12 +33,15 @@ usage:
    -skip n               skip the first n lines of the file, because some
                          files may comments above header.
 
+   -h h1,h2,...          treat the file as a header-less file and use this header
+
    -f field1,field2,...
                          default to all fields
 
 examples:
 
-   $prog henry tpcsv2_test.csv
+   $prog                                   henry tpcsv2_test.csv
+   $prog -header alpha,number,string,value henry tpcsv2_test_noheader.csv
 
 END
 
@@ -51,6 +54,7 @@ my $delimiter = ',';
 my $fields;
 my $skiplines;
 my $row;
+my $header;
 
 GetOptions(
    'verbose'     => \$verbose,
@@ -59,9 +63,15 @@ GetOptions(
    'fields=s'    => \$fields,
    'row=s'       => \$row,
    'skip=s'      => \$skiplines,
+   'header=s'    => \$header,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV || @ARGV >2;
+
+my $opt = {
+   delimiter=>$delimiter,
+   skiplines=>$skiplines,
+};
 
 my $pattern = shift @ARGV;
 $pattern = qr/$pattern/;
@@ -74,16 +84,15 @@ if ($fields) {
       $required->{$f} ++;
       push @requiredColumns, $f;
    }
+   $opt->{requiredColumns} = \@requiredColumns;
+}
+
+if ($header) {
+   $opt->{SetInputHeader} = $header;
+   $opt->{InputNoHeader}  = 1;
 }
 
 my $ref;
-
-my $opt = {
-   delimiter=>$delimiter,
-   requiredColumns=>\@requiredColumns,
-   skiplines=>$skiplines,
-};
-
 if (!@ARGV || $ARGV[0] eq '-') {
    $ref = open_csv('-', $opt);
 } else {
