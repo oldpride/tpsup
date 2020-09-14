@@ -6,12 +6,14 @@ our @EXPORT_OK = qw(
    parse_PatternFile
    get_PatternCfg_by_app
    get_PatternCfg
+   itemize_log
 );
 
 use Carp;
 use Data::Dumper;
 #use XML::Simple;
-use TPSUP::CSV qw(query_csv2);
+use TPSUP::CSV  qw(query_csv2);
+use TPSUP::UTIL qw(get_in_fh);
 
 my $PatternCfg_by_file_app;
                   
@@ -87,6 +89,101 @@ sub get_PatternCfg {
    }
       
    return $cfg;
+}
+
+# a perl iterator/generator 
+# https://stackoverflow.com/questions/3775413/what-is-the-perl-version-of-a-python-iterator
+# use bigint;
+# sub fibonacci {
+#     my $limit = 10**( shift || 0 );
+#     my ( $a, $b ) = ( 0, 1 );
+#     return sub {
+#         return if $a > $limit;
+#         ( my $r, $a, $b ) = ( $a, $b, $a + $b );
+#         return $r;
+#     };
+# }
+# 
+# my $fit = fibonacci( 15 );
+# 
+# my $n = 0;
+# while ( defined( my $f = $fit->())) {
+#      print "F($n): $f\n";
+#      $n++;
+# }
+
+sub itemize_log {
+   my ($input, $item_start_pattern, $opt) = @_;
+
+   my $start_pattern = qr/$item_start_pattern/;
+
+   my $match_pattern;
+   if ($opt->{MatchPattern}) {
+      $match_pattern = qr/$opt->{MatchPattern}/;
+   }
+
+   my $exclude_pattern;
+   if ($opt->{ExcludePattern}) {
+      $exclude_pattern = qr/$opt->{ExcludePattern}/;
+   }
+
+   my $max_len = $opt->{MaxLen} ? $opt->{MaxLen} : 64000;
+
+   my $ifh = get_in_fh($input, $opt);
+   return undef if !$ifh;
+
+   my $line;
+
+   return sub {
+      my $item;
+
+      # item will be undefined before 1st item
+      if (defined $line) {
+         $item = $line;
+      }
+
+      while ( defined($line = <$ifh>) ) {
+         if ($line =~ /$start_pattern/) {
+            if (defined $item) {
+               # this is not the first line
+
+               if ( (  $match_pattern && $item !~   /$match_pattern/) || 
+                    ($exclude_pattern && $item =~ /$exclude_pattern/) ){
+                  # throw away the current complete item.
+                  $item = $line;
+                  next;
+               }
+               return $item; 
+            }
+         } 
+         
+         $item .= $line;
+         my $length = length($item);
+
+         if ($length > $max_len) {
+            croak "line is unexpected long ($length), over limit ($max_len)";
+         }
+         
+      }
+      
+      close($ifh) if $ifh != \*STDIN;
+
+      {
+            if (defined $item) {
+               # this is not the first line
+
+               if ( (  $match_pattern && $item !~   /$match_pattern/) || 
+                    ($exclude_pattern && $item =~ /$exclude_pattern/) ){
+                  # throw away the current complete item.
+                  $item = $line;
+                  next;
+               }
+               return $item; 
+            }
+      }
+
+      return undef;    # returning undef to signal the end of iterator/generator
+   }   
 }
       
 1
