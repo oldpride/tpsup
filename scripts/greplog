@@ -22,6 +22,10 @@ usage:
    patterns are perl regex pattern.
    'filename' can be a file name or stdin '-'.
 
+   -v                verbose mode
+   -maxlen INT       max length of each item. this prevents running out of memory 
+                     when mistakenly worked on a binary file. default to 64000.
+
 examples:
 
    $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'com[.]sr[.]biz' greplog_test.log
@@ -33,9 +37,11 @@ END
 }
 
 my $verbose;
+my $maxlen;
 
 GetOptions(
    'verbose'     => \$verbose,
+   'maxlen=s'    => \$maxlen,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV || @ARGV < 3;
