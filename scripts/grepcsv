@@ -73,7 +73,7 @@ GetOptions(
 
 usage("wrong number of args") if !@ARGV || @ARGV >2;
 
-if ($delimiter eq '|') {
+if ($delimiter eq '|' -o $delimiter eq '^') {
    $delimiter = '\|';
 }
 

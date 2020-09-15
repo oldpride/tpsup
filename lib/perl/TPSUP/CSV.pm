@@ -134,6 +134,9 @@ sub open_csv {
       }
 
       my $delimiter = defined $opt->{delimiter} ? $opt->{delimiter} : ',';
+      if ($delimiter eq '|' || $delimiter eq '^') {
+         $delimiter = "\\$delimiter";
+      }
 
       my $columns;
       if ($opt->{QuotedInput}) {
@@ -235,9 +238,8 @@ sub parse_csv_array {
    $header =~ s///;
 
    my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ',';
-
-   if ($delimiter eq '|') {
-      $delimiter = '\|';
+   if ($delimiter eq '|' || $delimiter eq '^') {
+      $delimiter = "\\$delimiter";
    }
 
    my $h1;
@@ -548,6 +550,9 @@ sub update_csv {
    $opt->{verbose} && print "set_clause='$set', resolved to v_by_k =", Dumper($v_by_k);
 
    my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ',';
+   if ($delimiter eq '|' || $delimiter eq '^') {
+      $delimiter = "\\$delimiter";
+   }
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
 
@@ -767,6 +772,9 @@ sub csv_file_to_array {
    }
 
    my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ',';
+   if ($delimiter eq '|' || $delimiter eq '^') {
+      $delimiter = "\\$delimiter";
+   }
 
    my $rtn;
 
@@ -1417,6 +1425,10 @@ sub print_csv_hashArray {
       }
       
       my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ',';
+      # this delimiter is for output, therefore, don't escape for | or ^
+      #if ($delimiter eq '|' || $delimiter eq '^') {
+      #   $delimiter = "\\$delimiter";
+      #}
       
       if (!$opt->{OutputNoHeader}) {
          if ($opt->{OutputHeader}) {
@@ -1476,6 +1488,9 @@ sub delete_csv {
    my ($ifh, $columns, $pos, $SkippedLines) = @{$ref}{qw(fh columns pos SkippedLines)};
    
    my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ', ';
+   if ($delimiter eq '|' || $delimiter eq '^') {
+      $delimiter = "\\$delimiter";
+   }
    
    my $warn = $opt->{verbose} ? 'use' : 'no';
    

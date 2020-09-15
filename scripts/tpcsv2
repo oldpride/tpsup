@@ -141,6 +141,10 @@ examples:
    - to add a new column, use -ee. The second example disables all original columns
    $prog       -ee                    'numberPlus1=\$number+1' tpcsv2_test.csv
    $prog -f '' -ee 'oldnumber=\$number,numberPlus1=\$number+1' tpcsv2_test.csv
+
+   - delimiter and missing header
+   $prog -op InputNoHeader -op SetInputHeader=alpha,number,name,score -delimiter ^ -f name,score tpcsv2_test_caret.csv
+   $prog -op InputNoHeader -op SetInputHeader=alpha,number,name,score -delimiter ^ -me '\$name eq "henry"' tpcsv2_test_caret.csv
    
    - query csv with quotes
    $prog -op RenderStdout -op QuotedInput                       tpcsv2_test_quoted.csv
