@@ -40,6 +40,6 @@ do
    for f in `find $path -name \*.php`
    do
       echo $f
-      php -l $f
+      php -l $f |grep -v "No syntax errors detected"
    done
 done
