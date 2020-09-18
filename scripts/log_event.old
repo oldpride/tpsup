@@ -36,9 +36,7 @@ description:
    -m   match_pattern             Perl style, only count the lines with this pattern
    
    -app App                       As it is in pattern_file .
-                                  this is required to handle timestamps
-
-   -pf  pattern_file              pattern file, default to $dir/log_pattern.csv.
+   -pf  pattern_file               pattern file, default to $dir/log_pattern.csv.
    
    -t TimePattern                 Perl style. Default is in $dir/log_pattern.csv.
    -a Assignment                  How to assign the matched time_pattern. Default is in $dir/log_pattern.csv.
@@ -102,6 +100,8 @@ examples:
    -test got_postion_before_complete='\$time{position}[0] lt \$time{complete}[0]' \\
    -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
    /server/logs/server.out
+   
+
 
    05:31:17:901 INFO : Read data from /database/adjustments.csv [interfaces.Data][PROCESS THREAD-0]
    
@@ -192,32 +192,27 @@ for my $oid (@oids) {
    $seen_id->{$oid}->{cmdline} ++;
 }
    
+my $cfg = get_PatternCfg({
+   PatternFile => $pattern_file,
+   RemoveInputQuotes => 1,
+   App               => $App,
+   TimePattern       => $TimePattern,
+   Assignment        => $Assignment,
+   TimeKey           => $TimeKey,
+   CheckSettings     => [ qw(TimePattern Assignment TimeKey) ],
+});
+   
 my $out_fh = get_out_fh($output);
    
+my @assignments = split /,/, $cfg->{Assignment};
+my @timekeys = split /,/, $cfg->{TimeKey};
+        
 die "no events defined" if !@events && !$print && !$grep && !$grepv && !@oids;
          
-my $cfg;
-my @assignments;
-my @timekeys;
-if ($App) {
-   $cfg = get_PatternCfg({
-      PatternFile => $pattern_file,
-      RemoveInputQuotes => 1,
-      App               => $App,
-      TimePattern       => $TimePattern,
-      Assignment        => $Assignment,
-      TimeKey           => $TimeKey,
-      CheckSettings     => [ qw(TimePattern Assignment TimeKey) ],
-   });
-   
-   @assignments = split /,/, $cfg->{Assignment};
-   @timekeys = split /,/, $cfg->{TimeKey};
-
-   # https://perldoc.perl.org/perlop.html#Regexp-Quote-Like-Operators
-   # use qr// to precompile to speed up
-   if (defined($cfg->{TimePattern})) {
-      $cfg->{TimePattern} = qr/$cfg->{TimePattern}/;
-   }
+# https://perldoc.perl.org/perlop.html#Regexp-Quote-Like-Operators
+# use qr// to precompile to speed up
+if (defined($cfg->{TimePattern})) {
+   $cfg->{TimePattern} = qr/$cfg->{TimePattern}/;
 }
          
 if (defined $exclude_pattern) {
@@ -370,8 +365,6 @@ for my $f (@ARGV) {
             my $backstring_criteria;
       
             if ($backseconds) {
-               die "must specify -app AppName to parse timestamp" if !$App;
-
                my $now_seconds = time();
                my $old_seconds = $now_seconds - $backseconds;
       
@@ -389,8 +382,6 @@ for my $f (@ARGV) {
                $backstring = join("", @{$r}{@timekeys});
                $backstring_criteria = "<=$backstring";
             } elsif ($backtime) {
-               die "must specify -app AppName to parse timestamp" if !$App;
-
                my @a = ($backtime =~ /$cfg->{TimePattern}/);
       
                next if ! @a;
@@ -447,6 +438,11 @@ for my $f (@ARGV) {
                
                next if ! @a;
                
+               my $r; # ref
+               @{$r}{@assignments} = @a;
+               
+               $timestring - join("", @{$r}{@timekeys});
+               
                if ($backpattern) {
                   if ($line =~ /$backpattern/) {
                      $pos = $back->tell();
@@ -454,13 +450,6 @@ for my $f (@ARGV) {
                      last;
                   }
                } elsif ($backstring) {
-                  die "must specify -app AppName to parse timestamp" if !$App;
-
-                  my $r; # ref
-                  @{$r}{@assignments} = @a;
-               
-                  $timestring - join("", @{$r}{@timekeys});
-               
                   if ($timestring <= $backstring) {
                      $pos = $back->tell();
                      print STDERR "\nbackward found line: $timestring <= $backstring\n$line\n";
@@ -498,10 +487,6 @@ for my $f (@ARGV) {
                my $startstring_criteria;
             
                if ($starttime) {
-                  # these two are the same
-                  # die "must specify -app AppName to parse timestamp" if !$App;
-                  die "must specify -app AppName to parse timestamp" if !$cfg;
-
                   my @a = ($starttime =~ /$cfg->{TimePattern}/);
 
                   next if ! @a;
@@ -553,17 +538,14 @@ for my $f (@ARGV) {
                   
                   next if defined   $match_pattern && $line !~   /$match_pattern/;
                   
-                  if ($App) {
-                     # we need to parse timestamp
-                     my @a = ($line =~ /$cfg->{TimePattern}/);
+                  my @a = ($line =~ /$cfg->{TimePattern}/);
                   
-                     next if ! @a;
+                  next if ! @a;
                   
-                     my $r; # ref
-                     @{$r}{@assignments} = @a;
+                  my $r; # ref
+                  @{$r}{@assignments} = @a;
                   
-                     $timestring = join("", @{$r}{@timekeys});
-                  }
+                  $timestring = join("", @{$r}{@timekeys});
                   
                   if ($startpattern) {
                      if ($line =~ /$startpattern/) {
@@ -607,8 +589,6 @@ for my $f (@ARGV) {
    my $endstring_criteria;
       
    if ($endtime) {
-      die "must specify -app AppName to parse timestamp" if !$App;
-
       my @a = ($endtime =~ /$cfg->{TimePattern}/);
       next if ! @a;
       
@@ -655,23 +635,20 @@ for my $f (@ARGV) {
       next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
          
       next if defined   $match_pattern && $line !~   /$match_pattern/;
-          
+         
+      my @a = ($line =~ /$cfg->{TimePattern}/);
+         
+      next if ! @a;
+         
       my $r; # ref
-      if ($App) {
-         # we need to parse timestamp
-         my @a = ($line =~ /$cfg->{TimePattern}/);
+      @{$r}{@assignments} = @a;
          
-         next if ! @a;
+      if ($endtime) {
+         my $timestring = join("", @{$r}{@timekeys});
          
-         @{$r}{@assignments} = @a;
-         
-         if ($endtime) {
-            my $timestring = join("", @{$r}{@timekeys});
-            
-            if ($timestring > $endstring) {
-               print STDERR "\nmatched endtime line: $timestring > $endstring\n$line\n";
-               last;
-            }
+         if ($timestring > $endstring) {
+            print STDERR "\nmatched endtime line: $timestring > $endstring\n$line\n";
+            last;
          }
       }
          
@@ -735,32 +712,29 @@ for my $f (@ARGV) {
          }
          
          if ($matched || @captures) {
-            my $timestring;
-            if ($App) {
-               $timestring = join("", @{$r}{@timekeys});
-            }
+            my $timestring = join("", @{$r}{@timekeys});
 
             if ($is_reset_tag->{$t}) {
                undef %time;
                undef %value;
-               push @{$time{$t}}, $timestring if $App;
+               push @{$time{$t}}, $timestring;
                push @{$value{$t}}, \@captures if @captures;
                $halted = 0;
                @grepped = ();
                next LINE;
             } elsif ($is_exit_tag->{$t}) {
-               push @{$time{$t}}, $timestring if $App;
+               push @{$time{$t}}, $timestring;
                push @{$value{$t}}, \@captures if @captures;
                last LINE;
             } elsif ($halted) {
                next LINE;
             } elsif ($is_halt_tag->{$t}) {
-               push @{$time{$t}}, $timestring if $App;
+               push @{$time{$t}}, $timestring;
                push @{$value{$t}}, \@captures if @captures;
                $halted ++;
                next LINE;
             } else {
-               push @{$time{$t}}, $timestring if $App;
+               push @{$time{$t}}, $timestring;
                push @{$value{$t}}, \@captures if @captures;
                next LINE;
             }

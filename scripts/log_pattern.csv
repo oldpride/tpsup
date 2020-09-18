@@ -1,5 +1,7 @@
 App,Example,TimePattern,Assignment,TimeKey,Comment
 appia,"2018/10/31 09:30:04:223: ",^(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2}),"yyyy,mm,dd,HH,MM,SS","yyyy,mm,dd,HH,MM,SS",appia log
 pks,"2018/10/31 09:30:04:223: ",^(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2}),"yyyy,mm,dd,HH,MM,SS","yyyy,mm,dd,HH,MM,SS",dummy log
+syslog,"Sep  8 12:11:35 ",^([A-Z][a-z][a=z]) ([0-9 ]/\d) (\d{2}):(\d{2}):(\d{2}),"Mmm,d,HH,MM,SS","Mmm,d,HH,MM,SS",syslog
+
 # to display, tpcsv2 -op QuotedInput -op RenderStdout -op RemoveInputQuotes log_pattern.csv|less -S
 
