@@ -95,6 +95,7 @@ description:
    
 examples:
    
+   - timestamp-based test
    $prog -app syslog \\
    -event "begin=testapp started, config =" \\
    -event "feeds=reading from /dev/null" \\
@@ -118,6 +119,37 @@ examples:
    OK: PASSED: got_feeds_before_complete \$time{feeds}[0] lt \$time{complete}[0] => Sep18081606 lt Sep18092635
    OK: PASSED: got_postion_before_complete \$time{position}[0] lt \$time{complete}[0] => Sep18081635 lt Sep18092635
    OK: PASSED: complete_status_is_DONE \$value{complete}[0][0] eq "DONE" => DONE eq "DONE"
+
+   - row-based test, in case row is not timestamped. this should be faster than time-based.
+   $prog \\
+   -event "begin=testapp started, config =" \\
+   -event "feeds=reading from /dev/null" \\
+   -event "position=running sql/positions.sql" \\
+   -event "complete=entered state=(.+?)\\\\b" \\
+   -reset begin \\
+   -halt complete \\
+   -test has_begun='defined(\$row{begin}[0])' \\
+   -test has_got_feeds='defined(\$row{feeds}[0])' \\
+   -test has_run_positions_sql='defined(\$row{position}[0])' \\
+   -test has_completed='defined(\$row{complete}[0])' \\
+   -test got_feeds_before_complete='\$row{feeds}[0] < \$row{complete}[0]' \\
+   -test got_postion_before_complete='\$row{position}[0] < \$row{complete}[0]' \\
+   -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
+   log_event_test.log
+
+   OK: PASSED: has_begun defined(\$row{begin}[0]) => defined(2)
+   OK: PASSED: has_got_feeds defined(\$row{feeds}[0]) => defined(12)
+   OK: PASSED: has_run_positions_sql defined(\$row{position}[0]) => defined(13)
+   OK: PASSED: has_completed defined(\$row{complete}[0]) => defined(16)
+   OK: PASSED: got_feeds_before_complete \$row{feeds}[0] < \$row{complete}[0] => 12 < 16
+   OK: PASSED: got_postion_before_complete \$row{position}[0] < \$row{complete}[0] => 13 < 16
+   OK: PASSED: complete_status_is_DONE \$value{complete}[0][0] eq "DONE" => DONE eq "DONE"
+
+   - grep the state of the last start
+   $prog \\
+      -event "begin=testapp started, config =" -reset begin \\
+      -grep state= -grepmax 1 \\
+      log_event_test.log
 
    - the following is like a tail command
    $prog -app syslog -backtime "Sep 18 13:02:33" -print log_event_test.log
@@ -210,14 +242,14 @@ usage("-progress must be followed by a positive integer")
 my @oid_tags = qw(11 41 17 37);
 my $oid_tags_piped = join("|", @oid_tags);   # qw(11 41) -> "11|41"
 
-my $seen_id;
+my $seen_oid;
 my $oid_pattern;
 my $oid_pattern_compiled;
 my $oid_pattern_with_tags;
 my $oid_pattern_with_tags_compiled;
       
 sub update_oid_pattern {
-   $oid_pattern          = join("|", keys(%$seen_id));
+   $oid_pattern          = join("|", keys(%$seen_oid));
    $oid_pattern_compiled = qr/\b($oid_pattern)\b/;
 
    $oid_pattern_with_tags          = "($oid_tags_piped)=($oid_pattern)";
@@ -236,7 +268,7 @@ if (@oids) {
    #}
 
    for my $oid (@oids) {
-      $seen_id->{$oid}->{cmdline} ++;
+      $seen_oid->{$oid}->{cmdline} ++;
    }
 
    update_oid_pattern();
@@ -245,6 +277,9 @@ if (@oids) {
 my $out_fh = get_out_fh($output);
    
 die "no events defined" if !@events && !$print && !$grep && !$grepv && !@oids;
+
+my  $grep_compiled = qr/$grep/;
+my $grepv_compiled = qr/$grepv/;
          
 my $cfg;
 my @assignments;
@@ -291,16 +326,16 @@ if (defined $backpattern) {
    $backpattern_compiled = qr/$backpattern/;
 };
          
-my $pattern_by_tag;
-my $pattern_by_tag;
+my          $pattern_by_tag;
+my $compiled_pattern_by_tag;
 for my $e (@events) {
    if ($e =~ /^(.+?)=(.+)/ ) {
       my ($tag, $pattern) = ($1, $2);
          
       croak "tag='$tag' shows up multiple times in -event" if exists $pattern_by_tag->{$tag};
          
-      #$pattern_by_tag->{$tag} = $pattern;
-      $pattern_by_tag->{$tag} = qr/$pattern/;
+               $pattern_by_tag->{$tag} =    $pattern;
+      $compiled_pattern_by_tag->{$tag} = qr/$pattern/;
    } else {
       croak "event='$e' bad format";
    }
@@ -395,6 +430,9 @@ my $error = 0;
 
 for my $f (@ARGV) {
    my $prefix = @ARGV > 1 ? "$f:" : "";
+
+   my   $tried_timestamp_pattern = 0;
+   my $matched_timestamp_pattern = 0;
       
    my $fh;
       
@@ -507,8 +545,12 @@ for my $f (@ARGV) {
                next if defined   $match_pattern && $line !~ /$match_pattern/;
                
                my @a = ($line =~ /$cfg->{TimePattern_compiled}/);
-               
-               next if ! @a;
+
+               if (!@a) {
+                  $tried_timestamp_pattern ++;
+                  next;
+               }
+               $matched_timestamp_pattern ++;
                
                if ($backpattern) {
                   if ($line =~ /$backpattern/) {
@@ -621,7 +663,11 @@ for my $f (@ARGV) {
                      # we need to parse timestamp
                      my @a = ($line =~ /$cfg->{TimePattern_compiled}/);
                   
-                     next if ! @a;
+                     if (!@a) {
+                        $tried_timestamp_pattern ++;
+                        next;
+                     }
+                     $matched_timestamp_pattern ++;
                   
                      my $r; # ref
                      @{$r}{@assignments} = @a;
@@ -685,6 +731,7 @@ for my $f (@ARGV) {
       
    my %time;
    my %value;
+   my %row;
    my $halted;
    my $line_count;
    my $last_time = time();
@@ -725,7 +772,11 @@ for my $f (@ARGV) {
          # we need to parse timestamp
          my @a = ($line =~ /$cfg->{TimePattern_compiled}/);
          
-         next if ! @a;
+         if (!@a) {
+            $tried_timestamp_pattern ++;
+            next;
+         }
+         $matched_timestamp_pattern ++;
          
          @{$r}{@assignments} = @a;
          
@@ -739,18 +790,19 @@ for my $f (@ARGV) {
          }
       }
          
-      if ($grep && $grepcount < $grepmax && $line =~ /$grep/ && $line !~ /$grepv/ ) {
-         $grepcount ++;
-         
-         push @grepped, $line;
+      if ($grep && $grepcount < $grepmax && $line =~ /$grep_compiled/ ) {
+         if ( !defined($grepv) || $line !~ /$grepv_compiled/ ) {
+            $grepcount ++;
+            push @grepped, $line;
+         }
       }
          
-      if (! $seen_id) {
-         # when tracing order, $seen_id is defined, we will decide whether to print later
+      if (! $seen_oid) {
+         # when tracing order, $seen_oid is defined, we will decide whether to print later
          $print && print {$out_fh} "$line\n";
       }
          
-      if ($seen_id) {
+      if ($seen_oid) {
          if ($line =~ /$oid_pattern_with_tags_compiled/) {
             my $tag = $1;
             my $val = $2;
@@ -764,15 +816,15 @@ for my $f (@ARGV) {
          
                next if !defined $v || !"$v";
          
-               if (!$seen_id->{$v}->{$k}) {
+               if (!$seen_oid->{$v}->{$k}) {
                   $verbose && print STDERR "new link: $tag=$val => $k=$v\n";
                   $need_update_pattern ++; 
                }
-               $seen_id->{$v}->{$k}++;
+               $seen_oid->{$v}->{$k}++;
             }
 
             if ($need_update_pattern) {
-               $verbose && print STDERR "updated seen_id = ", Dumper($seen_id);
+               $verbose && print STDERR "updated seen_oid = ", Dumper($seen_oid);
                update_oid_pattern();
             }
 
@@ -797,39 +849,50 @@ for my $f (@ARGV) {
          my $matched;
          
          if ($tag_will_capture->{$t}) {
-            @captures = ($line =~ /$pattern_by_tag->{$t}/);
-         } elsif ($line =~ /$pattern_by_tag->{$t}/) {
+            @captures = ($line =~ /$compiled_pattern_by_tag->{$t}/);
+         } elsif ($line =~ /$compiled_pattern_by_tag->{$t}/) {
             $matched ++;
          }
          
          if ($matched || @captures) {
+            $verbose && print STDERR "event='$t' pattern='$pattern_by_tag->{$t}' matched: $line\n";
+
             my $timestring;
             if ($App) {
                $timestring = join("", @{$r}{@timekeys});
             }
 
             if ($is_reset_tag->{$t}) {
+               $verbose && print STDERR "event='$t' reset processing\n";
                undef %time;
                undef %value;
                push @{$time{$t}}, $timestring if $App;
                push @{$value{$t}}, \@captures if @captures;
+               push @{$row{$t}}, $line_count;
                $halted = 0;
                @grepped = ();
                next LINE;
             } elsif ($is_exit_tag->{$t}) {
+               $verbose && print STDERR "event='$t' exits processing\n";
                push @{$time{$t}}, $timestring if $App;
                push @{$value{$t}}, \@captures if @captures;
+               push @{$row{$t}}, $line_count;
                last LINE;
             } elsif ($halted) {
+               $verbose >=2 && print STDERR "event='$t' is skipped while in halted state\n";
                next LINE;
             } elsif ($is_halt_tag->{$t}) {
+               $verbose && print STDERR "event='$t' halted processing\n";
                push @{$time{$t}}, $timestring if $App;
                push @{$value{$t}}, \@captures if @captures;
+               push @{$row{$t}}, $line_count;
                $halted ++;
                next LINE;
             } else {
+               $verbose && print STDERR "event='$t' is saved\n";
                push @{$time{$t}}, $timestring if $App;
                push @{$value{$t}}, \@captures if @captures;
+               push @{$row{$t}}, $line_count;
                next LINE;
             }
          }
@@ -860,8 +923,8 @@ for my $f (@ARGV) {
       print "index,status,check,expression,detail\n";
    }
    
-   for my $row (@test_tag_expressions) {
-      my ($test_tag, $expression) = @$row;
+   for my $r (@test_tag_expressions) {
+      my ($test_tag, $expression) = @$r;
    
       my $compiled = eval "$warn warnings; no strict; sub { $expression } ";
       if ($@) { 
@@ -890,12 +953,20 @@ for my $f (@ARGV) {
    }
       
    if ($grep) {
-      print "$grepcount lines matching pattern='$grep'. ",
+      $verbose && print STDERR "$grepcount lines matching pattern='$grep'. ",
             $grepcount>$grepmax ? "truncated to $grepmax lines" : "",
             ";\n";
       
       for my $line (@grepped) {
          print "$line\n";
+      }
+   }
+
+   if ($tried_timestamp_pattern) {
+      my $matched_percentage = $matched_timestamp_pattern*100/$tried_timestamp_pattern;
+
+      if ($matched_percentage < 5) {
+         print STDERR "timestamp pattern='$cfg->{TimePattern}' is likely wrong, because only $matched_percentage% ($matched_timestamp_pattern/$tried_timestamp_pattern) matched.\n";
       }
    }
 }

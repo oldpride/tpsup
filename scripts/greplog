@@ -23,13 +23,15 @@ usage:
    'filename' can be a file name or stdin '-'.
 
    -v                verbose mode
-   -maxlen INT       max length of each item. this prevents running out of memory 
+   -maxlen   INT     max length of each item. this prevents running out of memory 
                      when mistakenly worked on a binary file. default to 64000.
+   -maxcount INT     max number of output  
 
 examples:
 
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'com[.]sr[.]biz' greplog_test.log
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1'         greplog_test.log
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'com[.]sr[.]biz'     greplog_test.log
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1'             greplog_test.log
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxcount 1 greplog_test.log
 
 END
 
@@ -37,11 +39,13 @@ END
 }
 
 my $verbose;
-my $maxlen;
+my $maxlen = 64000;
+my $maxcount;
 
 GetOptions(
    'verbose'     => \$verbose,
    'maxlen=s'    => \$maxlen,
+   'maxcount=s'  => \$maxcount,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV || @ARGV < 3;
@@ -50,7 +54,11 @@ my $start_pattern = shift @ARGV;
 my $content_pattern = shift @ARGV;
 
 for my $input (@ARGV) {
-   my $iterator = itemize_log($input, $start_pattern, {MatchPattern=>$content_pattern});
+   my $iterator = itemize_log($input, $start_pattern, {
+                                                         MatchPattern=>$content_pattern,
+                                                         MaxLen      =>$maxlen,
+                                                         MaxCount    =>$maxcount,
+                                                      });
 
    while(defined(my $item = $iterator->())) {
       print $item;

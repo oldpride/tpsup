@@ -127,12 +127,14 @@ sub itemize_log {
       $exclude_pattern = qr/$opt->{ExcludePattern}/;
    }
 
-   my $max_len = $opt->{MaxLen} ? $opt->{MaxLen} : 64000;
+   my $max_len   = $opt->{MaxLen}   ? $opt->{MaxLen}   : 64000;
+   my $max_count = $opt->{MaxCount};
 
    my $ifh = get_in_fh($input, $opt);
    return undef if !$ifh;
 
    my $line;
+   my $item_count = 0;
 
    return sub {
       my $item;
@@ -143,7 +145,12 @@ sub itemize_log {
       }
 
       while ( defined($line = <$ifh>) ) {
+         last if $max_count && $item_count >= $max_count;
+         
          if ($line =~ /$start_pattern/) {
+            # this is a starting line. if we already have an $item, we return the 
+            # $item, unless this is the first line.
+
             if (defined $item) {
                # this is not the first line
 
@@ -153,22 +160,24 @@ sub itemize_log {
                   $item = $line;
                   next;
                }
+               $item_count ++;
                return $item; 
             }
          } 
          
+         # this is not a starting line
          $item .= $line;
          my $length = length($item);
 
          if ($length > $max_len) {
-            croak "line is unexpected long ($length), over limit ($max_len)";
+            carp "line is unexpected long, already ($length) over limit ($max_len); returned this much. ";
+            return $item;
          }
-         
       }
       
       close($ifh) if $ifh != \*STDIN;
 
-      {
+      if (!$max_count || $item_count < $max_count) {
             if (defined $item) {
                # this is not the first line
 
