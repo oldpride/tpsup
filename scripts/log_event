@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use strict;
 use Data::Dumper;
@@ -9,12 +9,14 @@ use TPSUP::DATE qw(get_interval_seconds);
 use TPSUP::LOG qw(get_PatternCfg);
 use TPSUP::FIX qw(parse_fix_message);
 use TPSUP::UTIL qw(get_out_fh);
+use TPSUP::DATE qw(get_Mon_by_number yyyymmddHHMMSS_to_epoc);
 
 my $prog = $0; $prog =~ s:.*/::;
 my $dir  = $0; $dir  =~ s:[^/]+$::;
 
 my $min_idle = 60;
 my $grepmax = 200;
+my $yyyy = `date +%Y`; chomp $yyyy;
 
 sub usage {
    my ($msg) = @_;
@@ -42,6 +44,8 @@ description:
    
    -t TimePattern                 Perl style. Default is in $dir/log_pattern.csv.
    -a Assignment                  How to assign the matched time_pattern. Default is in $dir/log_pattern.csv.
+   -k TimeKey                     default is in $dir/log_pattern.csv. use ',' as separator.
+                                  eg, -k HH,MM,SS
    
    -event tag=pattern             define event tag. can define multiple times to specify a chain of events, in order.
    
@@ -78,56 +82,70 @@ description:
                                   will be converted into backtime
    
    -endtime time                  End searching after this time
+
+   -now yyyymmddHHMMSS            use this during test, to fake the current time.
    
    -print                         print matching lines
    
    -oid order_id                  trace this order, can be tag 11,41,17,37. can set multiple times.
    
    -output output.txt             default to stdout
+
+   -v                             verbose. -v -v will increase verbose
    
 examples:
    
-   $prog -app risktool \\
-   -event "begin=Log4j config =" \\
-   -event "feeds=database/adjustments.csv" \\
-   -event "position=sql/positions.sql" \\
-   -event "complete=state=RUNNING.*?::.*?: (.+?)[.]" \\
+   $prog -app syslog \\
+   -event "begin=testapp started, config =" \\
+   -event "feeds=reading from /dev/null" \\
+   -event "position=running sql/positions.sql" \\
+   -event "complete=entered state=(.+?)\\\\b" \\
    -reset begin \\
    -halt complete \\
    -test has_begun='defined(\$time{begin}[0])' \\
    -test has_got_feeds='defined(\$time{feeds}[0])' \\
-   -test has_run_positions_sql='defined(\$time{position}[0])‘ \\
+   -test has_run_positions_sql='defined(\$time{position}[0])' \\
    -test has_completed='defined(\$time{complete}[0])' \\
    -test got_feeds_before_complete='\$time{feeds}[0] lt \$time{complete}[0]' \\
    -test got_postion_before_complete='\$time{position}[0] lt \$time{complete}[0]' \\
    -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
-   /server/logs/server.out
+   log_event_test.log
 
-   05:31:17:901 INFO : Read data from /database/adjustments.csv [interfaces.Data][PROCESS THREAD-0]
-   
-   05:31:23:871 INFO : Read /database/sql/positions.sql for CLIENT [interfaces.PositionLoadThread][CLIENT
-   
-   05:33:58:176 INFO : DataServer [state=RUNNING] :: Life-cycle state transition [[NEW] -> [RUNNING]]: DONE.
-   
+   OK: PASSED: has_begun defined(\$time{begin}[0]) => defined(Sep18081606)
+   OK: PASSED: has_got_feeds defined(\$time{feeds}[0]) => defined(Sep18081606)
+   OK: PASSED: has_run_positions_sql defined(\$time{position}[0]) => defined(Sep18081635)
+   OK: PASSED: has_completed defined(\$time{complete}[0]) => defined(Sep18092635)
+   OK: PASSED: got_feeds_before_complete \$time{feeds}[0] lt \$time{complete}[0] => Sep18081606 lt Sep18092635
+   OK: PASSED: got_postion_before_complete \$time{position}[0] lt \$time{complete}[0] => Sep18081635 lt Sep18092635
+   OK: PASSED: complete_status_is_DONE \$value{complete}[0][0] eq "DONE" => DONE eq "DONE"
+
    - the following is like a tail command
+   $prog -app syslog -backtime "Sep 18 13:02:33" -print log_event_test.log
+   $prog -app syslog -backpattern "Starting Message of the Day" -print log_event_test.log
    
-   date;$prog -app appia -backseconds 10 -print appia.console.log
-   date;$prog -app appia -backtime "2017-01-18 10:44:49" -print appia.console.log
-   date;$prog -app appia -backpattern "Command line for execution" -print appia.console.log
+   - assume now to be a different time 'Sep 18 13:18:00', need to follow the format.
+   $prog -app syslog -now ${yyyy}0918131800 -backseconds 300 -print log_event_test.log
+   (you should see only three lines: two at 13:15:01 and one at 13:17:01)
    
    - the following is to trace an order
-   $prog -progress 100000 -m 35= -app appia -backseconds 1800 -oid USABC999 appia.console.log
+   $prog -progress 100000 -app syslog -oid USABC999-1 -print log_event_test.log
    
-   - to extact a period of an appia log file
-   $prog -app appia -starttime "2019/02/21 14:10:00" -endtime "2019/02/21 14:22:00" -print appia.log
+   - to extact a period of a log file
+   $prog -app syslog -starttime "Sep 18 13:02:33" -print log_event_test.log
+   $prog -app syslog -starttime "Sep 18 13:02:33" -endtime "Sep 18 13:02:34" -print log_event_test.log
+
+   - use -k TimeKey to simplify the timestamp comparation
+     the following should get the same output as the above command. add -v to see the internal.
+   $prog -app syslog -k HH,MM,SS -starttime "Sep 18 13:02:33" -endtime "Sep 18 13:02:34" -print log_event_test.log
    
 EOF
    
    exit 1;
 }
    
-our ($exclude_pattern, $match_pattern, $verbose, $App, $pattern_file, $TimePattern, $Assignment, $TimeKey) = @_;
-   
+our ($exclude_pattern, $match_pattern, $App, $pattern_file, $TimePattern, $Assignment, $TimeKey) = @_;
+
+my $verbose = 0;
 my @events;
 my @tests;
 my $resetString;
@@ -148,12 +166,13 @@ my $print;
 my $front;
 my @oids;
 my $output;
+my $fake_now;
    
 GetOptions(
    "x=s" => \$exclude_pattern,
    "m=s" => \$match_pattern,
    "i=s" => \$min_idle,
-   "v"   => \$verbose,
+   "v+"  => \$verbose,  
    "t=s" => \$TimePattern,
    "a|assignment=s" => \$Assignment,
    "pf=s" => \$pattern_file,
@@ -180,6 +199,7 @@ GetOptions(
    "front=s" => \$front,
    "oid=s"=> \@oids,
    "output=s"=> \$output,
+   "now=s"=> \$fake_now,
 ) or usage("Could not parse command line: $!");
    
 usage("wrong number of args") if !@ARGV;
@@ -187,9 +207,39 @@ usage("wrong number of args") if !@ARGV;
 usage("-progress must be followed by a positive integer")
    if $progress && "$progress" !~ /^[1-9][0-9]*/;
    
+my @oid_tags = qw(11 41 17 37);
+my $oid_tags_piped = join("|", @oid_tags);   # qw(11 41) -> "11|41"
+
 my $seen_id;
-for my $oid (@oids) {
-   $seen_id->{$oid}->{cmdline} ++;
+my $oid_pattern;
+my $oid_pattern_compiled;
+my $oid_pattern_with_tags;
+my $oid_pattern_with_tags_compiled;
+      
+sub update_oid_pattern {
+   $oid_pattern          = join("|", keys(%$seen_id));
+   $oid_pattern_compiled = qr/\b($oid_pattern)\b/;
+
+   $oid_pattern_with_tags          = "($oid_tags_piped)=($oid_pattern)";
+   $oid_pattern_with_tags_compiled = qr/\b$oid_pattern_with_tags\b/;
+
+   $verbose && print STDERR "updated oid_pattern=\\b($oid_pattern)\\b\n";
+   $verbose && print STDERR "updated oid_pattern_with_tags=\\b$oid_pattern_with_tags\\b\n";
+}
+
+
+if (@oids) {
+   # this pre-filter will speed up but will also filter out none fix-message lines
+   # therefore, i took it out from default
+   # if (!$match_pattern) {
+   #   $match_pattern = '35=';
+   #}
+
+   for my $oid (@oids) {
+      $seen_id->{$oid}->{cmdline} ++;
+   }
+
+   update_oid_pattern();
 }
    
 my $out_fh = get_out_fh($output);
@@ -216,9 +266,13 @@ if ($App) {
    # https://perldoc.perl.org/perlop.html#Regexp-Quote-Like-Operators
    # use qr// to precompile to speed up
    if (defined($cfg->{TimePattern})) {
-      $cfg->{TimePattern} = qr/$cfg->{TimePattern}/;
+      $cfg->{TimePattern_compiled} = qr/$cfg->{TimePattern}/;
    }
 }
+
+$verbose && print "cfg = ", Dumper($cfg);
+$verbose && print "\@assignments = ", Dumper(\@assignments);
+$verbose && print "\@timekeys = ",    Dumper(\@timekeys);
          
 if (defined $exclude_pattern) {
    $exclude_pattern = qr/$exclude_pattern/;
@@ -232,8 +286,9 @@ if (defined $startpattern) {
    $startpattern = qr/$startpattern/;
 };
          
+my $backpattern_compiled;
 if (defined $backpattern) {
-   $backpattern = qr/$backpattern/;
+   $backpattern_compiled = qr/$backpattern/;
 };
          
 my $pattern_by_tag;
@@ -337,7 +392,7 @@ $verbose && print "tag_will_capture ", Dumper($tag_will_capture);
 $verbose && print "test_tag_expressions ", Dumper(\@test_tag_expressions);
       
 my $error = 0;
-      
+
 for my $f (@ARGV) {
    my $prefix = @ARGV > 1 ? "$f:" : "";
       
@@ -372,37 +427,45 @@ for my $f (@ARGV) {
             if ($backseconds) {
                die "must specify -app AppName to parse timestamp" if !$App;
 
-               my $now_seconds = time();
+               my $now_seconds;
+               if ($fake_now) {
+                  $now_seconds = yyyymmddHHMMSS_to_epoc($fake_now); 
+               } else {
+                  $now_seconds = time();
+               }
+
                my $old_seconds = $now_seconds - $backseconds;
-      
-               my $r;
-      
                my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($old_seconds);
       
+               my $r;
                $r->{SS}   = sprintf("%02d", $sec);
                $r->{MM}   = sprintf("%02d", $min);
                $r->{HH}   = sprintf("%02d", $hour);
                $r->{yyyy} = sprintf("%04d", $year+1900);
                $r->{mm}   = sprintf("%02d", $mon+1);
                $r->{dd}   = sprintf("%02d", $mday);
+               $r->{d}    = sprintf("%d",   $mday);
+               $r->{Mmm}  = get_Mon_by_number($mon+1);
          
                $backstring = join("", @{$r}{@timekeys});
-               $backstring_criteria = "<=$backstring";
+               $backstring_criteria = "le $backstring";
             } elsif ($backtime) {
                die "must specify -app AppName to parse timestamp" if !$App;
 
-               my @a = ($backtime =~ /$cfg->{TimePattern}/);
+               my @a = ($backtime =~ /$cfg->{TimePattern_compiled}/);
       
-               next if ! @a;
+               die "backtime=$backtime not matching: /$cfg->{TimePattern}/\n" if !@a;
             
                my $r; # ref
                @{$r}{@assignments} = @a;
             
                $backstring = join("", @{$r}{@timekeys});
-               $backstring_criteria = "<='$backstring'";
+               $backstring_criteria = "le '$backstring'";
             } elsif ($backpattern) {
-               $backstring_criteria = "=~/$backpattern/";
+               $backstring_criteria = "=~ /$backpattern/";
             }
+
+            $verbose && print STDERR "backstring_criteria: $backstring_criteria\n";
             
             my $line_count = 0;
             my $pos;
@@ -415,7 +478,7 @@ for my $f (@ARGV) {
                $line_count ++;
             
                if ($front && $line_count >= $front) {
-                  print STDERR "total front=$front lines parsed. stop\n";
+                  $verbose && print STDERR "total front=$front lines parsed. stop\n";
                   last;
                }
             
@@ -443,14 +506,14 @@ for my $f (@ARGV) {
                
                next if defined   $match_pattern && $line !~ /$match_pattern/;
                
-               my @a = ($line =~ /$cfg->{TimePattern}/);
+               my @a = ($line =~ /$cfg->{TimePattern_compiled}/);
                
                next if ! @a;
                
                if ($backpattern) {
                   if ($line =~ /$backpattern/) {
                      $pos = $back->tell();
-                     print STDERR "backward found line: $line\n";
+                     $verbose && print STDERR "\nbackpattern=$backpattern found line: $line\n";
                      last;
                   }
                } elsif ($backstring) {
@@ -458,12 +521,13 @@ for my $f (@ARGV) {
 
                   my $r; # ref
                   @{$r}{@assignments} = @a;
+
+                  $timestring = join("", @{$r}{@timekeys});
                
-                  $timestring - join("", @{$r}{@timekeys});
-               
-                  if ($timestring <= $backstring) {
+                  $verbose>=2 && print STDERR "check backward: $timestring le $backstring ?\n";
+                  if ($timestring le $backstring) {
                      $pos = $back->tell();
-                     print STDERR "\nbackward found line: $timestring <= $backstring\n$line\n";
+                     $verbose && print STDERR "\nbackward found line: $timestring le $backstring\n$line\n";
                      last;
                   }
                }
@@ -476,7 +540,7 @@ for my $f (@ARGV) {
                
                $last_time = $now;
    
-               print STDERR "total $line_count lines are processed backwards in $seconds seconds\n";
+               $verbose && print STDERR "total $line_count lines are processed backwards in $seconds seconds\n";
             }
                
             if ($backstring_criteria && !defined $pos) {
@@ -502,9 +566,8 @@ for my $f (@ARGV) {
                   # die "must specify -app AppName to parse timestamp" if !$App;
                   die "must specify -app AppName to parse timestamp" if !$cfg;
 
-                  my @a = ($starttime =~ /$cfg->{TimePattern}/);
-
-                  next if ! @a;
+                  my @a = ($starttime =~ /$cfg->{TimePattern_compiled}/);
+                  die "starttime='$starttime' not matching: $cfg->{TimePattern}" if !@a;
             
                   my $r; # ref
                   @{$r}{@assignments} = @a;
@@ -514,6 +577,7 @@ for my $f (@ARGV) {
                } elsif ($startpattern) {
                   $startstring_criteria = "=~/$startpattern/";
                }
+               $verbose && print "startstring_criteria: >='$startstring'\n";
             
                my $line_count = 0;
                my $pos = 0;
@@ -529,7 +593,7 @@ for my $f (@ARGV) {
                   $line_count ++;
             
                   if ($front && $line_count >= $front) {
-                     print STDERR "total front=$front lines parsed. stop\n";
+                     $verbose && print STDERR "total front=$front lines parsed. stop\n";
                      last;
                   }
                   
@@ -555,7 +619,7 @@ for my $f (@ARGV) {
                   
                   if ($App) {
                      # we need to parse timestamp
-                     my @a = ($line =~ /$cfg->{TimePattern}/);
+                     my @a = ($line =~ /$cfg->{TimePattern_compiled}/);
                   
                      next if ! @a;
                   
@@ -567,13 +631,14 @@ for my $f (@ARGV) {
                   
                   if ($startpattern) {
                      if ($line =~ /$startpattern/) {
-                        print STDERR "\nfound start line: $line\n";
+                        $verbose && print STDERR "\nfound start line: $line\n";
                         $found_position = 1;
                         last;
                      }
                   } elsif ($startstring) {
-                     if ($timestring >= $startstring) {
-                        print STDERR "\nfound start line: $timestring >= $startstring\n$line\n";
+                     $verbose >= 2 && print STDERR "check beginning: $timestring gt $startstring ?\n";
+                     if ($timestring gt $startstring) {
+                        $verbose && print STDERR "\nfound start line: $timestring gt $startstring\n$line\n";
                         $found_position = 1;
                         last;
                      }
@@ -589,13 +654,13 @@ for my $f (@ARGV) {
 
                   $last_time = $now;
                   
-                  print STDERR "total $line_count lines are processed in $seconds seconds\n";
+                  $verbose && print STDERR "total $line_count lines are processed in $seconds seconds\n";
                }
                   
                if ($found_position) {
                   seek($fh, $pos, 0); # move to previous line
                } else {
-                  print STDERR "WARN: cannot find the start position using $startstring_criteria in $f. skipped the file\n";
+                  print STDERR "WARN: cannot find start position using $startstring_criteria in $f. skipped the file\n";
                   next;
                }
             }
@@ -609,8 +674,8 @@ for my $f (@ARGV) {
    if ($endtime) {
       die "must specify -app AppName to parse timestamp" if !$App;
 
-      my @a = ($endtime =~ /$cfg->{TimePattern}/);
-      next if ! @a;
+      my @a = ($endtime =~ /$cfg->{TimePattern_compiled}/);
+      die "endtime='$endtime' not matching: $cfg->{TimePattern}" if !@a;
       
       my $r; # ref
       @{$r}{@assignments} = @a;
@@ -632,8 +697,7 @@ for my $f (@ARGV) {
       $line_count ++;
       
       if ($front && $line_count >= $front) {
-      
-         print STDERR "total front=$front lines parsed. stop\n"; last;
+         $verbose && print STDERR "total front=$front lines parsed. stop\n"; last;
       }
          
       if ($progress) {
@@ -659,7 +723,7 @@ for my $f (@ARGV) {
       my $r; # ref
       if ($App) {
          # we need to parse timestamp
-         my @a = ($line =~ /$cfg->{TimePattern}/);
+         my @a = ($line =~ /$cfg->{TimePattern_compiled}/);
          
          next if ! @a;
          
@@ -667,9 +731,9 @@ for my $f (@ARGV) {
          
          if ($endtime) {
             my $timestring = join("", @{$r}{@timekeys});
-            
-            if ($timestring > $endstring) {
-               print STDERR "\nmatched endtime line: $timestring > $endstring\n$line\n";
+            $verbose>=2 && print STDERR "check end: $timestring gt $endstring ?\n";
+            if ("$timestring" gt "$endstring") {
+               $verbose && print STDERR "\nmatched endtime line: $timestring gt $endstring\n$line\n";
                last;
             }
          }
@@ -681,38 +745,42 @@ for my $f (@ARGV) {
          push @grepped, $line;
       }
          
-      $print && print {$out_fh} "$line\n";
+      if (! $seen_id) {
+         # when tracing order, $seen_id is defined, we will decide whether to print later
+         $print && print {$out_fh} "$line\n";
+      }
          
       if ($seen_id) {
-         my @ids = keys %$seen_id;
-         
-         my $pattern = join("|", @ids);
-         
-         if ($line =~ /\b(11|41|17|37) = ($pattern)\b/) {
+         if ($line =~ /$oid_pattern_with_tags_compiled/) {
             my $tag = $1;
             my $val = $2;
          
-            print "matched $tag=$val: $line\n";
+            $verbose && print STDERR "matched $tag=$val: $line\n";
          
             my $v_by_k = parse_fix_message($line);
-
-            for my $k (qw(11 41 17 37)) {
+            my $need_update_pattern;
+            for my $k (@oid_tags) {
                my $v = $v_by_k->{$k};
          
                next if !defined $v || !"$v";
          
                if (!$seen_id->{$v}->{$k}) {
-                  $seen_id->{$v}->{$k}++;
-
-                  print "new link: $tag=$val => $k=$v\n";
-         
-                  print "seen_id = ", Dumper($seen_id);
-               } else {
-                  $seen_id->{$v}->{$k}++;
+                  $verbose && print STDERR "new link: $tag=$val => $k=$v\n";
+                  $need_update_pattern ++; 
                }
+               $seen_id->{$v}->{$k}++;
             }
-         } elsif ($line =~ /\b($pattern)\b/) {
-            print "matched pattern=$1: $line\n";
+
+            if ($need_update_pattern) {
+               $verbose && print STDERR "updated seen_id = ", Dumper($seen_id);
+               update_oid_pattern();
+            }
+
+            # we haven't printed this line. print now
+            $print && print {$out_fh} "$line\n";
+         } elsif ($line =~ /$oid_pattern_compiled/) {
+            $verbose && print STDERR "matched pattern=$1: $line\n";
+            $print && print {$out_fh} "$line\n";
          }
       }
          
@@ -775,7 +843,7 @@ for my $f (@ARGV) {
          
       my $seconds = $now - $start_time;
          
-      print STDERR "total $line_count lines are processed forwards in $seconds seconds\n";
+      $verbose && print STDERR "total $line_count lines are processed forwards in $seconds seconds\n";
    }
          
    $verbose && print "\%time = ", Dumper(\%time);
@@ -835,8 +903,8 @@ for my $f (@ARGV) {
 exit 0 if $geneos;
       
 if ($error) {
-   print "ERROR: Total $error ERRORS.\n";
+   $verbose && print STDERR "ERROR: Total $error ERRORS.\n";
 } else {
-   print "OK: All Good.\n";
+   $verbose && print STDERR "OK: All Good.\n";
 }
 exit 0;

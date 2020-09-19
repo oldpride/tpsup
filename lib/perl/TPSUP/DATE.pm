@@ -12,12 +12,27 @@ our @EXPORT_OK = qw(
    get_mm_by_Mon
    convert_from_yyyymmdd
    date2any
+   yyyymmddHHMMSS_to_epoc
 );
 
 use Carp;
 use Data::Dumper;
 use TPSUP::CSV qw(parse_csv_file);
 use Time::Local;
+
+
+sub yyyymmddHHMMSS_to_epoc {
+   my ($yyyymmddHHMMSS, $opt) = @_;
+
+   if ("$yyyymmddHHMMSS" =~ /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/) {
+      my ($yyyy, $mm, $dd, $HH, $MM, $SS) = ($1, $2, $3, $4, $5, $6); 
+
+      return timelocal($SS, $MM, $HH, $dd, $mm-1, $yyyy);
+   } else {
+      die "yyyymmddHHMMSS='$yyyymmddHHMMSS', bad format";
+   }
+}
+
 
 my $exists_by_exch_holiday;
 

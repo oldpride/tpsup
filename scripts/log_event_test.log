@@ -1,15 +1,28 @@
 Sep 18 07:15:01 linux1 CRON[9571]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 07:15:02 testapp [9571]: testapp started, config = /tmp/dummy.conf
 Sep 18 07:17:01 linux1 CRON[9576]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
+Sep 18 07:17:02 testapp [9571]: testapp crashed
 Sep 18 07:25:01 linux1 CRON[9586]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 08:16:04 linux1 fixengine: [211233.611229] 35=D;11=USABC999-1;44=1999.99;38=100;55=IBM.N;54=1
+Sep 18 08:16:04 linux1 fixengine: [211233.611229] 35=8;11=USABC999-1;
 Sep 18 08:16:05 linux1 kernel: [211233.611229] perf: interrupt took too long (2543 > 2500), lowering kernel.perf_event_max_sample_rate to 78500
+Sep 18 08:16:06 testapp [9571]: testapp started, config = /tmp/dummy.conf
 Sep 18 08:17:01 linux1 CRON[9642]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
 Sep 18 08:25:01 linux1 CRON[9652]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 08:16:06 testapp [9571]: testapp reading from /dev/null
+Sep 18 08:16:35 testapp [9571]: testapp running sql/positions.sql
 Sep 18 09:17:01 linux1 CRON[9709]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
 Sep 18 09:25:01 linux1 CRON[9719]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 09:26:35 testapp [9571]: testapp entered state=DONE
 Sep 18 09:35:01 linux1 CRON[9728]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 09:35:02 linux1 fixengine: [211233.611229] 35=G;11=USABC999-2;41=USABC999-1;38=200;
+Sep 18 09:35:02 linux1 fixengine: [211233.611229] 35=8;11=USABC999-2;41=USABC999-1;38=200;
 Sep 18 09:35:48 linux1 systemd-timesyncd[757]: Network configuration changed, trying to establish connection.
 Sep 18 09:35:48 linux1 systemd-timesyncd[757]: Synchronized to time server 91.189.91.157:123 (ntp.ubuntu.com).
 Sep 18 09:45:01 linux1 CRON[9741]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 09:45:02 linux1 fixengine: [211233.611229] 35=F;11=USABC999-2;
+Sep 18 09:45:03 linux1 fixengine: [211233.611229] 35=8;11=USABC999-2;
+Sep 18 09:45:03 linux1 fixengine: [211233.611229] processed order USABC999-2
 Sep 18 10:06:26 linux1 snapd[2402]: storehelpers.go:438: cannot refresh: snap has no updates available: "android-studio", "core", "core18", "docker", "pycharm-community", "shellcheck", "tree"
 Sep 18 10:06:26 linux1 snapd[2402]: autorefresh.go:410: auto-refresh: all snaps are up-to-date
 Sep 18 10:15:01 linux1 CRON[9773]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
