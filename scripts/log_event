@@ -92,6 +92,8 @@ description:
    -output output.txt             default to stdout
 
    -v                             verbose. -v -v will increase verbose
+
+   -onError action                default is 'exit'. can also choose 'continue'
    
 examples:
    
@@ -99,50 +101,50 @@ examples:
    $prog -app syslog \\
    -event "begin=testapp started, config =" \\
    -event "feeds=reading from /dev/null" \\
-   -event "position=running sql/positions.sql" \\
+   -event "runsql=running sql/positions.sql" \\
    -event "complete=entered state=(.+?)\\\\b" \\
    -reset begin \\
    -halt complete \\
    -test has_begun='defined(\$time{begin}[0])' \\
    -test has_got_feeds='defined(\$time{feeds}[0])' \\
-   -test has_run_positions_sql='defined(\$time{position}[0])' \\
+   -test has_run_sql='defined(\$time{runsql}[0])' \\
    -test has_completed='defined(\$time{complete}[0])' \\
    -test got_feeds_before_complete='\$time{feeds}[0] lt \$time{complete}[0]' \\
-   -test got_postion_before_complete='\$time{position}[0] lt \$time{complete}[0]' \\
+   -test got_postion_before_complete='\$time{runsql}[0] lt \$time{complete}[0]' \\
    -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
    log_event_test.log
 
    OK: PASSED: has_begun defined(\$time{begin}[0]) => defined(Sep18081606)
    OK: PASSED: has_got_feeds defined(\$time{feeds}[0]) => defined(Sep18081606)
-   OK: PASSED: has_run_positions_sql defined(\$time{position}[0]) => defined(Sep18081635)
+   OK: PASSED: has_run_sql defined(\$time{runsql}[0]) => defined(Sep18081635)
    OK: PASSED: has_completed defined(\$time{complete}[0]) => defined(Sep18092635)
    OK: PASSED: got_feeds_before_complete \$time{feeds}[0] lt \$time{complete}[0] => Sep18081606 lt Sep18092635
-   OK: PASSED: got_postion_before_complete \$time{position}[0] lt \$time{complete}[0] => Sep18081635 lt Sep18092635
+   OK: PASSED: got_postion_before_complete \$time{runsql}[0] lt \$time{complete}[0] => Sep18081635 lt Sep18092635
    OK: PASSED: complete_status_is_DONE \$value{complete}[0][0] eq "DONE" => DONE eq "DONE"
 
    - row-based test, in case row is not timestamped. this should be faster than time-based.
    $prog \\
    -event "begin=testapp started, config =" \\
    -event "feeds=reading from /dev/null" \\
-   -event "position=running sql/positions.sql" \\
+   -event "runsql=running sql/positions.sql" \\
    -event "complete=entered state=(.+?)\\\\b" \\
    -reset begin \\
    -halt complete \\
    -test has_begun='defined(\$row{begin}[0])' \\
    -test has_got_feeds='defined(\$row{feeds}[0])' \\
-   -test has_run_positions_sql='defined(\$row{position}[0])' \\
+   -test has_run_sql='defined(\$row{runsql}[0])' \\
    -test has_completed='defined(\$row{complete}[0])' \\
    -test got_feeds_before_complete='\$row{feeds}[0] < \$row{complete}[0]' \\
-   -test got_postion_before_complete='\$row{position}[0] < \$row{complete}[0]' \\
+   -test got_postion_before_complete='\$row{runsql}[0] < \$row{complete}[0]' \\
    -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
    log_event_test.log
 
    OK: PASSED: has_begun defined(\$row{begin}[0]) => defined(2)
    OK: PASSED: has_got_feeds defined(\$row{feeds}[0]) => defined(12)
-   OK: PASSED: has_run_positions_sql defined(\$row{position}[0]) => defined(13)
+   OK: PASSED: has_run_sql defined(\$row{position}[0]) => defined(13)
    OK: PASSED: has_completed defined(\$row{complete}[0]) => defined(16)
    OK: PASSED: got_feeds_before_complete \$row{feeds}[0] < \$row{complete}[0] => 12 < 16
-   OK: PASSED: got_postion_before_complete \$row{position}[0] < \$row{complete}[0] => 13 < 16
+   OK: PASSED: got_postion_before_complete \$row{runsql}[0] < \$row{complete}[0] => 13 < 16
    OK: PASSED: complete_status_is_DONE \$value{complete}[0][0] eq "DONE" => DONE eq "DONE"
 
    - grep the state of the last start
@@ -199,6 +201,7 @@ my $front;
 my @oids;
 my $output;
 my $fake_now;
+my $onError = 'exit';
    
 GetOptions(
    "x=s" => \$exclude_pattern,
@@ -232,6 +235,7 @@ GetOptions(
    "oid=s"=> \@oids,
    "output=s"=> \$output,
    "now=s"=> \$fake_now,
+   "onError=s"=> \$onError,
 ) or usage("Could not parse command line: $!");
    
 usage("wrong number of args") if !@ARGV;
@@ -928,8 +932,14 @@ for my $f (@ARGV) {
    
       my $compiled = eval "$warn warnings; no strict; sub { $expression } ";
       if ($@) { 
-         print "ERROR: Bad expression '$expression': $@\n";
-         $error ++;
+         if ($geneos) {
+            $index ++;
+            print "$index,FAIL,$test_tag,$expression,Bad expression";
+         } else {
+            print "${prefix}ERROR: $test_tag, $expression,Bad expression: $@\n";
+            $error ++;
+         }
+         last if $onError eq 'exit';
       }
    
       if ($compiled->()) {
@@ -939,6 +949,7 @@ for my $f (@ARGV) {
          } else {
             print "${prefix}OK: PASSED: $test_tag $expression => ";
          }
+         eval "no warnings; print qq($expression), \"\\n\"";
       } else {
          if ($geneos) {
             $index ++;
@@ -947,9 +958,9 @@ for my $f (@ARGV) {
             print "${prefix}ERROR: FAILED: $test_tag $expression => ";
             $error ++;
          }
+         eval "no warnings; print qq($expression), \"\\n\"";
+         last if $onError eq 'exit';
       }
-      
-      eval "no warnings; print qq($expression), \"\\n\"";
    }
       
    if ($grep) {
