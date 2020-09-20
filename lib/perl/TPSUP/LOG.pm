@@ -127,8 +127,9 @@ sub itemize_log {
       $exclude_pattern = qr/$opt->{ExcludePattern}/;
    }
 
-   my $max_len   = $opt->{MaxLen}   ? $opt->{MaxLen}   : 64000;
-   my $max_count = $opt->{MaxCount};
+   my $maxlen     = $opt->{MaxLen}     ? $opt->{MaxLen}     : 64000;
+   my $maxcount   = $opt->{MaxCount};
+   my $warnMaxlen = $opt->{warnMaxlen} ? $opt->{WarnMaxlen} : 0;
 
    my $ifh = get_in_fh($input, $opt);
    return undef if !$ifh;
@@ -145,7 +146,7 @@ sub itemize_log {
       }
 
       while ( defined($line = <$ifh>) ) {
-         last if $max_count && $item_count >= $max_count;
+         last if $maxcount && $item_count >= $maxcount;
          
          if ($line =~ /$start_pattern/) {
             # this is a starting line. if we already have an $item, we return the 
@@ -160,6 +161,7 @@ sub itemize_log {
                   $item = $line;
                   next;
                }
+
                $item_count ++;
                return $item; 
             }
@@ -169,15 +171,29 @@ sub itemize_log {
          $item .= $line;
          my $length = length($item);
 
-         if ($length > $max_len) {
-            carp "line is unexpected long, already ($length) over limit ($max_len); returned this much. ";
+         if ($length > $maxlen) {
+            if ($warnMaxlen) {
+               carp "item size ($length) over limit ($maxlen); returned this much.";
+            }
+
+            # undef $line before skipping or returning the item
+            # this will undef $item in the next call also
+            undef $line;
+
+            if ( (  $match_pattern && $item !~   /$match_pattern/) || 
+               ($exclude_pattern && $item =~ /$exclude_pattern/) ){
+               # throw away the current complete item.
+               next;
+            }
+
+            $item_count ++;
             return $item;
          }
       }
       
       close($ifh) if $ifh != \*STDIN;
 
-      if (!$max_count || $item_count < $max_count) {
+      if (!$maxcount || $item_count < $maxcount) {
             if (defined $item) {
                # this is not the first line
 
