@@ -72,9 +72,9 @@ for my $input (@ARGV) {
                                                          WarnMaxlen  =>$warnMaxlen,
                                                       });
 
-   my $prefix = $prefixLogName ? $input : "";
+   my $prefix = $prefixLogName ? "$input:" : "";
 
    while(defined(my $item = $iterator->())) {
-      print "$prefix:$item";
+      print "${prefix}${item}";
    }
 }
