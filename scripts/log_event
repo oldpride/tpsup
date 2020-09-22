@@ -50,8 +50,12 @@ description:
    -event tag=pattern             define event tag to specify a chain of events, in order.
                                   can define multiple times
    
-   -test testname=expression      Perl expression
+   -test test=expression
+   -test test:attr1,attr2=expression
+                                  Perl expression
                                   can define multiple times
+                                  'attr' are attributes of the test. 
+                                      'continue' means to continue if failed. default to exit.
    
    -reset tag                     clear all events after matched these tag's patterns happend.
                                   can define multiple times
@@ -98,8 +102,6 @@ description:
 
    -v                             verbose. -v -v will increase verbose
 
-   -onError action                default is 'exit'. can also choose 'continue'
-   
 examples:
    
    - timestamp-based test
@@ -114,8 +116,8 @@ examples:
    -test has_got_feeds='defined(\$time{feeds}[0])' \\
    -test has_run_sql='defined(\$time{runsql}[0])' \\
    -test has_completed='defined(\$time{complete}[0])' \\
-   -test got_feeds_before_complete='\$time{feeds}[0] lt \$time{complete}[0]' \\
-   -test got_postion_before_complete='\$time{runsql}[0] lt \$time{complete}[0]' \\
+   -test got_feeds_before_complete:continue='\$time{feeds}[0] lt \$time{complete}[0]' \\
+   -test got_postion_before_complete:continue='\$time{runsql}[0] lt \$time{complete}[0]' \\
    -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
    log_event_test.log
 
@@ -139,8 +141,8 @@ examples:
    -test has_got_feeds='defined(\$row{feeds}[0])' \\
    -test has_run_sql='defined(\$row{runsql}[0])' \\
    -test has_completed='defined(\$row{complete}[0])' \\
-   -test got_feeds_before_complete='\$row{feeds}[0] < \$row{complete}[0]' \\
-   -test got_postion_before_complete='\$row{runsql}[0] < \$row{complete}[0]' \\
+   -test got_feeds_before_complete:continue='\$row{feeds}[0] < \$row{complete}[0]' \\
+   -test got_postion_before_complete:contine='\$row{runsql}[0] < \$row{complete}[0]' \\
    -test complete_status_is_DONE='\$value{complete}[0][0] eq "DONE"' \\
    log_event_test.log
 
@@ -209,7 +211,6 @@ my $front;
 my @oids;
 my $output;
 my $fake_now;
-my $onError = 'exit';
 my $plan;
    
 GetOptions(
@@ -244,7 +245,6 @@ GetOptions(
    "oid=s"=> \@oids,
    "output=s"=> \$output,
    "now=s"=> \$fake_now,
-   "onError=s"=> \$onError,
    "plan=s"=> \$plan,
 ) or usage("Could not parse command line: $!");
    
@@ -340,13 +340,15 @@ if (defined $backpattern) {
 };
 
 my $array_by_directive;
-my $to_be_continued;
 if ($plan) {
    my $fh = get_in_fh($plan);
+
+   my $to_be_continued;
    while (my $line = <$fh>) {
        chomp $line;
        if ($to_be_continued) {
           if ($line =~ /^(.*)\\$/) {
+             # \ at the end of line means to continue to the next line
              $array_by_directive->{$to_be_continued}->[-1] .= "$1\n";
           } else {
              $array_by_directive->{$to_be_continued}->[-1] .= $line;
@@ -356,6 +358,7 @@ if ($plan) {
           my ($directive, $detail) = ($1, $2);
 
           if ($detail =~ /^(.*)\\$/) {
+             # \ at the end of line means to continue to the next line
              push @{$array_by_directive->{$directive}}, "$1\n";
              $to_be_continued = $directive;
           } else {
@@ -369,15 +372,15 @@ if ($plan) {
        }
    }
    close $fh;
+
+   $verbose && print "array_by_directive = \n", Dumper($array_by_directive);
+
+   push @events, exists $array_by_directive->{event} ? @{$array_by_directive->{event}} : ();
+   push @tests,  exists $array_by_directive->{test}  ? @{$array_by_directive->{test}}  : ();
+   push @resets, exists $array_by_directive->{reset} ? @{$array_by_directive->{reset}} : ();
+   push @halts,  exists $array_by_directive->{halt}  ? @{$array_by_directive->{halt}}  : ();
+   push @exits,  exists $array_by_directive->{exit}  ? @{$array_by_directive->{exit}}  : ();
 }
-
-$verbose && print "array_by_directive = \n", Dumper($array_by_directive);
-
-my @events = exists $array_by_directive->{event} ? @{$array_by_directive->{event}} : ();
-my @tests  = exists $array_by_directive->{test}  ? @{$array_by_directive->{test}}  : ();
-my @resets = exists $array_by_directive->{reset} ? @{$array_by_directive->{reset}} : ();
-my @halts  = exists $array_by_directive->{halt}  ? @{$array_by_directive->{halt}}  : ();
-my @exits  = exists $array_by_directive->{exit}  ? @{$array_by_directive->{exit}}  : ();
          
 my          $pattern_by_tag;
 my $compiled_pattern_by_tag;
@@ -432,13 +435,23 @@ my $tag_will_capture;
 my @test_tag_expressions;
       
 for my $test (@tests) {
-   my ($test_tag, $expression);
+   my ($front, $expression);
       
    if ($test =~ /^(.+?)=(.+)/s ) {
       # multiline regex match
-      ($test_tag, $expression) = ($1, $2);
+      ($front, $expression) = ($1, $2);
    } else {
       croak "test='$test' bad format";
+   }
+
+   my ($test_tag, $attrString) = split /:/, $front;
+
+   my $has_attr = {};
+   if ($attrString) {
+      my @a = split /,/, $attrString;
+      for my $e (@a) {
+         $has_attr->{$e} = 1;
+      }
    }
       
    while ($expression =~ /\$value\{(.+?)\}/g) {
@@ -449,7 +462,7 @@ for my $test (@tests) {
       $tag_will_capture->{$event_tag} ++;
    }
       
-   push @test_tag_expressions, [ $test_tag, $expression ];
+   push @test_tag_expressions, [ $test_tag, $expression, $has_attr ];
 }
       
 $verbose && print "tag_will_capture ", Dumper($tag_will_capture);
@@ -953,7 +966,7 @@ for my $f (@ARGV) {
    }
    
    for my $r (@test_tag_expressions) {
-      my ($test_tag, $expression) = @$r;
+      my ($test_tag, $expression, $attr) = @$r;
    
       my $compiled = eval "$warn warnings; no strict; sub { $expression } ";
       if ($@) { 
@@ -964,7 +977,7 @@ for my $f (@ARGV) {
             print "${prefix}ERROR: $test_tag, $expression,Bad expression: $@\n";
             $error ++;
          }
-         last if $onError eq 'exit';
+         last if !$attr->{continue};
       }
    
       if ($compiled->()) {
@@ -984,7 +997,7 @@ for my $f (@ARGV) {
             $error ++;
          }
          eval "no warnings; print qq($expression), \"\\n\"";
-         last if $onError eq 'exit';
+         last if !$attr->{continue};
       }
    }
       
