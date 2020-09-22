@@ -119,12 +119,12 @@ sub itemize_log {
 
    my $match_pattern;
    if ($opt->{MatchPattern}) {
-      $match_pattern = qr/$opt->{MatchPattern}/;
+      $match_pattern = qr/$opt->{MatchPattern}/s;  # 's' for multiline regex
    }
 
    my $exclude_pattern;
    if ($opt->{ExcludePattern}) {
-      $exclude_pattern = qr/$opt->{ExcludePattern}/;
+      $exclude_pattern = qr/$opt->{ExcludePattern}/s;  # 's' for multiline regex
    }
 
    my $maxlen     = $opt->{MaxLen}     ? $opt->{MaxLen}     : 64000;
