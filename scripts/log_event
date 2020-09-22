@@ -8,7 +8,7 @@ use Getopt::Long;
 use TPSUP::DATE qw(get_interval_seconds);
 use TPSUP::LOG qw(get_PatternCfg);
 use TPSUP::FIX qw(parse_fix_message);
-use TPSUP::UTIL qw(get_out_fh);
+use TPSUP::UTIL qw(get_out_fh get_in_fh);
 use TPSUP::DATE qw(get_Mon_by_number yyyymmddHHMMSS_to_epoc);
 
 my $prog = $0; $prog =~ s:.*/::;
@@ -47,15 +47,20 @@ description:
    -k TimeKey                     default is in $dir/log_pattern.csv. use ',' as separator.
                                   eg, -k HH,MM,SS
    
-   -event tag=pattern             define event tag. can define multiple times to specify a chain of events, in order.
+   -event tag=pattern             define event tag to specify a chain of events, in order.
+                                  can define multiple times
    
    -test testname=expression      Perl expression
+                                  can define multiple times
    
-   -reset tagl,tag2               clear all events after matched these tags' patterns happend.
+   -reset tag                     clear all events after matched these tag's patterns happend.
+                                  can define multiple times
    
-   -halt tagl,tag2                stop parsing after matched these tags' patterns, until reset matched.
+   -halt tag                      stop parsing after matched these tag's pattern, until reset.
+                                  can define multiple times
 
-   -exit tagl,tag2                exit parsing after matched these tags' patterns happend.
+   -exit tag                      exit parsing after matched these tag's pattern happend.
+                                  can define multiple times
    
    -geneos                        output into geneos-friendly csv format
    
@@ -147,6 +152,9 @@ examples:
    OK: PASSED: got_postion_before_complete \$row{runsql}[0] < \$row{complete}[0] => 13 < 16
    OK: PASSED: complete_status_is_DONE \$value{complete}[0][0] eq "DONE" => DONE eq "DONE"
 
+   - put the test detail in a plan file
+   $prog -app syslog -plan log_event_test_plan.txt log_event_test.log
+
    - grep the state of the last start
    $prog \\
       -event "begin=testapp started, config =" -reset begin \\
@@ -182,9 +190,9 @@ our ($exclude_pattern, $match_pattern, $App, $pattern_file, $TimePattern, $Assig
 my $verbose = 0;
 my @events;
 my @tests;
-my $resetString;
-my $exitString;
-my $haltString;
+my @resets;
+my @exits;
+my @halts;
 my $geneos;
 my $progress;
 my $tail;
@@ -202,6 +210,7 @@ my @oids;
 my $output;
 my $fake_now;
 my $onError = 'exit';
+my $plan;
    
 GetOptions(
    "x=s" => \$exclude_pattern,
@@ -215,9 +224,9 @@ GetOptions(
    "k=s" => \$TimeKey,
    "event=s"=> \@events,
    "test=s" => \@tests,
-   "reset=s"=> \$resetString,
-   "exit=s" => \$exitString,
-   "halt=s" => \$haltString,
+   "reset=s"=> \@resets,
+   "exit=s" => \@exits,
+   "halt=s" => \@halts,
    "g|geneos" => \$geneos,
    "progress=s" => \$progress,
    "tail=s" => \$tail,
@@ -236,6 +245,7 @@ GetOptions(
    "output=s"=> \$output,
    "now=s"=> \$fake_now,
    "onError=s"=> \$onError,
+   "plan=s"=> \$plan,
 ) or usage("Could not parse command line: $!");
    
 usage("wrong number of args") if !@ARGV;
@@ -263,7 +273,6 @@ sub update_oid_pattern {
    $verbose && print STDERR "updated oid_pattern_with_tags=\\b$oid_pattern_with_tags\\b\n";
 }
 
-
 if (@oids) {
    # this pre-filter will speed up but will also filter out none fix-message lines
    # therefore, i took it out from default
@@ -280,7 +289,7 @@ if (@oids) {
    
 my $out_fh = get_out_fh($output);
    
-die "no events defined" if !@events && !$print && !$grep && !$grepv && !@oids;
+die "no events defined" if !@events && !$print && !$grep && !$grepv && !@oids && !$plan;
 
 my  $grep_compiled = qr/$grep/;
 my $grepv_compiled = qr/$grepv/;
@@ -329,11 +338,52 @@ my $backpattern_compiled;
 if (defined $backpattern) {
    $backpattern_compiled = qr/$backpattern/;
 };
+
+my $array_by_directive;
+my $to_be_continued;
+if ($plan) {
+   my $fh = get_in_fh($plan);
+   while (my $line = <$fh>) {
+       chomp $line;
+       if ($to_be_continued) {
+          if ($line =~ /^(.*)\\$/) {
+             $array_by_directive->{$to_be_continued}->[-1] .= "$1\n";
+          } else {
+             $array_by_directive->{$to_be_continued}->[-1] .= $line;
+             $to_be_continued = undef;
+          }
+       } elsif ($line =~ /^\s*(event|test|reset|halt|exit)\s+(\S+.*)/) {
+          my ($directive, $detail) = ($1, $2);
+
+          if ($detail =~ /^(.*)\\$/) {
+             push @{$array_by_directive->{$directive}}, "$1\n";
+             $to_be_continued = $directive;
+          } else {
+             push @{$array_by_directive->{$directive}}, $detail;
+          }
+       } elsif ($line =~ /^\s*#|^\s*$/) {
+          # skip comment and blank lines
+          next;
+       } else {
+          die "failed to parse plan $plan at: $line\n";
+       }
+   }
+   close $fh;
+}
+
+$verbose && print "array_by_directive = \n", Dumper($array_by_directive);
+
+my @events = exists $array_by_directive->{event} ? @{$array_by_directive->{event}} : ();
+my @tests  = exists $array_by_directive->{test}  ? @{$array_by_directive->{test}}  : ();
+my @resets = exists $array_by_directive->{reset} ? @{$array_by_directive->{reset}} : ();
+my @halts  = exists $array_by_directive->{halt}  ? @{$array_by_directive->{halt}}  : ();
+my @exits  = exists $array_by_directive->{exit}  ? @{$array_by_directive->{exit}}  : ();
          
 my          $pattern_by_tag;
 my $compiled_pattern_by_tag;
 for my $e (@events) {
-   if ($e =~ /^(.+?)=(.+)/ ) {
+   if ($e =~ /^(.+?)=(.+)/s ) {
+      # multiline regex match
       my ($tag, $pattern) = ($1, $2);
          
       croak "tag='$tag' shows up multiple times in -event" if exists $pattern_by_tag->{$tag};
@@ -347,61 +397,35 @@ for my $e (@events) {
          
 my @tags = sort(keys(%$pattern_by_tag));
          
-my @resets;
 my $is_reset_tag;
-{
-   if ($resetString) {
-      @resets = split /,/, $resetString;
-   }
-         
-   for my $t (@resets) {
-      croak "'$t' in -reset '$resetString' is not defined in -event" if ! exists $pattern_by_tag->{$t};
-      $is_reset_tag->{$t} ++;
-   }
+for my $t (@resets) {
+   croak "'$t' in -reset '$t' is not defined in -event"
+       if ! exists $pattern_by_tag->{$t};
+   $is_reset_tag->{$t} ++;
 }
-         
 $verbose && print "is_reset_tag = ", Dumper($is_reset_tag);
          
-my @exits;
 my $is_exit_tag;
-{
-   if ($exitString) {
-      @exits = split /,/, $exitString;
-   }
-         
-   for my $t (@exits) {
-      croak "'$t' in -exit '$exitString' is not defined in -event" if ! exists $pattern_by_tag->{$t};
-      $is_exit_tag->{$t} ++;
-   }
+for my $t (@exits) {
+   croak "'$t' in -exit '$t' is not defined in -event"
+      if ! exists $pattern_by_tag->{$t};
+   $is_exit_tag->{$t} ++;
 }
-         
 $verbose && print "is_exit_tag = ", Dumper($is_exit_tag);
 
-my @halts;
 my $is_halt_tag;
-{
-   if ($haltString) {
-      @halts = split /,/, $haltString;
-   }
-      
-   for my $t (@halts) {
-      croak "'$t' in -halt '$haltString' is not defined in -event" if ! exists $pattern_by_tag->{$t};
-      $is_halt_tag->{$t} ++;
-   }
+for my $t (@halts) {
+   croak "'$t' in -halt '$t' is not defined in -event"
+      if ! exists $pattern_by_tag->{$t};
+   $is_halt_tag->{$t} ++;
 }
-      
 $verbose && print "is_halt_tag = ", Dumper($is_halt_tag);
 
-my @on_halts;
-{
-   my $check_tag_during_on_halt;
-   for my $t ((@resets,@exits)) {
-      $check_tag_during_on_halt->{$t} ++;
-   }
-      
-   @on_halts = sort(keys %$check_tag_during_on_halt);
+my $check_tag_during_on_halt = {};
+for my $t ((@resets,@exits)) {
+   $check_tag_during_on_halt->{$t} ++;
 }
-      
+my @on_halts = sort(keys %$check_tag_during_on_halt);
 $verbose && print "\@on_halts = ", Dumper(\@on_halts);
       
 my $tag_will_capture;
@@ -410,7 +434,8 @@ my @test_tag_expressions;
 for my $test (@tests) {
    my ($test_tag, $expression);
       
-   if ($test =~ /^(.+?)=(.+)/ ) {
+   if ($test =~ /^(.+?)=(.+)/s ) {
+      # multiline regex match
       ($test_tag, $expression) = ($1, $2);
    } else {
       croak "test='$test' bad format";
