@@ -13,6 +13,7 @@ our @EXPORT_OK = qw(
    convert_from_yyyymmdd
    date2any
    yyyymmddHHMMSS_to_epoc
+   get_timezone_offset
 );
 
 use Carp;
@@ -20,6 +21,17 @@ use Data::Dumper;
 use TPSUP::CSV qw(parse_csv_file);
 use Time::Local;
 
+sub get_timezone_offset {
+   my ($opt) = @_;
+
+   # use Time::Local;
+   my $local_sec = time();
+   my @t = localtime($local_sec);
+   my $gmt_offset_in_seconds = timegm(@t) - $local_sec;
+   my $gmt_offset_in_hours = $gmt_offset_in_seconds/3600;
+
+   return $gmt_offset_in_hours;
+}
 
 sub yyyymmddHHMMSS_to_epoc {
    my ($yyyymmddHHMMSS, $opt) = @_;
@@ -493,5 +505,11 @@ sub date2any {
    my $compiled = TPSUP::Expression::compile_exp($output_template, $opt);
    return $compiled->();
 }
+
+sub main {
+   print "get_timezone_offset() = ", get_timezone_offset(), "\n";
+}
+
+main() unless caller();
 
 1

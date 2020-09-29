@@ -16,7 +16,6 @@ our @EXPORT_OK = qw(
 );
       
 use Carp;
-use Carp::Always;
 use Data::Dumper;
 use TPSUP::UTIL qw(get_in_fh get_out_fh get_homedir_by_user get_setting_from_env);
 use TPSUP::Expression;
@@ -37,6 +36,7 @@ sub get_autosys_fh {
       # don't bomb out here, just print an error. let the caller to handle it.
       print STDERR "cmd='$cmd' failed: $!" if ! $in_fh;
    } else {
+      require Carp::Always;
       confess "unknown input='$input'";
    }
 
