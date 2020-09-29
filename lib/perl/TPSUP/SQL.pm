@@ -1,6 +1,7 @@
 package TPSUP::SQL;
 
-use strict;
+#use strict;
+no strict 'refs' ;
 use base qw( Exporter );
 our @EXPORT_OK = qw(
       get_dbh
@@ -10,10 +11,13 @@ our @EXPORT_OK = qw(
       
 use Carp;
 use DBI;
+use JSON;
 use Data::Dumper;
 use TPSUP::UTIL qw(get_tmp_file get_out_fh);
 use TPSUP::LOCK qw(tpeng_unlock);
 use TPSUP::CSV qw(parse_csv_file);
+
+
 sub unlock_conn {
       
    my ($nickname, $opt) = @_;
@@ -92,6 +96,21 @@ sub get_dbh {
       my ($string, $login, $password) = @{$conn_info}{qw(string login unlocked_password)};
          
       $dbh = DBI->connect($string, $login, $password);
+
+      # how to add a method during runtime
+      # https://www.perlmonks.org/?node_id=755089
+      # https://stackoverflow.com/questions/4185482/how-to-convert-perl-objects-into-json-and-vice-versa/4185679#4185679
+      # https://stackoverflow.com/questions/28373405/add-new-method-to-existing-object-in-perl
+      
+      # how to unbless an object
+      # https://stackoverflow.com/questions/25508197/unblessing-perl-objects-and-constructing-the-to-json-method-for-convert-blessed
+      
+      # i tried to use this to dump $dbh, but always get an empty hash.
+     
+      # either of the following will add a method dynamically 
+      #*DBI::db::TO_JSON = sub { return { %{ shift() } }; };
+      sub DBI::db::TO_JSON { return { %{ shift() } }; }
+
          
       $dbh_by_key->{$nickname} = $dbh;
       $dbh_by_key->{"$string;$login"} = $dbh;
@@ -122,7 +141,30 @@ sub get_dbh {
       croak "need to run dbh with nickname or dbiArray";
    }
 }
+
+
+sub dump_object {
+   my ($obj, $opt) = @_;
+
+   # https://stackoverflow.com/questions/4185482/how-to-convert-perl-objects-into-json-and-vice-versa/4185679#4185679
+   # https://stackoverflow.com/questions/28373405/add-new-method-to-existing-object-in-perl
+   $opt->{verbose} && print STDERR "Dumper(\$obj) = ", Dumper($obj);
+
+   # the following didn't work. i keeps getting
+   #     Can't use an undefined value as a HASH reference
+   #
+   # no strict;
+   # $obj->{__actions}{TO_JSON} 
+   #    = sub { return { %{ shift() } }; };
+
+   my $json = JSON->new->allow_nonref;
+   # $json->allow_blessed([1]);  # this simple returns null
+   $json->convert_blessed([1]);  
+
+   return $json->pretty->encode( $obj ); # pretty-printing
+}
       
+
 sub run_sql {
    my ($sql, $opt) = @_;
       
@@ -132,6 +174,40 @@ sub run_sql {
       return undef;
    }
       
+   # https://metacpan.org/pod/distribution/DBI/DBI.pm#LongReadLen
+   # need to handle some adhoc attributes, for example, 
+   #    $dbh->{LongReadLen} = size
+   # is used to handle extra long cell
+
+   my $saved_attr = {};
+
+   if (exists($opt->{dbh_attr}) && defined($opt->{dbh_attr})) {
+      # $opt->{verbose} && print STDERR "original dbh = ", Dumper($dbh);
+      # original dbh = $VAR1 = bless( {}, 'DBI::db' );
+
+      $opt->{verbose} && print STDERR "original dbh = ", dump_object($dbh);
+
+      for my $k (keys %{$opt->{dbh_attr}}) {
+         # first save the existing setting
+         if (exists($dbh->{$k})) {
+            $saved_attr->{$k} = $dbh->{$k};
+         }
+
+         # set the attr
+         if (defined($opt->{dbh_attr}->{$k}) && "$opt->{dbh_attr}->{$k}" eq "_delete_") {
+            delete $dbh->{$k};
+         } else {
+            $dbh->{$k} = $opt->{dbh_attr}->{$k};
+            $opt->{verbose} && print STDERR "\$dbh->{$k} = $dbh->{$k}\n";
+         }
+      }
+
+      $dbh->{LongReadLen} = 12800;
+
+      $opt->{verbose} && print STDERR "modifed dump_object(\$dbh) = ", dump_object($dbh);
+      $opt->{verbose} && print STDERR "modifed      Dumper(\$dbh) = ",      Dumper($dbh);
+   }
+
    if ($opt->{TrimSql}) {
       # trim the ending: ; go quit
       $sql =~ s/;\s*$//s;
@@ -145,6 +221,20 @@ sub run_sql {
    }
       
    my $sth = $dbh->prepare($sql);
+
+   # restore the dbh attr after prepare()
+   # note: if prepare() failed, the restore may not be done
+   if (exists($opt->{dbh_attr}) && defined($opt->{dbh_attr})) {
+      for my $k (keys %{$opt->{dbh_attr}}) {
+         if (exists($saved_attr->{$k})) {
+            $dbh->{$k} = $saved_attr->{$k};
+         } else {
+            delete $dbh->{$k};
+         }
+      }
+
+      $opt->{verbose} && print STDERR "restored dbh = ", dump_object($dbh);
+   }
 
    if (!$sth) {
       print STDERR "failed at preparing sql\n";

@@ -119,12 +119,12 @@ sub itemize_log {
 
    my $match_pattern;
    if ($opt->{MatchPattern}) {
-      $match_pattern = qr/$opt->{MatchPattern}/;
+      $match_pattern = qr/$opt->{MatchPattern}/s;  # 's' for multiline regex
    }
 
    my $exclude_pattern;
    if ($opt->{ExcludePattern}) {
-      $exclude_pattern = qr/$opt->{ExcludePattern}/;
+      $exclude_pattern = qr/$opt->{ExcludePattern}/s;  # 's' for multiline regex
    }
 
    my $maxlen     = $opt->{MaxLen}     ? $opt->{MaxLen}     : 64000;
@@ -135,13 +135,14 @@ sub itemize_log {
    return undef if !$ifh;
 
    my $line;
+   my $started;
    my $item_count = 0;
 
    return sub {
       my $item;
 
       # item will be undefined before 1st item
-      if (defined $line) {
+      if (defined($line) && $started) {
          $item = $line;
       }
 
@@ -151,6 +152,8 @@ sub itemize_log {
          if ($line =~ /$start_pattern/) {
             # this is a starting line. if we already have an $item, we return the 
             # $item, unless this is the first line.
+
+            $started = 1;
 
             if (defined $item) {
                # this is not the first line
@@ -167,6 +170,8 @@ sub itemize_log {
             }
          } 
          
+         next if ! $started;
+
          # this is not a starting line
          $item .= $line;
          my $length = length($item);
@@ -179,15 +184,17 @@ sub itemize_log {
             # undef $line before skipping or returning the item
             # this will undef $item in the next call also
             undef $line;
+            $started = undef;
 
             if ( (  $match_pattern && $item !~   /$match_pattern/) || 
                ($exclude_pattern && $item =~ /$exclude_pattern/) ){
                # throw away the current complete item.
+               $item = undef;
                next;
+            } else {
+               $item_count ++;
+               return $item;
             }
-
-            $item_count ++;
-            return $item;
          }
       }
       

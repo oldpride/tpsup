@@ -31,6 +31,8 @@ usage:
 
    -maxcount INT     max number of output  
 
+   -p                prefix log file name
+
 examples:
 
    $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'com[.]sr[.]biz'     greplog_test.log
@@ -47,12 +49,14 @@ my $verbose;
 my $maxlen = 64000;
 my $maxcount;
 my $warnMaxlen;
+my $prefixLogName;
 
 GetOptions(
    'verbose'     => \$verbose,
    'maxlen=s'    => \$maxlen,
    'maxcount=s'  => \$maxcount,
    'warnMaxlen'  => \$warnMaxlen,
+   'p'           => \$prefixLogName,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV || @ARGV < 3;
@@ -68,7 +72,9 @@ for my $input (@ARGV) {
                                                          WarnMaxlen  =>$warnMaxlen,
                                                       });
 
+   my $prefix = $prefixLogName ? "$input:" : "";
+
    while(defined(my $item = $iterator->())) {
-      print $item;
+      print "${prefix}${item}";
    }
 }

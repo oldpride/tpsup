@@ -27,18 +27,28 @@ usage:
 
    $prog -s 'dbiString,login,password' (sql|file file.sql)+
    
-   -v              verbose
+   'batch' is for file containing multiple sql, for example, in this format,
+      <SQL>select * from tablel</SQL>
+      <SQL>select * from table2</SQL>
 
-   -noheader       no header
-
-   -output output.csv
-                   default to STDOUT
-
-   -trim           trim ending of sql: remove 'go', 'quit', and ';' at the end of sql
+   -attr key=value extra dbh attribute, for example, to handle extra long cell
+                       -attr LongReadLen=12800
 
    -conn conn.csv  connection file, default to \$HOME/.tpsup/conn.csv
 
+   -Dbistring      use "dbiString,login,password" instead of db nickname
+
    -LowMemory      use as little memory as possible
+
+   -maxout int     print only this number of rows
+
+   -noheader       no header
+
+   -op key=value  other options: for example,
+                   -op NonQuery=1 # use this if the sql is not a query
+
+   -output output.csv
+                   default to STDOUT
 
    -OutputDelimiter string
                    output delimiter, default to
@@ -46,18 +56,11 @@ usage:
    -OutputHeader "c1,c2 ,..."
                    output header, default to database column names
 
-   -maxout int     print only this number of rows
-
-   -Dbistring      use "dbiString,login,password" instead of db nickname
-
    -plain          use plain password with '-DbiString'
 
-   -op other options: for example,
-                   -op NonQuery=1 # use this if the sql is not a query
+   -trim           trim ending of sql: remove 'go', 'quit', and ';' at the end of sql
 
-   'batch' is for file containing multiple sql, for example, in this format,
-      <SQL>select * from tablel</SQL>
-      <SQL>select * from table2</SQL>
+   -v              verbose
 
 examples:
 
@@ -81,6 +84,9 @@ examples:
    'dbi:Oracle:host=h.db.com;service_name=h.db.com;port=l725,ORA_USER,plain' \\
    "select * from all_synonyms"
 
+   - test LongReadLen
+   $prog -v -attr LongReadLen=12800 tian\@tiandb 'select * from tblMembers'
+
 END
 
    exit 1;
@@ -98,8 +104,10 @@ my $OutputHeader;
 my $useDbiString;
 my $usePlainPassword;
 my @other_options;
+my $dbh_attr;
 
 GetOptions(
+   'attr=s%'        => \$dbh_attr,  # Getopt::Long to load key-value-pair into a hash
    'v|verbose'      => \$verbose,
    'trim'           => \$trim,
    'noheader'       => \$noheader,
@@ -117,6 +125,7 @@ GetOptions(
 usage("wrong number of args") if @ARGV < 2;
 
 my $opt = {
+   dbh_attr=> $dbh_attr,
    output=> $output,
    noheader=>$noheader,
    maxout=> $maxout,
@@ -125,6 +134,7 @@ my $opt = {
    LowMemory=>$LowMemory,
    OutputDelimiter=>$OutputDelimiter,
    OutputHeader=>$OutputHeader,
+   verbose=>$verbose,
 };
 
 my $arg1 = shift @ARGV;
