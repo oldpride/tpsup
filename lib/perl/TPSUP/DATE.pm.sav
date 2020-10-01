@@ -3,11 +3,9 @@ package TPSUP::DATE;
 use strict;
 use base qw( Exporter );
 our @EXPORT_OK = qw(
-   get_timezone_offset
    parse_holiday_csv
    is_holiday
    get_tradeday_by_exch_start_offset
-   get_holidays_by_exch_start_end
    get_tradedays_by_exch_start_end
    get_interval_seconds
    get_Mon_by_number
@@ -15,7 +13,7 @@ our @EXPORT_OK = qw(
    convert_from_yyyymmdd
    date2any
    yyyymmddHHMMSS_to_epoc
-   yyyymmdd_to_DayOfWeek
+   get_timezone_offset
 );
 
 use Carp;
@@ -27,8 +25,6 @@ use File::Spec;
 use POSIX;
 
 my $yyyymmdd_pattern = qr/^(\d{4})(\d{2})(\d{2})$/;
-my $yyyymmddHHMMSS_pattern = qr/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
-my $whole_week_seconds = 7*24*60*60;
 
 sub get_timezone_offset {
    my ($opt) = @_;
@@ -42,6 +38,7 @@ sub get_timezone_offset {
    return $gmt_offset_in_hours;
 }
 
+my $yyyymmddHHMMSS_pattern = qr/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
 
 sub yyyymmddHHMMSS_to_epoc {
    my ($yyyymmddHHMMSS, $opt) = @_;
@@ -71,6 +68,7 @@ sub yyyymmddHHMMSS_to_epoc {
 
 my $holidays_by_exch;
 my $exists_by_exch_holiday;
+my $exists_by_exch_yyyy;
 
 sub parse_holiday_csv {
    my ($exch, $opt) = @_;
@@ -78,11 +76,6 @@ sub parse_holiday_csv {
    croak "need to specify exch when calling parse_holiday_csv()" if ! $exch;
 
    return $exists_by_exch_holiday->{$exch} if exists $exists_by_exch_holiday->{$exch};
-
-   if (exists($opt->{HolidayRef}) and defined($opt->{HolidayRef})) {
-      $exists_by_exch_holiday->{$exch} = $opt->{HolidayRef};
-      return $exists_by_exch_holiday->{$exch};
-   }
 
    my $HolidaysCsv;
    if (exists($opt->{HolidaysCsv}) and defined($opt->{HolidaysCsv})) {
@@ -105,12 +98,13 @@ sub parse_holiday_csv {
    my $row_count = 0;
    my @holidays;
    my $ref;
+   my $ref2;
 
    while(<$fh>) {
       $row_count ++;
 
       if (/^$exch,(.+)/) {
-         @holidays = map {int($_)} split(/\s+/, $1);
+         @holidays = split /\s+/, $1;
 
          my $item_count = 0;
          my $last_holiday;
@@ -120,12 +114,13 @@ sub parse_holiday_csv {
 
             if ($yyyymmdd =~ /$yyyymmdd_pattern/) {
                my ($yyyy, $mm, $dd) = ($1, $2, $3);
-               if ($last_holiday && $yyyymmdd <= $last_holiday ) {
-                  die "$HolidaysCsv row $row_count item $item_count '$yyyymmdd' <= last one '$last_holiday', out of order";
+               if ($last_holiday && $last_holiday >= $yyyymmdd) {
+                  die "$HolidaysCsv row $row_count item $item_count '$yyyymmdd' >= last one '$last_holiday'";
                }
 
                $last_holiday = $yyyymmdd; 
                $ref->{$yyyymmdd} ++;
+               $ref2->{$yyyy} ++;
             } else {
                die "$HolidaysCsv row $row_count item $item_count '$yyyymmdd'  bad format";
             }
@@ -139,12 +134,10 @@ sub parse_holiday_csv {
 
    $holidays_by_exch->{$exch}       = \@holidays;
    $exists_by_exch_holiday->{$exch} = $ref;
+   $exists_by_exch_yyyy->{$exch}    = $ref2;
 
-   #$opt->{verbose} && print STDERR "\$exists_by_exch_holiday->{$exch} = \n";
-   #$opt->{verbose} && print STDERR Dumper($exists_by_exch_holiday->{$exch});
-
-   $opt->{verbose} && print STDERR "\$holidays_by_exch->{$exch} = \n";
-   $opt->{verbose} && print STDERR Dumper($holidays_by_exch->{$exch});
+   $opt->{verbose} && print "\$exists_by_exch_holiday->{$exch} = \n";
+   $opt->{verbose} && print Dumper($exists_by_exch_holiday->{$exch});
 
    return $exists_by_exch_holiday->{$exch};
 }
@@ -157,8 +150,9 @@ sub is_holiday {
       
    return $exists_by_exch_holiday->{$exch}->{$day};
 }
-
       
+my $whole_week_seconds = 7*24*60*60;
+
 my $tradeday_by_exch_start_offset;
 
 sub get_tradeday_by_exch_start_offset {
@@ -167,20 +161,12 @@ sub get_tradeday_by_exch_start_offset {
    return       $tradeday_by_exch_start_offset->{$exch}->{$start}->{$offset}
       if exists $tradeday_by_exch_start_offset->{$exch}->{$start}->{$offset};
 
-   my $holiday_href;
-   my $IgnoreHoliday;
-
-   if ($opt->{IgnoreHoliday} or $exch eq 'WeekDay') {
-      $IgnoreHoliday = 1;
-   } else {
-      $holiday_href = parse_holiday_csv($exch, $opt);
-   }
+   my $holiday_href = parse_holiday_csv($exch, $opt);
 
    my $whole_weeks    = POSIX::floor($offset/5);
    my $rest_tradedays = $offset%5;
 
    my $start_DayOfWeek = yyyymmdd_to_DayOfWeek($start);
-   $opt->{verbose} && print STDERR "start=$start, start_DayOfWeek = $start_DayOfWeek\n";
 
    my $add_CalendarDays = 0;
    if ($start_DayOfWeek >5) {
@@ -192,35 +178,20 @@ sub get_tradeday_by_exch_start_offset {
    }
    
    my $total_CalendarDays = ($whole_weeks*7) + $rest_tradedays + $add_CalendarDays;
-   $opt->{verbose} && print STDERR "total_CalendarDays ",
-         "= (\$whole_weeks*7) + \$rest_tradedays + \$add_CalendarDays", 
-         "= ($whole_weeks*7) + $rest_tradedays + $add_CalendarDays", 
-         "= $total_CalendarDays\n";
-
    my $total_CalendarDays_seconds = $total_CalendarDays*24*60*60;
-
-   # we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
-   my $start_epoc_seconds = yyyymmddHHMMSS_to_epoc("${start}120000");
+   my $start_epoc_seconds = yyyymmddHHMMSS_to_epoc("${start}000000");
    my   $new_epoc_seconds = $start_epoc_seconds + $total_CalendarDays_seconds;
    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($new_epoc_seconds);
-   my $new_yyyymmdd = sprintf("%4d%02d%02d", 1900+$year, $mon+1, $mday);
-
-   if ($IgnoreHoliday) {
-      # without taking holiday into account, we basically return a weekday 
-      return $new_yyyymmdd;
-   }
+   my $new_yyyymmdd = sprintf("%4d%02d%02d", $year, $mon+1, $mday);
 
    # we haven't considered holidays yet. now we need to do that
 
    my $holidays;
    my $sign;
-
    if ($offset >0) {
-      $opt->{verbose} && print STDERR "get_holidays_by_exch_begin_end($exch, $start, $new_yyyymmdd)\n";
       $holidays = get_holidays_by_exch_begin_end($exch, $start, $new_yyyymmdd, $opt); 
       $sign = 1;
    } else {
-      $opt->{verbose} && print STDERR "get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $start)\n";
       $holidays = get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $start, $opt); 
       $sign = -1;
    } 
@@ -228,26 +199,12 @@ sub get_tradeday_by_exch_start_offset {
    my $holiday_count = scalar(@$holidays);
 
    if ($holiday_count) {
-      # to avoid the same hoilday counted twice due to edge condition, introduce
-      #  IgnoreEdgeHoliday flag
-      # get_holidays_by_exch_begin_end(NYSE, 20200901, 20200907)
-      # recursively calling get_tradeday_by_exch_start_offset(NYSE, 20200907, 1*1)
-      # get_holidays_by_exch_begin_end(NYSE, 20200907, 20200908)
-      # recursively calling get_tradeday_by_exch_start_offset(NYSE, 20200908, 1*1)
-      # get_holidays_by_exch_begin_end(NYSE, 20200908, 20200909)
-      # get_tradeday_by_exch_start_offset('NYSE', '20200901', 4) = 20200909
-      # should see 20200908
-
       # recursively call this function
-      $opt->{verbose} && print STDERR "recursively calling get_tradeday_by_exch_start_offset($exch, $new_yyyymmdd, $sign*$holiday_count)\n";
-
-      return get_tradeday_by_exch_start_offset($exch, $new_yyyymmdd, $sign*$holiday_count, {%$opt, IgnoreEdgeHoliday=>1});  
+      return get_tradeday_by_exch_start_offset($exch, $new_yyyymmdd, $sign*$holiday_count);  
    } else {
-      $tradeday_by_exch_start_offset->{$exch}->{$start}->{$offset} = $new_yyyymmdd;
       return $new_yyyymmdd;
    }
 }
-
 
 sub get_holidays_by_exch_begin_end {
    my ($exch, $begin, $end, $opt) = @_;
@@ -265,52 +222,130 @@ sub get_holidays_by_exch_begin_end {
    my $end_covered;
 
    for my $d (@$all_holidays) {
-      if ($d > $end || ($opt->{IgnoreEdgeHoliday} && $d == $end)) {
+      if ($d > $end) {
          $end_covered ++;
          last;
       }
-
-      if ($d > $begin || (!$opt->{IgnoreEdgeHoliday} && $d == $begin)) {
+      if ($d >= $begin) {
          push @holidays, $d; 
       } else {
          $begin_covered ++;
       }
    }
 
-   if (!$end_covered) {
-      warn "end=$end exceeded upper range of '$exch' holidays ($all_holidays->[-1])" 
-   } elsif (!$begin_covered) {
-      warn "begin=$begin exceeded lower range of '$exch' holidays ($all_holidays->[0])" 
-   }
+   warn "begin=$begin exceeded lower range of '$exch' holidays $all_holidays->[0]" if ! $begin_covered;
+   warn "end=$end exceeded upper range of '$exch' holidays $all_holidays->[-1]" if ! $end_covered;
 
    return \@holidays;
 }
-
 
 sub yyyymmdd_to_DayOfWeek {
    my ($yyyymmdd, $opt) = @_;
 
    if ("$yyyymmdd" =~ /$yyyymmdd_pattern/) {
-      my ($yyyy, $mm, $dd) = ($1, $2, $3); 
+       my ($yyyy, $mm, $dd) = ($1, $2, $3); 
 
-      # https://perldoc.perl.org/Time::Local
-      #     The value for the day of the month is the actual day (i.e. 1..31), while
-      #     the month is the number of months since January (0..11). 
-      #     timelocal( $sec, $min, $hour, $mday, $mon, $year );
-      # i use 12pm instead of 0 am, to avoid daylight-saving-change causing +/- day
-      my $seconds = timelocal(0, 0, 12, $dd, $mm-1, $yyyy);
+       my $seconds = timelocal(0, 0, 0, $dd, $mm-1, $yyyy);
 
-      # https://perldoc.pl/functions/localtime
-      # the month in the range 0..11, with 0 for January and 11 for December.
-      my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($seconds);
+       # https://perldoc.pl/functions/localtime
+       # the month in the range 0..11, with 0 for January and 11 for December.
+       my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 
-      # print "$mday,$mon,$year\n";
-
-      return $wday;
+       return $wday;
    } else {
        die "yyyymmdd='$yyyymmdd', bad format";
    }
 }
+
+my $exists_by_exch_holiday;
+my $exists_by_exch_yyyy;
+
+sub parse_holiday_csv {
+   my ($exch, $opt) = @_;
+
+   croak "need to specify exch when calling parse_holiday_csv()" if ! $exch;
+
+   return $exists_by_exch_holiday->{$exch} if exists $exists_by_exch_holiday->{$exch};
+
+   my $HolidaysCsv;
+   if (exists($opt->{HolidaysCsv}) and defined($opt->{HolidaysCsv})) {
+      $HolidaysCsv = $opt->{HolidaysCsv};
+   } else {
+      # https://stackoverflow.com/questions/2403343/in-perl-how-do-i-get-the-directory-or-path-of-the-current-executing-code
+      my ($volume, $directory, $file) = File::Spec->splitpath(__FILE__);
+      $directory = File::Spec->rel2abs($directory);
+      # print "$volume, $directory, $file\n";
+      $HolidaysCsv = "$directory/holidays.csv";
+   }
+
+   croak "$HolidaysCsv is not found" if ! -f $HolidaysCsv;
+
+   # name,days
+   # NYSE,20200101 20200120 20200217 20200410 20200525 20200703 20200907 20201126 20201125 20210101 20210118 20210402 20210531 20210705 20210906 20211125 20211224 20220101 20220117 20220221 20220415 20220530 20220704 20220905 20221124 20221126
+
+   my $fh = get_in_fh($HolidaysCsv);
+
+   my $row_count = 0;
+   my $ref;
+   my $ref2;
+
+   while(<$fh>) {
+      $row_count ++;
+
+      if (/^$exch,(.+)/) {
+         my @holidays = split /\s+/, $1;
+         my $item_count = 0;
+         for my $yyyymmdd (@holidays) {
+            $item_count ++;
+
+            if ($yyyymmdd =~ /$yyyymmdd_pattern/) {
+               $ref->{$yyyymmdd} ++;
+               $ref2->{$yyyy} ++;
+            } else {
+               warn "$HolidaysCsv row $row_count item $item_count '$yyyymmdd'  bad format";
+            }
+}
+      
+my $tradedays_by_exch_start_end;
+      
+sub get_tradedays_by_exch_start_end {
+   my ($exch, $start, $end, $opt) = @_;
+      
+   return $tradedays_by_exch_start_end->{$exch}->{$start}->{$end}
+      
+   if exists $tradedays_by_exch_start_end->{$exch}->{$start}->{$end};
+   my $tradedays = get_tradedays_by_exch($exch, $opt);
+   
+   if ($start < $tradedays->[0] || $start > $tradedays->[-1]) {
+      carp "start day $start is out of range: $tradedays->[0] ~ $tradedays->[-1]";
+      $tradedays_by_exch_start_end->{$exch}->{$start}->{$end} = undef;
+      return undef;
+   }
+   
+   if ($end < $tradedays->[0] || $end > $tradedays->[-1]) {
+      carp "end day $end is out of range: $tradedays->[0] ~ $tradedays->[-1]";
+      $tradedays_by_exch_start_end->{$exch}->{$start}->{$end} = undef;
+      return undef;
+   }
+   
+   my @days;
+   
+   for my $d (@$tradedays) {
+      if ( $d < $start ) {
+         next;
+      }
+   
+      if ( $d > $end ) {
+         last;
+      }
+      
+      push @days, $d;
+   }
+      
+   $tradedays_by_exch_start_end->{$exch}->{$start}->{$end} = \@days;
+      
+   return $tradedays_by_exch_start_end->{$exch}->{$start}->{$end};
+}      
 
 
 sub get_interval_seconds {
@@ -319,9 +354,8 @@ sub get_interval_seconds {
    my $seconds;
       
    if ($yyyymmdd1 && $yyyymmdd2 && $yyyymmdd1 != $yyyymmdd2) {
-      # we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
-      my $seconds1 = yyyymmddHHMMSS_to_epoc("${yyyymmdd1}120000");
-      my $seconds2 = yyyymmddHHMMSS_to_epoc("${yyyymmdd2}120000");
+      my $seconds1 = yyyymmddHHMMSS_to_epoc("${yyyymmdd1}000000");
+      my $seconds2 = yyyymmddHHMMSS_to_epoc("${yyyymmdd2}000000");
 
       $seconds = $seconds2 - $seconds1;
    }
@@ -351,7 +385,6 @@ sub get_interval_seconds {
    return $seconds;
 }
       
-
 my $Mon_by_number;
       
 sub get_Mon_by_number {
@@ -387,7 +420,6 @@ sub get_Mon_by_number {
    return $Mon_by_number->{$number};
 }
          
-
 my $mm_by_Mon;
          
 sub get_mm_by_Mon {
@@ -439,7 +471,6 @@ sub get_mm_by_Mon {
    return $mm_by_Mon->{$Mon};
 }         
 
-
 sub convert_from_yyyymmdd {
    my ($template, $yyyymmdd, $opt) = @_;
          
@@ -465,47 +496,6 @@ sub convert_from_yyyymmdd {
    }
 }
    
-sub get_tradedays_by_exch_start_end {
-   my ($exch, $start, $end, $opt) = @_;
-
-   my $exists_holiday = parse_holiday_csv($exch, $opt);
-
-   use TPSUP::DATE_Weekdays;
-
-   my $weekdays = $TPSUP::DATE_Weekdays::weekdays;
-
-   if ($start < $weekdays->[0] || $start > $weekdays->[-1]) {
-      carp "start day $start is out of range: $weekdays->[0] ~ $weekdays->[-1]";
-      return undef;
-   }
-
-   if ($end < $weekdays->[0] || $end > $weekdays->[-1]) {
-      carp "end day $end is out of range: $weekdays->[0] ~ $weekdays->[-1]";
-      return undef;
-   }
-
-   my @tradedays;
-
-   for my $d (@$weekdays) {
-      if ( $d < $start ) {
-         next;
-      }
-
-      if ($exists_holiday->{$d}) {
-         next;
-      }
-
-      if ( $d > $end ) {
-         last;
-      }
-
-      push @tradedays, $d;
-   }
-
-   return \@tradedays;
-}
-
-
 sub date2any {
    my ($date, $input_pattern, $input_assignment, $output_template, $opt) = @_;
 
@@ -611,54 +601,12 @@ sub date2any {
    return $compiled->();
 }
 
-
 sub main {
-   print "get_timezone_offset() = ", get_timezone_offset(), "\n\n";
+   print "get_timezone_offset() = ", get_timezone_offset(), "\n";
 
-   print "get_interval_seconds('20200901', '120000', '20200902', '120001') = ", 
-      get_interval_seconds('20200901', '120000', '20200902', '120001'),
-      "\n";
-
-   print "should see 86401\n\n";
-
-   my $verbose = 0;
-
-   print "get_tradeday_by_exch_start_offset('NYSE', '20200901', 3) = ", 
-          get_tradeday_by_exch_start_offset('NYSE', '20200901', 3, {verbose=>$verbose}),
-          "\n";
-   print "should see 20200904\n\n";
-
-   print "get_tradeday_by_exch_start_offset('NYSE', '20200901', 4) = ",
-          get_tradeday_by_exch_start_offset('NYSE', '20200901', 4, {verbose=>$verbose}),
-          "\n";
-   print "should see 20200908\n\n";
-
-   print "get_tradeday_by_exch_start_offset('WeekDay', '20200901', 4) = ",
-          get_tradeday_by_exch_start_offset('WeekDay', '20200901', 4, {verbose=>$verbose}),
-          "\n";
-   print "should see 20200907\n\n";
-
-   print "get_tradeday_by_exch_start_offset('NYSE', '20200908', -4) = ",
-          get_tradeday_by_exch_start_offset('NYSE', '20200908', -4, {verbose=>$verbose}),
-          "\n";
-   print "should see 20200901\n\n";
-
-   print "get_tradeday_by_exch_start_offset('NYSE', '20200904', -3) = ",
-          get_tradeday_by_exch_start_offset('NYSE', '20200904', -3, {verbose=>$verbose}),
-          "\n";
-   print "should see 20200901\n\n";
-
-   print "get_tradedays_by_exch_start_end('NYSE', '20200901', '20200907') = ",
-          join(",", 
-        @{get_tradedays_by_exch_start_end('NYSE', '20200901', '20200907', {verbose=>$verbose})}), 
-          "\n";
-   print "should see 4 days\n\n";
-
-   print "get_tradedays_by_exch_start_end('NYSE', '20200901', '20200908') = ",
-          join(",", 
-        @{get_tradedays_by_exch_start_end('NYSE', '20200901', '20200908', {verbose=>$verbose})}), 
-          "\n";
-   print "should see 5 days\n\n";
+   print "get_tradeday_by_exch_start_offset('NYSE', '20200901', 4) = ", get_tradeday_by_exch_start_offset('NYSE', '20200901', 4, {verbose=>1}), "\n";
+   print "get_tradeday_by_exch_start_offset('NYSE', '20200908', -4) = ", get_tradeday_by_exch_start_offset('NYSE', '20200901', 4, {verbose=>1}), "\n";
+   print "should see 20200901\n";
 }
 
 main() unless caller();

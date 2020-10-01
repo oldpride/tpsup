@@ -7,6 +7,7 @@ our @EXPORT_OK = qw(
       get_dbh
       run_sql
       unlock_conn
+      array_to_InClause
 );
       
 use Carp;
@@ -343,6 +344,14 @@ sub run_sql {
    } else {
       return $return_aref;
    }
+}
+
+sub array_to_InClause {
+   my ($aref, $opt) = @_;
+
+   die "empty array ref" if !$aref || !@$aref;
+
+   return "'" . join("', '", @$aref) . "'";
 }
       
 1

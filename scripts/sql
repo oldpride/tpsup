@@ -75,6 +75,11 @@ examples:
 
    - mysql
    $prog tian\@tiandb 'SHOW TABLES'
+   $prog tian\@tiandb '
+      SELECT m.firstname, m.lastname, r.ranking
+      FROM   tblMembers m, tblAssignment a, tblRanking r
+      WHERE m.id = a.MemberId and r.id = a.RankingId
+   '
 
    - test passwords
    $prog -maxout 10 -DbiString \\
