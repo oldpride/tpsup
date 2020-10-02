@@ -6,6 +6,7 @@ our @EXPORT_OK = qw(
    get_timezone_offset
    parse_holiday_csv
    is_holiday
+   get_tradeday
    get_tradeday_by_exch_start_offset
    get_holidays_by_exch_start_end
    get_tradedays_by_exch_start_end
@@ -158,6 +159,22 @@ sub is_holiday {
    return $exists_by_exch_holiday->{$exch}->{$day};
 }
 
+
+sub get_tradeday {
+   my ($offset, $opt) = @_;
+
+   my $exch  = exists($opt->{Exch}) && defined($opt->{Exch})  ? $opt->{Exch}  : 'NYSE';
+
+   my $begin;
+   if (exists($opt->{Begin}) && defined($opt->{Begin})) {
+      $begin = $opt->{Begin};
+   } else {
+      my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
+      $begin = sprintf("%4d%02d%02d", 1900+$year, $mon+1, $mday);
+   }
+
+   return get_tradeday_by_exch_start_offset($exch, $begin, $offset);
+}
       
 my $tradeday_by_exch_start_offset;
 
@@ -219,11 +236,15 @@ sub get_tradeday_by_exch_start_offset {
       $opt->{verbose} && print STDERR "get_holidays_by_exch_begin_end($exch, $start, $new_yyyymmdd)\n";
       $holidays = get_holidays_by_exch_begin_end($exch, $start, $new_yyyymmdd, $opt); 
       $sign = 1;
-   } else {
+   } elsif ($offset <0) {
       $opt->{verbose} && print STDERR "get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $start)\n";
       $holidays = get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $start, $opt); 
       $sign = -1;
-   } 
+   } else { 
+      # $offset == 0
+      $holidays = get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $new_yyyymmdd, $opt); 
+      $sign = 1;
+   }
 
    my $holiday_count = scalar(@$holidays);
 
@@ -648,6 +669,21 @@ sub main {
           "\n";
    print "should see 20200901\n\n";
 
+   print "get_tradeday_by_exch_start_offset('NYSE', '20200904', 0) = ",
+          get_tradeday_by_exch_start_offset('NYSE', '20200904', 0, {verbose=>$verbose}),
+          "\n";
+   print "should see 20200904\n\n";
+
+   print "get_tradeday_by_exch_start_offset('NYSE', '20200905', 0) = ",
+          get_tradeday_by_exch_start_offset('NYSE', '20200905', 0, {verbose=>$verbose}),
+          "\n";
+   print "should see 20200908\n\n";
+
+   print "get_tradeday_by_exch_start_offset('NYSE', '20200907', 0) = ",
+          get_tradeday_by_exch_start_offset('NYSE', '20200907', 0, {verbose=>$verbose}),
+          "\n";
+   print "should see 20200908\n\n";
+
    print "get_tradedays_by_exch_start_end('NYSE', '20200901', '20200907') = ",
           join(",", 
         @{get_tradedays_by_exch_start_end('NYSE', '20200901', '20200907', {verbose=>$verbose})}), 
@@ -659,6 +695,12 @@ sub main {
         @{get_tradedays_by_exch_start_end('NYSE', '20200901', '20200908', {verbose=>$verbose})}), 
           "\n";
    print "should see 5 days\n\n";
+
+   print "get_tradeday(-4, {Begin=>'20200908'}) = ",
+          get_tradeday(-4, {Begin=>'20200908', verbose=>$verbose}),
+          "\n";
+   print "should see 20200901\n\n";
+
 }
 
 main() unless caller();
