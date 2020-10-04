@@ -1,0 +1,79 @@
+#!/usr/bin/env perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::DATE qw(get_tradeday);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog begin_yyyymmdd count
+
+description:
+   get trade day
+
+   -d yyyymmdd     relative to this day
+   -e exch         exclude this exchange's holidays, default to NYSE
+
+   if on weekend, count will start from Monday
+
+examples:
+
+   $prog   1  # next tradeday
+   $prog  -1  # previous tradeday
+
+   - 20201003 is Saturday, therefore current tradeday is set to Monday 20201005, then
+     the next tradeday will be 20201006
+   $prog -d 20201003 1   # you should see 20201006
+
+   - 20200907 is labor day, Monday, holiday
+   $prog -d 20200905 0   # you should see 20200908
+   $prog -d 20200907 0   # you should see 20200908
+   $prog -d 20200908 0   # you should see 20200908
+   $prog -d 20200905 1   # you should see 20200909
+   $prog -d 20200907 1   # you should see 20200909
+                        
+   $prog -d 20200909 -1  # you should see 20200908
+   $prog -d 20200909 -2  # you should see 20200904
+   $prog -d 20200905 -1  # you should see 20200904
+
+EOF
+
+   exit 1;
+}
+
+my @leftover;
+my $opt = {};
+
+eval {
+   for (my $i=0; $i<scalar(@ARGV); $i++) {
+      if ($ARGV[$i] eq '-d') {
+         $opt->{Begin} = $ARGV[$i+1];
+         $i++;
+      } elsif ($ARGV[$i] eq '-e') {
+         $opt->{Exch} = $ARGV[$i+1];
+         $i++;
+      } else {
+         push @leftover, $ARGV[$i];
+      }
+   }
+};
+
+usage("wrong command args") if $@; 
+
+usage("wrong number of args") if @leftover != 1;
+
+my ($offset) = @leftover;
+
+print get_tradeday( $offset, $opt), "\n";
+
+exit 0;

@@ -41,6 +41,7 @@ our @EXPORT_OK = qw(
    get_setting_from_env
    get_setting_from_profile
    should_do_it
+   binary_search_numeric
 );
 
 
@@ -1562,6 +1563,63 @@ sub glob2regex {
       
    return $regex;
 }
+
+sub binary_search_numeric {
+   my ($target, $aref, $begin, $end) = @_;
+
+   if ($target < $aref->[$begin]) {
+      die "binary_search_numeric: target=$target fell out the lower bound $aref->[$begin]\n";
+
+   } elsif ($target > $aref->[$end]) {
+      die "binary_search_numeric: target=$target over the upper bound $aref->[$end]\n";
+   } 
+   
+   while (1) {
+      if ($begin+1 < $end) {
+         my $mid = int(($begin+$end)/2);
+         
+         if ($target < $aref->[$mid]) {
+            $end = $mid;
+            next;
+         } elsif ($target > $aref->[$mid]) {
+            $begin = $mid;
+            next;
+         } else {
+            return $mid;
+         }
+      } elsif ($begin+1 == $end) {
+         # nothing in between 
+         if ($target > $aref->[$begin]) {
+            return $end;
+         } else {
+            return $begin;
+         }
+      } else {
+         # $begin == $end
+         return $end;
+      }
+   }
+}
+
+
+sub main {
+   my $aref = [ -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ];
+
+   eval {
+      print "binary_search_numeric 5.5 = ", 
+             binary_search_numeric(5.5, $aref, 0, scalar(@$aref -1)),
+            ", expecting 7\n\n";
+   };
+
+   eval  {binary_search_numeric(15, $aref, 0, scalar(@$aref -1))};
+   print $@;
+
+   eval  {binary_search_numeric(-5, $aref, 0, scalar(@$aref -1))};
+   print $@;
+}
+
+main() unless caller();
+
       
 ###################################################################
 package TPSUP::Expression;
