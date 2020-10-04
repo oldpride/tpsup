@@ -3,7 +3,7 @@
 use strict;
 use Data::Dumper;
 use Getopt::Long;
-use TPSUP::DATE qw(get_tradeday);
+use TPSUP::DATE qw(get_tradedays);
 
 my $prog = $0; $prog =~ s:.*/::;
 my $dir = $0; $dir =~ s:[^/]+$::;
@@ -16,7 +16,7 @@ sub usage {
    print STDERR << "EOF";
 usage:
 
-   $prog offset
+   $prog count
 
 description:
    get trade day
@@ -29,28 +29,21 @@ description:
 
 examples:
 
-   $prog   1  # next tradeday
-   $prog   0  # current tradeday. if on weekend, set to Monday
-   $prog  -1  # previous tradeday
+   $prog   3  # next 3 tradedays
+   $prog   0  # 0 day
+   $prog  -3  # previous 3 tradedays
 
    - 20201003 is Saturday, therefore current tradeday is set to Monday 20201005, then
      the next tradeday will be 20201006
-   $prog -d 20201003 1   # you should see 20201006
+   $prog -d 20201003 3   # you should see 20201006 20201007 20201008
 
    - 20200905 is Saturday. 20200907 is Monday, labor day holiday.
      for 20200905/20200906/20200907, current tradeday changes to Tuesday 20200908
      and the previous tradeday becomes Friday, 20200904
-   $prog -d 20200905 0   # you should see 20200908
-   $prog -d 20200907 0   # you should see 20200908
-   $prog -d 20200908 0   # you should see 20200908
-   $prog -d 20200905 1   # you should see 20200909
-   $prog -d 20200907 1   # you should see 20200909
-   $prog -d 20200905 -1  # you should see 20200904
+   $prog -d 20200905  2  # you should see 20200909, 202009010
+   $prog -d 20200908  2  # you should see 20200909, 202009010
+   $prog -d 20200905 -2  # you should see 20200903, 20200904
                         
-   $prog -d 20200909 -1  # you should see 20200908
-   $prog -d 20200909 -2  # you should see 20200904
-
-
 EOF
    exit 1;
 }
@@ -78,6 +71,6 @@ usage("wrong number of args") if @leftover != 1;
 
 my ($offset) = @leftover;
 
-print get_tradeday( $offset, $opt), "\n";
+print join("\n", @{get_tradedays($offset, $opt)}), "\n";
 
 exit 0;

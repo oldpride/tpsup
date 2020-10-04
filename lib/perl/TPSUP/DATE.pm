@@ -7,6 +7,7 @@ our @EXPORT_OK = qw(
    parse_holiday_csv
    is_holiday
    get_tradeday
+   get_tradedays
    get_tradeday_by_exch_begin_offset
    get_holidays_by_exch_begin_end
    get_tradedays_by_exch_begin_end
@@ -175,6 +176,25 @@ sub get_tradeday {
 
    return get_tradeday_by_exch_begin_offset($exch, $begin, $offset);
 }
+
+
+sub get_tradedays {
+   my ($count, $opt) = @_;
+
+   my @tradedays;
+
+   if ($count > 0) {
+      for (my $i=1; $i<=$count; $i++) {
+         push @tradedays, get_tradeday($i, $opt);
+      }
+   } elsif ($count < 0) {
+      for (my $i=$count; $i<=-1; $i++) {
+         push @tradedays, get_tradeday($i, $opt);
+      }
+   } 
+   return \@tradedays;
+}
+
       
 my $tradeday_by_exch_begin_offset;
 my $weekdays;
