@@ -1565,7 +1565,7 @@ sub glob2regex {
 }
 
 sub binary_search_numeric {
-   my ($target, $aref, $begin, $end) = @_;
+   my ($target, $aref, $begin, $end, $opt) = @_;
 
    if ($target < $aref->[$begin]) {
       die "binary_search_numeric: target=$target fell out the lower bound $aref->[$begin]\n";
@@ -1589,7 +1589,11 @@ sub binary_search_numeric {
          }
       } elsif ($begin+1 == $end) {
          # nothing in between 
-         if ($target > $aref->[$begin]) {
+         if ($target == $aref->[$end]) {
+            return $end;
+         } elsif ($target == $aref->[$begin]){
+            return $begin;
+         } elsif ($opt->{WhenInBetween} && $opt->{WhenInBetween} eq 'ChooseBigger'){
             return $end;
          } else {
             return $begin;

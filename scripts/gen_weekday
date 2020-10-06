@@ -3,7 +3,7 @@
 use strict;
 use Data::Dumper;
 use Getopt::Long;
-use TPSUP::DATE qw(get_tradeday_by_exch_begin_offset);
+use TPSUP::DATE qw(get_weekday_generator);
 
 my $prog = $0; $prog =~ s:.*/::;
 my $dir = $0; $dir =~ s:[^/]+$::;
@@ -40,8 +40,9 @@ usage("wrong number of args") if @ARGV != 2;
 
 my ($begin, $count) = @ARGV;
 
+my $generator = get_weekday_generator($begin);
 for (my $i=0; $i<$count; $i++) {
-   print get_tradeday_by_exch_begin_offset("WeekDay", $begin, $i, {RegenerateWeekday=>1}), "\n";
+   print $generator->(), "\n";
 }
 
 exit 0;

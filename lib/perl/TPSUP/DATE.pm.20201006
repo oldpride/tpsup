@@ -18,7 +18,6 @@ our @EXPORT_OK = qw(
    date2any
    yyyymmddHHMMSS_to_epoc
    yyyymmdd_to_DayOfWeek
-   get_weekday_generator
 );
 
 use Carp;
@@ -32,45 +31,6 @@ use POSIX;
 my $yyyymmdd_pattern = qr/^(\d{4})(\d{2})(\d{2})$/;
 my $yyyymmddHHMMSS_pattern = qr/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
 my $whole_week_seconds = 7*24*60*60;
-
-
-sub get_weekday_generator {
-   my ($begin, $opt) = @_;
-
-   my $DayOfWeek = yyyymmdd_to_DayOfWeek($begin);
-   $opt->{verbose} && print STDERR "begin=$begin, DayOfWeek = $DayOfWeek\n";
-
-   my $add_CalendarDays = 0;
-   if ($DayOfWeek >5) {
-      # this is weekend
-      $add_CalendarDays = 7-$DayOfWeek+1;
-      $DayOfWeek = 1;
-   } 
-
-   my $day_seconds = 24*60*60;
-
-   my $add_CalendarDays_seconds = $add_CalendarDays*$day_seconds;
-
-   # we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
-   my $epoc_seconds = yyyymmddHHMMSS_to_epoc("${begin}120000") + $add_CalendarDays_seconds;
-
-   return sub {
-      my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($epoc_seconds);
-      my $to_be_returned = sprintf("%4d%02d%02d", 1900+$year, $mon+1, $mday);
-
-      # this block is for the next loop
-      if ( ($DayOfWeek % 5) == 0 ) {
-         # this is Friday. Add two days to pass weekend, for the next loop
-         $epoc_seconds += 3*$day_seconds;
-         $DayOfWeek     = 1;
-      } else {
-         $epoc_seconds += $day_seconds;
-         $DayOfWeek    += 1;
-      }
-
-      return $to_be_returned;
-   }
-}
 
 sub get_timezone_offset {
    my ($opt) = @_;
@@ -245,87 +205,116 @@ sub get_tradeday_by_exch_begin_offset {
    return       $tradeday_by_exch_begin_offset->{$exch}->{$begin}->{$offset}
       if exists $tradeday_by_exch_begin_offset->{$exch}->{$begin}->{$offset};
 
-   # holidays are non-weekdays
-
-   my $is_holiday;
+   my $holiday_href;
    my $IgnoreHoliday;
 
    if ($opt->{IgnoreHoliday} or $exch eq 'WeekDay') {
       $IgnoreHoliday = 1;
    } else {
-      $is_holiday = parse_holiday_csv($exch, $opt);
+      $holiday_href = parse_holiday_csv($exch, $opt);
    }
 
-   if (!$weekdays) {
-      use TPSUP::DATE_Weekdays;
-      $weekdays = $TPSUP::DATE_Weekdays::weekdays;
-   }
+   my $new_yyyymmdd;
 
-   # if the binary search falls between two connective trade days, eg, on weekends
-   my $ChooseBigger = undef;
-   if ($opt->{OnWeekend} && $opt->{OnWeekend} eq 'next') {
-      $ChooseBigger = 'ChooseBigger';
-   }
+   if (!$opt->{RegenerateWeekday}) {
+      if (!$weekdays) {
+         use TPSUP::DATE_Weekdays;
+         $weekdays = $TPSUP::DATE_Weekdays::weekdays;
+      }
 
-   my $begin_weekday_pos = binary_search_numeric($begin, $weekdays, 0, scalar(@$weekdays)-1, {WhenInBetween=>$ChooseBigger});
-   my $begin_weekday = $weekdays->[$begin_weekday_pos];
-   $opt->{verbose} && print "begin_weekday=$begin_weekday\n";
+      my $begin_pos = binary_search_numeric($begin, $weekdays, 0, scalar(@$weekdays)-1);
+
+      $opt->{verbose} && print "begin_yyyymmdd = $weekdays->[$begin_pos]\n";
+
+      $new_yyyymmdd = $weekdays->[$begin_pos + $offset];
+   } else {
+      my $whole_weeks    = POSIX::floor($offset/5);
+      my $rest_tradedays = $offset%5;
+   
+      my $begin_DayOfWeek = yyyymmdd_to_DayOfWeek($begin);
+      $opt->{verbose} && print STDERR "begin=$begin, begin_DayOfWeek = $begin_DayOfWeek\n";
+   
+      my $add_CalendarDays = 0;
+      if ($begin_DayOfWeek >5) {
+         # this is weekend
+         $add_CalendarDays = 7-$begin_DayOfWeek+1;
+      } elsif ($rest_tradedays + $begin_DayOfWeek > 5) {
+         # this is run over weekends 
+         $add_CalendarDays +=2;  
+      }
+      
+      my $total_CalendarDays = ($whole_weeks*7) + $rest_tradedays + $add_CalendarDays;
+      $opt->{verbose} && print STDERR "total_CalendarDays ",
+            "= (\$whole_weeks*7) + \$rest_tradedays + \$add_CalendarDays", 
+            "= ($whole_weeks*7) + $rest_tradedays + $add_CalendarDays", 
+            "= $total_CalendarDays\n";
+   
+      my $total_CalendarDays_seconds = $total_CalendarDays*24*60*60;
+   
+      # we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
+      my $begin_epoc_seconds = yyyymmddHHMMSS_to_epoc("${begin}120000");
+      my   $new_epoc_seconds = $begin_epoc_seconds + $total_CalendarDays_seconds;
+      my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($new_epoc_seconds);
+      $new_yyyymmdd = sprintf("%4d%02d%02d", 1900+$year, $mon+1, $mday);
+   }
 
    if ($IgnoreHoliday) {
       # without taking holiday into account, we basically return a weekday 
-      return  $weekdays->[$begin_weekday_pos + $offset];
+      return $new_yyyymmdd;
    }
 
    # we haven't considered holidays yet. now we need to do that
 
-   # first make sure the begin_weekday is not a holiday
-   my $begin_tradeday_pos = $begin_weekday_pos;
+   my $holidays;
+   my $sign;
 
-   while($is_holiday->{$weekdays->[$begin_tradeday_pos]}) {
-      if ($opt->{OnWeekend} && $opt->{OnWeekend} eq 'next') {
-         # OnWeekend flag affects both weekend and hoilday
-         $begin_tradeday_pos ++;
-      } else {
-         $begin_tradeday_pos --;
-      }
+   if ($offset >0) {
+      $opt->{verbose} && print STDERR "get_holidays_by_exch_begin_end($exch, $begin, $new_yyyymmdd)\n";
+      $holidays = get_holidays_by_exch_begin_end($exch, $begin, $new_yyyymmdd, $opt); 
+      $sign = 1;
+   } elsif ($offset <0) {
+      $opt->{verbose} && print STDERR "get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $begin)\n";
+      $holidays = get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $begin, $opt); 
+      $sign = -1;
+   } else { 
+      # $offset == 0
+      $holidays = get_holidays_by_exch_begin_end($exch, $new_yyyymmdd, $new_yyyymmdd, $opt); 
+      $sign = 1;
    }
 
-   # tradeday is a non-holiday weekday
-   my $begin_tradeday = $weekdays->[$begin_tradeday_pos];
-   $opt->{verbose} && print "begin_tradeday=$begin_tradeday\n";
+   my $holiday_count = scalar(@$holidays);
 
-   if ($offset == 0 ) {
-      # we only cache offset from a tradeday, as offset from weekend and holiday
-      # can be affected by OnWeekend flag
-      $tradeday_by_exch_begin_offset->{$exch}->{$begin_tradeday}->{$offset}
-         = $begin_tradeday;
-      return $begin_tradeday;
+   if ($holiday_count) {
+      # to avoid the same hoilday counted twice due to edge condition, introduce
+      #  IgnoreEdgeHoliday flag
+      # get_holidays_by_exch_begin_end(NYSE, 20200901, 20200907)
+      # recursively calling get_tradeday_by_exch_begin_offset(NYSE, 20200907, 1*1)
+      # get_holidays_by_exch_begin_end(NYSE, 20200907, 20200908)
+      # recursively calling get_tradeday_by_exch_begin_offset(NYSE, 20200908, 1*1)
+      # get_holidays_by_exch_begin_end(NYSE, 20200908, 20200909)
+      # get_tradeday_by_exch_begin_offset('NYSE', '20200901', 4) = 20200909
+      # should see 20200908
+
+      # when IgnoreEdgeHoliday = -1,  ignore the end   holiday
+      # when IgnoreEdgeHoliday =  1,  ignore the begin holiday
+      # when IgnoreEdgeHoliday undef, count all holidays.
+
+      # recursively call this function
+      $opt->{verbose} && print STDERR "recursively calling get_tradeday_by_exch_begin_offset($exch, $new_yyyymmdd, $sign*$holiday_count)\n";
+
+      my $afterAdjustedHoliday_yyyymmdd = 
+          get_tradeday_by_exch_begin_offset($exch, $new_yyyymmdd, $sign*$holiday_count, 
+                                            {%$opt, IgnoreEdgeHoliday=>$sign});  
+      $tradeday_by_exch_begin_offset->{$exch}->{$begin}->{$offset} = 
+         $afterAdjustedHoliday_yyyymmdd;
+      return $afterAdjustedHoliday_yyyymmdd;
    } else {
-      my $new_pos = $begin_tradeday_pos;
-
-      if ($offset > 0) {
-         for (my $i=1; $i<=$offset; $i ++) {
-            $new_pos ++;
-            while($is_holiday->{$weekdays->[$new_pos]}) {
-               $new_pos ++;
-            }
-         }
-      } elsif ($offset < 0) {
-         for (my $i=-1; $i>=$offset; $i --) {
-            $new_pos --;
-            while($is_holiday->{$weekdays->[$new_pos]}) {
-               $new_pos --;
-            }
-         }
+      if (!$opt->{IgnoreEdgeHoliday}) {
+         # IgnoreEdgeHoliday distorted the 'absolute' offset, therefore, don't cache it.
+         # cache it only when IgnoreEdgeHoliday is not set
+         $tradeday_by_exch_begin_offset->{$exch}->{$begin}->{$offset} = $new_yyyymmdd;
       }
-
-      my $new_tradeday = $weekdays->[$new_pos];
-
-      # we only cache offset from a tradeday, as offset from weekend and holiday
-      # can be affected by OnWeekend flag
-      $tradeday_by_exch_begin_offset->{$exch}->{$begin_tradeday}->{$offset}=$new_tradeday;
-
-      return $new_tradeday;
+      return $new_yyyymmdd;
    }
 }
 
@@ -348,21 +337,24 @@ sub get_holidays_by_exch_begin_end {
    for my $d (@$all_holidays) {
       if ($d >= $end ) {
          $end_covered ++;
-
-         if ($d == $end) {
-            push @holidays, $d; 
+         if ( $d == $end ) {
+            if (!$opt->{IgnoreEdgeHoliday} || $opt->{IgnoreEdgeHoliday} != -1) {
+               push @holidays, $d; 
+            }
          }
-
          last;
       }
 
-      if ( $d >= $begin ) {
+      if ( $d > $begin ) {
          push @holidays, $d; 
-         if ($d == $begin) {
-            $begin_covered ++;
-         }
       } else {
+         # $d <= $begin 
          $begin_covered ++;
+         if ( $d == $begin) {
+            if (!$opt->{IgnoreEdgeHoliday} || $opt->{IgnoreEdgeHoliday} != 1) {
+               push @holidays, $d; 
+            }
+         }
       }
    }
 
@@ -740,21 +732,11 @@ sub main {
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0) = ",
           get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, {verbose=>$verbose}),
-         ", expecting 20200904\n\n";
-          "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, {OnWeekend=>'next'}) = ",
-          get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, {OnWeekend=>'next', verbose=>$verbose}),
          ", expecting 20200908\n\n";
           "\n";
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0) = ",
           get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, {verbose=>$verbose}),
-         ", expecting 20200904\n\n";
-          "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, {OnWeekend=>'next'}) = ",
-          get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, {OnWeekend=>'next', verbose=>$verbose}),
          ", expecting 20200908\n\n";
           "\n";
 
@@ -763,11 +745,6 @@ sub main {
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1) = ",
           get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1, {verbose=>$verbose}),
-         ", expecting 20200908\n\n";
-          "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1, {OnWeekend=>'next'}) = ",
-          get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1, {OnWeekend=>'next', verbose=>$verbose}),
          ", expecting 20200909\n\n";
           "\n";
 
