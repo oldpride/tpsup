@@ -214,7 +214,7 @@ sub get_tradeday {
       $begin = sprintf("%4d%02d%02d", 1900+$year, $mon+1, $mday);
    }
 
-   return get_tradeday_by_exch_begin_offset($exch, $begin, $offset);
+   return get_tradeday_by_exch_begin_offset($exch, $begin, $offset, $opt);
 }
 
 

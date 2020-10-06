@@ -24,6 +24,11 @@ description:
    -d yyyymmdd     use this as today, the reference day.
    -e exch         exclude this exchange's holidays, default to NYSE
 
+   -OnWeekend next|previous 
+                   if reference day is on weekend, default to move it to 'previous'
+                   tradeday, eg, Friday.
+                   if set 'next', then will change it to 'next' tradeday, eg, Monday
+
    If reference day is on weekend, we will change to use the coming tradeday, normally
    Monday; but if Monday is holiday, then it will become Tuesday.
 
@@ -33,16 +38,20 @@ examples:
    $prog   0  # 0 day
    $prog  -3  # previous 3 tradedays
 
-   - 20201003 is Saturday, therefore current tradeday is set to Monday 20201005, then
-     the next tradeday will be 20201006
-   $prog -d 20201003 3   # you should see 20201006 20201007 20201008
-
    - 20200905 is Saturday. 20200907 is Monday, labor day holiday.
-     for 20200905/20200906/20200907, current tradeday changes to Tuesday 20200908
-     and the previous tradeday becomes Friday, 20200904
-   $prog -d 20200905  2  # you should see 20200909, 202009010
-   $prog -d 20200908  2  # you should see 20200909, 202009010
-   $prog -d 20200905 -2  # you should see 20200903, 20200904
+     for 20200905/20200906/20200907,
+         By default, current tradeday changes to Friday 20200904.  and the previous tradeday
+         becomes Thursday, 20200903
+         If '-OnWeekend next', current tradeday changes to Friday 20200908.
+         and the previous tradeday becomes Friday, 20200904
+
+   $prog -d 20200905   2  # you should see 20200908, 20200909
+   $prog -d 20200908   2  # you should see 20200909, 20200910
+   $prog -d 20200905  -2  # you should see 20200902, 20200903
+
+   $prog -d 20200905 -OnWeekend next  2  # you should see 20200909, 20200910
+   $prog -d 20200908 -OnWeekend next  2  # you should see 20200909, 20200910
+   $prog -d 20200905 -OnWeekend next -2  # you should see 20200903, 20200904
                         
 EOF
    exit 1;
@@ -58,6 +67,9 @@ eval {
          $i++;
       } elsif ($ARGV[$i] eq '-e') {
          $opt->{Exch} = $ARGV[$i+1];
+         $i++;
+      } elsif ($ARGV[$i] eq '-OnWeekend') {
+         $opt->{OnWeekend} = $ARGV[$i+1];
          $i++;
       } else {
          push @leftover, $ARGV[$i];
