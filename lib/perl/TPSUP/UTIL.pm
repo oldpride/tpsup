@@ -42,6 +42,7 @@ our @EXPORT_OK = qw(
    get_setting_from_profile
    should_do_it
    binary_search_numeric
+   render_arrays
 );
 
 
@@ -1605,6 +1606,85 @@ sub binary_search_numeric {
    }
 }
 
+sub render_arrays {
+   my ($rows, $opt) = @_;
+
+   if ($rows) {
+      my $type = ref $rows;
+      croak "wrong ref type '$type'. expecting 'ARRAY'" if $type ne 'ARRAY';
+   }
+
+   return if !@$rows;
+
+   my $max_by_pos;
+
+   for my $r (@$rows) {
+      for (my $i=0; $i<scalar(@$r); $i++) {
+         my $len = length($r->[$i]);
+
+         if (!$max_by_pos->{$i}) {
+            $max_by_pos->{$i} = $len;
+         } elsif ($max_by_pos->{$i} < $len) {
+            $max_by_pos->{$i} = $len;
+         }
+      }
+   }
+
+   my $num_fields = scalar(keys %$max_by_pos);
+
+   my $out_fh;
+   if ($opt->{interactive}) {
+      my $cmd = "less -S";
+
+      open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
+   } elsif ($opt->{out_fh}) {
+      $out_fh = $opt->{out_fh};
+   } else {
+      $out_fh = \*STDOUT;
+   }
+
+   if ($opt->{RenderHeader}) {
+      my $r = shift(@$rows);
+
+      for (my $i=0; $i<$num_fields; $i++) {
+         my $max = $max_by_pos->{$i};
+
+         my $v = defined($r->[$i]) ? "$r->[$i]" : "";
+         my $buffLen = $max - length($v);
+
+         print {$out_fh} ' | ', unless $i == 0;
+
+         print {$out_fh} +(' ' x $buffLen), $v;
+      }
+      print {$out_fh} "\n";
+
+      # print {$out_fh} the bar right under the header
+      my $length = 3 * ($num_fields -1);
+
+      for (my $i=0; $i<$num_fields; $i++) {
+         $length += $max_by_pos->{$i};
+      }
+
+      print {$out_fh} + ('=' x $length), "\n";
+   }
+
+   for my $r (@$rows) {
+      for (my $i=0; $i<$num_fields; $i++) {
+         my $max = $max_by_pos->{$i};
+
+         my $v = defined($r->[$i]) ? "$r->[$i]" : "";
+         my $buffLen = $max - length($v);
+
+         print {$out_fh} ' | ', unless $i == 0;
+
+         print {$out_fh} +(' ' x $buffLen), $v;
+      }
+      print {$out_fh} "\n";
+   }
+
+   close $out_fh if $out_fh != \*STDOUT && !$opt->{out_fh};
+}
+
 
 sub main {
    my $aref = [ -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ];
@@ -1620,6 +1700,17 @@ sub main {
 
    eval  {binary_search_numeric(-5, $aref, 0, scalar(@$aref -1))};
    print $@;
+
+   print "\ntest render_arrays()\n";
+   {
+       my $a = [ ['name', 'age'],
+                 ['john', 50, 'non-smoker'],
+                 ['judy', 49, 'smoker'],
+                 ['ava', 16],
+                 ['michael'],
+               ];
+      render_arrays($a);
+   }
 }
 
 main() unless caller();

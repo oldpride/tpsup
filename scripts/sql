@@ -50,6 +50,8 @@ usage:
    -output output.csv
                    default to STDOUT
 
+   -render         print output in grid
+
    -OutputDelimiter string
                    output delimiter, default to
 
@@ -75,7 +77,14 @@ examples:
 
    - mysql
    $prog tian\@tiandb 'SHOW TABLES'
+
    $prog tian\@tiandb '
+      SELECT m.firstname, m.lastname, r.ranking
+      FROM   tblMembers m, tblAssignment a, tblRanking r
+      WHERE m.id = a.MemberId and r.id = a.RankingId
+   '
+
+   $prog -render tian\@tiandb '
       SELECT m.firstname, m.lastname, r.ranking
       FROM   tblMembers m, tblAssignment a, tblRanking r
       WHERE m.id = a.MemberId and r.id = a.RankingId
@@ -110,6 +119,7 @@ my $useDbiString;
 my $usePlainPassword;
 my @other_options;
 my $dbh_attr;
+my $RenderOutput;
 
 GetOptions(
    'attr=s%'        => \$dbh_attr,  # Getopt::Long to load key-value-pair into a hash
@@ -118,6 +128,7 @@ GetOptions(
    'noheader'       => \$noheader,
    'maxout=s'       => \$maxout,
    'o|output=s'     => \$output,
+   'render'         => \$RenderOutput,
    'conn=s'         => \$connfile,
    'LowMemory'      => \$LowMemory,
    'OutputDelimiter=s' => \$OutputDelimiter,
@@ -132,6 +143,7 @@ usage("wrong number of args") if @ARGV < 2;
 my $opt = {
    dbh_attr=> $dbh_attr,
    output=> $output,
+   RenderOutput=> $RenderOutput,
    noheader=>$noheader,
    maxout=> $maxout,
    TrimSql=>$trim,

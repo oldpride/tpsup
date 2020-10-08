@@ -14,7 +14,7 @@ use Carp;
 use DBI;
 use JSON;
 use Data::Dumper;
-use TPSUP::UTIL qw(get_tmp_file get_out_fh);
+use TPSUP::UTIL qw(get_tmp_file get_out_fh render_arrays);
 use TPSUP::LOCK qw(tpeng_unlock);
 use TPSUP::CSV qw(parse_csv_file);
 
@@ -264,20 +264,18 @@ sub run_sql {
       
    my $ReturnDetail;
    my $return_aref;
+   my $headers = [];
       
    if ($opt->{OutputHeader}) {
-      my @user_headers = split /,/, $opt->{OutputHeader};
-      $ReturnDetail->{headers} = \@user_headers;
-      
-      if (!$opt->{noheader}) {
-         print {$out_fh} join($OutputDelimiter, @user_headers), "\n" if $out_fh;
-      }
+      $headers = [split /,/, $opt->{OutputHeader}];
    } elsif ($sth->{NAME}) {
-      @{$ReturnDetail->{headers}} = @{$sth->{NAME}};
+      $headers = $sth->{NAME};
+   }
 
-      if (!$opt->{noheader}) {
-         print {$out_fh} join($OutputDelimiter, @{$sth->{NAME}}), "\n" if $out_fh;
-      }
+   $ReturnDetail->{headers} = $headers;
+
+   if (!$opt->{noheader} && !$opt->{RenderOutput}) {
+      print {$out_fh} join($OutputDelimiter, @$headers), "\n" if $out_fh;
    }
       
    my $count=0;
@@ -330,11 +328,15 @@ sub run_sql {
    }
      
    if ($out_fh) {
-      # no warnings for the join
-      no warnings 'uninitialized';
-      
-      for my $array_ref ( @$return_aref ) {
-         print {$out_fh} join($OutputDelimiter, @$array_ref ), "\n";
+      if ($opt->{RenderOutput}) {
+         TPSUP::UTIL::render_arrays([$headers, @$return_aref], {%$opt, RenderHeader=>1});
+      } else {
+         # no warnings for the join
+         no warnings 'uninitialized';
+         
+         for my $array_ref ( @$return_aref ) {
+            print {$out_fh} join($OutputDelimiter, @$array_ref ), "\n";
+         }
       }
    }
       
@@ -353,6 +355,19 @@ sub array_to_InClause {
 
    return "'" . join("', '", @$aref) . "'";
 }
+
+
+sub main {
+   my $sql = "
+     SELECT m.firstname, m.lastname, r.ranking
+       FROM   tblMembers m, tblAssignment a, tblRanking r
+      WHERE m.id = a.MemberId and r.id = a.RankingId
+   ";
+
+   run_sql($sql, {nickname=>'tian@tiandb', RenderOutput=>1, output=>'-'});
+}
+
+main() unless caller();
       
 1
       
