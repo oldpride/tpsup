@@ -7,6 +7,12 @@ use Getopt::Long;
 use Carp;
 use MIME::Lite;
 
+my $host = `hostname`; chomp $host;
+my $id = `id`; chomp $id;
+my ($user) = ($id =~ /^.+?\((.+?)\)/);
+my $from_address_form = 'noreply.$user@$host';
+my $from_address      = "noreply.$user\@$host";
+
 my $prog = $0; $prog =~ s:.*/::;
 
 sub usage {
@@ -27,7 +33,8 @@ usage:
                   CC addresses
 
    -f from_address
-                  Default to 'login.host\@discard.mail.abc.com';
+                  Default to '$from_address_form'. 
+                  for example, it is '$from_address' on this host
 
    -a attachment  Mail attachment, can use multiple times.
 
@@ -79,12 +86,8 @@ my @attachments;
 my @Types;
 my @names;
 my @cc;
-my $host = `hostname`; chomp $host;
-my $id = `id`; chomp $id;
 my $main_message_type = "TEXT";
 my $PrefixSpace;
-my ($user) = ($id =~ /^.+?\((.+?)\)/);
-my $from_address = "$user.$host\@discard.mail.abc.com";
 
 GetOptions(
    'v|verbose'       => \$verbose,
