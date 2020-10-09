@@ -221,6 +221,8 @@ sub run_sql {
       $sql =~ s/go\s*$//s;
    }
       
+   $opt->{verbose} && print STDERR "\nfinalized sql = $sql\n";
+
    my $sth = $dbh->prepare($sql);
 
    # restore the dbh attr after prepare()
