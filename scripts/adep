@@ -46,13 +46,13 @@ description:
 examples:
 
    - test a job in box
-   $prog -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt test_job1
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_job1
 
    - test a box
-   $prog -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt test_box1
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_box1
 
    - filter out job on-hold and on-ice
-   $prog -df adep_autorep_J_q_example.txt \\
+   $prog -df adep_autorep_q_J_example.txt \\
          -sf adep_autorep_J_example.txt \\
          -me '\$Status !~ /OH|OI/' \\
          test_job1

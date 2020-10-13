@@ -739,10 +739,10 @@ sub print_autorep_J_job {
 sub main {
    use Data::Dumper;
    print "autorep_J=", Dumper(autorep_J("file=autorep_J_example.txt")); 
-   print "autorep_q_J=", Dumper(autorep_q_J("file=autorep_J_q_example.txt")); 
+   print "autorep_q_J=", Dumper(autorep_q_J("file=autorep_q_J_example.txt")); 
    print "get_dependency=", Dumper(get_dependency("test_job1", 
                                      {
-                                        DetailFiles => "autorep_J_q_example.txt", 
+                                        DetailFiles => "autorep_q_J_example.txt", 
                                         StatusFiles => "autorep_J_example.txt", 
                                         #verbose => 1,
                                      })); 

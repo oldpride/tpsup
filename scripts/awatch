@@ -62,10 +62,10 @@ examples:
    $prog -                  # take from STDIN
 
    - test without autosys
-   $prog -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
-   $prog -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
 
-   $prog -df adep_autorep_J_q_example.txt -sf adep_autorep_J_example.txt -J test_box1 filter_data
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt -J test_box1 filter_data
 
 END
 
