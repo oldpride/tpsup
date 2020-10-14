@@ -270,6 +270,10 @@ sub get_cache_file {
 
    if (!need_refresh($file, $opt)) {
       $opt->{verbose} && print STDERR "we will use cached $file\n";
+
+      if (-z $file) {
+         print STDERR "cache $file has zero size. if it shouldn't be zero, delete it or wait it to expire\n";
+      }
       return $file;
    }
 
