@@ -132,7 +132,7 @@ if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
   
       if ($attr =~ /watch_file/) {
          system("ls -l $resolved");
-      } elsif ($attr =~ /std_out_file/) {
+      } elsif ($attr =~ /std_out_file|std_err_file/) {
          $resolved =~ s/[>]+//g;
          system("ls -l $resolved");
       } elsif ($attr =~ /^(command)$/) {
