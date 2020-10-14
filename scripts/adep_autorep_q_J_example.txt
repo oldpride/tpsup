@@ -18,27 +18,35 @@ owner: jerry@juno
 permission:
 alarm_if_fail: 1
 profile: /etc/profile
+box_terminator: 1
+job_terminator: 1  
 
 /* ---------- test_job2 -------------*/
   
 insert_job: test_job2 job_type: CMD
 box_name: test_box1
-command: sleep 60
+command: $TPSUP/scripts/adebug test_job2 >$HOME/`date +%Y%d%d`.log
 machine: juno
 owner: jerry@juno
 permission:
 alarm_if_fail: 1
-profile: /etc/profile
+profile: "/home/tian/sitebase/github/tpsup/profile"
+std_out_file: ">>$TPSUP/scripts/adebug_$AUTO_JOB_NAME.log"
+std_err_file: ">$TPSUP/scripts/adebug_$AUTO_JOB_NAME.err"
+job_terminator: 1
 
 /* ---------- test_job3 -------------*/
   
-insert_job: test_job3 job_type: CMD
-command: sleep 60
+insert_job: test_job3 job_type: FW
 machine: juno
 owner: jerry@juno
 permission:
 alarm_if_fail: 1
-profile: /etc/profile
+profile: "/home/tian/sitebase/github/tpsup/profile"
+watch_file: "$TPSUP/scripts/adebug_$AUTO_JOB_NAME.dat"
+watch_interval: 60
+term_run_time: 120
+box_terminator: 1
 
 /* ---------- test_job4 -------------*/
   

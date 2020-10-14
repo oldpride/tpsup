@@ -225,6 +225,7 @@ sub autorep_q_J {
                confess "unexpected insert_job line: $line\n";
             } else {
                $result->{$current_JobName}->{job_type} = $a[1];
+               $result->{$current_JobName}->{defination} = "$line\n";
             }
          } else {
             if (!$current_JobName) {
@@ -232,6 +233,7 @@ sub autorep_q_J {
             }
 
             $result->{$current_JobName}->{$attr} = $rest;
+            $result->{$current_JobName}->{defination} .= "$line\n";
          }
       }
    }

@@ -40,6 +40,8 @@ our @EXPORT_OK = qw(
    get_timestamp
    get_setting_from_env
    get_setting_from_profile
+   source_profile
+   resolve_string_in_env
    should_do_it
    binary_search_numeric
    render_arrays
@@ -95,6 +97,43 @@ sub get_setting_from_profile {
    return undef;
 }
 
+
+sub source_profile {
+   my ($profile, $opt) = @_;
+
+   my @env = `/bin/bash -c ". $profile; env"`;
+   chomp @env;
+
+   for my $line (@env) {
+      if ($line =~ /^([^=\s]+?)=(.*)/) {
+         my ($k, $v) = ($1, $2);
+
+         $v = '' if ! defined $v;
+
+         $ENV{$k} = $v;
+      }
+   }
+}
+
+
+sub resolve_string_in_env {
+   my ($string, $opt) = @_;
+
+   # resolve a string without executing: < > `
+
+   $string =~ s/[>]/.greaterthan./g;
+   $string =~ s/[<]/.lessthan./g;
+   $string =~ s/[`]/.backtick./g;
+
+   my $resolved = `bash -c 'echo $string'`;
+   chomp $resolved;
+
+   $resolved =~ s/[.]greaterthan[.]/>/g;
+   $resolved =~ s/[.]lessthan[.]/</g;
+   $resolved =~ s/[.]backtick[.]/`/g;
+
+   return $resolved;
+}
 
 sub get_timestamp {
    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
@@ -1687,6 +1726,8 @@ sub render_arrays {
 
 
 sub main {
+   print "\n------------------------------------------------\n";
+   print "test binary search\n";
    my $aref = [ -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ];
 
    eval {
@@ -1701,7 +1742,8 @@ sub main {
    eval  {binary_search_numeric(-5, $aref, 0, scalar(@$aref -1))};
    print $@;
 
-   print "\ntest render_arrays()\n";
+   print "\n------------------------------------------------\n";
+   print "test render_arrays()\n";
    {
        my $a = [ ['name', 'age'],
                  ['john', 50, 'non-smoker'],
@@ -1710,6 +1752,19 @@ sub main {
                  ['michael'],
                ];
       render_arrays($a);
+   }
+
+   print "\n------------------------------------------------\n";
+   print "test resolve_string_in_env()\n";
+   my @strings = (
+      '$HOME/junk',
+      '>>$HOME/junk',
+      '<$HOME/junk',
+      '$HOME/`date +%Y%m%d`.log',
+   );
+
+   for my $s (@strings) {
+      print "resolve_string_in_env($s) = ", resolve_string_in_env($s), "\n";
    }
 }
 

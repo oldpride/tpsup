@@ -1,0 +1,158 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::AUTOSYS qw( 
+   query_jobs 
+   print_autorep_J_header
+   get_autorep_J_format
+   autorep_J
+   print_autorep_J_job
+);
+use TPSUP::UTIL qw(
+   get_in_fh
+   source_profile
+   resolve_string_in_env
+);
+# use Carp::Always;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $DetailExpire = 24*3600;
+my $interval = 10;
+my $interval_limit = 60;
+my $StatusExpire = 0;  
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog jobname
+   
+description:
+
+   debug an autosys job
+
+   # -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
+
+   -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
+
+   -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
+
+   -v                  verbose mode
+
+   If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
+   shell environment.
+
+   If \$UNIV_PATTERNS is not set in environment, this script will search it in
+   ~/.tpautosys, a bash init file.
+
+examples:
+
+   - test without autosys, a CMD
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_job2
+
+   - test without autosys, a FW, file watcher
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_job3
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $DetailFiles;
+my $StatusFiles;
+# my $UnivPatterns;
+my $reset;
+my $arg_is_job;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'J'             => \$arg_is_job,
+   #'u=s'           => \$UnivPatterns,
+   'df=s'          => \$DetailFiles,
+   'sf=s'          => \$StatusFiles,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($job) = @ARGV;
+
+my $opt = {
+   #UnivPatterns => $UnivPatterns,
+   StatusExpire => 0,  # always need the latest info
+   DetailFiles  => $DetailFiles,
+   StatusFiles  => $StatusFiles,
+   Jobs         => [$job],
+   #StatusOnly   => 1,  # only need to query status, ie, autorep -J
+   verbose      => $verbose,
+};
+
+my $info = query_jobs($opt);
+
+my $error = 0;
+if (!exists $info->{$job}) {
+   die "$job not found.\n";
+}
+
+if (!exists $info->{$job}->{Status}) {
+   die "$job status not found. just deleted?";
+}
+
+print_autorep_J_header();
+print_autorep_J_job($info, $job, "", $opt);
+print "\n";
+
+if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+   print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
+   print "\n";
+   $error ++;
+}
+
+if (!$info->{$job}->{defination}) {
+   print Dumper($info->{$job});
+   die "$job missing defination. just deleted?";
+}
+
+print $info->{$job}->{defination};
+print "\n";
+
+if ($info->{$job}->{profile}) {
+   my $profile = $info->{$job}->{profile};
+
+   TPSUP::UTIL::source_profile($profile);
+}
+
+$ENV{AUTO_JOB_NAME} = $job;
+
+if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
+   # resolve any env variables
+   for my $attr (qw(watch_file command std_out_file std_err_file)) {
+      next if ! $info->{$job}->{$attr};
+      my $resolved = resolve_string_in_env($info->{$job}->{$attr});
+      print "$attr: $resolved\n\n";
+  
+      if ($attr =~ /watch_file/) {
+         system("ls -l $resolved");
+      } elsif ($attr =~ /std_out_file/) {
+         $resolved =~ s//[>]+/g;
+         system("ls -l $resolved");
+      } elsif ($attr =~ /^(command)$/) {
+         my ($exe, $junk) = split /[\s<>]/, $resolved;
+         print "which exe: "; system("which $exe");
+         print "\n";
+      }
+
+   }
+} else {
+   die "unsupported job_type = $info->{$job}->{job_type}";
+}
+
+
