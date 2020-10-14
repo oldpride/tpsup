@@ -272,7 +272,7 @@ sub get_cache_file {
       $opt->{verbose} && print STDERR "we will use cached $file\n";
 
       if (-z $file) {
-         print STDERR "cache $file has zero size. if it shouldn't be zero, delete it or wait it to expire\n";
+         print STDERR "Cache file $file has zero size. If it shouldn't be zero, delete it or wait for it to expire\n";
       }
       return $file;
    }

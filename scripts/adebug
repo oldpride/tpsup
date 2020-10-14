@@ -9,11 +9,9 @@ use TPSUP::AUTOSYS qw(
    query_jobs 
    print_autorep_J_header
    get_autorep_J_format
-   autorep_J
    print_autorep_J_job
 );
 use TPSUP::UTIL qw(
-   get_in_fh
    source_profile
    resolve_string_in_env
 );
@@ -22,8 +20,6 @@ use TPSUP::UTIL qw(
 my $prog = $0; $prog =~ s:.*/::;
 
 my $DetailExpire = 24*3600;
-my $interval = 10;
-my $interval_limit = 60;
 my $StatusExpire = 0;  
 
 sub usage {
@@ -37,21 +33,18 @@ usage:
    
 description:
 
-   debug an autosys job
-
-   # -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
+   debug an autosys job:
+      - support job_types: CMD, FW
+      - load the profile if defined
+      - resolve variables in attributes: command, std_out_file, std_err_file, watch_file
+      - find the command path
+      - ls -l file
 
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
 
    -v                  verbose mode
-
-   If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
-   shell environment.
-
-   If \$UNIV_PATTERNS is not set in environment, this script will search it in
-   ~/.tpautosys, a bash init file.
 
 examples:
 
@@ -69,14 +62,11 @@ END
 my $verbose;
 my $DetailFiles;
 my $StatusFiles;
-# my $UnivPatterns;
 my $reset;
 my $arg_is_job;
 
 GetOptions(
    'v|verbose'     => \$verbose,
-   'J'             => \$arg_is_job,
-   #'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
 ) || usage("cannot parse command line: $!");
@@ -86,12 +76,10 @@ usage("wrong number of args") if @ARGV != 1;
 my ($job) = @ARGV;
 
 my $opt = {
-   #UnivPatterns => $UnivPatterns,
    StatusExpire => 0,  # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
    Jobs         => [$job],
-   #StatusOnly   => 1,  # only need to query status, ie, autorep -J
    verbose      => $verbose,
 };
 
@@ -103,7 +91,7 @@ if (!exists $info->{$job}) {
 }
 
 if (!exists $info->{$job}->{Status}) {
-   die "$job status not found. just deleted?";
+   die "$job status not found. just deleted?\n";
 }
 
 print_autorep_J_header();
@@ -117,8 +105,8 @@ if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
 }
 
 if (!$info->{$job}->{defination}) {
-   print Dumper($info->{$job});
-   die "$job missing defination. just deleted?";
+   print "\$info->{$job} = ", Dumper($info->{$job});
+   die "$job missing defination. just deleted?\n";
 }
 
 print $info->{$job}->{defination};
@@ -126,8 +114,11 @@ print "\n";
 
 if ($info->{$job}->{profile}) {
    my $profile = $info->{$job}->{profile};
-
+   
+   print "begin sourcing $profile\n";
    TPSUP::UTIL::source_profile($profile);
+   print "done  sourcing $profile\n";
+   print "\n";
 }
 
 $ENV{AUTO_JOB_NAME} = $job;
@@ -152,7 +143,7 @@ if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
 
    }
 } else {
-   die "unsupported job_type = $info->{$job}->{job_type}";
+   die "unsupported job_type = $info->{$job}->{job_type}\n";
 }
 
 
