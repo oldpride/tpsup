@@ -147,8 +147,8 @@ if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
       } elsif ($attr =~ /^(command)$/) {
          my ($exe, $junk) = split /[\s<>]/, $resolved;
          print "which exe: "; system("which $exe");
-         print "\n";
       }
+      print "\n";
 
    }
 } else {
