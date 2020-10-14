@@ -142,7 +142,7 @@ if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
       if ($attr =~ /watch_file/) {
          system("ls -l $resolved");
       } elsif ($attr =~ /std_out_file/) {
-         $resolved =~ s//[>]+/g;
+         $resolved =~ s/[>]+//g;
          system("ls -l $resolved");
       } elsif ($attr =~ /^(command)$/) {
          my ($exe, $junk) = split /[\s<>]/, $resolved;
