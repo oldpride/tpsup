@@ -110,6 +110,11 @@ sub source_profile {
 
          $v = '' if ! defined $v;
 
+         # exclude functions because they tend to be multilines and cause errors.
+         # BASH_FUNC_tpproxy%%=() {  local usage;
+         # BASH_FUNC_tpsup()=() {  local usage;
+         next if $v =~ /^\(\)/;
+
          $ENV{$k} = $v;
       }
    }
