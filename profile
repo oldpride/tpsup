@@ -325,6 +325,14 @@ functions () {
    echo "to see detail: typeset -f"
 }
 
+tprefresh () {
+   # refresh variables
+   export yyyymmdd=`date +%Y%m%d`
+   export yyyy=`echo $yyyymmdd|cut -c1-4`
+   export mm=`echo $yyyymmdd|cut -c5-6`
+   export dd=`echo $yyyymmdd|cut -c7-8`
+}
+
 # p3env -q # default to python 3
 
 alias p2c="python2 -m py_compile"
