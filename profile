@@ -66,7 +66,7 @@ usage:
    env_var default to PATH, but can be anthing, eg, LD_LIBRARY_PATH,MANPATH,PERL5LIB,PYTHONPATH
 
    "
-
+   # don't forget to localize OPTIND OPTARG 
    while getopts q o;
    do
       case "$o" in
@@ -327,10 +327,61 @@ functions () {
 
 tprefresh () {
    # refresh variables
-   export yyyymmdd=`date +%Y%m%d`
-   export yyyy=`echo $yyyymmdd|cut -c1-4`
-   export mm=`echo $yyyymmdd|cut -c5-6`
-   export dd=`echo $yyyymmdd|cut -c7-8`
+
+   local OPTIND OPTARG verbose check_only
+
+   verbose=N
+   check_only=N
+
+   # don't forget to localize OPTIND OPTARG 
+   while getopts cv o;
+   do
+      case "$o" in
+         c) check_only=Y;;
+         v) verbose=Y;;
+         *) echo "unknow switch. $usage">&2; return 1;;
+      esac
+   done
+
+   shift $((OPTIND-1))
+
+   if [ $check_only = N ]; then
+      # today
+      export yyyymmdd=`date +%Y%m%d`
+      export yyyy=`echo $yyyymmdd|cut -c1-4`
+      export   mm=`echo $yyyymmdd|cut -c5-6`
+      export   dd=`echo $yyyymmdd|cut -c7-8`
+   
+      # yesterday
+      export pyyyymmdd=`tradeday -1`
+      export pyyyy=`echo $pyyyymmdd|cut -c1-4`
+      export   pmm=`echo $pyyyymmdd|cut -c5-6`
+      export   pdd=`echo $pyyyymmdd|cut -c7-8`
+   
+      # tomorrow
+      export tyyyymmdd=`tradeday +1`
+      export tyyyy=`echo $tyyyymmdd|cut -c1-4`
+      export   tmm=`echo $tyyyymmdd|cut -c5-6`
+      export   tdd=`echo $tyyyymmdd|cut -c7-8`
+   
+      # time
+      export HHMMSS=`date +%H%M%S`
+      export HH=`echo $HHMMSS|cut -c1-2`
+      export MM=`echo $HHMMSS|cut -c3-4`
+      export SS=`echo $HHMMSS|cut -c5-6`
+   fi
+
+   if [ $verbose = Y -o $check_only = Y ]; then
+   cat >&2 <<EOF
+
+today:      yyyymmdd  yyyy  mm  dd = $yyyymmdd $yyyy $mm $dd
+yesterday: pyyyymmdd pyyyy pmm pdd = $pyyyymmdd $pyyyy $pmm $pdd
+tomorrow:  tyyyymmdd tyyyy tmm tdd = $tyyyymmdd $tyyyy $tmm $tdd
+
+HHMMSS HH MM SS = $HHMMSS $HH $MM $SS
+
+EOF
+   fi
 }
 
 # p3env -q # default to python 3
