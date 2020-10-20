@@ -2172,7 +2172,11 @@ sub render_csv {
       }
    }
    
+   my $count = 0;
    for my $r (@$rows) {
+      last if $opt->{PrintCsvMaxRows} && $count >= $opt->{PrintCsvMaxRows};
+      $count ++;
+
       for my $f (@$fields) {
          next if ! defined $r->{$f};
    
@@ -2218,7 +2222,11 @@ sub render_csv {
    }
    print {$out_fh} "\n";
    
+   $count = 0;
    for my $r (@$rows) {
+      last if $opt->{PrintCsvMaxRows} && $count >= $opt->{PrintCsvMaxRows};
+      $count ++;
+
       for (my $i=0; $i<$num_fields; $i++) {
          my $f = $fields->[$i];
          my $max = $max_by_field->{$f};
