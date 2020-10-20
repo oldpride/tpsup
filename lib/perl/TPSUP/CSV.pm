@@ -1440,8 +1440,11 @@ sub print_csv_hashArray {
       
       no warnings "uninitialized";
       
+      my $count = 0;
       for my $r (@{$print_HashArray}) {
+         last if $opt->{PrintCsvMaxRows} && $count >= $opt->{PrintCsvMaxRows};
          print {$out_fh} join($delimiter, @{$r}{@$fields}), "\n";
+         $count ++;
       }
       
       close $out_fh if $out_fh != \*STDOUT;
