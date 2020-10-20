@@ -67,6 +67,8 @@ usage:
    
    -render                      print out CSV in grids
    
+   -maxrow INT                  print at most INT number of rows
+
    -option setting              other options, eg,
                                    -op InputNoHeader        this indicates no header line in the input file
                                    -op UsePosition          this indicates to use cO,c1,... as column names
@@ -78,6 +80,7 @@ usage:
                                    -op InGroupGetFirst      get the first of each sort group
                                    -op InGroupGetLast       get the last of each sort group
                                    -op DeleteColumns=a,b,... delete these columns
+                                   -op PrintCsvMaxRows=INT  print max number of rows
 
    -trimfloat f1,f2,... trim floating points for these columns, eg 2.03000 -> 2.03
 
@@ -232,12 +235,14 @@ my @SpaceFiles;
 my $trimfloatString;
 my $render;
 my $FIX;
+my $maxrows;
 
 GetOptions(
    'verbose' => \$verbose,
    'd|delimiter=s' => \$delimiter,
    'delete' => \$delete,
    'render' => \$render,
+   'maxrows=s' => \$maxrows,
    'skip=s' => \$skiplines,
    'me=s' => \@match_expression,
    'xe=s' => \@exclude_expression,
@@ -274,6 +279,7 @@ my $opt = {
    PrintCmd => 1,
    ShowDiff => 1,
    RenderStdout => $render,
+   PrintCsvMaxRows => $maxrows,
    verbose => $verbose,
    FIX => $FIX,
 };
