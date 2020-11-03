@@ -23,6 +23,14 @@ package TPSUP::Expression;
 # with the 'my' above commented out, we need the following 'no strict ..' to
 # disable the compiler's complain.
 
+# for example, to set a variable from another program
+#    use TPSUP::Expression;
+#    no warnings 'once';   # this prevents: Name ... used only once: possible typo.
+#    $TPSUP::Expression::myvar = 1;
+#    @TPSUP::Expression::myarray = (1,2);
+#    $TPSUP::Expression::myhash = {};
+#    $TPSUP::Expression::myhash{firstname} = 'jack';
+
 use strict;
 no strict 'refs' ;
 no strict 'vars';
