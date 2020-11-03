@@ -168,6 +168,8 @@ sub dump_object {
 
 sub run_sql {
    my ($sql, $opt) = @_;
+
+   my $original_sql = $sql;
       
    my $dbh = get_dbh($opt);
       
@@ -221,7 +223,7 @@ sub run_sql {
       $sql =~ s/go\s*$//s;
    }
       
-   $opt->{verbose} && print STDERR "\nfinalized sql = $sql\n";
+   $opt->{verbose} && $sql ne $original_sql && print STDERR "\nfinalized sql = $sql\n";
 
    my $sth = $dbh->prepare($sql);
 
