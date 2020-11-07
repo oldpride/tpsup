@@ -124,7 +124,7 @@ my \$verbose = $verbose;
 
 EOF
 
-         print {$cfh} "my ", Dumper(\@ARGV), "\n";
+         print {$cfh} "my ", Dumper($args), "\n";
       
          #print {$cfh} qq(\$ENV{PATH}="/usr/bin:/bin:\$ENV{PATH}";\n);
          
