@@ -22,4 +22,4 @@ fi
 
 db_nickname=$1
 
-sql -noheader $db_nickname "select 'success'" || echo "failure"
+sql -noheader $db_nickname "select 'success'" || (echo "failure"; exit 1)
