@@ -45,6 +45,7 @@ our @EXPORT_OK = qw(
    should_do_it
    binary_search_numeric
    render_arrays
+   Print_ArrayOfHashes_Vertically
 );
 
 
@@ -1660,6 +1661,44 @@ sub render_arrays {
 
    return if !@$rows;
 
+   my $out_fh;
+   if ($opt->{interactive}) {
+      my $cmd = "less -S";
+
+      open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
+   } elsif ($opt->{out_fh}) {
+      $out_fh = $opt->{out_fh};
+   } else {
+      $out_fh = \*STDOUT;
+   }
+
+   if ($opt->{Vertical}) {
+      # when vertically print the arrays, we need at least 2 rows, with the first
+      # as the header
+      #    name: tian
+      #     age: 36
+      #
+      #    name: john
+      #     age: 30
+      return if @$rows < 2;;
+
+      my $headers = $rows->[0];
+
+      my $num_columns = scalar(@$headers);
+
+      for (my $i=1; $i<scalar(@$rows); $i++) {
+         my $r = $rows->[$i];
+         for (my $j=0; $j<$num_columns; $j++) {
+            printf {$out_fh} "%25s '%s'\n", 
+                             defined($headers->[$j]) ? $headers->[$j] : '',
+                             defined(      $r->[$j]) ?       $r->[$j] : '';
+         }
+         print "\n";
+      }
+
+      return;
+   }
+
    my $max_by_pos;
 
    for my $r (@$rows) {
@@ -1675,17 +1714,6 @@ sub render_arrays {
    }
 
    my $num_fields = scalar(keys %$max_by_pos);
-
-   my $out_fh;
-   if ($opt->{interactive}) {
-      my $cmd = "less -S";
-
-      open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
-   } elsif ($opt->{out_fh}) {
-      $out_fh = $opt->{out_fh};
-   } else {
-      $out_fh = \*STDOUT;
-   }
 
    if ($opt->{RenderHeader}) {
       my $r = shift(@$rows);
@@ -1729,6 +1757,36 @@ sub render_arrays {
    close $out_fh if $out_fh != \*STDOUT && !$opt->{out_fh};
 }
 
+sub Print_ArrayOfHashes_Vertically {
+   my ($aref, $opt) = @_;
+
+   return if !$aref || !@$aref;
+
+   my $headers;
+   
+   if ($opt->{headers}) {
+      # user-specified headers can be a ref of array or a string
+      my $type = ref $opt->{headers};
+
+      if ($type eq 'ARRAY') {
+         $headers = $opt->{headers};
+      } else {
+         @$headers = split /,/, $opt->{headers};
+      }
+   } else {
+      @$headers = sort(keys(%{$aref->[0]}));
+   }
+      
+   my $out_fh  = $opt->{out_fh}  ? $opt->{out_fh}  : \*STDOUT;
+
+   for my $r (@$aref) {
+      for my $c (@$headers) {
+         printf "%25s '%s'\n", $c, defined($r->{$c}) ? $r->{$c} : '';
+      } 
+      print "\n";
+   }
+}
+
 
 sub main {
    print "\n------------------------------------------------\n";
@@ -1757,6 +1815,17 @@ sub main {
                  ['michael'],
                ];
       render_arrays($a);
+      render_arrays($a, {Vertical=>1});
+   }
+
+   print "\n------------------------------------------------\n";
+   print "test Print_ArrayOfHashes_Vertically()\n";
+   {
+       my $aref = [ 
+             {name => 'tian', age => 36, ranking=> 'solider'},
+             {name => 'john', age => 30, ranking=> 'general'},
+       ];
+       Print_ArrayOfHashes_Vertically($aref, {headers=>"name,age,ranking"});
    }
 
    print "\n------------------------------------------------\n";

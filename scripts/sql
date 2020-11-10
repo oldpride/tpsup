@@ -52,6 +52,8 @@ usage:
 
    -render         print output in grid
 
+   -vertical       print output vertically. best for 1-row result with many columns.
+
    -OutputDelimiter string
                    output delimiter, default to
 
@@ -76,19 +78,25 @@ examples:
    $prog sybuser1\@sybdb1 file /apps/get_positions.sql
 
    - mysql
-   $prog tian\@tiandb 'SHOW TABLES'
+   $prog tian\@tiandb "SHOW TABLES"
 
-   $prog tian\@tiandb '
+   $prog tian\@tiandb "
       SELECT m.firstname, m.lastname, r.ranking
       FROM   tblMembers m, tblAssignment a, tblRanking r
       WHERE m.id = a.MemberId and r.id = a.RankingId
-   '
+   "
 
-   $prog -render tian\@tiandb '
+   $prog -render tian\@tiandb "
       SELECT m.firstname, m.lastname, r.ranking
       FROM   tblMembers m, tblAssignment a, tblRanking r
       WHERE m.id = a.MemberId and r.id = a.RankingId
-   '
+   "
+
+   $prog -vertical tian\@tiandb "
+      SELECT m.firstname, m.lastname, r.ranking
+      FROM   tblMembers m, tblAssignment a, tblRanking r
+      WHERE m.id = a.MemberId and r.id = a.RankingId
+   "
 
    - test passwords
    $prog -maxout 10 -DbiString \\
@@ -99,7 +107,7 @@ examples:
    "select * from all_synonyms"
 
    - test LongReadLen
-   $prog -v -attr LongReadLen=12800 tian\@tiandb 'select * from tblMembers'
+   $prog -v -attr LongReadLen=12800 tian\@tiandb "select * from tblMembers"
 
 END
 
@@ -120,6 +128,7 @@ my $usePlainPassword;
 my @other_options;
 my $dbh_attr;
 my $RenderOutput;
+my $Vertical;
 
 GetOptions(
    'attr=s%'        => \$dbh_attr,  # Getopt::Long to load key-value-pair into a hash
@@ -129,6 +138,7 @@ GetOptions(
    'maxout=s'       => \$maxout,
    'o|output=s'     => \$output,
    'render'         => \$RenderOutput,
+   'vertical'       => \$Vertical,
    'conn=s'         => \$connfile,
    'LowMemory'      => \$LowMemory,
    'OutputDelimiter=s' => \$OutputDelimiter,
@@ -140,9 +150,12 @@ GetOptions(
 
 usage("wrong number of args") if @ARGV < 2;
 
+$RenderOutput = 1 if $Vertical;
+
 my $opt = {
    dbh_attr=> $dbh_attr,
    output=> $output,
+   Vertical=> $Vertical,
    RenderOutput=> $RenderOutput,
    noheader=>$noheader,
    maxout=> $maxout,
