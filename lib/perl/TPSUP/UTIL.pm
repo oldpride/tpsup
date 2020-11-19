@@ -159,7 +159,7 @@ sub get_file_timestamp {
 
    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($mtime);
 
-   return sprintf("%04d%02d%02d%02d%02d%02d", 
+   return sprintf("%04d/%02d/%02d %02d:%02d:%02d", 
                   $year+1900, $mon+1, $mday, $hour, $min, $sec);
 }
 
