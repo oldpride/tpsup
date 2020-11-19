@@ -38,6 +38,7 @@ our @EXPORT_OK = qw(
    get_java
    glob2regex
    get_timestamp
+   get_file_timestamp
    get_setting_from_env
    get_setting_from_profile
    source_profile
@@ -144,6 +145,22 @@ sub resolve_string_in_env {
 sub get_timestamp {
    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
    return sprintf("%04d%02d%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
+}
+
+sub get_file_timestamp {
+   my ($file, $opt) = @_;
+
+   my @array  = lstat($file);
+
+   return undef if !@array;
+
+   my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks)
+      = @array;
+
+   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($mtime);
+
+   return sprintf("%04d%02d%02d%02d%02d%02d", 
+                  $year+1900, $mon+1, $mday, $hour, $min, $sec);
 }
 
 my $tmp_index;
@@ -1840,6 +1857,11 @@ sub main {
    for my $s (@strings) {
       print "resolve_string_in_env($s) = ", resolve_string_in_env($s), "\n";
    }
+
+   print "\n------------------------------------------------\n";
+   print "test get_file_stamp('/etc/profile')\n";
+   print get_file_timestamp('/etc/profile'), "\n";
+   # print Dumper(lstat('/etc/.profile')), "\n";
 }
 
 main() unless caller();
