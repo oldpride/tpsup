@@ -81,6 +81,8 @@ if [ $rc -eq 0 ]; then
    echo ""
    ( set -x; git status )
    echo ""
+
+   export PATH=/usr/lib/git-core:$PATH
    if which git-restore-mtime; then
       ( set -x; git-restore-mtime )
    fi
