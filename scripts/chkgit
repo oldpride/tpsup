@@ -74,6 +74,12 @@ do
             echo "Answer is "$answer". Not done"
 	 else
             (set -x; git pull)
+
+            echo ""
+            export PATH=/usr/lib/git-core:$PATH
+            if which git-restore-mtime; then
+               ( set -x; git-restore-mtime )
+            fi
          fi
       fi
    fi
@@ -94,6 +100,11 @@ do
             (set -x; git add -A)
 	    (set -x; git commit -m update)
 	    (set -x; git push)
+            echo ""
+            export PATH=/usr/lib/git-core:$PATH
+            if which git-restore-mtime; then
+               ( set -x; git-restore-mtime )
+            fi
          fi
       fi
    fi

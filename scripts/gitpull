@@ -1,0 +1,11 @@
+#!/bin/bash
+
+(set -x; git pull)
+
+echo ""
+
+export PATH=/usr/lib/git-core:$PATH
+if which git-restore-mtime; then
+   ( set -x; git-restore-mtime )
+fi
+
