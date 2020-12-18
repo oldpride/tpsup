@@ -60,6 +60,9 @@ description:
 
    -n                  dryrun mode, check-only. will print the command but won't run the jobs.
 
+   variables are: \$JobName \$job_type \$LastStart \$LastEnd \$Status ...
+   basically any autosys tags.
+
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
    shell environment.
 

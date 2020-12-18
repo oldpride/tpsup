@@ -109,7 +109,7 @@ main () {
    
    . $DIR/../profile
    
-   export PSl
+   export PS1
    # man -M /usr/openwin/man xrdb
    # xrdb $DISPLAY_SWITCH -query
    
