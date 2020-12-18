@@ -8,7 +8,7 @@
 #    #!/bin/bash -i
 # but because this script is called from another script, not from shell prompt, "-i"
 # doesn't work. we hard code PS1 here
-export PS1='$USER@$HOSTNAME:$PWD$'
+export PS1='$USER@$HOSTNAME:$PWD$ '
 
 # to test,
 #    xterm.linux 
