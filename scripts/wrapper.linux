@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# PS1 is only populated (inheritated) in interactive shell
+# https://stackoverflow.com/questions/48664623/echo-ps1-in-script
+# https://www.gnu.org/savannah-checkouts/gnu/bash/manual/bash.html#Interactive-Shells
+
+# to make the shell interatvie, we can do use "-i"
+#    #!/bin/bash -i
+# but because this script is called from another script, not from shell prompt, "-i"
+# doesn't work. we hard code PS1 here
+export PS1='$USER@$HOSTNAME:$PWD$'
+
 # to test,
 #    xterm.linux 
 #
@@ -137,7 +147,7 @@ run_os_binary () {
    epoc_time_end=`date +%s`
    last_run_time=`expr $epoc_time_end - $epoc_time_begin`
 
-   if [ $rc -eq 0 -o $last_run_time -gt 30 ]; then
+   if [ $rc -eq 0 -o $last_run_time -gt 10 ]; then
       # this worked. no need to try the next
       exit $rc
    fi
