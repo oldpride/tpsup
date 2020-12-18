@@ -88,6 +88,8 @@ run_os_binary () {
    export XFILESEARCHPATH=$ROOT/usr/share/X11/app-defaults/%N
    export XLOCALEDIR=$ROOT/usr/share/X11/locale
 
+   epoc_time_begin=`date +%s`
+
    if [ $actual_os_version = $expected_os_version ]; then
       # this is a native os
       export LD_LIBRARY_PATH=$ROOT/usr/lib64
@@ -132,7 +134,10 @@ run_os_binary () {
       fi
    fi
 
-   if [ $rc -eq 0 ]; then
+   epoc_time_end=`date +%s`
+   last_run_time=`expr $epoc_time_end - $epoc_time_begin`
+
+   if [ $rc -eq 0 -o $last_run_time -gt 30 ]; then
       # this worked. no need to try the next
       exit $rc
    fi
