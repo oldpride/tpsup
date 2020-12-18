@@ -153,6 +153,10 @@ elif [[ $UNAME =~ Cygwin ]]; then
    #    Pseudo-terminal will not be allocated because stdin is not a terminal.
    alias ssh="ssh -tt"
 elif [[ $UNAME =~ Linux ]]; then
+   export Linux=`uname -a|cut -d" " -f3|cut -d. -f1,2`
+   # Linux linux1 4.15.0-112-generic #113-Ubuntu SMP Thu Jul 9 23:41:39 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
+   # Linux should be set to 4.15
+
    if ! /usr/bin/perl -Mwarnings -e "print '';"; then
       # this happens on old Solaris host
       echo "/usr/bin/per1 is too old. find a newer version instead" >&2

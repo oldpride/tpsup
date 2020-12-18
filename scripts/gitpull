@@ -4,7 +4,7 @@
 
 echo ""
 
-export PATH=/usr/lib/git-core:$PATH
+export PATH=/usr/lib/git-core:$SITEBASE/Linux/$Linux/usr/bin:$PATH
 if which git-restore-mtime; then
    ( set -x; git-restore-mtime )
 fi
