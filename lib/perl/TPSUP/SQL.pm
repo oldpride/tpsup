@@ -205,7 +205,7 @@ sub run_sql {
          }
       }
 
-      $dbh->{LongReadLen} = 12800;
+      #$dbh->{LongReadLen} = 12800;
 
       $opt->{verbose} && print STDERR "modifed dump_object(\$dbh) = ", dump_object($dbh);
       $opt->{verbose} && print STDERR "modifed      Dumper(\$dbh) = ",      Dumper($dbh);
