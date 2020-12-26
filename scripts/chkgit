@@ -35,7 +35,7 @@ fi
 
 . $TPSUP/profile
 
-for cmd in kdbnotes mycpp myjava myjoomla mykivy mynotes mysite mytp kungfusql
+for cmd in kdbnotes mycpp myjava myjoomla mykivy mynotes mysite mytp kungfusql freecad
 do 
    echo ""
    echo "------ $cmd -------"
