@@ -10,8 +10,6 @@ use TPSUP::AUTOSYS qw(
    print_autorep_J_header
    get_autorep_J_format
    print_autorep_J_job
-   autorep_J
-   autorep_q_J
 );
 use TPSUP::UTIL qw(
    source_profile
@@ -85,17 +83,7 @@ my $opt = {
    verbose      => $verbose,
 };
 
-#my $info = query_jobs($opt);
-
-my $info;
-
-if ($StatusFiles || $DetailFiles) { 
-   $info = query_jobs($opt);
-} else {
-   my $status_ref = autorep_J($job, $opt);
-   my $detail_ref = autorep_q_J($job, $opt);
-   $info = {%{$status_ref->{$job}}, %{$detail_ref->{$job}}};
-}
+my $info = query_jobs($opt);
 
 my $error = 0;
 if (!exists $info->{$job}) {
