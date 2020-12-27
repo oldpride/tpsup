@@ -94,7 +94,7 @@ if ($StatusFiles || $DetailFiles) {
 } else {
    my $status_ref = autorep_J($job, $opt);
    my $detail_ref = autorep_q_J($job, $opt);
-   $info = {%{$status_ref->{$job}}, %{$detail_ref->{$job}}};
+   $info->{$job} = {%{$status_ref->{$job}}, %{$detail_ref->{$job}}};
 }
 
 my $error = 0;
