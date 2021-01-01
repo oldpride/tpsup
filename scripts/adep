@@ -35,6 +35,8 @@ description:
    
    -r                  reset cache, ie, time out all caches
 
+   -rs                 reset status cache only
+
    -me matchExpression eg -me '\$Status !~ /OH|OI/'
 
    If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
@@ -67,10 +69,12 @@ my $DetailFiles;
 my $StatusFiles;
 my $UnivPatterns;
 my $reset;
+my $reset_status;
 
 GetOptions(
    'v|verbose'     => \$verbose,
    'r|reset'       => \$reset,
+   'rs'            => \$reset_status,
    'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
@@ -94,7 +98,9 @@ my $opt = {
 if ($reset) {
    $opt->{DetailExpire} = 0;
    $opt->{StatusExpire} = 0;
-} 
+} elsif ($reset_status) {
+   $opt->{StatusExpire} = 0;
+}
 
 my $dependency = get_dependency($job, $opt);
 

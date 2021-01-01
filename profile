@@ -355,6 +355,8 @@ tprefresh () {
       export yyyy=`echo $yyyymmdd|cut -c1-4`
       export   mm=`echo $yyyymmdd|cut -c5-6`
       export   dd=`echo $yyyymmdd|cut -c7-8`
+      export YYYY=$yyyy
+      export YYMD=$yyyymmdd
    
       # yesterday
       export pyyyymmdd=`tradeday -1`
