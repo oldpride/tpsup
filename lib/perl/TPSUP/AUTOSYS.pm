@@ -471,7 +471,7 @@ sub query_jobs {
          my @patterns = split /,/, $UnivPatterns;
 
          # take the prefix part
-         @patterns = map {my @a=split /_/, $_, 2; $a[0]} @patterns;
+         @patterns = map {my @a=split /_/, $_, 2; "$a[0]\%"} @patterns;
 
          my $needed_patterns;
          if (exists $opt->{Jobs}) {
@@ -537,7 +537,7 @@ sub query_jobs {
          my @patterns = split /,/, $UnivPatterns;
 
          # take the prefix part
-         @patterns = map {my @a=split /_/, $_, 2; $a[0]} @patterns;
+         @patterns = map {my @a=split /_/, $_, 2; "$a[0]\%"} @patterns;
 
          my $needed_patterns;
          if (exists $opt->{Jobs}) {
