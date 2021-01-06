@@ -322,19 +322,7 @@ sub get_univ_patterns {
 
 
 sub find_needed_patterns {
-   my ($jobs2, $patterns, $opt) = @_;
-
-   my @jobs;
-
-   my $type = ref $jobs2;
-   if ($type eq 'ARRAY') {
-      @jobs = @$jobs2;
-   } elsif ($type eq 'HASH') {
-      @jobs = keys %$jobs2;
-   } else {
-      # default to string of jobs, separated by coma ','
-      @jobs = split /,/, $jobs2;
-   }
+   my ($jobs, $patterns, $opt) = @_;
 
    my $need_pattern;
    my $pattern_by_job;
@@ -347,7 +335,7 @@ sub find_needed_patterns {
 
       my $compiled = qr/$regex/;
 
-      for my $job (@jobs) {
+      for my $job (@$jobs) {
          if ($job =~ /$compiled/) {
             $need_pattern->{$pattern} ++;
             $pattern_by_job->{$job} = $pattern;
@@ -355,7 +343,7 @@ sub find_needed_patterns {
       }
    }
 
-   for my $job (@jobs) {
+   for my $job (@$jobs) {
       if (!exists $pattern_by_job->{$job}) {
          print STDERR "WARN: job $job is not converted by ", join(",", @$patterns), "\n";
       }
@@ -366,18 +354,7 @@ sub find_needed_patterns {
    return \@needed_patterns;
 }
 
-
-my $query_jobs_result;
 sub query_jobs {
-   # universe is decided in this order
-   #    static files: $opt->{DetailFiles} or $opt->{StatusFiles}
-   #    opt->{Universe}: coma separated string
-   #    opt->{Jobs}: can be a ref to array, ref to hash, a string with coma as separator
-   #    get_universe(): this goes to environment variable and file
-   # cache file's expiration is only checked once because once the cache file is loaded
-   # into $query_jobs_result hash (in-memory cache), the file will not be checked any
-   # more
-
    my ($opt) = @_;
 
    my $need_job_detail = 1;
@@ -409,56 +386,21 @@ sub query_jobs {
 
    if ( (!$DetailFiles && $need_job_detail) || (!$StatusFiles && $need_job_status) ) {
       if (!$UnivPatterns) {
-         if ($opt->{Jobs}) {
-            # first try to figure out Prefix from the Jobs if given.
-            my @jobs;
-
-            my $type = ref $opt->{Jobs};
-            if ($type eq 'ARRAY') {
-               @jobs = @{$opt->{Jobs}};
-            } elsif ($type eq 'HASH') {
-               @jobs = keys %{$opt->{Jobs}};
-            } else {
-               # default to string of jobs, separated by coma ','
-               @jobs = split /,/, $opt->{Jobs};
-            }
-
-            my $seen_prefix;
-            for my $j (@jobs) {
-               my ($prefix, $junk) = split /_/, $j, 2;
-               $seen_prefix->{$prefix} ++;
-            }
-
-            $UnivPatterns = join(",", sort(keys %$seen_prefix));
-         } else {
-            $UnivPatterns = get_univ_patterns($opt);
-         }
-      } 
+          $UnivPatterns = get_univ_patterns($opt);
+      }
    }
    
-   my $detail_ref = $query_jobs_result->{detail}; 
-   my $status_ref = $query_jobs_result->{status}; 
-
-   my $meta;
-   $meta->{updated} = 0;
-   $meta->{new}     = {};
+   my $detail_ref; 
+   my $status_ref; 
 
    if ($need_job_detail) {
       if ($DetailFiles) {
          for my $file (split /,/, $DetailFiles) {
-            if ($query_jobs_result->{seen_file}->{$file}) {
-               next;
-            }
-            $query_jobs_result->{seen_file}->{$file} ++;
-
             $file =~ s/\s+//;
             $file =~ s/\s+$//;
             my $new = autorep_q_J("file=$file", $opt);
    
             next if ! $new;
-
-            $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
    
             if ($detail_ref) {
                $detail_ref = {%$detail_ref, %$new};
@@ -470,9 +412,6 @@ sub query_jobs {
          # APP1%,APP2%
          my @patterns = split /,/, $UnivPatterns;
 
-         # take the prefix part
-         @patterns = map {my @a=split /_/, $_, 2; $a[0]} @patterns;
-
          my $needed_patterns;
          if (exists $opt->{Jobs}) {
             $needed_patterns = find_needed_patterns($opt->{Jobs}, \@patterns);      
@@ -481,11 +420,6 @@ sub query_jobs {
          }
 
          for my $pattern (@$needed_patterns) {
-            if ($query_jobs_result->{seen_prefix}->{$pattern}) {
-               next;
-            }
-            $query_jobs_result->{seen_prefix}->{$pattern} ++;
-
             my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
                                                  CacheExpire=>$opt->{DetailExpire},
                                                  %$opt,
@@ -495,9 +429,6 @@ sub query_jobs {
    
             next if ! $new;
    
-            $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
-
             if ($detail_ref) {
                $detail_ref = {%$detail_ref, %$new};
             } else {
@@ -512,20 +443,12 @@ sub query_jobs {
    if ($need_job_status) {
       if ($StatusFiles) {
          for my $file (split /,/, $StatusFiles) {
-            if ($query_jobs_result->{seen_file}->{$file}) {
-               next;
-            }
-            $query_jobs_result->{seen_file}->{$file} ++;
-
             $file =~ s/\s+//;
             $file =~ s/\s+$//;
             my $new = autorep_J("file=$file", $opt);
    
             next if ! $new;
    
-            $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
-
             if ($status_ref) {
                $status_ref = {%$status_ref, %$new};
             } else {
@@ -536,9 +459,6 @@ sub query_jobs {
          # APP1%,APP2%
          my @patterns = split /,/, $UnivPatterns;
 
-         # take the prefix part
-         @patterns = map {my @a=split /_/, $_, 2; $a[0]} @patterns;
-
          my $needed_patterns;
          if (exists $opt->{Jobs}) {
             $needed_patterns = find_needed_patterns($opt->{Jobs}, \@patterns);      
@@ -547,37 +467,25 @@ sub query_jobs {
          }
 
          for my $pattern (@$needed_patterns) {
-            if ($query_jobs_result->{seen_prefix}->{$pattern}) {
-               next;
-            }
-            $query_jobs_result->{seen_prefix}->{$pattern} ++;
-
             my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
                                                  CacheExpire=>$opt->{StatusExpire},
                                                  %$opt,
                                       });  
    
-            my $new = autorep_J("file=$file", $opt);
+             my $new = autorep_J("file=$file", $opt);
    
-            next if ! $new;
+             next if ! $new;
    
-            $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
-
-            if ($status_ref) {
-               $status_ref = {%$status_ref, %$new};
-            } else {
-               $status_ref = $new;
-            }
+             if ($status_ref) {
+                $status_ref = {%$status_ref, %$new};
+             } else {
+                $status_ref = $new;
+             }
          }
       } else {
          confess "don't know how to find universe: neither StatusFiles nor UnivPatterns is defined.";
       }
    }
-
-   # assign back to cache
-   $query_jobs_result->{detail} = $detail_ref; 
-   $query_jobs_result->{status} = $status_ref; 
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
 
@@ -626,42 +534,14 @@ sub query_jobs {
       $return_ref->{$job} = $r;
    }
 
-   # https://perlmaven.com/wantarray
-   # wantarray will return
-   #   undef: if the function was called in VOID context
-   #   false: other than undef if the function was called in SCALAR context
-   #   true:  if the function was called in LIST context.
-   if (wantarray) {
-      return ($return_ref, $meta);
-   } elsif (defined wantarray) {
-      return $return_ref;
-   } 
-}
-
-
-sub update_parent_child_mapping {
-   my ($children_by_parent, $children_by_box, $update_ref, $opt) = @_;
-
-   for my $job (keys %$update_ref) {
-      my $r = $update_ref->{$job};
-   
-      for my $cond_job (condition_to_jobs($r->{condition})) {
-         push @{$children_by_parent->{$cond_job}}, $job;
-      } 
-   
-      if ($r->{box_name}) {
-         push @{$children_by_box->{$r->{box_name}}}, $job;
-      } 
-   }
-   $opt->{verbose} && print STDERR "children_by_parent=", Dumper($children_by_parent);
-   $opt->{verbose} && print STDERR "children_by_box=",    Dumper($children_by_box);
+   return $return_ref;
 }
 
 
 sub get_dependency {
    my ($job2, $opt) = @_;
 
-   my $all_ref = query_jobs({%$opt, Jobs=>[$job2]});
+   my $all_ref = query_jobs($opt);
 
    $opt->{verbose} && print STDERR "all=", Dumper($all_ref);
 
@@ -672,8 +552,19 @@ sub get_dependency {
 
    my $children_by_parent;
    my $children_by_box;
+   for my $job (keys %$all_ref) {
+      my $r = $all_ref->{$job};
 
-   update_parent_child_mapping($children_by_parent, $children_by_box, $all_ref);
+      for my $cond_job (condition_to_jobs($r->{condition})) {
+         push @{$children_by_parent->{$cond_job}}, $job;
+      } 
+
+      if ($r->{box_name}) {
+         push @{$children_by_box->{$r->{box_name}}}, $job;
+      } 
+   }
+
+   $opt->{verbose} && print STDERR "children=", Dumper($children_by_parent);
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
 
@@ -707,15 +598,6 @@ sub get_dependency {
          # $reason is why we are here, eg, self, box, condition
 
          $opt->{verbose} && print "trace dependency([@[$serial]], $job, $updown, $reason)\n";
-
-         # this updates all_ref
-         my $meta;
-         ($all_ref, $meta)  = query_jobs({%$opt, Jobs=>[$job]});
-         if ($meta->{updated}) {
-            update_parent_child_mapping($children_by_parent,
-                                        $children_by_box, 
-                                        $meta->{new});
-         }
 
          my $r = $all_ref->{$job};
 
@@ -758,6 +640,7 @@ sub get_dependency {
    
             push @next_level, ['box_parent', [$box_name]];
          }
+   
    
          # handle condition relationship
          if ($updown eq 'up') {

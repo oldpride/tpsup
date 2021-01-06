@@ -486,6 +486,8 @@ sub query_jobs {
             }
             $query_jobs_result->{seen_prefix}->{$pattern} ++;
 
+            print "opt=", Dumper($opt);
+
             my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
                                                  CacheExpire=>$opt->{DetailExpire},
                                                  %$opt,
@@ -674,6 +676,8 @@ sub get_dependency {
    my $children_by_box;
 
    update_parent_child_mapping($children_by_parent, $children_by_box, $all_ref);
+
+   my ($children_by_parent, $children_by_box, $update_ref, $opt) = @_;
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
 
