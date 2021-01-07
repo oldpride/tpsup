@@ -631,6 +631,8 @@ sub update_parent_child_mapping {
       print STDERR "children_by_parent=", Dumper($children_by_parent);
       print STDERR "children_by_box=",    Dumper($children_by_box);
    }
+
+   return ($children_by_parent, $children_by_box);
 }
 
 
@@ -646,9 +648,8 @@ sub get_dependency {
       return undef;
    }
 
-   my $children_by_parent;
-   my $children_by_box;
-
+   my $children_by_parent = {};
+   my $children_by_box    = {};
    update_parent_child_mapping($children_by_parent, $children_by_box, $all_ref, $opt);
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
@@ -688,6 +689,7 @@ sub get_dependency {
          my $meta;
          ($all_ref, $meta)  = query_jobs({%$opt, Jobs=>[$job]});
          if ($meta->{updated}) {
+            # update mapping only when there is a update in the jobs
             update_parent_child_mapping($children_by_parent,
                                         $children_by_box, 
                                         $meta->{new}, 
@@ -748,8 +750,8 @@ sub get_dependency {
             }
          }
    
-         # this job is a box
          if ($children_by_box->{$job}) {
+            # this job is a box
             # for this example, one box has two children
             #    test_box1
             #     test_job1
