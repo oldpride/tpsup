@@ -620,6 +620,9 @@ sub update_parent_child_mapping {
          push @{$children_by_box->{$r->{box_name}}}, $job;
       } 
    }
+
+   $opt->{verbose} && print STDERR "parent_child mapping is updated\n";
+
    $opt->{verbose} && print STDERR "children_by_parent=", Dumper($children_by_parent);
    $opt->{verbose} && print STDERR "children_by_box=",    Dumper($children_by_box);
 }
@@ -640,7 +643,7 @@ sub get_dependency {
    my $children_by_parent;
    my $children_by_box;
 
-   update_parent_child_mapping($children_by_parent, $children_by_box, $all_ref);
+   update_parent_child_mapping($children_by_parent, $children_by_box, $all_ref, $opt);
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
 
@@ -681,7 +684,8 @@ sub get_dependency {
          if ($meta->{updated}) {
             update_parent_child_mapping($children_by_parent,
                                         $children_by_box, 
-                                        $meta->{new});
+                                        $meta->{new}, 
+                                        $opt);
          }
 
          my $r = $all_ref->{$job};
