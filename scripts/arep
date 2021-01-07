@@ -42,8 +42,6 @@ description:
 
    -me MatchExpression perl regex, eg, -me '\$Status !~ /OH|OI/'. can set multiple times
 
-   -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
-
    -de n               expire Detail cache after n seconds. default $DetailExpire.
                        mainly for testing purpose.
 
@@ -62,12 +60,6 @@ description:
 
    variables are: \$JobName \$job_type \$LastStart \$LastEnd \$Status ...
    basically any autosys tags.
-
-   If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
-   shell environment.
-
-   If \$UNIV_PATTERNS is not set in environment, this script will search it in
-   ~/.tpautosys, a bash init file.
 
 examples:
 
@@ -88,7 +80,6 @@ my $ExcludePattern;
 my @JobExps;
 my $DetailFiles;
 my $StatusFiles;
-my $UnivPatterns;
 my $detail;
 my $reset;
 
@@ -99,7 +90,6 @@ GetOptions(
    'mp=s'          => \$MatchPattern,
    'xp=s'          => \$ExcludePattern,
    'me=s'          => \@JobExps,
-   'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
    'de=s'          => \$DetailExpire,
@@ -137,13 +127,11 @@ while (<$ifh>) {
 close $ifh;
 
 my $opt = {
-   UnivPatterns => $UnivPatterns,
    DetailExpire => $DetailExpire,
    StatusExpire => $StatusExpire,
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
    JobExps      => \@JobExps,
-   Jobs         => \@jobs,
    verbose      => $verbose,
 };
 
