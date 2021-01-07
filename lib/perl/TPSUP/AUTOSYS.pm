@@ -609,6 +609,8 @@ sub query_jobs {
 sub update_parent_child_mapping {
    my ($children_by_parent, $children_by_box, $update_ref, $opt) = @_;
 
+   my $updated = 0;
+
    for my $job (keys %$update_ref) {
       my $r = $update_ref->{$job};
    
@@ -619,12 +621,16 @@ sub update_parent_child_mapping {
       if ($r->{box_name}) {
          push @{$children_by_box->{$r->{box_name}}}, $job;
       } 
+
+      $updated ++;
    }
 
-   $opt->{verbose} && print STDERR "parent_child mapping is updated\n";
+   if ($updated && $opt->{verbose}) {
+      print STDERR "parent_child mapping is updated\n";
 
-   $opt->{verbose} && print STDERR "children_by_parent=", Dumper($children_by_parent);
-   $opt->{verbose} && print STDERR "children_by_box=",    Dumper($children_by_box);
+      print STDERR "children_by_parent=", Dumper($children_by_parent);
+      print STDERR "children_by_box=",    Dumper($children_by_box);
+   }
 }
 
 
