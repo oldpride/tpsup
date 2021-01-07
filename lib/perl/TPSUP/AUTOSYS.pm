@@ -370,7 +370,8 @@ sub find_needed_patterns {
 my $cumulative = {                      # all knowledge so far, 
    job_hash => {},                      # hash key is job name
    seen_file => {},                     # user provided files loaded so far
-   seen_pattern => {},                  # patterns run by autorep so far
+   seen_status_pattern => {},           # patterns run by autorep -J so far
+   seen_detail_pattern => {},           # patterns run by autorep -J -q so far
 };    
 my $last_result = {};   # after applied JobExps on $cumulative 
 my $last_exp = '';      # JobExps converted into a string
@@ -463,10 +464,10 @@ sub query_jobs {
          my @patterns = split /,/, $UnivPatterns;
 
          for my $pattern (@patterns) {
-            if ($cumulative->{seen_pattern}->{$pattern}) {
+            if ($cumulative->{seen_detail_pattern}->{$pattern}) {
                next;
             }
-            $cumulative->{seen_pattern}->{$pattern} ++;
+            $cumulative->{seen_detail_pattern}->{$pattern} ++;
 
             my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
                                                  CacheExpire=>$opt->{DetailExpire},
@@ -507,10 +508,10 @@ sub query_jobs {
          my @patterns = split /,/, $UnivPatterns;
 
          for my $pattern (@patterns) {
-            if ($cumulative->{seen_pattern}->{$pattern}) {
+            if ($cumulative->{seen_status_pattern}->{$pattern}) {
                next;
             }
-            $cumulative->{seen_pattern}->{$pattern} ++;
+            $cumulative->{seen_status_pattern}->{$pattern} ++;
 
             my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
                                                  CacheExpire=>$opt->{StatusExpire},
