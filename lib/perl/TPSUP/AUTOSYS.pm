@@ -367,17 +367,15 @@ sub find_needed_patterns {
 }
 
 
-my $query_jobs_result;
-sub query_jobs {
-   # universe is decided in this order
-   #    static files: $opt->{DetailFiles} or $opt->{StatusFiles}
-   #    opt->{Universe}: coma separated string
-   #    opt->{Jobs}: can be a ref to array, ref to hash, a string with coma as separator
-   #    get_universe(): this goes to environment variable and file
-   # cache file's expiration is only checked once because once the cache file is loaded
-   # into $query_jobs_result hash (in-memory cache), the file will not be checked any
-   # more
+my $cumulative = {                      # all knowledge so far, 
+   job_hash => {},                      # hash key is job name
+   seen_file => {},                     # user provided files loaded so far
+   seen_pattern => {},                  # patterns run by autorep so far
+};    
+my $last_result = {};   # after applied JobExps on $cumulative 
+my $last_exp = '';      # JobExps converted into a string
 
+sub query_jobs {
    my ($opt) = @_;
 
    my $need_job_detail = 1;
@@ -420,36 +418,36 @@ sub query_jobs {
                @jobs = keys %{$opt->{Jobs}};
             } else {
                # default to string of jobs, separated by coma ','
-               @jobs = split /,/, $opt->{Jobs};
+               @jobs = split /[ ,]+/, $opt->{Jobs};
             }
 
-            my $seen_prefix;
+            my $seen_pattern;
             for my $j (@jobs) {
                my ($prefix, $junk) = split /_/, $j, 2;
-               $seen_prefix->{$prefix} ++;
+               my $pattern = $prefix =~ /\%$/ ? $prefix : "$prefix\%";
+               $seen_pattern->{$pattern} ++;
             }
 
-            $UnivPatterns = join(",", sort(keys %$seen_prefix));
+            $UnivPatterns = join(",", sort(keys %$seen_pattern));
          } else {
             $UnivPatterns = get_univ_patterns($opt);
          }
       } 
    }
    
-   my $detail_ref = $query_jobs_result->{detail}; 
-   my $status_ref = $query_jobs_result->{status}; 
-
    my $meta;
    $meta->{updated} = 0;
-   $meta->{new}     = {};
+
+   my $new_detail_ref = {};
+   my $new_status_ref = {};
 
    if ($need_job_detail) {
       if ($DetailFiles) {
          for my $file (split /,/, $DetailFiles) {
-            if ($query_jobs_result->{seen_file}->{$file}) {
+            if ($cumulative->{seen_file}->{$file}) {
                next;
             }
-            $query_jobs_result->{seen_file}->{$file} ++;
+            $cumulative->{seen_file}->{$file} ++;
 
             $file =~ s/\s+//;
             $file =~ s/\s+$//;
@@ -458,33 +456,17 @@ sub query_jobs {
             next if ! $new;
 
             $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
-   
-            if ($detail_ref) {
-               $detail_ref = {%$detail_ref, %$new};
-            } else {
-               $detail_ref = $new;
-            }
+            $new_detail_ref = $new;
          }
       } elsif ($UnivPatterns) {
          # APP1%,APP2%
          my @patterns = split /,/, $UnivPatterns;
 
-         # take the prefix part
-         @patterns = map {my @a=split /_/, $_, 2; "$a[0]\%"} @patterns;
-
-         my $needed_patterns;
-         if (exists $opt->{Jobs}) {
-            $needed_patterns = find_needed_patterns($opt->{Jobs}, \@patterns);      
-         } else {
-            $needed_patterns = \@patterns;
-         }
-
-         for my $pattern (@$needed_patterns) {
-            if ($query_jobs_result->{seen_prefix}->{$pattern}) {
+         for my $pattern (@patterns) {
+            if ($cumulative->{seen_pattern}->{$pattern}) {
                next;
             }
-            $query_jobs_result->{seen_prefix}->{$pattern} ++;
+            $cumulative->{seen_pattern}->{$pattern} ++;
 
             my $file = get_cache_file($pattern, {QuerySwitch=>'-q -J',
                                                  CacheExpire=>$opt->{DetailExpire},
@@ -496,13 +478,7 @@ sub query_jobs {
             next if ! $new;
    
             $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
-
-            if ($detail_ref) {
-               $detail_ref = {%$detail_ref, %$new};
-            } else {
-               $detail_ref = $new;
-            }
+            $new_detail_ref = $new;
          }
       } else {
          confess "don't know how to find universe: neither DetailFiles nor UnivPatterns is defined.";
@@ -512,10 +488,10 @@ sub query_jobs {
    if ($need_job_status) {
       if ($StatusFiles) {
          for my $file (split /,/, $StatusFiles) {
-            if ($query_jobs_result->{seen_file}->{$file}) {
+            if ($cumulative->{seen_file}->{$file}) {
                next;
             }
-            $query_jobs_result->{seen_file}->{$file} ++;
+            $cumulative->{seen_file}->{$file} ++;
 
             $file =~ s/\s+//;
             $file =~ s/\s+$//;
@@ -524,33 +500,17 @@ sub query_jobs {
             next if ! $new;
    
             $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
-
-            if ($status_ref) {
-               $status_ref = {%$status_ref, %$new};
-            } else {
-               $status_ref = $new;
-            }
+            $new_status_ref = $new;
          }
       } elsif ($UnivPatterns) {
          # APP1%,APP2%
          my @patterns = split /,/, $UnivPatterns;
 
-         # take the prefix part
-         @patterns = map {my @a=split /_/, $_, 2; "$a[0]\%"} @patterns;
-
-         my $needed_patterns;
-         if (exists $opt->{Jobs}) {
-            $needed_patterns = find_needed_patterns($opt->{Jobs}, \@patterns);      
-         } else {
-            $needed_patterns = \@patterns;
-         }
-
-         for my $pattern (@$needed_patterns) {
-            if ($query_jobs_result->{seen_prefix}->{$pattern}) {
+         for my $pattern (@patterns) {
+            if ($cumulative->{seen_pattern}->{$pattern}) {
                next;
             }
-            $query_jobs_result->{seen_prefix}->{$pattern} ++;
+            $cumulative->{seen_pattern}->{$pattern} ++;
 
             my $file = get_cache_file($pattern, {QuerySwitch=>'-J',
                                                  CacheExpire=>$opt->{StatusExpire},
@@ -562,68 +522,74 @@ sub query_jobs {
             next if ! $new;
    
             $meta->{updated} ++;
-            $meta->{new} = {%{$meta->{new}}, %$new};
-
-            if ($status_ref) {
-               $status_ref = {%$status_ref, %$new};
-            } else {
-               $status_ref = $new;
-            }
+            $new_status_ref = $new;
          }
       } else {
          confess "don't know how to find universe: neither StatusFiles nor UnivPatterns is defined.";
       }
    }
 
-   # assign back to cache
-   $query_jobs_result->{detail} = $detail_ref; 
-   $query_jobs_result->{status} = $status_ref; 
-
-   my $warn = $opt->{verbose} ? 'use' : 'no';
-
-   my $matchExps;
-   if ($opt->{JobExps} && @{$opt->{JobExps}}) {
-      @$matchExps = map {
-         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
-         $@ ? (die "Bad match expression '$_' : $@") : $compiled;
-      } @{$opt->{JobExps}};
-   }
+   my  $new_exp = $opt->{JobExps} ? join(";", @{$opt->{JobExps}}) : '';
 
    my $return_ref;
 
-   my $seen_job;
+   if ( $meta->{updated} || $new_exp ne $last_exp) {
+         if ($meta->{updated}) {
+         my $seen_new_job;
+         for my $job (keys %$new_status_ref) {
+            $seen_new_job->{$job} ++;
+         }
+         for my $job (keys %$new_detail_ref) {
+            $seen_new_job->{$job} ++;
+         }
+             
+         # merge new result to the cumulative 
+         for my $job (keys %$seen_new_job) {
+            my $cum = exists $cumulative->{job_hash}->{$job} ? 
+                             $cumulative->{job_hash}->{$job} : {};
+   
+            my $ns = exists $new_status_ref->{$job} ? $new_status_ref->{$job} : {};
+            my $nd = exists $new_detail_ref->{$job} ? $new_detail_ref->{$job} : {};
 
-   for my $job (keys %$status_ref) {
-      $seen_job->{$job} ++;
-   }
-       
-   for my $job (keys %$detail_ref) {
-      $seen_job->{$job} ++;
-   }
-       
-   for my $job (keys %$seen_job, ) {
-      my $r; 
-
-      if (exists $status_ref->{$job} && exists $detail_ref->{$job} ) {
-         $r = { %{$status_ref->{$job}}, %{$detail_ref->{$job}} };
-      } elsif ($status_ref->{$job})  {
-         $r = $status_ref->{$job};
-      } else {
-         $r = $detail_ref->{$job};
-      }
-
-      $r->{JobName} = $job;
-
-      if ($matchExps) {
-         TPSUP::Expression::export_var(%$r, {RESET=>1});
-         for my $e (@$matchExps) {
-            if (! $e->()) {
-               next;
-            }
+            my $r = {%$cum, %$ns, %$nd};
+   
+            $r->{JobName} = $job;
+   
+            $meta->{new}->{$job} = $r;
+            $cumulative->{job_hash}->{$job}  = $r;
          }
       }
 
-      $return_ref->{$job} = $r;
+      if ($opt->{JobExps} && @{$opt->{JobExps}}) {
+         my $warn = $opt->{verbose} ? 'use' : 'no';
+      
+         my $matchExps = map {
+            my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+            $@ ? (die "Bad match expression '$_' : $@") : $compiled;
+         } @{$opt->{JobExps}};
+      
+         for my $job (keys %{$cumulative->{job_hash}}) {
+            my $r = $cumulative->{job_hash}->{$job};
+      
+            if ($matchExps) {
+               TPSUP::Expression::export_var(%$r, {RESET=>1});
+               for my $e (@$matchExps) {
+                  if (! $e->()) {
+                     next;
+                  }
+               }
+            }
+      
+            $return_ref->{$job} = $r;
+         }
+      } else {
+         $return_ref = $cumulative->{job_hash};
+      }
+   
+      $last_result = $return_ref;
+      $last_exp    = $last_exp;
+   } else {
+      $return_ref = $last_result;
    }
 
    # https://perlmaven.com/wantarray
