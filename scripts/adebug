@@ -81,16 +81,13 @@ my $opt = {
    StatusExpire => 0,  # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
-   Jobs         => [$job],
    verbose      => $verbose,
 };
-
-#my $info = query_jobs($opt);
 
 my $info;
 
 if ($StatusFiles || $DetailFiles) { 
-   $info = query_jobs($opt);
+   $info = query_jobs($job, $opt);
 } else {
    my $status_ref = autorep_J($job, $opt);
    my $detail_ref = autorep_q_J($job, $opt);

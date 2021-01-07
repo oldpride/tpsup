@@ -26,9 +26,6 @@ description:
 
    check autosys dependency
 
-   -u UnivPatterns    job universe pattern. eg PROJ1_APP1%,PROJ2_APP2%. Multiple
-                       patterns are separated by coma.
-
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
@@ -38,12 +35,6 @@ description:
    -rs                 reset status cache only
 
    -me matchExpression eg -me '\$Status !~ /OH|OI/'
-
-   If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
-   shell environment.
-
-   If \$UNIV_PATTERNS is not set in environment, this script will search it in
-   ~/.tpautosys, a bash init file.
 
 examples:
 
@@ -67,7 +58,6 @@ END
 my $verbose;
 my $DetailFiles;
 my $StatusFiles;
-my $UnivPatterns;
 my $reset;
 my $reset_status;
 
@@ -75,7 +65,6 @@ GetOptions(
    'v|verbose'     => \$verbose,
    'r|reset'       => \$reset,
    'rs'            => \$reset_status,
-   'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
    'me=s'          => \@DepExps,
@@ -91,7 +80,6 @@ my $opt = {
    StatusFiles  => $StatusFiles,
    DetailExpire => $DetailExpire,
    StatusExpire => $StatusExpire,
-   UnivPatterns => $UnivPatterns,
    DepExps      => \@DepExps,
 };
 

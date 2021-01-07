@@ -377,7 +377,7 @@ my $last_result = {};   # after applied JobExps on $cumulative
 my $last_exp = '';      # JobExps converted into a string
 
 sub query_jobs {
-   my ($jobs, $opt) = @_;
+   my ($opt) = @_;
 
    my $need_job_detail = 1;
    my $need_job_status = 1;
@@ -404,30 +404,36 @@ sub query_jobs {
 
    my $DetailFiles  = $opt->{DetailFiles};
    my $StatusFiles  = $opt->{StatusFiles};
-   my $UnivPatterns;
+   my $UnivPatterns = $opt->{UnivPatterns};
 
    if ( (!$DetailFiles && $need_job_detail) || (!$StatusFiles && $need_job_status) ) {
-      # figure out $UnivPatterns from job prefix
-      my @joblist;
+      if (!$UnivPatterns) {
+         if ($opt->{Jobs}) {
+            # first try to figure out Prefix from the Jobs if given.
+            my @jobs;
 
-      my $type = ref $jobs;
-      if ($type eq 'ARRAY') {
-         @joblist = @$jobs;
-      } elsif ($type eq 'HASH') {
-         @joblist = keys %$jobs;
-      } else {
-         # default to string of jobs, separated by coma ','
-         @joblist = split /[ ,]+/, $jobs;
-      }
+            my $type = ref $opt->{Jobs};
+            if ($type eq 'ARRAY') {
+               @jobs = @{$opt->{Jobs}};
+            } elsif ($type eq 'HASH') {
+               @jobs = keys %{$opt->{Jobs}};
+            } else {
+               # default to string of jobs, separated by coma ','
+               @jobs = split /[ ,]+/, $opt->{Jobs};
+            }
 
-      my $seen_pattern;
-      for my $j (@joblist) {
-         my ($prefix, $junk) = split /_/, $j, 2;
-         my $pattern = $prefix =~ /\%$/ ? $prefix : "$prefix\%";
-         $seen_pattern->{$pattern} ++;
-      }
+            my $seen_pattern;
+            for my $j (@jobs) {
+               my ($prefix, $junk) = split /_/, $j, 2;
+               my $pattern = $prefix =~ /\%$/ ? $prefix : "$prefix\%";
+               $seen_pattern->{$pattern} ++;
+            }
 
-      $UnivPatterns = join(",", sort(keys %$seen_pattern));
+            $UnivPatterns = join(",", sort(keys %$seen_pattern));
+         } else {
+            $UnivPatterns = get_univ_patterns($opt);
+         }
+      } 
    }
    
    my $meta;
@@ -633,7 +639,7 @@ sub update_parent_child_mapping {
 sub get_dependency {
    my ($job2, $opt) = @_;
 
-   my $all_ref = query_jobs($job2, $opt);
+   my $all_ref = query_jobs({%$opt, Jobs=>[$job2]});
 
    $opt->{verbose} && print STDERR "all=", Dumper($all_ref);
 
@@ -681,7 +687,7 @@ sub get_dependency {
 
          # this updates all_ref
          my $meta;
-         ($all_ref, $meta)  = query_jobs($job, $opt);
+         ($all_ref, $meta)  = query_jobs({%$opt, Jobs=>[$job]});
          if ($meta->{updated}) {
             # update mapping only when there is a update in the jobs
             update_parent_child_mapping($children_by_parent,

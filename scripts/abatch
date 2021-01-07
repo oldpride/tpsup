@@ -53,8 +53,6 @@ description:
 
    -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
 
-   -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
-
    -r                  reset caches on start, ie, time out all caches
 
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
@@ -68,12 +66,6 @@ description:
    -v                  verbose mode
 
    -J                  args are jobnames. default to filenames
-
-   If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
-   shell environment.
-
-   If \$UNIV_PATTERNS is not set in environment, this script will search it in
-   ~/.tpautosys, a bash init file.
 
 examples:
 
@@ -95,7 +87,6 @@ my $MatchPattern;
 my $ExcludePattern;
 my $DetailFiles;
 my $StatusFiles;
-my $UnivPatterns;
 my $force;
 my $dryrun;
 my $reset;
@@ -109,7 +100,6 @@ GetOptions(
    'J'             => \$arg_is_job,
    'm=s'           => \$MatchPattern,
    'x=s'           => \$ExcludePattern,
-   'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
 ) || usage("cannot parse command line: $!");
@@ -155,7 +145,6 @@ if ($arg_is_job) {
 }
 
 my $opt = {
-   UnivPatterns => $UnivPatterns,
    DetailExpire => $DetailExpire,
    StatusExpire => $StatusExpire,
    DetailFiles  => $DetailFiles,
@@ -169,9 +158,9 @@ if ($reset) {
    my $opt2 = {%$opt};
    $opt2->{DetailExpire} = 0; 
    $opt2->{StatusExpire} = 0; 
-   $info = query_jobs($opt2);
+   $info = query_jobs($seen, $opt2);
 } else {
-   $info = query_jobs($opt);
+   $info = query_jobs($seen, $opt);
 }
 
 my $exists_box_job;

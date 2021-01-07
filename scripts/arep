@@ -158,9 +158,9 @@ if ($reset) {
    my $opt2 = {%$opt};
    $opt2->{DetailExpire} = 0;
    $opt2->{StatusExpire} = 0;
-   $info = query_jobs($opt2);
+   $info = query_jobs($seen, $opt2);
 } else {
-   $info = query_jobs($opt);
+   $info = query_jobs($seen, $opt);
 }
 
 my $exists_box_job;

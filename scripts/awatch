@@ -40,8 +40,6 @@ description:
 
    -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
 
-   -u UnivPatterns     use this to check dependent jobs, when '-chkdep' specified
-
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
    -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
@@ -49,12 +47,6 @@ description:
    -v                  verbose mode
 
    -J                  args are jobnames. default to filenames
-
-   If '-u UnivPatterns' is not set, this script will first search \$UNIV_PATTERNS in
-   shell environment.
-
-   If \$UNIV_PATTERNS is not set in environment, this script will search it in
-   ~/.tpautosys, a bash init file.
 
 examples:
 
@@ -77,7 +69,6 @@ my $MatchPattern;
 my $ExcludePattern;
 my $DetailFiles;
 my $StatusFiles;
-my $UnivPatterns;
 my $reset;
 my $arg_is_job;
 
@@ -86,7 +77,6 @@ GetOptions(
    'J'             => \$arg_is_job,
    'm=s'           => \$MatchPattern,
    'x=s'           => \$ExcludePattern,
-   'u=s'           => \$UnivPatterns,
    'df=s'          => \$DetailFiles,
    'sf=s'          => \$StatusFiles,
 ) || usage("cannot parse command line: $!");
@@ -129,7 +119,6 @@ if ($arg_is_job) {
 }
 
 my $opt = {
-   UnivPatterns => $UnivPatterns,
    StatusExpire => 0,  # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
@@ -138,7 +127,7 @@ my $opt = {
    verbose      => $verbose,
 };
 
-my $info = query_jobs($opt);
+my $info = query_jobs(\@jobs, $opt);
 
 my $error = 0;
 my $bad_by_job;
@@ -177,7 +166,7 @@ while (1) {
 
    print_autorep_J_header();
 
-   my $info = query_jobs($opt);
+   my $info = query_jobs(\@jobs_to_watch, $opt);
    $failed = 0;
 
    for my $job (@jobs) {
@@ -200,7 +189,7 @@ while (1) {
    sleep $sub_interval;
    $sub_interval += 10;
    $sub_interval = $interval_limit if $sub_interval > $interval_limit;
-   $info = query_jobs($opt);
+   $info = query_jobs(\@jobs_to_watch, $opt);
 }
    
 print "ERROR: total $failed failed, $error errors\n";
