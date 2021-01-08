@@ -137,13 +137,13 @@ if ($machine) {
 
       if ($info->{$job}->{command}) {
          my ($command, $rest) = split /\s/, $info->{$job}->{command}, 2;
-         $script .= "which $command;\n\n";
+         $script .= "which $command; echo \"\";\n\n";
       }
 
       for my $attr (qw(std_out_file std_err_file)) {
          my $file = $info->{$job}->{$attr};
          if ($file) {
-            $script .= "ls -l $file && tail $file; echo \"\"; echo \"\";\n\n";
+            $script .= "ls -l $file && tail $file; echo \"\";\n\n";
          }
       }
 
