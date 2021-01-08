@@ -440,8 +440,9 @@ if [[ $TERM =~ ^xterm|^vt ]]; then
 fi
 
 # https://stackoverflow.com/questions/6920402/in-a-bash-script-how-to-run-bash-functions-defined-outside
-# export all functions
-set -a
+# -a export all functions and variables
+# -b report background process immediately without waiting for the next prompt
+set -ab
 
 set -o vi
 #  Control-V, Backspace
