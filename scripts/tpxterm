@@ -20,6 +20,8 @@ usage:
 
    -d      debug mode. logs to ~/junk.log
 
+   -n      not sourcing tpsup profile
+
    -f number
           use Monospace with this font size, eg, 9. normally for ubuntu remote
           desktop. default $font
@@ -36,12 +38,14 @@ EOF
 
 loginshell='-ls'
 debug='N'
+source_tpsup_profile=Y
 
-while getopts bdf: o;
+while getopts bdf:n o;
 do
    case "$o" in
       b) loginshell="";;
       d) debug=Y;;
+      n) source_tpsup_profile=N;;
       f) font="-fa Monospace -fs $OPTARG";;
       *) echo "unknow switch '$o'"; usage;;
    esac
@@ -107,7 +111,7 @@ main () {
    
    DIR=`dirname $0`
    
-   . $DIR/../profile
+   . $DIR/../profile  # this sets TPSUP env
    
    export PS1
    # man -M /usr/openwin/man xrdb
@@ -129,7 +133,7 @@ main () {
       # /usr/openwin/bin/xlsfonts|grep adobe-courier
       
       #nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
-      # -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash --rcfile $TPSUP/profile >/dev/null 2>&1 &
+      # -fg white -bg black -title $title -sl 10000 -sb -e "/bin/bash --rcfile $TPSUP/profile" >/dev/null 2>&1 &
    
       nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
       -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
@@ -139,6 +143,12 @@ main () {
          export TERMINFO=/usr/share/terminfo
       fi
 
+      if [ $source_tpsup_profile = Y ]; then
+         source_tpsup_part="-e '/bin/bash --rcfile $TPSUP/profile'"
+         # -e '/bin/bash --rcfile $TPSUP/profile' 
+         #         This is to load the tpsup profile as user's profile may not load it.
+      fi
+
       eval "$nohup xterm.linux $DISPLAY_SWITCH -geom 95x44 $font \
       -fg white -bg black -title $title -sl 10000 -sb $loginshell \
       -xrm 'XTerm*selectToClipboard: true' \
@@ -146,10 +156,15 @@ main () {
            <Btn1Down>: select-start(CLIPBOARD) \\n\\\
            <Btn1Up>: select-end(CLIPBOARD) \\n\\\
            <Btn3Down>: insert-selection(CLIPBOARD) \\n\\\
-      ' $redirect"
+      ' \
+      $source_tpsup_part \
+      $redirect"
    
+      # eval    is to handle the redirect at run time
+      
       # -ls     to login session, this will source profile and record in /var/log/wtmp so
       #         that 'w' command will list this session
+
    
    else
       echo "unsupported OS=$OS"
