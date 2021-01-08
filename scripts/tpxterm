@@ -20,7 +20,10 @@ usage:
 
    -d      debug mode. logs to ~/junk.log
 
-   -n      not sourcing tpsup profile
+   -n      not sourcing tpsup profile.
+           default is to source tpsup profile, mainly because "set -o vi" cannot
+           be inherited from parent shell; therefore, we have to "set -o vi" on
+           each new xterm; therefore, we may as well just source the whole profle.
 
    -f number
           use Monospace with this font size, eg, 9. normally for ubuntu remote
