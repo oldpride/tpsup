@@ -130,11 +130,16 @@ if ($machine) {
    if ($?==0) {
       # we can ssh to the machine, then run the script remotely
 
-      my $script = "";
+      my $script = "\n";
 
       $script .= ". $info->{$job}->{profile};\n\n"        if $info->{$job}->{profile};
-      $script .= "which $info->{$job}->{command};\n\n"    if $info->{$job}->{command};
       $script .= "ls -l $info->{$job}->{watch_file};\n\n" if $info->{$job}->{watch_file};
+
+      if ($info->{$job}->{command}) {
+         my ($command, $rest) = split /\s/, $info->{$job}->{command}, 2;
+         $script .= "which $command;\n\n";
+      }
+
       for my $attr (qw(std_out_file std_err_file)) {
          my $file = $info->{$job}->{$attr};
          if ($file) {
