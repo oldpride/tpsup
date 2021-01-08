@@ -138,11 +138,11 @@ if ($machine) {
       for my $attr (qw(std_out_file std_err_file)) {
          my $file = $info->{$job}->{$attr};
          if ($file) {
-            $script .= "ls -l $file && tail $file; echo ''; echo '';\n\n";
+            $script .= "ls -l $file && tail $file; echo \"\"; echo \"\";\n\n";
          }
       }
 
-      my $cmd = "tpssh $machine \"$script\"";
+      my $cmd = "tpssh -sshargs=-q $machine '$script'";
       print "cmd = $cmd\n\n";
       system($cmd);
       exit 0;

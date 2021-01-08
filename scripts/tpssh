@@ -50,6 +50,9 @@ examples:
    - test timout
    $prog -t 3 host1 -- 'while :;do date;hostname;id;sleep 1; done'
 
+   - test -sshargs
+   $prog -sshargs=-q host1 hostname
+
 END
 
    exit 1;
