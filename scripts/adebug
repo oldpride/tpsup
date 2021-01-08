@@ -121,6 +121,38 @@ if (!$info->{$job}->{defination}) {
 print $info->{$job}->{defination};
 print "\n";
 
+my $machine = $info->{$job}->{machine};
+
+if ($machine) {
+   my $ssh = "ssh -n -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
+   my $test_cmd = "$ssh $machine hostname >/dev/null";
+   system($test_cmd);
+   if ($?==0) {
+      # we can ssh to the machine, then run the script remotely
+
+      my $script = "";
+
+      $script .= ". $info->{$job}->{profile};\n\n"        if $info->{$job}->{profile};
+      $script .= "which $info->{$job}->{command};\n\n"    if $info->{$job}->{command};
+      $script .= "ls -l $info->{$job}->{watch_file};\n\n" if $info->{$job}->{watch_file};
+      for my $attr (qw(std_out_file std_err_file)) {
+         my $file = $info->{$job}->{$attr};
+         if ($file) {
+            $script .= "ls -l $file && tail $file; echo ''; echo '';\n\n";
+         }
+      }
+
+      my $cmd = "tpssh $machine \"$script\"";
+      print "cmd = $cmd\n\n";
+      system($cmd);
+      exit 0;
+   } else {
+      print "test_cmd=$test_cmd failed.\n";
+      print "We will run the rest locally, or please log onto $machine\n"; 
+   }
+}
+
+# now we do everything locally
 if ($info->{$job}->{profile}) {
    my $profile = $info->{$job}->{profile};
    
@@ -144,6 +176,7 @@ if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
       } elsif ($attr =~ /std_out_file|std_err_file/) {
          $resolved =~ s/[>]+//g;
          system("ls -l $resolved");
+         system("tail $resolved");
       } elsif ($attr =~ /^(command)$/) {
          my ($exe, $junk) = split /[\s<>]/, $resolved;
          print "which exe: "; system("which $exe");
