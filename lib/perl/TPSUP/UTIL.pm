@@ -47,6 +47,7 @@ our @EXPORT_OK = qw(
    binary_search_numeric
    render_arrays
    Print_ArrayOfHashes_Vertically
+   get_items
 );
 
 
@@ -1804,6 +1805,58 @@ sub Print_ArrayOfHashes_Vertically {
    }
 }
 
+sub get_items {
+   my ($input, $opt) = @_;
+
+   my $type = ref $input;
+   my $fh;
+   my $need_close;
+
+   if (!$type) {
+      # $input is a file name
+      if ($input eq '-') {
+         $fh = \*STDIN;
+      } else {
+         open $fh, "<$input" or die "cannot read $input: $!";
+         $need_close ++;
+      }
+   } elsif ($type eq 'GLOB') {
+      # $ perl -e 'print ref(\*STDIN), "\n";'
+      # GLOB
+      # $ perl -e 'open my $fh, "<UTIL.pm"; print ref($fh), "\n";'
+      # GLOB
+      $fh = $input;
+   } else {
+      croak "don't know how to handle input with ref type=$type"; 
+   }
+
+   my $result = [];
+
+   while(<$fh>) {
+      chomp;
+
+      next if /^\s*$/;    # skip blank   lines
+      next if /^\s*#/;    # skip comment lines
+
+      s/#.*//;            # remove in-line comment
+
+      s/^\s+//;           # trim leading  spaces
+      s/\s+$//;           # trim trailing spaces
+
+      if ($opt->{OnePerLine}) {
+         # OnePerLine will allow a string item with space in the middle
+         # for example CHL's HK exchange ticker is "941 HK"
+         push @$result, $_;
+      } else {
+         push @$result, split(/\s+/, $_);
+      }
+   }
+
+   close $fh if $need_close;
+
+   return $result;
+}
+
 
 sub main {
    print "\n------------------------------------------------\n";
@@ -1862,6 +1915,21 @@ sub main {
    print "test get_file_stamp('/etc/profile')\n";
    print get_file_timestamp('/etc/profile'), "\n";
    # print Dumper(lstat('/etc/.profile')), "\n";
+
+   print "\n------------------------------------------------\n";
+   print "test get_items(), multiple per line\n";
+   {
+       my $a = get_items("UTIL_test_get_items.txt");
+       print join("\n", @$a), "\n";
+   }
+
+   print "\n------------------------------------------------\n";
+   print "test get_items(), one per line\n";
+   {
+       my $a = get_items("UTIL_test_get_items.txt", {OnePerLine=>1});
+       print join("\n", @$a), "\n";
+   }
+
 }
 
 main() unless caller();
