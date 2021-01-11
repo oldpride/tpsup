@@ -147,9 +147,13 @@ main () {
       fi
 
       if [ $source_tpsup_profile = Y ]; then
-         source_tpsup_part="-e '/bin/bash --rcfile $TPSUP/profile'"
          # -e '/bin/bash --rcfile $TPSUP/profile' 
          #         This is to load the tpsup profile as user's profile may not load it.
+         if [ "X$SITESPEC" != X ]; then
+            source_tpsup_part="-e '/bin/bash --rcfile $SITESPEC/profile'"
+         else
+            source_tpsup_part="-e '/bin/bash --rcfile    $TPSUP/profile'"
+         fi
       fi
 
       eval "$nohup xterm.linux $DISPLAY_SWITCH -geom 95x44 $font \
