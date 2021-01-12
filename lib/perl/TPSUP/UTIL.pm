@@ -33,7 +33,6 @@ our @EXPORT_OK = qw(
    sort_unique
    trim_path
    reduce_path
-   get_items_from_file
    get_pw_by_key
    get_java
    glob2regex
@@ -318,45 +317,6 @@ sub get_out_fh {
    }
 
    return $out_fh;
-}
-   
-sub get_items_from_file {
-   my ($file, $opt) = @_;
-   
-   my $ifh = get_in_fh($file, $opt) ;
-   
-   my $ret;
-
-   my $delimiter = $opt->{InlineDelimiter};
-   
-   if (defined $delimiter) {
-      # multiple items per line
-      while (<$ifh>) {
-         chomp;
-
-         next if /^\s*$|^\s*#/;
-   
-         my $line = $_;
-   
-         for my $e (split /$delimiter/, $line) {
-            next if !defined $e || "$e" eq "";
-            $ret->{$e} ++;
-         }
-      }
-   } else {
-      # default to one item per line
-      while (<$ifh>) {
-         chomp;
-
-         next if /^\s*$|^\s*#/;
-   
-         $ret->{$_} ++;
-      }
-   }
-   
-   close $ifh if $ifh != \*STDIN;
-   
-   return $ret;
 }
    
 sub get_patterns_from_log {
@@ -1830,31 +1790,42 @@ sub get_items {
       croak "don't know how to handle input with ref type=$type"; 
    }
 
-   my $result = [];
+   my @result;
+   my $delimiter = $opt->{InlineDelimiter};
 
    while(<$fh>) {
       chomp;
 
-      next if /^\s*$/;    # skip blank   lines
-      next if /^\s*#/;    # skip comment lines
+      next if /^\s*$/;       # skip blank lines
 
-      s/#.*//;            # remove in-line comment
+      if (!$opt->{NotTrimComment}) {
+         next if /^\s*#/;    # skip comment lines
+         s/#.*//;            # remove in-line comment
+      }
 
       s/^\s+//;           # trim leading  spaces
       s/\s+$//;           # trim trailing spaces
 
-      if ($opt->{OnePerLine}) {
-         # OnePerLine will allow a string item with space in the middle
-         # for example CHL's HK exchange ticker is "941 HK"
-         push @$result, $_;
+      if ($delimiter) {
+         push @result, split(/$delimiter/, $_);
       } else {
-         push @$result, split(/\s+/, $_);
+         # each line is an item. this will allow a string item with space in the middle
+         # for example CHL's HK exchange ticker is "941 HK"
+         push @result, $_;
       }
    }
 
    close $fh if $need_close;
 
-   return $result;
+   if ($opt->{ReturnHashCount}) {
+      my $ret;
+      for my $i (@result) {
+         $ret->{$i} ++;
+      }
+      return $ret;
+   } else {
+      return \@result;
+   }
 }
 
 
@@ -1919,14 +1890,14 @@ sub main {
    print "\n------------------------------------------------\n";
    print "test get_items(), multiple per line\n";
    {
-       my $a = get_items("UTIL_test_get_items.txt");
+       my $a = get_items("UTIL_test_get_items.txt", {InlineDelimiter=>'\s+'});
        print join("\n", @$a), "\n";
    }
 
    print "\n------------------------------------------------\n";
    print "test get_items(), one per line\n";
    {
-       my $a = get_items("UTIL_test_get_items.txt", {OnePerLine=>1});
+       my $a = get_items("UTIL_test_get_items.txt");
        print join("\n", @$a), "\n";
    }
 
