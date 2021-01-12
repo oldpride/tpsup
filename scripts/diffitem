@@ -20,9 +20,10 @@ usage:
 
 description:
 
-   itemmize the files and find the difference between them in term of unique items.
+   itemmize the files and find the difference between them.
 
    -verbose             verbose mode
+   -u                   compare unique items. default to compare count
 
 examples:
 
@@ -38,9 +39,11 @@ END
 }
 
 my $verbose;
+my $unique;
 
 GetOptions(
    'v|verbose' => \$verbose,
+   'u|unique'  => \$unique,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 3;
@@ -52,15 +55,33 @@ my $seen2 = parse_file($file2, $pattern);
    
 for my $k (keys %$seen1) {
    if ($seen2->{$k}) {
-      print "common,$k\n";
+      if ($unique) {
+         print "common,$k\n";
+      } else {
+         if ($seen1->{$k} == $seen2->{$k}) {
+            print "common,$k\n";
+         } elsif ($seen1->{$k} > $seen2->{$k}) {
+            print "file1,$k,+", $seen1->{$k} - $seen2->{$k}, "\n";
+         } else {
+            print "file2,$k,+", $seen2->{$k} - $seen1->{$k}, "\n";
+         }
+      }
       delete $seen2->{$k};
    } else {
-      print "file1,$k\n";
+      if ($unique) {
+         print "file1,$k\n";
+      } else {
+         print "file1,$k,+", $seen1->{$k}, "\n";
+      }
    }
 }
 
 for my $k (keys %$seen2) {
-   print "file2,$k\n"
+   if ($unique) {
+      print "file2,$k\n";
+   } else {
+      print "file2,$k,+", $seen2->{$k}, "\n";
+   }
 }
 
 exit 0;
@@ -77,6 +98,7 @@ sub parse_file {
    while(<$ifh>) {
       chomp;
       next if /^\s^|^\s*#/; # skip comments and blank lines
+      s/#.*//;              # skip partial comments
       for my $e (split /$pattern/, $_) {
          next if ! defined $e;
          $ret->{$e} ++;
