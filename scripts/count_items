@@ -56,6 +56,8 @@ my $seen = {};
 
 for my $file (@ARGV) {
    my $seen2 = get_items($file, {InlineDelimiter=>$pattern, ReturnHashCount=>1});
+
+   # merge count
    for my $k (keys %$seen2) {
       $seen->{$k} += $seen2->{$k};
    }
