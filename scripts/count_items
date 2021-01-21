@@ -1,0 +1,72 @@
+#! /usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::UTIL qw(get_in_fh get_items);
+use Carp;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $count = 0;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog delimiter_pattern file1 file2
+
+description:
+
+   itemmize the files and find count of each item
+
+   -verbose             verbose mode
+
+   -c INT       only print count bigger than this threshold. default is $count.
+
+examples:
+
+   # count
+   $prog '[\\s,]+'      diffcsvlong_test1.csv diffcsvlong_test2.csv
+
+   # find dups
+   $prog '[\\s,]+' -c 1 diffcsvlong_test1.csv diffcsvlong_test2.csv
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   'c|count=s' => \$count,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my $pattern = shift @ARGV;
+
+my $seen = {};
+
+for my $file (@ARGV) {
+   my $seen2 = get_items($file, {InlineDelimiter=>$pattern, ReturnHashCount=>1});
+
+   # merge count
+   for my $k (keys %$seen2) {
+      $seen->{$k} += $seen2->{$k};
+   }
+}
+   
+for my $k (keys %$seen) {
+   if ($seen->{$k} > $count) {
+      print "$k,$seen->{$k}\n";
+   }
+}
+
+exit 0;

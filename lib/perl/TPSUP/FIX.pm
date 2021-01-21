@@ -23,7 +23,7 @@ our @EXPORT_OK = qw(
 
 use Carp;
 use Data::Dumper;
-use TPSUP::UTIL qw(get_items_from_file get_in_fh get_out_fh
+use TPSUP::UTIL qw(get_items get_in_fh get_out_fh
                    unique_array sort_unique compile_paired_strings);
 
 use TPSUP::CSV qw(query_csv2 print_csv_hashArray);
@@ -1471,10 +1471,10 @@ sub get_order_hierarchy {
    my $pick_this_ord;
       
    if ($opt->{FixPickOrdFile}) {
-      $pick_this_ord = get_items_from_file($opt->{FixPickOrdFile},
+      $pick_this_ord = get_items($opt->{FixPickOrdFile},
                                              {
-                                               %$opt,
                                                InlineDelimiter=>$opt->{FixPickOrdDelimiter},
+                                               ReturnHashCount=>1,
                                              }
                                           );
       
@@ -1654,8 +1654,8 @@ sub filter_fix {
       if ($opt->{FixFilterFile}) {
          $FilterExists = get_items_from_file($opt->{FixFilterFile},
                                                {
-                                                 %$opt,
                                                  InlineDelimiter=>$opt->{FixFilterDelimiter},
+                                                 ReturnHashCount=>1,
                                                }
                                             );
       } elsif ($opt->{FixFilterArray}) {

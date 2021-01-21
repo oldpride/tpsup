@@ -33,7 +33,6 @@ our @EXPORT_OK = qw(
    sort_unique
    trim_path
    reduce_path
-   get_items_from_file
    get_pw_by_key
    get_java
    glob2regex
@@ -47,6 +46,7 @@ our @EXPORT_OK = qw(
    binary_search_numeric
    render_arrays
    Print_ArrayOfHashes_Vertically
+   looper
    get_items
 );
 
@@ -318,45 +318,6 @@ sub get_out_fh {
    }
 
    return $out_fh;
-}
-   
-sub get_items_from_file {
-   my ($file, $opt) = @_;
-   
-   my $ifh = get_in_fh($file, $opt) ;
-   
-   my $ret;
-
-   my $delimiter = $opt->{InlineDelimiter};
-   
-   if (defined $delimiter) {
-      # multiple items per line
-      while (<$ifh>) {
-         chomp;
-
-         next if /^\s*$|^\s*#/;
-   
-         my $line = $_;
-   
-         for my $e (split /$delimiter/, $line) {
-            next if !defined $e || "$e" eq "";
-            $ret->{$e} ++;
-         }
-      }
-   } else {
-      # default to one item per line
-      while (<$ifh>) {
-         chomp;
-
-         next if /^\s*$|^\s*#/;
-   
-         $ret->{$_} ++;
-      }
-   }
-   
-   close $ifh if $ifh != \*STDIN;
-   
-   return $ret;
 }
    
 sub get_patterns_from_log {
@@ -1805,12 +1766,45 @@ sub Print_ArrayOfHashes_Vertically {
    }
 }
 
+# generator/iterator to loop through fh or array
+sub looper {
+   my ($input, $opt) = @_;
+
+   my $type = ref $input;
+
+   my $i = -1;
+   my $max;
+   if ($type eq 'ARRAY') {
+      $max = scalar(@$input);
+   }
+
+   return sub {
+      if ($type eq 'GLOB') {
+         my $line = <$input>;
+         return $line;
+      } elsif ($type eq 'ARRAY') {
+         $i++;
+
+         if ($i < $max) {
+            return $input->[$i];
+         } else {
+            return undef;
+         }
+      } else {
+         croak "unsupported type=$type";
+         return undef;
+      }
+   }
+}
+
 sub get_items {
    my ($input, $opt) = @_;
 
    my $type = ref $input;
    my $fh;
    my $need_close;
+
+   my $get_line;
 
    if (!$type) {
       # $input is a file name
@@ -1820,41 +1814,59 @@ sub get_items {
          open $fh, "<$input" or die "cannot read $input: $!";
          $need_close ++;
       }
+
+      $get_line = looper($fh);  # generator/iterator
    } elsif ($type eq 'GLOB') {
       # $ perl -e 'print ref(\*STDIN), "\n";'
       # GLOB
       # $ perl -e 'open my $fh, "<UTIL.pm"; print ref($fh), "\n";'
       # GLOB
       $fh = $input;
+      $get_line = looper($fh);
+   } elsif ($type eq 'ARRAY') {
+      $get_line = looper($input);
    } else {
       croak "don't know how to handle input with ref type=$type"; 
    }
 
-   my $result = [];
+   my @result;
+   my $delimiter = $opt->{InlineDelimiter};
 
-   while(<$fh>) {
-      chomp;
+   #while(<$fh>) {
 
-      next if /^\s*$/;    # skip blank   lines
-      next if /^\s*#/;    # skip comment lines
+   while (defined(my $line = $get_line->())) {
+      chomp $line;
 
-      s/#.*//;            # remove in-line comment
+      next if $line =~ /^\s*$/;       # skip blank lines
 
-      s/^\s+//;           # trim leading  spaces
-      s/\s+$//;           # trim trailing spaces
+      if (!$opt->{NotTrimComment}) {
+         next if $line =~ /^\s*#/;    # skip comment lines
+         $line =~ s/#.*//;            # remove in-line comment
+      }
 
-      if ($opt->{OnePerLine}) {
-         # OnePerLine will allow a string item with space in the middle
-         # for example CHL's HK exchange ticker is "941 HK"
-         push @$result, $_;
+      $line =~ s/^\s+//;           # trim leading  spaces
+      $line =~ s/\s+$//;           # trim trailing spaces
+
+      if ($delimiter) {
+         push @result, split(/$delimiter/, $line);
       } else {
-         push @$result, split(/\s+/, $_);
+         # each line is an item. this will allow a string item with space in the middle
+         # for example CHL's HK exchange ticker is "941 HK"
+         push @result, $line;
       }
    }
 
    close $fh if $need_close;
 
-   return $result;
+   if ($opt->{ReturnHashCount}) {
+      my $ret;
+      for my $i (@result) {
+         $ret->{$i} ++;
+      }
+      return $ret;
+   } else {
+      return \@result;
+   }
 }
 
 
@@ -1919,17 +1931,32 @@ sub main {
    print "\n------------------------------------------------\n";
    print "test get_items(), multiple per line\n";
    {
-       my $a = get_items("UTIL_test_get_items.txt");
+       my $a = get_items("UTIL_test_get_items.txt", {InlineDelimiter=>'\s+'});
        print join("\n", @$a), "\n";
    }
 
    print "\n------------------------------------------------\n";
    print "test get_items(), one per line\n";
    {
-       my $a = get_items("UTIL_test_get_items.txt", {OnePerLine=>1});
+       my $a = get_items("UTIL_test_get_items.txt");
        print join("\n", @$a), "\n";
    }
 
+   print "\n------------------------------------------------\n";
+   print "test get_items() on array, multiple items per element\n";
+   {
+       my $string = "
+abc
+   def ghi # leading space, ending space, multiple in one line, in-line comment 
+# commented line and blank line
+
+jkl
+";
+
+       my @array = split /\n/, $string;
+       my $a = get_items(\@array, {InlineDelimiter=>'\s+'});
+       print join("\n", @$a), "\n";
+   }
 }
 
 main() unless caller();
