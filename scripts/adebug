@@ -22,7 +22,7 @@ use TPSUP::UTIL qw(
 my $prog = $0; $prog =~ s:.*/::;
 
 my $DetailExpire = 24*3600;
-my $StatusExpire = 0;  
+my $StatusExpire = 10;  
 
 sub usage {
    my ($message) = @_;
@@ -78,7 +78,7 @@ usage("wrong number of args") if @ARGV != 1;
 my ($job) = @ARGV;
 
 my $opt = {
-   StatusExpire => 0,  # always need the latest info
+   StatusExpire => $StatusExpire,  # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
    verbose      => $verbose,

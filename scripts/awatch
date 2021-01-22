@@ -15,7 +15,7 @@ my $prog = $0; $prog =~ s:.*/::;
 my $DetailExpire = 24*3600;
 my $interval = 10;
 my $interval_limit = 60;
-my $StatusExpire = 0;  
+my $StatusExpire = $interval-1 ;  
 
 sub usage {
    my ($message) = @_;
@@ -119,7 +119,7 @@ if ($arg_is_job) {
 }
 
 my $opt = {
-   StatusExpire => 0,  # always need the latest info
+   StatusExpire => $StatusExpire,  # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
    Jobs         => \@jobs,

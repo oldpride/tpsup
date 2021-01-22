@@ -372,10 +372,7 @@ my $cumulative = {                      # all knowledge so far,
    seen_file => {},                     # user provided files loaded so far
    seen_status_pattern => {},           # patterns run by autorep -J so far
    seen_detail_pattern => {},           # patterns run by autorep -J -q so far
-   status_pattern_time => {},           # last time updated
-   detail_pattern_time => {},           # last time updated
 };    
-
 my $last_result = {};   # after applied JobExps on $cumulative 
 my $last_exp = '';      # JobExps converted into a string
 
@@ -462,15 +459,7 @@ sub query_jobs {
 
          for my $pattern (@patterns) {
             if ($cumulative->{seen_detail_pattern}->{$pattern}) {
-               my $now_sec = time();
-               my $mtime = $cumulative->{detail_pattern_time}->{$pattern};
-               $mtime = 0 if !$mtime;
-               my $expire_sec = defined($opt->{DetailExpire}) ? $opt->{DetailExpire} : 3600 * 12;
-               my $staleness = $now_sec - $mtime;
-
-               if ($staleness < $expire_sec) {
-                  next;
-               }
+               next;
             }
             $cumulative->{seen_detail_pattern}->{$pattern} ++;
 
@@ -479,8 +468,6 @@ sub query_jobs {
                                                  %$opt,
                                       });  
    
-            $cumulative->{detail_pattern_time}->{$pattern} = time();
-
             my $new = autorep_q_J("file=$file", $opt);
    
             next if ! $new;
@@ -516,15 +503,7 @@ sub query_jobs {
 
          for my $pattern (@patterns) {
             if ($cumulative->{seen_status_pattern}->{$pattern}) {
-               my $now_sec = time();
-               my $mtime = $cumulative->{status_pattern_time}->{$pattern};
-               $mtime = 0 if !$mtime;
-               my $expire_sec = defined($opt->{StatusExpire}) ? $opt->{StatusExpire} : 3600 * 12;
-               my $staleness = $now_sec - $mtime;
-
-               if ($staleness < $expire_sec) {
-                  next;
-               }
+               next;
             }
             $cumulative->{seen_status_pattern}->{$pattern} ++;
 
@@ -533,8 +512,6 @@ sub query_jobs {
                                                  %$opt,
                                       });  
    
-            $cumulative->{status_pattern_time}->{$pattern} = time();
-
             my $new = autorep_J("file=$file", $opt);
    
             next if ! $new;

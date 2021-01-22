@@ -84,10 +84,10 @@ my $opt = {
 };
 
 if ($reset) {
-   $opt->{DetailExpire} = 0;
-   $opt->{StatusExpire} = 0;
+   $opt->{DetailExpire} = 3;
+   $opt->{StatusExpire} = 3;
 } elsif ($reset_status) {
-   $opt->{StatusExpire} = 0;
+   $opt->{StatusExpire} = 3;
 }
 
 my $dependency = get_dependency($job, $opt);
