@@ -13,9 +13,9 @@ use POSIX qw(strftime);
 
 my $prog = $0; $prog =~ s:.*/::;
 
-my $DetailExpire = 24*3600;
 my $interval = 10;
 my $interval_limit = 60;
+my $DetailExpire = 24*3600;
 my $StatusExpire = $interval-1;
 
 sub usage {
