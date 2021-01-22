@@ -1,7 +1,7 @@
 REM @echo off
 
 
-set yyyymmdd=%date:~10,4%%date:~7,2%%date:~4,2%
+set yyyymmdd=%date:~10,4%%date:~4,2%%date:~7,2%
 
 set "source=C:\users\william\sitebase\github"
 
@@ -24,5 +24,5 @@ REM https://stackoverflow.com/questions/734598/how-do-i-make-a-batch-file-termin
 :error
 echo Failed with error #%errorlevel%.
 REM sleep a little so that user can see the output
-timeout /t 60
+timeout /t 300
 exit /b %errorlevel%
