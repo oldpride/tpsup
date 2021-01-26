@@ -355,7 +355,7 @@ sub run_sql {
 sub array_to_InClause {
    my ($aref, $opt) = @_;
 
-   die "empty array ref" if !$aref || !@$aref;
+   die "array_to_InClause() received empty array. SQL doesn't allow empty in-clause: in ()" if !$aref || !@$aref;
 
    return "'" . join("', '", @$aref) . "'";
 }
