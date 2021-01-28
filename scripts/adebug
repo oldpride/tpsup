@@ -91,6 +91,10 @@ if ($StatusFiles || $DetailFiles) {
 } else {
    my $status_ref = autorep_J($job, $opt);
    my $detail_ref = autorep_q_J($job, $opt);
+
+   die "cannot find job detail for $job\n" if ! $detail_ref->{$job};
+   die "cannot find job status for $job\n" if ! $status_ref->{$job};
+
    $info->{$job} = {%{$status_ref->{$job}}, %{$detail_ref->{$job}}};
 }
 
