@@ -133,7 +133,7 @@ sub resolve_string_in_env {
    $string =~ s/[<]/.lessthan./g;
    $string =~ s/[`]/.backtick./g;
 
-   my $resolved = `bash -c 'echo $string'`;
+   my $resolved = `bash -c \"echo $string\"`;
    chomp $resolved;
 
    $resolved =~ s/[.]greaterthan[.]/>/g;

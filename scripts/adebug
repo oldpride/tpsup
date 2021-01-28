@@ -122,10 +122,11 @@ print $info->{$job}->{defination};
 print "\n";
 
 my $machine = $info->{$job}->{machine};
+my $owner   = $info->{$job}->{owner};
 
 if ($machine) {
    my $ssh = "ssh -n -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
-   my $test_cmd = "$ssh $machine hostname >/dev/null";
+   my $test_cmd = "$ssh $owner\@$machine hostname >/dev/null";
    system($test_cmd);
    if ($?==0) {
       # we can ssh to the machine, then run the script remotely
@@ -147,13 +148,15 @@ if ($machine) {
          }
       }
 
-      my $cmd = "tpssh -sshargs=-q $machine '$script'";
+      $script =~ s/\$AUTO_JOB_NAME/$job/g;
+      
+      my $cmd = "tpssh -sshargs=-q $owner\@$machine '$script'";
       print "cmd = $cmd\n\n";
       system($cmd);
       exit 0;
    } else {
       print "test_cmd=$test_cmd failed.\n";
-      print "We will run the rest locally, or please log onto $machine\n"; 
+      print "We will run the rest locally, or please log onto $owner\@$machine\n"; 
    }
 }
 
@@ -172,8 +175,12 @@ $ENV{AUTO_JOB_NAME} = $job;
 if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
    # resolve any env variables
    for my $attr (qw(watch_file command std_out_file std_err_file)) {
-      next if ! $info->{$job}->{$attr};
-      my $resolved = resolve_string_in_env($info->{$job}->{$attr});
+      my $string = $info->{$job}->{$attr};
+      next if ! $string;
+
+      $string =~ s/\$AUTO_JOB_NAME/$job/g;
+
+      my $resolved = resolve_string_in_env($string);
       print "$attr: $resolved\n\n";
   
       if ($attr =~ /watch_file/) {
