@@ -32,7 +32,7 @@ if [ "X$BASH_SOURCE" != "X" ]; then
    TPSUP=$(cd "`dirname \"$BASH_SOURCE\"`"; pwd -P) || return
    export TPSUP
 else
-   if ! [[ "$0" =~ bash ]]; then
+   if ! [[ "X$0" =~ Xbash ]]; then
       echo "Run bash first ... Env is not set !!!" >&2
       return
    else
