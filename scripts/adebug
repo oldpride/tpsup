@@ -128,87 +128,98 @@ print "\n";
 my $machine = $info->{$job}->{machine};
 my $owner   = $info->{$job}->{owner};
 
+my $local_cmd_file = `get_tmp /var/tmp $prog`; chomp $local_cmd_file;
+
+my $fh_cmd = "sed 's/\\\$AUTO_JOB_NAME/$job/g' >$local_cmd_file";
+open my $cfh, "|$fh_cmd" or die "$fh_cmd failed";
+
+print {$cfh} "#!/bin/bash\n\n";
+
+while (<DATA>) {
+    print {$cfh} $_;
+}
+
+print "\n";
+
+print {$cfh} ". $info->{$job}->{profile};\n\n"        if $info->{$job}->{profile};
+print {$cfh} "ls -l $info->{$job}->{watch_file};\n\n" if $info->{$job}->{watch_file};
+
+if ($info->{$job}->{command}) {
+   my ($command, $rest) = split /\s/, $info->{$job}->{command}, 2;
+   print {$cfh} "which $command; echo \"\";\n\n";
+}
+
+for my $attr (qw(std_out_file std_err_file)) {
+   my $file = $info->{$job}->{$attr};
+
+   if ($file) {
+      # sometimes people put > in the output file, like below
+      #    std_out_file: ">/tmp/test.log"
+      #    std_err_file: ">/tmp/test.err"
+      # remove the >
+      $file =~ s/[>]+//g;
+   
+      print {$cfh} "ls -l $file && tail $file; echo \"\";\n\n";
+
+      if ($attr eq 'std_out_file') {
+         print {$cfh} "dig_app_log $file;\n\n";
+      }
+   }
+}
+
+close $cfh;
+
+{ 
+   my $cmd = "chmod 744 $local_cmd_file";
+   system($cmd);
+   die "cmd = $cmd failed" if $? != 0;
+}
+
+my $run_with_ssh;
 if ($machine) {
    my $ssh = "ssh -n -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
    my $test_cmd = "$ssh $owner\@$machine hostname >/dev/null";
+   print "test_cmd = $test_cmd\n";
    system($test_cmd);
    if ($?==0) {
       # we can ssh to the machine, then run the script remotely
-
-      my $script = "\n";
-
-      $script .= ". $info->{$job}->{profile};\n\n"        if $info->{$job}->{profile};
-      $script .= "ls -l $info->{$job}->{watch_file};\n\n" if $info->{$job}->{watch_file};
-
-      if ($info->{$job}->{command}) {
-         my ($command, $rest) = split /\s/, $info->{$job}->{command}, 2;
-         $script .= "which $command; echo \"\";\n\n";
-      }
-
-      for my $attr (qw(std_out_file std_err_file)) {
-         my $file = $info->{$job}->{$attr};
-
-         if ($file) {
-            # sometimes people put > in the output file, like below
-            #    std_out_file: ">/tmp/test.log"
-            #    std_err_file: ">/tmp/test.err"
-            # remove the >
-            $file =~ s/[>]+//g;
-   
-            $script .= "ls -l $file && tail $file; echo \"\";\n\n";
-         }
-      }
-
-      $script =~ s/\$AUTO_JOB_NAME/$job/g;
-      
-      my $cmd = "tpssh -sshargs=-q $owner\@$machine '$script'";
-      print "cmd = $cmd\n\n";
-      system($cmd);
-      exit 0;
+      print "ssh worked. we will run debug script using ssh.\n";
+      $run_with_ssh ++;
    } else {
-      print "test_cmd=$test_cmd failed.\n";
-      print "We will run the rest locally, or please log onto $owner\@$machine\n"; 
+      print "ssh didn't work. we will run debug script locally.\n";
    }
 }
 
-# now we do everything locally
-if ($info->{$job}->{profile}) {
-   my $profile = $info->{$job}->{profile};
-   
-   print "begin sourcing $profile\n";
-   TPSUP::UTIL::source_profile($profile);
-   print "done  sourcing $profile\n";
-   print "\n";
-}
-
-$ENV{AUTO_JOB_NAME} = $job;
-
-if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
-   # resolve any env variables
-   for my $attr (qw(watch_file command std_out_file std_err_file)) {
-      my $string = $info->{$job}->{$attr};
-      next if ! $string;
-
-      $string =~ s/\$AUTO_JOB_NAME/$job/g;
-
-      my $resolved = resolve_string_in_env($string);
-      print "$attr: $resolved\n\n";
-  
-      if ($attr =~ /watch_file/) {
-         system("ls -l $resolved");
-      } elsif ($attr =~ /std_out_file|std_err_file/) {
-         $resolved =~ s/[>]+//g;
-         system("ls -l $resolved");
-         system("tail $resolved");
-      } elsif ($attr =~ /^(command)$/) {
-         my ($exe, $junk) = split /[\s<>]/, $resolved;
-         print "which exe: "; system("which $exe");
-      }
-      print "\n";
-
-   }
+my $cmd;
+if ($run_with_ssh) {
+   $cmd = "tpssh -sshargs=-q $owner\@$machine -f $local_cmd_file";
 } else {
-   die "unsupported job_type = $info->{$job}->{job_type}\n";
+   $cmd = "$local_cmd_file";
 }
 
+print "\n\n";
+system("cat $local_cmd_file");
+print "cmd = $cmd\n\n";
+system($cmd);
 
+# nothing to add below
+__DATA__
+
+dig_app_log () {
+   autosyslog=$1
+
+   APPLOG=`perl -e '
+      while (<>) { 
+         if (/\bLOG\s*FILE[\s=:]+(\S+)/i) {
+            print $1, "\n";
+         }
+      }' <$autosyslog |tail -1`
+
+   if [ "X$APPLOG" != "X" ]; then
+      tail  $APPLOG
+   else
+      echo "no separate application log found in autosyslog";
+   fi
+
+   echo ""
+}

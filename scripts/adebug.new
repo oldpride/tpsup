@@ -210,7 +210,7 @@ dig_app_log () {
 
    APPLOG=`perl -e '
       while (<>) { 
-         if (/\bLOG\s*FILE[\s=:]+(\S+)/) {
+         if (/\bLOG\s*FILE[\s=:]+(\S+)/i) {
             print $1, "\n";
          }
       }' <$autosyslog |tail -1`
