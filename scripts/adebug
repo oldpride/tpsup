@@ -217,8 +217,8 @@ dig_app_log () {
 
    if [ "X$APPLOG" != "X" ]; then
       echo ""
-      echo ""
       echo "found separate application log $APPLOG";
+      echo ""
       echo tail $APPLOG
       echo ""
       tail  $APPLOG
