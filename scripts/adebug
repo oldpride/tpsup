@@ -148,12 +148,13 @@ if ($machine) {
       for my $attr (qw(std_out_file std_err_file)) {
          my $file = $info->{$job}->{$attr};
 
-         # sometimes people put > in the output file, like below
-         #    std_out_file: ">/tmp/test.log"
-         #    std_err_file: ">/tmp/test.err"
-         # remove the >
-         $file =~ s/[>]+//g;
          if ($file) {
+            # sometimes people put > in the output file, like below
+            #    std_out_file: ">/tmp/test.log"
+            #    std_err_file: ">/tmp/test.err"
+            # remove the >
+            $file =~ s/[>]+//g;
+   
             $script .= "ls -l $file && tail $file; echo \"\";\n\n";
          }
       }

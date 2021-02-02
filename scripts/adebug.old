@@ -10,6 +10,8 @@ use TPSUP::AUTOSYS qw(
    print_autorep_J_header
    get_autorep_J_format
    print_autorep_J_job
+   autorep_J
+   autorep_q_J
 );
 use TPSUP::UTIL qw(
    source_profile
@@ -20,7 +22,7 @@ use TPSUP::UTIL qw(
 my $prog = $0; $prog =~ s:.*/::;
 
 my $DetailExpire = 24*3600;
-my $StatusExpire = 0;  
+my $StatusExpire = 10;  
 
 sub usage {
    my ($message) = @_;
@@ -76,14 +78,25 @@ usage("wrong number of args") if @ARGV != 1;
 my ($job) = @ARGV;
 
 my $opt = {
-   StatusExpire => 0,  # always need the latest info
+   StatusExpire => $StatusExpire,  # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
-   Jobs         => [$job],
    verbose      => $verbose,
 };
 
-my $info = query_jobs($opt);
+my $info;
+
+if ($StatusFiles || $DetailFiles) { 
+   $info = query_jobs($job, $opt);
+} else {
+   my $status_ref = autorep_J($job, $opt);
+   my $detail_ref = autorep_q_J($job, $opt);
+
+   die "cannot find job detail for $job\n" if ! $detail_ref->{$job};
+   die "cannot find job status for $job\n" if ! $status_ref->{$job};
+
+   $info->{$job} = {%{$status_ref->{$job}}, %{$detail_ref->{$job}}};
+}
 
 my $error = 0;
 if (!exists $info->{$job}) {
@@ -112,6 +125,53 @@ if (!$info->{$job}->{defination}) {
 print $info->{$job}->{defination};
 print "\n";
 
+my $machine = $info->{$job}->{machine};
+my $owner   = $info->{$job}->{owner};
+
+if ($machine) {
+   my $ssh = "ssh -n -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
+   my $test_cmd = "$ssh $owner\@$machine hostname >/dev/null";
+   system($test_cmd);
+   if ($?==0) {
+      # we can ssh to the machine, then run the script remotely
+
+      my $script = "\n";
+
+      $script .= ". $info->{$job}->{profile};\n\n"        if $info->{$job}->{profile};
+      $script .= "ls -l $info->{$job}->{watch_file};\n\n" if $info->{$job}->{watch_file};
+
+      if ($info->{$job}->{command}) {
+         my ($command, $rest) = split /\s/, $info->{$job}->{command}, 2;
+         $script .= "which $command; echo \"\";\n\n";
+      }
+
+      for my $attr (qw(std_out_file std_err_file)) {
+         my $file = $info->{$job}->{$attr};
+
+         if ($file) {
+            # sometimes people put > in the output file, like below
+            #    std_out_file: ">/tmp/test.log"
+            #    std_err_file: ">/tmp/test.err"
+            # remove the >
+            $file =~ s/[>]+//g;
+   
+            $script .= "ls -l $file && tail $file; echo \"\";\n\n";
+         }
+      }
+
+      $script =~ s/\$AUTO_JOB_NAME/$job/g;
+      
+      my $cmd = "tpssh -sshargs=-q $owner\@$machine '$script'";
+      print "cmd = $cmd\n\n";
+      system($cmd);
+      exit 0;
+   } else {
+      print "test_cmd=$test_cmd failed.\n";
+      print "We will run the rest locally, or please log onto $owner\@$machine\n"; 
+   }
+}
+
+# now we do everything locally
 if ($info->{$job}->{profile}) {
    my $profile = $info->{$job}->{profile};
    
@@ -126,8 +186,12 @@ $ENV{AUTO_JOB_NAME} = $job;
 if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
    # resolve any env variables
    for my $attr (qw(watch_file command std_out_file std_err_file)) {
-      next if ! $info->{$job}->{$attr};
-      my $resolved = resolve_string_in_env($info->{$job}->{$attr});
+      my $string = $info->{$job}->{$attr};
+      next if ! $string;
+
+      $string =~ s/\$AUTO_JOB_NAME/$job/g;
+
+      my $resolved = resolve_string_in_env($string);
       print "$attr: $resolved\n\n";
   
       if ($attr =~ /watch_file/) {
@@ -135,6 +199,7 @@ if ($info->{$job}->{job_type} =~ /^(FW|CMD)/) {
       } elsif ($attr =~ /std_out_file|std_err_file/) {
          $resolved =~ s/[>]+//g;
          system("ls -l $resolved");
+         system("tail $resolved");
       } elsif ($attr =~ /^(command)$/) {
          my ($exe, $junk) = split /[\s<>]/, $resolved;
          print "which exe: "; system("which $exe");
