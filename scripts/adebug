@@ -216,6 +216,11 @@ dig_app_log () {
       }' <$autosyslog |tail -1`
 
    if [ "X$APPLOG" != "X" ]; then
+      echo ""
+      echo ""
+      echo "found separate application log $APPLOG";
+      echo tail $APPLOG
+      echo ""
       tail  $APPLOG
    else
       echo "no separate application log found in autosyslog";
