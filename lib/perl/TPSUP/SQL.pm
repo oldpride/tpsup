@@ -8,6 +8,7 @@ our @EXPORT_OK = qw(
       run_sql
       unlock_conn
       array_to_InClause
+      dump_conn_csv
 );
       
 use Carp;
@@ -20,7 +21,6 @@ use TPSUP::CSV qw(parse_csv_file);
 
 
 sub unlock_conn {
-      
    my ($nickname, $opt) = @_;
 
    my $connfile;
@@ -74,6 +74,34 @@ sub unlock_conn {
    }
       
    return $r;
+}
+
+sub dump_conn_csv {
+   my ($connfile, $opt) = @_;
+
+   croak "missing $connfile for sql connection" if ! -f $connfile;
+      
+   my $ref = parse_csv_file($connfile, {keyColumn=>'nickname',
+                                        QuotedInput=>1,
+                                        RemoveInputQuotes=>1,
+                                       });
+
+   return if !$ref;
+      
+   for my $nickname (sort (keys %$ref)) {
+      my $rows = $ref->{$nickname};
+      
+      for my $r (@$rows) {
+         my $r2;
+         @{$r2}{qw(string login locked_password)} = @{$r}{qw(string login password)};
+         $r2->{unlocked_password} = tpeng_unlock($r->{password});
+         $r2->{nickname} = $nickname;
+      
+         print join(",", @{$r2}{qw(string login unlocked_password)}), "\n";
+      }
+   }
+      
+   return;
 }
       
 my $dbh_by_key;
@@ -362,6 +390,7 @@ sub array_to_InClause {
 
 
 sub main {
+   print "\n\ntest run_sql\n\n";
    my $sql = "
      SELECT m.firstname, m.lastname, r.ranking
        FROM   tblMembers m, tblAssignment a, tblRanking r
@@ -369,9 +398,15 @@ sub main {
    ";
 
    run_sql($sql, {nickname=>'tian@tiandb', RenderOutput=>1, output=>'-'});
+
+   print "\n\ntest dump_conn_csv\n\n";
+
+   my $homedir = (getpwuid($<))[7];
+   my $hiddendir = "$homedir/.tpsup";
+   $connfile = "$hiddendir/conn.csv";
+   dump_conn_csv($connfile);
 }
 
 main() unless caller();
       
 1
-      
