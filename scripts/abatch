@@ -140,7 +140,7 @@ if ($arg_is_job) {
          $seen->{$job} ++;
       }
       
-      close $ifh;
+      close $ifh if $ifh != \*STDIN;
    }
 }
 

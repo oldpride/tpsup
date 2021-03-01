@@ -57,6 +57,6 @@ while (<$ifh>) {
    print;
 }
 
-close $ifh;
+close $ifh if $ifh != \*STDIN;
 
 exit 0;

@@ -105,6 +105,6 @@ sub parse_file {
       }
    }
 
-   close $ifh;
+   close $ifh != \*STDIN;
    return $ret;
 }

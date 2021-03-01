@@ -143,7 +143,7 @@ for my $pkg ( sort(keys %$info_by_pkg) ) {
       print {$ofh} "$line\n";
    }
 
-   close $ifh;
+   close $ifh if $ifh != \*STDIN;
 }
 
 if ($info_by_pkg) {
@@ -289,7 +289,7 @@ sub parse_pkg {
       }
    }
 
-   close $ifh;
+   close $ifh if $ifh != \*STDIN;
 
    return 1;
 }
