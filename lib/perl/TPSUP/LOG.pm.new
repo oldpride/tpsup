@@ -14,7 +14,7 @@ use Carp;
 use Data::Dumper;
 #use XML::Simple;
 use TPSUP::CSV  qw(query_csv2);
-use TPSUP::UTIL qw(get_in_fh close_in_fh);
+use TPSUP::UTIL qw(get_in_fh);
 
 my $PatternCfg_by_file_app;
                   
@@ -223,57 +223,39 @@ sub itemize_log {
 sub find_log_pattern {
    my ($log, $opt) = @_;
 
-   my @configured_patterns = (
-      # regex non-capturing group: (?:)?
+   my @known_patterns = (
+      # regex non-capturing group: (?:) 
 
-      { 
-          example => 'Tue Mar 23 00:30:04 EDT 2021: process started',
-          pattern => "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ 0-3][0-9]) ([0-5][0-9]:[0-5][0-9]:[0-5][0-9]) ([A-Z][A-Z][A-Z]) ([12][0-9][0-9][0-9])",
-          yyyymmdd => '$6$mm_by_Mmm{$2}$3',
-          HHMMSS   => '$4',
-      },
-
-      { 
-          example => 'Sep 18 09:26:35 testapp [9571]: testapp entered state=DONE',
-          pattern => "^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)? [ 0-3][0-9] [0-5][0-9]:[0-5][0-9]:[0-5][0-9]",
-          yyyymmdd => '$current_yyyy$mm_by_Mmm{$1}$2',
-          HHMMSS   => '$3',
-      },
-
+      # Tue Mar 23 00:30:04 EDT 2021: process started
+      "^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-3][0-9] [0-5][0-9]:[0-5][0-9]:[0-5][0-9] [A-Z][A-Z][A-Z] [12][0-9][0-9][0-9]",
    );
 
    my @compiled;
 
-   for my $cp (@configured_patterns) {
-      push @compiled, qr/$cp->{pattern}/;
+   for my $p (@known_patterns) {
+      push @compiled, qr/$p/;
    }
 
    my $row_max = 100;
    my $row_count = 0;
 
-   my $number_of_patterns = scalar(@configured_patterns);
+   my $number_of_patterns = scalar(@known_patterns);
 
    my @count_by_idx;
 
    my $ifh = get_in_fh($log);
 
-   while (my $line = <$ifh>) {
+   while (<$ifh> && $row_count < $row_max) {
       $row_count ++;
 
       for (my $idx=0; $idx<$number_of_patterns; $idx++ ) {
-         if ( $line =~ /$compiled[$idx]/ ) {
+         if ( /$compiled[$idx]/ ) {
             $count_by_idx[$idx] ++;
          }
       }
-
-      last if $row_count >= $row_max;
-
-      $row_count ++;
    }
 
    close_in_fh($ifh);
-
-   $opt->{verbose} && print "count_by_idx = ", Dumper(@count_by_idx), "\n";
 
    if ($row_count > 0)  {
       my $max_hits = 0;
@@ -287,7 +269,7 @@ sub find_log_pattern {
       }
  
       if (defined $max_idx) {
-         return $configured_patterns[$max_idx];
+         return $known_patterns[$max_idx];
       } else {
          return undef;
       }

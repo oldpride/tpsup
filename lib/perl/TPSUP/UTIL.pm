@@ -6,6 +6,8 @@ our @EXPORT_OK = qw(
    get_tmp_file
    get_in_fh
    get_out_fh
+   close_in_fh
+   close_out_fh
    get_patterns_from_log
    cp_file2_to_file1
    backup_filel_to_file2
@@ -289,7 +291,7 @@ sub get_in_fh {
    
    return $in_fh;
 }
-   
+
 sub get_out_fh {
    my ($output, $opt) = @_;
    
@@ -320,6 +322,21 @@ sub get_out_fh {
    return $out_fh;
 }
    
+
+sub close_in_fh {
+   my ($fh, $opt) = @_;
+
+   close $fh if $fh != \*STDIN;
+}
+
+
+sub close_out_fh {
+   my ($fh, $opt) = @_;
+
+   close $fh if $fh != \*STDOUT && $fh != \*STDERR;
+}
+
+
 sub get_patterns_from_log {
    my ($log, $match_pattern, $opt) = @_;
    
