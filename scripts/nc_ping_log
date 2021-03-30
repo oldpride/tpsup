@@ -1,6 +1,6 @@
 #!/bin/bash
 
-interval=30
+interval=60
 output=~/nc_ping.log
 
 usage () {
@@ -9,8 +9,10 @@ usage:
    
    $0 host port
 
-   -i internval
+   -i internval     default to $interval seconds
    
+   log is $output
+
 EOF
    exit 1
 }
@@ -37,7 +39,8 @@ echo "logging to $output"
 
 while :
 do
-   date "+%Y%m%d %H:%M:%S"
+   echo ""
+   date "+%Y-%m-%d %H:%M:%S"
    (set -x; nc -zv $host $port)
 
    sleep $interval   
