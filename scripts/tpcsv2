@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use warnings;
 use strict;
@@ -89,10 +89,13 @@ usage:
                                 when 'namespace' is 'all', means all namespaces,
                                 can set multiple times.
                                 for example,
+                                to import a module:
+                                   -code 'TPSUP::Expression=use TPSUP::FIX qw(/./);'
                                 to import a user module:
                                    -code 'all=use lib "/my_path"; use MY_MODULE'
                                 to define a function:
                                   -code 'TPSUP::Expression=sub my_sum {my(\$a,\$b)=@_; return \$a+\$b;}'
+
 
    -codefile "namespace=file"
                                 same as '-code' but the real content is in the 'file'
