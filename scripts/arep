@@ -12,7 +12,7 @@ use TPSUP::AUTOSYS qw(get_dependency
                       print_autorep_J_header
                       print_autorep_J_job
                       );
-use TPSUP::UTIL    qw(get_in_fh);
+use TPSUP::UTIL    qw(get_in_fh close_in_fh);
 # use Carp::Always;
 
 my $prog = $0; $prog =~ s:.*/::;
@@ -124,7 +124,7 @@ while (<$ifh>) {
    $seen->{$job} ++;
 }
 
-close $ifh != \*STDIN;
+close_in_fh($ifh);
 
 my $opt = {
    DetailExpire => $DetailExpire,
@@ -178,13 +178,7 @@ if (!$detail) {
       } elsif (!$info->{$job}->{job_type}) {
          print  "$job detail not found\n";
       } else {
-         print "insert_job: $info->{$job}->{JobName}    job_type: $info->{$job}->{job_type}\n";
-         for my $attr (sort keys(%{$info->{$job}})) {
-            if ($attr =~ /^(JobName|job_type|LastStart|LastEnd|Status)$/) {
-               next;
-            }
-            print  "$attr: $info->{$job}->{$attr}\n";
-         }
+         print  "$info->{$job}->{defination}\n";
       }
       print "\n";
    }  

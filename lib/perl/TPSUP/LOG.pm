@@ -15,6 +15,7 @@ use Carp;
 use Data::Dumper;
 #use XML::Simple;
 use TPSUP::CSV  qw(query_csv2);
+use TPSUP::CFG  qw(parse_simple_cfg);
 use TPSUP::UTIL qw(get_in_fh close_in_fh);
 
 my $PatternCfg_by_file_app;
@@ -308,26 +309,9 @@ use strict;
 sub find_log_pattern_info {
    my ($log, $opt) = @_;
 
-   my @configured_patterns = (
-      # regex non-capturing group: (?:)?
+   my $cfg_file = $opt->{LogPatternCfg} ? $opt->{LogPatternCfg} : "$ENV{TPSUP}/scripts/log_pattern.cfg";
 
-      { 
-          example => 'Tue Mar 23 00:30:04 EDT 2021: process started',
-          pattern_src => "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ 0-3][0-9]) ([0-5][0-9]):([0-5][0-9]):([0-5][0-9]) ([A-Z][A-Z][A-Z]) ([12][0-9][0-9][0-9])",
-          yyyymmdd_src => '$6$mm_by_Mmm{$2}$3',
-          HHMMSS   => '$4',
-          yyyymmdd_src => 'sub { return sprintf("%s%s%s", $8, $TPSUP::LOG::mm_by_Mon{$2}, $3); }',
-          HHMMSS_src   => 'sub { return sprintf("%s%s%s", $4, $5, $6); }',
-      },
-
-      { 
-          example => 'Sep 18 09:26:35 testapp [9571]: testapp entered state=DONE',
-          pattern_src => "^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ 0-3][0-9]) ([0-5][0-9]):([0-5][0-9]):([0-5][0-9])",
-          yyyymmdd_src => 'sub { return sprintf("%s%s%s", $TPSUP::LOG::yyyy, $TPSUP::LOG::mm_by_Mon{$1}, $2); }',
-          HHMMSS_src   => 'sub { return sprintf("%s%s%s", $3, $4, $5); }',
-      },
-
-   );
+   my @configured_patterns = values(%{parse_simple_cfg($cfg_file, $opt)});
 
    my @compiled;
 
@@ -425,6 +409,11 @@ yyyymmdd = $TPSUP::LOG::yyyymmdd
 HHMMSS   = $TPSUP::LOG::HHMMSS
 
 EOF
+
+   my $log = "$ENV{TPSUP}/scripts/log_event_test.log";
+   print "parse log $log\n";
+   print "matched pattern: \n";
+   print Dumper(find_log_pattern_info($log));
 }
 
 main() unless caller();
