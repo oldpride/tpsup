@@ -7,7 +7,8 @@ our @EXPORT_OK = qw(
    get_PatternCfg_by_app
    get_PatternCfg
    itemize_log
-   find_log_pattern
+   find_log_pattern_info
+   parse_log_line
 );
 
 use Carp;
@@ -220,7 +221,91 @@ sub itemize_log {
 }
 
 
-sub find_log_pattern {
+
+my ($sec, $min, $hour, $day, $mon, $year) = localtime();
+
+############################ BEGIN no strict ########################################
+# http://www.softpanorama.org/Scripting/Perlorama/perl_namespaces.shtml
+
+# "eval '...' statements, as well as regular expressions with deferred evaluation
+# (like s///e operators or $(${ }) expressions), re-establish the namespace environment
+# for the duration of the expression compilation."
+
+#don't use 'my' for the following variables, 'my' will make them not accessible as
+#$TPSUP::LOG::yyyy for example.
+#my $yyyy = '2021';
+
+# without 'my', $TPSUP::LOG::yyyy is a global variable, accessible anywhere
+# with 'my',    $TPSUP::LOG::yyyy will not exist in the main (calling) script
+# with the 'my' above commented out, we need the following 'no strict ..' to
+# disable the compiler's complain.
+
+# for example, to set a variable from another program
+#    use TPSUP::LOG;
+#    no warnings 'once';   # this prevents: Name ... used only once: possible typo.
+#    $TPSUP::LOG::myvar = 1;
+#    @TPSUP::LOG::myarray = (1,2);
+#    $TPSUP::LOG::myhash = {};
+#    $TPSUP::LOG::myhash{firstname} = 'jack';
+
+no strict;
+
+$SS   = sprintf("%02d", $sec);
+$MM   = sprintf("%02d", $min);
+$HH   = sprintf("%02d", $hour);
+$dd   = sprintf("%02d", $day);
+$mm   = sprintf("%02d", $mon+1);
+$yyyy = sprintf("%d", $year+1900);
+
+$yyyymmdd = "$yyyy$mm$dd";
+$HHMMSS   = "$HH$MM$SS";
+
+%mm_by_Mon = ( 
+         'Jan' => '01',
+         'Feb' => '02',
+         'Mar' => '03',
+         'Apr' => '04',
+         'May' => '05',
+         'Jun' => '06',
+         'Jul' => '07',
+         'Aug' => '08',
+         'Sep' => '09',
+         'Oct' => '10',
+         'Nov' => '11',
+         'Dec' => '12',
+
+         'JAN' => '01',
+         'FEB' => '02',
+         'MAR' => '03',
+         'APR' => '04',
+         'MAY' => '05',
+         'JUN' => '06',
+         'JUL' => '07',
+         'AUG' => '08',
+         'SEP' => '09',
+         'OCT' => '10',
+         'NOV' => '11',
+         'DEC' => '12',
+
+         'January'   => '01',
+         'February'  => '02',
+         'March'     => '03',
+         'April'     => '04',
+         'May'       => '05',
+         'June'      => '06',
+         'July'      => '07',
+         'August'    => '08',
+         'September' => '09',
+         'October'   => '10',
+         'November'  => '11',
+         'December'  => '12',
+);
+
+use strict;
+
+############################ END no strict ########################################
+
+sub find_log_pattern_info {
    my ($log, $opt) = @_;
 
    my @configured_patterns = (
@@ -228,16 +313,18 @@ sub find_log_pattern {
 
       { 
           example => 'Tue Mar 23 00:30:04 EDT 2021: process started',
-          pattern => "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ 0-3][0-9]) ([0-5][0-9]:[0-5][0-9]:[0-5][0-9]) ([A-Z][A-Z][A-Z]) ([12][0-9][0-9][0-9])",
-          yyyymmdd => '$6$mm_by_Mmm{$2}$3',
+          pattern_src => "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ 0-3][0-9]) ([0-5][0-9]):([0-5][0-9]):([0-5][0-9]) ([A-Z][A-Z][A-Z]) ([12][0-9][0-9][0-9])",
+          yyyymmdd_src => '$6$mm_by_Mmm{$2}$3',
           HHMMSS   => '$4',
+          yyyymmdd_src => 'sub { return sprintf("%s%s%s", $8, $TPSUP::LOG::mm_by_Mon{$2}, $3); }',
+          HHMMSS_src   => 'sub { return sprintf("%s%s%s", $4, $5, $6); }',
       },
 
       { 
           example => 'Sep 18 09:26:35 testapp [9571]: testapp entered state=DONE',
-          pattern => "^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)? [ 0-3][0-9] [0-5][0-9]:[0-5][0-9]:[0-5][0-9]",
-          yyyymmdd => '$current_yyyy$mm_by_Mmm{$1}$2',
-          HHMMSS   => '$3',
+          pattern_src => "^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([ 0-3][0-9]) ([0-5][0-9]):([0-5][0-9]):([0-5][0-9])",
+          yyyymmdd_src => 'sub { return sprintf("%s%s%s", $TPSUP::LOG::yyyy, $TPSUP::LOG::mm_by_Mon{$1}, $2); }',
+          HHMMSS_src   => 'sub { return sprintf("%s%s%s", $3, $4, $5); }',
       },
 
    );
@@ -245,7 +332,12 @@ sub find_log_pattern {
    my @compiled;
 
    for my $cp (@configured_patterns) {
-      push @compiled, qr/$cp->{pattern}/;
+      my $compiled_pattern = qr/$cp->{pattern_src}/;
+      $cp->{pattern} = $compiled_pattern;
+      push @compiled, $compiled_pattern;
+      
+      $cp->{yyyymmdd} = eval "use TPSUP::LOG; $cp->{yyyymmdd_src}";
+      $cp->{HHMMSS}   = eval $cp->{HHMMSS_src};
    }
 
    my $row_max = 100;
@@ -267,8 +359,6 @@ sub find_log_pattern {
       }
 
       last if $row_count >= $row_max;
-
-      $row_count ++;
    }
 
    close_in_fh($ifh);
@@ -287,7 +377,10 @@ sub find_log_pattern {
       }
  
       if (defined $max_idx) {
-         return $configured_patterns[$max_idx];
+         my $ref = $configured_patterns[$max_idx];
+         $ref->{test_row_count} = $row_count;
+         $ref->{test_hit_count} = $max_hits;
+         return $ref;
       } else {
          return undef;
       }
@@ -295,6 +388,46 @@ sub find_log_pattern {
       return undef;
    }
 }
+
+sub parse_log_line {
+   my ($line_ref, $cfg, $opt) = @_;
+
+   my $ret;
+
+   croak "missing cfg" if !$cfg || !$cfg->{pattern};
+
+   my @matches = ($$line_ref =~ /$cfg->{pattern}/);
+   if (@matches) {
+      $ret->{yyyymmdd} = $cfg->{yyyymmdd}->();
+      $ret->{HHMMSS}   = $cfg->{HHMMSS}->();
+
+      if ($opt->{verbose}) {
+         print "1ine=$$line_ref\n";
+         print "\@matches = ", Dumper(\@matches), "\n";
+         print "ret = ", Dumper($ret);
+      }
+   }
+  
+   return $ret;
+}
+
+
+sub main {
+   print <<"EOF";
+yyyy = $TPSUP::LOG::yyyy
+mm   = $TPSUP::LOG::mm
+dd   = $TPSUP::LOG::dd
+HH   = $TPSUP::LOG::HH
+MM   = $TPSUP::LOG::MM
+SS   = $TPSUP::LOG::SS
+
+yyyymmdd = $TPSUP::LOG::yyyymmdd
+HHMMSS   = $TPSUP::LOG::HHMMSS
+
+EOF
+}
+
+main() unless caller();
       
 1
       

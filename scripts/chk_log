@@ -4,13 +4,13 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use TPSUP::DATE qw(get_interval_seconds);
-use TPSUP::LOG qw(get_PatternCfg find_log_pattern);
+use TPSUP::LOG qw(find_log_pattern_info parse_log_line);
 use TPSUP::UTIL qw(get_in_fh);
 
 my $prog = $0; $prog =~ s:.*/::;
 my $dir = $0; $dir =~ s:[^/]+$::;
 
-my $min_idle = 60;
+my $last_seconds = 3600;
 
 sub usage {
    my ($msg) = @_;
@@ -27,43 +27,113 @@ usage:
    
     check log for error
 
+   -v                     verbose mode
+
+   -s                     print summary
+
    -x exclude_pattern     Perl style, exclude lines with this pattern
+
    -m  match_pattern      Perl style, only count the lines with this pattern
+
+   -t seconds             only check for logs in the this number of last seconds.
+                          default $last_seconds
 
 examples:
 
    $prog log_event_test.log
+   $prog chk_log_test_2.log
+   $prog /var/log/syslog
 
 EOF
 
    exit 1;
 }
 
- our ($exclude_pattern, $match_pattern, $verbose);
+ our ($exclude_pattern, $match_pattern, $verbose, $print_summary);
 
  GetOptions(
    "x=s"            => \$exclude_pattern,
    "m=s"            => \$match_pattern,
    "v"              => \$verbose,
+   "s"              => \$print_summary,
+   "t=s"            => \$last_seconds,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
 
+my $current_yyyymmdd = $TPSUP::LOG::yyyymmdd;
+my $current_yyyy     = $TPSUP::LOG::yyyy;
+my $current_HHMMSS   = $TPSUP::LOG::HHMMSS;
+
+my $compiled_match   =   $match_pattern ?   qr/$match_pattern/ : undef;
+my $compiled_exclude = $exclude_pattern ? qr/$exclude_pattern/ : undef;
+
 for my $f (@ARGV) {
    print STDERR "file = $f\n";
 
-   my $pattern = find_log_pattern($f);
+   my $cfg = find_log_pattern_info($f);
 
-   if ($pattern) {
-      print "file=$f, matched =", Dumper($pattern), "\n";
+   if ($cfg) {
+      print "file=$f, matched =", Dumper($cfg), "\n";
    } else {
       print "file=$f, cannot match any pattern\n";
       exit 1;
    }
 
+   my $pattern  = $cfg->{pattern};
+   my $pattern_compiled  = qr/$pattern/;
+   my $yyyymmdd_exp = $cfg->{yyyymmdd};
+   my $HHMMSS_exp   = $cfg->{HHMMSS};
+
+   my $summary;
+   my $last_part_started;
+
    my $ifh = get_in_fh($f);
 
    while(<$ifh>) {
+      my $line = $_;
+      $summary->{total_rows} ++ if $print_summary;
 
+      if (!$last_part_started) {
+         my $result = parse_log_line(\$line, $cfg);
+
+         next if !$result;
+         $summary->{dated_rows} ++ if $print_summary;
+
+         next if $result->{yyyymmdd} ne $current_yyyymmdd;
+         $summary->{today_rows} ++ if $print_summary;
+
+         my $staleness = get_interval_seconds(undef, $result->{HHMMSS}, undef, $current_HHMMSS);
+         if ($staleness > $last_seconds) {
+            next;
+         } else {
+            $last_part_started ++;
+         }
+
+         print "$result->{yyyymmdd} $result->{HHMMSS}\n";
+      }
+
+      $summary->{last_rows} ++ if $print_summary;
+
+      if ($compiled_match) {
+         next if $line !~ /$compiled_match/;
+         $summary->{matched_rows} ++ if $print_summary;
+      }
+   
+      if ($compiled_exclude) {
+         next if $line =~ /$compiled_exclude/;
+         $summary->{excluded_rows} ++ if $print_summary;
+      }
+
+      print $line;
    }
+
+   print "summary = ", Dumper($summary), "\n" if $print_summary; 
 }
+
+exit 0;
+
+#################################################################################
+# subs
+#################################################################################
+

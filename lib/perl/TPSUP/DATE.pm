@@ -653,7 +653,7 @@ sub date2any {
       my ($sec, $min, $hour, $day, $mon, $year) = localtime($gmt_seconds);
          
       $converted_r->{SS} = sprintf("%02d", $sec);
-      $converted_r->{MM} - sprintf("%02d", $min);
+      $converted_r->{MM} = sprintf("%02d", $min);
       $converted_r->{HH} = sprintf("%02d", $hour);
       $converted_r->{dd} = sprintf("%02d", $day);
       $converted_r->{mm} = sprintf("%02d", $mon+1);
