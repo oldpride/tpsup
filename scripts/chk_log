@@ -44,6 +44,8 @@ examples:
    $prog chk_log_test_2.log
    $prog /var/log/syslog
 
+   $prog -m 'ERROR|FAIL' *.log /var/log/syslog
+
 EOF
 
    exit 1;
@@ -69,15 +71,15 @@ my $compiled_match   =   $match_pattern ?   qr/$match_pattern/ : undef;
 my $compiled_exclude = $exclude_pattern ? qr/$exclude_pattern/ : undef;
 
 for my $f (@ARGV) {
-   print STDERR "file = $f\n";
+   print "\nfile=$f\n";
 
    my $cfg = find_log_pattern_info($f);
 
    if ($cfg) {
-      print "file=$f, matched =", Dumper($cfg), "\n";
+      print "file=$f, matched time pattern =", Dumper($cfg), "\n" if $verbose;
    } else {
-      print "file=$f, cannot match any pattern\n";
-      exit 1;
+      print "file=$f, cannot match any time pattern\n";
+      next;
    }
 
    my $pattern  = $cfg->{pattern};
@@ -110,7 +112,7 @@ for my $f (@ARGV) {
             $last_part_started ++;
          }
 
-         print "$result->{yyyymmdd} $result->{HHMMSS}\n";
+         print "parse log from $result->{yyyymmdd} $result->{HHMMSS}\n";
       }
 
       $summary->{last_rows} ++ if $print_summary;

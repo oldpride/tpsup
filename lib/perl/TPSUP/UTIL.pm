@@ -213,7 +213,10 @@ sub get_tmp_file {
    if (! -d $daydir ) {
       system("mkdir -p $daydir");
       die "failed mkdir -p $daydir" if $?;
-      system("find $tmpdir -mount -mtime +7 -exec /bin/rm -fr {} \\; 2>/dev/null");
+
+      #system("find $tmpdir -mount -mtime +7 -exec /bin/rm -fr {} \\; 2>/dev/null");
+      # https://unix.stackexchange.com/questions/115863/delete-files-and-directories-by-their-names-no-such-file-or-directory
+      system("find $tmpdir -mount -mtime +7 -prune -exec /bin/rm -fr {} \\; 2>/dev/null");
    }
    
    if ($opt->{AddIndex}) {
