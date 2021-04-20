@@ -11,6 +11,7 @@ use TPSUP::AUTOSYS qw(get_dependency
                       get_autorep_J_format
                       print_autorep_J_header
                       print_autorep_J_job
+                      print_autorep_q_J_job
                       );
 use TPSUP::UTIL    qw(get_in_fh close_in_fh);
 # use Carp::Always;
@@ -165,23 +166,15 @@ if (!$detail) {
    print_autorep_J_header();
 
    for my $job (@jobs) {
-      if (!$info->{$job}) {
-         printf get_autorep_J_format(), $job,  "not found", "", "";
-      } else {
-         print_autorep_J_job($info, $job, "", $opt);
-      }
+      print_autorep_J_job($info, $job, "", $opt);
    }
 } else {
    for my $job (@jobs) {
-      if (!$info->{$job}) {
-         print  "$job not found\n";
-      } elsif (!$info->{$job}->{job_type}) {
-         print  "$job detail not found\n";
-      } else {
-         print  "$info->{$job}->{defination}\n";
+      for my $job (@jobs) {
+         print_autorep_q_J_job($info, $job, "", $opt);
       }
-      print "\n";
    }  
 }
 
 exit 0;
+

@@ -12,12 +12,19 @@ our @EXPORT_OK = qw(
       get_univ_patterns
       print_autorep_J_header
       print_autorep_J_job
+      print_autorep_q_J_job
       query_jobs
 );
       
 use Carp;
 use Data::Dumper;
-use TPSUP::UTIL qw(get_in_fh get_out_fh get_homedir_by_user get_setting_from_env);
+use TPSUP::UTIL qw(get_in_fh
+                   get_out_fh
+                   close_in_fh
+                   get_homedir_by_user
+                   get_setting_from_env
+);
+
 use TPSUP::Expression;
 
 sub get_autosys_fh {
@@ -80,7 +87,7 @@ sub autorep_J {
          push @$autorep_array, $line
       }
       
-      close $in_fh if $in_fh != \*STDIN;
+      close_in_fh($in_fh);
    }
 
    # now we have $autorep_array, let's parse it
@@ -234,11 +241,16 @@ sub autorep_q_J {
 
             $result->{$current_JobName}->{$attr} = $rest;
             $result->{$current_JobName}->{defination} .= "$line\n";
+
+            if ($attr eq 'box_name') {
+               my $box_name = $rest;
+               push @{$result->{$box_name}->{detail_box_children}}, $current_JobName;
+            }
          }
       }
    }
    
-   close $in_fh if $in_fh != \*STDIN;
+   close_in_fh($in_fh);
 
    return $result;
 }
@@ -716,6 +728,10 @@ sub get_dependency {
          my $r = $all_ref->{$job};
 
          if ($reason ne 'self') {
+            my $dep =  { detail => $r,
+                         serial => $serial,
+                         reason => $reason,
+                       };
             if ($r) {
                if ($matchExps) {
                   TPSUP::Expression::export_var($r, {RESET=>1});
@@ -726,18 +742,14 @@ sub get_dependency {
                   }
                }
          
-               push @{$dependency->{$updown}}, { detail => $r,
-                                                 serial => $serial,
-                                                 reason => $reason,
-                                               };
+               $opt->{verbose} && print "\nsaved a '$updown' dep = ", Dumper($dep), "\n";
+               push @{$dependency->{$updown}}, $dep;
             } else {
                # this job is outside the UNIV_PATTERNS
                $r->{JobName} = $job;
       
-               push @{$dependency->{$updown}}, { detail => $r,
-                                                 serial => $serial,
-                                                 reason => $reason,
-                                               };
+               $opt->{verbose} && print "\nsaved a '$updown' dep = ", Dumper($dep), "\n";
+               push @{$dependency->{$updown}}, $dep;
                next TODO;
             };
          }
@@ -845,6 +857,11 @@ sub print_autorep_J_header {
 sub print_autorep_J_job {
    my ($info, $job, $indent, $opt) = @_;
 
+   if (!$info->{$job}) {
+      printf get_autorep_J_format(), $indent.$job, "not found", "", "";
+      return;
+   }
+  
    printf get_autorep_J_format(),
       $indent.$job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
 
@@ -855,10 +872,34 @@ sub print_autorep_J_job {
    }
 }
 
+sub print_autorep_q_J_job {
+   my ($info, $job, $indent, $opt) = @_;
+
+   if (!$info->{$job}->{defination}) {
+      print $indent, $job, " not found\n\n";
+      return;
+   }
+  
+   print $indent, join("\n$indent", split(/\n/, $info->{$job}->{defination})), "\n\n";
+
+   if (exists $info->{$job}->{detail_box_children}) {
+      for my $child (@{$info->{$job}->{detail_box_children}}) {
+         print_autorep_q_J_job($info, $child, $indent . " ", $opt);
+      }
+   }
+}
+
+
 sub main {
    use Data::Dumper;
+
+   print "\n----------------------------------------------------\n";
    print "autorep_J=", Dumper(autorep_J("file=autorep_J_example.txt")); 
+
+   print "\n----------------------------------------------------\n";
    print "autorep_q_J=", Dumper(autorep_q_J("file=autorep_q_J_example.txt")); 
+
+   print "\n----------------------------------------------------\n";
    print "get_dependency=", Dumper(get_dependency("test_job1", 
                                      {
                                         DetailFiles => "autorep_q_J_example.txt", 
