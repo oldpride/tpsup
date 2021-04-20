@@ -170,9 +170,7 @@ if (!$detail) {
    }
 } else {
    for my $job (@jobs) {
-      for my $job (@jobs) {
-         print_autorep_q_J_job($info, $job, "", $opt);
-      }
+      print_autorep_q_J_job($info, $job, "", $opt);
    }  
 }
 

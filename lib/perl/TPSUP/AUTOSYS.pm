@@ -872,6 +872,7 @@ sub print_autorep_J_job {
    }
 }
 
+
 sub print_autorep_q_J_job {
    my ($info, $job, $indent, $opt) = @_;
 
