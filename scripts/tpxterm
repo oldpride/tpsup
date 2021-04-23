@@ -25,6 +25,9 @@ usage:
            be inherited from parent shell; therefore, we have to "set -o vi" on
            each new xterm; therefore, we may as well just source the whole profle.
 
+   -e "command arg1 arg2"
+           run the command 
+
    -f number
           use Monospace with this font size, eg, 9. normally for ubuntu remote
           desktop. default $font
@@ -35,6 +38,8 @@ example:
    $0 host1.abc.com:0
    $0 auto
 
+   $0 -e 'tpdist server 5555' \$DISPLAY
+
 EOF
    exit 1
 }
@@ -42,14 +47,16 @@ EOF
 loginshell='-ls'
 debug='N'
 source_tpsup_profile=Y
+command=""
 
-while getopts bdf:n o;
+while getopts bdf:ne: o;
 do
    case "$o" in
       b) loginshell="";;
       d) debug=Y;;
       n) source_tpsup_profile=N;;
       f) font="-fa Monospace -fs $OPTARG";;
+      e) command="$OPTARG";;
       *) echo "unknow switch '$o'"; usage;;
    esac
 done
@@ -146,13 +153,25 @@ main () {
          export TERMINFO=/usr/share/terminfo
       fi
 
-      if [ $source_tpsup_profile = Y ]; then
-         # -e '/bin/bash --rcfile $TPSUP/profile' 
-         #         This is to load the tpsup profile as user's profile may not load it.
-         if [ "X$SITESPEC" != X ]; then
-            source_tpsup_part="-e '/bin/bash --rcfile $SITESPEC/profile'"
-         else
-            source_tpsup_part="-e '/bin/bash --rcfile    $TPSUP/profile'"
+      if [ "X$command" = "X" ]; then
+         if [ $source_tpsup_profile = Y ]; then
+            # -e '/bin/bash --rcfile $TPSUP/profile' 
+            #         This is to load the tpsup profile as user's profile may not load it.
+            if [ "X$SITESPEC" != X ]; then
+               source_tpsup_part="-e '/bin/bash --rcfile $SITESPEC/profile'"
+            else
+               source_tpsup_part="-e '/bin/bash --rcfile    $TPSUP/profile'"
+            fi
+         fi
+      else
+         if [ $source_tpsup_profile = Y ]; then
+            # -e '/bin/bash --rcfile $TPSUP/profile' 
+            #         This is to load the tpsup profile as user's profile may not load it.
+            if [ "X$SITESPEC" != X ]; then
+               source_tpsup_part="-e '$command'"
+            else
+               source_tpsup_part="-e '$command'"
+            fi
          fi
       fi
 
