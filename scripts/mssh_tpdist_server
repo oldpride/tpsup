@@ -39,8 +39,8 @@ debug=N
 while getopts m:x:d o;
 do
    case "$o" in
-      m)   match_pattern="-m '$OPTARG'";;
-      x) exclude_pattern="-x '$OPTARG'";;
+      m)   match_pattern="-m $OPTARG";;
+      x) exclude_pattern="-x $OPTARG";;
       d) debug=Y;;
       *) echo "unknow switch '$o'"; usage;;
    esac
