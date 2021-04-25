@@ -175,10 +175,10 @@ if ($hostlist) {
          next LINE if $excluded;
       }
 
-      my ($host, $sitebase) = split /,/, $line;
-
-      next if !$host;
-      push @hosts, $host;
+      for my $e (split /[\s,]+/, $line) {
+         next if !$e;
+         push @hosts, $e;
+      }
    }
 }
 

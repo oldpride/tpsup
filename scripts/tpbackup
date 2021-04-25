@@ -38,8 +38,8 @@ Usage:
 
    -f tpbackup.csv default to ~/.tpsup/tpbackup.csv. Example of format:
                      proj,source_base,backup_base,retention,comment
-                     tpsup,\$home/\$proj,\$home/backup/\$proj,5,these are scripts
-                     notes,\$home/\$proj,\$home/backup/\$proj,5,these are notes
+                     tpsup,\$home/sitebase/github/\$proj,\$home/backup/\$proj,5,these are scripts
+                     notes,\$home/sitebase/github/\$proj,\$home/backup/\$proj,5,these are notes
      retention is number of backups
 
    -b brief mode when 'check'. only prints the file names
@@ -151,7 +151,7 @@ if ($action eq 'do') {
    my $ cmd;
 
    if ($brief) {
-      $cmd = "rsync -avn --delete --exclude .svn --exclude .swp $backup_base/$yyyymmdd/* $source_base";
+      $cmd = "rsync -avn --delete --exclude .svn --exclude *.swp $backup_base/$yyyymmdd/* $source_base";
    } else {
       $cmd = "diff -r $backup_base/$yyyymmdd $source_base|egrep -v '[.](svn|swp)|^Common subdirectories'";
    }
