@@ -37,7 +37,10 @@ description:
    
    -hl host1,host2     specify host list on command line, separated by ','.
 
-   -hf hostfile.txt    hosts are stored in this file, separated by ',', space or new-line.
+   -hf hostfile.txt    hosts are stored in this file. example,
+                          host,profile
+                          myhost1,myprofile1
+                          myhost2,myprofile2
 
    -v                  verbose mode
 
@@ -91,7 +94,7 @@ examples:
    mssh -t 3 -hl localhost -- "ls -d '/etc /usr' /bin; sleep 10; echo done"
 
    - test catch bogus host failure
-   mssh -t 3 -hf ~/support/hosts.csv.bogus -prefix -- sleep 1 |grep ,std
+   mssh -t 3 -hf ~/.tpsup/hosts.csv.bogus -prefix -- sleep 1 |grep ,std
 
 END
 
