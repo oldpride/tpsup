@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use warnings;
 use strict;
@@ -7,13 +7,13 @@ use Getopt::Long;
 use POSIX ":sys_wait_h";
 use Carp;
 use TPSUP::SSH qw(tpssh get_remote_login_host);
-use TPSUP::UTIL qw(get_timestamp get_tmp_file);
+use TPSUP::UTIL qw(get_in_fh close_in_fh get_timestamp get_tmp_file);
 
 my $prog = $0; $prog =~ s:.*/::;
 my $default_ssh_maxcount = 5;
 my $default_scp_maxcount = 1;   # scp should be single-thread
 
-my $default_hostfile = "~/support/hosts.csv";
+my $default_hostfile = "~/.tpsup/hosts.csv";
 
 sub usage {
    my ($message) = @_;
@@ -63,6 +63,8 @@ description:
 
    -dryrun             dryrun command
 
+   -rp                 remote_profile
+
    Build-in variables  \%{host}  - remote host, 
                        \%{login} - remote login,
                        \%{yyyy}, \%{mm}, \%{dd}, \%{HH}, \%{MM}, \%{SS}
@@ -109,6 +111,7 @@ my $prefix;
 my $action;
 my $maxcount;
 my $dryrun;
+my $remote_profile;
 
 GetOptions(
    'v|verbose'     => \$verbose,
@@ -124,33 +127,33 @@ GetOptions(
    'm|match=s'     => \@MatchPatterns,
    'x|exclude=s'   => \@ExcludePatterns,
    'prefix'        => \$prefix,
+   'rp=s'          => \$remote_profile,
 
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV < 1;
 
-my @hosts;
+my $cfg;
 
 if ($hostlist) {
    for my $e (split /[\s,]+/, $hostlist) {
       next if !$e;
-      push @hosts, $e;
+      $cfg->{$e}->{host} = $e;
+      $cfg->{$e}->{profile} = $remote_profile if $remote_profile;
    }
 } else {
-   $hostfile = $hostfile ? $hostfile : $default_hostfile;
+   if (!$hostfile) {
+      $hostfile = `bash -c "echo $default_hostfile"`;
+      chomp $hostfile;
+   }
 
-   my $real_hostfile = `readlink -f $hostfile`;
-   chomp $real_hostfile;
-
-   croak "hostfile='$hostfile' ($real_hostfile) not found" if ! -f $real_hostfile;
-   open my $fh, "<$real_hostfile" or croak "cannot read $real_hostfile";
+   my $fh = get_in_fh($hostfile);
    
    LINE:
-   while (<$fh>) {
-      my $line = $_;
+   while (my $line = <$fh>) {
       chomp $line;
 
-      next if $line =~ /^(host|hostname)$/i;     # skip header
+      next if $line =~ /^(host|hostname)/;      # skip header
       next if $line =~ /^\s*#/;                  # skip comment
       next if $line =~ /^\s*$/;                  # skip blank lines
 
@@ -175,26 +178,23 @@ if ($hostlist) {
          next LINE if $excluded;
       }
 
-      my ($host, $sitebase) = split /,/, $line;
+      my ($host, $profile) = split /,/, $line;
 
       next if !$host;
-      push @hosts, $host;
+
+      print "ERROR: duplicate host=$host in $hostfile, overwriten\n" if $cfg->{$host};
+      @{$cfg->{$host}}{qw(host profile)} = ($host, $profile);
    }
+
+   close_in_fh($fh);
 }
 
-if (!@hosts) {
+if (!$cfg) {
    print "no hosts matched criteria\n";
    exit 0;
 }
 
-# sort and make @hosts unique
-my $exists_host;
-
-for my $h (@hosts) {
-   $exists_host->{$h} ++;
-}
-
-@hosts = sort (keys %$exists_host);
+my @hosts = sort (keys %$cfg);
 
 if ($action) {
    if ($action ne 'ssh' && $action ne 'scp') {
@@ -232,6 +232,7 @@ my $info_by_pid;
 while (1) {
    while ($count<$maxcount && @todo) {
       my $host = shift @todo;
+      my $profile = $cfg->{$host}->{profile};
 
       my ($remote_login, $remote_host)
          = get_remote_login_host($host, {remote_login => $remote_login});
@@ -244,6 +245,7 @@ while (1) {
          style        => $style,
          timeout      => $timeout,
          remote_login => $remote_login,
+         profile      => $profile,
          sshargs      => \@sshargs,
          verbose      => $verbose,
          stdout       => $tmp_stdout,

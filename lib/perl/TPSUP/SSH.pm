@@ -46,8 +46,11 @@ sub tpssh {
    my ($action, $host, $args, $opt) = @_;
    # $host could be host, or login@host. login could also come from $opt
    my ($remote_login, $remote_host) = get_remote_login_host($host, $opt);
+
+   $opt->{verbose} && print "tpssh opt = ", Dumper($opt);
    
    my $verbose = $opt->{verbose};
+   my $profile = $opt->{profile};
 
    my $extra_ssh = "";
 
@@ -154,7 +157,10 @@ EOF
       $cmd =   "cat $local_cmd_file|"
              . " ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout -o BatchMode=yes"
              . " $extra_ssh $remote_login\@$remote_host"
-             . " 'mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file' $stdout $stderr";
+             . " '";
+             
+      $cmd .= " . $profile; " if $profile;
+      $cmd .= " mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file' $stdout $stderr";
       $dryrun_cmd = "ssh $remote_login\@$remote_host " . join(" ", @$args);
    } else {
       croak "unknown action='$action'. expecting 'ssh' or 'scp'";
