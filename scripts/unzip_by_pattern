@@ -112,7 +112,7 @@ sub get_zipped_paths {
       chomp @lines;
       for my $l (@lines) {
          if ($l =~ /$compiled/) {
-            chomp;
+            chomp $l;
             push @{$result->{paths}}, $l;
          }
       }
