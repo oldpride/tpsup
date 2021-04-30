@@ -1,0 +1,114 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+#use TPSUP::CSV qw(parse_csv_file render_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $home = `/bin/bash -c "echo ~"`; chomp $home;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+Usage:
+
+   $prog pattern out_base_dir file1.zip file2.zip ...
+
+   unzip partial list of files by pattern from zip files.
+
+   "pattern" is a regex pattern, perl-style.
+
+Examples:
+
+   
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'verbose' => \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 3;
+
+my $pattern      = shift @ARGV;
+my $out_base_dir = shift @ARGV;
+
+my $error = 0;
+my $unzipped;
+
+for my $zip (@ARGV) {
+   my $result = get_zipped_paths($zip, $pattern);
+   
+   $verbose && print "result = ", Dumper($result);
+
+   if ($result->{error}) {
+      $error ++;
+      next;
+   }
+
+   for my $zpath (@{$result->{paths}}) {
+      next if $unzipped->{$zpath};
+
+      print "\n";
+
+      my $cmd = qq(unzip -j "$zip" "$zpath" -d "$out_base_dir");
+      print "cmd = $cmd\n";
+      system($cmd);
+
+      if ($? == 0 ) {
+         $unzipped->{$zpath} ++;
+      } else {
+         print "ERROR: unzip failed\n";
+         $error ++;
+      }
+   }
+}
+
+if ($error) {
+   print "ERROR: total $error ERRORS\n";
+} else {
+   print "All good\n";
+}
+
+exit $error;
+
+###################################################################
+# subs
+###################################################################
+
+sub get_zipped_paths {
+   my ($zip, $pattern, $opt) = @_;
+
+   my $compiled = qr/$pattern/;
+
+   my $result;
+   my $cmd = qq(zipinfo -1 "$zip");
+   print "cmd = $cmd\n";
+
+   my @lines = `$cmd`;
+   if ($? == 0) {
+      chomp @lines;
+      for my $l (@lines) {
+         if ($l =~ /$compiled/) {
+            chomp;
+            push @{$result->{paths}}, $l;
+         }
+      }
+   } else {
+      $result->{error} = "cmd=$cmd failed: $!";
+      print STDERR "ERROR: cmd=$cmd failed: $!\n";
+   }
+
+   return $result;
+}
