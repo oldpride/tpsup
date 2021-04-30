@@ -5,6 +5,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
+use File::Basename;
 #use TPSUP::CSV qw(parse_csv_file render_csv);
 
 my $prog = $0; $prog =~ s:.*/::;
@@ -25,8 +26,11 @@ Usage:
 
    "pattern" is a regex pattern, perl-style.
 
+   -c        check only. it only shows which file will come from which zip file.
+
 Examples:
 
+   $prog -c pattern out_base_dir file1.zip file2.zip ...
    
 END
 
@@ -34,9 +38,11 @@ END
 }
 
 my $verbose;
+my $check_only;
 
 GetOptions(
    'verbose' => \$verbose,
+   'c'       => \$check_only,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV < 3;
@@ -48,6 +54,7 @@ my $error = 0;
 my $unzipped;
 
 for my $zip (@ARGV) {
+   print "\n------------------- $zip ------------------------\n";
    my $result = get_zipped_paths($zip, $pattern);
    
    $verbose && print "result = ", Dumper($result);
@@ -58,30 +65,46 @@ for my $zip (@ARGV) {
    }
 
    for my $zpath (@{$result->{paths}}) {
-      next if $unzipped->{$zpath};
+      my $basename = basename($zpath);
+      my $unzipped_path = "$out_base_dir/$basename";
 
+      if ($unzipped->{$zpath}) {
+         $verbose && print "$zpath is already extracted to $unzipped_path from $unzipped->{$zpath}\n";
+         next;
+      }
+
+      if (-e $unzipped_path) {
+         $verbose && print "$zpath unzipped path $unzipped_path already exists. skipped\n";
+         next;
+      }
+      
       print "\n";
-
-      # -n     never overwrite existing files.  
-      #        If a file already exists, skip the extraction of that file without
-      #        prompting.  By default unzip  queries  before  extracting
-      #        any  file  that already exists; the user may choose to overwrite
-      #        only the current file, overwrite all files, skip extraction  of
-      #        the  current  file,  skip extraction of all existing files, or 
-      #        rename the current file.
-      # -j     junk paths.  The archive's directory structure is not recreated; all 
-      #        files are deposited in the extraction directory (by default, the 
-      #        current one).
-
-      my $cmd = qq(unzip -n -j "$zip" "$zpath" -d "$out_base_dir");
-      print "cmd = $cmd\n";
-      system($cmd);
-
-      if ($? == 0 ) {
+      
+      if ($check_only) {
+         print "dryrun extract $zpath to $unzipped_path\n";
          $unzipped->{$zpath} ++;
       } else {
-         print "ERROR: unzip failed\n";
-         $error ++;
+         # -n     never overwrite existing files.  
+         #        If a file already exists, skip the extraction of that file without
+         #        prompting.  By default unzip  queries  before  extracting
+         #        any  file  that already exists; the user may choose to overwrite
+         #        only the current file, overwrite all files, skip extraction  of
+         #        the  current  file,  skip extraction of all existing files, or 
+         #        rename the current file.
+         # -j     junk paths.  The archive's directory structure is not recreated; all 
+         #        files are deposited in the extraction directory (by default, the 
+         #        current one).
+   
+         my $cmd = qq(unzip -n -j "$zip" "$zpath" -d "$out_base_dir");
+         print "cmd = $cmd\n";
+         system($cmd);
+   
+         if ($? == 0 ) {
+            $unzipped->{$zpath} ++;
+         } else {
+            print "ERROR: unzip failed\n";
+            $error ++;
+         }
       }
    }
 }
