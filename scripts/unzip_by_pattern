@@ -28,6 +28,9 @@ Usage:
 
    -c        check only. it only shows which file will come from which zip file.
 
+   note: to avoid overwriten existing files, the script will not extract a file if
+         the a file already exists at the target path.
+
 Examples:
 
    $prog -c pattern out_base_dir file1.zip file2.zip ...
