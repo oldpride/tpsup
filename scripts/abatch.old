@@ -17,7 +17,6 @@ my $interval = 10;
 my $interval_limit = 60;
 my $DetailExpire = 24*3600;
 my $StatusExpire = $interval-1;
-my $repeat = 1;
 
 sub usage {
    my ($message) = @_;
@@ -54,9 +53,7 @@ description:
 
    -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
 
-   -repeat number      repeat the same list of jobs 'number' of times. default to $repeat.
-
-   -reset              reset caches on start, ie, time out all caches
+   -r                  reset caches on start, ie, time out all caches
 
    -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
 
@@ -98,8 +95,7 @@ my $arg_is_job;
 GetOptions(
    'v|verbose'     => \$verbose,
    'n|dryrun'      => \$dryrun,
-   'reset'         => \$reset,
-   'repeat=s'      => \$repeat,
+   'r|reset'       => \$reset,
    'f|force'       => \$force,
    'J'             => \$arg_is_job,
    'm=s'           => \$MatchPattern,
@@ -261,7 +257,7 @@ if ($fatal) {
 
 if (!$force) {
    my $run = $dryrun ? "dryrun" : "run";
-   print "Do you want to proceed to $run the jobs $repeat time(s)? Y/N\n";
+   print "Do you want to proceed to $run the jobs ? Y/N\n";
    my $answer = readline(*STDIN);
 
    if ($answer !~ /^\s*[yY]/) {
@@ -270,112 +266,106 @@ if (!$force) {
    }
 }
 
-for (my $loop=1; $loop<=$repeat; $loop++) {
-   my @tally;
+my @tally;
+
+for my $job (@jobs) {
+   my $autorep_cmd = "autorep -J $job";
+
+   my $before_result;
+   my @subjobs;
+   my $subcount;
+
+   if (!$dryrun) {
+      $before_result = autorep_J("command=$autorep_cmd");
    
-   for my $job (@jobs) {
-      my $autorep_cmd = "autorep -J $job";
-   
-      my $before_result;
-      my @subjobs;
-      my $subcount;
-   
-      if (!$dryrun) {
+      while (!$before_result) {
+         print "command=$autorep_cmd failed. will try again after 10 seconds\n";
+         sleep $interval;
          $before_result = autorep_J("command=$autorep_cmd");
-      
-         while (!$before_result) {
-            print "command=$autorep_cmd failed. will try again after 10 seconds\n";
-            sleep $interval;
-            $before_result = autorep_J("command=$autorep_cmd");
-         }
-      
-         @subjobs  = sort(keys %$before_result);
-         $subcount = scalar(@subjobs);
       }
    
-      my $start_cmd = "sendevent -E FORCE_STARTJOB -J $job";
-      
-      if ($dryrun) {
-         print "dryrun = $start_cmd\n";
-      } else {
-         print "cmd = $start_cmd\n";
-         system($start_cmd);
-         if ($?) {
-            print "force start job failed: $!";
-            exit 1;
-         }   
-      }   
-   
-      next if $dryrun;
-      
-      my $sub_run;
-      my $sub_err;
-      my $sub_start = strftime("%T", localtime(time()));
-   
-      my $sub_interval = $interval;
-      my $sub_round = 0;
-
-      sleep(1); # sleep one sec to let fast-running job have time update the status
-   
-      while (1) { 
-         $sub_run = 0;
-         $sub_err = 0;
-   
-         my $after_result = autorep_J("command=$autorep_cmd");
-   
-         for my $j (@subjobs) {
-            if ( $before_result->{$j}->{Status}    ne $after_result->{$j}->{Status}    ||
-                 $before_result->{$j}->{LastStart} ne $after_result->{$j}->{LastStart} ||
-                 $before_result->{$j}->{LastEnd}   ne $after_result->{$j}->{LastEnd}   ){
-               if ($after_result->{$j}->{Status} =~ /^(SU|TE|FA)$/) {
-                  $sub_run ++;             
-               }
-               if ($after_result->{$j}->{Status} =~ /^(TE|FA)$/) {
-                  $sub_err ++;             
-               }
-            }
-         }
-   
-         if ($sub_run < $subcount && $sub_err == 0 ) {
-            print "Only $sub_run of $subcount subjobs complete since $sub_start. sleep for $sub_interval\n";
-            sleep $sub_interval;
-            $sub_interval += 10;
-            $sub_interval = $interval_limit if $sub_interval > $interval_limit;
-         } else {
-            # try to restore the original autorep -J format, starting with the main job 
-            push @tally, [$job, $after_result->{$job}->{LastStart}, $after_result->{$job}->{LastEnd}, $after_result->{$job}->{Status}];
-   
-            # then list the rest jobs with indent
-            for my $j (@subjobs) {
-               # skip the main job as it was already printed.
-               next if $j eq $job;
-               push @tally, [$j, $after_result->{$j}->{LastStart}, $after_result->{$j}->{LastEnd}, $after_result->{$j}->{Status}];
-            }
-            last;
-         }
-      }
-   
-      $done_job_count ++; 
-      print "$done_job_count of $total_job_count complete. sleep for 10\n";
-      print_autorep_J_header();
-      for my $row (@tally) {
-          printf get_autorep_J_format(), @$row;
-      }
-   
-      if ($sub_err) {
-          print "Aborting - $sub_err of $subcount subjobs did not complete successfully\n";
-          exit 1;
-      }
+      @subjobs  = sort(keys %$before_result);
+      $subcount = scalar(@subjobs);
    }
 
+   my $start_cmd = "sendevent -E FORCE_STARTJOB -J $job";
+   
    if ($dryrun) {
-      print "dryrun mode. nothing done.\n";
-      print_autorep_J_header();
+      print "dryrun = $start_cmd\n";
    } else {
-      print "all complete successfully. \n";
+      print "cmd = $start_cmd\n";
+      system($start_cmd);
+      if ($?) {
+         print "force start job failed: $!";
+         exit 1;
+      }   
+   }   
+
+   next if $dryrun;
+   
+   my $sub_run;
+   my $sub_err;
+   my $sub_start = strftime("%T", localtime(time()));
+
+   my $sub_interval = $interval;
+   my $sub_round = 0;
+
+   while (1) { 
+      $sub_run = 0;
+      $sub_err = 0;
+
+      my $after_result = autorep_J("command=$autorep_cmd");
+
+      for my $j (@subjobs) {
+         if ( $before_result->{$j}->{Status}    ne $after_result->{$j}->{Status}    ||
+              $before_result->{$j}->{LastStart} ne $after_result->{$j}->{LastStart} ||
+              $before_result->{$j}->{LastEnd}   ne $after_result->{$j}->{LastEnd}   ){
+            if ($after_result->{$j}->{Status} =~ /^(SU|TE|FA)$/) {
+               $sub_run ++;             
+            }
+            if ($after_result->{$j}->{Status} =~ /^(TE|FA)$/) {
+               $sub_err ++;             
+            }
+         }
+      }
+
+      if ($sub_run < $subcount && $sub_err == 0 ) {
+         print "Only $sub_run of $subcount subjobs complete since $sub_start. sleep for $sub_interval\n";
+         sleep $sub_interval;
+         $sub_interval += 10;
+         $sub_interval = $interval_limit if $sub_interval > $interval_limit;
+      } else {
+         # try to restore the original autorep -J format, starting with the main job 
+         push @tally, [$job, $after_result->{$job}->{LastStart}, $after_result->{$job}->{LastEnd}, $after_result->{$job}->{Status}];
+
+         # then list the rest jobs with indent
+         for my $j (@subjobs) {
+            # skip the main job as it was already printed.
+            next if $j eq $job;
+            push @tally, [$j, $after_result->{$j}->{LastStart}, $after_result->{$j}->{LastEnd}, $after_result->{$j}->{Status}];
+         }
+         last;
+      }
    }
 
-   print "loop #$loop of $repeat loops\n\n" if $repeat >1;
+   $done_job_count ++; 
+   print "$done_job_count of $total_job_count complete. sleep for 10\n";
+   print_autorep_J_header();
+   for my $row (@tally) {
+       printf get_autorep_J_format(), @$row;
+   }
+
+   if ($sub_err) {
+       print "Aborting - $sub_err of $subcount subjobs did not complete successfully\n";
+       exit 1;
+   }
+}
+
+if ($dryrun) {
+   print "dryrun mode. nothing done.\n";
+   print_autorep_J_header();
+} else {
+   print "all complete successfully\n";
 }
 
 exit 0;
