@@ -42,9 +42,28 @@ sub unlock_conn {
                                         RemoveInputQuotes=>1,
                                        });
       
-   my $rows = $ref->{$nickname};
+   croak "failed to parse $connfile" if !$ref;
+
+   my $rows_by_lc;
+   my $seen_lc;
+   for my $n (keys %$ref) {
+      my $lc = lc($n);
+
+      if ($seen_lc->{$lc}) {
+         print STDERR "WARN: $lc is duplicated: $seen_lc->{$lc}, $n\n";
+      } else {
+         $seen_lc->{$lc} = $n;
+      }
+
+      $rows_by_lc->{$lc} = $ref->{$n};
+   }
+
+   my $lc_nickname = lc($nickname);
+
+   my $rows = $rows_by_lc->{$lc_nickname};
       
-   croak "nickname='$nickname' doesn't exist in $connfile" if !$rows;
+   croak "nickname='$nickname' lowercase='$lc_nickname' doesn't exist in $connfile"
+      if !$rows;
       
    my $r;
       
