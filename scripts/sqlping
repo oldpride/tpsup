@@ -5,6 +5,8 @@ usage () {
 usage:
 
    $0 db_nickname
+   $0 all
+
 
 example:
 
@@ -15,11 +17,28 @@ EOF
    exit 1
 }
 
-if [ $# -ne 1 ]; then
+if [ $# -eq 0 ]; then
    echo "wrong number of args" >&2
    usage
 fi
 
-db_nickname=$1
+error=0
 
-sql -noheader $db_nickname "select 'success'" || (echo "failure"; exit 1)
+if [ $1 = all ]; then
+   pinglist=`sed 1d ~/.tpsup/conn.csv|cut -d, -f1|sed -e 's:^[ ][ ]*::'|grep ^[a-zA-Z0-9@]`
+else
+   pinglist="$@"
+fi
+
+for nickname in $pinglist
+do 
+   echo "" >&2
+   echo "INFO: pinging $nickname" >&2
+   if ! timeout 5 sql -noheader $nickname "select '$nickname: success'"; then
+      echo "$nickname: failure"
+      ((error++))
+   fi
+done
+
+exit $error
+
