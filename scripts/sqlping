@@ -1,11 +1,16 @@
 #!/bin/bash
 
+timeout=5
+
 usage () {
    cat >&2 <<EOF
 usage:
 
    $0 db_nickname
    $0 all
+
+   -t sec    timeout. default to $timeout (seconds)
+   -v        verbose mode
 
 
 example:
@@ -16,6 +21,19 @@ EOF
 
    exit 1
 }
+
+verbose=N
+
+while getopts t:v o;
+do
+   case "$o" in
+      v) verbose=Y;;
+      t) timeout=$OPTARG;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
 
 if [ $# -eq 0 ]; then
    echo "wrong number of args" >&2
@@ -32,8 +50,11 @@ fi
 
 for nickname in $pinglist
 do 
-   echo "" >&2
-   echo "INFO: pinging $nickname" >&2
+   if [ $verbose = Y ]; then 
+      echo >&2 ""
+      echo >&2 "INFO: pinging $nickname"
+   fi
+
    if ! timeout 5 sql -noheader $nickname "select '$nickname: success'"; then
       echo "$nickname: failure"
       ((error++))
