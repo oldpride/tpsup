@@ -80,7 +80,7 @@ do
       echo >&2 "INFO: pinging $nickname"
    fi
 
-   if ! timeout 5 sql -noheader $nickname "select '$nickname: success'"; then
+   if ! timeout 5 sql $conn -noheader $nickname "select '$nickname: success'"; then
       echo "$nickname: failure"
       ((error++))
    fi
