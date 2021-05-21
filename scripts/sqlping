@@ -1,21 +1,28 @@
 #!/bin/bash
 
 timeout=5
+prog=`basename $0`
 
 usage () {
    cat >&2 <<EOF
 usage:
 
-   $0 db_nickname
-   $0 all
+   $prog db_nickname
+   $prog all
 
-   -t sec    timeout. default to $timeout (seconds)
-   -v        verbose mode
+   -c conn_file        change from the default connection file.
+   -m match_pattern    only nickname matching this pattern, egrep regex
+   -t sec              timeout. default to $timeout (seconds)
+   -v                  verbose mode
+   -x exclude_pattern  exclude nickname matching this pattern, egrep regex
 
 
 example:
 
-   $0 a@b
+   $prog a@b
+   $prog all
+   $prog -m orauser2@oradb2 all
+   $prog -x orauser2@oradb2 all
 
 EOF
 
@@ -23,12 +30,18 @@ EOF
 }
 
 verbose=N
+conn=""
+match=""
+exclude=""
 
-while getopts t:v o;
+while getopts c:m:t:vx: o;
 do
    case "$o" in
-      v) verbose=Y;;
+      c) conn="-conn $OPTARG";;
+      m) match="$OPTARG";;
       t) timeout=$OPTARG;;
+      v) verbose=Y;;
+      x) exclude="$OPTARG";;
       *) echo "unknow switch '$o'"; usage;;
    esac
 done
@@ -50,6 +63,18 @@ fi
 
 for nickname in $pinglist
 do 
+   if [ "X$match" != "X" ]; then
+      if ! [[ $nickname =~ $match ]]; then
+         continue 
+      fi
+   fi
+
+   if [ "X$exclude" != "X" ]; then
+      if [[ $nickname =~ $exclude ]]; then
+         continue 
+      fi
+   fi
+
    if [ $verbose = Y ]; then 
       echo >&2 ""
       echo >&2 "INFO: pinging $nickname"
