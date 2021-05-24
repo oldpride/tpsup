@@ -11,10 +11,10 @@ usage:
    $prog all
 
    -c conn_file        change from the default connection file.
-   -m match_pattern    only nickname matching this pattern, egrep regex
+   -m match_pattern    only nickname matching this pattern, case-insensitive egrep.
    -t sec              timeout. default to $timeout (seconds)
    -v                  verbose mode
-   -x exclude_pattern  exclude nickname matching this pattern, egrep regex
+   -x exclude_pattern  exclude nickname matching this pattern, case-insensitive egrep.
 
 
 example:
@@ -61,16 +61,23 @@ else
    pinglist="$@"
 fi
 
+# NOTE: This requires Bash 4.0+ (v4.0 released on 2009-02-20)
+#
+# use the ${var,,} syntax to conver to lowercase
+# use the ${var^^} syntax to conver to uppercase
+#
+# https://stackoverflow.com/questions/44106842/case-insensitive-regex-in-bash
+
 for nickname in $pinglist
 do 
    if [ "X$match" != "X" ]; then
-      if ! [[ $nickname =~ $match ]]; then
+      if ! [[ ${nickname,,} =~ ${match,,} ]]; then
          continue 
       fi
    fi
 
    if [ "X$exclude" != "X" ]; then
-      if [[ $nickname =~ $exclude ]]; then
+      if [[ ${nickname,,} =~ ${exclude,,} ]]; then
          continue 
       fi
    fi

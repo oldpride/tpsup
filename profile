@@ -410,6 +410,15 @@ wbar () {
    fi
 }
 
+cdlatest () {
+   latest_dir=`$TPSUP/scripts/cdlatest.bash "$@"`
+
+   if [ "X$latest_dir" != "X" ];then
+      cd $latest_dir
+   fi
+}
+
+
 if [[ $TERM =~ ^xterm|^vt ]]; then
    # we use PROMPT_COMMAND to manage title bar, it will not replace PS1.
 
