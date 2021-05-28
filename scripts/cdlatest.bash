@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# this script will be called by tpsup/profile
+
 prog=`basename $0`
 
 usage () {
@@ -12,14 +14,24 @@ usage:
       - if there is only one subfolder, cd under it
       - if there are yyyymmdd* folders, cd under the latest one
 
-   -m match_pattern    only nickname matching this pattern, egrep regex
-   -x exclude_pattern  exclude nickname matching this pattern, egrep regex
+   -m match_pattern    only nickname matching this pattern, egrep regex.
+                       matching doesn't apply to dated subdirs.
+
+   -x exclude_pattern  exclude nickname matching this pattern, egrep regex.
+                       matching doesn't apply to dated subdirs.
+
    -d                  debug mode
 
 
 example:
 
-   $prog /media/sdcard/LCA
+   $prog ~/backup
+
+   # exact subdir matching
+   $prog -m ^tpsup/ ~/backup
+
+   # substring matching, mostly for exclusion
+   $prog -x tpsup ~/backup
 
 EOF
 
@@ -55,19 +67,28 @@ cd $parent_dir || exit 1
 
 while :
 do
-    subdirs=`/bin/ls -1 -d */ 2>/dev/null|egrep "$match"|egrep -v "$exclude"` 
-    subdir_count=`echo -n "$subdirs" |wc -l`
-
-    if [ $subdir_count = 0 ]; then 
-       break
-    fi
+    subdir_count=`/bin/ls -1 -d */ 2>/dev/null|egrep "$match"|egrep -v "$exclude"|wc -l` 
 
     if [ $subdir_count = 1 ]; then
-       cd $subdirs
+       subdir=`/bin/ls -1 -d */ 2>/dev/null|egrep "$match"|egrep -v "$exclude"` 
+       cd $subdir
        continue
     fi
 
-    latest_dated_dir=`/bin/ls -1 -d 20[0-9][0-9][0-9][0-9][0-9][0-9]*/ 2>/dev/null|egrep "$match"|egrep -v "$exclude"|tail -1`
+    # now we have either 0 subdirs or more than one.
+    #
+    # 0 subdirs may be caused by the matching criteria but we may have dated subdirs
+    # which shouldn't be applied by the matchig criteria.
+    #
+    # now we are checking dated subdirs
+    #
+    # 20210524_release1
+    # 2021-05-24_release2
+    # 05-24
+    # 0524
+    # 05
+    # 24
+    latest_dated_dir=`/bin/ls -1 -d 20[0-9][0-9][0-9][0-9][0-9][0-9]*/ 20[0-9][0-9]-[0-9][0-9][0-9-][0-9]*/ [0-9][0-9][0-9][0-9]/ [0-9][0-9]-[0-9][0-9]/ [0-9][0-9]/ 2>/dev/null|tail -1`
     if [ "X$latest_dated_dir" != X ]; then
        cd $latest_dated_dir || exit 1
        continue
