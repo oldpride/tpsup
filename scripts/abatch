@@ -70,6 +70,8 @@ description:
 
    -J                  args are jobnames. default to filenames
 
+   -z                  skip checks
+
 examples:
 
    $prog abatch_test_good.txt    # take from file
@@ -94,9 +96,11 @@ my $force;
 my $dryrun;
 my $reset;
 my $arg_is_job;
+my $skip_checks;
 
 GetOptions(
    'v|verbose'     => \$verbose,
+   'z'             => \$skip_checks,
    'n|dryrun'      => \$dryrun,
    'reset'         => \$reset,
    'repeat=s'      => \$repeat,
@@ -256,7 +260,12 @@ print "----------------------------------.\n";
 print "Total $total_job_count jobs, $error errors, $fatal fatal.\n";
 
 if ($fatal) {
-   exit $error;
+   if ($skip_checks) {
+      print "\n";
+      print "ERROR: there are fatal errors but '-z' is set to skip checks\n";
+   } else {
+      exit $error;
+   }
 }
 
 if (!$force) {
