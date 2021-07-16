@@ -67,7 +67,7 @@ if [ $verbose = Y ]; then
 fi
 
 if [ $db_type = mssql ]; then
-   sql $conn $db_nick "select * from Information.Schema (nolock)"
+   sql $conn $db_nick "select * from Information_Schema.tables (nolock)"
 elif [ $db_type = mysql ]; then
    sql $conn $db_nick "show tables"
 fi
