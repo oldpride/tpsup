@@ -1,0 +1,86 @@
+#!/bin/bash
+
+# this is library wrapper. When we copy software (Oracle cleint, Tibco, Sybase cleint)
+# from one host1 to host2, if the underlying system GLIBC not matching, the software
+# won't work. 
+# To work around this problem, we can use this script, plus copying some of libraries
+# from host1 and store them under $TPSUP/Linux, to make the sofeware running. 
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $0 [-debug] command.pl [args]
+
+examples:
+   command default path to \$TPSUP/scripts
+
+   - to test oracle
+   $0 sql oradb1 "select * from all_synonyms"
+
+   - to test sybase
+   $0 sql sybdb1 "select @@version"
+
+   - to test tibrv
+   $0 rvlisten -service 8309 -daemon host1:7700 APP1.ORDERS.PUBLISHER
+
+EOF
+
+   exit 1
+}
+
+debug=N
+
+if [ "X$1" = "X-debug" ]; then
+   debug=Y
+   shift
+fi
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+if [ "X$0" != "X/bin/bash" ]; then
+   scripts_dir=`dirname $0`
+   prog=`basename $0`
+elif [ "X$BASH_SOURCE" != "X" ]; then
+   scripts_dir=`dirname $BASH_SOURCE`
+   prog=`basename $BASH_SOURCE`
+else
+   echo "cannot figure out scripts_dir" >&2
+   return
+fi
+
+TPSUP=`$scripts_dir/trimpath $scripts_dir/..`
+
+. $TPSUP/profile
+
+[ $debug = Y ] && set -x
+
+command=$1
+shift
+
+if ! [[ $command =~ / ]]; then
+   command=$TPSUP/scripts/$command
+fi
+
+# oracle
+export ORACLE_HOME=$TPSUP/Linux/DBI/ORCLclnt/product/10.2.0.3
+export LD_LIERARY_PATH=$ORACLE_HOME/1ib:$LD_LIERARY_PATH
+
+# sybase
+export SYBVER=12.5.1_64bit
+export SYBASE_OCS=OCS-12_5
+export SYBASE=$TPSUP/Linux/DBI/SYBSclnt.12.5.1_64bit/sybase
+export LD_LIBRARY_PATH=$SYBASE/OCS-12_5/lib:$LD_LIBRARY_PATH
+
+# tibco
+export TIB_RV_HOME=$TPSUP/Linux/DBI/Tibrv/7.3/
+export LD_LIBRARY_PAH=$TIB_RV_HOME/lib:$LD_LIBRARY_PATH
+
+ROOT=$TPSUP/Linux/DBI
+
+#strace -o /tmp/junk -f $ROOT/lib64/ld-linux-x86-64.so.2 --library-path $ROOT/lib64:$LD_LIERARY_PATH $ROOT/usr/bin/perl $command "$@"
+
+$ROOT/lib64/ld-linux-x86-64.so.2 --library-path $ROOT/lib64:$LD_LIBRARY_PATH $ROOT/usr/bin/perl $command "$@"

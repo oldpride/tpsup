@@ -1,0 +1,115 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use strict;
+use Carp;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print <<"END";
+usage:
+
+   $prog -- cmd arg1 arg2 ...
+
+   -d debug the wrapper
+
+examples:
+
+   - noramlly
+   $prog --  sleep 1 
+   $prog -- "sleep 1; env|sort" 
+
+   - debug mode
+   $prog -debug -- sleep 2
+
+   - test a piped command
+   echo a,b,c | $prog -- cut -d, -f2
+
+END
+   exit 1;
+}
+
+my $debug;
+
+GetOptions(
+   'd' => \$debug,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $wrapper_dir;
+if ($0 =~ m:^(.+)/:) {
+   $wrapper_dir = $1;
+} else {
+   $wrapper_dir = "";
+}
+   
+my $TPSUP;
+
+if ($ENV{TPSUP} && (!$ENV{TPSUPMODE} || $ENV{TPSUPMODE} ne 'safe') ) {
+   $TPSUP = $ENV{TPSUP};
+
+   my $TPSUPMODE = $ENV{TPSUPMODE} ? $ENV{TPSUPMODE} : "";
+
+   if ($debug) {
+      print STDERR "TPSUP=$TPSUP is already set. (TPSUPMODE=$TPSUPMODE) No need to source $TPSUP/profile.\n";
+   }
+} else {
+   if ($ENV{TPSUPMODE} && $ENV{TPSUPMODE} eq 'safe') {
+      if ($debug) {
+         print STDERR "unset TPSUPMODE=$ENV{TPSUPMODE}\n";
+      }
+      delete $ENV{TPSUPMODE};
+   }
+
+   # figure out TPSUP path from the link source's dir
+   if ($wrapper_dir) {
+      $TPSUP = "$wrapper_dir/..";
+
+      # reduce this kind of repetition, TPSUP=/home/eq2dev/tpsup/autopath/../scripts/..
+      # to TPSUP=/home/eq2dev/tpsup
+      $TPSUP =~ s:[/]+[^/]+/[.][.]/scripts/[.][.]$::;
+   } else {
+      $TPSUP = "..";
+   }
+
+   my $profile = "$TPSUP/profile";
+
+   if (! -f $profile) {
+      die "$0 is misplaced because there is no $profile";
+   }
+
+   my @env = `/bin/bash -c ". $profile; env"`;
+   chomp @env;
+
+   for my $line (@env) {
+      if ($line =~ /^([^=]+?)=(.*)/) {
+         my ($k, $v) = ($1, $2);
+   
+         $v = '' if ! defined $v;
+   
+         $ENV{$k} = $v;
+      }
+   }
+
+   if ($debug) {
+      print STDERR "Sourced $TPSUP/profile. New ENV is below: \n";
+
+      for my $k (sort {$a cmp $b} (keys %ENV)) {
+         print STDERR "$k=$ENV{$k}\n";
+      }
+   }
+}
+
+print "TPSUP=$TPSUP\n" if $debug;
+
+system(@ARGV) ;
+   

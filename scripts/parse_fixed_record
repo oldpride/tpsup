@@ -1,0 +1,115 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::BINARY qw( 
+   get_fixed_records
+);
+
+# use Carp::Always;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $delimiter = ',';
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog [-t template] record_size fixed_record_file
+   
+   break a fixed-record file into one record a line
+
+   -t template      break the record using the template (perl pack/unpack template)
+                    https://perldoc.perl.org/functions/pack
+                    for text file, in particular: 
+                       A  A text (ASCII) string, will be space padded.
+                    We noramally extract the text and then let perl to convert the
+                    data.
+
+                    for binary file, we will have to use other templates
+
+   -d delimiter     output delimiter when "-t template" is also specified. 
+                    default to '$delimiter
+
+   -me   match_expression 
+                    perl style, cell-based, eg, -m '\$f[0] eq 'john' && \$f[3] == 23'.
+                    used with '-t template'. Fields are stored in array \@f.
+
+   -xe exclude_expression 
+                    perl style, cell-based, eg, -m '\$f[0] eq 'john' && \$f[3] == 23'.
+                    used with '-t template'. Fields are stored in array \@f.
+   
+   -mp match_pattern
+                    perl style, line-based. Can use multiple times, in AND logic.
+                    eg. -mp "junkl" -mp "junk2"
+                         will match both "junk1 junk2" and "junk2 junk1",
+                         but will not match "junk1" or "junk2".
+   
+   -xp exclude_pattern
+                    perl style, line-based. Can use multiple times, in AND logic,
+                    eg. -xp "junk1" -xp "junk2"
+                        will match both "junk1 junk2" and "junk2 junk1",
+                        but will not match "junk1" or "junk2".
+
+examples:
+   $prog                        50 parse_fixed_record_test.txt
+   $prog -t 'A12 A12 A4 A4 A18' 50 parse_fixed_record_test.txt
+
+   $prog -mp Spinsak 50 parse_fixed_record_test.txt
+   $prog -xp Spinsak 50 parse_fixed_record_test.txt
+
+   $prog -t 'A12 A12 A4 A4 A18' -me '\$f[1] eq "Spinsak"' 50 parse_fixed_record_test.txt
+   $prog -t 'A12 A12 A4 A4 A18' -xe '\$f[1] eq "Spinsak"' 50 parse_fixed_record_test.txt
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $template;
+my @match_expression;
+my @exclude_expression;
+my @match_pattern;
+my @exclude_pattern;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   't=s'           => \$template,
+   'd=s'           => \$delimiter,
+   'me=s'          => \@match_expression,
+   'xe=s'          => \@exclude_expression,
+   'mp=s'          => \@match_pattern,
+   'xp=s'          => \@exclude_pattern,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 2;
+
+my ($record_size, $file) = @ARGV;
+
+my $opt = {
+   Template => $template,
+   FixedRecordMatchExps => \@match_expression,
+   FixedRecordExcludeExps => \@exclude_expression,
+   FixedRecordMatchPatterns => \@match_pattern,
+   FixedRecordExcludePatterns => \@exclude_pattern,
+};
+
+my $records = get_fixed_records($file, $record_size, $opt);
+
+for my $record (@$records) {
+   if (!$template) {
+      print $record, "\n";
+   } else {
+      print join($delimiter, @$record), "\n";
+   }
+}
+
+exit 0;

@@ -1,0 +1,32 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 file1 file2
+
+   diff two binary files with xxd
+  
+EOF
+   exit 1
+}
+
+# while getopts bdf: o;
+# do
+#    case "$o" in
+#       b) loginshell="";;
+#       d) debug=Y;;
+#       f) font="-fa Monospace -fs $OPTARG";;
+#       *) echo "unknow switch '$o'"; usage;;
+#    esac
+# done
+# 
+# shift $((OPTIND-1))
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+diff <(xxd $1) <(xxd $2)

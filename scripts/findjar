@@ -1,0 +1,124 @@
+#!/bin/bash
+   
+usage () {
+   cat <<EOF
+usage:
+
+   locate java code.
+
+   - to use specific jar files
+   $0 pattern jarl jar2 ...
+
+   - to use the CLASSPATH
+   $0 pattern env
+
+   -d dump the code
+   -h print header of the code
+   -s save tmp dir for troubleshooting, default is no
+
+examples:
+
+   $0 FileFixPublisher env
+   $0 FileFixPublisher *jar
+
+   - to open a jar file
+   mkdir junkdir
+   cd junkdir
+   jar -xvf found.jar
+
+EOF
+   exit 1
+}
+
+if [ $# -lt 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+dump=N
+header=N
+save_tmp_dir=N
+# where is java
+export PATH=$PATH:/usr/local/bin:
+
+while getopts hds o; do
+   case "$o" in
+      h) header=Y;;
+      d) dump=Y;;
+      s) save_tmp_dir=Y;;
+     #x) exclude=$OPTARG;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+pattern="$1"
+shift
+
+check_jar () {
+   f=$1
+   pattern=$2
+
+   line=`jar -tvf $f |grep -si "$pattern"`
+
+   if [ "X$line" != "X" ];then
+      echo ""
+      echo $line
+      echo "found in $f"
+
+      if [ $dump = Y -o $header = Y ]; then
+         path=`echo $line |sed -e 's:.* ::'`
+         #echo $path
+         tmpdir=`get_tmp /tmp findjar`
+
+         [ -d $tmpdir ] || mkdir $tmpdir || exit 1
+
+         oldpwd=`pwd`
+         abspath=`readlink -f $f`
+         cd $tmpdir
+         jar -xvf $abspath $path
+
+         if [ $header = Y ]; then
+            echo ""
+            javap $path
+            echo ""
+         fi
+
+         if [ $dump = Y ]; then
+            echo ""
+            javap -c $path
+            echo ""
+         fi
+
+         if [ $save_tmp_dir = Y ]; then
+            echo "class file is saved at: "
+            readlink -f $path
+         else
+            /bin/rm -fr $tmpdir
+         fi
+
+         cd $oldpwd
+      fi
+   fi
+}
+
+if [ "$1" = "env" ]; then
+   for f in `echo $CLASSPATH|sed -e 's/:/ /g'`
+   do
+      check_jar $f "$pattern"
+   done
+else
+   for f in "$@"
+   do
+      check_jar $f "$pattern"
+   done
+fi
+
+exit 0;
+
+# $ for i in *jar; do if jar -tvf $i | grep -Hsi FileFixPublisher;then echo $i;fi done
+# (standard input): 4886 Sat Sep 21 14:25:30 EDT 2013 com/abc/fix/tools/FileFixPublisher.class
+# fix-support-tools.jar
+# (standard input): 4860 Mon Mar 19 13:08:10 EDT 2012 com/abc/fix/tools/FileFixPublisher.class
+# fix-tools.jar

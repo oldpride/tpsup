@@ -1,0 +1,161 @@
+#!/usr/bin/perl
+#
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(diff_csv_long);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog -ref k1-1,k1-2,... -ref k2-1,k2-2,... -cmp k1-3,k1-4,... -cmp k2-3,k2-4,... csv1 csv2
+
+   Diff csv by keys only. It will ignore the difference between non-key values.
+
+   -me match_expression    perl style, cell-based, eg, -m '\$Column1==1 && \$Column2 eq "B"'
+
+   -xe exclude_expression  perl style, cell-based, eg, -m '\$Column3=~ /junk/ || !\$Column4'
+
+   -mp match_pattern       perl style, line-based. Can be multiple, in AND logic.
+                           eg. -e "junk1" -e "junk2"
+                              will match both "junk1 junk2" and "junk2 junk1",
+                              but will not match "junk1" or "junk2".
+
+   -xp exclude_pattern     perl style, line-based. Can be multiple, in AND logic.
+                           eg. -e "junk1" -e "junk2"
+                              will match both "junk1 junk2" and "junk2 junk1",
+                              but will not match "junk1" or "junk2".
+
+   -delimiter string       default to ','
+
+   -skip number            skip the first n lines of the file, because some files may comments
+                           above header, default to 0, no skipping.
+
+   -output output          default to STDOUT
+
+   -option setting other   options, eg,
+                             -op InputNoHeader this indicates no header line in the input file
+                             -op UsePosition this indicates to use cO,c1,... as column names
+
+   -header string          use this as output header
+
+   -ref ref_keys           columns used to link (like foreign key) csvs
+
+   -cmp cmp_keys           columns to diff
+   
+   -common                 print common also, default to print diff only
+   -commononly             print common only, default to print diff only
+
+   -placeholder pattern    to handle undefined cell, can be set, for example, '^(0|)\?'
+
+   -SameHeader             assume files have the same header
+
+examples:
+
+   $prog -header RIC,TICKER,EOD,SOD -ref TICKER,RIC -ref TICKER,RIC \\
+      -cmp TOTAL_EOD_POSITION -cmp SOD -placeholder '^(0|)\$' diffcsvlong_test1.csv diffcsvlong_test2.csv
+
+   $prog -SameHeader -ref c2 diffcsvlong_SameHeader1.csv diffcsvlong_SameHeader2.csv
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $delimiter;
+my $skiplines;
+my @match_expression;
+my @exclude_expression;
+my @match_pattern;
+my @exclude_pattern;
+my $output = '-';
+my @other_options;
+my $header;
+my $common;
+my $commononly;
+my @ref_keystring;
+my @cmp_keystring;
+my $placeholder;
+my $SameHeader;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'djdelimiter=s' => \$delimiter,
+   'skip=s'        => \$skiplines,
+   'me=s'          => \@match_expression,
+   'xe=s'          => \@exclude_expression,
+   'mp=s'          => \@match_pattern,
+   'xp=s'          => \@exclude_pattern,
+   'o|output=s'    => \$output,
+   'op|option=s'   => \@other_options,
+   'header=s'      => \$header,
+   'ref=s'         => \@ref_keystring,
+   'cmp=s'         => \@cmp_keystring,
+   'common'        => \$common,
+   'commononly'    => \$commononly,
+   'SameHeader'    => \$SameHeader,
+   'placeholder=s' => \$placeholder,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my @csvs = @ARGV;
+
+$verbose && print "csvs = ", Dumper(\@csvs);
+
+my @ref_keys;
+my @cmp_keys;
+
+for my $string (@ref_keystring) {
+   my @keys = split /,/, $string;
+   push @ref_keys, \@keys;
+}
+
+$verbose && print "ref_keys = ", Dumper(\@ref_keys);
+
+for my $string (@cmp_keystring) {
+   my @keys = split /,/, $string;
+   push @cmp_keys, \@keys;
+}
+
+$verbose && print "cmp_keys = ", Dumper(\@cmp_keys);
+
+my $opt = {
+   MatchExps       => \@match_expression,
+   ExcludeExps     => \@exclude_expression,
+   MatchPatterns   => \@match_pattern,
+   ExcludePatterns => \@exclude_pattern,
+   delimiter       => $delimiter,
+   skiplines       => $skiplines,
+   verbose         => $verbose,
+   DiffCsvHeader   => $header,
+   DiffCsvOutput   => $output,
+   PrintCommon     => $common,
+   CommonOnly      => $commononly,
+   Placeholder     => $placeholder,
+   SameHeader      => $SameHeader,
+};
+
+for my $op (@other_options) {
+   if ($op =~ /^(TrimFloats)=(.+)/) {
+      @{$opt->{$1}} = split /,/, $2;
+   } elsif ($op =~ /^(.+?)=(.+)/) {
+      $opt->{$1} = $2;
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+my $error = 0;
+   
+diff_csv_long(\@csvs, \@ref_keys, \@cmp_keys, $opt);

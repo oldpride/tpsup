@@ -1,0 +1,93 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 check
+   $0 sftp
+
+   -d       debug mode
+
+example:
+
+   $0 check
+   $0 sftp
+
+EOF
+   exit 1
+}
+
+debug=N
+
+while getopts d o;
+do
+   case "$o" in
+      #b) loginshell="";;
+      d) debug=Y;;
+      #f) font="-fa Monospace -fs $OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+action=$1
+
+. ~/sitebase/github/tpsup/profile
+
+alert () {
+   message=$1
+   #echo "$message" | tpmail -s " $prog failed" tech@livingstonchinese.org 
+   # my ubuntu linux1 cannot send email
+   echo $message
+   echo "`date +%Y/%m/%d-%H:%M:%S` $0 $message" >> ~/error.log 
+   exit 1
+}
+
+[ $debug = Y ] && set -x
+
+cd /media/sdcard/LCA || alert "cd /media/sdcard failed"
+
+yyyymmdd=`date +%Y%m%d`
+
+dir=/media/sdcard/LCA/$yyyymmdd
+
+if [ $action = check ]; then
+   (set -x; ls -l $dir)
+   exit 0
+elif [ $action != sftp ]; then
+   echo "unknown action='$action'"
+   usage
+fi
+
+if ! [ -d $dir ]; then
+   find /media/sdcard/LCA -maxdepth 1 -mtime +200 -exec /bin/rm -fr {} \;
+   mkdir $dir
+fi
+
+cd $dir || alert "cd $dir failed"
+
+date '+%Y-%m-%d %H:%M:%S'
+
+# after ssh-key based auth working, no need for tpentry/sshpass ... 
+# tpentry -- /usr/bin/sshpass -p tpentry{livin80}{decoded} sftp livin80@livingstonchinese.org <<EOF
+sftp -l 1000 livin80@livingstonchinese.org >`date +%Y%m%d-%H%M%S`.log <<EOF
+   ls -l backup/daily/LCA2.tar.gz 
+   get -p backup/daily/LCA2.tar.gz
+   ls -l backup/daily/livin80_joom218.sql 
+   get -p backup/daily/livin80_joom218.sql
+EOF
+
+[ $? -ne 0 ] && alert "sftp failed"
+
+date '+%Y-%m-%d %H:%M:%S'
+
+(set -x; ls -l $dir)

@@ -1,0 +1,121 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $delimiter = ":";
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR <<"END";
+Usage:
+
+   $prog path_set1 path_set2 ...
+   $prog  env_var1  env_var2 ...
+
+   this a script to reduce the path by removing the duplicates. 
+
+   path_set is like path1:path2:.... for example, \$PATH is a path_set
+
+
+   -v          verbose mode
+   -q          quiet
+   -e          args are env vars
+   -d string   delimiter. defaut to "$delimiter". but for PYTHONPATH in Cygwin, it is semi-colon ;
+
+Examples:
+
+   $prog path1::path2::path3:path1:path2 path3:path1:path2:path1::path2
+   path1::path2:path3
+   path3:path1:path2:
+
+   $prog "\$PATH" "\$LD_LIBRARY_PATH"
+
+   $prog -e PATH LD_LIBRARY_PATH
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $quiet;
+my $is_env_var;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   'e'         => \$is_env_var,
+   'q|quiet'   => \$quiet,
+   'd=s'       => \$delimiter,
+   ) || usage ("cannot parse command line: $!");
+usage("wrong number of args") if !@ARGV;
+
+my $UNAME = `uname`; chomp $UNAME;
+
+for my $arg (@ARGV) {
+   my $old_path;
+   
+   print STDERR "\n" if !$quiet;
+    
+   if ($is_env_var) {
+      print STDERR "reducing $arg ...\n" if !$quiet;
+      $old_path = $ENV{$arg};
+      if (!defined $old_path) {
+         print STDERR "$arg is not defined in env. skipped\n" if !$quiet;
+         next;
+      }
+   } else {
+      $old_path = $arg;
+   }
+
+   next if !defined $old_path;
+
+   print STDERR "old_path=$old_path\n" if !$quiet;
+
+   my $d2 = ($arg eq 'PYTHONPATH' && $UNAME =~ /^CYGWIN/i) ? ';' : $delimiter;
+   my @old = split /$d2/, $old_path, -1;   # use -1 to preserve trailing empty value.
+   
+   my $seen;
+   
+   my @new;
+   
+   my $i=0;
+   
+   my $changed = 0;
+
+   for my $p (@old) {
+      if ($seen->{$p}) {
+         print STDERR "dropping duplicate at $i: '$p'\n" if !$quiet;
+         $changed ++;
+      } else {
+         $seen->{$p}++;
+         push @new, $p;
+      }
+   
+      $i++;
+   }
+   
+   my $new_path = join($d2, @new);
+   
+   print STDERR "new_path=$new_path\n" if !$quiet;
+
+   if (!$changed) {
+      print STDERR "no change. skipped\n" if !$quiet;
+      next;
+   }
+
+   if ($is_env_var) {
+      print "export $arg='$new_path'\n";
+   } else {
+      print "$new_path\n";
+   }
+}
+
+exit 0;

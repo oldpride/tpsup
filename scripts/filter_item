@@ -1,0 +1,137 @@
+#!/usr/bin/env perl
+
+#use warnings;
+#use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+   
+use TPSUP::UTIL qw(
+   insert_namespaces
+);
+   
+my $prog = $0; $prog =~ s:.*/::;
+   
+sub usage {
+   my ($message) = @_;
+   
+   print "$message\n" if $message;
+   
+   print STDERR << "END";
+usage:
+   
+   $prog     input.txt
+   $prog - < input.txt
+   $prog -inline item1 item2 ... 
+   
+   filter a list of items depend on the code. Default is to pass through every item.
+
+   -code "perl code"
+                               this is to overwrite the $pass_item function. see 
+                               examples below.
+                               the default $pass_item function passes every item.
+
+   -codefile "namespace=file"
+                                same as '-code' but the real content is in the 'file'
+
+   -delimiter string            default is \\s, ie, any space/tab/newline ...
+                                To use new line, -d "\\n"
+
+   -inline                      command line args are not file names but the items
+
+   -skip number                 skip the first number of lines. this is used to handle 
+                                header
+   
+examples:
+
+   - test default behavior
+   filter_item -v filter_item_test.txt
+   
+   - test inline
+   filter_item -i 123 abc 8K
+
+   - test user code
+   $prog -code '
+            use TPSUP::FIX qw(get_fixname_by_tag);
+            \$pass_item = sub {
+               my (\$item) = \@_;
+               return get_fixname_by_tag(\$item);
+            };
+         ' filter_item_test.txt
+   
+   $prog -codefile filter_item_test.pl filter_item_test.txt 
+
+   - test -skip
+   $prog -skip 3 filter_item_test.txt 
+   
+END
+   
+   exit 1;
+}
+   
+my $verbose;
+my $delimiter = '\s';
+my $skiplines = 0;
+my $inline;
+my @SpaceCodes;
+my @SpaceFiles;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   'd|delimiter=s' => \$delimiter,
+   'skip=s' => \$skiplines,
+   'i|inline' => \$inline,
+   'code=s' => \@SpaceCodes,
+   'codefile=s' => \@SpaceFiles,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+# default function. this is likely to be overwriten by the code below
+$main::pass_item = sub { return 1 };
+
+for my $file (@SpaceFiles) {
+   my $code = `cat $file`;
+   eval $code;
+   if ($@) {
+      die "failed to load code='$code': $@";
+   }
+}
+
+for my $code (@SpaceCodes) {
+   eval $code;
+   if ($@) {
+      die "failed to load code='$code': $@";
+   }
+}
+
+my $items;
+if ($inline) {
+   $items = \@ARGV;
+} else {
+   for my $file (@ARGV) {
+      my $string;
+      
+      if ($skiplines > 1) {
+         $string = `sed 1,${skiplines}d $file`; 
+      } else {
+         $string = `cat $file`; 
+      }
+      push @$items, split /$delimiter/, $string;
+   }
+}
+
+for my $item (@$items) {    
+   if (!"$item") {
+      $verbose && print STDERR "skipped a empty item.\n";
+      next;
+   }
+
+   if ($main::pass_item->($item)) {
+      print "$item\n";
+   } else {
+      $verbose && print STDERR "item='$item' didn't pass.\n";
+   }
+}
+      
+         

@@ -1,0 +1,94 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog [-debug] weekday_offset
+
+example:
+
+   $prog +7
+   $prog +0
+   $prog -7
+
+
+   i=-15; while [ \$i -lt 15 ]; do $prog -debug \$i; ((i++)); done
+
+EOF
+   exit 1
+}
+
+debug=N
+if [ "X$1" = "X-debug" ]; then
+   debug=Y
+   shift
+fi
+
+if [ $# -ne 1 ]; then
+   echo >&2 "wrong number of args"
+   usage
+fi
+
+weekday_offset=$1
+
+day_of_week=`date +%u` # day of week 1-7. %w will give 0-6
+
+
+day_offset=$((weekday_offset/5*7))   # convert business week (5 days) to week (7days)
+partial_offset=$((weekday_offset%5)) # partial_offset is <= 4 but >=0
+
+if [ $weekday_offset -ge 0 ]; then
+   # we look forward
+
+   if [ $day_of_week -eq 7 ]; then
+      # today's is sunday, we count from monday
+      ((day_offset ++))    # bash increment
+      day_of_week=1
+   elif [ $day_of_week -eq 6 ]; then
+      # today's is saturday, we count from monday
+      ((day_offset +=2))    # bash increment
+      day_of_week=1
+   fi
+
+   if [[ $((partial_offset + day_of_week)) -gt 5 ]]; then
+      # new date will cross weekend, add two days
+      # for example, partial_offset=2 and day_of_week=4 (Thursday), we should get Tuesday
+      ((day_offset +=2))
+   fi
+else # [ $weekday_offset -lt 0 ]; then
+   # we look backward
+
+   # right now partial_offset is positive as % only return positive number. we need
+   # to change it to negative, by moving ref point a week forward 
+   if [ $partial_offset -gt 0 ]; then
+      ((partial_offset -=5)) 
+      ((day_offset     +=7)) 
+   fi
+
+   if [ $day_of_week -eq 7 ]; then
+      # today's is sunday, we count from friday
+      ((day_offset -=2))    # bash increment
+      day_of_week=5
+   elif [ $day_of_week -eq 6 ]; then
+      # today's is saturday, we count from friday
+      ((day_offset --))    # bash increment
+      day_of_week=5
+   fi
+
+   if [[ $((partial_offset + day_of_week)) -lt 1 ]]; then  # 1 is Monday
+      # new date will cross weekend, substract two days
+      # for example, partial_offset=-3 and day_of_week=1 (Monday), we get previous Wednesday
+      ((partial_offset -=2))
+   fi
+fi
+
+day_offset=$((day_offset + partial_offset))
+
+if [ $debug = Y ]; then
+   date -d "$day_offset days" "+%Y%m%d %u=%a offset=$weekday_offset"   # %u: weekday 1-7; %a: Mon,Tue,...
+else
+   date -d "$day_offset days" +%Y%m%d
+fi

@@ -1,0 +1,90 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog dir1 dir2
+   
+description:
+
+   Check dup jar files. After udeploy, sometimes ends with dup jar files
+      abc.1.2.3.jar
+      abc.1.2.4.jar
+      abc.1_2_4.jar
+
+      abc.1.2.3.RELEASE.jar
+      abc.1.2.4.RELEASE.jar
+
+   -v       verbose mode
+
+examples:
+
+   $prog ./
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $error = 0;
+
+for my $d (@ARGV) {
+   if (! -d $d) {
+      print STDERR "$d not a dir\n"; 
+      $error ++;
+      next;
+   }
+
+   my @jars = `ls -1 $d/*.jar`;
+   chomp @jars;
+
+   my $regular_jars_by_prefix = {};  # must init
+   my $RELEASE_jars_by_prefix = {};  # must init
+
+   for my $jar (@jars) {
+      my $jars_by_prefix;
+      my $prefix = $jar;
+
+      if ($jar =~ /RELEASE.jar/) {
+         $jars_by_prefix = $RELEASE_jars_by_prefix;
+         $prefix =~ s/[0-9._]+RELEASE.jar$//;
+      } else {
+         $jars_by_prefix = $regular_jars_by_prefix;
+         $prefix =~ s/[0-9._]+.jar$//;
+      }
+
+      $verbose && print "$jar prefix=$prefix\n";
+   
+      push @{$jars_by_prefix->{$prefix}}, $jar;
+
+      if (@{$jars_by_prefix->{$prefix}} > 1) {
+         print "ERROR: duplicate $prefix\n";
+         for my $jar (@{$jars_by_prefix->{$prefix}}) {
+            print "   $jar\n";
+         }
+         $error ++
+      }
+   }
+}
+
+print "total $error ERRORS\n";

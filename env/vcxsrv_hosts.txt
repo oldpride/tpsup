@@ -1,0 +1,7 @@
+localhost
+inet6:localhost
+inux1
+linux1.fios-router.home
+inet6:linux1
+192.168.1.191
+inet6:192.168.1.191

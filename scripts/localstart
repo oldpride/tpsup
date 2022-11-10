@@ -1,0 +1,285 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Getopt::Long;
+use Carp;
+
+sub usage {
+
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $0 app_id cmd arg1 arg2
+
+description:
+
+   start up a program with pid lock file /var/tmp/localstart.appid.userid.txt
+
+options:
+
+   -verbose
+
+   -t end_time            time after which return code is forced to 0. format: HH:MM:SS
+
+   -path start_path       cd to this path before running command
+
+   -prep command          preparation commands
+
+   -var key=value         define variables, this will used only by localstart, not set in env
+
+   -env key=value         set env
+
+   -delay seconds         delay specified seconds, this is used to pace a chain of commands
+
+sequence:
+
+   prep command
+   cd start_path
+   command
+
+examples:
+
+   localstart sleep_1 sleep 100
+   localstop sleep_1
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my %var;
+my %env;
+my $end_time;
+my $start_path;
+my $prep;
+my $path;
+my $delay;
+my $tomorrow_start = "23:59:59";
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   't=s' => \$end_time,
+   'path=s' => \$path,
+   'prep=s' => \$prep,
+   'var=s' => \%var,
+   'env=s' => \%env,
+   'delay=s' => \$delay,
+   'cutoff=s' => \$tomorrow_start,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my ($app_id) = shift @ARGV;
+
+my $user_id = `id | cut -d\\\( -f2 | cut -d\\\) -f1`;
+chomp $user_id;
+
+my $pid_file = "/var/tmp/localhost.$app_id.$user_id.txt";
+
+sleep $delay if $delay;
+
+if (-f $pid_file) {
+   print STDERR "pid_file=$pid_file already exists\n";
+   system("ls -l $pid_file");
+
+   my $pid = `cat $pid_file`;
+   chomp $pid;
+
+   if ($pid !~ /^\d+$/) {
+      die "pid_file=$pid_file is corrupted, the content is not a PID.\n";
+   }
+
+   my @pid_trees;
+
+   my $os = `/bin/uname`; chomp $os;
+   my $ cmd;
+
+   if ($os eq "SunOS") {
+      $cmd = "/usr/bin/ptree $pid";
+   } elsif ($os eq "Linux") {
+      $cmd = "/usr/bin/pstree -pal $pid";
+   } else {
+      die "os=$os is not supported";
+   }
+
+   my @lines = "$cmd 2>/dev/null";
+
+   if (@lines) {
+      print STDERR "pid_file=$pid_file contains active pid=$pid. quit.\n";
+      print STDERR "\n----------$cmd-------\n";
+      print STDERR @lines;
+      print STDERR "\n";
+      exit 1;
+   }
+
+   # now the file is stale: dead pid
+   print STDERR "pid_file=$pid_file contains dead pid=$pid. file is removed.\n";
+
+   unlink($pid_file) || die "cannot remove pid_file=$pid_file";
+}
+
+$verbose && print STDERR "creating pid_file=$pid_file\n";
+system("echo $$ >$pid_file") && die "cannot create pid_file=$pid_file";
+
+if (%env) {
+   for my $k (sort keys(%env)) {
+      my $v = $env{$k};
+
+      my $new_k = apply_var($k);
+      my $new_v = apply_var($v);
+
+      $ENV{$new_k} = $new_v;
+   }
+}
+
+print STDERR "\n---------------env---------------\n";
+if (%ENV) {
+   for my $var (sort (keys %ENV)) {
+      print STDERR "$var=$ENV{$var}\n";
+   }
+}
+
+print STDERR "\n";
+print STDERR "------------ulimit -a------------------\n";
+system("sh -c \"ulimit -a\" >&2");
+print STDERR "\n";
+   
+print STDERR "\n";
+print STDERR "-------------ulimit -a -H-----------------\n";
+system("sh -c \"ulimit -a -H\" >&2");
+print STDERR "\n";
+
+my $today = `date +%Y%m%d`; chomp $today;
+my $time = `date +%H:%M:%S`; chomp $time;
+
+my %internal;
+
+if ($time gt $tomorrow_start) {
+   my $cmd = "tradeday +1";
+
+   my $tomorrow = `$cmd`;
+
+   die "cmd=$cmd failed" if $?;
+
+   chomp $tomorrow;
+
+   $internal{today} = $tomorrow;
+} else {
+   $internal{today} = $today;
+}
+
+$internal{id} = $app_id;
+$internal{user} = $user_id;
+
+$prep = apply_var($prep);
+$path = apply_var($path);
+
+my @commands;
+
+for my $cmd (@ARGV) {
+   push @commands, apply_var($cmd);
+}
+
+if ($prep) {
+   print STDERR "\n";
+   print STDERR "prep=$prep\n";
+   print STDERR "\n";
+   system("$prep") && exit 1;
+}
+
+if ($path) {
+   chdir($path) || exit 1;
+   system("pwd") ;
+}
+
+print STDERR "\n";
+print STDERR "cmd=", join(' ', @commands), "\n";
+print STDERR "\n";
+   
+print STDERR "----------- proc error starts below  \n";
+
+my $child_pid;
+
+if ($child_pid = fork()) {
+   # this is parent
+   waitpid($child_pid, 0);
+} else {
+   # this is child
+   exec(@commands) ;
+}
+
+my $sig = 0;
+my $rc = 0;
+my $msg = "";
+
+if ($? == -1) {
+   $rc = 255;
+   $msg = "failed to execute: $!";
+   print STDERR "$msg\n";
+} else {
+   $sig = $? & 127;
+
+   if ($sig) {
+      $msg = sprintf "sig=%d, %s",
+      $sig, ($? & 128)                ? 'CORED !!!'         :
+            ($sig == 6 || $sig == 11) ? 'coredump disabled' :
+                                        'no coredump'       ;
+      print "$msg\n";
+   }
+   $rc = $?;
+   $rc = $rc & 0xffff;
+   $rc >>= 8;
+}
+
+$verbose && print STDERR "removing pid_file=$pid_file.\n";
+unlink($pid_file) || die "cannot remove pid_file=$pid_file";
+
+$time = "date +%H:%M:%S"; chomp $time;
+
+my $exit_code = $rc ? $rc  :
+               $sig ? $sig :
+                         0 ;
+
+$verbose && print STDERR "rc=$rc, sig=$sig, exit_code=$exit_code\n";
+
+if ($end_time ) {
+   if ($time lt $end_time ) {
+      $verbose && print STDERR "exit_time=$time is before expected end_time=$end_time. ",
+                               "return real exit_code=$exit_code\n";
+      exit $exit_code;
+   } else {
+      $verbose && print STDERR "exit_time=$time is after expected end_time=$end_time. ",
+                               "force exit code=0\n";
+      exit 0;
+   }
+}
+
+###############################################
+# subs
+###############################################
+sub apply_var {
+   my ($string) = @_;
+
+   if (%var && $string) {
+      for my $k (keys %var) {
+         my $v = $var{$k};
+
+         next if $string !~ /\%$k\%/;
+
+         for my $ik (keys %internal) {
+            my $iv = $internal{$ik};
+
+            $v =~ s/\%$ik\%/$iv/g;
+  }
+         $string =~ s/\%$k\%/$v/g;
+      } 
+   }
+
+   return $string;
+}

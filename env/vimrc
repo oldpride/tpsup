@@ -1,0 +1,15 @@
+" link this file to ~/.vimrc and ~/.virc (cygwin vi only uses ~/.virc)
+
+" https://vi.stackexchange.com/questions/4141/how-to-indent-as-spaces-instead-of-tab
+" tabstop:          Width of tab character
+" softtabstop:      Fine tunes the amount of white space to be added
+" shiftwidth        Determines the amount of whitespace to add in normal mode
+" expandtab:        When on uses space instead of tabs
+
+" set tabstop     =4
+" set softtabstop =4
+" set shiftwidth  =4
+set autoindent
+set expandtab
+set ignorecase
+

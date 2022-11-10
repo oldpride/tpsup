@@ -1,0 +1,200 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Getopt::Long;
+use Carp;
+
+my $wait_time = 1;
+my $signal = 1;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print << "END";
+
+usage:
+
+   $0 app_id
+
+description:
+
+   stop a program with pid lock file /var/tmp/localstart.app_id.userid.txt
+
+options:
+
+   -verbose
+
+   -sig sig             kill sig. default to TERM (1)
+
+   -wait wait_time      if the above sig didn't kill the proc, wait this
+                        many seconds to kill -9. default to $wait_time.
+
+   -ReportMissingPidFile
+                        if the pid_file is missing, the program is very
+                        likely already stopped. If this flag is set, return
+                        code will be 1 in this case. Default is not to report
+                        this, and return code is 0.
+
+examples:
+
+   localstart sleep_1 sleep 100
+   localstop sleep_1
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $ReportMissingPidFile;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   'sig=s' => \$signal,
+   'wait=s' => \$wait_time,
+   'ReportMissingPidFile' => \$ReportMissingPidFile,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($app_id) = shift @ARGV;
+
+my $user_id = `id | cut -d\\\( -f2 | cut -d\\\) -f1`;
+chomp $user_id;
+
+my $pid_file = "/var/tmp/localhost.$app_id.$user_id.txt";
+
+$verbose && print "looking into pid_file=$pid_file\n";
+
+if (!-f $pid_file) {
+   print "pid_file=$pid_file doesn't exists\n";
+
+   if ($ReportMissingPidFile) {
+      exit 1;
+   } else {
+      exit 0;
+   }
+}
+
+my $pid = "cat $pid_file"; chomp $pid;
+
+if ($pid !~ /^\d+$/) {
+   die "pid_file=$pid_file is corrupted, the content is not a PID.\n";
+}
+
+my $os = `/bin/uname`; chomp $os;
+
+my $cmd;
+
+if ($os eq "SunOS") {
+   $cmd = "/usr/bin/ptree $pid";
+} elsif ($os eq "Linux") {
+   $cmd = "/usr/bin/pstree -pal $pid";
+} else {
+   die "os=$os is not supported";
+}
+
+my @lines = `$cmd 2>/dev/null`;
+
+if ($? || !@lines) {
+   print "pid=$pid in pid_file=$pid_file is already gone, removing the pid_file.\n";
+   unlink("$pid_file") || die "cannot remove pid_file=$pid_file";
+   exit 0;
+}
+
+if ($verbose) {
+   print "-------- $cmd ------------\n";
+   print "@lines";
+   print "\n";
+}
+
+# now we have an active pid
+my @to_be_killed;
+
+if ($os eq "SunOS") {
+   # Solaris
+   # $ /usr/bin/ptree 713
+   # 7994 zsched
+   # 9307 /usr/lib/ssh/sshd
+   # 12609 /usr/lib/ssh/sshd
+   # 12610 /usr/lib/ssh/sshd
+   # 12649 -ksh
+   # 713 /usr/bin/perl /home/gpt/tpsup/scripts/localstart sleep_l sleep
+   # 745 sleep 1000
+  
+   my $begun;
+
+   for my $l (@lines) {
+      if ($l =~ /^\s*(\d+)/) {
+         my $p = $1;
+
+         if (!$begun) {
+            if ($p == $pid) {
+               $begun++;
+            }
+
+            next;
+         } 
+
+         if ( -d "/proc/$p" ) {
+            $verbose && print "kill -$signal $p\n";
+
+            kill($signal, $p);
+            push @to_be_killed, $p;
+         }
+      }
+   }
+} elsif ($os eq "Linux") {
+   # /usr/bin/pstree -pal 72199--
+   # localstart,72199 /home/tian/scripts/localstart sleep_l sleep 10000
+   # "-sleep,72216 10000
+
+   my $begun;
+   
+   for my $l (@lines) {
+      if ($l =~ /^.*?,(\d+)/) {
+         my $p = $1;
+
+         if (!$begun) {
+            if ($p == $pid) {
+               $begun++;
+            }
+
+            next;
+         }
+
+         if ( -d "/proc/$p" ) {
+            $verbose && print "kill -$signal $p\n";
+
+            kill($signal, $p);
+            push @to_be_killed, $p;
+         }
+      }
+   }
+}
+
+my $has_waited = 0;
+
+for my $p (@to_be_killed) {
+   # wait the process to handle the signal
+
+   while($has_waited < $wait_time) {
+      if (-d "/proc/$p") {
+         sleep 1;
+         $has_waited ++;
+      } else {
+         last;
+      }
+
+      # if the child process does not exit, kill -9
+      if (-d "/proc/$p") {
+         $verbose && print "kill -9 $p\n";
+         kill (9, $p);
+      }
+   }
+}
+
+exit 0;

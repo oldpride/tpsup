@@ -1,0 +1,121 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog perl.pl
+   $prog tpnc.ps1
+
+description:
+
+   Remove comments and blank lines from perl/powershell script. This condenses
+   the script to make copy-and-paste eaiser. 
+
+   The script also flattens simple structure, like,
+      if (a) {
+         b;
+      }
+   to 
+      if (a) { b }
+
+   -v          verbose mode
+
+   -o output   default to STDOUT
+
+examples:
+
+   $prog tpns.ps1
+   $prog netsuck
+
+EOF
+
+   exit 1;
+}
+
+my $verbose;
+my $output;
+
+GetOptions(
+   "v"        => \$verbose,
+   "o=s"      => \$output,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+   
+my ($file) = @ARGV;
+
+die "$file not found"    if ! -f $file;
+die "$file not readable" if ! -r $file;
+
+my $string = `cat $file`;
+exit 1 if $?;
+
+my $old_count = `wc -l $file`; chomp $old_count;
+
+my $ofh;
+if (!$output || $output eq '-') {
+   $ofh = \*STDOUT;
+} else { 
+   open $ofh, ">$output" or die "cannot write to $output: $!";
+}
+
+# first remove <#...#>
+$string =~ s/<#.*?#>//gs;
+
+my @lines = split /\n/, $string;
+
+my @lines2;
+
+for (my $i=0; $i< $#lines; $i++) {
+   next if $lines[$i] =~ /^\s*$/;                #skip blank   lines
+   next if $lines[$i] =~ /^\s*#/ && $i != 0;     #skip comment lines but keep #! 
+
+   # flat this stucture
+   #   if (a) {
+   #      b;
+   #   }
+   # to
+   #   if (a) { b; }
+
+   if ($lines[$i] =~ /{\s*$/) {
+      if ($i+2 < $#lines && $lines[$i+2] =~ /^\s*}\s*$/) {
+         # trim spaces
+         $lines[$i] =~ s/\s+$//;
+
+         $lines[$i+1] =~ s/^\s+//;
+         $lines[$i+1] =~ s/\s+$//;
+
+         $lines[$i+2] =~ s/^\s+//;
+
+         push @lines2, "$lines[$i] $lines[$i+1] }";
+         $i +=2;
+         next;
+      }
+   } 
+
+   push @lines2, $lines[$i];
+}
+   
+my $new_count = scalar(@lines2);
+
+print {$ofh} join("\n", @lines2), "\n";
+
+close $ofh if $ofh != \*STDOUT;
+
+print STDERR "--------------------------------------------\n";
+print STDERR "Reduced from $old_count lines to $new_count lines\n";
+
+exit 0;

@@ -1,0 +1,102 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog dir
+
+   remove git history (log) of a repo. noramlly to save space or remove security problems in old check-ins.
+   -n       dryrun mode
+
+examples:
+
+   $prog -n $TPSUP/../rpm
+
+EOF
+
+   exit 1
+}
+
+dryrun=N
+while getopts n o;
+do
+   case "$o" in
+      n) dryrun=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+dir=$1
+
+cd $dir || exit 1
+pwd
+
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+echo ""
+
+cmd="git config --get remote.origin.url"
+echo "cmd = $cmd"
+origin=`$cmd`
+
+if [ "X$origin" = "X" ]; then
+   echo "cannot find origin of $dir"
+   exit 1
+else
+   echo "origin=$origin"
+   echo ""
+fi
+
+cmd="git rev-parse --show-toplevel"
+echo "cmd = $cmd"
+top_level=`$cmd`
+
+if [ "X$top_level" = "X" ]; then
+   echo "cannot find top_level of $dir"
+   exit 1
+else
+   echo "top_level=$top_level"
+   echo ""
+fi
+
+cd $top_level || exit 1
+
+commands="
+   rm -fr .git
+   git init
+   git add .
+   git commit -m 'initial'
+   git remote add origin $origin
+   git push --set-upstream origin master --force
+"
+if [ $dryrun = Y ]; then
+   echo "dryrun $commands"
+else 
+   echo "$commands" |while read cmd
+   do
+      if echo "$cmd" |grep '[a-zA-Z0-1]' >/dev/null; then
+         echo ""
+         echo "cmd = $cmd"
+         $cmd
+      fi
+   done
+fi
+
+echo ""
+cmd="git log"
+echo "cmd = $cmd"
+$cmd
+

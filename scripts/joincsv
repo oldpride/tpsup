@@ -1,0 +1,169 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(join_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog -ref k1-1,k1-2,... -ref k2-1,k2-2,... -join k1-3,k1-4,... -join k2-3,k2-4,... csv1 csv2
+
+   Join csv files by keys. can be more than two csv files.
+
+   -me   match_expression     perl style, cell-based, eg, -m '\$Column1==1 && \$Column2 eq "B"'
+   -xe exclude_expression     perl style, cell-based, eg, -m '\$Column3=~ /junk/ || !\$Column4'
+
+   -mp match_pattern          perl style, line-based. Can be multiple, in AND logic.
+                              eg. -e "junk1" -e "junk2"
+                                 will match both "junk1 junk2" and "junk2 junk1",
+                                 but will not match "junk1" or "junk2".
+
+   -xp exclude_pattern        perl style, line-based. Can be multiple, in AND logic.
+                              eg. -e "junk1" -e "junk2"
+                                 will match both "junk1 junk2" and "junk2 junk1",
+                                 but will not match "junk1" or "junk2".
+
+   -delimiter char            default to ','
+
+   -skip number               skip the first n lines of the file, because some files may comments
+                              above header, default to 0, no skipping.
+
+   -output output             default to STDOUT
+
+   -option setting            other options, eg,
+                                 -op InputNoHeader this indicates no header line in the input file
+                                 -op UsePosition this indicates to use cO,cl,... as column names
+
+   -header string             use this as output header
+
+   -ref ref_keys              columns used to link (like foreign key) csvs.
+                              ref keys will not be printed. To print ref key, add it into the '-join'
+
+   -join join_keys            columns to join
+   
+   -IgnoreMissingRef          if one file is missing a ref key, all rows with that key in other
+                              files are ignored (skipped)
+
+examples:
+
+   - without printing ref key
+   $prog -ref TICKER,RIC -ref TICKER,RIC -join TOTAL_EOD_POSITION -join SOD \\
+      diffcsvlong_test1.csv diffcsvlong_test2.csv | csv -
+
+   - to print ref key in '-join'
+   $prog -ref TICKER,RIC -ref TICKER,RIC -join TICKER,RIC,TOTAL_EOD_POSITION -join SOD \\
+      diffcsvlong_test1.csv diffcsvlong_test2.csv | csv -
+
+   $prog -ref alpha -ref alpha -join alpha,number -join float \\
+      joinquerycsv_test1.csv joinquerycsv_test2.csv | csv -
+
+   $prog -ref alpha -ref alpha -join alpha,number -join       float \\
+      joinquerycsv_test1.csv joinquerycsv_test2.csv | csv -
+
+   $prog -ref alpha -ref alpha -join alpha,number -join alpha,float \\
+      joinquerycsv_test1.csv joinquerycsv_test2.csv | csv -
+
+   - test -IgnoreMissingRef
+   $prog -ref alpha -ref alpha -join alpha,number -join alpha,float -IgnoreMissingRef \\
+      joinquerycsv_test1.csv joinquerycsv_test2.csv | csv -
+
+   - test header
+   $prog -ref alpha -ref alpha -join alpha,number -join alpha,float -header 'alpha1,number,alpha2,float' \\
+      joinquerycsv_test1.csv joinquerycsv_test2.csv | csv -
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $delimiter;
+my $skiplines;
+my @match_expression;
+my @exclude_expression;
+my @match_pattern;
+my @exclude_pattern;
+my $output = '-';
+my @other_options;
+my $header;
+my $common;
+my $commonon1y;
+my @ref_keystring;
+my @join_keystring;
+my $IgnoreMissingRef;
+
+GetOptions(
+   'v|verbose'        => \$verbose,
+   'd|delimiter=s'    => \$delimiter,
+   'skip=s'           => \$skiplines,
+   'me=s'             => \@match_expression,
+   'xe=s'             => \@exclude_expression,
+   'mp=s'             => \@match_pattern,
+   'xp=s'             => \@exclude_pattern,
+   'o|output=s'       => \$output,
+   'op|option=s'      => \@other_options,
+   'header=s'         => \$header,
+   'ref=s'            => \@ref_keystring,
+   'join=s'           => \@join_keystring,
+   'IgnoreMissingRef' => \$IgnoreMissingRef,
+) || usage ("cannot parse command line: ?!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my @csvs = @ARGV;
+
+$verbose && print "csvs = ", Dumper(\@csvs);
+
+my @ref_keys;
+my @join_keys;
+
+for my $string (@ref_keystring) {
+   my @keys = split /,/, $string;
+   push @ref_keys, \@keys;
+}
+
+$verbose && print "ref_keys = ", Dumper(\@ref_keys);
+
+for my $string (@join_keystring) {
+   my @keys = split /,/, $string;
+   push @join_keys, \@keys;
+}
+
+$verbose && print "join_keys = ", Dumper(\@join_keys);
+
+my $opt = {
+   MatchExps            => \@match_expression,
+   ExcludeExps          => \@exclude_expression,
+   MatchPatterns        => \@match_pattern,
+   ExcludePatterns      => \@exclude_pattern,
+   delimiter            => $delimiter,
+   skiplines            => $skiplines,
+   verbose              => $verbose,
+   JoinCsvHeader        => $header,
+   JoinCsvOutput        => $output,
+   JoinIgnoreMissingRef => $IgnoreMissingRef,
+};
+
+for my $op (@other_options) {
+   if ($op =~ /^(TrimFloats)=(.+)/) {
+      @{$opt->{$1}} = split /,/, $2;
+   } elsif ($op =~ /^(.+?)-(.+)/) {
+      $opt->{$1} = $2;
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+   
+join_csv(\@csvs, \@ref_keys, \@join_keys, $opt);
+   
+exit 0

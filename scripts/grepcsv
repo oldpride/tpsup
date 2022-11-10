@@ -1,0 +1,214 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(open_csv close_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog pattern
+   $prog pattern -
+   $prog pattern input
+
+   'pattern' is perl pattern.
+   'input' can be a file name or stdin '-'.
+
+   -csv                  output in csv format
+   -delimiter string     default to ','
+
+   -row n                only print the number n row, starting from 0.
+                         default is to print every matched row.
+
+   -skip n               skip the first n lines of the file, because some
+                         files may comments above header.
+
+   -h h1,h2,...          treat the file as a header-less file and use this header. 
+                         can be used mulitple times to give column multiple meanings.
+                         (see example)
+
+   -f field1,field2,...
+                         default to all fields
+
+   -i                    case-insensitive
+
+examples:
+
+   $prog henry tpcsv2_test.csv
+
+   $prog -delimiter '|' -header alpha,number,string,value henry tpcsv2_test_noheader.csv
+
+   $prog -delimiter '|' -h alpha,number,string,value -h a,n,s,v henry tpcsv2_test_noheader.csv
+
+END
+
+   exit 1;
+}
+
+my $csv;
+my $verbose;
+my $delimiter = ',';
+my $fields;
+my $skiplines;
+my $row;
+my @headers;
+my $insensitive;
+
+GetOptions(
+   'verbose'     => \$verbose,
+   'i'           => \$insensitive,
+   'csv'         => \$csv,
+   'delimiter=s' => \$delimiter,
+   'fields=s'    => \$fields,
+   'row=s'       => \$row,
+   'skip=s'      => \$skiplines,
+   'header=s'    => \@headers,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV || @ARGV >2;
+
+if ($delimiter eq '|' || $delimiter eq '^') {
+   $delimiter = "\\$delimiter";
+}
+
+my $opt = {
+   delimiter=>$delimiter,
+   skiplines=>$skiplines,
+};
+
+my $pattern = shift @ARGV;
+if ($insensitive) {
+   $pattern = qr/$pattern/i;
+} else {
+   $pattern = qr/$pattern/;
+}
+
+my $required;
+my @requiredColumns;
+
+if ($fields) {
+   for my $f (split /,/, $fields) {
+      $required->{$f} ++;
+      push @requiredColumns, $f;
+   }
+   $opt->{requiredColumns} = \@requiredColumns;
+}
+
+# @headers is array of strings
+# ("h1,h2,h3", "c1,c2,c3", "firstname,lastname,age")
+
+if (@headers) {
+   $opt->{SetInputHeader} = $headers[0];
+   $opt->{InputNoHeader}  = 1;
+}
+
+my $ref;
+if (!@ARGV || $ARGV[0] eq '-') {
+   $ref = open_csv('-', $opt);
+} else {
+   $ref = open_csv($ARGV[0], $opt);
+}
+
+die "cannot parse input" if !$ref;
+
+my ($ifh, $columns, $pos) = @{$ref}{qw(fh columns pos)};
+
+my @combined_columns; 
+if (@headers >1) {
+   # convert 
+   #    ("h1,h2,h3", "c1,c2,c3", "firstname,lastname,age")
+   # to
+   #    ("h1|c1|firstname", "h2|c2|lastname", "h3|c3|age")
+
+   my $dimension = scalar(@headers);
+   my $columnsList;
+   
+   for (my $i=0; $i<scalar(@headers); $i++) {
+      @{$columnsList->[$i]} = split /,/, $headers[$i];
+   }
+
+   my $numColumns = scalar(@{$columnsList->[0]});
+   for (my $j=0; $j<$numColumns; $j ++) {
+      my @slice;
+      for (my $i=0; $i<scalar(@headers); $i++) {
+         push @slice, defined $columnsList->[$i]->[$j] ? $columnsList->[$i]->[$j] : '';
+      }
+
+      push @combined_columns, join("|", @slice);
+   }
+}
+
+if ($csv) {
+   if (@requiredColumns) {
+      print join(',', @requiredColumns), "\n";
+   } else {
+      print join(',', @$columns), "\n";
+   }
+}
+
+my $matched_i = 0;
+
+while (<$ifh>) {
+   my $line = $_;
+   chomp $line;
+
+   next if $line !~ /$pattern/;
+
+   if (defined($row) && $matched_i != $row) {
+      $matched_i ++;
+      next;
+   } else {
+      $matched_i ++;
+   }
+
+   $line =~ s///;
+
+   if ($csv) {
+      if (@requiredColumns) {
+         my @a = split /$delimiter/, $line;
+
+         my @b;
+
+         for my $c (@requiredColumns) {
+            my $p = $pos->{$c};
+
+            push @b, defined($a[$p]) ? "$a[$p]" : '';
+         }
+
+         print join(",", @b), "\n";
+      } else {
+         print "$line\n";
+      }
+   } else {
+      my @a = split /$delimiter/, $line;
+
+      if (@requiredColumns) {
+         for my $c (@requiredColumns) {
+            my $p = $pos->{$c};
+            printf "%25s '%s'\n", $c, defined($a[$p]) ? "$a[$p]" : '';
+         }
+      } else {
+         for (my $i=0; $i<scalar(@$columns); $i++) {
+            if (@headers>1) {
+               printf "%25s '%s'\n", $combined_columns[$i], defined($a[$i]) ? "$a[$i]" : '';
+            } else {
+               printf "%25s '%s'\n", $columns->[$i], defined($a[$i]) ? "$a[$i]" : '';
+            }
+         }
+      }
+
+      print "\n";
+   }
+}
+
+close_csv($ref);

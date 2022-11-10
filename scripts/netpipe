@@ -1,0 +1,286 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use strict;
+use Carp;
+use IO::Socket::INET;
+use IO::Select;
+use POSIX ":sys_wait_h";
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $default_wait = 600;
+my $timeout = 10;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print <<"END";
+usage:
+
+   $prog local_port remote_host:remote_port
+
+   This script is used as net pipe. It listens at local_port as a server, and
+   connects to remote_host:remote_port as client. 
+
+   -v                  verbose mode.
+
+   -timeout n          network connection timeout seconds. default $timeout.
+
+   -wait    n          only wait this many seconds for any client coming. 
+                       default $default_wait.
+                       if '-allow' is used, default is $default_wait*10
+
+   -allow host1,host2,...
+                       only allow these hosts to connect. default to all
+
+   -deny  host1,host2,...
+                       deny these hosts to connect. default to none
+
+examples:
+
+   - to test
+   tpnc -l 4444
+   $prog 3333 localhost:4444
+   tpnc localhost 3333
+
+   - to set up selenium with a chrome browser on a remote pc at port 9222, run the following 
+     on the pc's cygwin terminal. 
+
+        $prog 9333 localhost:9222
+
+     then have chromedriver point to pc:93333
+
+END
+   exit 1;
+}
+
+sub timestamped {
+   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+   return sprintf("%04d%02d%02d %02d:%02d:%02d ", $year+1900, $mon+1, $mday, $hour, $min, $sec);
+}
+
+my $verbose;
+my $allowString;
+my $denyString;
+my $wait;
+
+GetOptions(
+   'v|verbose' =>      \$verbose,
+   'wait=s'    =>      \$wait,
+   'timeout=s' =>      \$timeout,
+   'allow=s'   =>      \$allowString,
+   'deny=s'    =>      \$denyString,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 2;
+
+my ($local_port, $remote_host_port) = @ARGV;
+
+my ($remote_host, $remote_port) = split /:/, $remote_host_port;
+
+#                         +--------------------------------+
+#   +------------+        | left server       right client |     +------------------+
+#   |left client +<------>+ (local_port)                   +<--->| right server     |
+#   +------------+        |           this script          |     |(remote_host,port)|
+#                         +--------------------------------+     +------------------+ 
+# 
+# 
+
+my $allow;
+my $deny;
+if ($allowString) {
+   for my $host ( (split(/,/, $allowString)) ) {
+      my $ip = get_ipv4($host, {verbose=>$verbose});
+      die "cannot find or confirm IP for $host\n" if !$ip;
+      print "allow host=$host, ip=$ip\n";
+      $allow->{$ip} ++;
+   }
+}
+
+if ($denyString) {
+   for my $host ( (split(/,/, $denyString)) ) {
+      my $ip = get_ipv4($host, {verbose=>$verbose});
+      die "cannot find or confirm IP for $host\n" if !$ip;
+      print "deny host=$host, ip=$ip\n";
+      $deny->{$ip} ++;
+   }
+}
+
+if (! defined $wait) {
+   if ($allow) {
+      # extend time in secure situation
+      $wait = $default_wait * 24;
+   } else {
+      $wait = $default_wait;
+   }
+}
+
+my $left_server_socket = new IO::Socket::INET (
+   #LocalHost => '127.0.0.1',
+   LocalPort => $local_port,
+   Proto => 'tcp',
+   Listen => 10,
+   Reuse => 1,
+   ReuseAddr => 1,
+   # ReusePort => 1,  #cygwin doesn't accept this because windows doesn't support it
+   Timeout => $wait,
+) or die "ERROR in Socket Creation : $!\n";
+
+my $info_by_pid;
+
+ACCEPT:
+while (1) {
+   print timestamped(), "Waiting for client connection at port $local_port for $wait seconds\n";
+   my $left_client_socket = $left_server_socket->accept();
+
+   if (! defined $left_client_socket) {
+       print timestamped(), "No new client connection for $wait seconds. Server quits\n";
+
+       # some cygwin needs this explicit server socket close() to release the 
+       # listening port; exit() will not release the port if there are still 
+       # clients connected.
+       $left_server_socket->close(); 
+       exit 0;
+   }
+
+   # get the host and port number of newly connected client,
+   my $peer_host = $left_client_socket->peerhost();   # this is actually ipv4
+   my $peer_port = $left_client_socket->peerport();
+
+   if ($allow && !$allow->{$peer_host}) {
+      print "rejected $peer_host:$peer_port because it is not in the allow list\n";
+      next ACCEPT;
+   }
+
+   if ($deny && $deny->{$peer_host}) {
+      print "rejected $peer_host:$peer_port because it is in the deny list\n";
+      next ACCEPT;
+   }
+
+   my $child_pid = fork();
+
+   die "fork() failed: $! " if ! defined($child_pid);
+
+   if ($child_pid) {
+      # this is parent
+
+      print timestamped(), "Accepted new client connection from $peer_host:$peer_port, then connect to $remote_host:$remote_port, child_pid=$child_pid\n";
+
+      $info_by_pid->{$child_pid}->{host} = $peer_host;
+      $info_by_pid->{$child_pid}->{port} = $peer_port;
+
+      while (1) {
+         my $kid = waitpid(-1, WNOHANG);
+         if (!$kid) {
+            last;
+         }
+      }
+
+      next ACCEPT;
+   } 
+
+   # this is child
+
+   my $right_server_socket = new IO::Socket::INET (
+                                 PeerHost => $remote_host,
+                                 PeerPort => $remote_port,
+                                 Proto => 'tcp',
+                                 Timeout => $timeout,
+                       );
+
+   if (!$right_server_socket) {
+      print timestamped(), "Cannot connect to $remote_host:$remote_port, then close client connetion at $peer_host:$peer_port\n";
+      $left_client_socket->close();
+      next;
+   }
+
+   my $select = IO::Select->new($left_client_socket) or die "IO::Select $!";
+   $select->add($right_server_socket) or die "IO::Select $!";
+
+   SELECT:
+   while (1) {
+      if (my @ready = $select->can_read(300)) {
+         for my $fh (@ready) {
+            if ($fh == $left_client_socket) {
+               my $data;
+
+               $left_client_socket->recv($data,1024000);
+
+               if (!$data) {
+                  print timestamped(), "client $peer_host:$peer_port quitted, then we close server side $remote_host:$remote_port\n";
+                  $right_server_socket->close();
+                  last SELECT;
+               } else {
+                  print timestamped(), "received from client $peer_host:$peer_port ", length($data), " bytes. sending to $remote_host:$remote_port\n";
+
+                  # block socket when sending
+                  $right_server_socket->blocking(1);
+
+                  $right_server_socket->send($data);
+
+                  # unblock socket when reading
+                  $right_server_socket->blocking(0);
+               }
+            } else { # $fh == $right_server_socket
+               my $data;
+
+               $right_server_socket->recv($data,1024000);
+
+               if (!$data) {
+                  print timestamped(), "remote server $remote_host:$remote_port quitted, then we close client $peer_host:$peer_port.\n";
+                  $left_client_socket->close();
+                  last SELECT;
+               } else {
+                  print timestamped(), "received from server $remote_host:$remote_port ", length($data), " bytes. sending to $peer_host:$peer_port\n";
+
+                  # block socket when sending
+                  $left_client_socket->blocking(1);
+
+                  $left_client_socket->send($data);
+
+                  # unblock socket when reading
+                  $left_client_socket->blocking(0);
+               }
+            }
+         }
+      }
+   }
+
+   exit(0);
+} 
+
+exit 0;
+
+#########################################################################
+# subs
+#########################################################################
+sub get_ipv4 {
+   my ($hostname, $opt) = @_;
+
+   my $cmd = "getent ahosts $hostname";
+   my @ahosts = `$cmd`;
+   if ($?) {
+      print "ERROR: cmd=$cmd failed: $!\n";
+      return "";
+   }
+
+   chomp @ahosts;
+
+   $verbose && print "cmd = $cmd\n   ", join("\n   ", @ahosts), "\n";
+
+   for my $line (@ahosts) {
+      if ( $line =~ /^(\d+[.]\d+[.]\d+[.]\d+)\s/) {
+         return $1;
+      }
+   }
+
+   print "ERROR: cannot find ipv4 for $hostname\n   ", join("\n   ", @ahosts), "\n";
+   return "";
+}
+

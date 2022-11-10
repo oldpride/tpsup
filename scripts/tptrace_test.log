@@ -1,0 +1,3 @@
+2021/08/24 23:59:01,123 orderid=ORD-0001,tradeid=TRD-0001,sid=400001,orderqty=4500,filledqty=1000,LastQty=600,SenderComp=BLKC
+2021/08/25 00:00:01,456 orderid=ORD-0001,tradeid=TRD-0001,sid=400001,bookid=BKG-0001,qty=600,SenderComp=BLKC
+2021/08/25 00:00:01,534 ERROR unknown SenderComp=DUMMY

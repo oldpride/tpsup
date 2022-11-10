@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# this wrapper is to shorten command line, so that instead of
+#    tptrace tptrace_myapp.cfg ...
+# we can type
+#    tptrace_myapp ...
+
+prog=`basename $0`
+dir=`dirname $0`
+
+prefix=`echo $prog|cut -d_ -f1`
+
+# if the $prefix is not the binary name, then copy this file
+# and replace $prefix (below) with the binary name
+# eg
+#    tptrace $dir/$prog.cfg -c $prog  "$@"
+$prefix $dir/$prog.cfg -c $prog  "$@" 

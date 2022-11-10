@@ -1,0 +1,211 @@
+#!/bin/bash
+
+prog=`basename $0`
+dir=`dirname $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog old_pattern new_string f1 f2 ...
+
+   $prog -s sed_clause f1 f2 ...
+
+   'sed_clause'    eg, s/old_pattern/new_pattern/g
+   'f1 f2 ...'     can be both file and directory
+
+   -m pattern      only files with name matching this pattern
+
+   -x pattern      exclue files with name to matching this pattern
+
+   -i              case-insensitive when handling '-x' and '-m'.
+                   default to case-sensitive.
+                   note: old sed command doesn't support case-insensitive.
+
+   -f force        the change without asking for confirmation
+
+   -d              debug mode
+
+   -v              verbose mode
+
+   -n              dry run. just list the changes without making the changes
+
+   -s              the next arg is a sed_clause, eg s/old_pattern/new_pattern/g
+
+   -p              use perl, this way '-i' case-insensitive also works on the pattern
+
+   -y              when prompt, simple return means 'Y'. default to 'N';
+
+example:
+
+   - change /usr/bin/bash (not available in Ubuntu Linux) to /bin/bash
+   $prog /usr/bin/bash /bin/bash .
+
+   - the following commands are the same
+   $prog uat prod          junk.txt junkdir
+   $prog -s "s/uat/prod/g" junk.txt junkdir
+
+   - when patten contains '/', use a. different separator, eg,
+   $prog -s "s:/apps/data/:/apps/archive:/g" junk.txt junkdir
+
+   - only change *.properties files under current dir recursively
+   $prog -m .properties old_string new_string .
+   
+   - use perl to do case-insensitive replacement, the following commands
+   achieves the same goal.
+   $prog -m .properties -p -i       OLD_PATTERN new_string    junkdir
+   $prog -m .properties -p -i -s "s/OLD_PATTERN/new_string/"  junkdir
+   $prog -m .properties -p    -s "s/OLD_PATTERN/new_string/i" junkdir
+
+EOF
+
+   exit 1
+}
+
+force=N
+exclude='_NO_EXCLUDE'
+match='.*'
+case=''
+verbose=N
+debug=N
+dryrun=N
+sedarg=N
+perl=N
+perlcase=''
+default=N
+
+while getopts m:x:fivnsdpy o;
+do
+   case "$o" in
+      f) force=Y;;
+      v) verbose=Y;;
+      d) debug=Y;;
+      p) perl=Y;;
+      n) dryrun=Y;;
+      s) sedarg=Y;;
+      i) case="-i";perlcase=i;;
+      m) match=$OPTARG;;
+      x) exclude=$OPTARG;;
+      y) default=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac 
+done
+
+shift $((OPTIND-1))
+
+if [ $sedarg = Y ]; then
+   if [ $# -lt 2 ]; then
+      echo "wrong number of args"
+      usage
+   fi
+
+   sed_clause=$1
+   shift
+else
+   if [ $# -lt 3 ]; then
+     echo "wrong number of args"
+     usage
+   fi
+
+   old_pattern=$1
+   new_string=$2
+   shift
+   shift
+
+   sep=not_found
+
+   for c in / : % '|'
+   do
+      if [[ "$old_pattern" =~ [${c}] ]]; then
+         continue
+      fi
+
+      if [[ "$new_string" =~ [${c}] ]]; then
+         continue
+      fi
+
+      sep=$c
+      break
+   done
+
+   if [ $sep = not_found ]; then
+      echo "cannot find a good separator for old_pattern='$old_pattern', new_string='$new_string'"
+      exit 1
+   fi
+
+   sed_clause="s${sep}${old_pattern}${sep}${new_string}${sep}g"
+fi
+
+tmpfile=`get_tmp /var/tmp $prog`
+
+if [ $? -ne 0 ]; then
+   echo "cmd=get_tmp /var/tmp $prog failed" >&2
+   exit 1
+fi
+
+if [ $perl = Y ]; then
+   echo perl_clause=${sed_clause}${perlcase}
+else
+   sed_clause=${sed_clause}${perlcase}
+fi
+
+for d in $@
+do
+   # .?* will match hiden files and folders, eg, .., .git,
+   # but will not match current folder '.'
+   for f in `find $d -mount \( -name .?\* -o -name \*\~ \) -prune -o -type f -print|egrep $case "$match" |egrep -v $case "$exclude"`
+   do
+      [ $verbose = Y ] && echo $f
+
+      if [ $perl = N ]; then
+         [ $debug = Y ] && set -x
+         sed "$sed_clause" $f >$tmpfile
+         rc=$?
+         set +x
+
+         if [ $rc -ne 0 ]; then
+            echo "cmd=sed "$sed_clause" $f failed" >&2
+            exit 1
+         fi
+      else
+         [ $debug = Y ] && set -x
+         cat $f | /usr/bin/perl -e "{ while (<>) { ${sed_clause}${perlcase}; print \$_; } }" >$tmpfile
+         rc=$?
+         set +x
+
+         if [ $rc -ne 0 ]; then
+            echo "cmd=perl $file failed" >&2
+            exit 1
+         fi
+      fi
+
+      if diff $f $tmpfile; then
+         # no change
+         continue;
+      else
+         if [ $force = N -a $dryrun = N ]; then
+            echo ""
+            echo "We will change $f"
+
+            echo "Do you want to change Y|N ? [$default]"
+            read answer
+
+            if [ "X$answer" = "X" ]; then
+               answer=$default
+            fi
+
+            if [ "$answer" != "Y" -a "$answer" != "y" ]; then
+               echo "Answer is "$answer". Therefore, skipped $f."
+               continue;
+            fi
+         fi
+
+         if [ $dryrun = N ]; then
+            cat $tmpfile > $f
+            echo ""
+            echo "changed $f"
+            echo ""
+         fi
+      fi
+   done
+done

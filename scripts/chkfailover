@@ -1,0 +1,195 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $delimiter = ":";
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR <<"END";
+Usage:
+
+   $prog service side    map.csv
+
+   This script check mapping during failover process.
+
+   DNS mapping between logical name and physical prod and dr name.
+   NFS mount between mount points name and nfs server name.
+
+   "service" can be "dns", "nfs", or "all"
+   "side"    can be "prod" or "dr"
+   "map.csv" contains the mapping.
+
+   -v          verbose mode
+
+Examples:
+
+   $prog dns prod chkfailover_test.csv
+   $prog nfs dr   chkfailover_test.csv
+   $prog all prod chkfailover_test.csv
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   ) || usage ("cannot parse command line: $!");
+usage("wrong number of args") if @ARGV != 3;
+
+my ($asked_service, $side, $file) = @ARGV;
+
+usage "unknown serv='$asked_service'" if $asked_service !~ /^(nfs|dns|all)$/i;
+
+usage "unknown side='$side'" if $side !~ /^(prod|dr)$/i;
+
+my $error = 0;
+my $rowno = 0;
+  
+open my $fh, "<$file" or die "cannot read $file";
+
+while (<$fh>) {
+   $rowno ++;
+
+   next if /^\s*#/; 
+   next if /^\s*$/; 
+   next if /^service,/;  # skip header 
+
+   chomp;
+
+   my $line = $_;
+
+   my ($serv, $logical, $prod, $dr, $comment) = split /,/, $line, 5; 
+
+   my $physical = ($side =~ /^prod/i) ? $prod : $dr;
+
+   if (!$physical) {
+      print "ERROR: bad format at row #$rowno: $line\n";
+   }
+                  
+   if ($serv =~ /dns/i && $asked_service =~ /dns|all/i) {
+      my $logical_ip  = get_ipv4($logical);
+      my $physical_ip = get_ipv4($physical);
+   
+      if ($logical_ip && $physical_ip && $logical_ip eq $physical_ip) {
+         printf  "OK:    DNS %-30s matches %-4s %-30s %-16s\n", $logical, $side, $physical, $physical_ip;
+      } else {
+         print   "ERROR: DNS $logical $logical_ip doesn't match $side $physical $physical_ip\n";
+         $error ++;
+      }
+   } 
+
+   if ($serv =~ /nfs/i && $asked_service =~ /nfs|all/i) {
+      my $expected = $physical;
+      my $actual = get_device($logical);
+   
+      if ($expected eq $actual) {
+         printf  "OK:    NFS %-30s mounted %-4s %-30s as expected\n", $logical, $side, $actual;
+      } else {
+         print   "ERROR: NFS $logical mounted $side at $actual, not $expected\n";
+         $error ++;
+      }
+   }
+}
+
+close $fh;
+
+if ($error) {
+   print "ERROR: total $error errors\n";
+} else {
+   print "OK:    All good.\n";
+}
+
+exit $error;
+
+##############################################################
+# subs
+##############################################################
+   
+sub get_device {
+   my ($mount, $opt) = @_;
+
+   my $cmd = "/bin/df -k $mount";
+   my @lines = `$cmd`;
+   if ($?) {
+      print "ERROR: cmd=$cmd failed: $!\n";
+      $error ++;
+      return "";
+   }
+
+   chomp @lines;
+
+   $verbose && print "cmd = $cmd\n   " . join("\n   ", @lines), "\n";
+
+   # tian@linux1:/home/tian/github/tpsup/scripts$ df -k /
+   # Filesystem     1K-blocks     Used Available Use% Mounted on
+   # /dev/sda2      122029712 36739600  79048320  32% /
+
+   my @a = split /\s+/, $lines[1], 7;
+   my $device = $a[0];
+   my $expected_mount = $a[5];
+
+   if ($expected_mount ne $mount) {
+      print "ERROR: '$mount' actually mounted at '$expected_mount'\n";
+      $error ++;
+      return "";
+   }
+
+   return $a[0];
+}
+
+sub get_ipv4 {
+   my ($hostname, $opt) = @_;
+
+   # https://unix.stackexchange.com/questions/50365/getent-hosts-prints-ipv6-getent-ahosts-prints-ipv4
+   # Both getent hosts and getent ahosts can potentially print both IPv4 and IPv6 addresses,
+   # but they decide which address(es) to print differently (that's the point of having two
+   # different commands).
+
+   # hosts calls gethostbyname2 (the IPv6-supporting variant of gethostbyname). The behavior
+   # is hard-coded: look up an IPv6 address, and if none exists, look up an IPv4 address.
+
+   # ahosts calls getaddrinfo. This function enumerates all protocols for a given name, so
+   # it can return both IPv4 and IPv6 addresses in the same call. What it returns is 
+   # determined by the settings in /etc/gai.conf. Because many applications are still
+   # struggling to cope with IPv6, most distributions prefer IPv4 by default and only use
+   # IPv6 by explicit request.
+
+   # SOCK_STREAM (reliable stream-oriented service or Stream Sockets)
+   # SOCK_DGRAM (datagram service or Datagram Sockets)
+   # SOCK_SEQPACKET (reliable sequenced packet service), or
+   # SOCK_RAW (raw protocols atop the network layer).
+
+   my $cmd = "getent ahosts $hostname";
+   my @ahosts = `$cmd`;
+   if ($?) {
+      print "ERROR: cmd=$cmd failed: $!\n";
+      $error ++;
+      return "";
+   }
+
+   chomp @ahosts;
+
+   $verbose && print "cmd = $cmd\n   ", join("\n   ", @ahosts), "\n"; 
+
+   for my $line (@ahosts) {
+      if ( $line =~ /^(\d+[.]\d+[.]\d+[.]\d+)\s/) {
+         return $1;
+      }
+   }
+
+   print "ERROR: cannot find ipv4 for $hostname\n   ", join("\n   ", @ahosts), "\n"; 
+   $error ++;
+   return "";
+}

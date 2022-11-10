@@ -1,0 +1,11 @@
+/* ---------- p2_job1 -------------*/
+  
+insert_job: p2_job1 job_type: CMD
+command: sleep 60
+machine: juno
+owner: jerry@juno
+permission:
+alarm_if_fail: 1
+profile: /etc/profile
+condition: s(test_box1)
+

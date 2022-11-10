@@ -1,0 +1,88 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog path
+
+   reset the whole repo
+
+   -n       dryrun mode
+   -f       force without asking for confrimation
+
+
+examples:
+
+   $prog .
+
+EOF
+
+   exit 1
+}
+
+dryrun=N
+force=N
+while getopts nf o;
+do
+   case "$o" in
+      n) dryrun=Y;;
+      f) force=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+path=$1
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+echo ""
+echo " --------------------- begin git status ---------------------"
+echo ""
+git status
+echo ""
+echo " --------------------- end   git status ---------------------"
+echo ""
+
+commands="
+   git fetch --all
+   git reset --hard origin/master
+"
+
+if [ $dryrun = Y ]; then
+   echo "dryrun $commands"
+else
+   echo "$commands"
+
+   if [ $force = N ]; then
+      echo "Do you want to run the commands Y|N ? [N]"
+      read answer
+
+      if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+          echo "Answer is '$answer'. Therefore, skipped $f."
+          exit 0
+      fi
+   fi
+
+   echo "$commands" |while read cmd
+   do
+      if echo "$cmd" |grep '[a-zA-Z0-1]' >/dev/null; then
+         echo ""
+         echo "cmd = $cmd"
+         $cmd
+      fi
+   done
+fi
+
+

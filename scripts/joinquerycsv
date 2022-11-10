@@ -1,0 +1,159 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(join_query_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog link_expression csvl csv2 ...
+
+   Join and link csv by expression
+
+The following switches are applied pre-join
+
+   -me   match_expression      perl style, cell-based, eg, -m '\$Column1 ==1 && \$Column2 eq "B"'
+   -xe exclude_expression      perl style, cell-based, eg, -m '\$Column3=~ /junk/ || !\$Column4'
+
+   -mp match_pattern           perl style, line-based. Can be multiple, in AND logic,
+                               eg. -e "junk1" -e "junk2"
+                                 will match both "junk1 junk2" and "junk2 junk1",
+                                 but will not match "junk1" or "junk2".
+
+   -xp exclude_pattern         perl style, line-based. Can be multiple, in AND logic,
+                               eg. -e "junk1" -e "junk2"
+                                  will match both "junk1 junk2" and "junk2 junk1",
+                                  but will not match "junk1" or "junk2".
+
+   -delimiter char             default to ','
+
+   -skip number                skip the first n lines of the file, because some files may comments
+                               above header, default to 0, no skipping.
+
+The following switches are applied post-join
+
+   -noheader                   don't print output header.
+
+   -f f1,f2,...                only output these fields, eg, first csv's name column is: t1_name.
+                               -f '' will disable all original columns.
+
+   -ee new_col=exp             export new columns, perl style, can set multiple times
+                               -ee 'sum=\$c1+\$c2,diff=\$c1-\$c2,comment="hardcode"'
+   
+   -te new_col=exp             temporary new columns, perl style, can set multiple times
+                               -te 'sum=\$c1+\$c2,diff=\$c1-\$c2,comment="hardcode"'
+                               temporary new columns can be used for sort key, match expression
+                               but will not be printed out
+
+   -output output              default to STDOUT
+
+The following switches are applied all time
+
+   -option setting             other options, eg,
+                                   -op InputNoHeader this indicates no header line in the input file
+                                   -op UsePosition this indicates to use cO,c1,... as column names
+
+examples:
+
+   $prog '\${t1_alpha} eq \${t2_alpha}' joinquerycsv_test1.csv joinquerycsv_test2.csv
+
+   $prog '\${t1_number} == \${t2_float}' joinquerycsv_test1.csv joinquerycsv_test2.csv
+
+   !!! Better to add a 'defined()' check because 'uninitialized == uninitialized' is always true
+   $prog 'defined(\${t1_alpha}) && defined(\${t2_alpha}) && \${t1_alpha} eq \${t2_alpha}' \\
+       joinquerycsv_test1.csv joinquerycsv_test2.csv
+
+   $prog -f t1_alpha,t2_float '\${t1_alpha} eq \${t2_alpha}' joinquerycsv_test1.csv joinquerycsv_test2.csv
+
+   - disable all original columns and output new columns
+   $prog -f '' -ee 'name=\${t1_name},float=\${t2_float},plus1=\${t2_float}+1' \\
+      '\${t1_alpha} eq \${t2_alpha}' joinquerycsv_test1.csv joinquerycsv_test2.csv
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $delimiter;
+my $skiplines;
+my @match_expression;
+my @exclude_expression;
+my @match_pattern;
+my @exclude_pattern;
+my $output = '-';
+my @other_options;
+my $fieldString;
+my @ExportExps;
+my @TempExps;
+
+GetOptions(
+   'v|verbose'      => \$verbose,
+   'djdelimiter=s'  => \$delimiter,
+   'skip=s'         => \$skiplines,
+   'me=s'           => \@match_expression,
+   'xe=s'           => \@exclude_expression,
+   'mp=s'           => \@match_pattern,
+   'xp=s'           => \@exclude_pattern,
+   'o|output=s'     => \$output,
+   'op|option=s'    => \@other_options,
+   'f|field=s'      => \$fieldString,
+   'ee=s'           => \@ExportExps,
+   'te=s'           => \@TempExps,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 3;
+
+my $expression = shift @ARGV;
+
+my @csvs = @ARGV;
+
+$verbose && print STDERR "csvs = ", Dumper(\@csvs);
+
+my $opt = {
+   MatchExps       => \@match_expression,
+   ExcludeExps     => \@exclude_expression,
+   MatchPatterns   => \@match_pattern,
+   ExcludePatterns => \@exclude_pattern,
+   delimiter       => $delimiter,
+   skiplines       => $skiplines,
+   verbose         => $verbose,
+   JQOutput        => $output,
+};
+
+if (defined $fieldString) {
+   @{$opt->{SelectColumns}} = split /,/, $fieldString;
+}
+
+if (@ExportExps) {
+   $opt->{ExportExps} = \@ExportExps;
+}
+
+if (@TempExps) {
+   $opt->{TempExps} = \@TempExps;
+}
+
+for my $op (@other_options) {
+   if ($op =~ /^(TrimFloats)=(.+)/) {
+      @{$opt->{$1}} = split /,/, $2;
+   } elsif ($op =~ /^(.+?)=(.+)/) {
+      $opt->{$1} = $2;
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+my $error = 0;
+
+join_query_csv(\@csvs, $expression, $opt);

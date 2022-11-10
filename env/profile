@@ -1,0 +1,10 @@
+# append this to ~/.profile 
+
+set -o vi
+unset TMOUT
+
+tpsup () { . ~/sitebase/github/tpsup/profile }
+tpsup # depending on situation, this will be kept off, and will be called on demand
+
+tpscripts
+git status

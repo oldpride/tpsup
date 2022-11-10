@@ -1,0 +1,89 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::XML qw(query_xml);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog file.log
+
+   parse a log with inline xml message, eg, those from MQ
+
+   -v verbose
+
+   -m MatchPattern        perl-style, can use once
+
+   -x ExcludePattern      perl-style, can exclude once
+
+   -path string           perl-style, eg, -path {FIXSession}->{suppress-out}
+                          can repeat
+
+   -ForceArray a,b,c      force this tags into array.
+
+   -KeyAttr tag=attr      can repeat, eg, -KeyAttr tl=a1 -KeyAttr t2=a2
+
+   -addRoot string        add a root node
+
+examples:
+
+   $prog parse_xml_log_test.log
+
+   $prog -m Gees parse_xml_log_test.log
+
+   # get ARTIST for 1990 
+   $prog -m 1990 -path 'map {\$_->{ARTIST}} grep {\$_->{YEAR} == 1990} \@{\$r->{CD}}' parse_xml_log_test.log
+
+END
+
+   exit 1;
+}
+
+my $tag_string;
+my $verbose;
+my %attr_by_key;
+my $ForceArrayString;
+my @paths;
+my $addRoot;
+my $MatchPattern;
+my $ExcludePattern;
+
+GetOptions(
+   'v|verbose'    => \$verbose,
+   'ForceArray=s' => \$ForceArrayString,
+   'KeyAttr=s'    => \%attr_by_key,
+   'p|path=s'     => \@paths,
+   'addRoot=s'    => \$addRoot,
+   'm=s'          => \$MatchPattern,
+   'x=s'          => \$ExcludePattern,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1 ;
+
+my $file = shift @ARGV;
+
+my $rows = query_xml($file, {
+   KeyAttr        => \%attr_by_key,
+   ForceArray     => $ForceArrayString,
+   verbose        => $verbose,
+   paths          => \@paths,
+   AddRootNode    => $addRoot,
+   MatchPattern   => $MatchPattern,
+   ExcludePattern => $ExcludePattern,
+   DumpInlineXml  => 1,
+   yamlOutput     => 1,
+});
+
+exit 0;
+   

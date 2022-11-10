@@ -1,0 +1,316 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
+$Data::Dumper::Terse = 1;
+
+use Getopt::Long;
+use Carp;
+use File::Basename;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   my $TwoDaysAgo = `date -d '-2 days' +%Y%m%d`; chomp $TwoDaysAgo;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog config    - show configuration
+   $prog check     - check whether local files are up to to date
+   $prog sync      - sync up local files.
+
+   deploy using tpdist.
+
+   -v                verbose mode
+
+   -n|-dryrun        dryrun
+
+   -c  cfg_file      default to \$SITESPEC/cfg/tpdist_deploy.cfg
+   -a  app_name      app_name is defined in config file
+
+   -lb local_base    default to \$SITEBASE
+
+   -rs remote_host:remote_port
+                     this overrides config 
+   -rb remote_base
+                     this overrides config 
+
+   -rd remote_dirs
+                     this overrides config.
+                     eg. -rd "dir1,dir2"
+
+   -ex id1,id2,...   only excludes with these ids
+
+   -nx id1,id2,...   skip excludes with these ids
+
+examples:
+
+   $prog        config
+   $prog        check
+   $prog        sync
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $cfg_file;
+my $app_name;
+my $local_base;
+my $user_remote_server;
+my $user_remote_base;
+my $user_remote_dirs;
+my $dryrun;
+my $only_exclude_ids;
+my $skip_exclude_ids;
+
+GetOptions(
+   'verbose'     => \$verbose,
+   'c=s'         => \$cfg_file,
+   'a=s'         => \$app_name,
+   'n|dryrun'    => \$dryrun,
+   'lb=s'        => \$local_base,
+   'rs=s'        => \$user_remote_server,
+   'rb=s'        => \$user_remote_base,
+   'rd=s'        => \$user_remote_dirs,
+   'ex=s'        => \$only_exclude_ids,
+   'nx=s'        => \$skip_exclude_ids,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($action) = @ARGV;
+
+my $flag;
+if ($action eq 'check') {
+   $flag = "-n";
+} elsif ($action eq 'sync' || $action eq 'config') {
+   $flag = "";
+} else {
+   usage("unknown action='$action'");
+}
+
+our $deploy_cfg;
+if (!$cfg_file) {
+   my $sitedir = $ENV{SITESPEC};
+   die "\$SITESPEC is not defined" if !defined $sitedir;
+
+   $cfg_file = "$sitedir/cfg/tpdist_deploy.cfg";
+   die "default cfg $cfg_file not found" if ! -f $cfg_file;
+} else {
+   die "cfg $cfg_file not found" if ! -f $cfg_file;
+}
+
+my $string = `cat $cfg_file`;
+die "cannot read $cfg_file" if $?;
+
+eval $string;
+if ($@) {
+   croak "ERROR in parsing $cfg_file: $@\n";
+   return undef;
+}
+
+($verbose || $action eq 'config') && print "deploy_cfg = ", Dumper($deploy_cfg);
+
+exit 0 if $action eq 'config';
+
+$app_name = 'default' if !$app_name; 
+
+my $app_cfg = $deploy_cfg->{app}->{$app_name};
+
+die "app_name='$app_name' is not defined" if ! defined $app_cfg;
+
+$verbose && print "app_cfg = ", Dumper($app_cfg);
+
+
+my           ($remote_host, $remote_port, $remote_dirs, $remote_base, $local_hosts, $local_os, $exclude) = 
+@{$app_cfg}{qw(remote_host   remote_port   remote_dirs   remote_base   local_hosts   local_osu  exclude)};
+
+my $uname = `uname -a`; chomp $uname;
+die "local os='$uname' doesn't match '$local_os'" 
+   if defined($local_os) && $uname !~ /$local_os/;
+
+my $dict = {};
+my @ua = split /\s/, $uname;
+@{$dict}{qw(V_MAJOR V_MINOR V_PATCH)} = split /[.]/, $ua[2];
+
+if ($ua[0] =~ /Linux/) {
+   $dict->{OS_FAMILY} = "Linux";
+} elsif ($ua[0] =~ /CYGWIN/) {
+   $dict->{OS_FAMILY} = "Windows";
+} else {
+   $dict->{OS_FAMILY} = "Unknown";
+}
+
+# this is useless so far
+#my @env_vars = qw(SITEBASE SITESPEC TPSUP);
+#for my $ev (@env_vars) {
+#   die "$ev is not defined in env." if ! $ENV{$ev};
+#   $dict->{$ev} = $ENV{$ev};
+#}
+
+$verbose && print "dict = ", Dumper($dict);
+
+if ($user_remote_server) {
+   ($remote_host, $remote_port) = split /:/, $user_remote_server;
+}
+
+if ($user_remote_base) {
+   $remote_base = $user_remote_base;
+}
+
+if ($user_remote_dirs) {
+   $remote_dirs = [ split /;/, $user_remote_dirs ];
+}
+
+my $hostname = `hostname |cut -d. -f1`; chomp $hostname;
+
+if ($local_hosts ne 'localhost') {
+   # TODO: need rework this logic
+   die "hostname='$hostname' is not part of '$local_hosts'" 
+      if $local_hosts !~ /$hostname/ && $hostname !~ /$local_hosts/;
+}
+
+die "remote_host='$remote_host' and localhost='$hostname' are the same. rsync instead" 
+   if $remote_host =~ /$hostname/ || $hostname =~ /$remote_host/;
+
+my $me = `id |cut -d\\( -f2|cut -d\\) -f1`; chomp $me;
+
+if (!$local_base) {
+   $local_base = $ENV{SITEBASE};
+   die "\$SITEBASE is not defined" if !defined $local_base;
+}
+
+my $parent_base = dirname($local_base);
+my $real_parent_base = `cd $parent_base || exit 1; pwd -P`;
+$? && die "cd $parent_base failed";
+chomp $real_parent_base;
+
+my $real_local_base = "$real_parent_base/" . basename($local_base);
+
+my $owner;
+my $target;
+if ( -e $real_local_base ) {
+   $owner = `/bin/ls -lLd $real_local_base|awk '{print \$3}'`; chomp $owner;
+   print "INFO: real_local_base $real_local_base owner=$owner\n";
+   $target = $real_local_base;
+} else {
+   $owner = `/bin/ls -lLd $real_parent_base|awk '{print \$3}'`; chomp $owner;
+   print "INFO: real_parent_base $real_parent_base owner=$owner\n";
+   $target = $real_parent_base;
+}
+
+die "target $target is owned by $owner, not me ($me)" if $owner ne $me;
+
+my $exclude_pattern = "[.]git/|[.]sw[op]|[.]nfs|[.]idea|[.]github|__pycache__";
+if (defined $exclude) {
+   $verbose && print "exclude = ", Dumper($exclude);
+
+   my $excludes;
+   my $type = ref($exclude);
+   if (!$type) {
+      # this is a scalar, string
+      $excludes = [{pattern=>$exclude}];
+   } elsif ($type eq 'HASH') {
+      $excludes = [ $exclude ];
+   } elsif ($type eq 'ARRAY') {
+      $excludes = $exclude;
+   } else {
+      die "unsupport type='$type' of exclude = ", Dumper($exclude);
+   }
+
+   my $only_id;
+   my $skip_id;
+
+   if ($only_exclude_ids) {
+      for my $id (split(/,/, $only_exclude_ids)) {
+         $only_id->{$id} ++;
+      }
+   }
+
+   if ($skip_exclude_ids) {
+      for my $id (split(/,/, $skip_exclude_ids)) {
+         $skip_id->{$id} ++;
+      }
+   }
+
+   for my $ex (@$excludes) {
+      die "missing key='pattern' at ", Dumper($ex) if ! exists $ex->{pattern};
+
+      if (exists $ex->{host}) {
+         # TODO: rework this logic
+         my $host_pattern = $ex->{host};
+         if ($hostname !~ /$host_pattern/ && $host_pattern !~ /$hostname/) {
+            $verbose && print "exclude skipped because hostname='$hostname' and pattern='$host_pattern' not match\n";
+            next;
+         }
+      }
+
+      # print __LINE__, "\n";
+
+      if (exists $ex->{id}) {
+         my $id = $ex->{id};
+         next if exists $skip_id->{$id};
+         next if $only_id && !$only_id->{$id};
+      }
+
+      my $file_pattern = resolve_scalar_var_in_string($ex->{pattern}, $dict);
+
+      $exclude_pattern .= "|$file_pattern";
+   }
+}
+
+for my $sub_dir (@$remote_dirs) {
+   $sub_dir = resolve_scalar_var_in_string($sub_dir, $dict);
+   my $sub_base = dirname($sub_dir);
+   my $cmd = qq(tpdist -q -timeout 3600 client $remote_host $remote_port $flag)
+           . qq( --exclude '$exclude_pattern')
+           . qq( "$remote_base/$sub_dir" "$local_base/$sub_base");
+
+   if ($dryrun) {
+      print "\nDRYRUN: $cmd\n";
+   } else {
+      print "\n$cmd\n";
+      system($cmd);
+   }
+}
+
+exit 0;
+
+#######################################################################################
+# subs 
+#######################################################################################
+
+sub resolve_scalar_var_in_string {
+   my ($clause, $Dict) = @_;
+
+   return $clause if !$clause;
+
+   # scalar_vars is enclosed by double curlies {{ ... }},
+   my @scalar_vars = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)\}\}/g);  # get all scalar vars
+
+   return $clause if !@scalar_vars;   # return when no variable found
+
+   my $seen;
+   for my $k (@scalar_vars) {
+      next if $seen->{$k};
+
+      $seen->{$k} = 1;
+
+      die "cannot resolve {{$k}} in $clause" if ! exists $Dict->{$k};
+
+      $clause =~ s:\{\{$k\}\}:$Dict->{$k}:g;
+   }
+
+   return $clause;
+
+}
+

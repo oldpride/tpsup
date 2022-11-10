@@ -1,0 +1,138 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+use LWP;
+use WWW::Mechanize;
+use HTTP::Cookies;
+#use IO::Socket::SSL qw();
+use TPSUP::LOCK qw(get_entry_by_key);
+use Encode qw();
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog any
+
+description:
+
+
+examples:
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+) || usage("cannot parse command line: $!");
+
+#usage("wrong number of args") if @ARGV != 1;
+
+
+my $login_url = 'https://www.livingstonchinese.org/LCA2';
+my $entry = get_entry_by_key('lca_tian');
+die "get_entry_by_key('lca_tian') failed" if !$entry;
+
+my $username = $entry->{user};
+my $password = $entry->{decoded};
+
+my $cookie_jar = HTTP::Cookies->new(
+  file => "$ENV{'HOME'}/.tpsup/cookies_$prog.txt",
+  autosave => 1,
+  # the cookies might be expired, or requested to be discarded, 
+  # so,construct your $cookie_jar with ignore_discard set to 1:
+  ignore_discard => 1,
+);
+
+my $mech = WWW::Mechanize->new(
+   agent => 'Mozilla/5.0 (X11; Linux x86_64)',
+
+   # Enable strict form processing to catch typos and non-existant form fields.
+   strict_forms => 1,
+
+   # Checks each request made to see if it was successful
+   autocheck => 1,
+
+   cookie_jar => $cookie_jar,
+
+   agent_alias => 'Linux Mozilla',
+);
+
+#$mech->agent_alias('Linux Mozilla');
+
+$mech-> get($login_url);
+
+if ( $mech->content() =~ /login-greeting/) {
+   print "already logged in\n";
+} else {
+   print "sending login/password\n";
+
+    # # <form action="https://www.livingstonchinese.org/LCA2/index.php/component/users/?Itemid=103" method="post" id="login-form" class="form-inline">
+    # die "login-form not found" if !$mech->form_id('login-form');
+    # 
+    # # $mech->field( $name, $value, $number )
+    # # Given the name of a field, set its value to the value specified. This applies to the current form (as set by the form_name() or form_number() method or defaulting to the first form on the page).
+    # 
+    # # <div id="form-login-username" class="control-group">
+    # #   <input id="modlgn-username" type="text" name="username" class="input-small" tabindex="0" size="18" placeholder="Username" />
+    # # $mech->field('form-login-username' => $username);
+    # $mech->field('username' => $username);
+    # 
+    # # <div id="form-login-password" class="control-group">
+    # #    <input id="modlgn-passwd" type="password" name="password" class="input-small" tabindex="0" size="18" placeholder="Password" />
+    # #$mech->field('form-login-password' => $password);
+    # $mech->field('password' => $password);
+    # 
+    # # <button type="submit" tabindex="0" name="Submit" class="btn btn-primary login-button">Log in</button>
+    # $mech->click_button(name => 'Submit');
+     
+   $mech->submit_form(
+      form_id => 'login-form',
+      fields  => {
+         'username' => $username,
+         'password' => $password,
+      },
+   );
+   
+   {
+      my $content = $mech->content();
+      if ($verbose) {
+         print Encode::encode('utf8', $content);
+      } else {
+         print "got content\n";
+      }
+   }
+}
+
+$verbose && print "cookies = ", $mech->cookie_jar->as_string(), "\n";
+
+# <ul class="nav menu nav-pills mod-list"> <li class="item-103 default current active"><a href="/LCA2/index.php" >Latest News</a></li><li class="item-104"><a href="/LCA2/index.php/join-us" >Join Us</a></li><li class="item-105"><a href="/LCA2/index.php/search" >Search</a></li><li class="item-106"><a href="/LCA2/index.php/member-only" >Member Only</a></li><li class="item-108"><a href="/LCA2/index.php/my-account" >My Account</a></li><li class="item-102"><a href="/LCA2/index.php/contact-us" >Contact Us</a></li><li class="item-135 deeper parent"><a href="/LCA2/index.php/board-internal" >Board Internal</a><ul class="nav-child unstyled small"><li class="item-107"><a href="/LCA2/index.php/board-internal/board-internal-articles" >Board Internal - Articles</a>
+
+$mech->follow_link(text => 'My Account');
+#$mech->follow_link(url_regex => qr/member-only/);
+
+{
+   {
+      my $content = $mech->content();
+      if ($verbose) {
+         print Encode::encode('utf8', $content);
+      } else {
+         print "got content\n";
+      }
+   }
+}
+

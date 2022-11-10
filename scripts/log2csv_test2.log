@@ -1,0 +1,8 @@
+INFO 08-24-2021 09:41:00,000 aggUnit=Spread, instrument=IBM, Qty=100000, Type=SOD
+INFO 08-24-2021 09:41:00,000 aggUnit=Spread, instrument=GOOG, Qty=35000, Type=SOD
+INFO 08-24-2021 09:41:00,000 aggUnit=Spread, instrument=AAPL, Qty=2300, Type=SOD
+INFO 08-24-2021 09:41:00,000 aggUnit=Spread, instrument=IBM, Qty=200000, Type=DAY
+INFO 08-24-2021 09:41:00,000 aggUnit=Arb, instrument=IBM, Qty=9000, Type=SOD
+INFO 08-24-2021 09:41:00,000 aggUnit=Arb, instrument=GOOG, Qty=22000, Type=SOD
+INFO 08-24-2021 09:41:00,000 aggUnit=Arb, instrument=AAPL, Qty=700, Type=SOD
+INFO 08-24-2021 09:41:00,000 aggUnit=Arb, instrument=IBM, Qty=4500, Type=DAY

@@ -1,0 +1,386 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(
+   update_csv_inplace
+   delete_csv_inplace
+   query_csv2
+);
+   
+use TPSUP::UTIL qw(
+   get_exps_from_string
+   get_ExpHash_from_ArrayOfStrings
+   insert_namespaces
+);
+   
+my $prog = $0; $prog =~ s:.*/::;
+   
+sub usage {
+   my ($message) = @_;
+   
+   print "$message\n" if $message;
+   
+   print STDERR << "END";
+usage:
+   
+   $prog file.csv
+   
+   -me   match_expression       perl style, cell-based, eg, -m '\$Column1 == 1 && \$Column2 eq "B"'
+   -xe exclude_expression       perl style, cell-based, eg, -m '\$Column3 =~ /junk/ || !\$Column4'
+   
+   -mp match_pattern            perl style, line-based. Can use multiple times, in AND logic.
+                                eg. -mp "junkl" -mp "junk2"
+                                   will match both "junk1 junk2" and "junk2 junk1",
+                                   but will not match "junk1" or "junk2".
+   
+   -xp exclude_pattern          perl style, line-based. Can use multiple times, in AND logic,
+                                eg. -xp "junk1" -xp "junk2"
+                                   will match both "junk1 junk2" and "junk2 junk1",
+                                   but will not match "junk1" or "junk2".
+   
+   -ee new_col=exp              export new columns, perl style, can set multiple times
+                                eg, -ee 'sum=\$c1+\$c2,diff=\$c1-\$c2,comment="hardcode"'
+   
+   -te new_col=exp              temporary new columns, perl style, can set multiple times
+                                eg, -te 'sum=\$c1+\$c2,diff=\$c1-\$c2,comment="hardcode"'
+                                temporary new columns can be used for sort key, match expression
+                                but will not be printed out
+   
+   -f f1,f2,...                 only output these fields, -f '' will disable all original columns
+   
+   -delimiter char              default to ','
+   
+   -noheader don't print output header.
+   
+   -skip number                 skip this number of lines from the beginning of the file, because
+                                some files may comments above header. default to 0, no skipping.
+   
+   -set set_clause              eg. "Column1=A ColumnB='two words'". this changes the input file.
+   -delete                      delete the rows that matching the match_expression. this changes input file. 
+   -output output.csv           output, when in query mode only, default to STDOUT
+   
+   -sort f1,f2,...              sort by these fields (columns)
+   
+   -render                      print out CSV in grids
+   
+   -maxrow INT                  print at most INT number of rows
+
+   -option setting              other options, eg,
+                                   -op InputNoHeader        this indicates no header line in the input file
+                                   -op UsePosition          this indicates to use cO,c1,... as column names
+                                   -op OutputHeader=a,b,... use this as output's header
+                                   -op DQuoteColumns=a,b,... use double quotes to wrap these columns
+                                   -op SetInputHeader=a,b,... use this as input header, eg, when no header.
+                                   -op QuotedInput          indicates some input cells may be quoted
+                                   -op RenderStdout         to format output into grid. same as "-render"
+                                   -op InGroupGetFirst      get the first of each sort group
+                                   -op InGroupGetLast       get the last of each sort group
+                                   -op DeleteColumns=a,b,... delete these columns
+                                   -op PrintCsvMaxRows=INT  print max number of rows
+
+   -trimfloat f1,f2,... trim floating points for these columns, eg 2.03000 -> 2.03
+
+   -code "namespace=perl_exp"
+                                insert some user code to the namespace.
+                                when 'namespace' is 'all', means all namespaces,
+                                can set multiple times.
+                                for example,
+                                to import a module:
+                                   -code 'TPSUP::Expression=use TPSUP::FIX qw(/./);'
+                                to import a user module:
+                                   -code 'all=use lib "/my_path"; use MY_MODULE'
+                                to define a function:
+                                  -code 'TPSUP::Expression=sub my_sum {my(\$a,\$b)=@_; return \$a+\$b;}'
+
+
+   -codefile "namespace=file"
+                                same as '-code' but the real content is in the 'file'
+   
+   -grpkeys f1,f2,...
+                                group by these keys
+   
+   -grpacts f1=maxnum,f2=medianstr,f3=sum,f4=avg,f5=set=Stock,...
+                                apply pre-defined actions to group.
+                                can set multiple times
+                                actions are:
+                                   first,last,count
+                                   string: medianstr,maxstr,minstr,
+                                   number: mediannum,maxnum,minnum,avg,sum
+                                   hard code: set=...
+   
+   -grpexps f1='\$ah->[0]->{Account}',f2 = '\$ah->[-1]->{Qty}',... 
+                                apply these perl expressions to each group
+                                can set multiple times
+                                two pre-defined variables:
+                                   \$c: current column name
+                                   \$ah: ref to the array of hashes of the current group
+   
+   -summary f1=maxnum,f2=medianstr,f3=sum,f4=avg,...
+                                apply these pre-defined function in summary
+                                can set multiple times
+   
+   -summexp f1=exp1,f2=exp2,...
+                                apply these perl expressions in summary
+                                can set multiple times
+                                two pre-defined variables:
+                                  \$c:  current column name
+                                  \$ah: ref to the array of hashes of the whole content
+   
+   -FIX                         treat header like FIX tag. otherwise, perl cannot handle
+                                numeric variable in expression, eg, \${35} eq 'D'
+   
+examples:
+   
+   - query
+   $prog -me '\$alpha eq "a"' tpcsv2_test.csv
+   $prog -xe '\$alpha eq "a"' tpcsv2_test.csv
+   
+   $prog -mp hello -me '\$alpha eq "a"' tpcsv2_test.csv
+   $prog -xp hello -me '\$alpha eq "a"' tpcsv2_test.csv
+   
+   $prog -FIX -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38}+1' -render tpcsv2_test_FIX.csv
+   
+   - to add a new column, use -ee. The second example disables all original columns
+   $prog       -ee                    'numberPlus1=\$number+1' tpcsv2_test.csv
+   $prog -f '' -ee 'oldnumber=\$number,numberPlus1=\$number+1' tpcsv2_test.csv
+
+   - delimiter and missing header
+   $prog -op InputNoHeader -op SetInputHeader=alpha,number,name,score -delimiter ^ -f name,score tpcsv2_test_caret.csv
+   $prog -op InputNoHeader -op SetInputHeader=alpha,number,name,score -delimiter ^ -me '\$name eq "henry"' tpcsv2_test_caret.csv
+   
+   - query csv with quotes
+   $prog -op RenderStdout -op QuotedInput                       tpcsv2_test_quoted.csv
+   $prog -op RenderStdout -op QuotedInput -op RemoveInputQuotes tpcsv2_test_quoted.csv
+   
+   - update (this changes the input file), use quotes to handle wierd column names
+   $prog -me '\${"#Ric"} eq "GLD.P"' -set "Source=1 Type=STOCK" tpcsv2_test_header.csv
+   $prog -me '\${"#Ric"} eq "GLD.P"' -set "Source=0 Type=ETF"   tpcsv2_test_header.csv
+   
+   - compare these 2 commands:
+   the first command prints the header, but the 2nd command won't because it treats the header
+   as a dataline: since the header line not matching SPY, it is ignored.
+   $prog -op   UsePosition -me '\$c0 =~ /SPY/' tpcsv2_test_header.csv
+   $prog -op InputNoHeader -me '\$c0 =~ /SPY/' tpcsv2_test_header.csv
+   
+   - delete (this changes the input file)
+   $prog -op UsePosition -delete -me '\$c0 =~ /SPY/' tpcsv2_test_header.csv
+   
+   - print all columns except one column named 'string'
+   $prog -op DeleteColumns=string tpcsv2_test.csv
+   
+   -group
+   get the last element of column 'string'
+   $prog -grpkeys alpha,number -grpexps string='\$ah->[-1]->{string}' -grpacts value=maxstr tpcsv2_test.csv
+   
+   the following are the same to sum up column '38', grouped by column '1' (Account in FIX protocol)
+   $prog -grpkeys 1 -grpacts 38=sum                                             tpcsv2_test_FIX.csv
+   $prog -grpkeys 1 -grpexps 38='\$sum=0;for \$r (\@\$ah) {\$sum += \$r->{38};} \$sum' tpcsv2_test_FIX.csv
+   
+   - summary
+   $prog -summary alpha=minstr,number=maxnum                      -op PrintData=0 tpcsv2_test.csv
+   $prog -summexp alpha='\$ah->[-1]->{number}',number='"i am not"' -op PrintData=0 tpcsv2_test.csv
+   
+   - user code
+   $prog -code 'TPSUP::CSV=sub mysum {
+            my (\$col, \$ah) = \@_;
+            my \$sum = 0;
+            for my \$r (\@\$ah) { \$sum += \$r->{\$col}}
+            return \$sum;
+         }' \\
+      -summexp number='mysum("number", \$ah)' tpcsv2_test.csv
+   
+   $prog -codefile TPSUP::FIX,TPSUP::CSV,TPSUP::Expression=tpcsv2_test_codefile.pl -summexp number='mysum("number", \$ah)' tpcsv2_test.csv
+   
+   - when expression works on numeric header, use -FIX
+   compare the following two commands:
+   The first one will error out "Modification of a read-only value attempted" because
+   perl not allow us to use \${35} directly
+   $prog      -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38}+1' -render tpcsv2_test_FIX.csv
+   $prog -FIX -me '\${35} =~ /[DG]/' -xe '\${35} eq "G"' -ee '38plus1=\${38}+1' -render tpcsv2_test_FIX.csv
+   
+   - temporary columns can be used in sort key, MatchExp, ExcludeExp, ExportExp
+   $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -ee 's3=\${s2}' tpcsv2_test.csv
+   $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -ee 's3=\${s2}' -sort s2 tpcsv2_test.csv
+   $prog -te s2='regsub(\$string, "s:^(.).*:\\\$1:")' -grpkeys s2 -grpact alpha=first,number=sum,string=last,value=maxnum tpcsv2_test.csv
+   
+
+END
+   
+   exit 1;
+}
+   
+my $verbose;
+my $delimiter = ',';
+my $skiplines;
+my @match_expression;
+my @exclude_expression;
+my @match_pattern;
+my @exclude_pattern;
+my $set_clause;
+my $output;
+my @other_options;
+my $delete;
+my $fieldString;
+my @ExportExps;
+my @TempExps;
+my $noheader;
+my $sortString;
+my $groupKeyString;
+my @groupActs;
+my @groupExps;
+my @summActs;
+my @summExps;
+my @SpaceCodes;
+my @SpaceFiles;
+my $trimfloatString;
+my $render;
+my $FIX;
+my $maxrows;
+
+GetOptions(
+   'verbose' => \$verbose,
+   'd|delimiter=s' => \$delimiter,
+   'delete' => \$delete,
+   'render' => \$render,
+   'maxrows=s' => \$maxrows,
+   'skip=s' => \$skiplines,
+   'me=s' => \@match_expression,
+   'xe=s' => \@exclude_expression,
+   'mp=s' => \@match_pattern,
+   'xp=s' => \@exclude_pattern,
+   'ee=s' => \@ExportExps,
+   'te=s' => \@TempExps,
+   'set=s' => \$set_clause,
+   'f|field=s' => \$fieldString,
+   'sort=s' => \$sortString,
+   'noheader' => \$noheader,
+   'o|output=s' => \$output,
+   'op|option=s' => \@other_options,
+   'trimfloat=s' => \$trimfloatString,
+   'grpkeys=s' => \$groupKeyString,
+   'grpacts=s' => \@groupActs,
+   'grpexps=s' => \@groupExps,
+   'summary=s' => \@summActs,
+   'summexp=s' => \@summExps,
+   'code=s' => \@SpaceCodes,
+   'codefile=s' => \@SpaceFiles,
+   'FIX' => \$FIX,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $opt = {
+   MatchExps => \@match_expression,
+   ExcludeExps => \@exclude_expression,
+   MatchPatterns => \@match_pattern,
+   ExcludePatterns => \@exclude_pattern,
+   delimiter => $delimiter,
+   skiplines => $skiplines,
+   PrintCmd => 1,
+   ShowDiff => 1,
+   RenderStdout => $render,
+   PrintCsvMaxRows => $maxrows,
+   verbose => $verbose,
+   FIX => $FIX,
+};
+
+if ($trimfloatString) {
+   my @a = split /,/, $trimfloatString;
+   $opt->{TrimFloats} = \@a;
+}
+
+if ($groupKeyString) {
+   my @a = split /,/, $groupKeyString;
+   $opt->{GroupKeys} = \@a;
+}
+
+if (@groupActs) {
+   croak "must also set -grpkeys when you set -grpacts" if !$groupKeyString;
+   $opt->{GroupAction} = get_ExpHash_from_ArrayOfStrings(\@groupActs);
+}
+
+if (@groupExps) {
+   croak "must also set -grpkeys when you set -grpexps" if !$groupKeyString;
+   $opt->{GroupActExp} = get_ExpHash_from_ArrayOfStrings(\@groupExps);
+}
+
+if (@summActs) {
+   $opt->{SummaryAction} = get_ExpHash_from_ArrayOfStrings(\@summActs);
+   $opt->{PrintSummary} = 1;
+}
+
+if (@summExps) {
+   $opt->{SummaryExp} = get_ExpHash_from_ArrayOfStrings(\@summExps);
+   $opt->{PrintSummary} = 1;
+}
+
+insert_namespaces(\@SpaceCodes, 'code', $opt) if @SpaceCodes;
+insert_namespaces(\@SpaceFiles, 'file', $opt) if @SpaceFiles;
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      my ($k, $v) = ($1, $2);
+      
+      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } else {
+         $opt->{$k} = $v;
+      }
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+if (defined $fieldString) {
+   @{$opt->{SelectColumns}} = split /,/, $fieldString;
+}
+
+if ($sortString) {
+   @{$opt->{SortKeys}} = split /,/, $sortString;
+}
+
+if (@ExportExps) {
+   $opt->{ExportExps} = \@ExportExps;
+}
+
+if (@TempExps) {
+   $opt->{TempExps} = \@TempExps;
+}
+
+if ($noheader) {
+   $opt->{OutputNoHeader} ++;
+}
+
+if ($verbose) {
+   print STDERR "opt = ", Dumper($opt);
+}
+
+my $error = 0;
+
+for my $file (@ARGV) {
+   if ($set_clause) {
+      print "Checking $file\n";
+      my $result = update_csv_inplace($file, $set_clause, $opt);
+      if ($result =~ /^Updated|^No change|^Didn't want to change/ ) {
+         print "OK: $file: $result\n";
+      } else {
+         print "ERROR: $file: $result\n";
+      }
+   } elsif ($delete) {
+      print "Checking $file\n";
+      my $result = delete_csv_inplace($file, $opt);
+      if ($result =~ /^Updated|^No change|^Didn't want to change/ ) {
+         print "OK: $file: $result\n";
+      } else {
+         print "ERROR: $file: $result\n";
+      }
+   } else {
+      query_csv2($file, {output=>$output, %$opt});
+   }
+}
+      
+         

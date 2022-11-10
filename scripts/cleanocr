@@ -1,0 +1,249 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+echo $1
+
+usage:
+   
+   $0 file1 file2 ...
+
+example
+
+   $0 *
+
+   -l      remove blank lines
+   -s      remove spaces
+   -p      perl
+   -b      bash
+   -f      FIX message
+   -j      java
+   -y      python
+   -k      kdb
+
+EOF
+   exit 1
+}
+
+extra=""
+
+while getopts lpfjsybk o; 
+do
+   case "$o" in
+     f) extra="
+               $extra
+               s/z/,/g;
+               s/[l][l][l]\\([^a-zA-Z]\\)/111\\1/g;
+               s/[l][l]\\([^a-zA-Z]\\)/11\\1/g;
+               s/[l]\\([^a-zA-Z]\\)/1\\1/g;
+               s/\\([,|]\\)\\([0-9]*\\)-/\\1\\2=/g;
+               s/564=0/564=O/g;
+               s/>>/=/g;
+              "
+        ;; 
+     l) extra="
+               $extra
+               /^[ ]*\$/d;
+              "
+        ;; 
+     s) extra="
+               $extra
+               s/\\s//g;
+              "
+        ;; 
+     b) 
+         #X${llJ ->\${11}
+         #$dir =~ s:[A/]+$::;
+
+         # https://stackoverflow.com/questions/9053100/sed-regex-and-substring-negation
+         extra="
+               s:\\(=[ ]*\\)'pwd':\\1\`pwd\`:g
+               s:\\(=[ ]*\\)'id':\\1\`id\`:g
+               s:\\(=[ ]*\\)'hostname':\\1\`hostname\`:g
+               s:'\\(date [^']*\\)':\`\\1\`:g
+               s:'\\(dirname [^']*\\)':\`\\1\`:g
+               s:'\\(baseame [^']*\\)':\`\\1\`:g
+               s:'\\(id [^']*\\)':\`\\1\`:g
+               s:'\\(tty[^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(echo [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(cat [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(df [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(du [^']*\\)':\`\\1\`:g
+               "
+        ;;
+     p) 
+         #X${llJ ->\${11}
+         #$dir =~ s:[A/]+$::;
+
+         extra="
+               $extra
+               s:^\\(sub\\s\\{1,\\}\\S\\{1,\\}\\s*{\\)\\s*\\(\\S.*\\)\\$:\\1\\n\\2:
+               s:[X]\\([\\\$@%]\\):\\\\\\1:g;
+               s:J\\([{,]\\):}\\1:g;
+               s:{ll}:{11}:g; 
+               s:>>~:=~:g;
+               s:»~:=~:g
+               /[!=]~/s:/A:/^:g;
+               /=~ /s/\\([:\\/\\[]\\)A\\([^-]\\)/\\1^\\2/g;
+               s:my \\(\\[^= ]*\\s*\\)-:my \\1=:g;
+               s:filel\\b:file1:g;
+               s:\\({[^}( ]*\\)[jJ)|]:\\1}:g;
+               s: -~ /: =~ /:g;
+               s: =- /: =~ /:g;
+               s: =- s/: =~ s/:g;
+               s/ =- s:/ =~ s:/g;
+               s/ =- m:/ =~ m:/g;
+               s/=~ s:A/=~ s:^/g;
+               s:=~ s/A:=~ s/^:g;
+               s/=~ m:A/=~ m:^/g;
+               /[!=]~/s:~ \\([ms]*[/:]\\)[*A]:~ \\1^:g;
+               s:if I:if !:g;
+               s:if (I:if (!:g;
+               s:-[l]\\([^a-zA-Z ]\\):-1\\1:g;
+               s:^\\([ ]*[^ ][^ ]*[ ]*\\)-\\([ ]*[^ ;>-][^ ;->]*;\\):\\1=\\2:
+               /{[^}]*);[ ]*\\$/s/);[ ]*\\$/};/
+               /([^)]*};[ ]*\\$/s/};[ ]*\\$/);/
+               s/ - @_;/ = @_;/
+               s: -/tpsup: ~/tpsup:g
+               s:&[.]&[.]:\\&\\&:g
+               s/[I1][O0]::\\([A-Z]\\)/IO::\\1/g
+               s/wh i1 e (/while(/g
+               s/GetOpt ions/GetOptions/g
+               s:/bin/per1:/bin/perl:g
+               s:\\bper[i1]\\b:perl:g
+               s:([?]:(\$:g
+               s:^\\([ ]*\\)[?]\\([a-zA-Z]\\):\\1$\\2:g
+               s:\\(=[ ]*\\)'pwd':\\1\`pwd\`:g
+               s:\\(=[ ]*\\)'id':\\1\`id\`:g
+               s:\\(=[ ]*\\)'hostname':\\1\`hostname\`:g
+               s:'\\(date [^']*\\)':\`\\1\`:g
+               s:'\\(dirname [^']*\\)':\`\\1\`:g
+               s:'\\(baseame [^']*\\)':\`\\1\`:g
+               s:'\\(id [^']*\\)':\`\\1\`:g
+               s:'\\(df [^']*\\)':\`\\1\`:g
+               s:'\\(du [^']*\\)':\`\\1\`:g
+               /sed/!s:'\\(echo [^']*\\)':\`\\1\`:g
+               s:\"\\(date [^\"]*\\)\":\`\\1\`:g
+              " 
+        ;; 
+     j) extra="
+               $extra
+               s:I4:M:g;
+               s:FIap:Map:g;
+               s:[O]\\([^a-zA-Z0-9)]\\):()\\1:g;
+               /^[ ]*\$/d;
+              "
+        ;; 
+     y) extra="
+               $extra
+               s/II II II )/\"\"\")/;
+               s/II II II J/\"\"\")/;
+               s/II II II ..)/\"\"\")/;
+              "
+        ;; 
+     k) extra="
+               $extra
+               s/	/   /g;
+               s/t[ ]*i[ ]*1/til/g;
+               /[a-zA-Z]lb/!s/lb/1b/g;
+               /Ob[a-z]/!s/Ob/0b/g;
+               s/\"symbol\$()/\`symbol\$()/g;
+              "
+        ;; 
+     #k) tail=$OPTARG;;
+     *) usage;; 
+   esac
+done
+
+shift $((OPTIND-1))
+
+echo "extra = $extra"
+
+if [ $# -eq 0 ]; then
+   usage "wrong number of args"
+fi
+  
+tmpfile=~/junk.cleanocr.txt
+
+for f in $@
+do
+   if [ ! -f $f ]; then
+      echo "$f is not found"
+      continue
+   fi
+
+   echo ""
+   
+   # use "sed -b" to trade the file as binary so that it will preserve the line ending ^M
+   # https://stackoverflow.com/questions/4652652/preserve-line-endings
+
+   #      /^[ ]*$/d
+   sed -b " 
+         s:111 +: '\" + :g
+         s:+ 111: + \"':g
+         $extra
+        "  $f |\
+   sed -b '
+         s:[X]n:\\n:g;
+         s:[X]d:\\d:g;
+         s:■:=:g;
+         s/^\([ ]*\)	/\1      /g;
+         s/	/ /g;
+         s:get(O):get(0):g
+         s:(l):(1):g
+         s:(O):(0):g
+         s:\[l\]:[1]:g
+         s:\[O\]:[0]:g
+         s:i1e:ile:g
+         s:1ine:line:g
+         s:f ile:file:g
+         s:e[ ]*1[ ]*s[ ]*e:else:g
+         s:11 +:" +:g
+         s:+ 11:+ ":g
+         s:updat e:update:g
+         s:newArrayList:new ArrayList:g;
+         s:Listo():List<>():g;
+         s:Mapo():Map<>():g;
+         s: - new : = new :g
+         s:\(String [^ ]*\) - :\1 = :g
+         s:compile("A\([^-]\):compile("^\1:g
+         s:import j ava:import java:g
+         s:1»:!=:g
+         s:»:>>:g
+         s:«:<<:g;
+         s:/rt:/^:g
+         s/:rt/:^/g
+         s/\[rt/:[^/g
+         s:\b0K\b:OK:g
+         s:—:-:g
+   ' >$tmpfile
+
+   # s:—:-:g  the first dash and second dash are actually different.
+
+   if [ $? -ne 0 ]; then
+      echo "sed failed";
+      exit 1
+   fi
+
+   #s:[g][e][t][ ]\([a-zA-Z]\):get\1:g;
+
+   diff $f $tmpfile
+   rc=$?
+
+   echo ""
+   
+   if [ $rc -eq 0 ]; then
+      echo "no change in $f"
+   else 
+      echo "do you want to change $f [Y/N, default N]? " 
+      
+      read answer
+   
+      if echo "X$answer" | grep -i "^XY" >/dev/null; then
+         cat $tmpfile >$f
+         echo "$f changed"
+      else
+         echo "$f no change"
+      fi
+   fi
+done 

@@ -1,0 +1,85 @@
+#!/bin/bash
+
+prog=`echo $0|sed -e 's:.*/::'`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog base prefix [suffix]
+
+   Tmp file (dir) is in the form \$base/tmp_\$user/\$yyyymmdd/\${prefix}.\${HHMMSS}.\$pid.\$suffix
+
+   Another benefit of this script is that it has auto cleanup.
+
+   -d             make a directory, default is file
+   -u user        use this user instead, default to running user
+
+   suffix is optional.
+
+example:
+   - Path in both prefix and suffix will be trimmed. For example, the following
+   2 commands have the same results
+
+   $prog /tmp         myscript
+   $prog /tmp ~/tpsup/myscript
+
+   - Use suffix to distinguish 2 tmp files
+   TMPFILE1 =\`$prog /tmp \$0 1\`
+   TMPFILE2 =\`$prog /tmp \$0 2\`
+
+EOF
+
+exit 1
+
+}
+
+id=`id |cut -d\( -f2|cut -d\) -f1`
+
+while getopts du: o;
+do
+   case "$o" in
+      d) IsDir=Y;;
+      u) id=$OPTARG;;
+      *) echo "unknow switch"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -lt 2 -o $# -gt 3 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+base=$1
+prefix=$2
+suffix=$3
+
+prefix=`echo $prefix|sed -e 's:.*/::'`
+
+yyyymmdd=`date +%Y%m%d`
+HHMMSS=`date +%H%M%S`
+dir=$base/tmp_${id}
+dailydir=$dir/$yyyymmdd
+
+if [ ! -d $dailydir ]; then
+   mkdir -p $dailydir || exit 1
+   find $dir -mount -mtime +5 -exec /bin/rm -fr {} \;
+fi
+
+result="$dailydir/$prefix.$HHMMSS.$$"
+
+if [ "X$suffix" != "X" ]; then
+   suffix=`echo $suffix|sed -e 's:.*/::'`
+   result="$result.$suffix"
+fi
+
+if [ "X$IsDir" = "XY" ]; then
+   mkdir $result || exit 1
+   echo $result
+else
+   echo $result
+fi
+
+exit 0

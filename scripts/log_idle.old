@@ -1,0 +1,150 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::DATE qw(get_interval_seconds);
+use TPSUP::LOG qw(
+   get_PatternCfg_by_app
+   get_log_fh
+   get_log_time
+   get_log_latency
+);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+my $min_idle = 60;
+
+my $sortkeys = 'HH,MM,SS';
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+ description:
+   to find out log file's idleness pattern. '-' for STDIN.
+
+   The configurations are by default in ${dir}/log_pattern.cfg.
+
+   -x exclude_pattern     Perl style, exclude lines with this pattern
+   -m   match_pattern     Perl style, only count the lines with this pattern
+
+   -app App               As it is in pattern_file. default to 'auto', meaning auto-detect
+
+   -i min_idle            Ignore if it is less than this count. Default $min_idle
+
+   -pf pattern_file       pattern file, default to $dir/log_pattern.cfg.
+
+   -k TimeSortKey         default $sortkeys. can also be -k yyyy,mm,dd,HH,MM,SS.
+
+   -now yyyymmddHHMMSS    use this during test, to fake the current time.
+
+examples:
+
+   $prog            -i 5 logsnip_test.txt
+   $prog -app appia -i 5 logsnip_test.txt
+
+EOF
+
+   exit 1;
+}
+
+ our ($exclude_pattern, $match_pattern, $verbose, $pattern_file);
+
+ my $App = 'auto';
+ my $fake_now;
+
+ GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "m=s"            => \$match_pattern,
+   "i=s"            => \$min_idle,
+   "v"              => \$verbose,
+   "k=s"            => \$sortkeys,
+   "pf=s"           => \$pattern_file,
+   "app=s"          => \$App,
+   "now=s"          => \$fake_now,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $cfg = get_PatternCfg_by_app(
+          $App,
+          {
+             LogFile     => $ARGV[0],   # needed when $App eq 'auto'
+             PatternFile => $pattern_file,
+             sortkeys    => $sortkeys,  # overwrite default in cfg file
+             verbose     => $verbose,
+             SortKeyDelimiter => ':',
+           }
+);
+
+die "cannot find matching App in pattern cfg file\n" if !$cfg;
+
+$verbose && print "cfg = ", Dumper($cfg);
+
+$exclude_pattern = qr/$exclude_pattern/ if defined $exclude_pattern;
+  $match_pattern =   qr/$match_pattern/ if defined   $match_pattern;
+
+my $error = 0;
+
+for my $f (@ARGV) {
+   print STDERR "file = $f\n";
+
+   my $fh = get_log_fh($f, {
+                             # todo:
+                             # Head          => $front,
+                             # Tail          => $tail,
+                             # SkipHead      => $skip,
+                             # Anchor        => $anchor,
+                             # ShowProgress  => $progress,
+                             TimePatternCfg=> $cfg,
+                             FakeNow       => $fake_now,
+                             MatchPattern  => $match_pattern,
+                             ExcludePattern=> $exclude_pattern,
+                             verbose       => $verbose,
+                           }
+                      );
+
+   my $last_t;
+   my $idle_by_interval;
+   
+   while (my $line = <$fh>) {
+      chomp $line;
+   
+      next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
+      next if defined   $match_pattern && $line !~   /$match_pattern/;
+
+      my $t = get_log_time(\$line, $cfg);
+      next if !$t;
+
+      if ($last_t) {
+         my $idle = get_log_latency($last_t, $t);
+
+
+         if ($idle > $min_idle) {
+            $idle_by_interval->{"$last_t->{key}, $t->{key}"} = $idle;
+         }
+      }
+
+      $last_t = $t;
+   }
+
+   print "\n";
+
+   for my $interval (sort (keys %$idle_by_interval)) {
+      my $idle = $idle_by_interval->{$interval};
+      print "$interval idle $idle seconds\n";
+   }
+}
+
+exit 0;
+      
+      

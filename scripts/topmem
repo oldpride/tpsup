@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# show top memory usage 
+
+top -b -n 1 -o %MEM

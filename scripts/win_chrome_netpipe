@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# this script is to start chrome and netpipe, to prepare selenium setup
+
+# example: win_chrome_netpipe -allow linux1
+
+UNAME=`uname -a`
+
+# MINGW64_NT-10.0 LAPTOP-4DDGKLFF 2.11.2(0.329/5/3) 2018-11-10 14:38 x86_64 Msys
+# CYGWIN_NT-10.0 LAPTOP-4DDGKLFF 3.0.4(0.338/5/3) 2019-03-16 09:50 x86_64 Cygwin
+# Linux linux1 4.15.0-54-generic #58-Ubuntu SMP Mon Jun 24 10:55:24 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux
+
+#old_exe='C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
+# the standard Chrome keeps getting updated, forcing us to update chromedriver; therefore
+# we save a fixed version of chrome under home dir.
+#    copy C:\Program Files (x86)\Google\Chrome to $USERPROFILE\Chrome
+# where
+#    $USERPROFILE is C:\users\userid
+old_exe="$USERPROFILE\\Chrome\\Application\\chrome.exe"
+
+common="--remote-debugging-port=9222 --user-data-dir=$USERPROFILE\\ChromeTest -homepage about:blank --disable-session-crashed-bubble" 
+
+# --nosandbox                                 disable SUID. we don't need this as we SUID is for linux
+# -homepage about:blank                       help speed up
+# --disable-session-crashed-bubble            disable "restore pages" popup
+# --remote-debugging-port=9222                debug port to accept automation instruction
+# --user-data-dir=$USERPROFILE\\ChromeTest    to avoid pollute regular chrome dir $USERPROFILE is %USERPROFILE%
+
+if [[ $UNAME =~ Msys ]]; then
+   exe="$old_exe"
+elif [[ $UNAME =~ Cygwin ]]; then
+   new_exe=`cygpath "$old_exe"`
+   exe="$new_exe"
+else
+   echo "this script only works for PC:  Cygwin or Git Bash"
+   echo "current UNAME=$UNAME"
+   exit
+fi
+
+set -x
+if echo | tpnc -w 3 -v localhost 9222; then
+   echo "chrome already started"
+else 
+   echo "starting a local chrome"
+   "$exe" $common &
+fi
+
+netpipe 9333 localhost:9222 "$@"

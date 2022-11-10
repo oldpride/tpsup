@@ -1,0 +1,98 @@
+#!/bin/bash
+
+timeout=5
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog db_nickname
+   $prog all
+
+   -c conn_file        change from the default connection file.
+   -m match_pattern    only nickname matching this pattern, case-insensitive egrep.
+   -t sec              timeout. default to $timeout (seconds)
+   -v                  verbose mode
+   -x exclude_pattern  exclude nickname matching this pattern, case-insensitive egrep.
+
+
+example:
+
+   $prog a@b
+   $prog all
+   $prog -m orauser2@oradb2 all
+   $prog -x orauser2@oradb2 all
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+conn=""
+match=""
+exclude=""
+
+while getopts c:m:t:vx: o;
+do
+   case "$o" in
+      c) conn="-conn $OPTARG";;
+      m) match="$OPTARG";;
+      t) timeout=$OPTARG;;
+      v) verbose=Y;;
+      x) exclude="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+error=0
+
+if [ $1 = all ]; then
+   pinglist=`sed 1d ~/.tpsup/conn.csv|cut -d, -f1|sed -e 's:^[ ][ ]*::'|grep ^[a-zA-Z0-9@]`
+else
+   pinglist="$@"
+fi
+
+# NOTE: This requires Bash 4.0+ (v4.0 released on 2009-02-20)
+#
+# use the ${var,,} syntax to conver to lowercase
+# use the ${var^^} syntax to conver to uppercase
+#
+# https://stackoverflow.com/questions/44106842/case-insensitive-regex-in-bash
+
+for nickname in $pinglist
+do 
+   if [ "X$match" != "X" ]; then
+      if ! [[ ${nickname,,} =~ ${match,,} ]]; then
+         continue 
+      fi
+   fi
+
+   if [ "X$exclude" != "X" ]; then
+      if [[ ${nickname,,} =~ ${exclude,,} ]]; then
+         continue 
+      fi
+   fi
+
+   if [ $verbose = Y ]; then 
+      echo >&2 ""
+      echo >&2 "INFO: pinging $nickname"
+      extra_op="-op PrintConnInfo=1"
+   fi 
+
+   if ! timeout $timeout sql $conn $extra_op -noheader $nickname "select '$nickname: success'"; then
+      echo "$nickname: failure"
+      ((error++))
+   fi
+done
+
+exit $error
+

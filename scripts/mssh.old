@@ -1,0 +1,382 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use POSIX ":sys_wait_h";
+use Carp;
+use TPSUP::SSH qw(tpssh get_remote_login_host);
+use TPSUP::UTIL qw(get_in_fh close_in_fh get_timestamp get_tmp_file);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $default_ssh_maxcount = 5;
+my $default_scp_maxcount = 1;   # scp should be single-thread
+
+my $default_hostfile = "~/.tpsup/hosts.csv";
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   mssh -- command arg1 arg2
+
+   mscp -- file1 file2 ... remote_host:dir
+   mscp -- remote_host:file file.\%{host}
+
+description:
+
+   Run the command on a list of hosts. Default host list is stored in $default_hostfile.
+   First column of each line is hostname, or login\@hostname. Columns are separated by ','.
+   This file allows comments (#) and blank lines
+
+   Host can be host or login\@host.
+   
+   -hl host1,host2     specify host list on command line, separated by ','.
+
+   -hf hostfile.txt    hosts are stored in this file. example,
+                          host,profile
+                          myhost1,myprofile1
+                          myhost2,myprofile2
+
+   -v                  verbose mode
+
+   -a ssh|scp          action, default to use script name to figure out.
+
+   -sshargs            args to pass to generic ssh command, can set multiple times
+
+   -style bash|perl    Default to 'perl', because perl handles ' and " much better.
+                       Can also be 'bash'.
+
+   -n number           max number of parallel processes.
+                       ssh default to $default_ssh_maxcount.
+                       scp default to $default_scp_maxcount because scp is heavy on network.
+
+   -m match_pattern    regex (eg, perl style).
+                       Can use multiple times, in AND logic. OR logic can use 'a|b'
+                       
+
+   -x exclude_pattern  regex (eg, perl style).
+                       Can use multiple times, in AND logic. OR logic can use 'a|b'
+
+   -prefix             print prefix 'host,stdout/stderr,', on each line for easy parsing.
+
+   -dryrun             dryrun command
+
+   -rp                 remote_profile
+
+   Build-in variables  \%{host}  - remote host, 
+                       \%{login} - remote login,
+                       \%{yyyy}, \%{mm}, \%{dd}, \%{HH}, \%{MM}, \%{SS}
+
+examples:
+
+   - use default hostfile
+   mssh  -- ls -d /etc /usr
+   mscp  -- /etc/hosts \%{host}:/tmp
+
+   - use host switch
+   mssh -hl localhost,tian\@linux1 -- ls -d /etc /usr
+
+   - this command should return "File not found"
+   mssh -hl localhost,tian\@linux1 -- ls '/etc /usr'
+
+   - remote perl
+   mssh -hl localhost,tian\@linux1 -- perl -e 'print readlink("/bin"), "\\n";'
+   
+   - test stdout/stderr
+   mssh -prefix -hl localhost,tian\@linux1 -- "ls -d '/etc /usr' /bin; sleep 1"
+
+   - test timeout
+   mssh -t 3 -hl localhost -- "ls -d '/etc /usr' /bin; sleep 10; echo done"
+
+   - test catch bogus host failure
+   mssh -t 3 -hf ~/.tpsup/hosts.csv.bogus -prefix -- sleep 1 |grep ,std
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $remote_login;
+my $style = 'perl';
+my @sshargs;
+my $timeout;
+my $hostlist;
+my $hostfile;
+my @MatchPatterns;
+my @ExcludePatterns;
+my $prefix;
+my $action;
+my $maxcount;
+my $dryrun;
+my $remote_profile;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'dryrun'        => \$dryrun,
+   'l=s'           => \$remote_login,
+   'a|action=s'    => \$action,
+   'style=s'       => \$style,
+   'sshargs=s'     => \@sshargs,
+   't|timeout=s'   => \$timeout,
+   'hl|hostlist=s' => \$hostlist,
+   'hf|hostfile=s' => \$hostfile,
+   'n=s'           => \$maxcount,
+   'm|match=s'     => \@MatchPatterns,
+   'x|exclude=s'   => \@ExcludePatterns,
+   'prefix'        => \$prefix,
+   'rp=s'          => \$remote_profile,
+
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 1;
+
+my $cfg;
+
+if ($hostlist) {
+   for my $e (split /[\s,]+/, $hostlist) {
+      next if !$e;
+      $cfg->{$e}->{host} = $e;
+      $cfg->{$e}->{profile} = $remote_profile if $remote_profile;
+   }
+} else {
+   if (!$hostfile) {
+      $hostfile = `bash -c "echo $default_hostfile"`;
+      chomp $hostfile;
+   }
+
+   my $fh = get_in_fh($hostfile);
+   
+   LINE:
+   while (my $line = <$fh>) {
+      chomp $line;
+
+      next if $line =~ /^(host|hostname)/;      # skip header
+      next if $line =~ /^\s*#/;                  # skip comment
+      next if $line =~ /^\s*$/;                  # skip blank lines
+
+      if (@MatchPatterns) {
+         for my $m (@MatchPatterns) {
+            if ($line !~ /$m/) {
+               next LINE;
+            }
+         }
+      }
+
+      if (@ExcludePatterns) {
+         my $excluded = 1;
+
+         for my $m (@ExcludePatterns) {
+            if ($line !~ /$m/) {
+               $excluded = 0;
+               last;
+            }
+         }
+
+         next LINE if $excluded;
+      }
+
+      my ($host, $profile) = split /,/, $line;
+
+      next if !$host;
+
+      print "ERROR: duplicate host=$host in $hostfile, overwriten\n" if $cfg->{$host};
+      @{$cfg->{$host}}{qw(host profile)} = ($host, $profile);
+   }
+
+   close_in_fh($fh);
+}
+
+if (!$cfg) {
+   print "no hosts matched criteria\n";
+   exit 0;
+}
+
+my @hosts = sort (keys %$cfg);
+
+if ($action) {
+   if ($action ne 'ssh' && $action ne 'scp') {
+      usage("unsupported action='$action'");
+   }
+} else {
+   if ($prog =~ /ssh/) {
+      $action = 'ssh';
+   } elsif ($prog =~ /scp/) {
+      $action = 'scp';
+      usage("wrong number of args") if @ARGV < 2;
+   } else {
+      croak "cannot figure out action from script name '$prog'";
+   }
+}
+
+if (!$maxcount) {
+   if ($action eq 'ssh') {
+      $maxcount = $default_ssh_maxcount;
+   } elsif ($action eq 'scp') {
+      $maxcount = $default_scp_maxcount;
+   } else {
+      $maxcount = 1;
+   }
+}
+
+# make sure we execute each host+command only once.
+# for example, if the user didn't spectify %{host} in mscp, we should just run the command once.
+my $executed;
+
+my $count = 0;
+my @todo = @hosts;
+my $info_by_pid;
+
+while (1) {
+   while ($count<$maxcount && @todo) {
+      my $host = shift @todo;
+      my $profile = $cfg->{$host}->{profile};
+
+      my ($remote_login, $remote_host)
+         = get_remote_login_host($host, {remote_login => $remote_login});
+
+      my $tmp_prefix = get_tmp_file("/var/tmp", $prog);
+      my $tmp_stdout = "$tmp_prefix.$host.stdout";
+      my $tmp_stderr = "$tmp_prefix.$host.stderr";
+
+      my $opt = {
+         style        => $style,
+         timeout      => $timeout,
+         remote_login => $remote_login,
+         profile      => $profile,
+         sshargs      => \@sshargs,
+         verbose      => $verbose,
+         stdout       => $tmp_stdout,
+         stderr       => $tmp_stderr,
+         dryrun       => $dryrun,
+      };
+
+      my @command;
+
+      my $timestamp = get_timestamp();
+
+      my ($yyyy, $mm, $dd, $HH, $MM, $SS)
+         = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
+
+      for my $a (@ARGV) {
+         # make a copy; otherwise it will be change @ARGV in place
+         my $e = $a;
+
+         $e =~ s/\%\{host\}/$remote_host/g;
+         $e =~ s/\%\{login\}/$remote_login/g;
+         $e =~ s/\%\{yyyy\}/$yyyy/g;
+         $e =~ s/\%\{mm\}/$mm/g;
+         $e =~ s/\%\{dd\}/$dd/g;
+         $e =~ s/\%\{HH\}/$HH/g;
+         $e =~ s/\%\{MM\}/$MM/g;
+         $e =~ s/\%\{SS\}/$SS/g;
+
+         push @command, $e;
+      }
+
+      my $key;
+      if ($action eq 'ssh') {
+         $key = join(",", ($host, @command));
+      } elsif ($action eq 'scp')  {
+         $key= join(",", @command);
+      }
+
+      print STDERR "key=$key\n" if $verbose;
+
+      if ($executed->{$key}) {
+         print STDERR "\nINFO: key=$key repeats. skipped.\n";
+         next;
+      } else {
+         $executed->{$key} ++;
+      }
+      
+      my $child_pid = fork();
+
+      if ($child_pid) {
+         # this is the parent
+
+         $info_by_pid->{$child_pid}->{host} = $host;
+         $info_by_pid->{$child_pid}->{begin} = $timestamp;
+         $info_by_pid->{$child_pid}->{begin_sec} = time();
+         $info_by_pid->{$child_pid}->{stdout}= $tmp_stdout;
+         $info_by_pid->{$child_pid}->{stderr}= $tmp_stderr;
+
+         $count ++;
+      } elsif ($child_pid == 0) {
+         # this is the child
+         tpssh($action, $host, \@command, $opt);
+         exit 0 if $dryrun;
+      } else {
+         print STDERR "fork() failed. count=$count, host=$host\n";
+         exit 1;
+      }
+   }
+
+   # this is the parent
+   while ( $count ) {
+      my $kid = waitpid(-1, WNOHANG);
+
+      my $rc = $?;
+
+      last if !$kid;
+
+      $count--;
+
+      if (!$dryrun) {
+         $info_by_pid->{$kid}->{end}     = get_timestamp();
+         $info_by_pid->{$kid}->{end_sec} = time();
+         $info_by_pid->{$kid}->{rc}      = $rc;
+         $info_by_pid->{$kid}->{duration}
+            = $info_by_pid->{$kid}->{end_sec} - $info_by_pid->{$kid}->{begin_sec};
+   
+         my $host = $info_by_pid->{$kid}->{host};
+   
+         print "host=$host,pid=$kid",
+               ",rc=$rc",
+               ",begin=$info_by_pid->{$kid}->{begin}",
+               ",end=$info_by_pid->{$kid}->{end}",
+               ",duration=$info_by_pid->{$kid}->{duration}",
+               "\n";
+   
+         my $row_count = 0;
+   
+         for my $output ( qw(stdout stderr) ) {
+            print "\n" if ! $prefix;
+   
+            for my $line (`cat $info_by_pid->{$kid}->{$output}`) {
+               $row_count ++;
+   
+               if ($prefix) {
+                  print "$host,$output,$line";
+               } else {
+                  print "$line";
+               }
+            }
+   
+            print "\n" if ! $prefix;
+         }
+   
+         # make sure there is explicit output when in prefix mode; otherwise, we
+         # may fail to notice that ssh command failure
+         if (!$row_count && $prefix) {
+            if ($rc == 0) {
+               print "$host,stdout,\n";         # print a new line to stdout when successful
+            } else {
+               print "$host,stderr,ssh cmd failed\n";  # print error to stderr when failed
+            }
+         }
+      }
+   
+      $verbose && print STDERR "count=$count, todo=", scalar (@todo),
+                               ",total=", scalar(@hosts), "\n";
+   }
+
+   last if !$count && !@todo;
+
+   sleep 1;
+}

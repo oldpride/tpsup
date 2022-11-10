@@ -1,0 +1,48 @@
+ my $cfg = {
+   keys => {
+       RESOLUTIONCODE => 'Solved (Permanently)',
+      RESOLUTIONNOTES => 'done',
+                CAUSE => 'Process Execution',
+             SUBCAUSE => 'Execution Error',
+   },
+
+   suits => {
+      PROC => {
+            CAUSE => 'Process Execution',
+         SUBCAUSE => 'Execution Error',
+      },
+
+      DATA => {
+            CAUSE => 'Data Error',
+         SUBCAUSE => 'Data Input',
+      },
+   },
+
+   aliases => {
+      RC => 'RESOLUTIONCODE',
+      RN => 'RESOLUTIONNOTES',
+       C => 'CAUSE',
+      SC => 'SUBCAUSE',
+   },
+};
+
+my $code = <<'END';
+   use strict;
+   use warnings;
+   my $text = $element->get_text();
+END
+
+my $code2 = <<"END";
+   use strict;
+   use warnings;
+   my $text = $element->get_text();
+END
+
+my $actions2 = [
+         ['tab=3', "string=$known->{RESOLUTIONCODE}",  'resolution code'],
+         ['tab=3', "string=$known->{'this is key'}",  'resolution code'],
+         ['tab=3', "string=$known->{$key}",  'resolution code'],
+
+         ['tab=1', "string=$known->[2]",        'enter subcause'],
+         ['tab=1', "string=$known->[$i]",        'enter subcause'],
+];

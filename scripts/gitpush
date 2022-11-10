@@ -1,0 +1,84 @@
+#!/bin/bash
+
+prog=`basename $0`
+dir=`dirname $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog  all
+   $prog  filename
+
+   -f           force without asking for confrimation
+   -n           dryrun
+   -m message   commit message, default to 'update'.
+   -v           versbose
+
+example:
+
+   $prog all
+   $prog scratchpad.txt
+
+EOF
+
+   exit 1
+}
+
+force=N
+verbose=N
+dryrun=''
+commit_message=update
+
+while getopts fnvm: o;
+do
+   case "$o" in
+      n) dryrun='--dry-run';;
+      f) force=Y;;
+      v) verbose=Y;;
+      m) commit_message=$OPTARG;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac 
+done
+
+shift $((OPTIND-1))
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+if [ $1 = all ]; then
+   ( set -x; git add $dryrun -A )
+else 
+   ( set -x; git add $dryrun "$@" )
+fi
+
+echo ""
+   
+( set -x; git diff --cached --name-only )
+echo ""
+
+( set -x; git commit $dryrun -m "$commit_message" )
+rc=$?
+echo ""
+
+if [ $rc -eq 0 ]; then
+   ( set -x; git diff --stat --cached origin/master )
+   echo ""
+   
+   if [ $force = N ]; then
+      echo "Do you want to push the changes Y|N ? [N]"
+      read answer
+   
+      if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+          echo "Answer is '$answer'. Therefore, skipped $f."
+          exit 0
+      fi
+   fi
+   
+   echo ""
+   ( set -x; git push $dryrun )
+   echo ""
+   ( set -x; git status )
+fi

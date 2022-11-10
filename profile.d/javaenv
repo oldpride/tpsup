@@ -1,0 +1,86 @@
+local j javac_bin found BASEDIR usage prog version
+
+prog=${FUNCNAME[1]}
+
+usage="
+
+usage:
+
+   $prog check
+   $prog version
+
+example:
+
+   $prog check
+   $prog 1.8
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+version=$1
+
+echo "JAVA_HOME=$JAVA_HOME"
+
+for j in javac java
+do
+   echo ""
+   cmd="which $j"
+   echo $cmd
+   j_bin=`$cmd`
+   if [ $? -eq 0 ]; then
+      cat <<END
+
+$j_bin
+
+END
+   fi
+done
+
+if [[ $UNAME =~ CYGWIN ]]; then
+   BASEDIR="/cygdrive/c/Program Files/Java"
+elif [[ $UNAME =~ MINGW64_NT ]]; then
+   BASEDIR="/c/Program Files/Java"
+elif [[ $UNAME =~ Linux ]]; then
+   BASEDIR=$HOME
+else
+   echo "unsupported UNAME='$UNAME'"
+   return
+fi
+
+if [ $version = check ]; then
+   echo ""
+   echo "current installations: "
+   /bin/ls -1d "$BASEDIR"/*
+else
+   # favor jdk because jdk contains jre
+   for j in jdk jre
+   do
+      found=`/bin/ls -1d "$BASEDIR"/${j}${version}*|tail -1`
+   
+      if [ "X$found" != X ]; then
+         echo ""
+         echo "found $found"
+   
+         echo ""
+         echo "export JAVA_HOME=$found"
+         export JAVA_HOME="$found"
+   
+         echo ""
+         echo "export PATH=\"$found/bin:\$PATH\""
+         export PATH="$found/bin:$PATH"
+         reduce PATH
+   
+         echo ""
+         echo "verify PATH:"
+         which java
+         which javac
+         break
+      fi
+   done
+fi
+

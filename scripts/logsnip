@@ -1,0 +1,116 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+my  $dir = $0;  $dir =~ s:[^/]+$::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog [-begin pattern] [-end pattern]   log
+
+   $prog [-after string]  [-before string] log
+
+descript ion:
+
+   Snip a log from begin pattern to end pattern. Pattern is regular expression.
+   Pattern-matching doesn't require the log in order.
+
+   Snip a log from after string to begin string. Note: string is compare against whole line.
+   String comparision requires the log in order.
+
+examples:
+
+   $prog -begin "^2018/01/29 06:55:00:686"    -end "^2018/01/29 06:57:00:483" logsnip_test.txt
+
+   $prog -after  "2018/01/29 06:55:00:686" -before  "2018/01/29 06:57:00:483" logsnip_test.txt
+
+EOF
+
+   exit 1;
+}
+
+my $begin_pattern;
+my $end_pattern;
+my $after_string;
+my $before_string;
+my $verbose;
+
+GetOptions(
+   "begin=s" => \$begin_pattern,
+   "end=s"   => \$end_pattern,
+   "after=s" => \$after_string,
+   "before=s"=> \$before_string,
+   "v" => \$verbose,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($f) = @ARGV;
+
+my $fh;
+
+if ($f =~ /gz$/) {
+   my $cmd = "gunzip -c $f";
+   open $fh, "$cmd|" or die "cmd=$cmd failed";
+} else {
+   open $fh, "<$f" or die "cannot read $f failed";
+}
+
+my $begun;
+my $ended;
+
+my $begin_compiled;
+my $end_compiled;
+
+if (defined $begin_pattern) {
+   $begin_compiled = qr/$begin_pattern/;
+} elsif ( !defined $after_string) {
+   # default to begun already
+   $begun = 1;
+}
+
+if (defined $end_pattern) {
+   $end_compiled = qr/$end_pattern/;
+}
+
+my $before_string_len = 0;
+if (defined $before_string) {
+   $before_string_len = length($before_string);
+}
+
+my $after_string_len = 0;
+if (defined $after_string) {
+   $after_string_len = length($after_string);
+}
+
+LINE:
+while (<$fh>) {
+   my $line = $_;
+
+   if ( !$begun ) {
+      if ( ( defined $begin_compiled && $line =~ /$begin_compiled/ ) ||
+         ( defined $after_string && substr($line, 0, $after_string_len) ge $after_string ) ){
+         $begun = 1;
+      } else {
+         next;
+      }
+   }
+
+   last if defined $before_string && substr($line, 0, $before_string_len) ge $before_string;
+
+   print $line;
+
+   last if defined $end_compiled && $line =~ /$end_compiled/;
+}
+
+exit 0;

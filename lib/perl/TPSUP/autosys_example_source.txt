@@ -1,0 +1,1 @@
+https://techdocs.broadcom.com/content/broadcom/techdocs/us/en/ca-enterprise-software/intelligent-automation/workload-automation-ae-and-workload-control-center/11-3-6-SP8/reference/ae-commands/monitor-and-report-on-workload/autorep-command-report-job-machine-and-variable-information.html

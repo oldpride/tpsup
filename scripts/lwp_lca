@@ -1,0 +1,133 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_homedir);
+use TPSUP::DATE qw(yyyymmddHHMMSS_to_epoc get_tradeday);
+
+# in case we get
+#    Wide character in print at /home/tian/sitebase/github/tpsup/scripts/lwp_lca line 106.
+# we use the following
+use open qw( :std :encoding(UTF-8) );
+
+# https://perlmaven.com/lwp-useragent-and-basic-authentication
+use LWP::UserAgent;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $BackDays = 5;
+
+sub usage {
+   my ($message, $opt) = @_;
+
+   print "$message\n" if $message;
+
+   my $caller1 = $opt->{Caller} ? $opt->{Caller} : "$prog file.cfg";
+   my $caller2 = $opt->{Caller} ? $opt->{Caller} : "$prog diffdated_test.cfg";
+
+   my $detail = $opt->{Detail} ? $opt->{Detail} : "";
+   my $example;
+
+   if ($opt->{Example}) {
+     $example = $opt->{Example};
+     $example =~ s/\{\{prog\}\}/$caller2/gi;
+   } else {
+     $example = <<"EOF";
+
+   - to set up test dirs
+       diffdated_test.bash
+
+   - diff 
+       diffdated diffdated_test.cfg today
+       diffdated diffdated_test.cfg `date +%Y%m%d`
+
+   - only test p2 and p3 and assume yesterday as 'today'. should be all matched
+       diffdated diffdated_test.cfg -t p2,p3 today=`tradeday -1`
+
+EOF
+   }
+
+   print STDERR << "END";
+
+Usage:
+
+   $prog cfg yyyymmdd1 yyyymmdd2
+
+   Compare dirs of two dates. This is used to search for missing files or missing sub dirs.
+
+   if yesterday's dir is still in today_pattern, for example, on weekend, before friday's
+   files are archived, they may still be in today_pattern, it this case use
+      today=yesterday_yyyymmdd
+   to specify that use today_pattern on yesterday's files.
+
+   -t p1,p2,...          only test these patterns
+
+   -v                    verbose
+
+   -backdays INT         default to $BackDays
+
+Examples:
+$example
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $test_patterns;
+my $caller;
+
+GetOptions(
+   'verbose'   =>      \$verbose,
+   'test=s'    =>      \$test_patterns,
+   'c=s'       =>      \$caller,
+   'backdays=s'=>      \$BackDays,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $cfg_file = shift @ARGV;
+
+my $today  = `date +%Y%m%d`;   chomp $today;
+my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
+
+#my $ua = LWP::UserAgent->new;
+#$ua->credentials( 'https://pause.perl.org/pause/authenquery', 'PAUSE', 'szabgab', '**********');
+
+
+my $url = "https://livingstonchinese.org/";
+my $ua = new LWP::UserAgent();
+$ua->max_redirect(5);
+$ua->agent("Mozilla/5.0 (Windows NT 6.1)");
+
+my $response = $ua->get($url);
+my $request = $response->request();
+
+if ($response->is_success) {
+   print $response->decoded_content;
+} else {
+   die $response->status_line;
+}
+
+print "------------------- begin redirects --------------------------------\n";
+
+my @redirects = $response->redirects();
+for my $red (@redirects) {
+   print "------------------- request --------------------------------\n";
+   my $req = $red->request();
+   print($req->as_string());
+
+   print "------------------- redirect --------------------------------\n";
+   print($red->as_string());
+}
+
+print "------------------- end redirects --------------------------------\n";
+print($request->as_string());
+
+print "------------------- response --------------------------------\n";
+print($response->as_string());
+

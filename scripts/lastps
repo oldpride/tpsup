@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ps --sort=start_time -ef

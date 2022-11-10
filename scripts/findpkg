@@ -1,0 +1,41 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 pattern
+
+   find the pkg with files or name match a pattern
+
+   note: Ubuntu doesn't use rpm.
+
+examples:
+
+   $0 libc.so
+   $0 chromium-browser/locales
+
+EOF
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+for i in $@
+do
+   echo "---- match by filename, search in /var/lib/dpkg/info/*.list, case-insensitive ----"
+   grep -Fi "$i" /var/lib/dpkg/info/*.list |sed 's:/var/lib/dpkg/info/::;s/.list:/: /'
+
+   echo ""
+   echo "---- match by pkg name, case-sensitive ----"
+   (set -x; dpkg -l "$i")
+
+   #echo ""
+   #echo "---- match by file name, case-sensitive ----"
+   #(set -x; dpkg -S "$i")
+
+   echo
+done

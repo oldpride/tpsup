@@ -1,0 +1,29 @@
+this is line 1
+this is line 2
+this is line 3
+this is line 4
+this is line 5  flag this: ERROR: process dead
+this is line 6    process id = 10000
+this is line 7
+this is line 8
+this is line 9  don't flag this: if there is an error, please call me
+this is line 10
+this is line 11
+this is line 12
+this is line 13 flag this: Exception: java crashed
+this is line 14    java stack1
+this is line 15 use log file: /var/log/syslog
+this is line 16
+this is line 17
+this is line 18 don't flag this: msgid=0, price=23.99, qty=100, error=0, msg=filled
+this is line 19
+this is line 21 don't flag this: found error message []
+this is line 22
+this is line 23
+this is line 24
+this is line 25 flag this: FATAL: unknown id
+this is line 26
+this is line 27
+this is line 28
+this is line 29
+this is line 30

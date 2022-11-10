@@ -1,0 +1,174 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::AUTOSYS qw(get_dependency load_autosys_cfg);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $DetailExpire = 24*60*60;
+my $StatusExpire = 24*60*60;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog JobName
+   
+description:
+
+   check autosys dependency
+
+   -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
+
+   -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
+   
+   -r                  reset cache, ie, time out all caches
+
+   -rs                 reset status cache only
+
+   -je matchExpression JobExpression. eg -me '\$JobName =~ /JOB1|JOB2|JOB3/', 
+                       this will help reduce the job universe.
+                       this is very useful during troubleshooting.
+
+   -de matchExpression DependencyExprssion. eg -me '\$Status !~ /OH|OI/'.
+                       this will help prune dependency search path
+
+   -de matchExpression DependencyExprssion. eg -me '\$Status !~ /OH|OI/'.
+                       this will help prune dependency search path
+
+   -ej external_jobs   eg "P2_J1,P3_J1". This will bring in both P2% and P3%'s whole universe.
+                       By default, this script only looks into the JobName's universe
+                       when searching for dependency, which will miss downward dependency
+                       in other universe. For example, 
+                          $prog P1_J1
+                       the program will only search in P1. If job P2_J2 depends on
+                       P1_J1, the program will not be aware. This ignorance can be
+                       fixed by either
+                          $prog -ej 'P2_J1,P3_J1'
+                          $prog -ej 'P2%,P3%'
+                          $prog -ej 'P2,P3'
+                       This can also be set in ~/.tpsup/autosys.cfg
+                          dependency.ExtJobs = P2,P3
+
+   -op key=value       add other optional setting, eg,
+                       -op IgnoreConditionWhenStartTimesDefined=1
+
+examples:
+
+   1. test a job in box
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_job1
+
+   2. test a box
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_box1
+
+   3. test IgnoreConditionWhenStartTimesDefined upward, test_job3 and test_job4 are 
+     not upward dependency any more
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt \\
+      -op IgnoreConditionWhenStartTimesDefined=1 test_box1
+
+   4. test IgnoreConditionWhenStartTimesDefined downward. compare the following two
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt \\
+      test_job4    # you see test_box1 as downward dependency
+
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt \\
+      -op IgnoreConditionWhenStartTimesDefined=1 test_job4   # test_box1 is gone
+
+   5. filter out job on-hold and on-ice
+   $prog -df adep_autorep_q_J_example.txt \\
+         -sf adep_autorep_J_example.txt \\
+         -de '\$Status !~ /OH|OI/' \\
+         test_job1
+
+   6. filter out dependency on on-hold and on-ice, and narrow universe to only job1 and box1
+   $prog -df adep_autorep_q_J_example.txt \\
+         -sf adep_autorep_J_example.txt \\
+         -je '\$JobName =~ /job1|box1/' \\
+         -de '\$Status !~ /OH|OI/' \\
+         test_job1
+
+   7. test an external dependency. you should see p2_job1, which was not seen in test-2
+   (when using -df and -sf, we actually don't need to set -ej as the new universe is 
+    automatically loaded with the -df and -sf.)
+   $prog -df adep_autorep_q_J_example.txt,adep_autorep_q_J_example_p2.txt \\
+         -sf adep_autorep_J_example.txt,adep_autorep_J_example_p2.txt \\
+         -ej 'p2%' \\
+         test_box1
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $DetailFiles;
+my $StatusFiles;
+my $reset;
+my $reset_status;
+my %value_by_key;
+my @DepExps;
+my @JobExps;
+my $ExtJobs;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'r|reset'       => \$reset,
+   'rs'            => \$reset_status,
+   'df=s'          => \$DetailFiles,
+   'sf=s'          => \$StatusFiles,
+   'de=s'          => \@DepExps,
+   'je=s'          => \@JobExps,
+   'ej=s'          => \$ExtJobs,
+   'op=s'          => \%value_by_key,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($job) = @ARGV;
+
+my $opt = { 
+   verbose      => $verbose,
+   DetailFiles  => $DetailFiles,
+   StatusFiles  => $StatusFiles,
+   DetailExpire => $DetailExpire,
+   StatusExpire => $StatusExpire,
+   DepExps      => \@DepExps,
+   JobExps      => \@JobExps,
+   ExtJobs      => $ExtJobs,
+   %value_by_key,
+};
+
+if ($reset) {
+   $opt->{DetailExpire} = 30;
+   $opt->{StatusExpire} = 30;
+} elsif ($reset_status) {
+   $opt->{StatusExpire} = 30;
+}
+
+my $dependency = get_dependency($job, $opt);
+
+$verbose && print STDERR "dependency=", Dumper($dependency);
+
+no warnings 'uninitialized';
+
+for my $updown (qw(up self down)) {
+   next if ! exists $dependency->{$updown};
+
+   for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
+                                :         @{$dependency->{$updown}}  ) {
+                                  
+      print $updown eq 'up'   ? '-': 
+            $updown eq 'down' ? '+' : '',
+            join('.', @{$dep->{serial}}),
+            ",   $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
+            "$dep->{reason}, ",
+            "$dep->{detail}->{Status}, ",
+            "$dep->{detail}->{LastStart}, $dep->{detail}->{LastEnd}\n";
+   }
+}

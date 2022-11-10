@@ -1,0 +1,202 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::DATE qw(get_interval_seconds);
+use TPSUP::LOG qw(find_log_PatternCfg get_log_time);
+use TPSUP::UTIL qw(get_in_fh);
+use TPSUP::READER qw(spot);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+my $last_seconds = 3600;
+
+my $exclude_pattern = undef;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+description:
+   
+   check log for error
+
+   -v                     verbose mode
+
+   -s                     print summary
+
+   -x exclude_pattern     Perl style, exclude lines with this pattern.
+                          default to undef
+
+   -t seconds             only check for logs in the this number of last seconds.
+                          default $last_seconds. 
+                          to disable this, use 0.
+
+   -pf LogPatternCfgFile  default to log_pattern.cfg
+
+   -old                   check old logging too. default is only to check today's logging.
+   -case                  case-sensitive match. default is case insensitive.
+
+   -now YYYYmmdd-HHMMSS   set this as now, for testing purpse
+
+   -nt                    no time pattern
+
+examples:
+
+   $prog log_event_test.log   # no error, just to test parsing the timestamp
+
+   $prog      chklog_test.log     # no error because today has no error
+   $prog -old chklog_test.log     # some old error
+
+   $prog /var/log/syslog                      # normally see some errors
+
+   - test with -now YYYYmmddHHMMSS
+   $prog       -now 20210323000000       chklog_test.log     
+   $prog       -now 2021-03-23-00:00:00  chklog_test.log     
+   $prog -old  -now 2021-03-23-00:00:00  chklog_test.log     
+
+   - on file without time pattern
+   $prog     spoterr_test.log
+   $prog -nt spoterr_test.log
+
+EOF
+
+   exit 1;
+}
+
+my ($verbose, $case_sensitive, $print_summary, $LogPatternCfg, $old, 
+    $YYYYmmddHHMMSS, $no_time_pattern);
+
+ GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "v"              => \$verbose,
+   "s"              => \$print_summary,
+   "old"            => \$old,
+   "case"           => \$case_sensitive,
+   "t=s"            => \$last_seconds,
+   "pf=s"           => \$LogPatternCfg,
+   "now=s"          => \$YYYYmmddHHMMSS,
+   "nt"             => \$no_time_pattern,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $current_yyyymmdd;
+my $current_yyyy;
+my $current_HHMMSS;
+
+if ($YYYYmmddHHMMSS) {
+   if ("$YYYYmmddHHMMSS" =~ /^(\d{4})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})$/) {
+      $current_yyyymmdd = "$1$2$3";
+      $current_yyyy     = "$1";
+      $current_HHMMSS   = "$4$5$6";
+   } else {
+      croak "cannot parse YYYYmmddHHMMSS='$YYYYmmddHHMMSS'";
+   }
+} else {
+   $current_yyyymmdd = $TPSUP::LOG::yyyymmdd;
+   $current_yyyy     = $TPSUP::LOG::yyyy;
+   $current_HHMMSS   = $TPSUP::LOG::HHMMSS;
+} 
+
+if ($verbose) {
+   print "current_yyyymmdd = $current_yyyymmdd\n";
+   print "current_HHMMSS   = $current_HHMMSS\n";
+}   
+
+my $compiled_exclude = $exclude_pattern ?
+                             ($case_sensitive ?  qr/$exclude_pattern/ : qr/$exclude_pattern/i)
+                             : undef;
+
+for my $f (@ARGV) {
+   print "\nfile=$f\n" if $verbose;
+
+   my $ignore_time_pattern;
+
+   my $cfg;
+   if ($no_time_pattern) {
+      $ignore_time_pattern = 1;
+   } else {
+      $cfg = find_log_PatternCfg($f, {LogPatternCfg=>$LogPatternCfg});
+
+      if ($cfg) {
+         print STDERR "file=$f, matched time pattern =", Dumper($cfg), "\n" if $verbose;
+      } else {
+         print STDERR "file=$f, cannot match any time pattern. will ignore time_pattern\n";
+         $ignore_time_pattern = 1;
+      }
+   }
+
+   my $pattern  = $cfg->{pattern};
+   my $compiled = $cfg->{compiled};
+
+   my $summary;
+   my $last_part_started;
+
+   # my $ifh = get_in_fh($f);
+   # while(my $line = <$ifh>) {
+   my $lines = TPSUP::READER::spot($f, 'error', {input_type=>'file', verbose=>0});
+   for my $line (@$lines) {
+      $summary->{total_rows} ++ if $print_summary;
+
+      if (!$ignore_time_pattern) {
+         if (!$last_part_started) {
+            my $t = get_log_time(\$line, $cfg);
+   
+            if ($verbose) {
+               print "spot line = $line\n"; 
+               print "t = ", Dumper($t);
+            }
+   
+            next if !$t;
+            $summary->{dated_rows} ++ if $print_summary;
+   
+            if (!$old) {
+               next if $t->{yyyymmdd} ne $current_yyyymmdd;
+               $summary->{today_rows} ++ if $print_summary;
+            }
+   
+            if ($last_part_started) {
+               my $backwardness = get_interval_seconds($t->{yyyymmdd}, $t->{HHMMSS}, $current_yyyymmdd, $current_HHMMSS);
+               if ($backwardness > $last_seconds) {
+                  next;
+               }
+            } 
+   
+            $last_part_started ++;
+   
+            print "parse log from $t->{yyyymmdd} $t->{HHMMSS}\n" if $verbose;
+         }
+   
+         $summary->{last_rows} ++ if $print_summary;
+      }
+
+      if ($compiled_exclude) {
+         next if $line =~ /$compiled_exclude/;
+         $summary->{excluded_rows} ++ if $print_summary;
+      }
+
+      print $line, "\n"; #see some errors
+
+;
+   }
+
+   print "summary = ", Dumper($summary), "\n" if $print_summary; 
+}
+
+exit 0;
+
+#################################################################################
+# subs
+#################################################################################
+

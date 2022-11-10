@@ -1,0 +1,204 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+#use TPSUP::UTIL    qw(get_setting_from_env);
+use Selenium::Chrome;
+
+my $prog = $0; $prog =~ s:.*/::;
+my $drivername = "chromedriver";
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog auto
+   $prog host:port
+
+description:
+
+    run selenium test
+
+    +----------+      +--------------+     +----------------+
+    | selenium +----->+ chromedriver +---->+ chrome browser +---->internet
+    +----------+      +--------------+     +----------------+
+
+    selenium will always start a chromedriver locally.
+
+    $prog auto
+    selenium will also start a local browser.
+
+    $prog host:port
+    selenium will connect to an existing running browser, local or remote.
+
+    -ba a=b             browser args. for example, -ba proxy-pac-url=http://pac.abc.net.
+                        can set multiple times.
+
+    -driver DRIVER      webdriver name. default to $drivername.
+                        DRIVER must be in \$PATH. this is used to choose
+                        chromedriver's version to match the browser's.
+
+    -headless           headless browser.
+
+    -v                  verbose mode. 
+
+examples:
+
+    - let Selenium::Chrome to start a local browser automatically
+    $prog auto
+    $prog -ba proxy-pac-url=http://pac.abc.net auto
+
+    - start Chrome (c1) on localhost with debug port 9222.
+    /usr/bin/chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
+    --user-data-dir=/tmp/selenium_chrome_browser_dir --remote-debugging-port=9222
+    $prog localhost:9222
+
+   - start Chrome (c1) on remote PC with debug port 9222.
+
+    +------------------+       +---------------------+
+    | +---------+      |       |  +---------------+  |
+    | |selenium |      |       |  |chrome browser +------->internet
+    | +---+-----+      |       |  +----+----------+  |
+    |     |            |       |       ^             |
+    |     |            |       |       |             |
+    |     v            |       |       |             |
+    | +---+---------+  |       |  +----+---+         |
+    | |chromedriver +------------>+netpipe |         |
+    | +-------------+  |       |  +--------+         |
+    |                  |       |                     |
+    |                  |       |                     |
+    |  Linux           |       |   PC                |
+    |                  |       |                     |
+    +------------------+       +---------------------+
+
+    PC> "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe" \
+    --remote-debugging-port=9222 --user-data-dir=%USERPROFILE%\\ChromeTest
+    on the same remote PC, launch cygwin, in cygwin term: netpipe 9333 localhost:9222
+    $prog 192.168.1.164:9333
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $headless;
+my @browserArgs;
+
+GetOptions(
+   'v|verbose'         => \$verbose,
+   'headliess'         => \$headless,
+   'ba|browserArgs=s'  => \@browserArgs,
+   'driver=s'          => \$drivername,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($host_port) = @ARGV;
+
+my $driver_log = "/tmp/selenium_chromedriver.log";
+
+my $driver_args = "--verbose --log-path=$driver_log";  # chromedriver cmd line
+
+my $browser_options;
+
+if ($host_port eq 'auto') {
+   print "we will start a chromedriver which will start a browser\n";
+
+   # these args are chrome browser (including chromium-browser) command line args
+   $browser_options->{args} = [
+            '--no-sandbox',              # to run without root
+            '--disable-dev-shm-usage',   # to run without root
+            '--window-size=960,540',
+
+            # use a separate browser dir to avoid corruption
+            '--user-data-dir=/tmp/selenium_chrome_browser_dir',  
+   ];
+
+   if ($headless) {
+      push @{$browser_options->{args}}, "--headless";
+   }
+
+   for my $ba (@browserArgs) {
+      #'--proxy-pac-url=http://pac.abc.net',
+      push  @{$browser_options->{args}}, "--$ba",
+   }
+} else {
+   print "we will start a chrome driver which will connect to an existing browser at host:port=$host_port\n";
+
+   # this is remote browser's debugger listener
+   $browser_options->{debuggerAddress} = $host_port;
+}
+
+if ($verbose) {
+   # to check any lingering chromedriver. they should have been killed before we start
+   my $cmd = "ps -ef |grep $drivername|grep -v grep";
+   print "$cmd\n";
+   system($cmd);
+
+   $cmd = "cat /dev/null > $driver_log";
+   print "$cmd\n";
+   system($cmd);
+
+   # --pid PID  exits when PID is gone
+   # -F         retry file if it doesn't exist
+   $cmd = "tail --pid $$ -F -f $driver_log &";
+   print "$cmd\n";
+   system($cmd);
+}
+
+my $driver = Selenium::Chrome->new (
+   # the following seting are in Selenium::Chrome
+   startup_timeout => 20,
+   custom_args => $driver_args,
+
+   # the following setting are in Selenium/CanStartBinary.pm
+   logfile => "${driver_log}2",  # another chromedriver log, shorter version
+
+   # Selenium::Chrome is an extension of Selenium::Remote::Driver
+   # the following setting are in Selenium::Remote::Driver
+   debug_on   => 1, 
+   extra_capabilities => {
+      'goog:chromeOptions' => $browser_options,
+   },
+);
+
+sleep 2;
+
+my $url = "https://www.google.com";
+$driver->get($url);
+
+sleep 2;
+
+# in chrome browser, find the interested spot, right click -> inspect, this will bring up source code,
+# in the source code window, right click -> copy -> ...
+
+# <input class="gLFyf gsfi" maxlength="2048" name="q" type="text" jsaction="paste:puy29d" aria-autocomplete="both" aria-haspopup="false" autocapitalize="off" autocomplete="off" autocorrect="off" autofocus="" role="combobox" spellcheck="false" title="Search" value="" aria-label="Search" data-ved="0ahUKEwjt7s-M5pXnAhVDuVkKHUlHBscQ39UDCAY">
+
+my $search_box = $driver->find_element('q', 'name');
+$driver->send_keys_to_active_element("perl Selenium", "\n");
+sleep 2;
+
+# https://gist.github.com/dnmfarrell/5dde6d3957bf9ae037e170cdb44f75a5 
+my @links = $driver->find_elements('a', 'tag_name');
+for my $l (@links) {
+   my $link_url = eval { $l->get_attribute('href') };
+   next unless $link_url;
+   my $link_uri = URI->new($link_url);
+   next unless $link_uri->can('host'); # not all URIs have a domain
+   my $link_host = $link_uri->host;
+   print $link_host, "\n";
+}
+
+sleep 2;
+
+$driver->shutdown_binary;
+
+# list all the log files
+system("ls -ld /tmp/selenium_*");

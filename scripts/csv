@@ -1,0 +1,715 @@
+#!/usr/bin/perl
+
+package CSV;
+
+use strict;
+use warnings;
+use Data::Dumper;
+use Getopt::Long qw(:config no_ignore_case);
+use Carp qw/cluck confess/;
+
+sub usage {
+   my ($message) = @_;
+
+   my ($name) = $0 =~ m#([^/]+)$#;
+   
+   print STDERR "$message\n" if $message;
+   
+   print STDERR <<USAGE;
+usage:
+   $name [OPTION] FILE
+   $name -help
+View, search, sort, aggregate, and evaluate dynamic expressions over csv data..
+Results are in a table format for easy readability, or optionally in csv format.
+   
+Options:
+   -field=COLNAME  The column names to disblay (Default, all columns).
+                   Use -Field instead to allow nonexistent fields
+   
+   -nofield    Don't display original columns (i.e. only show -e column
+   
+   -match=REGEX    Perl regexp to match rows (like grep), faster than -Match
+   
+   -Match=PERLEXP  Similar to -match but expresssions are used, eg. (\$pnl > 3)
+
+   -expr=PERLEXP   A column will be created with result of this perl expression.
+                   Each displayed field, e.g. 'X', will be accessible with \$X.
+                   To name the column, prefix your expression with: MYNAME=.
+                   See example.
+   
+   -sum            This will add a row at the end with the sum of all columns.
+                   Use -Sum to force results for columns with non-numeric data.
+   
+   -average        Similar to -sum, adds a row with the average of all columns
+   
+   -groupby=COL    Group by columns (O-offset or anmes) for aggregate functions.
+   
+   -last=INT       Only print last N data rows (doesn't apply to aggregates)
+   
+   -csv            Toggle csv output rather than a table format
+   
+   -sort=COL       Sort by columns (*0-offset or name) negative offsets work too.
+
+   -sortDesc       Sort descending (ascending default)
+   
+   -sortNumeric    Sort numerically (Default: alpha-numeric))
+   
+   -sortUnique     Only one row per unique value of sort column will be shown.
+   
+   -delim=STRING   The delimeter to use when parsing (Default: ,)
+   
+   -rawdelim       Allow regular expression in delimeter (default it's escaped)
+   
+   -whitespace     Use whitespace as delimiter (i.e. -delim 'Ws' -raswdelim)
+   
+   -nocommaexpand  Disable expanding comma separated list in command line args
+
+   -noheader       Don't output header line(s)
+   
+   -incremental    Use incremental table rendering, (e.g. with 'tail -f')
+   
+   -xargs          Get files from stdin: avoid shell command line length limits.
+   
+   -skip=INT       skip the first INT lines because some files have comments above
+                   header.
+   
+   -fakeHeader=h1,h2,...
+                   use this as the header
+   
+   -missingHeader
+                  indicate the input file has no header. You use -fakeHader to provide one.
+   
+   -quiet         turn off some warnings, eg,
+                  "Warning: Found 54 lines with wrong/inconsistent number of columns"
+
+Examples:
+   $name -f pnlL,pnlS -m 20061016 -e 'pnlTotal=\$pnlL+\$pnlS' ./dtata/report.csv
+   $name -field pnlL -field pnlS -sum ./reports/report.csv
+   $name -f x,y -e 'a=\$x > \$y ? 1 : -1' -e 'b=\$prev::a + \$a' -M '\$b > 0'
+   $name -f exch,volume,fees -sum -groupby exch -sort fees,volume -sortNumeric
+   
+   - this will filter out comment '#' and blank lines
+   $name -match ,^[ ]*[^#]' conn.csv
+   
+USAGE
+   exit 1;
+}
+   
+my $delim = ',';
+my $fakeHeader;
+   
+sub main {
+   my (@fields, @exps, @matches, @matchExps, $sum, $average, $lastCount, $allowMissing,
+       $xargs , $csv, @sort, $sortDesc, $sortNumeric, $sortUnique, $help, $warn, $nofield,
+       $rawdelim, @aggs, @groupby, $force_sum, $force_average, $incremental, $skiplines,
+       $missingHeader);
+   my $commaExpand = 1;
+   my $header = 1;
+   my $noheader;
+   my $quiet = 0;
+   
+   GetOptions('field|f=s'      => \@fields,
+              'Field=s'        => sub { $allowMissing=1; push @fields, $_[1]; },
+              'nofield'        => \$nofield,
+              'noheader'       => \$noheader,
+              'match=s'        => \@matches,
+              'Match=s'        => \@matchExps,
+              'expression=s'   => \@exps,
+              'delimiter=s'    => \$delim,
+              'rawdelimeter'   => \$rawdelim,
+              'whitspace'      => sub { $delim = '\s+'; $rawdelim = 1;},
+              'debug'          => \$warn,
+              'commaexpand'    => \$commaExpand,
+              'sum'            => \$sum,
+              'Sum'            => \$force_sum,
+              'Average'        => \$force_average,
+              'average'        => \$average,
+              'groupby=s'      => \@groupby,
+              'last=i'         => \$lastCount,
+              'sort=s'         => \@sort,
+              'sortDesc'       => \$sortDesc,
+              'sortNumeric'    => \$sortNumeric,
+              'sortUnique'     => \$sortUnique,
+              'csv'            => \$csv,
+              'incremental'    => \$incremental,
+              'xargs'          => \$xargs,
+              'skip=s'         => \$skiplines,
+              'fakeHeader=s'   => \$fakeHeader,
+              'missingHeader'  => \$missingHeader,
+              'quiet'          => \$quiet,
+              'help'           => \$help
+   ) or usage ("cannot parse command line: $!");
+   
+   usage() if $help;
+   usage("wrong number of args") if !@ARGV;
+   usage("must specify '-fakeHeader h1,h2,...' when '-missingHeader' is used") if $missingHeader && !$fakeHeader;
+   
+   $header = 0 if $noheader;
+   
+   @fields  = $commaExpand ? (map {split ',', $_} @fields)  : @fields;
+   @groupby = $commaExpand ? (map {split ',', $_} @groupby) : @groupby;
+   @sort    = $commaExpand ? (map {split ',', $_} @sort)    : @sort;
+   $delim = $rawdelim ? qr/$delim/ : quotemeta($delim);
+   $warn = $warn ? "use" : "no";
+   
+   my (@sum, @originalFields, @fieldsIndex, @allfields, @expNames, $table, @lastRows, $badLines,
+       @minVisible, @minVisInds);
+   
+   FILE_LOOP: {
+      if ($xargs) {
+         # Read file names as needed from stdin (don't wait for eof before beginning processing)
+         my $file = <STDIN>;
+         last FILE_LOOP unless defined $file;
+         push @ARGV, map { chomp; length $_ ? $_ : () } $file;
+      }
+         
+      # Workaround for perl failing to open files with leading whitespace
+      @ARGV = map { m#^\S# ? $_ : "./$_" } @ARGV;
+         
+      @ARGV = map { #Handle reading gzip files (based on filename)
+         my $file = $_;
+         if (/\.(gz|Z)$/) {
+            $file =~ s/'/'\\' '/g;
+            $file = "gzip -dc '$file' |";  # gzip -d = gunzip
+         }
+         $file;
+      } @ARGV;
+         
+      my $skipped_row = 0;
+      LINE: while (<>) {
+         if ($skiplines && $skipped_row <$skiplines) {
+            $skipped_row ++;
+            next;
+         }
+         
+         chomp;
+         my $line = $_;
+         $line =~ s///g;
+         next if $line eq '';
+         
+         #check if the current line/row matches (uses regex, like grep). Do this before we split.
+         for (@matches) {
+            unless ($line =~ $_) {
+               next LINE unless (@fieldsIndex == 0 ) || ($. == 1); #Don't skip header lines. $. is line number
+               last;
+            }
+         }
+            
+         my @data = split $delim, $line, -1; # -1 is keep trailing empty fields
+            
+         # Parse Header (only runs on first line)
+         unless (@fieldsIndex) {
+            processHeader(\@fields, $nofield, \@fieldsIndex, \@data, $allowMissing);
+            @originalFields = @fields;
+            parseExpressions(\@exps, \@matchExps, \@fields, \@fieldsIndex, \@minVisible, $warn);
+            
+            my %fieldmap = map {$fields[$_] => $_ } 0 .. $#fields;
+            @groupby = map { m/^-*\d+$/ ? $_ : (exists $fieldmap{$_} ? $fieldmap{$_} : (die "Unknown group-by field $_\n")) } @groupby;
+            @sort    = map { m/^-*\d+$/ ? $_ : (exists $fieldmap{$_} ? $fieldmap{$_} : (die "Unknown sort field $_\n")) } @sort;
+            
+            @allfields = Expression::normalizeNames(@data);
+            @minVisInds = findIndices(\@minVisible, \@allfields);
+            $table = createTable($csv, \@fields, \@sort, $sortNumeric, $sortDesc, $sortUnique, $header, $incremental);
+            @expNames = Expression::normalizeNames(\@fields[ (@fields - @exps) .. $#fields ]);
+            
+            push @aggs, newAggregate::Sum    (scalarf(@fields), \@groupby) if $sum;      #sum()?
+            push @aggs, newAggregate::Average(scalarf(@fields), \@groupby) if $average;  #average()?
+            push @aggs, newAggregate::Sum    (scalarf(@fields), \@groupby) if $force_sum;
+            push @aggs, newAggregate::Average(scalarf(@fields), \@groupby) if $force_average;
+            $lastCount = 0 if @groupby && @aggs && !defined($lastCount);
+            undef $lastCount if defined($lastCount) && $lastCount < 0;
+         
+            if (!$missingHeader) {
+               # when !$missingHeader, the first line is Header, so we are done now.
+               next;
+            }
+         }
+         
+         # First line of each subsequent file
+         if ($. == 1) {   #$. is input line number 
+            # in case position of fields has moved (or been removed) re-process header (this is messy)
+            processHeader(\@originalFields, $nofield, \@fieldsIndex, \@data, $allowMissing);
+            @allfields = Expression::normalizeNames(@data);
+            @minVisInds = findIndices(\@minVisible, \@allfields);
+            #skip first line from each file
+            if (!$missingHeader) {
+               # when !$missingHeader, the first line is Header, so we are done now.
+               next;
+            }
+         }
+            
+         # Check if data is consistent with correct number of columns
+         if (@data != @allfields) {
+            ++$badLines;
+            $data[$_] = '' for (@data .. $#allfields);
+         }
+            
+         # set up the expression variables if we need them
+         if (@matchExps || @exps) {
+            #print "data = ", Dumper(\@data);
+            Expression::export(map {$allfields[$_] => $data[$_]} (@minVisInds));
+            Expression::exportPrev(@expNames);
+         }
+            
+         # Evaluate Expressions (add columns dynamically)
+         push @data, evalExpressions(\@exps, \@expNames) if (@exps);
+   
+         # check if the current line/row matches (using perl expression)
+         for (@matchExps) {
+            #print "exp = ", Dumper($_);
+            next LINE unless $_->();
+         }
+         
+         # done processing the line, now we need to store it somewhere
+         my @rowdata = map $data[$_], @fieldsIndex;
+         if (defined $lastCount) {
+            push @lastRows, @rowdata;
+            shift @lastRows if (@lastRows > $lastCount);
+         } else {
+            $table->row(@rowdata);
+         }
+         
+         # update aggregate functions
+         $_->row(\@rowdata) for @aggs;
+      }
+      continue {
+         #reset line numbering on each input file
+         close ARGV if eof(ARGV);
+      }
+         
+      redo FILE_LOOP if $xargs;
+   }
+         
+   # Done reading csv data, now render the output
+   if (defined $lastCount) {
+      $table->row(@$_) for @lastRows;
+   }
+   if ($table) {
+      $table->rule('-') if @aggs && I (defined($lastCount) && $lastCount == 0);
+      for my $agg (@aggs) {
+         $agg->output($table);
+         $table->rule(); #Flush table output
+      }
+      print $table->render(2147483647);
+   }
+         
+   warn "Warning: Found $badLines lines with wrong/inconsistent number of columns\n" if $badLines && !$quiet;
+}
+main() unless caller();
+         
+sub processHeader {
+   my ($fields, $nofield, $fieldsIndex, $data, $allowMissing) = @_;
+
+   #cluck "here";
+         
+   if ($fakeHeader) {
+      # user specified header
+      @$fields = split $delim, $fakeHeader, -1;
+      @$fieldsIndex = (0 .. $#$fields);
+
+      return;
+   }
+         
+   if (!@$fields && !$nofield) {
+      @$fields = @$data;
+      @$fieldsIndex = (0 .. $#$fields);
+   } else {
+      my %headerPos = map { $data->[$_] => $_ } (0 .. $#$data);
+      for (0 .. $#$fields) {
+         my $pos = $headerPos{$fields->[$_]};
+         if (!defined $pos) {
+            die "Could not find '$fields->[$_]' in header: @$data\n" unless $allowMissing;
+            $pos = 1000000000; # suitabley large to never match anything (famous last words)
+         }
+         $fieldsIndex->[$_] = $pos;
+      }
+   }
+}
+         
+sub createTable {
+   my ($csv, $fields, $sort, $sortNumeric, $sortDesc, $sortUnique, $header, $incremental) = @_;
+   my $t = $csv ? MyCSVTable->new() : MyTextTable->new($incremental);
+
+   $t = SortableTable->new($t, $sort, $sortNumeric, $sortDesc, $sortUnique) if @$sort;
+         
+   if ($header) {
+      $t->head(@$fields);
+      $t->rule('=');
+   }
+   return $t;
+}
+         
+sub parseExpressions {
+   my ($exps, $matchExps, $fields, $fieldsIndex, $minVis, $warn) = @_;
+         
+   push @$fieldsIndex, ($_ - @$exps) for 0 .. $#$exps;
+         
+   my @names = chooseExpressionNames($exps);
+   push @$fields, @names;
+         
+   @$minVis = parseMinVisible(@$matchExps, @$exps);
+         
+   # compile expressions
+   @$exps = map {
+      my $r = eval "$warn warnings; no strict; package Expression; sub { $_}";
+      die "Bad expression '$_' : $@" if $@;
+      $r
+   } @$exps;
+   @$matchExps = map {
+      my $complied = eval "$warn warnings; no strict; package Expression; sub { $_ } ";
+      $@ ? (die "Bad match expression '$_' : $@") : $complied;
+   } @$matchExps;
+}
+         
+sub parseMinVisible {
+   my @exps = @_;
+   my %seen;
+   for my $e (@exps) {
+      while ($e =~ m/\$(\{)?(prev::)?([a-zA-Z0-9_]+)(?(1)\})/g) {
+         $seen{$3} = 1;
+         Expression::exportPrevious() if defined $2;
+      }
+   }
+   return keys %seen;
+}
+         
+sub chooseExpressionNames {
+   my $exps = shift;
+   my @names;
+   foreach (@$exps) {
+      if (m/^ *([a-zA-Z0-9_:,.-]*?) *=([^=~].*)$/s) {
+         push @names, $1;
+         $- = $2; # useless?! $-: the number of lines left on the page of the currently selected channel
+      } else {
+         push @names, length($_) > 15 ? (substr($_, 0, 15)) : $_;
+      }
+   }
+   return @names;
+}
+         
+sub evalExpressions {
+   my ($exprs, $exprNames) = @_;
+   my @results;
+       
+   for (my $i=0; $i < @$exprs; ++$i) {
+      my $result = $exprs->[$i]->();
+      push @results, $result;
+       
+      # Allow future expressions to access this result
+      Expression::exportCurrent($exprNames->[$i] => $result);
+   }
+       
+   return @results;
+}
+       
+sub findIndices {
+   my ($search, $data) = @_;
+   my $i = 0;
+   my %lookup = map { $_ => $i++ } @$data;
+   map { exists $lookup{$_} ? $lookup{$_} : () } @$search;
+}
+       
+#####################################################################################################
+#####################################################################################################
+       
+# All expressions are anonymous subroutines in 'Expression' namespace, where the current
+# row's data is stored. Previus row data is stored in 'prev' namespace.
+package Expression;
+no strict 'refs';
+      
+my $exportPreviousValue = 0;
+sub exportPrevious { $exportPreviousValue = 1; }
+      
+sub normalizeNames {
+   map {
+      my $k = $_;
+      if (defined $_) {
+         $k =~ s/[^a-zA-Z0-9]/_/g;
+         $k =~ s/^(\d)/x$1/;
+      }
+      $k
+   } @_;
+}
+      
+sub exportPrev {
+   for my $k (@_) {
+      next unless defined $k;
+      ${"$prev::$k"} = ${"Expression::$k"} if $exportPreviousValue;
+   }
+}
+      
+sub exportCurrent {
+   my ($k, $v) = @_;
+   next unless defined $k;
+   ${$k} = $v;
+}
+      
+sub export {
+   while (@_) {
+      my ($k, $v) = splice(@_, 0, 2);
+      next unless defined $k;
+      ${"*prev::$k"} = ${"Expression::$k"} if $exportPreviousValue;
+      ${$k} = $v;
+   }
+}
+      
+#################################################################################################
+# Replacement for Text::FormatTable when we want csv output
+# Fast implementation prints output row-by-row (stream vs. buffer) 
+package MyCSVTable;
+
+sub new { bless \(my $x), $_[0]; } # ? what is for
+sub rule {}
+sub render {}
+sub head { row(@_) }
+sub row { no warnings; print +(join ',', @_[1..$#_]), "\n";}
+      
+################################################################################################
+# Wrap a table object (Text::FormatTable or similar) to make it sortable
+# # my $table = new($tableImpl, $sortindex, $numeric, $sortDesc, $sortUnique);
+package SortableTable;
+
+sub new {
+   my $class = shift;
+   bless {
+      table    => $_[0],
+      sortcol  => $_[1],
+      numeric  => $_[2],
+      descend  => $_[3],
+      unique   => $_[4],
+      seen     => {},
+      buf      => [],
+   }, $class;
+}
+      
+sub rule {
+   my $self = shift;
+   $self->flush();
+   $self->{table}->rule(@_);
+}
+      
+sub head {
+   my $self = shift;
+   $self->flush();
+   $self->{table}->head(@_);
+}
+      
+sub row {
+   my $self = shift;
+   if ($self->{unique}) { # If only outputting unique, skip duplicate rows
+      my $index = join "\0", map { $_[$_] } @{$self->{sortcol}};
+      return if $self->{seen}{$index};
+      $self->{seen}{$index} = 1;
+   }
+      
+   push @{$self->{buf}}, [@_];
+}
+      
+sub render {
+   my $self = shift;
+   $self->flush();
+   $self->{table}->render(@_);
+}
+      
+sub flush {
+   my $self = shift;
+      
+   my $mysort = sub {
+      my $result = 0;
+      for my $sortcol (@{$self->{sortcol}}) {
+         my $ai = $_[0]->[$sortcol];
+         my $bi = $_[1]->[$sortcol];
+   
+         if ($self->{numeric}) {
+            $ai = 0 unless defined $ai && $ai =~ /\d/;
+            $bi = 0 unless defined $bi && $bi =~ /\d/;
+         } else {
+            $ai = '' unless defined $ai;
+            $bi = '' unless defined $bi;
+         }
+         $result = $self->{numberic}? ($ai <=> $bi) : ($ai cmp $bi);
+         last unless $result == 0;
+      }
+      $result *= -1 if $self->{descend};
+   
+      return $result;
+   };
+   for (sort { $mysort->($a,$b) } @{$self->{buf}}) {
+      $self->{table}->row(@$_);
+   }
+   
+   $self->{buf} = [];
+   $self->{seen} = {};
+}
+   
+###############################################################################################
+# Substitute implementation of Text::FormatTable
+# Reasons for rewrite:
+# 1. This is much much faster!
+# 2. Text::FormatTable has a bug where it does not output empty rows
+# 3. Removing a Text::FormatTable dependency removes EFS dependency
+# 4. Added incremental rendering ability (experimental)
+package MyTextTable;
+   
+our $MIN_ROW_THRESHOLD;
+BEGIN { $MIN_ROW_THRESHOLD = $ENV{CSV_INCR_MIN_ROW_THRESHOLD} || 50 }
+   
+sub check_threshold { # This is a bit wierd, but let's see how it goes
+   my $self = shift;
+   return if !$self->{incr}{enabled} || $self->{incr}{flush};
+
+   $self->{incr}{start_time} ||= time();
+   my $elapsed_time = time() - $self->{incr}{start_time};
+   my $numrows      = @{$self->{rows}};
+   my $scaled       = $elapsed_time < 5 ? $numrows : $numrows * log($elapsed_time);
+   
+   $self->{incr}{flush} = $scaled > $MIN_ROW_THRESHOLD;
+}
+   
+sub new {
+   my $class = shift;
+   my $incremental = shift;
+   bless {
+      size => undef,
+      maxs => [],
+      rows => [],
+      incr => { enabled => $incremental, flush => 0 }
+   }, $class;
+}
+   
+sub head { row(@_); }
+
+sub rule {
+   my ($self, $string) = @_;
+   push @{$self->{rows}}, $string if defined $string;
+}
+   
+sub row {
+   my $self = shift;
+   $self->{size} = @_ unless defined $self->{size};
+   die "Inconsistent number of columns in @_" if @_ != $self->{size};
+
+   push @{$self->{rows}}, \@_;
+   for my $i (0 .. $#_) {
+      $_[$i] = '' unless defined $_[$i];
+      unless ($self->{incr}{flush}) {
+         my $len = length($_[$i]);
+         $self->{maxs}[$i] = 0 unless defined $self->{maxs}[$i];
+         $self->{maxs}[$i] = $len if $self->{maxs}[$i] < $len;
+      }
+   }
+   
+   $self->check_threshold();
+   $self->render() if $self->{incr}{flush};
+}
+   
+sub render {
+   my $self = shift;
+   
+   my @maxs = @{$self->{maxs}};
+   
+   for my $row (@{$self->{rows}}) {
+      my $behind = 0;
+      if (ref $row eq 'ARRAY') {
+         for (0 .. $#maxs) {
+            my $buffLen = $maxs[$_] - length($row->[$_]) + $behind;
+            $behind = $buffLen < 0 ? $buffLen : 0;
+            print ' | ', unless $_ == 0;
+            print +(' ' x $buffLen), $row->[$_];
+         }
+      } else {
+         my $length = 3 * (@maxs -1);
+         $length += $_ for @maxs;
+         print +($row x $length);
+      } 
+      print "\n";
+   }
+   $self->{rows} = [];
+   return;
+}
+   
+######################################################################################################
+package Aggregate;
+use strict;
+use warnings;
+   
+sub new {
+   my ($class, $numCols, $groupFields, $force) = @_;
+   my @groupbys = map { $_ < 0 ? $numCols + $_ : $_ } @$groupFields;
+   
+   return bless {
+      store   => {},
+      numcols => $numCols,
+      groupby => [ map { die "Invalid group-by index: $_\n" if $_ >= $numCols || $_ < 0; $_ } @groupbys ],
+      force   => $force,
+   }, $class;
+}
+   
+sub row {
+   my ($self, $data) = @_;
+   my $key = join "\0", map {$data->[$_] } @{$self->{groupby}};
+   $self->doAdd($key, $data);
+}
+   
+sub doAdd {}
+sub output {}
+   
+#############################################################################################
+package Aggregate::Sum;
+use base 'Aggregate';
+   
+sub doAdd {
+   my ($self, $key, $data) = @_;
+   my $store = ($self->{store}{$key} ||= [ 0 x $self->{numcbols} ]);
+
+   for my $i (0 .. ($self->{numcols} -1 )) {
+      my $val = $data->[$i];
+
+      if ($self->{isgroupby}{$i}) {
+         $store->[$i] = $val;
+      } elsif (!$self->{force} && (!defined($val) || $val !~ /^ *[0-9.eE+-]+ *$/)) {
+         $store->[$i] = '';
+      } elsif (!defined($store->[$i]) || $store->[$i] ne '') {
+         no warnings;
+         $store->[$i] += $val;
+      }
+   } 
+}
+   
+sub output {
+   my ($self, $table) = @_;
+   for my $key (keys %{$self->{store}}) {
+      $table->row(@{$self->{store}{$key}});
+   }
+}
+   
+#################################################################################################
+package Aggregate::Average;
+use base 'Aggregate::Sum';
+   
+sub doAdd {
+   my ($self, $key, $data) = @_;
+   
+   $self->{count}{$key} ++;
+   $self->SUPER::doadd($key, $data);
+}
+   
+sub output {
+   my ($self, $table) = @_;
+   
+   for my $key (keys %{$self->{store}}) {
+      my $data  = $self->{store}{$key};
+      my $count = $self->{count}{$key};
+      $table->row(map {
+         my $val = $data->[$_];
+         ($count == 0)
+            ? ''
+            : ($self->{isgroupby}{$_})
+               ? $val
+               : ($val eq '') ? '' : sprintf("%0.4f", $val / $count);
+      } 0 .. $#$data);
+   }
+}
+   
+1
+   

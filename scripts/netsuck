@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use IO::Socket::INET;
+my $prog = $0; $prog =~ s:.*/::;
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+   print <<"END";
+usage:
+   $prog remote_host remote_port
+
+The main purpose is to copy tpdist from host1 to host2 if host2
+doesn't have telnet/netcat. This script is on purpose short,
+so that can easily be copy-n-paste.
+
+   host1\$ cat tpdist | tpnc -l 5555
+   host2\$ $prog host1 5555 > tpdist
+
+END
+   exit 1;
+}
+usage("wrong number of args") if @ARGV != 2;
+my ($host, $port) = @ARGV;
+my $server_socket = new IO::Socket::INET ( PeerHost=>$host, PeerPort=>$port, Proto=>'tcp');
+die "cannot connect to $host:$port" if !$server_socket;
+while (1) {
+   my $data;
+   $server_socket->recv($data,1024000);
+   last if !$data;
+   print $data;
+}
+exit 0;

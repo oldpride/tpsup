@@ -1,0 +1,77 @@
+local dir mvn_bin count HOMEDIR
+
+mvn_bin=`which mvn` 
+
+if [ $? -eq 0 ]; then
+   cat <<END
+
+$mvn_bin
+
+mvn --version
+
+END
+   mvn --version
+
+   echo ""
+   return
+fi
+
+if [[ $UNAME =~ CYGWIN || $UNAME =~ MINGW64_NT ]]; then
+   HOMEDIR=$(cd $USERPROFILE; pwd -P)
+elif [[ $UNAME =~ Linux ]]; then
+   HOMEDIR=$HOME
+fi
+
+if [ "X$M2_HOME" != "X" ]; then
+   echo "found M2_HOME=$M2_HOME"
+
+   export PATH="$PATH:$M2_HOME/bin"
+
+   $M2_HOME/bin/mvn --version
+
+   reduce PATH
+   
+   return
+else
+   cat <<END
+M2_HOME is not set
+
+we will try to find a maven installation
+
+END
+   mvn_bin="`find $HOMEDIR/*maven* -mount \\( -name mvn -o -name mvn.exe \\)`"
+
+   count=`echo "$mvn_bin"|wc -l`
+
+   if [ $count -gt 1 ]; then
+      cat <<END
+
+found more than one mvn executables:
+
+$mvn_bin
+
+END
+      unset mvn_bin
+   elif [ $count -eq 0 ]; then
+      echo "no mvn found"
+   fi
+fi
+
+if [ "X$mvn_bin" != "X" ]; then
+   dir=`dirname $mvn_bin`
+
+   export PATH="$PATH:$dir"
+
+reduce PATH
+
+cat <<END
+
+mvn is $mvn_bin
+
+mvn --version
+
+END
+   $mvn_bin --version
+fi
+
+echo ""

@@ -1,0 +1,84 @@
+#!/bin/bash
+
+# $USERPROFILE is from windows env variable %USERPROFILE%
+file_unresolved='$USERPROFILE/Desktop/putty_config.reg'
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $0 export
+   $0 import
+   $0 check
+
+   putty config is stored in windows registry, therefore, when desktop is rebuilt, (for example,
+   in citrix environment, desktop is virtual and is moved around without copying over registry),
+   putty config is lost.
+
+   we use this script to export/import putty config into/from a file, which can be backed up.
+
+   this script can only be run from cygwin. config is saved to
+
+      $file_unresolved,
+
+   where \$USERPROFILE is from windows env variable %USERPROFILE%
+
+   -c        internally call cmd.exe, as "cmd /c regedit ...".
+             default to run from cygwin directly as "regedit ..."
+
+   If you get error "...regedit: permission denied", then you need to run cygwin as 
+   administrator: right click cygwin icon->Run as Administrator.
+
+EOF
+   exit 1
+}
+
+
+UseCmd=N
+
+while getopts c o;
+do
+   case "$o" in
+      c)   UseCmd=Y;;
+      #u)  id=$OPTARG;;
+      *)   usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+action=$1
+
+UNAME=`uname -a`
+
+if ! [[ $UNAME =~ Cygwin ]]; then
+   echo "ERROR: this script can only be run on Cygwin. current UNAME=$UNAME." >&2
+   exit 1
+fi
+
+eval "file=$file_unresolved"
+
+if [ $action = export ]; then
+   if [ $UseCmd = Y ]; then
+      (set -x; cmd /c "regedit /e $file HKEY_CURRENT_USER\\Software\\SimonTatham")
+   else
+      (set -x;         regedit /e $file HKEY_CURRENT_USER\\Software\\SimonTatham )
+   fi
+elif [ $action = import ]; then
+   if [ $UseCmd = Y ]; then
+      (set -x; cmd /c "regedit /i $file")
+   else
+      (set -x;         regedit /i $file )
+   fi
+elif [ $action = check ]; then
+   (set -x; ls -l $file )
+else
+   echo "ERROR: unsupported action='$action'" >&2
+   usage
+fi
+ 

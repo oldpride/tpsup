@@ -1,0 +1,10 @@
+#!/bin/bash
+
+xterm -display 192.168.1.196:0 -xrm "XTerm*selectToClipboard: true" -xrm "XTerm.vt100.translations: #override \
+ <Btn1Down>: select-start(CLIPBOARD) \n\
+ <Btn1Up>: select-end(CLIPBOARD) \n\
+ <Btn3Down>: insert-selection(CLIPBOARD) \n\
+"
+
+
+

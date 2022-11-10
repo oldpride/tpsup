@@ -1,0 +1,7 @@
+nickname,string,login,password,comment
+ora_user@ora_db,dbi:Oracle:host=AHOST.abc.com;service_name=AHOST.abc.com;port=1501,ora_user,%09%06%0F%05%00%03%5E%5CU,oracle server
+
+
+# use "" as there is a ',' between host and port
+# ODBC Driver 11 for SQL Server matches the string in ..../etc/odbcinst.ini
+sql_user@sql_db,"dbi:ODBC:DRIVER={ODBC Driver 11 for SQL Server};SERVER=AHOST.abc.com,1502;database=app1",sql_user,%09%06%0F%05%00%03%5E%5CU,microsoft sql server

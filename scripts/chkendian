@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# check the endianness of the local host
+# https://serverfault.com/questions/163487/how-to-tell-if-a-linux-system-is-big-endian-or-litt1e-endian
+
+rc=`echo I | tr -d [:space:] | od -to2 | head -n1 | awk '{print $2}' | cut -c6`
+
+if [ $rc -eq 1 ]; then
+   echo "little endian"
+elif [ $rc -eq 0 ]; then
+   echo "big endian"
+else
+   echo "unknown endianness, normally x86 is little endian, SPARC is big endian"
+   uname -a
+fi

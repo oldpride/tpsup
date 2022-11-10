@@ -1,0 +1,180 @@
+#!/usr/bin/perl -i
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+#use Carp::Always;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $user;
+{
+   my $id = `id`;
+   ($user) = ( $id =~ /^.+?\((.+?)\)/ );
+   croak "cannot find user from id command output: $id" if !$user;
+}
+
+my $snap_dir = "/tmp/snap_dir_$user";
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog snap
+   $prog diff
+   $prog diffupdate
+   
+description:
+
+   trace env changes.
+
+   'snap'       is to snap the env;
+   'diff'       is to compare the snapped env with the current env;
+   'diffupdate' is to compare the snapped env with the current env, and then update snap;
+
+    'env' includes 
+        env    (which contains PWD and OLDPWD)
+        ulimit
+
+   Note: alias cannot be compared by a script because it is not passed down to
+         non-interactive shell.
+         alias is instead diff'ed by a shell function diffalias.
+
+   -x ExcludePattern  perl regex pattern, exclude these lines
+
+   -m MatchPattern    perl regex pattern, only compare lines matching this pattern
+
+   -d snap_dir        directory to store snap files 
+
+   -v                 verbose
+
+examples:
+
+   unset A B;  $prog snap; export A=1; $prog diff;       export B=2; $prog diff
+
+   unset A B;  $prog snap; export A=1; $prog diffupdate; export B=2; $prog diffupdate
+
+   # ulimit can go down but cannot go up, therefore, the 2nd ulimit will fail
+   openfile=`ulimit -n`; $prog snap; ulimit -n 512; $prog diff; ulimit -n \$openfile; $prog diff 
+   cd; $prog snap; cd /; $prog diffupdate; cd -; $prog diff
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $MatchPattern;
+my $ExcludePattern;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'd=s'           => \$snap_dir,
+   'm=s'           => \$MatchPattern,
+   'x=s'           => \$ExcludePattern,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($action) = @ARGV;
+
+if ($action eq 'snap') {
+   snap($snap_dir);
+} elsif ($action eq 'diff') {
+   diff($snap_dir);
+} elsif ($action eq 'diffupdate') {
+   diff($snap_dir, {update=>1});
+}
+
+exit 0;
+
+sub snap {
+   my ($snap_dir, $opt) = @_;
+
+   if ( ! -d $snap_dir ) {
+      system("mkdir -p $snap_dir");
+      $? && exit 1;
+   }
+
+   system("env       > $snap_dir/env.txt");              $? && exit 1;
+   system("ulimit -a > $snap_dir/ulimit.txt");           $? && exit 1;
+}
+
+sub parse_env {
+   my ($snap_file, $opt) = @_;
+
+   my @lines;
+
+   @lines = `cat $snap_file`;
+   $? && die "";
+
+   chomp @lines;
+
+   my $ref;
+
+   for my $l (@lines) {
+      if ($l =~ /^(\S+?)=(.*)/) {
+         $ref->{$1} = $2;
+      }
+   }
+
+   return $ref;
+}
+
+sub diff {
+   my ($snap_dir, $opt) = @_;
+
+   system("env       > $snap_dir/env.txt.new");              $? && exit 1;
+   system("ulimit -a > $snap_dir/ulimit.txt.new");           $? && exit 1;
+
+   print "\n";
+   $verbose && print "--- diff $snap_dir/env.txt $snap_dir/env.txt.new ---\n";
+   diff_env("$snap_dir/env.txt", "$snap_dir/env.txt.new");
+
+   print "\n";
+   $verbose && print "--- diff $snap_dir/ulimit.txt $snap_dir/ulimit.txt.new ---\n";
+   system("diff $snap_dir/ulimit.txt $snap_dir/ulimit.txt.new");
+
+   if ($opt->{update}) {
+      system("/bin/cp -f $snap_dir/env.txt.new    $snap_dir/env.txt");    $? && exit 1;
+      system("/bin/cp -f $snap_dir/ulimit.txt.new $snap_dir/ulimit.txt"); $? && exit 1;
+   }
+}
+
+sub diff_env {
+   my ($old_snap_file, $new_snap_file, $opt) = @_;
+
+   my $old = parse_env($old_snap_file);
+   my $new = parse_env($new_snap_file);
+
+   my %exist_keys;
+   undef @exist_keys{ ( keys(%$old), keys(%$new) ) };
+   my @keys = sort( keys(%exist_keys) );
+
+   my $can_print_blank_line = 0;
+
+   for my $k (@keys) {
+      next if   $MatchPattern && $k !~   /$MatchPattern/;
+      next if $ExcludePattern && $k !~ /$ExcludePattern/;
+
+      if (! exists $new->{$k}) {
+         print "- $k=$old->{$k}\n";
+         $can_print_blank_line = 1;
+      } elsif (! exists $old->{$k}) {
+         print "+ $k=$new->{$k}\n";
+         $can_print_blank_line = 1;
+      } elsif ( $new->{$k} ne $old->{$k} ) {
+         print "- $k=$old->{$k}\n";
+         print "+ $k=$new->{$k}\n";
+         $can_print_blank_line = 1;
+      } else {
+         print "\n" if $can_print_blank_line;
+         $can_print_blank_line =0; # only print a blank line once, as a separator
+      }
+   }
+} 
+

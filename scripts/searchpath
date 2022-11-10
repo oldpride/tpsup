@@ -1,0 +1,77 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_in_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+my $delimiter = ":";
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog env_var file
+
+description:
+   
+   search filename in env_var. this enhanced 'which' command
+      - it searches beyond the first match
+      - it searches pattern, eg, tp*
+      - it searches other 'PATH' vars
+
+   -v             verbose mode
+   -d delimiter   default to '$delimiter'
+ 
+example:
+
+   $prog PATH       python
+   $prog PATH       grep
+   $prog PERL5LIB   TPSUP
+   $prog PYTHONPATH tpsup
+   $prog LD_LIBRARY_PATH '*libperl*'
+
+EOF
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   "v"              => \$verbose,
+   "d=s"            => \$delimiter,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 2;
+
+my ($env_var, $file) = @ARGV;
+
+my $value = exists($ENV{$env_var}) ? $ENV{$env_var} : "";
+
+if (!$value) {
+   print STDERR "env_var='$env_var' is empty or not defined\n";
+   exit 0;
+}
+
+for my $part (split (/$delimiter/, $value)) {
+   my $cmd = "/bin/ls -d '$part/'$file 2>/dev/null";
+
+   $verbose && print STDERR "cmd=$cmd\n";
+
+   my @globs = `$cmd`;
+
+   next if ($? || !@globs);
+
+   print join("", @globs);
+}
+
+exit 0;

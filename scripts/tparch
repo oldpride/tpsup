@@ -1,0 +1,825 @@
+#!/bin/bash
+
+# This is a bash implementation. We use bash for portability because we have
+# some really old OS. Use the Perl version wherever is possible.
+
+prog=`basename $0`
+ArchRetention=14
+LogRetention=NoRetention
+
+usage () {
+   MMDD=`date +%m%d`
+
+   cat <<EOF
+Usage:
+
+   $prog "log_pattern" arch_base
+
+   $prog "/a/b/c/*"    /a/arch/c
+   $prog "/a/b/c/*log" /a/arch/c
+
+   $prog -RemoveOnly "/a/b/cores*"
+
+   Note: use quotes, " or ', to enclose log_pattern !!!
+
+Description:
+
+   Archive log and clean up. It performs the following tasks in order:
+
+   - It calculates space required by the log_pattern.
+   - It checks the available space under arch_base against required space.
+   - It prints out the commands to be executed and ask for confrimation
+   - It creates subfolder arch_base/YYYY/YYYYMMDD
+   - It cleans the arch_base
+   - It copies the log_pattern to arch_base/YYYY/YYYYMMDD
+   - It removes the log_pattern
+   - It gzip'es the arch_base/YYYY/YYYYMMDD
+
+   The following command-line switches can change the above behavior:
+
+   -ar|-ArchRetention days
+                        Default to $ArchRetention.
+                        For example, 1 is for older than 1 day
+
+   -lr|-LogRetention days
+                        Default to $LogRetention.
+                        For example, 1 is for older than 1 day
+                        Note: this setting will keep the original logs
+                        to stay in the prod directory. You need to use
+                        -ArchRetention if you want to manage archive
+                        retention.
+
+   -ncl|-NotCopyLog Glob_Pattern
+                        Not to copy files with this pattern to arch_base.
+                        Glob Pattern, like in: rm 2015*log, ls 2016*
+
+   -nclRE|-Not CopyLogRE RegEx_Pattern
+                         Not to copy files with this pattern to arch_base.
+                         RegEx Pattern, like in: egrep '.*PATH' /etc/profile
+
+   -nrl|-NotRemoveLog Glob_Pattern
+                        Not to remove files with this pattern from log dir.
+                        Glob Pattern, like in: rm 2015*log, ls 2016*
+
+   -nrlRE|-NotRemoveLogRE RegEX_Pattern
+                        Not to remove files with this pattern from log dir.
+                        RegEx Pattern, like in: egrep '.*PATH' /etc/profile
+
+   -nra|-NotRemoveArch Glob_Pattern
+                        Not to remove files with this pattern in arch_base
+                        even after ArchRetention period.
+                        Glob Pattern, like in: rm 2015*log, ls 2016*
+
+   -nraRE|-NotRemoveArchRE RegEx_Pattern
+                        Not to remove files with this pattern in arch_base
+                        even after ArcRetention period.
+                        RegEx Pattern, like in: egrep '.*PATH' /etc/profile
+
+   -ngz|-NotGzipArch Glob_Pattern
+                        Not to gzip the archived files with this pattern.
+                        Glob Pattern, like in: rm 2015*log, ls 2016*
+
+   -ng zRE|-NotGz ipArchRE RegEx_Patt ern
+                        Not to gzip the archived files with this pattern.
+                        RegEx Pattern, like in: egrep '.*PATH' /etc/profile
+
+   -mail address        Send mail to this address after done, addresses are separated
+                        by comma ','.
+
+   -SkipCheckSpace      Not to check available space.
+
+   -v|-verbose          Verbose mode.
+
+   -f|-force            Force to execute without asking for confirmation.
+                        When running from cron or Control-M, the script will
+                        never ask for confirmation even without this flag.
+
+   -RemoveOnly          Remove Only.
+
+   -IgnoreGzipError     This disables all Gzip errors. Background: There were an
+                        unknown gzip error on (Linux
+                        3.0.101-0.47.71-default #1 SMP Thu Nov 12 12:22:22
+                        UTC 2015 (b5b212e) x86_64 x86_64 x86_64 GNU/Linux)
+                        To show the error:
+                        cd /export/axiomuat/shared/axiomdev/archtest
+                        /bin/rm -fr backup
+                        mkdir -p backup/2016/20160429/p3
+                        /bin/cp -pf /etc/profile backup/2016/20160429/p3/x.log
+                        /bin/gzip -fr backup
+                        gzip: backup/2016/20160429/p3: Unknown error 523
+
+   Glob pattern vs RegEx pattern:
+      Glob Pattern, like in: rm 2015*log, ls 2016*, find . -name 'core*'
+      RegEx Pattern, like in: egrep '.*PATH' /etc/profile
+
+      Glob Pattern is more intuitive to some people, but it can only handle full path.
+      The Glob Pattern here is enhanced: you can use 1|1 for multiple patterns.
+
+      RegEx Pattern can handle full path, for example,
+
+         /a/b/20160422/procl/daily.log
+         /a/b/20160422/procl/map1.txt
+         /a/b/20160422/procl/map2.txt
+         /a/b/20160422/proc2/daily.log
+         /a/b/20160422/proc2/map1.txt
+         /a/b/20160422/proc2/map2.txt
+
+      If you don't want to archive 20160422/proc2/map1.txt, you can do
+
+         $prog -NotCopyLogRE ",*/proc2/map1.txt" /a/b/20160422/* /a/arch
+
+Examples:
+
+   To remove core files under /a/b/
+
+      $prog -RemoveOnly "/a/b/cores*"
+
+   To remove core files under /a/b/, older than 1 day
+
+      $prog -RemoveOnly -LogRetention 1 "/a/b/*cores*"
+
+   The following command will copy files to /a/arch/c/YYYY/YYYYMMDD/*log
+
+      $prog "/a/b/c/*log" /a/arch/c
+
+   The following command will copy files to /a/arch/c/YYYY/YYYYMMDD/c/*,
+   and /a/b/c will be removed, which may not be desirable.
+
+      $prog "/a/b/c" /a/arch/c
+
+Tests:
+
+   - create a model log dir
+   cd /var/tmp
+
+   Test Suite 1:
+   mkdir mdl # model log dir
+
+   for d in p1 p2 p3; do mkdir mdl/\$d; for f in x y z; do cp /etc/profile mdl/\$d/\$f.log; done; done
+
+   - do this right before each test case
+   /bin/rm -fr testlog backup;
+   cp -pr mdl testlog;
+   mkdir -p backup/2016/20160401;
+   cp -pr mdl/* backup/2016/20160401;
+   find backup/2016/20160401 -exec touch -t 201604010000 {} \\; ;
+   mkdir -p backup/2016/20160402;
+   cp -pr mdl/* backup/2016/20160402;
+   find backup/2016/20160402 -exec touch -t ${MMDD}0000 {} \\; ;
+
+   - test cases
+   $prog -NotCopyLog            'x.log' "testlog/*" backup
+   $prog -NotCopyLogRE    '.*/p2/x.log' "testlog/*" backup
+
+   $prog -NotRemoveLog          'x.log' "testlog/*" backup
+   $prog -NotRemoveLogRE  '.*/p2/x.log' "testlog/*" backup
+
+   $prog -NotRemoveArch         'x.log' "testlog/*" backup
+   $prog -NotRemoveArchRE '.*/p2/x.log' "testlog/*" backup
+
+   $prog -NotGzipArch               '*' "testlog/*" backup
+   $prog -NotGzipArchRE      '.*/p3/.*' "testlog/*" backup
+
+   - do this right after each test case to check the results
+   ls -Rl backup testlog
+
+   Test Suite 2:
+   - do this right before each test case
+   touch /var/tmp/core.l; touch -t ${MMDD}0000 /var/tmp/core.2; touch -t 201604010000 /var/tmp/core.3
+
+   - test cases
+   $prog -RemoveOnly '/var/tmp/core*'
+   $prog -RemoveOnly -LogRetention 1 '/var/tmp/core*'
+
+   - do this right after each test case to check the results
+   ls -1 /var/tmp/core*
+
+EOF
+   exit 1
+}
+
+((ArchRetention--)); # adjust to 'find' cmd
+
+saved_args="$@"
+
+while [ $# -gt 0 ]
+do
+   case "$1" in
+      -ar|-ArchRetention)     ArchRetention="$2"; shift;
+                              if ! echo $ArchRetention | egrep '^[1-9][0-9]*$' >/dev/null; then
+                                 echo "ArchRetention='$ArchRetention' is in bad format"
+                                 exit 1
+                              fi
+                              ((ArchRetention--)); # adjust to 'find' cmd 
+                              ;;
+     -lr|-LogRetention)       LogRetention="$2"; shift;
+                              if ! echo $LogRetention | egrep '^[1-9][0-9]*$' >/dev/null; then
+                                 echo "LogRetention='$LogRetention' is in bad format"
+                                 exit 1
+                              fi
+                              ((LogRetention--)) # adjust to 'find' cmd
+                              ;;
+     -ncl|-NotCopyLog)        NotCopyLog="$2"; shift; 
+                              ;;
+     -nrl|-NotRemoveLog)      NotRemoveLog="$2"; shift; 
+                              ;;
+     -nra|-NotRemoveArch)     NotRemoveArch="$2"; shift; 
+                              ;;
+     -ngz|-NotGzipArch)       NotGzipArch="$2"; shift; 
+                              ;;
+     -nclRE|-NotCopyLogRE)    NotCopyLogRE="$2"; shift; 
+                              ;;
+     -nrlRE|-NotRemoveLogRE)  NotRemoveLogRE="$2"; shift; 
+                              ;;
+     -nraRE|-NotRemoveArchRE) NotRemoveArchRE="$2"; shift;  
+                              ;;
+     -ngzRE|-NotGzipArchRE)   NotGzipArchRE="$2"; shift; 
+                              ;;
+     -mail)                   mail=`echo $2|sed 's:,: :g'`; shift; 
+                              ;;
+     -SkipCheckSpace)         SkipCheckSpace=Y; 
+                              ;;
+     -IgnoreGzipError)        IgnoreGzipError=Y; 
+                              ;; 
+     -f|-force)               force=Y; 
+                              ;;
+     -v|-verbose)             verbose=Y; 
+                              ;;
+     -RemoveOnly)             RemoveOnly=Y; 
+                              ;;
+     --)                      break 
+                              ;;
+     -*)                      echo "unknown switch $1"
+                              usage 
+                              ;;
+     *)                       break 
+                              ;;
+   esac
+
+   shift
+done  
+   
+if [ "X$RemoveOnly" = "XY" ]; then
+   if [ $# -ne 1 ]; then
+      echo "wrong number of args"
+      usage
+   fi
+
+   log_pattern="$1"
+else
+   if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+   fi
+
+   log_pattern="$1"
+   arch_base="$2"
+fi
+
+yyyymmdd=`date +%Y%m%d`
+yyyy=`echo $yyyymmdd|cut -c1-4`
+
+# simplify //, ///, ... into /
+log_pattern=`echo "$log_pattern"|sed -e 's:/[/]+:/:g'`
+arch_base=`echo $arch_base|sed -e 's:/[/]+:/:g'`
+
+# remove ending / from $arch_base. Don't do this to $log_pattern
+arch_base=`echo $arch_base|sed -e 's:/$:/:g'`
+
+arch_daily=$arch_base/$yyyy/$yyyymmdd
+
+# $ dirname /a/b/c/
+# /a/b
+log_base=`dirname "$log_pattern"`
+
+# create self-maintained temporary files
+id=`id |cut -d\( -f2|cut -d\) -f1`
+HHMMSS=`date +%H%M%S`
+tmpbase=/var/tmp/tmp_${id}
+tmpdaily=$tmpbase/$yyyymmdd
+
+if [ ! -d $tmpdaily ]; then
+   mkdir -p $tmpdaily || exit 1
+   find $tmpbase -mount -mtime +5 -type d -prune -exec /bin/rm -fr {} \;
+fi
+
+tmpfile_error=$tmpdaily/$prog.$HHMMSS.error
+touch $tmpfile_error
+
+mail_alert () {
+   status="$1"
+   message="$2"
+   # send Eamil
+
+   if [ "X$mail" != "X" ]; then
+      echo "sending email to $mail ..."
+      mailx -s "Archive $log_pattern $status $yyyymmdd" $mail <<EOF
+$0 $saved_args
+
+user=`id`
+host=`hostname`
+
+$message
+
+`cat $tmpfile_error`
+EOF
+   fi
+}
+
+# from: http://unix.stackexchange.com/questions/14270/get-exit-status-of-process-thats-piped-to-another
+# $ false | true; echo $?
+# 0
+# $ set -o pipefail
+# $ false | true; echo $?
+# 1
+
+set -o pipefail
+
+# Check Archive Space
+if [ "X$SkipCheckSpace" != "XY" -a "X$RemoveOnly" != "XY" ]; then
+   echo ""
+   echo "------------- Checking Archive Space------------"
+   echo ""
+   # first find the mount point. NOTE: $arch_base may not exist yet; therefore we need to trace up.
+   arch_mount=$arch_base
+
+   while [ "X$arch_mount" != "X" ]
+   do
+      if [ -d $arch_mount ]; then
+         break;
+      fi
+
+      # trace up the path
+      arch_mount=`echo $arch_mount|sed -e 's:[^/]*$::;s:/$::'`
+   done
+
+   if [ "X$arch_mount" = "X" ]; then
+      if echo $arch_base |grep ^/ >/dev/null; then
+         # if we were using absolute path, then no luck
+         message="cannot find where arch_base=$arch_base is mounted"
+         echo $message
+         mail_alert ABORTED "$message"
+         exit 1
+      else
+         # if we were using relative path, then use pwd
+         arch_mount=`pwd`
+      fi
+   fi
+
+   echo "arch_base='$arch_base' will be at or created under '$arch_mount'"
+   echo ""
+
+   DF=`df -k $arch_mount|cat`
+   echo "$DF"
+   echo ""
+
+   available=`echo "$DF"|tail -1|awk '{print $4}'`
+   echo "'$arch_mount' has $available KB available space"
+   echo ""
+
+   # Find out how much space is required
+   DU=`du -sk $log_pattern|sort -rn`
+
+   if [ $? -ne 0 ]; then
+      message="cannot check the space usage of $log_pattern. ABORTED!!!"
+      echo $message
+      mail_alert ABORTED "$message"
+      exit 1
+   fi
+
+   echo "logs_pattern='$log_pattern' space usage in KB:"
+   echo "$DU" |head
+   echo ""
+
+   total=`echo "$DU"|awk '{s+=$1} END {print s}'`
+   echo "total=$total KB"
+   echo ""
+
+   # required is more than du total because temporary files, eg, gzip
+   required=`echo "$total*2"|bc`
+   echo "required=$required KB. This is more than what du reported because of future temporary files, eg, gzip."
+   echo ""
+
+   if [ $available -lt $required ]; then
+      message="Available space is not enough: $available < $required"
+      echo $message
+      mail_alert ABORTED "$message"
+      exit 1
+   else
+      echo "Available space is enough: $available >= $required"
+      echo ""
+   fi
+fi
+
+# Make the archive directory
+if [ "X$RemoveOnly" != "XY" ]; then
+   i=0
+   if [ ! -d $arch_daily ]; then
+      cmd="mkdir -p $arch_daily"
+      commands_mkdir[$i]="$cmd";
+      ((i++));
+   fi
+
+   # Clean up Archive
+   i=0
+   if [ "X$NotRemoveArch" = "X" -a "X$NotRemoveArchRE" = "X" ]; then
+      # This is a simple cleanup
+      cmd="find $arch_base/* -mount -mtime +$ArchRetention -ls -type d -prune -exec /bin/rm -fr {} \\;"
+      commands_rmarch[$i]="$cmd";
+      ((i++));
+   else
+      # take hassle to handle NotRemoveArch because we cannot do "rm -fr".
+      tmpfile_rmarch=$tmpdaily/$prog.$HHMMSS.rmarch
+
+      echo "Removed archive files are listed in $tmpfile_rmarch"
+
+      if [ "X$NotRemoveArch" != "X" ]; then
+         # This is Glob patern. like in: ls *, rm *log
+         # We used to do this
+         # find $arch_base/* -mount -name "$NotRemoveArch" -prune -o -print > $tmpfile_rmarch
+         # but the above cannot allow multiple patterns from command line
+         #
+         # There we use the following:
+         # convert p1|p2|p3 to -name "p1" -o -name "p2" -o -name "p3"
+         clause=`echo "$NotRemoveArch"|sed -e 's:|:" -o -name ":g'`
+         clause="-name \"$clause\""
+         cmd="find $arch_base/* -mount -mtime +$ArchRetention \\( \\( $clause \\) -prune -o -print \\) > $tmpfile_rmarch"
+         echo "$cmd"
+         eval "$cmd"
+      else
+         # This is RegExp like in: egrep ".*",
+         cmd="find $arch_base/* -mount -mtime +$ArchRetention |egrep -v -e \"^$NotRemoveArchRE\$\" > $tmpfile_rmarch"
+         echo "$cmd"
+         eval "$cmd"
+      fi
+
+      # process the list backward, this way we can delete files before delete its parent dir
+      # the sed trick is from http://www.catonmat.net/blog/sed-one-liners-explained-part-one/
+      for old in `sed '1!G;h;$!d' $tmpfile_rmarch`
+      do
+         if [ -d $old ]; then
+            # the echo command keeps the return code to 0
+            cmd="/bin/rmdir '$old' 2>/dev/null || echo '$old is not empty but this is OK'"
+         else
+            cmd="/bin/rm -f '$old'"
+         fi
+
+         commands_rmarch[$i]="$cmd";
+         ((i++));
+      done
+   fi
+
+   # Copy Log to Archive
+   i=0
+   if [ "X$NotCopyLog" = "X" -a "X$NotCopyLogRE" = "X" ]; then
+      # this is a simple copy
+      cmd="/bin/cp -pr $log_pattern $arch_daily"
+      commands_cp[$i]="$cmd";
+      ((i++));
+   else
+      # take hassle to handle NotCopyLog because we cannot do "cp -pr".
+      tmpfile_cp=$tmpdaily/$prog.$HHMMSS.cp
+      echo "Copied files are listed in $tmpfile_cp"
+
+      if [ "X$NotCopyLog" != "X" ]; then
+         # This is Glob patern. like in: ls *, rm *log
+         # We used to do this
+         # find $log_pattern -mount -name "$NotCopyLog" -prune -o -print > $tmpfile_cp
+         # but the above cannot allow multiple patterns from command line
+         #
+         # There we use the following:
+         # convert p1|p2|p3 to -name "p1" -o -name "p2" -o -name "p3"
+         clause=`echo "$NotCopyLog"|sed -e 's:|:" -o -name ":g'`
+         clause="-name \"$clause\""
+         cmd="find $log_pattern -mount \\( $clause \\) -prune -o -print > $tmpfile_cp"
+         echo "$cmd"
+         eval "$cmd"
+         else
+         # This is RegExp like in: egrep ".*",
+         cmd="find $log_pattern -mount |egrep -v -e \"^$NotCopyLogRE\$\" > $tmpfile_cp"
+         echo "$cmd"
+         eval "$cmd"
+      fi
+
+      for old in `cat $tmpfile_cp`
+      do
+         # Since we cannot do "cp -pr", we have to handle dir structure by ourselves,
+         new=`echo $old | sed -e "s|${log_base}|${arch_daily}|"`
+
+         if [ -d $old ]; then
+            cmd="[ -d $new ] || mkdir -p $new"
+         else
+            cmd="/bin/cp -pf $old $new"
+         fi
+
+         commands_cp[$i]="$cmd";
+       ((i++));
+      done
+   fi
+fi
+
+# Clean up Log
+#if [ "X$RemoveOnly" != "XY" ]; then
+# RemoveOnly flag doesn't affect clean up log
+   i=0
+   if [ "X$NotRemoveLog" = "X" -a "X$NotRemoveLogRE" = "X" -a "$LogRetention" = "NoRetention" ]; then
+      # this is a simple remove
+      cmd="/bin/rm -fr $log_pattern"
+      commands_rmlog[$i]="$cmd";
+      ((i++));
+   else
+      if [ "$LogRetention" != "NoRetention" ]; then
+         mtime="-mtime +$LogRetention"
+      fi
+
+      # take hassle to handle NotRemoveLog because we cannot do "rm -fr".
+      tmpfile_rmlog=$tmpdaily/$prog.$HHMMSS.rmlog
+
+      echo "Removed files are listed in $tmpfile_rmlog"
+
+      if [ "X$NotRemoveLog" != "X" ]; then
+         # This is Glob patern. like in: ls *, rm *log
+         # We used to do this
+         # find $log_pattern -mount -name "$NotRemoveLog" prune -o -print > $tmpfile_rmlog
+         # but the above cannot allow multiple patterns from command line
+         #
+         # There we use the following:
+         # convert p1|p2|p3 to -name "p1" -o -name "p2" -o -name "p3"
+         clause=`echo "$NotRemoveLog"|sed -e 's:|:" -o -name ":g'`
+         clause="-name \"$clause\""
+         cmd="find $log_pattern -mount $mtime \\( $clause \\) -prune -o -print > $tmpfile_rmlog"
+         echo "$cmd"
+         eval "$cmd"
+      elif [ "X$NotRemoveLogRE" != "X" ]; then
+         # This is RegExp like in: egrep ".*",
+         cmd="find $log_pattern -mount $mtime |egrep -v -e \"^($NotRemoveLogRE)\$\" > $tmpfile_rmlog"
+         echo "$cmd"
+         eval "$cmd"
+      else
+         cmd="find $log_pattern -mount $mtime > $tmpfile_rmlog"
+         echo "$cmd"
+         eval "$cmd"
+      fi
+      
+      # process the list backward, this way we can delete files before delete its parent dir
+      # the sed trick is from http://www.catonmat.net/blog/sed-one-liners-explained-part-one/
+      for old in `sed '1!G;h;$!d' $tmpfile_rmlog`
+         do
+         if [ -d $old ]; then
+            # the echo command keeps the return code to 0
+            cmd="/bin/rmdir '$old' 2>/dev/null || echo '$old is not empty but this is OK'"
+         else
+            cmd="/bin/rm -f '$old'"
+         fi
+         commands_rmlog[$i]="$cmd";
+       ((i++));
+      done
+   fi
+         
+   # Gzip newly archived files
+   i=0
+   if [ "X$NotGzipArch" = "X" -a "X$NotGzipArchRE" = "X" ]; then
+      # this is a simple gzip
+      cmd="/bin/gzip -fr $arch_daily"
+      commands_gzip[$i]="$cmd";
+      ((i++));
+   fi
+#fi
+
+echo ""
+echo "<<<<<<<<<<<< commands to be executed >>>>>>>>>>>>>>>>>>>>"
+if [ ${#commands_mkdir[@]} -ne 0 ]; then
+   echo ""
+   echo "----------------- Create Archive Dir -----------------"
+   echo ""
+   for cmd in "${commands_mkdir[@]}"
+   do
+      echo "$cmd"
+   done
+fi
+
+if [ ${#commands_rmarch[@]} -ne 0 ]; then
+   echo ""
+   echo "----------------- Clean up Archive Dir -----------------"
+   echo ""
+   for cmd in "${commands_rmarch[@]}"
+   do
+      echo "$cmd"
+   done
+fi
+
+if [ ${#commands_cp[@]} -ne 0 ]; then
+   echo ""
+   echo "--------------- Copy Log to Archive Dir ----------------"
+   echo ""
+   for cmd in "${commands_cp[@]}"
+   do
+      echo "$cmd"
+   done
+fi
+
+if [ ${#commands_rmlog[@]} -ne 0 ]; then
+   echo ""
+   echo "---------------- Clean up Log -------------------"
+   echo ""
+   for cmd in "${commands_rmlog[@]}"
+   do
+      echo "$cmd"
+   done
+fi
+   
+if [ "X$RemoveOnly" != "XY" ]; then
+   if [ ${#commands_gzip[@]} -ne 0 ]; then
+      echo ""
+      echo "---------------- Gzip Archive Dir --------------------"
+      echo ""
+      for cmd in "${commands_gzip[@]}"
+      do
+         echo "$cmd"
+      done
+   else
+      echo ""
+      echo "------------------Gzip Archive Dir---------------------"
+      echo ""
+      if ! [ "X$NotGzipArch" = "X" -a "X$NotGzipArchRE" = "X" ]; then
+         echo "We will see which files to gzip under $arch_daily after copy done."
+      fi
+   fi
+fi
+
+echo ""
+
+TTY=`tty 2>/dev/null`
+tty_rc=$?
+
+if [ $tty_rc -eq 0 -a "X$force" != "XY" ]; then
+   echo "Do you want to execute the above commands Y|N ? [N]"
+   read answer
+
+   if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+      echo "Answer is "$answer". Therefore, quit, did nothing."
+      exit 0
+   fi
+fi
+
+fatal=0
+echo ""
+echo "<<<<<<<<<<<< Running commands >>>>>>>>>>>>>"
+
+if [ ${#commands_mkdir[@]} -ne 0 ]; then
+   echo ""
+   echo "-------------Create Archive Dir-------------------"
+   echo ""
+   for cmd in "${commands_mkdir[@]}"
+   do
+      echo "$cmd"
+      # this tee trick is from
+      # http://stackoverflow.com/questions/692000/how-do-i-write-stderr-to-a-file-while-using-tee-with-a-pipe
+      # note: we need a space bewteen the two >
+      $cmd 2> >(tee -a $tmpfile_error)
+      rc=${PIPESTATUS[0]}
+      if [ $rc -ne 0 ]; then
+          message="FAILED: $cmd"
+          echo "$message"
+          echo "$message" >> $tmpfile_error
+          ((fatal++))
+      fi
+   done
+   
+   if [ $fatal -ne 0 ]; then
+      message="$prog $log_pattern ABORTED"
+      echo "$message"
+      mail_alert ABORTED "$message"
+      exit 1
+   fi
+fi
+   
+if [ ${#commands_rmarch[@]} -ne 0 ]; then
+   echo ""
+   echo "---------------- Clean up Archive Dir ---------------"
+   echo ""
+   for cmd in "${commands_rmarch[@]}"
+   do
+      echo "$cmd"
+      # we need eval to handle ||
+      eval $cmd 2> >(tee -a $tmpfile_error)
+      rc=${PIPESTATUS[0]}
+      [ $rc -ne 0 ] && echo "FAILED: $cmd" >>$tmpfile
+   done
+fi
+   
+if [ ${#commands_cp[@]} -ne 0 ]; then
+   echo ""
+   echo "------------------ Copy Log to Archive Dir ------------------"
+   echo ""
+   for cmd in "${commands_cp[@]}"
+   do
+      echo "$cmd"
+      # we need eval to handle [ ... ]
+      eval $cmd 2> >(tee -a $tmpfile_error)
+      rc=${PIPESTATUS[0]}
+      if [ $rc -ne 0 ]; then
+         message="FAILED: $cmd"
+         echo "$message"
+         echo "$message" >> $tmpfile_error
+         ((fatal++))
+      fi
+   done
+
+   if [ $fatal -ne 0 ]; then
+      message="$prog $log_pattern ABORTED"
+      echo "$message"
+      mail_alert ABORTED "$message"
+      exit 1
+   fi
+fi
+      
+if [ ${#commands_rmlog[@]} -ne 0 ]; then
+   echo ""
+   echo "-------------- Clean up Log -------------------"
+   echo ""
+   for cmd in "${commands_rmlog[@]}"
+   do
+      echo "$cmd"
+      # we need eval to handle ||
+      eval $cmd 2> >(tee -a $tmpfile_error)
+      rc=${PIPESTATUS[0]}
+      [ $rc -ne 0 ] && echo "FAILED: $cmd" >>$tmpfile_error
+   done
+fi
+
+if [ "X$RemoveOnly" != "XY" ]; then
+   if [ "X$NotGzipArch" != "X" -o "X$NotGzipArchRE" != "X" ]; then
+      # take hassle to handle NotGzipArch because we cannot do "rm -fr".
+      tmpfile_gzip=$tmpdaily/$prog.$HHMMSS.gzip
+
+      echo "gzipped files are listed in $tmpfile_gzip"
+
+      if [ "X$NotGzipArch" != "X" ]; then
+         # This is Glob patern. like in: ls *, rm *log
+         # We used to do this
+         # find $arch_daily -mount -name "$NotGzipArch" -prune -o -print > $tmpfile_gzip
+         # but the above cannot allow multiple patterns from command line
+         #
+         # There we use the following:
+         # convert p1|p2|p3 to -name "p1" -o -name "p2" -o -name "p3"
+         clause=`echo "$NotGzipArch"|sed -e 's:|:" -o -name ":g'`
+         clause="-name \"$clause\""
+         cmd="find $arch_daily -mount \\( $clause \\) -prune -o -print > $tmpfile_gzip"
+         echo "$cmd"
+         eval "$cmd"
+      else
+         # This is RegExp like in: egrep ".*",
+         cmd="find $arch_daily -mount |egrep -v -e \"^($NotGzipArchRE)\$\" > $tmpfile_gzip"
+         echo "$cmd"
+         eval "$cmd"
+      fi
+
+      for f in `cat $tmpfile_gzip`
+      do
+         # only gzip files, not link, directory
+         if [ -f $f ]; then
+            cmd="/bin/gzip -f $f"
+         else
+            continue
+         fi
+
+         commands_gzip[$i]="$cmd";
+         ((i++));
+      done
+   fi
+
+   if [ ${#commands_gzip[@]} -ne 0 ]; then
+      echo ""
+      echo "----------------- Gzip Archive Dir -----------------"
+      echo ""
+
+      for cmd in "${commands_gzip[@]}"
+      do
+         echo "$cmd"
+         if [ "X$IgnoreGzipError" = "X" ]; then
+            $cmd 2> >(tee -a $tmpfile_error)
+            rc=${PIPESTATUS[0]}
+            [ $rc -ne 0 ] && echo "FAILED: $cmd" >>$tmpfile_error
+         else
+            $cmd 2>&1
+         fi
+      done
+   fi
+fi
+
+error_count=`wc -l $tmpfile_error|awk '{print $1}'`
+
+if [ $error_count -ne 0 ]; then
+   message="$prog $log_pattern FAILED"
+   echo ""
+   echo "error file is $tmpfile_error"
+   echo ""
+   echo "$message"
+   mail_alert FAILED "$message"
+else
+   message="$prog $log_pattern SUCCESSFUL"
+   echo ""
+   echo "$message"
+   mail_alert SUCCESSFUL "$message"
+fi

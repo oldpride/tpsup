@@ -1,0 +1,60 @@
+#!/bin/bash
+
+font="-fn '-adobe-courier-medium-r-normal--14-*'" 
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 display
+   $0 auto
+
+   pop up an xterm
+
+   When 'display' is set to 'auto', the script will use the env variable DISPLAY.
+   (current DISPLAY='$DISPLAY'.) If the DISPLAY is not set, then the script 
+   will try to use the host from where you logged in.
+
+   -m host_pattern       match host pattern
+
+   -x host_pattern       exclude host pattern
+
+example:
+
+   $0 192.168.1.164:0
+   $0 host1.abc.com:0
+   $0 auto
+
+   $0 \$DISPLAY
+
+EOF
+   exit 1
+}
+
+  match_pattern=""
+exclude_pattern=""
+
+debug=N
+
+while getopts m:x:d o;
+do
+   case "$o" in
+      m)   match_pattern="-m $OPTARG";;
+      x) exclude_pattern="-x $OPTARG";;
+      d) debug=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+display=$1
+
+[ $debug = Y ] && set -x
+
+mssh $match_pattern $exclude_pattern -- tpxterm -e "'tpdist server 5555'" $display

@@ -1,0 +1,60 @@
+#!/bin/bash
+
+
+# https://intoli.com/blog/installing-google-chrome-on-centos/
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $0 libgdk-3.so.0
+
+   query and download rpm for Redhat/Centos/Fedora/Amazon linux
+
+EOF
+   exit 1
+}
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+file=$1
+
+# set proxy
+# export http_proxy=...
+# export https_proxy=...
+
+set -x
+
+# Find the package name for this library.
+package=$(repoquery --repofrompath=centos7,http://mirror.centos.org/centos/7/os/`arch` \
+         --repoid=centos7 -q --qf="%{name}" --whatprovides "$file" | head -n1)
+
+if [ "X$package" = "X" ]; then
+   echo "Cannot find package" >&2
+   exit 1
+fi
+
+# Find the URL for the package.
+url=$(repoquery --repofrompath=centos7,http://mirror.centos.org/centos/7/os/`arch` \
+    --repoid=centos7 -q --qf="%{location}" "$package" | \
+     sed s/x86_64.rpm$/`arch`.rpm/ | \
+     sed s/i686.rpm$/`arch`.rpm/g | \
+     sort -u
+)
+
+if [ "X$url" = "X" ]; then
+   echo "Cannot find url" >&2
+   exit 1
+fi
+
+# Download the RPM.
+wget "${url}" -O "$package.rpm"
+
+# Extract it.
+#echo "Extracting $1..."
+#rpm2cpio $1.rpm | cpio -idmv > /dev/null 2>&1
+
+

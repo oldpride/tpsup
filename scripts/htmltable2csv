@@ -1,0 +1,132 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::XML qw(query_xml);
+use TPSUP::UTIL qw(get_out_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog file.html path
+
+   convert an html table to csv
+
+   NOTE: XML protocol will replace newline with space in the attribute
+
+   'path' is perl-style,                         eg -path \$r->{body}->{table}.
+         user can also use 'r' instead of '\$r',  eg -path  r->{body}->{table}.
+
+
+   -v      verbose
+
+   -output output.csv   default to STDOUT
+
+   -quote  single|double|none
+                        default to none
+
+   -delimiter string    default to ','
+
+The following are for xml parsing
+
+   -ForceArray a,b,c      force this tags into array. default to 'tr';
+
+   -KeyAttr tag=attr      can repeat, eg, -KeyAttr tl=a1 -KeyAttr t2=a2
+
+   -addRoot string        add a root node
+
+examples:
+
+   
+   $prog htmltable2csv_test.html '\$r->{body}->{table}->{tr}'
+   $prog htmltable2csv_test.html  'r->{body}->{table}->{tr}'
+
+END
+
+   exit 1;
+}
+
+my $tag_string;
+my $verbose;
+my %attr_by_key;
+my $ForceArrayString = 'tr';
+my $addRoot;
+my $output;
+my $delimiter = ',';
+my $quote = 'none';
+
+GetOptions(
+   'v|verbose'    => \$verbose,
+   'ForceArray=s' => \$ForceArrayString,
+   'KeyAttr=s'    => \%attr_by_key,
+   'addRoot=s'    => \$addRoot,
+   'output|o=s'   => \$output,
+   'delimiter|d=s'=> \$delimiter,
+   'quote=s'      => \$quote,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 2 ;
+
+my ($file, $path) = @ARGV;
+
+my $out_fh = get_out_fh($output);
+die "cannot open output" if !$out_fh;
+
+my $rows = query_xml($file, {
+   KeyAttr     =>\%attr_by_key,
+   ForceArray  =>$ForceArrayString,
+   # verbose     =>$verbose,
+   paths       =>[$path],
+   AddRootNode =>$addRoot,
+})->[0];
+
+$verbose && print STDERR "rows = ", Dumper($rows);
+
+for my $r (@$rows) {
+   if (exists $r->{th}) {
+      print_row($r->{th}, $delimiter, $quote);
+      last;
+   }
+}
+
+for my $r (@$rows) {
+   if (exists $r->{td}) {
+      print_row($r->{td}, $delimiter, $quote);
+   }
+}
+
+exit 0;
+
+###################################################
+# subs
+###################################################
+
+sub print_row {
+   my ($row, $delimiter, $quote_style) = @_;
+
+   my @array;
+      
+   # the xml parser converts an empty cell <td></td> into a empty hash {}.
+   # we replace the empty hash {} with empty string
+   if ($quote_style eq 'double') {
+      @array = map { ref($_) eq 'HASH' ? qq("") : qq("$_") } @{$row};
+   } elsif ($quote_style eq 'single') {
+      @array = map { ref($_) eq 'HASH' ? qq('') : qq('$_') } @{$row};
+   } else {
+      @array = map { ref($_) eq 'HASH' ? '' : $_ } @{$row};
+   }
+   print {$out_fh} join($delimiter, @array), "\n";
+}
+   
+
+

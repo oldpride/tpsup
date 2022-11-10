@@ -1,0 +1,1 @@
+@SET RETVAL=%~f1

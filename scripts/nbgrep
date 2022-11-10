@@ -1,0 +1,90 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use IO::File;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog [switches] command
+
+   when multiple grep/egrep command formed in a pipe, the blocking (buffering)
+   can cause big delay. This script is to remove this blocking and hence
+   remove the delay
+
+   -v                 verbose
+
+   -i                 case insensitive, applying to both -m and -x
+
+   -m perl_pattern    match this perl_pattern.
+                      can use multiple times, in AND logic
+
+   -x perl_pattern    exclude this perl_pattern.
+                      can use only once
+
+examples:
+
+   - create it test log file
+   i=0; while [ \$i -le 100 ]; do echo abc; sleep 1; ((i++)); done >/tmp/junk.log \&
+
+   - contrast the behavior of the following two commands
+      the fist command will have realtime output
+      the second command will delay the output
+      the third command will have no delay as it has only one grep.
+
+      $prog -m ab -m bc -- 'tail -f /tmp/junk.log'
+
+      tail -f /tmp/junk.log |egrep ab|egrep bc
+
+      tail -f /tmp/junk.log |egrep ab
+   
+END
+
+   exit 1;
+}
+
+my $verbose;
+my @match_pattern;
+my $exclude_pattern;
+my $case_insensitive;
+
+GetOptions(
+   'v|verbose'   => \$verbose,
+   'i'           => \$case_insensitive,
+   'm|match=s'   => \@match_pattern,
+   'x|exclude=s' => \$exclude_pattern,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($command) = @ARGV;
+
+open my $fh, "$command|" or die "cannot run command=$command, $!";
+
+LINE:
+while (<$fh>) {
+   my $line = $_;
+
+   next if defined $exclude_pattern && $line =~ $exclude_pattern;
+
+   for my $p (@match_pattern) {
+      next LINE if $line !~ /$p/;
+   }
+
+   print $line;
+}
+
+close $fh;
+
+exit 0;

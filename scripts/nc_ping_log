@@ -1,0 +1,47 @@
+#!/bin/bash
+
+interval=60
+output=~/nc_ping.log
+
+usage () {
+   cat <<EOF
+usage:
+   
+   $0 host port
+
+   -i internval     default to $interval seconds
+   
+   log is $output
+
+EOF
+   exit 1
+}
+
+while getopts i: o;
+do
+   case "$o" in
+      i) interval=$OPTARG;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+host=$1
+port=$2
+
+echo "logging to $output"
+
+while :
+do
+   echo ""
+   date "+%Y-%m-%d %H:%M:%S"
+   (set -x; nc -zv $host $port)
+
+   sleep $interval   
+done 2>&1 | tee $output

@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# got idea from Slava Rozeman
+# ideally to run this as root to avoid some warnings
+
+#Proto Recv-Q Send-Q Local Address           Foreign Address         State       User       Inode      PID/Program name     Timer
+#udp6       0      0 :::5353                 :::*                                111        24631      -                    off (0.00/0/0)
+#udp        0      0 224.0.0.251:5353        0.0.0.0:*                           1000       200212     26847/chromium-brow  off (0.00/0/0)
+#tcp6       0      0 :::3389                 :::*                    LISTEN      113        25257      -                    off (0.00/0/0)
+#tcp6       0      0 :::22                   :::*                    LISTEN      0          26318      -                    off (0.00/0/0)
+#tcp        0      0 192.168.1.191:43932     209.85.232.188:5228     ESTABLISHED 1000       364953     26847/chromium-brow  keepalive (27.46/0/0)
+#tcp        0      0 192.168.1.191:37208     140.82.114.26:443       ESTABLISHED 1000       371111     26847/chromium-brow  keepalive (8.00/0/0)
+
+NETSTAT=`netstat -anoep 2>/dev/null |egrep '^(tcp|udp)'|sort -n -k2,3 -r|head -n 10`
+
+echo "$NETSTAT"
+
+topline=`echo "$NETSTAT"|head -n 1`
+
+echo "---"
+echo "$topline"
+
+top_rq=`echo $topline|awk '{print $2}'`
+top_sq=`echo $topline|awk '{print $3}'`
+
+if [ $top_rq -eq 0 -a $top_sq -eq 0 ]; then
+   echo "No Net_hog found"
+   exit 0
+fi
+
+echo $topline

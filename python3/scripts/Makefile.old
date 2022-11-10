@@ -1,0 +1,15 @@
+# gitbash and cygwin cannot use symbolic link reliablely. so we make hard copies
+
+
+all: copy_scripts
+
+OBJS := $(wildcard *_cfg.py)
+
+copy_scripts: $(OBJS)
+	for f in $(OBJS); \
+	do \
+	   prog=`echo $$f|sed -e 's:_cfg.py:.py:'`; \
+	   rm -f $$prog; \
+	   cp -f tpbatch_py_generic.bash $$prog; \
+	done
+

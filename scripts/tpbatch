@@ -1,0 +1,232 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+$Data::Dumper::Terse = 1;     # print without "$VAR1="
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(
+   resolve_scalar_var_in_string
+);
+use TPSUP::BATCH qw(
+   parse_cfg
+   run_batch
+);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message, $opt) = @_;
+
+   #my $usage_fh = defined($opt->{usage_fh}) ? $opt->{usage_fh} : \*STDERR;
+   my $usage_fh = \*STDOUT;
+
+   print {$usage_fh} "$message\n" if $message;
+
+   my   $usage_caller;
+   my $example_caller;
+
+   if ($opt->{caller}) {
+      $usage_caller = $opt->{caller};
+      if (exists $opt->{all_cfg}->{position_args}) {
+         $usage_caller .=  " " . join(" ", @{$opt->{all_cfg}->{position_args}});
+      } 
+      $example_caller = $opt->{caller};
+   } else {
+      # when we run tpbatch without $opt->{caller}
+      $usage_caller   = "$prog file.cfg pos_arg1 pos_arg2 ...";
+      $example_caller = "$prog tpslnm_test.cfg 192.168.1.179:9333";
+   }
+
+   my $detail = exists($opt->{all_cfg}->{usage_detail}) ? 
+                       $opt->{all_cfg}->{usage_detail} : "";
+
+   my $example;
+   if (exists $opt->{all_cfg}->{usage_example}) {
+      $example = $opt->{all_cfg}->{usage_example};
+      $example = resolve_scalar_var_in_string($example, {prog=>$example_caller});
+   } else {
+      $example = <<"EOF";
+
+   linux\$ $example_caller q=python
+   linux\$ $example_caller -batch tpslnm_test_batch.txt
+
+EOF
+   }
+
+   my $usage_top;
+   if ($opt->{all_cfg}->{usage_top}) {
+      $usage_top = resolve_scalar_var_in_string($opt->{all_cfg}->{usage_top}, 
+                                                {prog=>$example_caller});
+   } else {
+      $usage_top = <<"END";
+
+   $usage_caller key1=value1  key2=value2 ...
+   $usage_caller suit=suit1   key1=value1 ... 
+
+   $usage_caller -batch fille key1=value1 ... 
+
+   $usage_caller ANY
+
+   $detail
+   -v              verbose mode.   each -v will increment level. max level is 2.
+
+   -debug          debug mode. each -debug will increment level. max level is 2.
+
+   -batch file     file has command args, one line per call.
+                   if file is '-', it means STDIN
+
+    -dryrun        dryrun mode if implemented
+
+    -interactive   interactive mode if implemented
+
+    -np            not to run post code. default is to run post code.
+
+   'pos_arg' is required and defined in file.cfg
+
+
+   If value is '-', it will take from STDIN. click 'Enter' then 'Control+D' to end.
+   Only one '-' is allowed.
+
+   'suit' is a set of pre-defined keys; can be overwriten by command-line key=value.
+
+   the code flow is:
+      linked_script -> tpbatch -> TPSUP::BATCH ->    xxx.cfg file   -> module
+   eg.
+      tpslnm_test   -> tpbatch -> TPSUP::BATCH ->   tpslnm_test.cfg -> TPSUP::SELENIUM
+    tpswagger_test  -> tpbatch -> TPSUP::BATCH ->tpswagger_test.cfg -> TPSUP::SWAGGER
+      tpbatch_test  -> tpbatch -> TPSUP::BATCH ->  tpbatch_test.cfg -> TPSUP::BATCH
+
+END
+
+      if (exists $opt->{all_cfg}->{extra_args}) {
+         my $extra_args = $opt->{all_cfg}->{extra_args};
+         $usage_top .= "    extra args:\n";
+         print "{all_cfg}->{extra_args} = ", Dumper($opt->{all_cfg}->{extra_args});
+
+         for my $k (sort(keys %$extra_args)) {
+            my $v = $extra_args->{$k};
+
+            my $opt_spec = $v->{spec};
+            my $opt_type = $v->{type};
+            my $opt_help = $v->{help};
+
+            my $switch;
+            my $arg = '';
+            if ($opt_spec =~ /^(.+)?=([si])$/) {
+               $switch = $1;
+               if ($2 eq 's') {
+                  $arg = 'string';
+               } else {
+                  $arg = 'int';
+               }
+            } else {
+               $switch = $opt_spec;
+            }
+
+            my $line = sprintf("       -%-12s", "$switch $arg"); # pad space on right
+
+            $line .= "  $opt_help";
+
+            if ($opt_type eq 'HASH' || $opt_type eq 'ARRAY') {
+               $line .= " (can repeat)";
+            }
+
+            $usage_top .= "$line\n";
+         }
+      }
+   }
+
+   print {$usage_fh} << "END";
+
+usage: 
+$usage_top
+
+example:
+$example
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $debug;
+my $caller;
+my $batch;
+my $dryrun;
+my $interactive;
+my $no_post;
+
+# when user run script without args, the intention is like to see usage.
+# in this case, we print to STDOUT for easier 'grep'
+usage("missing cfg_file arg") if ! @ARGV;
+
+if ($ARGV[0] eq '-v') {
+   $verbose ++;
+   shift @ARGV;
+   usage("missing cfg_file arg") if ! @ARGV;
+} 
+
+my $cfg_file  = shift @ARGV;
+
+my $all_cfg = parse_cfg($cfg_file, {verbose=>$verbose});
+
+$verbose && print __FILE__ . " ". __LINE__ . ' $all_cfg =', Dumper($all_cfg);
+
+GetOptions(
+   'v|verbose+'     => \$verbose,      # each     -v will increment the verbose level
+   'debug+'         => \$debug,        # each -debug will increment the debug   level
+   'n|dryrun'       => \$dryrun,
+   'c=s'            => \$caller,
+   'batch=s'        => \$batch,
+   'interactive'    => \$interactive,
+   'np'             => \$no_post,
+   $all_cfg->{extra_getopts} ? @{$all_cfg->{extra_getopts}} : (),
+) || usage ("cannot parse command line: $!");
+
+my $opt = {
+   verbose     => $verbose,
+   debug       => $debug,
+   dryrun      => $dryrun,
+   interactive => $interactive,
+   no_post     => $no_post,
+};
+
+if ($all_cfg->{position_args}) {
+   my @position_args = @{$all_cfg->{position_args}};
+   if ( scalar(@position_args) > @ARGV) {
+      usage("missing positional args, expecting: @position_args", 
+            {caller=>$caller, 
+             all_cfg=>$all_cfg,
+            });
+   }
+
+   # use $opt to pass position args; therefore, be care of naming, avoid dups.
+   for my $pa (@position_args) {
+      $opt->{$pa} = shift @ARGV;
+   }
+}
+
+if ($all_cfg->{extra_options}) {
+   $opt = {%$opt, %{$all_cfg->{extra_options}}};
+}
+
+$verbose && print "ARGV = ", Dumper(\@ARGV);
+
+# set default to 1 in order to trigger help message by default
+my $minimal_args = $all_cfg->{minimal_args} ? $all_cfg->{minimal_args} : 1;
+
+usage("missing args",
+      {caller=>$caller, 
+       all_cfg=>$all_cfg,
+      }) if @ARGV < $minimal_args && !$batch;
+
+# @{$opt->{ARGV}} = @ARGV;  # copying is safer
+
+if ($batch) {
+   run_batch($all_cfg, $batch, $opt);
+} else {
+   run_batch($all_cfg, [\@ARGV], $opt);
+}

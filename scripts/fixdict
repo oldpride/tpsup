@@ -1,0 +1,56 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::FIX qw(/./);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog
+
+descript ion:
+   dump the fix dictionary
+
+EOF
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   "v" => \$verbose,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV;
+
+my $opt = {
+   verbose => $verbose,
+};
+
+my $name_by_tag = map_fixname_by_tag($opt);
+
+my $desc_by_tag_value = map_desc_by_tag_value($opt);
+
+for my $tag (sort {$a<=>$b} keys(%$name_by_tag)) {
+   printf "%5s %s\n", "$tag", $name_by_tag->{$tag};
+
+   if ($desc_by_tag_value->{$tag}) {
+      for my $value (sort keys(%{$desc_by_tag_value->{$tag}})) {
+         printf "%5s %3s %s\n", "$tag", "$value", $desc_by_tag_value->{$tag}->{$value};
+      }
+   }
+
+   print "\n";
+}
+
+exit 0;

@@ -1,0 +1,68 @@
+#!/bin/bash
+
+timeout=5
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog pattern job_pattern1 job_pattern2 ...
+
+   -i        case-insensitive
+
+   -q        autorep's query mode, or detail mode
+
+   -p 'pass_through_to_arep'
+
+
+
+example:
+
+   - the following are the same
+   agrep sleep test%
+   arep -me '\$defination =~ /sleep/' -J test%
+
+   - test with autosys software. -p '-noExpire' to use the old cache for speed
+   agrep -p '-noExpire' sleep test%
+   agrep -p '-noExpire -c defination,LastStart,LastEnd' sleep test%
+
+
+   - test without autosys software
+   agrep -p '-df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt'    sleep test%
+   agrep -p '-df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt' -i SLEEP test%
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+
+while getopts ip:qv o;
+do
+   case "$o" in
+      v) verbose=Y;;
+      q) query='-q';;
+      i) case_insensitive=i;;
+      p) passthrough="$OPTARG";;
+      *) # don't print $o here because it is set to '?'. see 'man bash', getopts section
+         #     "If an invalid option is seen, getopts places ? into name"
+         # echo "unknow switch at $o"; 
+         usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -lt 2 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+pattern=$1
+shift
+
+[ $verbose = Y ] && set -x
+arep $passthrough $query -me "\$defination =~ /$pattern/$case_insensitive" -J $@
+

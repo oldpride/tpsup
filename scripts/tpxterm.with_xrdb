@@ -1,0 +1,106 @@
+#!/bin/bash
+
+font="-fn '-adobe-courier-medium-r-normal--14-*'" 
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 display
+
+   pop up an xterm
+
+   When 'display' is set to auto, the script will use the env variable DISPLAY.
+   Currently, DISPLAY='$DISPLAY'
+
+   -b      a blank shell, not a login shell, therefore, not sourcing profiles.
+           this way will have a virgin env for testing.
+
+   -d      debug mode
+
+   -f number
+          use Monospace with this font size, eg, 9. normally for ubuntu remote
+          desktop. default $font
+
+example:
+
+   $0 192.168.1.164:0
+   $0 host1.abc.com:0
+   $0 auto
+
+EOF
+   exit 1
+}
+
+loginshell='-ls'
+debug='N'
+
+while getopts bdf: o;
+do
+   case "$o" in
+      b) loginshell="";;
+      d) debug=Y;;
+      f) font="-fa Monospace -fs $OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+if [ "$1" = auto ]; then
+   DISPLAY_SWITCH=""
+else
+   DISPLAY_SWITCH="-display $1"
+fi
+
+OS=`uname`
+
+id=`id |cut -d\( -f2|cut -d\) -f1`
+hostname=`hostname`
+pwd=`pwd`
+title="$id@$hostname:$pwd"
+
+DIR=`dirname $0`
+
+. $DIR/../profile
+
+export PSl
+# man -M /usr/openwin/man xrdb
+# xrdb $DISPLAY_SWITCH -query
+
+[ $debug = Y ] && set -x
+
+if [ $OS = SunOS ]; then
+   XPATH=/usr/openwin/bin
+
+   $XPATH/xrdb $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
+
+   # /usr/openwin/bin/xlsfonts|grep adobe-courier
+   
+   #nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   # -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash --rcfile $TPSUP/profile >/dev/null 2>&1 &
+
+   nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
+
+elif [ $OS = Linux ]; then
+   xrdb.linux $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
+
+   #nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   #-fg white -bg black -title $title -sl 10000 -sb -e "/bin/bash --rcfile $TPSUP/profile" >/dev/null 2>&1&
+
+   #nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+   eval "nohup xterm.linux $DISPLAY_SWITCH -geom 100x44 $font \
+   -fg white -bg black -title $title -sl 10000 -sb $loginshell >/dev/null 2>&1&"
+
+   # -ls     to login session, this will source profile and record in /var/log/wtmp so
+   #         that 'w' command will list this session
+
+else
+   echo "unsupported OS=$OS"
+fi

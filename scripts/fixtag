@@ -1,0 +1,105 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::FIX qw(
+   parse_fix_message
+   get_fixname_by_tag
+   get_desc_by_tag_value
+   map_desc_by_tag_value
+   dump_fix_message
+);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog input
+
+   'input' can be a. file name or '-' (stdin).
+
+   -t t1,t2,...     select these tags to display, default to all tags.
+   -d delimitor     default to /\\b8=FIX[.0-9]+?([^.0-9]+)[0-9]/ or /\\b35=[DEFG8]([^.0-9]+)[0-9]+=/
+   -v               verbose mode
+   -dict dict_file  extra dictionary for inhouse tags, or overwrite standard tags 
+   
+
+examples:
+
+   $prog fixtag_test.txt
+
+   $prog -t 35,49,50,56,57,115 fixtag_test.txt
+
+   - to dump a nested fix message
+   head -n 1 fixlog2csv_test_multileg.txt | $prog -
+
+   - to overwrite standard tags, pay attention to tag 35 and 54 in the following outputs
+
+   $prog -t 35,54                            fixtag_test.txt
+   $prog -t 35,54 -dict fixtag_test_dict.txt fixtag_test.txt
+
+END
+
+   exit 1;
+}
+
+my $tag_string;
+my $verbose;
+my $delimitor;
+my $FixDictFile;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   't|tag=s' => \$tag_string,
+   'd|delimitor=s' => \$delimitor,
+    "dict=s" => \$FixDictFile,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($input) = @ARGV;
+
+my $FixDict;
+if ($FixDictFile) {
+   croak "$FixDictFile not found" if ! -f $FixDictFile;
+
+   $FixDict = `cat $FixDictFile`;
+
+   # load the user-specified dict here because filter_fix may not take $opt when
+   # applying TPSUP::Expression
+   map_desc_by_tag_value({FixDict => $FixDict});
+}
+
+my $ifh;
+
+if ($input eq '-') {
+   $ifh = \*STDIN;
+} else {
+   open $ifh, "<$input" or die "cannot read $input";
+}
+
+while (<$ifh>) {
+   my $line = $_;
+
+   $ line =~ s//,/g;
+   $ line =~ s///g;
+
+   print "$line\n";
+
+   dump_fix_message($line, {FixDe1imiter => $delimitor,
+                            tags => $tag_string,
+                            verbose =>$verbose,
+                            DumpFH=>\*STDOUT,
+                   });
+}
+
+exit 0;

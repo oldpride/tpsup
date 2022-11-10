@@ -1,0 +1,137 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(cat_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog csv1 csv2
+
+   concatnate csv files
+
+   -me match_expression    perl style, cell-based, eg, -m '\$Column1==1 && \$Column2 eq "B"'
+   -xe exclude_expression  perl style, cell-based, eg, -m '\$Column3=~ /junk/ || !\$Column4'
+
+   -mp match_pattern       perl style, line-based. Can be multiple, in AND logic.
+                           eg. -e "junk1" -e "junk2"
+                              will match both "junk1 junk2" and "junk2 junk1",
+                              but will not match "junk1" or "junk2".
+
+   -xp exclude_pattern     perl style, line-based. Can be multiple, in AND logic.
+                           eg. -e "junk1" -e "junk2"
+                              will match both "junk1 junk2" and "junk2 junk1",
+                              but will not match "junk1" or "junk2".
+
+   -delimiter string       default to ","
+
+   -skip number            skip the first n lines of the file, because some files may comments
+                           above header, default to 0, no skipping.
+
+   -option setting         other options, eg,
+                              -op InputNoHeader this indicates no header line in the input file
+                              -op UsePosition this indicates to use cO,cl,... as column names
+
+   -o output.csv           default to STDOUT
+
+   -col columns            select these columns, can use multiple times, one per csv
+                           for each csv, this defaults to first -col if it exists,
+                           otherwise, default to all columns.
+
+   -header c1,c2,          hard code header for output
+
+examples:
+
+   # assume the same header
+   $prog                                    joinquerycsv_test1.csv joinquerycsv_test2.csv
+
+   # handle differet headers
+   $prog -col alpha,number -col alpha,float joinquerycsv_test1.csv joinquerycsv_test2.csv
+
+END
+   
+   exit 1;
+}
+
+my $verbose;
+my $delimiter;
+my $skiplines;
+my @match_expression;
+my @exclude_expression;
+my @match_pattern;
+my @exclude_pattern;
+my @other_options;
+my $header;
+my $output = "-";
+my @columnStrings;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'd|delimiter=s' => \$delimiter,
+   'skip=s'        => \$skiplines,
+   'me=s'          => \@match_expression,
+   'xe=s'          => \@exclude_expression,
+   'mp=s'          => \@match_pattern,
+   'xp=s'          => \@exclude_pattern,
+   'op|option=s'   => \@other_options,
+   'header=s'      => \$header,
+   'o|output=s'    => \$output,
+   'col=s'         => \@columnStrings,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my @csvs = @ARGV;
+
+my $opt = {
+   MatchExps       => \@match_expression,
+   ExcludeExps     => \@exclude_expression,
+   MatchPatterns   => \@match_pattern,
+   ExcludePatterns => \@exclude_pattern,
+   delimiter       => $delimiter,
+   skiplines       => $skiplines,
+   verbose         => $verbose,
+   CatCsvHeader    => $header,
+   CatCsvOutput    => $output,
+};
+
+for my $op (@other_options) {
+   if ($op =~ /^(TrimFloats)=(.+)/) {
+      @{$opt->{$1}} = split /,/, $2;
+   } elsif ($op =~ /^(.+?)=(.+)/) {
+      $opt->{$1} = $2;
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+my $error = 0;
+
+my @CatCsvColumns;
+
+if (@columnStrings) {
+   for my $string (@columnStrings) {
+      my @a = split /,/, $string;
+      push @CatCsvColumns, \@a;
+   }
+
+   $opt->{CatCsvColumns} = \@CatCsvColumns;
+
+   $verbose && print "opt->{CatCsvColumns} = ", Dumper($opt->{CatCsvColumns});
+}
+
+cat_csv(\@csvs, $opt);
+
+exit 0;
+

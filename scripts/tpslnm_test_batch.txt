@@ -1,0 +1,4 @@
+# batch file can have comment and blank lines
+
+s=perl
+s=python

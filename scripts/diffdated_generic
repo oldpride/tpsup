@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# this wrapper is to shorten command line, so that instead of
+#    diffdated check_myapp.cfg ...
+# we can type
+#    check_myapp ...
+# for this, do 
+#    ln -s diffdated_generic check_myapp
+
+prog=`basename $0`
+dir=`dirname $0`
+
+diffdated $dir/$prog.cfg -c $prog  "$@" 

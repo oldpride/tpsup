@@ -1,0 +1,84 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::LOG qw(get_logs_by_cfg);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   my $TwoDaysAgo = `date -d '-2 days' +%Y%m%d`; chomp $TwoDaysAgo;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog config.cfg id
+
+   get logs
+
+   'config.cfg' is the config file.
+   'id' is the id in the config file.
+
+   -v                verbose mode
+
+   -max INT          max number of logs
+
+   -d yyyymmdd       default to today.
+
+   -s separator      default to newline
+
+   -b INT            backward these many days, ie, previous days
+
+examples:
+
+   $prog        get_logs_test.cfg syslog
+   $prog -max 2 get_logs_test.cfg syslog
+
+   $prog        get_logs_test.cfg dpkg
+   $prog -max 2 get_logs_test.cfg dpkg
+
+   $prog             get_logs_test.cfg lca
+   $prog -d $TwoDaysAgo get_logs_test.cfg lca
+
+   $prog -d $TwoDaysAgo -b 3 get_logs_test.cfg lca
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $max;
+my $yyyymmdd;
+my $separator = "\n";
+my $BackwardDays;
+
+GetOptions(
+   'verbose'     => \$verbose,
+   'max=s'       => \$max,
+   'd=s'         => \$yyyymmdd,
+   'b=s'         => \$BackwardDays,
+   's=s'         => \$separator,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV !=2 ;
+
+my ($cfg_file, $id) = @ARGV;
+
+print join($separator, 
+           @{get_logs_by_cfg($cfg_file, $id, {LogLastCount=>$max, 
+                                              yyyymmdd=>$yyyymmdd, 
+                                          BackwardDays=>$BackwardDays, 
+                                               verbose=>$verbose})}
+          ),
+      "\n";
+
+exit 0;
+

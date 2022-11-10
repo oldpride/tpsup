@@ -1,0 +1,13 @@
+! https://newspaint.wordpress.com/2015/12/23/clipboard-cut-and-paste-like-putty-in-xterm/
+! http://superuser.com/questions/204482/how-can-i-copy-text-from-exceed
+
+XTerm*selectToClipboard: true
+
+XTerm.vt100.translations: #override \
+ <Btn1Down>: select-start(CLIPBOARD) \n\
+ <Btn1Up>: select-end(CLIPBOARD) \n\
+ <Btn3Down>: insert-selection(CLIPBOARD) \n\
+
+! run xrdb -load this_filename
+
+! in Exceed, xconfig, X Selections, set "CLIPBOARD" and set "Auto X Selection", unset "Copy On Focus Loss"

@@ -1,0 +1,188 @@
+#!/bin/bash
+
+# backup c drive config to h drive
+
+dst="/cygdrive/h/hdepot"
+
+yyyymmdd=`date +%Y%m%d`
+
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog backup
+   $prog restore
+   $prog check
+
+   back up local drive's (eg,C:) file to network drive (eg, H:)
+
+   -v            verbose mode
+   -m pattern    only    lines matching this pattern
+   -x pattern    exclude lines matching this pattern
+
+   -b backup_dir default to /cygdrive/h
+
+   the files to be backed up is saved in /home/\$USER/hdepot.cfg. example content is below
+      # putty config
+      /cygdrive/c/Users/\$USER/Desktop/putty_config.reg
+      
+      # aqua data studio
+      /cygdrive/c/Users/\$USER/.datastudio/connections
+      
+      # cygwin stuff
+      /home/\$USER/hdepot.cfg
+      /home/\$USER/tpdist
+      /home/\$USER/.bash_profile
+      /home/\$USER/.bashrc
+      
+
+   save local c drive config files to netowrk h drive H:/hdepot or other shared drive.
+
+   This is very useful when we replace PC which all local C drive data will be gone.
+
+   before replacing PC, run 'backup'. after getting new PC, run 'restore'.
+
+example:
+
+   $prog          check
+
+   - to test
+   $prog -m putty -b /home/$USER/hdepot backup
+   $prog -m putty -b /home/$USER/hdepot restore
+   $prog -m putty -b /home/$USER/hdepot check
+
+EOF
+   exit 1
+}
+
+cfg="/home/$USER/hdepot.cfg"
+
+if ! [ -f $cfg ]; then
+   echo "ERROR: missing $cfg"
+   usage
+fi
+
+src=`cat $cfg`
+[ $? = 0 ] || exit 1
+
+verbose=N
+
+while getopts vm:x:b: o;
+do
+   case "$o" in
+      v)   verbose=Y;;
+      m)   Match=$OPTARG;;
+      x)   Exclude=$OPTARG;;
+      b)   dst=$OPTARG;;
+      *)   usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+action=$1
+
+UNAME=`uname -a`
+
+if ! [[ $UNAME =~ Cygwin ]]; then
+   echo "ERROR: this script can only be run on Cygwin. current UNAME=$UNAME." >&2
+   exit 1
+fi
+
+if [ $action = backup ]; then
+   if ! [ -d "$dst/$yyyymmdd" ]; then
+      mkdir -p "$dst/$yyyymmdd" || exit 1
+
+      # copy over old files
+      if [ -e "$dst/latest" ]; then
+         cp -r $dst/latest/* $dst/$yyyymmdd
+      fi
+
+      # update link
+      /bin/rm -f $dst/latest
+      cd $dst || exit 1
+      ln -s $yyyymmdd latest
+   fi
+fi
+   
+echo "$src"|while read line
+do
+   # skip blank lines
+   if [[ $line =~ ^[[:space:]]*$ ]]; then
+      continue
+   fi
+
+   # how bash regexp handles space and comment sign.
+   # According to man bash, the =~ operator supports "extended regular expressions" as defined in man 3 regex.
+   # man 3 regex says it supports the POSIX standard and refers the reader to man 7 regex. The POSIX standard
+   # supports [:space:] as the character class for whitespace.
+   #
+   # The GNU bash manual documents the supported character classes as follows:
+   # Within ‘[’ and ‘]’, character classes can be specified using the syntax [:class:], where class is one of
+   # the following classes defined in the POSIX standard:
+   #    alnum alpha ascii blank cntrl digit graph lower print
+   #    punct space upper word xdigit
+   if [[ $line =~ ^[[:space:]]*# ]]; then
+      continue
+   fi
+
+   # resolve variables
+   line=`eval echo "$line"`
+
+   if [ "X$Match" != X ]; then
+      if ! [[ $line =~ $Match ]]; then
+         continue
+      fi
+   fi
+
+   if [ "X$Exclude" != X ]; then
+      if [[ $line =~ $Exclude ]]; then
+         continue
+      fi
+   fi
+
+   echo ""
+   echo "source side $line" 
+   ls -l "$line"
+   echo ""
+
+   relpath=`echo "$line"|sed "s:^/cygdrive/c/users/$USER/::i;s:^/home/$USER/::i"`
+   srcdir=`dirname "$line"`
+
+   dstpath="$dst/latest/$relpath"
+   dstdir=`dirname "$dstpath"`
+
+   if [ $action = backup ]; then
+      if [ -e "$line" ]; then
+         if ! [ -d "$dstdir" ]; then
+            mkdir -p "$dstdir" || exit 1
+         fi
+
+         # cp -pr doesn't work in windows: cp: failed to preserve ownership for '...': Permission denied
+         (set -x; cp -r "$line" "$dstdir")
+      else 
+         echo "ERROR: $line doesn't exist"
+      fi
+   elif [ $action = restore ]; then
+      [ -d $srcdir ] || mkdir $srcdir || exit 1
+ 
+      if [ -e "$dstpath" ]; then
+         (set -x; cp -r "$dstpath" "$srcdir")
+      else
+         echo "ERROR: '$dstpath' doesn't exist"
+      fi
+   elif [ $action = check ]; then
+      echo "backup side $dstpath" 
+      ls -l "$dstpath"
+   else
+      echo "ERROR: unsupported action='$action'" >&2
+      usage
+   fi
+done

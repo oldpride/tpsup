@@ -1,0 +1,425 @@
+#!/usr/bin/env perl
+
+use File::Basename;
+
+use strict;
+use warnings;
+
+# 'our' can be used multiple times. Using it here allows us to use 'strict' and 'warning'
+# to check this cfg file alone, as
+#     $ perl tptrace_test.cfg
+our $all_cfg;   
+our %known;
+
+# don't add 'my' in front of below because the variable is declared in the caller.
+$all_cfg = {
+   # global vars
+   # only vars in double curlies {{ }} willl be substituted. this leaves
+   # single curly, like $known{YYYYMMDD}, be eval()'ed.
+   
+   # use array to enforce sequencing because later var may rely on earlier var.
+   # use single quote to delay their execution. they will be eval'ed later. 
+   vars => [ 
+      dummy_global_var2 => '"hardcoded string"',
+      dummy_global_var3 => 'get_log_example($known{YYYYMMDD}, \%known)',
+
+      # the following is equivalent to `date`+chomp(). but chomp(`date`) does't work.
+      dummy_global_var1 => 'cmd_output_string("date")',
+   ],
+
+   cfg_by_entity => {
+      test_code => {
+         method => 'code',
+         code => q( 
+            update_knowledge("DUMMY", "DUM");
+            print "access from entity=test_code's code, known=", Dumper(\%known);
+         ),
+      },
+
+      # where_clause key is $opt/$known key, value is table's column name
+      # $opt and $known should use the same key:
+      #     $known is upper case, in order to make command args easier.
+      #     therefore $opt is upper case too, in order to be consistent
+   
+      orders => {
+         # condition's variables won't be resolved because
+         # for example: '$known{SOURCE} && $known{SOURCE} eq "FIRM"'
+         # would be resolved to: '$knownFIRM && $knownFIRM eq "FIRM"'
+         # which would fail compile.
+         method => 'db',
+         db => 'tptest@tpdbmysql',
+         DbType => 'mysql',
+         where_clause => {
+            ORDERID => 'orderid',
+            SID  => 'sid',
+            ORDERQTY => {column=>'orderqty',numeric=>1},
+            LASTQTY => {column=>'lastqty',numeric=>1},
+            FILLEDQTY => {column=>'filledqty',numeric=>1},
+            SENDERCOMP  => 'SenderComp',
+            TARGETCOMP  => 'TargetComp',
+            YYYYMMDD  => { clause=>"CAST(LastUpdateTime as DATE) = '{{opt_value}}'",
+                           update_knowledge=>0,
+                           # can also be an expression
+                           # update_knowledge=>'{{value}} != 0', 
+                         },
+         },
+         order_clause => 'order by LastUpdateTime',
+   
+         #this only works for today
+         #example_clause => "OrderDate > CAST(GETDATE() as DATE) and Status = 'Filled'",
+   
+         example_clause => "OrderDate > '{{yyyymmdd}}' and Status = 'Filled'",
+         Comment => "comment from cfg.\n",
+      },
+   
+      trades => {
+         method => 'db',
+         db => 'tptest@tpdbmssql',
+         DbType => 'mssql',
+         where_clause => {
+            # one order can have multiple trades
+            TRADEID => 'tradeid',   
+            ORDERID => 'orderid',
+            SID  => 'sid',
+            ORDERQTY => {column=>'qty',
+                         numeric=>1, 
+                         clause => "qty <= {{opt_value}}",
+                         update_knowledge=>0,
+                        },
+            FILLEDQTY => {column=>'qty',
+                         numeric=>1, 
+                         clause => "qty <= {{opt_value}}",
+                         update_knowledge=>0,
+                        },
+             TRADEQTY => {column=>'qty', numeric=>1,},
+           TRADEPRICE =>  {column=>'Price', numeric=>1},
+           TARGETCOMP => 'TargetComp',
+             YYYYMMDD => { clause=>"CAST(TradeDate as DATE) = '{{opt_value}}'",
+                           update_knowledge=>0,
+                         }
+         },
+         order_clause => 'order by LastUpdateTime',
+         example_clause => "TradeDate >= '{{yyyy}}{{mm}}{{dd}}'",
+         comment => 'trace in trades table',
+      },
+
+      actions => {
+         method => 'db',
+         db => 'tptest@tpdbmssql',
+         DbType => 'mssql',
+         where_clause => {
+            # one order can have multiple trades
+            ORDERID => 'msgid',
+            FILLEDQTY => { column=>'filledqty', numeric=>1},
+         },
+         #order_clause => 'order by LastUpdateTime',
+         #example_clause => "TradeDate >= '{{yyyy}}{{mm}}{{dd}}'",
+         # Id,MsgId,STATUS,FilledQty
+         # 1,ORD-0001,,
+         # 2,ORD-0001,SENT,
+         # 3,ORD-0001,PARTIAL,600
+         # 4,ORD-0001,COMPLETED,1000
+         filter => {
+            ExportExps => [
+               'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+            ],
+            SortKeys => [ 'weight' ],
+         },
+         comment => 'trace in trades table',
+         AllowMultiple=>1,
+         Top=>1,
+         # to test:
+         #     tptrace_test -t actions orderid=ORD-0001
+      },
+
+      booking => {
+         method => 'db',
+         db => 'tptest@tpdbmssql',
+         DbType => 'mssql',
+         where_clause => {
+            # one order can have multiple trades
+            BOOKID =>  'bookid',
+            TRADEID => 'tradeid',   
+            ORDERID => 'orderid',   
+            SID  => 'sid',
+            ORDERQTY => {numeric=>1, clause=>"qty <= {{opt_value}}", update_knowledge=>0},
+            TRADEQTY => {column=>'qty', numeric=>1,},
+          TRADEPRICE =>  {column=>'Price', numeric=>1},
+          TARGETCOMP => 'TargetComp',
+            YYYYMMDD => { clause=>"CAST(TradeDate as DATE) = '{{opt_value}}'",
+                           update_knowledge=>0,
+                        },
+         },
+         order_clause => 'order by LastUpdateTime',
+         example_clause => "TradeDate = '{{yyyymmdd}}'",
+         #AddClauseToNarrowResult=> "IsActive = 1",
+         DisableKeyToWidenResult=> ['extra_clause', 'PRICE'],
+      },
+
+      applog_cmd =>{
+         method => 'cmd', 
+
+         vars => [ 
+            log => 'get_log_example("{{entity}}", \%known)',  
+         ],
+
+         cmds => [ 
+            # use array to enforce the sequence. 
+            # {{grep}} is  zgrep -E, handle both regular and gzipped files with RegExp
+            # each row: [ keys, cmd, flags ]
+            { 
+               condition=>'$known{TRADEID}', 
+               cmd=>'{{grep}} {{TRADEID}} {{log}}',
+               extract => {
+                  key_pattern => { 
+                     # this key is a $known key. if $known key is not defined, the pattern
+                     # will be used in place
+                     ORDERID   => '.+?',
+                     TRADEID   => '.+?',
+                     SID       => '.+?',
+                     FILLEDQTY => {pattern=>'[0-9.]+', numeric=>1},
+                  },
+         
+                  # Perl uses (?<NAME>pattern) to specify names captures. You have to use the %+ 
+                  # hash to retrieve them.
+                  #   $variable =~ /(?<count>\d+)/; 
+                  #   print "Count is $+{count}";
+                  line_pattern => 'orderid=(?<ORDERID>{{ORDERID}}),.*tradeid=(?<TRADEID>{{TRADEID}}),.*sid=(?<SID>{{SID}}),.*filledqty=(?<FILLEDQTY>{{FILLEDQTY}}),',
+                  # filter => { },  # can add a filter within extract
+               },
+               tests => [
+                  {
+                     test => '$row_count > 0',
+                     if_success => '
+                        # two ways to update
+                        update_knowledge("LOGGED_TRANSACTION", 1);
+                        $known{DUMMY_KNOWLEDGE} = $row_count+1;
+                     ',
+                  },  
+                  {
+                     test => '$rc == 0',
+                     if_failed => 'exit(1);',
+                  },
+               ],
+               example_cmd => "{{grep}} orderid= {{log}}|head -n 5",
+            },
+            {
+               grep_keys => [
+                 'TRADEID',
+                 {key=>'ORDERID', pattern=>'orderid={{opt_value}}'},
+                 'BOOKID',
+               ],
+               file => '"{{log}}"', 
+               logic=>'AND',  # default to OR
+               Top => 5,
+               tests => [
+                  {
+                     test => '$row_count > 0',
+                     if_success => 'update_ok(   "seen TRANSACTION in {{log}}");',
+                     if_failed  => 'update_error(  "no TRANSACTION in {{log}}");',
+                  },  
+               ],
+               # test with: 
+               #    tptrace_test -t applog_cmd tradeid=trd001
+               #    tptrace_test -t applog_cmd ANY
+            },
+         ],
+      },
+
+      applog_cmd_unconditional =>{
+         method => 'cmd', # cannot update knownledge
+         vars => [
+            log => 'get_log_example("{{entity}}", \%known)',  
+         ], 
+         cmds => [ 
+             {
+                # unconditional command
+                cmd =>'{{grep}} " (ERROR|FAIL)[ :]" {{log}}', 
+                code => q(
+                   # some processing code here
+                   update_knowledge("PROCESSED_ERROR", 1);
+                   print "access from entity=applog_cmd_unconditional's code, known=", Dumper(\%known);
+                ),
+                tests => [
+                   {
+                      test => '$row_count > 0',
+                      if_success => 'update_error("seen ERROR in {{log}}")',  
+                   }
+                ],
+             },
+         ],
+         example_cmd => "{{grep}} '(ERROR|FAIL)[ :]' {{log}} |tail -5",
+      },
+
+      applog_log =>{
+         method  => 'log', # can update knowledge
+         log => 'get_log_example("{{entity}}", \%known)',
+
+         extract => {
+            key_pattern => { 
+                # this key is a $known key. if $known key is not defined, the pattern
+                # will be used in place
+                BOOKID => '.+?',
+               TRADEID => '.+?',
+                   SID => '.+?',
+              TRADEQTY => {pattern=>'[0-9.]+', numeric=>1},
+            },
+   
+            # Perl uses (?<NAME>pattern) to specify names captures. You have to use the %+ 
+            # hash to retrieve them.
+            #   $variable =~ /(?<count>\d+)/; 
+            #   print "Count is $+{count}";
+            line_pattern => 'tradeid=(?<TRADEID>{{TRADEID}}),.*?sid=(?<SID>{{SID}}),.*?bookid=(?<BOOKID>{{BOOKID}}),.*?qty=(?<TRADEQTY>{{TRADEQTY}}),',
+            # filter => { },  # can add a filter within extract
+         },
+         
+         # example is derived from key_pattern automatically
+      },
+
+      applog_section =>{
+         method  => 'section', 
+         #log => 'dirname(__FILE__) . "tptrace_test_section.log"',
+         log => '"/home/tian/sitebase/github/tpsup/scripts/tptrace_test_section*.log"',
+
+         section_cfg => {
+            # PreMatch/PreExclude is for speedup, it covers every line.
+              PreMatch   => '^2021',   
+            # PreExclude => '^2022',   
+
+            # this cfg will transferred to TPSUP::LOG::get_log_sections() sub
+            BeginPattern  => 'section id .*? started',
+              EndPattern  => 'section completed',
+
+            # MatchPattern/ExcludePattern applied after BeginPattern/EndPattern
+                MatchPattern  => 'order id|trade id',
+            # ExcludePattern  => 'no content',
+
+            ExtractPatterns => [
+               '^(?<BeginTime>.{23}) section id (?<SectionId>.*?) started',
+               '^(?<EndTime>.{23}) section completed',
+               'order id (?<OrderId>\S+)',
+               'trade id (?<TradeId>\S+)',
+              ],
+            KeyAttr    => { OrderId=>'Array', TradeId=>'Hash' },
+            KeyDefault => { OrderId=>[],      TradeId=>{} },
+            # KeyDefault is to simplify MatchExp, allowing us to use
+            #     MatchExp =>'grep {/^ORD-0001$/}  @{$r{OrderId}}'
+            # without worrying about whether $r{OrderId} is defined.
+
+            # MatchExp can use {{...}} vars. this is applied after a whole section is
+            # completed.
+                MatchExp =>'grep(/^{{ORDERID}}$/, @{$r{OrderId}})',
+            # ExcludeExp =>'...',
+
+            key_pattern => { 
+               # this key is a $known key. if $known key is not defined, the pattern
+               # will be used in place
+               ORDERID => '\S+',
+            },
+
+         },
+
+         update_key => {
+             # the key is $known key. The column is the the key of a section
+             SECTION_BEGINTIME => { column=>'BeginTime' }, 
+             SECTION_ENDTIME   => { column=>'EndTime'   }, 
+             SECTIONID         => { column=>'SectionId' }, 
+             ORDERIDS          => { column=>'OrderId'   },
+             ORDERID2          => { code=>'$r{OrderId}->[0]', condition=>'$r{OrderId}' },
+         },
+
+         # example is derived from key_pattern automatically
+
+         #Comment => '',
+      },
+   },
+   
+   extra_keys => ['example', 'security', 'sedol', 'cusip', 'isin'],
+
+   alias_map => {
+      sec => 'security',
+      oid => 'orderid',
+      tid => 'tradeid',
+      tc  => 'TargetComp',
+      #ts  => 'TargetSub',
+      sc  => 'SenderComp',
+      #ss  => 'SenderSub',
+   },
+   
+   extend_key_map => [ 
+      # one key's knowledge can extend to other keys.
+      #    for example, if I know SEDOL, I will know CUSIP.
+      # use a array to enforce the order.
+      # extender function, first arg is ref to $known, second arg is new value
+      [ 'SECURITY', \&update_security_knowledge ],
+      [ 'SEDOL',    \&update_security_knowledge ],
+      [ 'CUSIP',    \&update_security_knowledge ],
+      [ 'ISIN',     \&update_security_knowledge ],
+      [ 'SID',      \&update_security_knowledge ],
+   ],
+
+   entry_points => [ 
+      # use a array to enforce the order
+      # known keys => table list
+      [ ['BOOKID'],     ['booking', 'trades']],
+      [ ['TRADEID'],    ['trades']],
+      [ ['ORDERID'],    ['orders']],
+      [ ['SID', 'QTY'], ['orders']],
+      [ [],             ['orders']],   # this is default
+   ],
+
+   # trace entities in this order
+   trace_route => [ 
+      'test_code', 
+      #{ entity => 'orders', condition => '$known{YYYYMMDD} == $known{TODAY}'},
+      'orders', 
+      { entity=>'trades', AllowZero=>1},
+      'booking', 
+      'actions', 
+      { entity=>'orders', 
+        # normally we trace from orderid->tradeid->bookid but in case
+        # we know tradeid first, we can want to search back orders table for orderid.
+        # therefore, we set the reentry=1
+        condition => '$known{TRADEID} && !$known{ORDERID}',
+        reentry=>1,
+      },
+      'applog_cmd',
+      'applog_cmd_unconditional',
+      'applog_log',
+      'applog_section',
+   ],
+
+   example => <<"EOF",
+   # load test database
+   sql tptest\@tpdbmysql file tptrace_test_db.sql 
+   sql tptest\@tpdbmssql file tptrace_test_db.sql 
+
+   # get example
+   {{prog}} yyyymmdd=20211129 example=booking
+
+   # trace
+   {{prog}} yyyymmdd=20211129 tradeid=TRD-0001
+   {{prog}} yyyymmdd=20211129 sec=IBM orderqty=4,500 tradeqty=600 sc=BLKC
+
+   # force to trace through
+   {{prog}} -f yyyymmdd=20211129 tradeid=TRD-0001
+EOF
+
+};
+
+# this should be site-spec functions
+use TPSUP::TRACER_test_sitespec qw(update_security_knowledge); 
+
+sub get_log_example {
+   my ($arg1, $known) = @_;
+
+   print "get_log_example() get knowledge=" . Dumper($known);
+   print "arg1=$arg1\n";
+   #print __LINE__, " current namespace = ", __PACKAGE__, "\n";
+
+   my $dir = dirname(__FILE__);
+   my $log = "$dir/tptrace_test.log";
+
+   return $log;
+}
+

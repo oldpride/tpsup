@@ -1,0 +1,95 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog commit path
+   $prog last   path
+
+   check out file with a different name: 'path' will be checked out as a new 'path'.old3
+
+   'last' points to the last commit
+
+examples:
+
+   \$ git   log profile
+   \$ $prog 1234444 profile
+   \$ ls -l profile.old3
+
+EOF
+
+   exit 1
+}
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+commit=$1
+old_path=$2
+new_path="${old_path}.old3"
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+echo ""
+
+if [ $commit = last ]; then
+   # this only works for undelete files
+   # echo "git log -n 1 -- $old_path|grep ^commit|awk '{print \$2}'"
+   # commit=`git log -n 1 -- $old_path|grep ^commit|awk '{print $2}'`
+
+   # how-do-i-find-and-restore-a-deleted-file-in-a-git-repository
+   # https://stackoverflow.com/questions/953481/
+   echo "Find the last commit that affected the given path: $old_path"
+   cmd="git rev-list -n 1 HEAD -- $old_path"
+   echo $cmd
+   commit=`$cmd`
+   echo ""
+
+   if [ "X$commit" = "X" ]; then
+      echo "ERROR: $old_path is not found in git history"
+      echo ""
+      exit 1
+   fi
+
+   echo "commit=$commit"
+   echo ""
+
+   cmd="git show $commit --summary -- $old_path"
+   echo $cmd
+   summary=`$cmd`
+   echo "$summary"
+   echo ""
+
+   if [[ $summary =~ delete ]]; then
+      echo "the last commit was a delete. therefore, we choose the previous commit using ^"
+      commit="${commit}^"
+   fi
+
+   echo ""
+   echo "last commit=$commit"
+   echo ""
+fi
+
+# william@tianpc:/cygdrive/c/users/william/src/springboot3_login/src/main/resources/templates$ git rev-parse --show-prefix user_form.html
+# src/main/resources/templates/
+# user_form.html
+
+old_dir_in_git=`git rev-parse --show-prefix -- $old_path|head -n 1`
+echo ""
+echo "old_dir_in_git=$old_dir_in_git"
+echo ""
+
+cmd="git show '${commit}:${old_dir_in_git}${old_path}' > '${new_path}'"
+echo $cmd
+eval $cmd
+
+echo ""
+ls -l "$new_path"
+
+echo ""

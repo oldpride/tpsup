@@ -1,0 +1,482 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_tmp_file);
+use TPSUP::CSV qw(cat_csv);
+use File::Basename;
+use Spreadsheet::WriteExcel;
+
+my $assume_no_oracle_client_installed;
+
+# https://perlmaven.com/begin
+BEGIN {
+   if ( grep(/--no_oraclnt/, @ARGV) ) {
+      $assume_no_oracle_client_installed = 1;
+      use TPSUP::CSV qw(parse_csv_cmd);
+   } else {
+      use TPSUP::SQL qw(run_sql);
+   }
+}
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog config.cfg [ optional_args ]
+
+   -v                 verbose
+
+   -t tab             run only for this tab
+
+   --no_oraclnt       assume no oracle client installed on the local box.
+                      default to assume the host have the correct oracle client installed.
+
+                      NOTE: even if the local host has the correct version, sometimes
+                      the binary lib may not work with tpsup's perl. In this case,
+                      use this switch.
+                      However, if you don't have to use this switch, try avoid using
+                      it, as it may slow down the process a little bit.
+
+   -delimiter char
+                      default to ','. But sometimes cell contains ',', use this to switch.
+   
+examples:
+
+   # generate one xls
+   $prog sql2xls_example_xls.cfg
+
+   # generate one csv by concatnating each tab's csv into one
+   $prog sql2xls_example_single_csv.cfg
+
+   # generate multiple csvs
+   $prog sql2xls_example_csvs.cfg
+
+   # run with args
+   $prog sql2xls_example.cfg 112250 dummy
+
+   # run against only one of the tabs
+   $prog -t test3 sql2xls_example_xls.cfg 112250 dummy
+
+   # use --no_oraclnt if you get ld problem with oralce lib on a linux box
+   $prog              -t test2 sql2xls_example_xls.cfg
+   $prog --no_oraclnt -t test2 sql2xls_example_xls.cfg
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $user_tab;
+my $output_is_csv;
+my $delimiter = ' , ' ;
+
+GetOptions(
+   'v|verbose'   => \$verbose,
+   't|tab=s'     => \$user_tab,
+   'delimiter=s' => \$delimiter,
+   'no_oraclnt'  => \$assume_no_oracle_client_installed,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 1;
+
+if (!$assume_no_oracle_client_installed && $verbose) {
+   print STDERR "assume oracle client installed\n";
+}
+
+my $cfg_file = $ARGV[0];
+my $date = `date +%Y%m%d%H%M%S`; chomp $date;
+
+my ($yyyy, $mm, $dd, $HH, $MM, $SS)
+   = ($date =~ /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
+
+my $hostname = `hostname`; chomp $hostname;
+
+my $id = `id`; chomp $id;
+my ($user) = ($id =~ /^.+?\((.+?)\)/);
+
+my $home = `bash -c "echo ~"`; chomp $home;
+
+my $ScriptDir;
+if ($0 =~ m:/:) {
+   $ScriptDir = `pwd`; chomp $ScriptDir;
+} else {
+   ($ScriptDir) = ($0 =~ m:^(.*)/:);
+}
+
+my $dict = {
+   YYYY => $yyyy,
+   yyyy => $yyyy,
+   mm => $mm,
+   dd => $dd,
+   HH => $HH,
+   MM => $MM,
+   SS => $SS,
+   home => $home,
+   prog => $prog,
+   user => $user,
+   hostname => $hostname,
+   host => $hostname,
+   ScriptDir => $ScriptDir,
+};
+
+$verbose && print "dict = ", Dumper($dict);
+
+my $cfg = parse_cfg($cfg_file);
+
+$verbose && print "cfg = ", Dumper($cfg);
+
+die "failed to parse $cfg_file" if !$cfg;
+
+die "no tags found in $cfg_file" if !$cfg->{tabs} || !@{$cfg->{tabs}};
+
+die "one of output xls/output_single_csv/output_csv_dir must be defined"
+   if !defined $cfg->{output_file}
+   && !defined $cfg->{output_xls}
+   && !defined $cfg->{output_csv_dir}
+   && !defined $cfg->{output_single_csv};
+
+my $output_xls = $cfg->{output_xls}  ? $cfg->{output_xls}  :
+                 $cfg->{output_file} ? $cfg->{output_file} : # for backward compatibility
+                                                     undef ;
+
+my $output_single_csv = $cfg->{output_single_csv};
+my $output_csv_dir;
+   
+if ($output_single_csv) {
+   $output_csv_dir = dirname($output_single_csv);
+   $output_csv_dir = "." if !defined $output_csv_dir;
+} elsif ($cfg->{output_csv_dir}) {
+   $output_csv_dir = $cfg->{output_csv_dir};
+}
+
+my $error = 0;
+
+my @output_csvs;
+my $number_of_sheets_generated;
+
+if ($output_csv_dir) {
+   for my $tab (@{$cfg->{tabs}}) {
+      next if defined($user_tab) && $user_tab ne $tab;
+
+      if (! $cfg->{info_by_tab}->{$tab}) {
+         print STDERR "ERROR: tab='$tab' is not configured in $cfg_file.\n";
+         $error ++;
+         next;
+      }
+
+      my $connection_file = $cfg->{connection_file};
+
+      my ($connection, $sql, $substitutions, $number_of_args)
+         = @{$cfg->{info_by_tab}->{$tab}}{qw(connection sql substitutions number_of_args)};
+
+      if (defined($number_of_args) && @ARGV != $number_of_args) {
+         print STDERR "ERROR: tab='$tab' requires $number_of_args args. You provided ",
+         scalar(@ARGV) , "\n";
+         $error ++;
+         next;
+      }
+
+      if ($substitutions) {
+         for my $s (@$substitutions) {
+            eval "\$sql =~ $s";
+         }
+      }
+
+      print get_timestamp(), " tab='$tab', conn='$connection', sql = $sql\n";
+
+      if ($assume_no_oracle_client_installed) {
+         my $cmd = "sql.linux -OutputDelimiter $delimiter -output $output_csv_dir/$tab.csv";
+         $cmd .= " -conn $connection_file" if $connection_file;
+         $cmd .= " $connection";
+         $cmd .= qq( "$sql");
+         system($cmd);
+         $error ++ if $?;
+      } else {
+         my $structured_results = run_sql($sql, {  nickname=>$connection,
+                                                   connfile=>$connection_file,
+                                                   ReturnDetail=>1,
+                                                   OutputDelimiter=>$delimiter,
+                                                   output=>"$output_csv_dir/$tab.csv",
+                                                });
+         $error ++ if !$structured_results;
+      }
+
+      push @output_csvs, "$output_csv_dir/$tab.csv";
+
+      if ($output_single_csv) {
+         cat_csv(\@output_csvs, {CatCsvOutput=>$output_single_csv});
+      }
+   }
+} else {
+   my $workbook = Spreadsheet::WriteExcel->new("$output_xls");
+
+   my $format_content = $workbook->add_format(font=>'Courier New', size=>9, align=>'left');
+   $format_content->set_left(4);
+   $format_content->set_right(4);
+
+   my $format_header = $workbook->add_format(font=>'Courier New', size=>9, align=>'center', bold=>1);
+   $format_header->set_bottom(1);
+
+   for my $tab (@{$cfg->{tabs}}) {
+      next if defined($user_tab) && $user_tab ne $tab;
+
+      my $connection_file = $cfg->{connection_file};
+
+      if (! $cfg->{info_by_tab}->{$tab}) {
+         print STDERR "ERROR: tab='$tab' is not configured in $cfg_file.\n";
+         $error ++;
+         next;
+      }
+
+      my ($connection, $sql,, $substitutions, $number_of_args)
+         = @{$cfg->{info_by_tab}->{$tab}}{qw(connection sql substitutions number_of_args)};
+
+      if (defined($number_of_args) && @ARGV != $number_of_args) {
+         print STDERR "ERROR: tab='$tab' requires $number_of_args args. You provided ", scalar(@ARGV), "\n";
+         $error ++;
+         next;
+      }
+
+      if ($substitutions) {
+         for my $s (@$substitutions) {
+            eval "\$sql =~ $s";
+         }
+      }
+
+      print get_timestamp(), " tab='$tab', conn='$connection', sql = $sql\n";
+         
+      my $aref;
+      my $headers;
+
+      if ($assume_no_oracle_client_installed) {
+         my $cmd = "sql.linux -OutputDelimiter $delimiter";
+         $cmd .= " -conn $connection_file" if $connection_file;
+         $cmd .= " $connection";
+         $cmd .= qq( "$sql");
+
+         my $array_of_hash = parse_csv_cmd($cmd, {OriginalHeaderRef=>\$headers, delimiter=>$delimiter});
+
+         if (!$array_of_hash || @$array_of_hash == 0) {
+            print STDERR "sql for tab '$tab' returned nothing\n";
+            next;
+         }
+
+         for my $r (@$array_of_hash) {
+            my @array = @{$r}{@{$headers}};
+            push @$aref, \@array;
+         }
+      } else {
+         my $structured_results = run_sql($sql, { nickname=>$connection,
+                                                  connfile=>$connection_file,
+                                                  ReturnDetail=>1,
+                                                });
+
+         print get_timestamp(), " query done\n";
+
+         if (!$structured_results) {
+            print STDERR "sql for tab '$tab' failed\n";
+            $error ++;
+            next;
+         }
+
+         $aref = $structured_results->{aref};
+         $headers = $structured_results->{headers};
+      }
+
+      my $worksheet = $workbook->add_worksheet("$tab");
+
+      my $total_col = scalar(@{$headers});
+
+      for (my $col=0; $col<$total_col; $col++) {
+         $worksheet->write(0, $col, $headers->[$col], $format_header);
+      }
+
+      my $j=0;
+      for my $r (@$aref) {
+         $j++;
+
+         for (my $col=0; $col<$total_col; $col++) {
+            $worksheet->write($j, $col, $r->[$col], $format_content);
+         }
+      }
+
+      $number_of_sheets_generated ++;
+   }
+
+   $workbook->close();
+}
+
+if ( ! @output_csvs && ! $number_of_sheets_generated) {
+   print STDERR "ERROR: all selected tabs failed.\n";
+} elsif (defined $cfg->{mail_address}) {
+   my $address = translate($cfg->{mail_address}, $dict);
+   $address =~ s/,/ /g;
+
+   my $mail_cmd = "tpmail";
+
+   if (defined $cfg->{mail_subect}) {
+      $mail_cmd .= " -s '$cfg->{mail_subject}'";
+   } else {
+      $mail_cmd .= " -s '$user\@$hostname $ScriptDir/$prog'";
+   }
+
+   if ($output_single_csv) {
+      $mail_cmd .= " -a $output_single_csv";
+   } elsif ($output_csv_dir) {
+      for my $csv (@output_csvs) {
+         $mail_cmd .= " -a $csv";
+      }
+   } else {
+      $mail_cmd .= " -a $output_xls";
+   }
+
+   $mail_cmd .= " $address";
+
+   open my $mfh, "|$mail_cmd 2>&1" or die "$mail_cmd failed";
+
+   if( defined $cfg->{mail_message} ) {
+      print {$mfh} $cfg->{mail_message}, "\n";
+   } else {
+      print {$mfh} "$user\@$hostname $ScriptDir/$prog\n";
+   }
+
+   close $mfh;
+}
+
+print "Total $error errors\n";
+
+exit $error;
+   
+#################################
+# subs
+################################# 
+
+sub get_timestamp {
+   my $stamp = `date +%Y%m%d-%H:%M:%S`;
+   chomp $stamp;
+   return $stamp;
+} 
+
+sub translate {
+   my ($string, $dict) = @_; 
+
+   for my $k (keys %$dict) {
+      next if ! defined $dict->{$k}; 
+
+      $string =~ s:\%${k}\%:$dict->{$k}:g;
+   } 
+
+   return $string;
+} 
+
+sub parse_cfg {
+   my ($cfg_file) = @_; 
+
+   open my $fh, "<$cfg_file" or die "cannot read $cfg_file";
+
+   my $current_tab; 
+
+   while (<$fh>) {
+      next if /^\s*#/;
+      next if /^\s*$/; 
+
+      my $line = $_;
+      chomp $line; 
+
+      my ($key, $value); 
+
+      if ($line =~ /^(.+?)=(.*)/) {
+	 ($key, $value) = ($1, $2); 
+
+         $value = "" if ! defined $value; 
+
+         $key =~ s/^\s+//;
+	 $key =~ s/\s+$//; 
+
+         $value =~ s/^\s+//;
+	 $value =~ s/^(.+?)[ #].*/$1/ if $key !~ /^(substitution|mail_subject|sql)$/;
+      } else {
+	 print STDERR "ERROR: bad format at line: $line\n";
+	 $error ++;
+      }
+         
+      if ($key eq "tab") {
+         $current_tab = $value;
+
+         $dict->{tab} = $current_tab;
+
+         push @{$cfg->{tabs}}, $current_tab;
+      } elsif ($key eq "sql") {
+         if ($current_tab) {
+            $cfg->{info_by_tab}->{$current_tab}->{sql} = translate($value, $dict);;
+         }
+      } elsif ($key eq "sql_file") {
+         my $sql_file = translate($value, $dict);
+
+         die "$sql_file not found" if ! -f $sql_file;
+
+         die "$sql_file not readable" if ! -r $sql_file;
+
+         my $sql = `cat $sql_file`;
+
+         if ($current_tab) {
+            $cfg->{info_by_tab}->{$current_tab}->{sql} = translate($sql, $dict);
+         }
+      } elsif ($key eq "number_of_args") {
+         if ($current_tab) {
+            if ("$value" !~ /^\d+/) {
+               print STDERR "ERROR: in tab='$current_tab' number_of_args = $value is not a number\n";
+            }
+            $cfg->{nfo_by_tab}->{$current_tab}->{number_of_args} = $value;
+         }
+      } elsif ($key eq "substitution") {
+         if ($current_tab) {
+            push @{$cfg->{infoby_tab}->{$current_tab}->{substitutions}}, $value;
+         }
+      } elsif ($key eq "connection") {
+         if ($current_tab) {
+            $cfg->{info_by_tab}->{$current_tab}->{connection} = $value;
+         }
+      } elsif ($key eq "connection_file") {
+         $cfg->{connection_file} = translate($value, $dict);
+      } elsif ($key eq "mail_message_file") {
+         if (!$cfg->{mail_message}) {
+            my $mail_message_file = translate($value, $dict);
+
+            die "$mail_message_file not found"    if ! -f $mail_message_file;
+            die "$mail_message_file not readable" if ! -r $mail_message_file;
+
+            my $mail_message = `cat $mail_message_file`;
+
+            $cfg->{mail_message} = translate($mail_message, $dict);
+         }
+      } elsif ($key eq "mail_message") {
+         $cfg->{mail_message}      = translate($value, $dict);
+      } elsif ($key eq "mail_address") {
+         $cfg->{mail_address}      = translate($value, $dict);
+      } elsif ($key eq "mail_subject") {
+         $cfg->{mail_subject}      = translate($value, $dict);
+      } elsif ($key eq "output_xls") {
+         $cfg->{output_xls}        = translate($value, $dict);
+      } elsif ($key eq "output_file") {
+         $cfg->{output_file}       = translate($value, $dict);
+      } elsif ($key eq "output_single_csv") {
+         $cfg->{output_single_csv} = translate($value, $dict);
+      } elsif ($key eq "output_csv_dir") {
+         $cfg->{output_csv_dir}    = translate($value, $dict);
+      }
+   }
+
+   return $cfg;
+}

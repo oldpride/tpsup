@@ -1,0 +1,25 @@
+# plan file can have comment lines, blank lines
+
+app   syslog
+
+event begin=testapp started, config =
+event feeds=reading from /dev/null
+event runsql=running sql/positions.sql
+event complete=entered state=(.+?)\b
+
+reset begin
+halt complete
+
+test has_begun=defined($time{begin}[0])
+test has_got_feeds=defined($time{feeds}[0])
+test has_run_sql=defined($time{runsql}[0])
+test has_completed=defined($time{complete}[0])
+test got_feeds_before_complete:continue=$time{feeds}[0] lt $time{complete}[0]
+test got_postion_before_complete:continue=$time{runsql}[0] lt $time{complete}[0]
+test complete_status_is_DONE=$value{complete}[0][0] eq "DONE"
+
+# 'test' can have multi lines.
+test test_multiline=\
+       $time{feeds}[0] lt $time{complete}[0] \
+    && $time{runsql}[0] lt $time{complete}[0] \
+    && 1 \

@@ -1,0 +1,241 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use MIME::Lite;
+
+my $host = `hostname`; chomp $host;
+my $id = `id`; chomp $id;
+my ($user) = ($id =~ /^.+?\((.+?)\)/);
+my $from_address_form = 'noreply.$user@$host';
+my $from_address      = "noreply.$user\@$host";
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog -a attachment -s subject a1\@b.com a2\@b.com ...
+
+   -v             verbose
+
+   -s subject     Email subject
+
+   -cc address1,address2
+                  CC addresses
+
+   -f from_address
+                  Default to '$from_address_form'. 
+                  for example, it is '$from_address' on this host
+
+   -a attachment  Mail attachment, can use multiple times.
+
+   -T Type        Mime Type, eg, 'image/gif', 'TEXT', 'application/vnd.ms-excel', 'text/csv'
+                  If this is used, it must pair with '-a attachment'. see example below
+                  Default to 'AUTO', ie, auto-detect.
+
+   -mt Type       main message type, default to TEXT. AUTO doesn't work well here.
+
+   -n filename    File name on the receiving side.
+                  Default to basename of the attachment.
+                  if this is used, it must pair with '-a attachment'. see example below
+
+   -PrefixSpace    Prefix each line with two spaces so that outlook will preserve line breaks
+
+Troubleshooting commands to test MIME types
+   $prog types
+      list types as defined ini .../site_perl/MIME/types.db
+
+   $prog extensions
+      list file extensions as defined ini .../site_perl/MIME/types.db
+
+   $prog check filename
+      check the mime types for this file
+
+examples:
+   - one attachment
+   echo test|$prog -s "test" -a tpcsv2_test.csv tianhua.han\@abc.com
+
+   - multiple attachments (-a)
+   echo test|$prog -s "test" -a tpcsv2_test.csv -a tpmail_test.html tianhua.han\@abc.com
+
+   - to send html as main message body, two ways
+   csv2html tpcsv2_test.csv | $prog -mt text/html -s test tianhua.han\@abc.com
+   $prog -mt text/html -s test tianhua.han\@abc.com <tpmail_test.html
+
+   - to prevent outlook from removing line breaks, use -PrefixSpace.
+   (or you if the input is csv file, we can also use csv2html, see example above)
+   $prog -PrefixSpace -s test tianhua.han\@abc.com <tpcsv2_test.csv
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $subject = '';
+my @attachments;
+my @Types;
+my @names;
+my @cc;
+my $main_message_type = "TEXT";
+my $PrefixSpace;
+
+GetOptions(
+   'v|verbose'       => \$verbose,
+   'f|from=s'        => \$from_address,
+   'a|attachments=s' => \@attachments,
+   'T|Type=s'        => \@Types,
+   'n|name=s'        => \@names,
+   'cc=s'            => \@cc,
+   's|subject=s'     => \$subject,
+   'mt=s'            => \$main_message_type,
+   'PrefixSpace'     => \$PrefixSpace,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 1;
+   
+if ($ARGV[0] eq 'types') {
+   my $mts = MIME::Types->new();
+   print Dumper($mts->listTypes());
+   exit 0;
+} elsif ($ARGV[0] eq 'extensions') {
+   my $mts = MIME::Types->new();
+   print Dumper($mts->extensions());
+   exit 0;
+} elsif ($ARGV[0] eq 'check') {
+   usage("wrong number of args") if @ARGV != 2;
+
+   my $filename = $ARGV[1];
+
+   my $mts = MIME::Types->new();
+
+   my $ifh;
+
+   if ($filename eq '-') {
+      $ifh = \*STDIN;
+   } else {
+      open $ifh, "<$filename" or die "cannot read $filename";
+
+      my $mt = $mts->mimeTypeOf($filename);
+
+      if ($mt) {
+         print "extensions = ", $mt->extensions(), "\n";
+       print "type = ", $mt->type(), "\n";
+      } else {
+       print "$filename MIME Type is unknown\n";
+      }
+   }
+
+   my $string;
+   my $max = 1024*1024;
+
+   my $size = read($ifh, $string, $max);
+
+   if ($size < $max) {
+      print "Read only first $max bytes of content } to analyze\n";
+   }
+
+   my $content_mt = $mts->type($string);
+   if ($content_mt) {
+      print "content_extensions = ", $content_mt->extensions(), "\n";
+      print "content_type = ", $content_mt->type(), "\n";
+   } else {
+      print "content MIME Type is unknown\n";
+   }
+
+   exit 0;
+}
+   
+my $to_address = join(",",@ARGV);
+
+my $new_opt = {
+   From    => $from_address,
+   To      => $to_address,
+   Subject => $subject,
+   Type    => 'multipart/mixed',
+};
+
+if (@cc) {
+   my $string = join(", ", @cc);
+
+   $new_opt->{Cc} = $string;
+}
+
+my $msg = MIME::Lite->new(%$new_opt);
+
+if (-t STDIN) {
+   # this is on command line
+   print STDERR "type Enter then type Control+D to finish\n";
+}
+
+my @lines = <STDIN>;
+my $message;
+
+if ($PrefixSpace) {
+   $message = " " . join(" ", @lines)
+} else {
+   $message = join("", @lines);
+}
+
+$msg->attach(
+   Type => $main_message_type,
+   Data => $message,
+);
+
+if (@attachments) {
+   if (@Types && scalar(@Types) != scalar(@attachments)) {
+      die "-T Types and -a attachment are not in pair";
+   }
+
+   if (@names && scalar(@names) != scalar(@attachments)) {
+      die "-n name and -a attachment are not in pair";
+   }
+
+   for(my $i=0; $i<@attachments; $i++) {
+      # http://search.cpan.org/~rjbs/MIME-Lite-3.030/lib/MIME/Lite.pm#Content_types
+      #    "TEXT"   means "text/plain"
+      #    "BINARY" means "application/octet-stream"
+      #    "AUTO"   means attempt to guess from the filename, falling back
+      #             to 'application/octet-stream'. This is good if you have
+      #             MIME::Types on your system and you have no idea what
+      #             file might be used for the attachment.
+      #
+      # The default is "TEXT", but it will be "AUTO" if you set $AUTO_CONTENT_TYPE
+      # to true (sorry, but you have to enable
+      # to break code which depends on the old it explicitly, since we don't want behavior).
+      
+      my $t = defined($Types[$i]) ? $Types[$i] : 'AUTO';
+
+      my $path = $attachments[$i];
+
+      my $filename;
+
+      if ( defined($names[$i]) ) {
+       $filename = $names[$i];
+      } else {
+       $filename = $path;
+       $filename =~ s:.*/::;
+      }
+
+      $msg->attach(
+         Type => $t,
+       Path => $attachments[$i],
+       Encoding => 'base64',
+       Filename => $filename,
+      );
+   }
+}
+
+print "Mail Sent to $to_address\n";
+$msg->send; # send via default
+
+exit 0;

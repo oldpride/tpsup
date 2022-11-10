@@ -1,0 +1,161 @@
+local OPTIND OPTARG o quiet usage expected_version actual_version binaries binary find_binary tmpvar d2 prog
+
+prog=${FUNCNAME[1]}
+
+usage="usage: $prog [-q] 2|3"
+
+quiet=N
+
+while getopts q o;
+do  
+   case "$o" in
+      q) quiet=Y; flag="-q";;
+      *) echo "unknow switch. $usage">&2; return 1;; 
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args: expected 1, actual $#"
+   echo $usage
+   return
+fi  
+
+# remove old versions
+delpath $flag "Program Files/Python$expected_version"
+
+expected_version=$1
+
+if [ $expected_version = 3 ]; then
+   if ! [ "X$TP_P3_PATH" = "X" ]; then
+      export PATH="$TP_P3_PATH:$PATH"
+   fi
+elif [ $expected_version = 2 ]; then
+   if ! [ "X$TP_P2_PATH" = "X" ]; then
+      export PATH="$TP_P2_PATH:$PATH"
+   fi
+else 
+   echo "$expected_version is not supported python major versions (2,3)"
+   return
+fi
+
+[ $quiet = Y ] || (echo""; echo "PATH=$PATH")
+
+binaries=python
+if [ $expected_version = 3 ]; then
+   binaries="$binaries python3"
+fi
+
+found_binary=N
+for binary in `echo $binaries`
+do
+   python=`which $binary`
+   if [ $? != 0 ]; then
+      continue;
+   fi
+
+   actual_version=`"$python" --version 2>&1`
+   [ $quiet = Y ] || (echo ""; echo "'$python' is $actual_version")
+
+   if [[ $actual_version =~ "Python $expected_version" ]]; then
+      found_binary=Y
+   else
+      [ $quiet = Y ] || echo "$python version ($actual_version) is not $expected_version"
+   fi
+done
+
+if [ $found_binary = N ]; then
+   echo "ERROR: cannot find a python version $expected_version"
+   return
+fi
+
+if [[ $UNAME =~ Cygwin ]]; then
+   # Note: use semi-colon ; as separator
+   d2=';'
+
+   # cygwin converts PYTHONPATH's /cygdrive/c/users/$USERNAME/sitebase/github/... 
+   # into sys.path C:/cygdrive/c/users/$USERNAME/sitebase/github/... 
+   # therefore, we drop the front two parts: /cygdrive/c
+   # it basically converted /cygdrive/c/Program Files/... to /Program Files
+   # this works. 
+   #tmpvar=`echo "$SITESPEC/python$expected_version/lib${d2}$TPSUP/python$expected_version/lib" |sed -e "s:/cygdrive/c::g"`
+
+   # the following two also work
+   # -m  mixed   mode. windows path with  forward slashes, eg. C:/Program Files/ ...
+   # -w  windows mode. windows path with backward slashes, eg.  C:\Program Files\ ...
+    tmpvar=`cygpath -m "$SITESPEC/python$expected_version/lib"`${d2}`cygpath -m "$TPSUP/python$expected_version/lib"`
+   #tmpvar=`cygpath -w "$SITESPEC/python$expected_version/lib"`${d2}`cygpath -w "$TPSUP/python$expected_version/lib"`
+
+else
+   d2=':'
+   tmpvar="$SITESPEC/python$expected_version/lib${d2}$TPSUP/python$expected_version/lib"
+fi
+
+if [ "X$PYTHONPATH" = "X" ]; then
+   export PYTHONPATH="${tmpvar}"
+else
+   export PYTHONPATH="${tmpvar}${d2}$PYTHONPATH"
+fi
+
+export PATH="$SITESPEC/python$expected_version/scripts:$TPSUP/python$expected_version/scripts:$TPSUP/python$expected_version/examples:$PATH"
+
+reduce PATH PYTHONPATH
+
+[ $quiet = Y ] || (echo ""; echo "PATH=$PATH")
+[ $quiet = Y ] || (echo ""; echo PYTHONPATH=$PYTHONPATH)
+
+sitevenv () {
+   if [ "X$SITEVENV" = "X" ]; then
+      echo "SITEVENV is not defined. it should be defined in site-spec/profile"
+      return 1
+   else
+      echo "SITEVENV=$SITEVENV"
+      cd "$SITEVENV"
+   fi
+}
+
+svenv () {
+   if ! sitevenv; then
+      return;
+   fi
+
+   # add path to Chrome.exe and chromedriver.exe
+   export PATH="$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/Chrome/Application:$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/chromedriver:$PATH"
+
+   if [[ $UNAME =~ CYGWIN ]]; then
+      # this is cygwin. the activate bash script needs removing ^M, ie, dos2unix. ^M doesn't affect gitbash
+      . "$SITEVENV/Scripts/activate"
+   elif [[ $UNAME =~  MINGW64_NT ]]; then
+      # this is gitbash
+      . "$SITEVENV/Scripts/activate"
+   elif [[ $UNAME =~ Linux ]]; then
+      . "$SITEVENV/bin/activate"
+   else
+      echo "psup/profile.d/pythonenv:svenv(): unsupported UNAME=$UNAME"
+      return 1
+   fi
+}
+
+dvenv () {
+   deactivate
+}
+
+if [[ $UNAME =~ Cygwin && $quiet = N ]]; then
+cat <<END
+On Cygwin, use relative path or windows path. eg,
+                                                      ./tpcsv.py
+python                                                ./tpcsv.py
+C:/Users/$USERNAME/sitebase/github/tpsup/python$expected_version/scripts/tpcsv.py
+
+Absolute path doesn't work, eg
+                                                                   tpcsv.py
+python                                                             tpcsv.py
+/cygdrive/c/Users/$USERNAME/sitebase/github/tpsup/python$expected_version/lib/tpsup/tpcsv.py
+END
+fi
+
+# export the function
+set -a
+
+[ $quiet = Y ] || (echo "")

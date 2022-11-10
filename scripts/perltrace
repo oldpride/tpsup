@@ -1,0 +1,23 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+
+usage: $0 command.pl ...
+
+To fine tune, inject the following to turn on or off the debugging inside the script. 
+
+\$Devel::Trace::TRACE = 1; # turn on debugging. This is the default
+\$Devel::Trace::TRACE = 0; # turn off debugging
+
+EOF
+
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "ERROR: wrong number of args"
+   usage
+fi
+
+perl -d:Trace $@

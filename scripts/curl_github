@@ -1,0 +1,99 @@
+#!/bin/bash
+
+UNAME=`uname -s`
+
+# in your profile
+# export LOCAL_CURL_PROXY="-proxy proxy.abc.net:8080"
+flags="$LOCAL_CURL_PROXY"
+
+if [[ $UNAME =~ MINGW || $UNAME =~ CYGWIN ]]; then
+   # GitBash or Cygwin, disable ssl validation because certificate normally is not around.
+   flags="$flags --insecure"    
+fi
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 repo path
+
+   -f "curl_flags"     extra flags for curl. default depends on platform. 
+                       on this platform "$UNAME", default flags is "$flags"
+
+   -w                  overwrite current file. default to N
+
+example:
+
+   $0 java fileCopy/src/main/java/com/tpsup/fileCopy/Tar.java
+
+   $0 tpsup scripts/tpfind
+
+   $0 tpsup lib/perl/TPSUP/AUTOSYS.pm
+
+   $0 -f "-proxy proxy.abc.com:8080" tpsup scripts/tpfind
+EOF
+
+   exit 1
+}
+
+overwrite=N
+
+while getopts f:w o;
+do
+   case "$o" in
+      f) flags="$OPTARG";;
+      w) overwrite=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+proj=$1
+relative_path=$2                  # scripts/tpfind
+file=`basename $relative_path`    #         tpfind
+
+# unset LD_LIBRARY_PATH because wrong lib could guide curl to wrong ssl certificate
+unset LD_LIBRARY_PATH
+
+if ! [ -w . ]; then
+   echo "current dir is not writable"
+   ls -ld `pwd`
+   exit 1
+fi
+
+(set -x; /usr/bin/curl $flags https://raw.githubusercontent.com/oldpride/$proj/master/$relative_path > $file.github)
+
+if [[ `head -c 20 $file.github` =~ '^404: Not Found' ]]; then
+   echo ""
+   cat $file.github
+   /bin/rm -f $file.github
+   exit 1
+fi
+
+if [ -f $file ]; then
+   echo "diff $file $file.github"
+   diff $file $file.github
+
+   if [ $? -eq 0 ]; then
+      echo "no change"
+      exit 0
+   fi
+fi
+
+if [ $overwrite = Y ]; then
+   (set -x; /bin/cp $file.github $file)
+   ls -l $file
+fi
+
+if head $file |egrep "^#!" >/dev/null; then
+   (set -x; chmod 755 $file)
+fi
+
+ls -l $file
+

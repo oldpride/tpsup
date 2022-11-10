@@ -1,0 +1,784 @@
+#!/usr/bin/perl
+
+my $version = '2.0';
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use strict;
+use Carp;
+use POSIX;
+use TPSUP::UTIL qw(get_user);
+
+my $prog = $0; $prog =~ s:.*::;
+
+my ($dir) = ( $0 =~ m:(.*)/: );
+$dir = "." if ! "$dir";
+$dir = get_abs_path("$dir/..");
+
+my $tmpFilePattern = qr/[.](swp|svn|pyc|git|idea)/; # skip the tmp/svn/git/pycharm files
+
+my $file = "$dir/tpstamp.txt";
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print <<"END";
+Usage:
+
+   $prog check
+   $prog update
+
+   Set up a tripstamp check
+
+   -d dir          This is the directory that we will keep track of.
+                   Default to the parent dir (..) of this script's dir.
+                   The current script points to $dir.
+          can use '-d dir' multiple times.
+
+   -f file         default to ../tpstamp.txt.
+                   The current script points to $file.
+
+   -r dir          use this dir as the base dir for the '-d' switch so that
+                   you can specify relative paths
+
+   -v              verbose mode.
+
+   -x pattern
+   -exclude pattern
+                   exclude this pattern, perl style, can use multiple times
+
+   -m pattern
+   -match pattern
+                   match this pattern, perl style, can use multiple times
+          
+   -UseBase        use the base information in file, default to ignore base
+                   so that we can compare on the relative path level.
+
+   -NoOldMatch     ignore match/exclude in the current tpstamp.txt.
+                   When used with 'updte', this will remove the existing
+                   match/exelude.
+END
+
+   exit 1;
+}
+
+my $verbose;
+my @dirs;
+my $RelativeBase;
+my @excludes;
+my @matches;
+my $UseBase;
+my $NoOldMatch;
+
+GetOptions(
+   'v|verbose'    => \$verbose,
+   'UseBase'      => \$UseBase,
+   'd=s'          => \@dirs,
+   'f=s'          => \$file,
+   'r=s'          => \$RelativeBase,
+   'm|match=s'    => \@matches,
+   'x|exclude=s'  => \@excludes,
+   'NoOldMatch'   => \$NoOldMatch,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my $action = shift @ARGV;
+
+usage("unknow action='$action'") if $action !~ /(check|update)$/;
+
+if (!@dirs) {
+   @dirs = ($dir);
+}
+
+print "file= $file\n";
+print "dirs= " . join(' ', @dirs), "\n";
+
+my $old_tree;
+
+my $cksum_request = 0;
+my $cksum_compute = 0;
+
+if (-f $file) {
+   my $old_ref = parse_file($file, { UseBase => $UseBase,
+                                     matches => \@matches,
+                                     excludes => \@excludes,
+                                   });
+
+   $old_ref->{version} = "" if !defined $old_ref->{version};
+
+   my ($old_major, $junk)  = split /[.]/, $old_ref->{version};
+   my ($new_major, $junk2) = split /[.]/, $version;
+
+   if ($old_major ne $new_major) {
+      print "ERROR: version's major mismatch: $old_ref->{version} vs $version. Cannot check\n";
+      exit 1 if $action eq 'check';
+   } else {
+      for my $base (sort (keys %{$old_ref->{relative_tree}}) ) {
+         print "old base = $base\n";
+      }
+
+      $old_tree = $old_ref->{absolute_tree};
+   }
+
+   print "old stamp = $old_ref->{stamp}\n";
+   print "old version = $old_ref->{version}\n";
+
+   if ($old_ref->{matches}) {
+      for my $p (@{$old_ref->{matches}}) {
+         print "old match = $p\n";
+      }
+   }
+
+   if ($old_ref->{excludes}) {
+      for my $p (@{$old_ref->{excludes}}) {
+         print "old exclude = $p\n";
+      }
+   }
+
+   @matches  = @{$old_ref->{matches}}  if !@matches  && !$NoOldMatch && $old_ref->{matches};
+   @excludes = @{$old_ref->{excludes}} if !@excludes && !$NoOldMatch && $old_ref->{excludes};
+} else {
+   croak "missing $file" if $action ne "update";
+}
+
+my $new_ref = build_dir_tree(\@dirs, {verbose=>$verbose,
+                                      RelativeBase=>$RelativeBase,
+                                      matches => \@matches,
+                                      excludes => \@excludes,
+                                     });
+
+my $new_tree = $new_ref->{absolute_tree};
+
+$verbose && print "old_tree = ", Dumper ($old_tree) ;
+$verbose && print "new_tree = ", Dumper ($new_tree) ;
+
+my $need_update = 0;
+
+if ($old_tree) {
+   print "\n";
+   print "------------ changes begin -------\n";
+
+   # compare old_tree with new_tree
+   for my $f (sort (keys %$old_tree)) {
+      next if $f =~ /tpstamp.txt/; # skip the tpstamp.txt
+      next if $f =~ /${tmpFilePattern}/; # skip the tmp/svn/git/pycharm files
+
+      if (!$new_tree->{$f}) {
+         print "$f was deleted\n";
+         $need_update ++;
+      }
+   }
+
+   for my $f (sort (keys %$new_tree)) {
+      next if $f =~ /tpstamp.txt/; # skip the tpstamp.txt
+
+      if (!$old_tree->{$f}) {
+         print "$f is new\n";
+         $new_tree->{$f}->{need_cksum} = $new_tree->{$f};
+         $need_update ++;
+         next;
+      }
+
+      if ( $old_tree->{$f}->{type} ne $new_tree->{$f}->{type}) {
+         print "$f type changed: $old_tree->{$f}->{type} -> $new_tree->{$f}->{type}\n";
+         $new_tree->{$f}->{need_cksum} = $new_tree->{$f};
+         $need_update ++;
+         next;
+      }
+
+      # both sides are same kind type: file, dir, or link
+      if ( $new_tree->{$f}->{type} ne 'link'
+         && $old_tree->{$f}->{mode} != $new_tree->{$f}->{mode} ) {
+         print "$f mode changed: $old_tree->{$f}->{mode} -> $new_tree->{$f}->{mode}\n";
+         $need_update ++;
+      }
+
+      # sometimes, even vi'ing a file can change the file's parent folder's timestamp,
+      # therefore, no more checks for dir after this step
+      next if $new_tree->{$f}->{type} eq 'dir';
+
+      # both sides are same kind type: file, or link
+      if ( $old_tree->{$f}->{size} != $new_tree->{$f}->{size} ) {
+         print "$f size changed: $old_tree->{$f}->{size} -> $new_tree->{$f}->{size}\n";
+         $new_tree->{$f}->{need_cksum} = $new_tree->{$f};
+         $need_update ++;
+         next;
+      }
+
+      if ($new_tree->{$f}->{type} eq 'link') {
+         # for sym link, we cannot get the mtime consistently
+         #
+         # i86pc Solaris cannot get correct lstat
+         #
+         # $ uname -m
+         # i86pc
+         # $/usr/bin/perl -e 'my @a=lstat("/home/tian/tpsup/scripts/in_same_dir"); print $a[9], "\n";'
+         # 1486064300
+         #
+         # $ uname -m
+         # sun4u
+         # $/usr/bin/perl -e 'my @a=lstat("/home/tian/tpsup/scripts/in_same_dir"); print $a[9], "\n";'
+         # 1458233673
+         #
+         # also there is no way to fix mtime of sym link on Solaris; neither perl
+         # supports lutimes call, therefore, tpstamp/tpdist cannot handle mtime of sym link.
+         #
+         # so we will not check sym link mtime all together
+         #
+         # luckily, it is very easy to assign the cksum of sym link, which is the target
+         # path.
+       
+         $verbose && print "calculating cksum $f\n";
+         my $new_cksum = get_cksum($f, $new_tree->{$f});
+         $new_tree->{$f}->{cksum} = $new_cksum;
+
+         if ($old_tree->{$f}->{cksum} ne $new_tree->{$f}->{cksum}) {
+            print "$f sym link target changed: $old_tree->{$f}->{cksum} -> $new_tree->{$f}->{cksum}\n";
+            $need_update ++;
+         }
+      } else {
+         if ( $old_tree->{$f}->{mtime} ne $new_tree->{$f}->{mtime} ) {
+            $verbose && print "calculating cksum $f\n";
+            my $new_cksum = get_cksum($f, $new_tree->{$f});
+            $new_tree->{$f}->{cksum} = $new_cksum;
+
+            if ($old_tree->{$f}->{cksum} ne $new_tree->{$f}->{cksum}) {
+               print "$f cksum changed: $old_tree->{$f}->{cksum} -> $new_tree->{$f}->{cksum}\n";
+            } else {
+               print "$f mtime changed: $old_tree->{$f}->{mtime} -> $new_tree->{$f}->{mtime}\n";
+            }
+
+            $need_update ++;
+         }
+      }
+   }
+
+   print "-------------changes end-------------\n";
+   print "\n";
+
+   print "found $need_update change(s).\n";
+} else {
+   print "cannot find last stamp\n";
+}
+
+print "cksum_request=$cksum_request, cksum_compute=$cksum_compute\n";
+
+if ($action eq 'check') {
+   print "check only. quit\n";
+   exit 0;
+}
+
+if (!$need_update && $old_tree) {
+   print "no need to update\n";
+   exit 0;
+}
+
+my $max_backup = 5;
+
+for (my $i=$max_backup=1; $i>0; $i--) {
+   my $iplus1 = $i+1;
+
+   if ( -f "$file.$i" ) {
+      my $cmd = "/bin/mv $file.$i $file.$iplus1";
+      print "cmd = $cmd\n";
+      system($cmd);
+   }
+}
+
+{
+   if ( -f $file ) {
+      my $cmd = "/bin/mv $file $file.1";
+      print "cmd = $cmd\n";
+      system($cmd);
+   }
+}
+
+open my $fh, ">$file" or die "cannot write to $file";
+
+my $user = get_user();
+my $host = `hostname`; chomp $host;
+
+print {$fh} "stamp=$user\@$host " . `date '+%Y/%m/%d-%H:%M:%S %Z %z'`;
+print {$fh} "version=$version\n";
+print {$fh} "file timestamp is GMT for consistency between regions\n";
+
+for my $p (@matches) {
+   print {$fh} "match=$p\n";
+}
+
+for my $p (@excludes) {
+   print {$fh} "excludes=$p\n";
+}
+
+print {$fh} "\n";
+
+for my $base (sort (keys %{$new_ref->{relative_tree}})) {
+   print {$fh} "base=$base\n";
+
+   my $bref = $new_ref->{relative_tree}->{$base};
+
+   for my $path (sort (keys %$bref)) {
+      my $string = "path=$path";
+
+      my $absolute_path = "$base/$path";
+
+      my $nt_ref = $new_tree->{$absolute_path};
+      my $ot_ref = $old_tree->{$absolute_path};
+
+      if (!defined $nt_ref->{cksum}) {
+         if ($nt_ref->{need_cksum}) {
+            $verbose && print "calculating cksum $absolute_path\n";
+            $nt_ref->{cksum} = get_cksum($absolute_path, $nt_ref);
+         } elsif (defined $ot_ref->{cksum}) {
+            $verbose && print "copying old cksum $absolute_path\n";
+            $nt_ref->{cksum} = $ot_ref->{cksum};
+         }
+      }
+
+      if (!defined $nt_ref->{cksum}) {
+         $verbose && print "calculating cksum $absolute_path\n";
+         $nt_ref->{cksum} = get_cksum($absolute_path, $nt_ref);
+      }
+
+      for my $attr ( qw(type size mtime cksum mode) ) {
+         $string .= "|$attr=$nt_ref->{$attr}";
+      }
+
+      $verbose && print $string, "\n";
+      print {$fh} "$string\n";
+   }
+
+   print {$fh} "\n";
+}
+
+print "cksum_request=$cksum_request, cksum_compute=$cksum_compute\n";
+print "$file is updated\n";
+
+close $fh;
+
+exit 0;
+
+###########################################################
+# subs
+###########################################################
+#
+sub parse_file {
+   my ($file, $opt) = @_;
+
+   my $ret;
+   my $base;
+
+   if (!$opt->{UseBase}) {
+      $base = $dir;
+   }
+
+   open my $fh, "<$file" or die "cannot read to $file";
+
+   LINE:
+   while (<$fh>) {
+      my $line = $_;
+
+      chomp $line;
+
+      next if !$line;
+
+      if ( $line =~ /^base=(.*)/ ) {
+         $base = $1 if $opt->{UseBase} ;
+      } elsif ( $line =~ /^stamp=(.*)/ ) {
+         $ret->{stamp} = $1;
+      } elsif ( $line =~ /^version=(.*)/ ) {
+         $ret->{version} = $1;
+      } elsif ( $line =~ /^exclude=(.*)/ ) {
+         push @{$ret->{excludes}}, $1;
+      } elsif ( $line =~ /^match=(.*)/ ) {
+         push @{$ret->{matches}}, $1;
+      }
+
+      next if ! defined $base;
+
+      if ( $line =~ /^path=/ ) {
+         my $r;
+
+         for my $pair (split /[|]/, $line) {
+            my ($k, $v) = ($pair =~ /(.+?)=(.+)/);
+            $r->{$k} = $v;
+         }
+
+         my $path = $r->{path};
+
+         if (@{$opt->{matches}}) {
+            my $matched;
+
+            for my $m (@{$opt->{matches}}) {
+               if ($path =~ /$m/) {
+                  $matched ++;
+                  last;
+               }
+            }
+
+            next if !$matched;
+         }
+
+         if (@{$opt->{excludes}}) {
+            for my $m (@{$opt->{excludes}}) {
+               if ($path =~ /$m/) {
+                  next LINE;
+               }
+            }
+         }
+
+         $ret->{relative_tree}->{$base}->{$path} = $r;
+         $ret->{absolute_tree}->{"$base/$path"}  = $r;
+      }
+   }
+
+   close $fh;
+
+   return $ret;
+}
+
+sub get_abs_path {
+   my ($path) = @_;
+
+   # we have to write our own get_abs_path because the default abs_path resolves
+   # symbolic links, which is undesirable here.
+
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";'
+   # /home/t ian/tpsup/autopath
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("./tpsup/scripts/../autopath"), "\n";'
+   # /home/tian/tpsup/autopath
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path(".//tpsup/scripts/../autopath/"), "\n";
+   # /home/tian/tpsup/autopath
+
+   croak "path is no defined" if !$path;
+
+   if ($path !~ m:^/:) {
+      my $cwd = getcwd();
+      $path = "$cwd/$path";
+   }
+
+   my @a1 = split /\/+/, $path;
+   shift @a1; # shift away the undef before the first /
+
+   my @a2 ;
+
+   for my $e (@a1) {
+      if ($e eq '.') {
+         # convert /a/./b to /a/b
+         next;
+      } elsif ($e eq '..') {
+         # convert /a/b/../c to /a/c
+         pop @a2;
+         next;
+      } else {
+         push @a2, $e;
+         next;
+      }
+   }
+   
+   my $newpath = '/' . join('/', @a2) ;
+
+   return $newpath;
+}
+
+sub build_dir_tree {
+   my ($bases, $opt) = @_;
+
+   my $cwd = getcwd();
+
+   my $ret;
+
+   for my $base (@$bases) {
+      if ($opt->{RelativeBase} && $base !~ m:^/:) {
+         print "cd $opt->{RelativeBase}\n";
+         if ( !chdir($opt->{RelativeBase}) ) {
+            print STDERR "cd $opt->{RelativeBase} failed. $base is skipped.\n";
+            next;
+         }
+      }
+   
+      my @globs = `/bin/ls -1d $base`;
+
+      if ($? || !@globs) {
+         print STDERR "/bin/ls -1d $base failed, skipped $base\n";
+         next;
+      }
+
+      chomp @globs;
+
+      $opt->{verbose} && print "resolve globs if any: $base=>", join(' ', @globs), "\n";
+
+      for my $p (@globs) {
+         # convert *csv to a.csv, b.csv, ...
+
+         my $abs_path;
+
+         if ($p !~ m:^/:) {
+            # this is relative path
+            if ($opt->{RelativeBase}) {
+               $abs_path = get_abs_path("$opt->{RelativeBase}/$p")
+               #$abs_path = "$opt->{RelativeBase}/$p";
+            } else {
+               $abs_path = get_abs_path("$cwd/$p");
+               #$abs_path = "$abs_cwd/$p";
+            }
+         } else {
+            # this is absolute path, still call get_abs_path to simplify eg. from a/../b to b
+            $abs_path = get_abs_path("$p")
+  }
+
+         if (!$abs_path) {
+            print STDERR "cannot find abs_path for $p\n";
+            next;
+         }
+
+         # -l $abs_path below will allow a symbolic link pointing to nowhere
+         if ( ! -e $abs_path && ! -l $abs_path) {
+            print STDERR "cannot find $abs_path for $p\n";
+            next;
+         }
+
+         $opt->{ verbose} && print "cd $abs_path\n";
+         if (!chdir($abs_path)) {
+            print STDERR "cd $abs_path failed; skipped\n";
+            next;
+         }
+
+         my $cmd = "find * -mount -print";
+         $opt->{verbose} && print "cmd = $cmd\n";
+
+         my @files = `$cmd`;
+         if ($? || !@files) {
+            croak "$cmd failed";
+         }
+
+         chomp @files;
+
+         my $tree;
+
+         FILE:
+         for my $f (@files) {
+            next if $f =~ /tpstamp.txt/; # skip the tpstamp.txt
+            next if $f =~ /${tmpFilePattern}/; # skip the tmp/svn files
+
+            if (@{$opt->{matches}}) {
+               my $matched;
+
+               for my $m (@{$opt->{matches}}) {
+                  if ($f =~ /$m/) {
+                     $matched ++;
+                     last;
+                  }
+               }
+
+               next if !$matched;
+            }
+
+            if (@{$opt->{excludes}}) {
+               for my $m (@{$opt->{excludes}}) {
+                  if ($f =~ /$m/) {
+                     next FILE;
+                  }
+               }
+            }
+
+            # use lstat, which stats a symbolic link instead of the file the symbolic link points to
+            my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks)
+               = lstat($f);
+
+            # use gmtime because we will compare timestamp across regions
+            my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = gmtime($mtime);
+
+            my $mtime_string
+               = sprintf("%04d/%02d/%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
+
+            $tree->{$f}->{mtime} = $mtime_string;
+
+            my $octal_mode = sprintf("0%o", ($mode & 07777));
+            $tree->{$f}->{mode} = $octal_mode;
+     
+            if (-d $f) {
+               $tree->{$f}->{type} = "dir";
+               $tree->{$f}->{size} = 128; # hard coded
+            } elsif (-l $f) {
+               $tree->{$f}->{type} = "link";
+               $tree->{$f}->{size} = 22; # hard coded
+
+               # we cannot change link's mode because luchown is not implemented
+               # in perl, therefore, we hard code it here
+               my $mode = 0777;
+               my $octal_mode = sprintf("0%o", ($mode & 07777));
+               $tree->{$f}->{mode} = $octal_mode;
+            } elsif (-f $f) {
+               $tree->{$f}->{type} = "file";
+               $tree->{$f}->{size} = $size;
+            } else {
+               print STDERR "skipped $abs_path/$f because we cannot handle this type of file\n";
+            }
+         }
+
+         my $new_base = $abs_path;
+
+         $ret->{relative_tree}->{$new_base} = $tree;
+
+         for my $f (keys %$tree) {
+            $ret->{absolute_tree}->{"$new_base/$f"} = $tree->{$f};
+         }
+      }
+   }
+
+   chdir($cwd); # restore cwd
+
+   return $ret;
+}
+
+
+###################################################################################
+# BEGIN logic copied from /home/tian/tpsup/lib/perl/SunOS/lib/site_perl/String/CRC/Cksum.pm
+use integer; # for cksum
+
+sub get_cksum {
+   my ($path, $ref, $opt) = @_;
+
+   $cksum_request ++;
+
+   if ($cksum_request%100 ==0) {
+      $verbose && print "cksum_request=$cksum_request, cksum_compute=$cksum_compute\n";
+   }
+
+   init_crctab();
+
+   my $type = $ref->{type};
+
+   my $cksum = $type eq "dir"  ? 128 :
+               $type eq "link" ? readlink($path) :
+               $type eq "file" ? cksum($path) :
+                                 croak "should never be here: type='$type'";
+
+   return $cksum;
+}
+
+
+my @crctab;
+
+sub init_crctab {
+   return if @crctab;
+
+   @crctab = (
+   0x00000000,
+   0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b,
+   0x1a864db2, 0x1e475005, 0x2608edb8, 0x22c9f00f, 0x2f8ad6d6,
+   0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
+   0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac,
+   0x5bd4b01b, 0x569796c2, 0x52568b75, 0x6a1936c8, 0x6ed82b7f,
+   0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a,
+   0x745e66cd, 0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039,
+   0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5, 0xbe2b5b58,
+   0xbaea46ef, 0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033,
+   0xa4ad16ea, 0xa06c0b5d, 0xd4326d90, 0xd0f37027, 0xddb056fe,
+   0xd9714b49, 0xc7361b4c, 0xc3f706fb, 0xceb42022, 0xca753d95,
+   0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1, 0xe13ef6f4,
+   0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d, 0x34867077, 0x30476dc0,
+   0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5,
+   0x2ac12072, 0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16,
+   0x018aeb13, 0x054bf6a4, 0x0808d07d, 0x0cc9cdca, 0x7897ab07,
+   0x7c56b6b0, 0x71159069, 0x75d48dde, 0x6b93dddb, 0x6f52c06c,
+   0x6211e6b5, 0x66d0fb02, 0x5e9f46bf, 0x5a5e5b08, 0x571d7dd1,
+   0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
+   0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b,
+   0xbb60adfc, 0xb6238b25, 0xb2e29692, 0x8aad2b2f, 0x8e6c3698,
+   0x832f1041, 0x87ee0df6, 0x99a95df3, 0x9d684044, 0x902b669d,
+   0x94ea7b2a, 0xe0b41de7, 0xe4750050, 0xe9362689, 0xedf73b3e,
+   0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2, 0xc6bcf05f,
+   0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34,
+   0xdc3abded, 0xd8fba05a, 0x690ce0ee, 0x6dcdfd59, 0x608edb80,
+   0x644fc637, 0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb,
+   0x4f040d56, 0x4bc510e1, 0x46863638, 0x42472b8f, 0x5c007b8a,
+   0x58c1663d, 0x558240e4, 0x51435d53, 0x251d3b9e, 0x21dc2629,
+   0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5, 0x3f9b762c,
+   0x3b5a6b9b, 0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff,
+   0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623, 0xf12f560e,
+   0xf5ee4bb9, 0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65,
+   0xeba91bbc, 0xef68060b, 0xd727bbb6, 0xd3e6a601, 0xdea580d8,
+   0xda649d6f, 0xc423cd6a, 0xc0e2d0dd, 0xcda1f604, 0xc960ebb3,
+   0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7, 0xae3afba2,
+   0xaafbe615, 0xa7b8c0cc, 0xa379dd7b, 0x9b3660c6, 0x9ff77d71,
+   0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74,
+   0x857130c3, 0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640,
+   0x4e8ee645, 0x4a4ffbf2, 0x470cdd2b, 0x43cdc09c, 0x7b827d21,
+   0x7f436096, 0x7200464f, 0x76c15bf8, 0x68860bfd, 0x6c47164a,
+   0x61043093, 0x65c52d24, 0x119b4be9, 0x155a565e, 0x18197087,
+   0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
+   0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d,
+   0x2056cd3a, 0x2d15ebe3, 0x29d4f654, 0xc5a92679, 0xc1683bce,
+   0xcc2b1d17, 0xc8ea00a0, 0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb,
+   0xdbee767c, 0xe3a1cbc1, 0xe760d676, 0xea23f0af, 0xeee2ed18,
+   0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4, 0x89b8fd09,
+   0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662,
+   0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf,
+   0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
+   );
+};
+
+sub cksum {
+   my ($file, $opt) = @_;
+
+   $cksum_compute ++;
+
+   my $cksum = 0;
+   my $size = 0;
+
+   open my $ifd, "<$file";
+
+   if (!$ifd) {
+      carp "cannot read $file";
+      return 0;
+   }
+
+   while(1) {
+      my $data;
+      my $n = read($ifd, $data, 4096);
+
+      if (! defined $n) {
+         croak "error reading from $file: $!";
+      }
+
+      last if !$data;
+
+      $size += $n;
+
+      #for (my $i = 0; $i < $n; ++$i) {
+      #   my $c = unpack 'C', substr $data, $i, 1;
+      #   $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
+      # }
+      
+      for my $c (unpack 'C*', $data) {
+         $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
+      }
+   }
+
+   close $ifd;
+
+   # Extend with the length of the data
+   while ($size != 0) {
+      my $c = $size & 0xFF;
+      $size >>= 8;
+      $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
+   }
+
+   $cksum = ~ $cksum;
+
+   # positivise the result even on a 32 bit processor
+   no integer;
+   my $crc = $cksum;
+   $crc += 4294967296 if $crc < 0;
+
+   return $crc;
+}
+# END
+###################################################################################

@@ -1,0 +1,5 @@
+#!/usr/bin/perl
+
+use TPSUP::LOCK qw(tpeng_lock);
+
+print tpeng_lock($ARGV[0]), "\n";

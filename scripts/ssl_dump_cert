@@ -1,0 +1,28 @@
+#!/bin/bash
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $0 host:port
+
+   dump a ssl certificate from a remote server
+example:
+  
+   $0 wellsfargo.com:443
+
+EOF
+
+   exit 1
+}
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+remote_server=$1
+
+#https://www.feistyduck.com/library/openssl-cookbook/online/ch-testing-with-openssl.html#
+
+echo |openssl s_client -connect $remote_server 2>&1 | sed --quiet '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'

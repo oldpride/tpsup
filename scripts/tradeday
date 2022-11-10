@@ -1,0 +1,94 @@
+#!/usr/bin/env perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::DATE qw(get_tradeday);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog offset
+
+description:
+   get trade day
+
+   -d yyyymmdd     use this as today, the reference day.
+   -e exch         exclude this exchange's holidays, default to NYSE
+
+   -OnWeekend next|previous 
+                   if reference day is on weekend, default to move it to 'previous'
+                   tradeday, eg, Friday.
+                   if set 'next', then will change it to 'next' tradeday, eg, Monday
+
+   If reference day is on weekend, we will change to use the coming tradeday, normally
+   Monday; but if Monday is holiday, then it will become Tuesday.
+
+examples:
+
+   $prog   1  # next tradeday
+   $prog   0  # current tradeday
+   $prog  -1  # previous tradeday
+
+   - 20200905 is Saturday. 20200907 is Monday, labor day holiday.
+     for 20200905/20200906/20200907, 
+         By default, current tradeday changes to Friday 20200904.  and the previous tradeday 
+         becomes Thursday, 20200903
+         If '-OnWeekend next', current tradeday changes to Friday 20200908.  
+         and the previous tradeday becomes Friday, 20200904
+
+   $prog -d 20200905 0   # you should see 20200904
+   $prog -d 20200907 0   # you should see 20200904
+   $prog -d 20200908 0   # you should see 20200908
+   $prog -d 20200905 1   # you should see 20200908
+   $prog -d 20200907 1   # you should see 20200908
+   $prog -d 20200905 -1  # you should see 20200903
+                        
+   $prog -d 20200909 -1  # you should see 20200908
+   $prog -d 20200909 -2  # you should see 20200904
+
+   $prog -d 20200907 -OnWeekend next 0   # you should see 20200908
+   $prog -d 20200905 -OnWeekend next 0   # you should see 20200908
+   $prog -d 20200905 -OnWeekend next 1   # you should see 20200909
+
+EOF
+   exit 1;
+}
+
+my @leftover;
+my $opt = {};
+
+eval {
+   for (my $i=0; $i<scalar(@ARGV); $i++) {
+      if ($ARGV[$i] eq '-d') {
+         $opt->{Begin} = $ARGV[$i+1];
+         $i++;
+      } elsif ($ARGV[$i] eq '-e') {
+         $opt->{Exch} = $ARGV[$i+1];
+         $i++;
+      } elsif ($ARGV[$i] eq '-OnWeekend') {
+         $opt->{OnWeekend} = $ARGV[$i+1];
+         $i++;
+      } else {
+         push @leftover, $ARGV[$i];
+      }
+   }
+};
+
+usage("wrong command args") if $@; 
+
+usage("wrong number of args") if @leftover != 1;
+
+my ($offset) = @leftover;
+
+print get_tradeday( $offset, $opt), "\n";
+
+exit 0;

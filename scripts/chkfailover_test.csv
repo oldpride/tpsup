@@ -1,0 +1,10 @@
+serivce,logical,prod,bcp,comment
+# can have comment and blank lines
+
+# DNS example
+# supposed to be logical name, physical prod and name, but we use linux1 twice because this
+# is all I have
+dns,linux1,linux1.fios-router.home,LAPTOP-4DDGKLFF,test_app
+
+# NFS example
+nfs,/,/dev/sda2,/dev/sda3,test_app

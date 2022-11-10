@@ -1,0 +1,22 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog file.csv
+
+EOF
+
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+csv -match '^[ ]*[^#]' "$@" |less -S
+

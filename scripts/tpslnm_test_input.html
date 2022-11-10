@@ -1,0 +1,144 @@
+<!-- https://www.freecodecamp.org/news/html-form-input-type-and-submit-button-example/ -->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Static Selenium test page </title>
+    <link rel="stylesheet" href="tpslnm_test_input.css">
+    <!-- link to an external css file is better than in file and better than in-line -->
+</head>
+
+<body>
+    <form action="tpslnm_test_input_result.html">
+        <!--
+            This method could be GET or POST. With the GET method, the values
+            entered by the user are visible in the URL when the data is submitted. 
+            But with POST, the values are sent in HTTP headers, so those values 
+            are not visible in the URL.
+
+            default is GET
+
+            Use the GET method for submitting non-sensitive data or retrieving data 
+            from a server (for example, during searches). Use the POST request when 
+            submitting files or sensitive data.
+        -->
+        <fieldset>
+            <legend>Log in</legend>
+            <div class="form-control">
+                <!-- 
+                    Assigning labels to form controls is important. When they're
+                    properly connected to the input field through their for attribute
+                    and the input’s id attribute, it's easier for the user to use as
+                    they can just click the label itself to access the input.
+                -->
+                <label for="user id">User Id</label>
+                <input type="text" id="user id" placeholder="User Id" />
+            </div>
+            <div class="form-control">
+                <label for="password">password</label>
+                <input type="password" id="password" placeholder="password" />
+            </div>
+            <input type="submit" value="Log in" class="submit-btn" />
+        </fieldset>
+    </form>
+
+    <form action="tpslnm_test_input_result.html">
+        <!-- GET variable name is stored in 'name'-->
+        <fieldset>
+            <legend>Profile</legend>
+            <div class="form-control">
+                <label for="FullName">Name</label>
+                <input type="text" id="FullName" name="FullName" placeholder="My Name" />
+            </div>
+            <div class="form-control">
+                <label for="DateOfBirth">Date of Birth</label>
+                <input type="date" id="DateOfBirth" name="DateOfBirth" />
+            </div>
+            <div class="form-control">
+                <label for="weight">Weight in lbs</label>
+                <input type="number" id="weight" name="weight" placeholder="175" />
+            </div>
+            <div class="form-control">
+                <label for="PhoneNumber">Phone Number</label>
+                <input type="tel" id="PhoneNumber" name="PhoneNumber" placeholder="1-111-111-1111" />
+            </div>
+            <input type="submit" value="Update" class="submit-btn" />
+        </fieldset>
+    </form>
+
+    <form action="tpslnm_test_input_result.html">
+        <!-- GET variable name is stored in 'name'-->
+        <fieldset>
+            <legend>Profile2</legend>
+            <div class="form-control">
+                <label for="Expertise">Expertise</label>
+                <select id="Expertise" name="Expertise">
+                    <option value="Select a Language">Select a Language</option>
+                    <option value="HTML">HTML</option>
+                    <option value="CSS">CSS</option>
+                    <option value="JavaScript">JavaScript</option>
+                    <option value="React">React</option>
+                </select>
+            </div>
+            <div class="form-control">
+                <label for="Urgency">Urgency</label>
+                <select id="Urgency" name="Urgency">
+                    <option value="Select Urgency">Select Urgency</option>
+                    <option value="1">1 - High</option>
+                    <option value="2">2 - Medium</option>
+                    <option value="3">3 - Low</option>
+                </select>
+            </div>
+            <div class="form-control">
+                <label>Allergies</label>
+                <div>
+                    <label for="shimp">shimp</label>
+                    <input type="checkbox" id="shimp" name="shimp">
+                </div>
+                <div>
+                    <label for="peanut">peanut</label>
+                    <input type="checkbox" id="peanut" name="peanut">
+                </div>
+            </div>
+
+
+            <input type="submit" value="Update" class="submit-btn" />
+        </fieldset>
+    </form>
+
+    <form action="tpslnm_test_input_result.html" method="POST">
+        <!-- file needs method POST -->
+        <fieldset>
+            <legend>Upload files</legend>
+
+            <div class="form-control">
+                <label for="Resume">Resume</label>
+                <input type="file" id="Resume" name="Resume" />
+            </div>
+        </fieldset>
+    </form>
+
+    <form action="tpslnm_test_input_result.html">
+        <fieldset>
+            <legend>Contact me</legend>
+            <div class="form-control">
+                <label for="name">Name</label>
+                <input type="name" id="name" placeholder="Enter your name" required />
+            </div>
+
+            <div class="form-control">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="Enter your email" required />
+            </div>
+
+            <div class="form-control">
+                <label for="message">Message</label>
+                <textarea id="message" cols="30" rows="10" placeholder="Enter your message"
+                    required>Default Message</textarea>
+            </div>
+            <input type="submit" value="Send" class="submit-btn" />
+        </fieldset>
+    </form>
+</body>
+
+</html>

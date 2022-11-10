@@ -1,0 +1,43 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 dir1 dir2
+
+   use rsync to compare two dir
+
+   dir can be host:dir or just dir
+
+EOF
+   exit 1
+}
+
+# while getopts bdf:ne: o;
+# do
+#    case "$o" in
+#       d) debug=Y;;
+#       n) source_tpsup_profile=N;;
+#       f) font="-fa Monospace -fs $OPTARG";;
+#       e) command="$OPTARG";;
+#       *) echo "unknow switch '$o'"; usage;;
+#    esac
+# done
+# 
+# shift $((OPTIND-1))
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+dir1=$1
+dir2=$2
+
+# -a, --archive               archive mode; equals -rlptgoD (no -H,-A,-X)
+# -c, --checksum              skip based on checksum, not mod-time & size
+# -v, --verbose               increase verbosity
+# -n, --dry-run               perform a trial run with no changes made
+# -e "ssh -q"                 suppress login message
+rsync -n -av -c --delete -e "ssh -q" $dir1 $dir2

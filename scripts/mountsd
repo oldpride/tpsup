@@ -1,0 +1,6 @@
+#!/bin/bash
+
+sudo mount /dev/mmcblk1p1 /media/sdcard
+
+df -k /media/sdcard
+

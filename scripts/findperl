@@ -1,0 +1,118 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog module
+
+   -c      core only
+           this will use /usr/bin/perl and unset LD_LIBRARY_PATH and PERL5LIB
+
+   -s sub  check subroutine existence in the module
+
+   -v var  check whether variable is defined in the module.
+           note: we cannot check variable's existence. 
+                 non-existed variable can still be defined and then exist.
+
+   -d      debug
+
+examples:
+
+   $prog Carp
+   $prog Data::Dumper
+   $prog Inline::MakeMaker
+   $prog TPSUP::CSV
+
+   - check whether sub existence in module
+   $prog -s render_csv TPSUP::CSV
+   $prog -s XMLin XML::LibXML::Simple
+   $prog -s XMLin XML::Simple
+
+   - check whether variable is defined in module
+   $prog -v our_cfg TPSUP::BATCH
+   $prog -v PREFERRED_PARSER XML::LibXML::Simple
+   $prog -v PREFERRED_PARSER XML::Simple
+
+   - can also use / in place of ::
+   $prog Data/Dumper
+   $prog Data/Dumper.pm
+
+EOF
+   exit 1
+}
+
+
+while getopts cs:v:d o;
+do
+   case "$o" in
+      c) core=Y; 
+         export PATH="/usr/bin:$PATH"
+         unset LD_LIBRARY_PATH
+         unset PERL5LIB
+         ;;
+      s) sub=$OPTARG;; 
+      v) var=$OPTARG;; 
+      d) set -x;; 
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+# 'which perl' cannot report function
+type perl
+
+for i in $@
+do
+   i=`echo $i|sed -e 's!/!::!g; s![.]pm$!!'`
+   short=`echo $i|sed -e 's/::/\//g; s/$/.pm/'`
+
+   echo "perl -M$i -e \"print \\\$INC{'$short'}\""
+
+   perl -M$i -e "print \$INC{'$short'}"
+
+   if [ $? -eq 0 ]; then
+      echo ""
+       
+      perl -M$i -e "print \"\\\$$i::VERSION=\$$i::VERSION\\n\";"
+
+      if [ "X$sub" != "X" ]; then
+         # https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
+
+         perl_code=$(cat <<END
+#if (exists &$i::$sub) { 
+#if (defined &$i::$sub) { 
+if ($i->can('$sub')) { 
+   print "sub $i::$sub exists\\n";
+} else {
+   print "sub $i::$sub doesn't exist\\n";
+}
+END
+)
+         perl -M$i -e "$perl_code"
+      fi
+
+      if [ "X$var" != "X" ]; then
+         perl_code=$(cat <<END
+if (defined \$$i::$var) { 
+   print "\\\$$i::$var already defined\\n";
+} else {
+   print "\\\$$i::$var not defined yet\\n";
+}
+END
+)
+         perl -M$i -e "$perl_code"
+      fi
+   fi
+
+   echo ""
+
+done

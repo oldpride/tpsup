@@ -1,0 +1,3 @@
+<SQL>select count(*) as orderCount from orders</SQL>
+<SQL>select count(*) as tradeCount from trades</SQL>
+<SQL>select count(*) as rejectCount from rejects</SQL>

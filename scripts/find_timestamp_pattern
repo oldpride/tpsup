@@ -1,0 +1,69 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::DATE qw(get_interval_seconds);
+use TPSUP::LOG qw(get_PatternCfg_by_app get_log_time parse_PatternCfg);
+use TPSUP::UTIL qw(get_in_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+my $last_seconds = 3600;
+
+my $exclude_pattern = undef;
+my $match_pattern   = 'ERROR|FAIL|SEVER|EXCEPTION';
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog timestamp_string
+
+description:
+   
+   check log for error
+
+   -v                     verbose mode
+
+   -pf LogPatternCfgFile  default to log_pattern.cfg
+
+examples:
+
+   $prog "2022-11-01T12:03:52,511 ERROR: test error"
+
+EOF
+
+   exit 1;
+}
+
+my ($verbose, $LogPatternCfg);
+
+ GetOptions(
+   "v"              => \$verbose,
+   "pf=s"           => \$LogPatternCfg,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my $current_yyyymmdd = $TPSUP::LOG::yyyymmdd;
+my $current_yyyy     = $TPSUP::LOG::yyyy;
+my $current_HHMMSS   = $TPSUP::LOG::HHMMSS;
+
+my ($line) = @ARGV;
+
+my $PatternCfg_by_app = parse_PatternCfg({LogPatternCfg=>$LogPatternCfg});
+for my $app (sort(keys %$PatternCfg_by_app)) {
+   my $cfg = get_PatternCfg_by_app($app);
+   if ( $line =~ /$cfg->{compiled}/ ) {
+      print "matched cfg = ", Dumper($cfg);
+      print "\n";
+   }
+}
+
+exit 0;

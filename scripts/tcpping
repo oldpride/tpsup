@@ -1,0 +1,249 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Socket;
+use IO::Socket::INET;
+use Data::Dumper;
+use File::Basename;
+use Getopt::Long;
+use Statistics::Descriptive;
+
+#my $prog = $0; $prog =~ s:.*/::;
+my $prog = basename($0);
+my $iteration = 3;
+my $verbose;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+    $prog host port [iterration]
+
+    tcp-based ping to work around when firewall disables ICMP which is used by traditional ping.
+    This program needs sudo access.
+
+    'host' can be hostname and ip.
+    'iterration' default to $iteration.
+
+    -v               verbose
+
+    -keepTmp         keep the tcpdump in a temporary file.
+
+examples:
+
+    $prog          www.cnn.com 80
+    $prog -keepTmp www.cnn.com 80
+    $prog -v       www.cnn.com 80
+
+END
+
+   exit 1;
+}
+
+my $keepTmp;
+
+GetOptions(
+   'v|verbose'    => \$verbose,
+   'keepTmp'      => \$keepTmp,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2 || @ARGV > 3  ;
+
+my $ip    = shift;
+my $port  = shift;
+my $count = shift;
+
+$count=$iteration unless $count;
+
+my $diff="Not Available\n";
+
+if ($ip !~ /^\d{1,3}[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}$/ ) {
+   $ip=gethostbyname($ip);
+
+   if (defined $ip) {
+      $ip=inet_ntoa($ip);
+   } else {
+      print "Cannot find IP address for Host Name: $ip. \n";
+      exit 10;
+   }
+}
+
+my $username = $ENV{LOGNAME} || $ENV{USER} || getpwuid($<);
+
+my $ipcmd = "/sbin/ip route get $ip|grep dev";
+$verbose && print "ipcmd = $ipcmd\n";
+
+my $ipoutput=`$ipcmd`;
+
+$verbose && print "output = $ipoutput";
+
+my $interface;
+my $myip;
+my $if_pattern = '^.*?dev\s+(\S+)\s+?src\s+(\S+).*$';
+
+if ( $ipoutput =~ /$if_pattern/) {
+   $interface = $1;
+   $myip=$2;
+} else {
+   print << "END";
+
+ERROR: cannot find outgoing interface
+
+ipcmd = $ipcmd
+
+ouput = $ipoutput
+
+pattern = $if_pattern
+
+END
+
+   exit 1;
+}
+
+$verbose && print "interface = $interface, myip = $myip\n";
+
+my $tmpfile = "/tmp/junk.tcpdump.$username.$$";
+
+#https://stackoverflow.com/questions/25731643/how-to-schedule-tcpdump-to-run-for-a-specific-time-of-period
+my $timeout = $count + 1;  # to timeout tcpdump
+
+my $tcpdumpCmd = qq(timeout $timeout sudo /usr/sbin/tcpdump -Z $username -p -tt -l -nn -i $interface 'tcp[tcpflags] & (tcp-syn|tcp-rst) != 0' and port $port and host $ip 2>/dev/null);
+
+#       -Z user
+#       --relinquish-privileges=user
+#              If tcpdump is running as root, after opening the capture device or input  savefile,
+#              but  before  opening  any  savefiles for output, change the user ID to user and the
+#              group ID to the primary group of user.
+#
+#              This behavior can also be enabled by default at compile time.
+#       -p
+#       --no-promiscuous-mode
+#              Don't put the interface into promiscuous mode.  Note that the interface might be in
+#              promiscuous  mode for some other reason; hence, `-p' cannot be used as an abbrevia‐
+#              tion for `ether host {local-hw-addr} or ether broadcast'.
+#
+#              In computer networking, promiscuous mode is a mode for a wired network interface 
+#	      controller (NIC) or wireless network interface controller (WNIC) that causes the
+#	      controller to pass all traffic it receives to the central processing unit (CPU)
+#	      rather than passing only the frames that the controller is specifically programmed
+#	      to receive. This mode is normally used for packet sniffing that takes place on a
+#	      router or on a computer connected to a wired network or one being part of a
+#	      wireless LAN. Interfaces are placed into promiscuous mode by software bridges
+#	      often used with hardware virtualization.
+#
+#       -tt    Print the timestamp, as seconds since January 1, 1970, 00:00:00, UTC, and fractions
+#              of a second since that time, on each dump line.
+#
+#       -l     Make stdout line buffered.  Useful if you want to see the data while capturing  it.
+#              E.g.,
+#
+#                     tcpdump -l | tee dat
+#
+#       -n     Don't convert addresses (i.e., host addresses, port numbers, etc.) to names.
+
+# https://serverfault.com/questions/217605/how-to-capture-ack-or-syn-packets-by-tcpdump
+#
+# tcp-syn    first step of 3-way handshake
+# tcp-ack    ack
+# tcp-rst    reset flag, gets sent from the receiver to the sender when a packet 
+#            is sent to a particular host that was not expecting it.
+#
+# we send out a tcp-syn
+# the receiver will either accepts our connection by sending back a tcp-syn + tcp-ack 
+#                       or rejects our connection by sending back a tcp-rst
+
+$verbose && print "tcpdumpCmd = $tcpdumpCmd\n";
+
+my $pid;
+my $fh;
+
+if ($keepTmp) {
+   # if we want the output in a temp file, we use fork/exec
+   if ($pid = fork()) {
+      # this is parent; allow time for child (tcpdump) to get ready
+   } else {
+      # this is child
+      exec("$tcpdumpCmd > $tmpfile");
+   }
+} else {
+   # if we don't need the output in a temp file, we use pipe which has fork/exec undercover.
+   $pid = open($fh, "-|", $tcpdumpCmd) or die "failed to run tcpdumpCmd = $tcpdumpCmd, $!";
+}	
+
+$verbose && print "tcpdump pid=$pid\n"; 
+
+sleep 1; #wait for tcpdump ready 
+
+for ( ;$count>0;$count-- ) {
+   $verbose && print "count down $count\n";
+
+   my $sock=IO::Socket::INET->new(PeerAddr=>$ip,PeerPort=>$port,Proto=>'tcp', Timeout=>1) ;
+   close $sock if $sock;
+
+   unless ( $sock || $! =~ /refused/i ) {
+      print "$ip:$port not reacheable\n";
+      exit 11;
+   }
+}
+
+if ($keepTmp) {
+   # wait tcpdump finish so that it will flash the output.
+   waitpid($pid, 0);
+}
+
+# 1564498501.217665 IP 192.168.1.191.50296 > 151.101.209.67.80: Flags [S], seq 2729629870, win 29200, options [mss 1460,sackOK,TS val 953526656 ecr 0,nop,wscale 7], length 0
+#
+# 1564498501.226418 IP 151.101.209.67.80 > 192.168.1.191.50296: Flags [S.], seq 1269106671, ack 2729629871, win 27680, options [mss 1396,sackOK,TS val 285320683 ecr 953526656,nop,wscale 9], length 0
+#
+# 8.753 ms
+
+my $has_outgoing;
+my %outgoingTime_by_port=();
+my @samples=() ;
+
+if ($keepTmp) {
+   open $fh, "<$tmpfile" or die "cannot open $tmpfile: $!";
+}
+
+while (<$fh>) {
+   $verbose && print $_;
+
+   if (m/^(.*)\sIP $myip[.](\d{5}) > $ip.$port:/) {
+      my ($outgoingTime, $myport) = ($1, $2);
+
+      $has_outgoing=1; 
+
+      $outgoingTime_by_port{$myport}=$outgoingTime;
+
+   } elsif (m/^(.*)\sIP $ip[.]$port > $myip.(\d{5}):/ && $has_outgoing){
+      my ($incomingTime, $myport) = ($1, $2);
+
+      my $outgoingTime = $outgoingTime_by_port{$myport};
+
+      if ( defined $outgoingTime ) {
+         my $roundtrip_ms=($incomingTime - $outgoingTime)*1000;
+
+	 push(@samples,$roundtrip_ms) if $roundtrip_ms;
+
+         printf ("%.3f ms\n",$roundtrip_ms);
+      }
+
+      $has_outgoing=0;  #reset flag
+   }
+}
+
+close $fh;
+
+if ($keepTmp) {
+   print "tmpfile = $tmpfile is kept\n";
+}
+
+if (@samples) {
+   my $stat=Statistics::Descriptive::Full->new(); $stat->add_data(@samples);
+   printf ("Mean latency: %.3f ms\n",$stat->mean());
+}

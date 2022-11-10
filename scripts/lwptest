@@ -1,0 +1,154 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use LWP::UserAgent;
+use HTTP::Cookies;
+use File::Basename;
+use Cwd 'abs_path';
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $scriptdir = dirname(abs_path($0));
+push @INC, "${scriptdir}/../lib/perl";
+
+my $output = '-'; #STDOUT
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+   $prog url
+
+   -v              verbose
+
+   -output output.csv
+                   default to STDOUT
+examples:
+
+END
+
+   exit 1;
+}
+
+my $tag_string;
+my $verbose;
+my $noheader;
+my $maxout;
+my $connfile;
+my $LowMemory;
+my $OutputDelimiter;
+my $OutputHeader;
+my $useDbiString;
+my $usePlainPassword;
+my @other_options;
+
+GetOptions(
+   'v|verbose'      => \$verbose,
+   'noheader'       => \$noheader,
+   'maxout=s'       => \$maxout,
+   'o|output=s'     => \$output,
+   'conn=s'         => \$connfile,
+   'LowMemory'      => \$LowMemory,
+   'OutputDelimiter=s' => \$OutputDelimiter,
+   'OutputHeader=s' => \$OutputHeader,
+   'DbiString'      => \$useDbiString,
+   'plain'          => \$usePlainPassword,
+   'op|option=s'    => \@other_options,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my $opt = {
+   output=> $output,
+   noheader=>$noheader,
+   maxout=> $maxout,
+   connfile=>$connfile,
+   LowMemory=>$LowMemory,
+   OutputDelimiter=>$OutputDelimiter,
+   OutputHeader=>$OutputHeader,
+};
+
+my $arg1 = shift @ARGV;
+
+if ($useDbiString) {
+   my @triple = split /,/, $arg1;
+   $opt->{dbiArray} = \@triple;
+   $opt->{dbiPasswordLocked} = $usePlainPassword ? 0 : 1;
+} else {
+   $opt->{nickname} = $arg1;
+}
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      my ($k, $v) = ($1, $2);
+
+      if ($k =~ /(placeholder1|placeholder2)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } else {
+         $opt->{$k} = $v;
+      }
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+my $error = 0;
+
+while (@ARGV) {
+   my $sql;
+
+   my $a = shift @ARGV;
+
+   if ($a eq 'file' || $a eq 'batch') {
+      die "wrong number of args" if !@ARGV;
+      my $file = shift @ARGV;
+
+      if ($file ne '-') {
+         die "cannot find $file" if ! -f $file;
+         die "cannot read $file" if ! -r $file;
+      }
+
+      if ($a eq 'file') {
+         $sql = `cat $file`;
+         chomp $sql;
+
+         $verbose && print "sql ='$sql'\n";
+         my $ret = run_sql($sql, $opt);
+         $error ++ if !$ret;
+      } else {
+         # batch
+         #require TPSUP::XML qw(query_xml);
+         require TPSUP::XML;
+
+         my $sqls = TPSUP::XML::query_xml($file, { ForceArray => 'SQL',
+                                                   AddRootNode => 'xml',
+                                                   paths => ['$root->{SQL}'],
+                                                   verbose => $verbose});
+
+         print "sqls = ", Dumper($sqls) if $verbose;
+
+         if ($sqls->[0]) {
+            for my $sql (@{$sqls->[0]}) {
+               $verbose && print "sql='$sql'\n";
+               my $ret = run_sql($sql, $opt);
+               $error ++ if !$ret;
+            }
+         }
+      }
+   } else {
+      $sql = $a;
+
+      $verbose && print "sql='$sql'\n";
+      my $ret = run_sql($sql, $opt);
+      $error ++ if !$ret;
+   }
+}
+
+exit $error;

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -x
+#cat $1 |tr '\n' ' ' | sed 's:  *: :g' | sed 's: :", ":g'
+cat $1 |tr '\n' ' ' | sed 's:  *: :g'

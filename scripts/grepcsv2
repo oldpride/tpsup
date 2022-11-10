@@ -1,0 +1,25 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 pattern file.csv
+
+example:
+
+   $0 ,1, tpcsv2_test.csv
+
+EOF
+   exit 1
+}
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+pattern=$1
+file=$2
+
+grepcsv -csv "$pattern" $file|csv2 -

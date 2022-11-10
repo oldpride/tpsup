@@ -1,0 +1,1 @@
+@mycd %TPSUP%/vbs

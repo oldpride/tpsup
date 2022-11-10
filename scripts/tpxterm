@@ -1,0 +1,227 @@
+#!/bin/bash
+
+font="-fn '-adobe-courier-medium-r-normal--14-*'" 
+
+usage () {
+   cat <<EOF
+usage:
+
+   $0 display
+   $0 auto
+
+   pop up an xterm
+
+   When 'display' is set to 'auto', the script will use the env variable DISPLAY.
+   (current DISPLAY='$DISPLAY'.) If the DISPLAY is not set, then the script 
+   will try to use the host from where you logged in.
+
+   -b      a blank shell, not a login shell, therefore, not sourcing profiles.
+           this way will have a virgin env for testing.
+
+   -d      debug mode. logs to ~/junk.log
+
+   -n      not sourcing tpsup profile. source user .bash_profile or .profile instead.
+           default is to source tpsup profile, mainly because "set -o vi" cannot
+           be inherited from parent shell; therefore, we have to "set -o vi" on
+           each new xterm; therefore, we may as well just source the whole profle.
+
+   -e "command arg1 arg2"
+           run the command 
+
+   -f number
+          use Monospace with this font size, eg, 9. normally for ubuntu remote
+          desktop. default $font
+
+example:
+
+   $0 192.168.1.164:0
+   $0 host1.abc.com:0
+   $0 auto
+
+   $0 -e 'tpdist server 5555' \$DISPLAY
+
+EOF
+   exit 1
+}
+
+loginshell='-ls'
+debug='N'
+source_tpsup_profile=Y
+command=""
+
+while getopts bdf:ne: o;
+do
+   case "$o" in
+      b) loginshell="";;
+      d) debug=Y;;
+      n) source_tpsup_profile=N;;
+      f) font="-fa Monospace -fs $OPTARG";;
+      e) command="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+display=$1
+
+if [ $debug = Y ]; then
+   set -x
+fi
+
+scriptsdir=`dirname $0`
+export PATH=$scriptsdir:$PATH;
+
+main () {
+   if [ "$display" = auto ]; then
+      if [ "X$DISPLAY" = "X" ]; then
+         if ! [ "X$SSH_CONNECTION" = "X" ]; then
+            # SSH_CONNECTION
+            # normally like below
+            #   192.168.1.197 50256 192.168.1.191 22
+            #    client             server
+            # but if ssh localhost 'echo $SSH_CONNECTION', i got
+            #   ::1 41690 ::1 22
+            if [ $debug = Y ]; then
+               echo "SSH_CONNECTION=$SSH_CONNECTION"
+            fi
+            from_host=`echo $SSH_CONNECTION|awk '{print $1}'`
+         else
+            # if we "su or sudo, then there isn't likely either SSH_CONNECTION or DISPLAY 
+            # therefore, use tty to figure out
+            tty=`tty |cut -d/ -f3-`
+            cmd="w|grep -w $tty|awk '{print \$3}'"
+            if [ $debug = Y ]; then
+               echo "no DISPLAY set, figuring it out from \"$cmd\""
+               (set -x; tty)
+               (set -x; w)
+            fi
+            from_host=`eval $cmd`
+         fi
+      
+         if [ "X$from_host" = "X" ]; then
+            echo "You need to manually specify DISPLAY." >&2
+            exit 1
+         fi
+   
+         # TODO: the assumption is display 0, may not always be correct
+         DISPLAY_SWITCH="-display $from_host:0"
+      else
+         # we use the DISPLAY in ENV
+         DISPLAY_SWITCH=""
+      fi
+   else
+      DISPLAY_SWITCH="-display $display"
+   fi
+   
+   OS=`uname`
+   
+   id=`id |cut -d\( -f2|cut -d\) -f1`
+   hostname=`hostname`
+   pwd=`pwd`
+   title="$id@$hostname:$pwd"
+   
+   DIR=`dirname $0`
+   
+   . $DIR/../profile  # this sets TPSUP env
+   
+   export PS1
+   # man -M /usr/openwin/man xrdb
+   # xrdb $DISPLAY_SWITCH -query
+   
+   if [ $debug = Y ]; then
+      # https://stackoverflow.com/questions/60756020/print-environment-variables-sorted-by-name-including-variables-with-newlines
+      env -0 | sort -z | tr '\0' '\n'
+      # export -p | sed 's/declare -x //'
+      nohup=""
+      redirect=""
+   else
+      nohup="nohup"
+      redirect=">/dev/null 2>&1&"
+   fi
+   
+   if [ $OS = SunOS ]; then
+      XPATH=/usr/openwin/bin
+   
+      $XPATH/xrdb $DISPLAY_SWITCH -override $DIR/xterm.RightButtonPaste
+   
+      # /usr/openwin/bin/xlsfonts|grep adobe-courier
+      
+      #nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+      # -fg white -bg black -title $title -sl 10000 -sb -e "/bin/bash --rcfile $TPSUP/profile" >/dev/null 2>&1 &
+   
+      nohup /usr/openwin/bin/xterm $DISPLAY_SWITCH -geom 100x44 -fn '-adobe-courier-medium-r-normal--14-*' \
+      -fg white -bg black -title $title -sl 10000 -sb -e /bin/bash >/dev/null 2>&1 &
+   
+   elif [ $OS = Linux ]; then
+      if [ -d /usr/share/terminfo ]; then
+         export TERMINFO=/usr/share/terminfo
+      fi
+
+      if [ "X$command" = "X" ]; then
+         if [ $source_tpsup_profile = Y ]; then
+            # -e '/bin/bash --rcfile $TPSUP/profile' 
+            #         This is to load the tpsup profile as user's profile may not load it.
+            if [ "X$SITESPEC" != X ]; then
+               PROFILE=$SITESPEC/profile
+            else
+               PROFILE=$TPSUP/profile
+            fi
+         else
+            if [ -f ~/.bash_profile ]; then
+               PROFILE=~/.bash_profile
+            elif [ -f ~/.profile ]; then
+               PROFILE=~/.profile
+            else
+               echo "neither ~/.bash_profile nor ~/.profile found"
+               PROFILE=N
+            fi 
+         fi
+
+         if [ $PROFILE != N ]; then
+            source_tpsup_part="-e '/bin/bash --rcfile $PROFILE'"
+         fi
+      else
+         if [ $source_tpsup_profile = Y ]; then
+            # -e '/bin/bash --rcfile $TPSUP/profile' 
+            #         This is to load the tpsup profile as user's profile may not load it.
+            if [ "X$SITESPEC" != X ]; then
+               source_tpsup_part="-e '$command'"
+            else
+               source_tpsup_part="-e '$command'"
+            fi
+         fi
+      fi
+
+      eval "$nohup xterm.linux $DISPLAY_SWITCH -geom 95x44 $font \
+      -fg white -bg black -title $title -sl 10000 -sb $loginshell \
+      -xrm 'XTerm*selectToClipboard: true' \
+      -xrm 'XTerm.vt100.translations: #override \\\
+           <Btn1Down>: select-start(CLIPBOARD) \\n\\\
+           <Btn1Up>: select-end(CLIPBOARD) \\n\\\
+           <Btn3Down>: insert-selection(CLIPBOARD) \\n\\\
+      ' \
+      $source_tpsup_part \
+      $redirect"
+   
+      # eval    is to handle the redirect at run time
+      
+      # -ls     to login session, this will source profile and record in /var/log/wtmp so
+      #         that 'w' command will list this session
+
+   
+   else
+      echo "unsupported OS=$OS"
+   fi
+}
+
+if [ $debug = Y ]; then
+   main 2>&1 |tee ~/junk.log
+else
+   main
+fi

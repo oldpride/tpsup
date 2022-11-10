@@ -1,0 +1,65 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use Tibco::Rv;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog -service 7777 -daemon host:port subject
+
+   -v verbose
+
+examples:
+
+   - use remote daemon
+
+   $prog -service 8309 -daemon riskserver:7700 APP1.ORDERS.PUBLISHER
+
+   - use local daemon
+   $prog -service 8309 -daemon localhost:7700 APP1.ORDERS.PUBLISHER
+
+END
+
+   exit 1;
+}
+
+my $tag_string;
+my $verbose;
+my $service;
+my $daemon;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   'service=s' => \$service,
+   'daemon=s' => \$daemon,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my $subject = shift @ARGV;
+
+my $rv = new Tibco::Rv(daemon=>$daemon, service=>$service);
+
+my $listener = $rv->createListener( subject => $subject,
+                                   callback => sub
+                         {
+                            my ( $msg ) = @_;
+                            print "Listener got a message: $msg\n";
+                }
+);
+
+$rv->start;
+
+exit 0;

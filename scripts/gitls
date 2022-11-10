@@ -1,0 +1,68 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog dir
+
+   show git tracked files
+
+   -v        verbose
+   -d        include deleted files. this is in full-tree mode
+   -f        full-tree mode. default is only the current folder and down.
+
+examples:
+
+   $prog $TPSUP/../rpm
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+deleted=N
+fulltree=""
+
+while getopts dfv o;
+do
+   case "$o" in
+      d) deleted=Y;;
+      f) fulltree="--full-tree";;
+      v) verbose=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+dir=$1
+
+cd $dir || exit 1
+echo "pwd = `pwd`"
+
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+echo ""
+
+if [ $deleted = Y ]; then
+   cmd="git log --pretty=format: --name-only --diff-filter=A | sort - | sed '/^\$/d'"
+else
+   cmd="git ls-tree $fulltree --name-only -r HEAD"
+fi
+
+echo "cmd = $cmd"
+echo ""
+eval $cmd
+

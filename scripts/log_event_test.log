@@ -1,0 +1,86 @@
+Sep 18 07:15:01 linux1 CRON[9571]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 07:15:02 testapp [9571]: testapp started, config = /tmp/dummy.conf
+Sep 18 07:17:01 linux1 CRON[9576]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
+Sep 18 07:17:02 testapp [9571]: testapp crashed
+Sep 18 07:25:01 linux1 CRON[9586]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 08:16:04 linux1 fixengine: [211233.611229] 35=D;11=USABC999-1;44=1999.99;38=100;55=IBM.N;54=1
+Sep 18 08:16:04 linux1 fixengine: [211233.611229] 35=8;11=USABC999-1;
+Sep 18 08:16:05 linux1 kernel: [211233.611229] perf: interrupt took too long (2543 > 2500), lowering kernel.perf_event_max_sample_rate to 78500
+Sep 18 08:16:06 testapp [9571]: testapp started, config = /tmp/dummy.conf
+Sep 18 08:17:01 linux1 CRON[9642]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
+Sep 18 08:25:01 linux1 CRON[9652]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 08:16:06 testapp [9571]: testapp reading from /dev/null
+Sep 18 08:16:35 testapp [9571]: testapp running sql/positions.sql
+Sep 18 09:17:01 linux1 CRON[9709]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
+Sep 18 09:25:01 linux1 CRON[9719]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 09:26:35 testapp [9571]: testapp entered state=DONE
+Sep 18 09:35:01 linux1 CRON[9728]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 09:35:02 linux1 fixengine: [211233.611229] 35=G;11=USABC999-2;41=USABC999-1;38=200;
+Sep 18 09:35:02 linux1 fixengine: [211233.611229] 35=8;11=USABC999-2;41=USABC999-1;38=200;
+Sep 18 09:35:48 linux1 systemd-timesyncd[757]: Network configuration changed, trying to establish connection.
+Sep 18 09:35:48 linux1 systemd-timesyncd[757]: Synchronized to time server 91.189.91.157:123 (ntp.ubuntu.com).
+Sep 18 09:45:01 linux1 CRON[9741]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 09:45:02 linux1 fixengine: [211233.611229] 35=F;11=USABC999-2;
+Sep 18 09:45:03 linux1 fixengine: [211233.611229] 35=8;11=USABC999-2;
+Sep 18 09:45:03 linux1 fixengine: [211233.611229] processed order USABC999-2
+Sep 18 10:06:26 linux1 snapd[2402]: storehelpers.go:438: cannot refresh: snap has no updates available: "android-studio", "core", "core18", "docker", "pycharm-community", "shellcheck", "tree"
+Sep 18 10:06:26 linux1 snapd[2402]: autorefresh.go:410: auto-refresh: all snaps are up-to-date
+Sep 18 10:15:01 linux1 CRON[9773]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 10:17:01 linux1 CRON[9778]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
+Sep 18 10:25:01 linux1 CRON[9785]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 12:05:01 linux1 CRON[9896]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 12:11:35 linux1 xrdp[1384]: (1384)(140095926355776)[INFO ] Socket 12: AF_INET6 connection received from ::ffff:192.168.1.179 port 53230
+Sep 18 12:11:35 linux1 xrdp[1384]: (1384)(140095926355776)[DEBUG] Closed socket 12 (AF_INET6 ::ffff:192.168.1.191 port 3389)
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[DEBUG] Closed socket 11 (AF_INET6 :: port 3389)
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[INFO ] Using default X.509 certificate: /etc/xrdp/cert.pem
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[INFO ] Using default X.509 key file: /etc/xrdp/key.pem
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[ERROR] Cannot read private key file /etc/xrdp/key.pem: Permission denied
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[DEBUG] TLSv1.2 enabled
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[DEBUG] TLSv1.1 enabled
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[DEBUG] TLSv1 enabled
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[DEBUG] Security layer: requested 11, selected 0
+Sep 18 12:11:35 linux1 xrdp[9906]: (9906)(140095926355776)[DEBUG] Closed socket 12 (AF_INET6 ::ffff:192.168.1.191 port 3389)
+Sep 18 12:11:35 linux1 xrdp[1384]: (1384)(140095926355776)[INFO ] Socket 12: AF_INET6 connection received from ::ffff:192.168.1.179 port 53231
+Sep 18 12:11:35 linux1 xrdp[1384]: (1384)(140095926355776)[DEBUG] Closed socket 12 (AF_INET6 ::ffff:192.168.1.191 port 3389)
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] Closed socket 11 (AF_INET6 :: port 3389)
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] Using default X.509 certificate: /etc/xrdp/cert.pem
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] Using default X.509 key file: /etc/xrdp/key.pem
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[ERROR] Cannot read private key file /etc/xrdp/key.pem: Permission denied
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] TLSv1.2 enabled
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] TLSv1.1 enabled
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] TLSv1 enabled
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] Security layer: requested 0, selected 0
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] connected client computer name: TIANPC
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] Non-TLS connection established from ::ffff:192.168.1.179 port 53231: encrypted with standard RDP security
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] xrdp_000026b3_wm_login_mode_event_00000001
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] Loading keymap file /etc/xrdp/km-00000409.ini
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[WARN ] local keymap file for 0x00000409 found and doesn't match built in keymap, using local keymap file
+Sep 18 12:11:35 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] xrdp_wm_log_msg: connecting to sesman ip 127.0.0.1 port 3350
+Sep 18 12:11:35 linux1 xrdp-sesman[1304]: (1304)(139642564605248)[INFO ] A connection received from ::1 port 58626
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] xrdp_wm_log_msg: sesman connect ok
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] xrdp_wm_log_msg: sending login info to session manager, please wait...
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] return value from xrdp_mm_connect 0
+Sep 18 12:11:36 linux1 xrdp-sesman[1304]: (1304)(139642564605248)[INFO ] ++ reconnected session: username tian, display :10.0, session_pid 3393, ip ::ffff:192.168.1.179:53231 - socket: 12
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] xrdp_wm_log_msg: login successful for display 10
+Sep 18 12:11:36 linux1 xrdp-sesman[1304]: (1304)(139642564605248)[DEBUG] Closed socket 8 (AF_INET6 ::1 port 3350)
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] xrdp_wm_log_msg: started connecting
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] lib_mod_log_peer: xrdp_pid=9907 connected to X11rdp_pid=3423 X11rdp_uid=1000 X11rdp_gid=1000 client_ip=::ffff:192.168.1.179 client_port=53231
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] xrdp_wm_log_msg: connected ok
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] xrdp_mm_connect_chansrv: chansrv connect successful
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] Closed socket 16 (AF_INET6 ::1 port 58626)
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] The following channel is allowed: rdpdr (0)
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] The following channel is allowed: rdpsnd (1)
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] The following channel is allowed: cliprdr (2)
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[INFO ] The following channel is allowed: drdynvc (3)
+Sep 18 12:11:36 linux1 xrdp[9907]: (9907)(140095926355776)[DEBUG] The allow channel list now initialized for this session
+Sep 18 12:15:01 linux1 CRON[9915]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 12:17:01 linux1 CRON[9922]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
+Sep 18 12:25:01 linux1 CRON[9933]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 13:02:34 linux1 systemd[1]: Starting Message of the Day...
+Sep 18 13:02:34 linux1 50-motd-news[9970]:  * Kubernetes 1.19 is out! Get it in one command with:
+Sep 18 13:02:34 linux1 50-motd-news[9970]:      sudo snap install microk8s --channel=1.19 --classic
+Sep 18 13:02:34 linux1 50-motd-news[9970]:    https://microk8s.io/ has docs and details.
+Sep 18 13:02:34 linux1 systemd[1]: Started Message of the Day.
+Sep 18 13:05:01 linux1 CRON[10019]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 13:15:01 linux1 CRON[10029]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Sep 18 13:17:01 linux1 CRON[10034]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)

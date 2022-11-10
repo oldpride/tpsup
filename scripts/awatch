@@ -1,0 +1,171 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::AUTOSYS qw( query_jobs_superset print_autorep_J_header
+                      get_autorep_J_format autorep_J print_autorep_J_job
+                      parse_cmdline_jobs);
+use TPSUP::UTIL    qw(get_in_fh);
+# use Carp::Always;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $DetailExpire = 24*3600;
+my $interval = 10;
+my $interval_limit = 60;
+my $StatusExpire = $interval-1 ;  
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog    jobllist1.txt joblist2.txt ...
+   $prog -J job1 job2 ...
+   
+description:
+
+   Watch autosys jobs listed in a file, joblist.txt, to complete. 
+
+   Within the file, one job per line. The file allows comments (#) and blank lines.
+
+   The running job is checked in $interval seconds; if not done after, $interval increases
+   10 seconds for the next round, all the way up to $interval_limit seconds.
+
+   -x  ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
+
+   -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
+
+   -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
+
+   -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
+
+   -v                  verbose mode
+
+   -J                  args are jobnames. default to filenames
+
+examples:
+
+   $prog abatch_test.txt    # take from file
+   $prog -                  # take from STDIN
+
+   - test without autosys
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
+
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt -J test_box1 filter_data
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $MatchPattern;
+my $ExcludePattern;
+my $DetailFiles;
+my $StatusFiles;
+my $reset;
+my $arg_is_job;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'J'             => \$arg_is_job,
+   'm=s'           => \$MatchPattern,
+   'x=s'           => \$ExcludePattern,
+   'df=s'          => \$DetailFiles,
+   'sf=s'          => \$StatusFiles,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if ! @ARGV;
+
+my ($jobs, $seen, $jobFlags)
+   = parse_cmdline_jobs(\@ARGV, {          JFlag=>$arg_is_job,
+                                    MatchPattern=>$MatchPattern,
+                                  ExcludePattern=>$ExcludePattern,
+                                });
+
+$verbose && print "jobs = ", Dumper($jobs);
+
+my $opt = {
+   StatusExpire => $StatusExpire,  # always need the latest info
+   DetailFiles  => $DetailFiles,
+   StatusFiles  => $StatusFiles,
+   Jobs         => $jobs,
+   StatusOnly   => 1,  # only need to query status, ie, autorep -J
+   verbose      => $verbose,
+};
+
+my $info = query_jobs_superset($jobs, $opt);
+
+my $error = 0;
+my $bad_by_job;
+my @jobs_to_watch;
+
+for my $job (@$jobs) {
+   if (!exists $info->{$job}) {
+      $bad_by_job->{$job} = "not found";
+      print "ERROR: $job $bad_by_job->{$job}.\n";
+      $error ++;
+      next;
+   }
+
+   if (!exists $info->{$job}->{Status}) {
+      $bad_by_job->{$job} = "status not found. just deleted?";
+      print "ERROR: $job $bad_by_job->{$job}.\n";
+      $error ++;
+      next;
+   }
+
+   if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+      $bad_by_job->{$job} = "bad status: $info->{$job}->{Status}";
+      print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
+      $error ++;
+      next;
+   }
+
+   push @jobs_to_watch, $job;
+}
+
+my $sub_interval = $interval;
+my $failed;
+
+while (1) {
+   my $need_next_round = 0;
+
+   print_autorep_J_header();
+
+   my $info = query_jobs_superset(\@jobs_to_watch, $opt);
+   $failed = 0;
+
+   for my $job (@$jobs) {
+      if ($bad_by_job->{$job}) {
+         printf get_autorep_J_format(), $job,  $bad_by_job->{$job}, "", "";
+      } else {
+         print_autorep_J_job($info, $job, "", $opt);
+	 if ($info ->{$job}->{Status} =~ /^(RU|ST|AC)$/) {  
+            $need_next_round ++;
+         }
+
+	 if ($info ->{$job}->{Status} =~ /^(TE|FA)$/) {  
+            $failed ++;
+         }
+      }
+   }
+
+   last if ! $need_next_round;
+   print "$need_next_round jobs not completed. $failed failed so far. sleep for $sub_interval\n";
+   sleep $sub_interval;
+   $sub_interval += 10;
+   $sub_interval = $interval_limit if $sub_interval > $interval_limit;
+   $info = query_jobs_superset(\@jobs_to_watch, $opt);
+}
+   
+print "ERROR: total $failed failed, $error errors\n";
+
+exit $error;

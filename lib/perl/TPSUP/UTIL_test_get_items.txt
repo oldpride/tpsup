@@ -1,0 +1,5 @@
+abc
+   def ghi # leading space, ending space, multiple in one line, in-line comment 
+# commented line and blank line
+
+jkl

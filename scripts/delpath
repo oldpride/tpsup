@@ -1,0 +1,73 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR <<"END";
+Usage:
+
+   $0 pattern path1:path2:...
+
+   delete path components matching the pattern
+
+   -v verbose mode
+
+Examples:
+
+   $0 tpsup "\$PATH"
+   $0 tpsup "\$LD_LIBRARY_PATH"
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 2;
+
+my ($pattern, $old_path) = @ARGV;
+
+$verbose && print STDERR "old_path=$old_path\n";
+
+my @old = split /:/, $old_path;
+
+my @new;
+
+my $changed;
+
+for my $p (@old) {
+   if ($p =~ /$pattern/) {
+      $verbose && print STDERR "matched and dropped $p\n";
+      $changed ++;
+   } else {
+      push @new, $p;
+   }
+}
+
+my $new_path = join(":", @new);
+
+if ($verbose) {
+   if ($changed) {
+       print STDERR "new_path=$new_path\n";
+   } else {
+       print STDERR "no change\n";
+   }
+}
+
+print "$new_path\n";
+
+exit 0;

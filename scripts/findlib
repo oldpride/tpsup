@@ -1,0 +1,132 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog symbol_pattern elf1 (elf2 ...)
+
+description:
+   
+   search for a symbole in elf files using nm command or strings command
+
+   -s      use "strings -a file"
+   -n      use "nm -D file", default mode
+
+examples:
+
+   $prog         locale /usr/lib/chromium-browser/chromium-browser
+   $prog -s index.theme /usr/lib/chromium-browser/chromium-browser
+
+EOF
+
+   exit 1;
+}
+
+my $verbose;
+my $nm;
+my $strings;
+
+GetOptions(
+   "v"        => \$verbose,
+   "n"        => \$nm,
+   "s"        => \$strings,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my $pattern = shift @ARGV;
+$pattern = qr/$pattern/i;
+
+my $mode;
+$mode->{nm} = $nm;
+
+if ($strings) {
+   $mode->{strings} = $strings;
+} else {
+   $mode->{nm} = 1;
+}
+
+for my $elf (@ARGV) {
+   my $prefix = @ARGV == 1 ? "" : "$elf";
+   search($elf, $pattern, $mode, $prefix);
+
+   my $ldd_command = "ldd $elf";
+
+   my @ldd_output = `$ldd_command`;
+   next if $?;
+
+   # tian@linux1:/home/tian$ ldd /usr/lib/chromium-browser/chromium-browser
+   #     linux-vdso.so.1 (0x00007ffebf1ec000)
+   #     libffmpeg.so => /usr/lib/chromium-browser/libffmpeg.so (0x00007f4c2b05b000)
+   #     ...
+   # note: vdso is provided by kernel, not from file system. see vdso(7)
+
+   for my $line (@ldd_output) {
+      if ($line =~ /(.+?) => (.+)/) {
+         my ($lib, $resolution) = ($1, $2);
+         $lib =~ s:^\s+::;
+
+         if ($resolution =~ /not found/) {
+            print "$prefix:ldd: $lib not found\n";
+         } elsif ($resolution =~ /(.+?) \((.+)\)/)  {
+            my ($path, $addr) = ($1, $2);
+            search($path, $pattern, $mode, $lib);
+         } elsif ($lib =~ /vdso.so/)  {
+            # linux-vdso.so.1 (0x00007fff8eb5d000)
+            # libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f4e83554000)
+            # vdso is a kernel function, no physical file path
+            next;
+         } else {
+            print "unknown format at line: $line";
+            print "from command: $ldd_command\n";
+         }
+      }
+   }
+}
+
+sub search {
+   my ($elf_file, $pattern, $mode, $prefix, $opt) = @_;
+
+   if ($mode->{nm}) {
+      $prefix = $prefix ? "$prefix:nm" : "nm";
+      my @output = `nm -D $elf_file`;
+   
+      if ($?) {
+         print "$prefix: nm -D failed\n";
+      } else {
+         for my $line (@output) {
+            if ($line =~ /$pattern/) {
+               print "$prefix: $line";
+            }
+         }
+      }
+   }
+
+   if ($mode->{strings}) {
+      $prefix = $prefix ? "$prefix:strings" : "strings";
+      my @output = `strings -a $elf_file`;
+   
+      if ($?) {
+         print "$prefix: strings -a failed\n";
+      } else {
+         for my $line (@output) {
+            if ($line =~ /$pattern/) {
+               print "$prefix: $line";
+            }
+         }
+      }
+   }
+}

@@ -1,0 +1,227 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use strict;
+use Carp;
+use IO::Socket::INET;
+use IO::Select;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $number_of_retries = 1;
+my $retry_interval = 3;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print <<"END";
+usage:
+   This script is used as netcat (nc) if a host doesn't have netcat installed.
+
+   - as a server, listening at a local port
+   $prog -l local_port
+
+   - as a client, connecting to a remote port
+   $prog remote_host remote_port
+
+   -v                     verbose mode.
+
+server switches:
+
+   -w wait_time           wait this many seconds for client connection.
+                          return code is 2 after timeout,
+                          default to wait forever.
+
+client switches:
+
+   -r number_of_retries   default to only $number_of_retries
+
+   -i retry_interval      default to $retry_interval (seconds).
+
+   -w wait_time           wait this many seconds before giving up trying to connect.
+                          default to system default.
+
+known issues:
+
+   when "tpnc -l 9222" on cygwin mintty 3.5 version, client cannot connect using 
+   the localhost interface, ie, "tpnc localhost 9222" won't work. client has to 
+   connect with primary ip. cygwin mintty 3.4 version doesn't have this problem.
+
+examples:
+
+   # basic client-server connection
+   server_host\$ $prog -l 5555
+   client_host\$ $prog server_host 5555
+
+   # to copy a script from hostl to host2
+   host1\$ cat script | $prog -l 5555
+   host2\$ telnet host1 5555 > script
+
+END
+   exit 1;
+}
+
+$| = 1;
+
+my $verbose;
+my $localport;
+
+STDIN->blocking(0); # http://www.perlmonks.org/?node_id=881518
+
+my $wait_seconds;
+
+GetOptions(
+   'v|verbose'=>      \$verbose,
+   'l=s'      =>      \$localport,
+   'r=s'      =>      \$number_of_retries,
+   'i=s'      =>      \$retry_interval,
+   'w=s'      =>      \$wait_seconds,
+) || usage("cannot parse command line: $!");
+
+usage("number_of_retries=$number_of_retries is not a positive integer")
+   if "$number_of_retries" !~ /^[1-9]\d*$/;
+
+usage("retry_interval=$retry_interval is not a positive integer")
+   if "$retry_interval" !~ /^[1-9]\d*$/;
+
+usage("wait_seconds=$wait_seconds is not a positive integer")
+   if defined($wait_seconds) && "$wait_seconds" !~ /^[1-9]\d*$/;
+
+# http://www.thegeekstuff.com/2010/07/perl-tcp-udp-socket-programming
+
+if (defined $localport) {
+   # this is a server
+   usage("wrong number of args") if @ARGV;
+
+   my $socket = new IO::Socket::INET (
+      #LocalHost => '127.0.0.1',
+      LocalPort => $localport,
+      Proto => 'tcp',
+      Listen => 5,
+      Reuse => 1,
+   ) or die "ERROR in Socket Creation : $!\n";
+
+   if ($wait_seconds) {
+      $SIG{ALRM} = sub {
+         $verbose && print STDERR "server exits after $wait_seconds seconds not getting client connection\n";
+         exit 2;
+      };
+
+      alarm $wait_seconds;
+   }
+
+   # waiting for new client connection.
+   $verbose && print STDERR "SERVER Waiting for client connection on port $localport\n";
+   my $client_socket = $socket->accept();
+
+   alarm 0 if $wait_seconds;      # clear the alarm
+
+   # get the host and port number of newly connected client,
+   my $peer_address = $client_socket->peerhost();
+   my $peer_port = $client_socket->peerport();
+
+   $verbose && print STDERR "Accepted new client connection from $peer_address:$peer_port\n";
+
+   # we only accept one connection; therefore, close the listener after accepting one client.
+   close($socket);
+
+   send_and_receive($client_socket, {verbose=>$verbose});
+
+   close($client_socket);
+} else {
+   # this is a client
+
+   usage("wrong number of args") if @ARGV != 2;
+
+   my ($host, $port) = @ARGV;
+
+   my $server_socket;
+   my $i = 1;
+
+   while ($i <= $number_of_retries) {
+      $verbose && print STDERR "trying to connect $host:$port\n";
+
+      $server_socket = new IO::Socket::INET (
+                                 PeerHost => $host,
+                                 PeerPort => $port,
+                                 Proto => 'tcp',
+                                 Timeout => $wait_seconds,
+                       );
+
+      if ( ! $server_socket) {
+         $verbose && print STDERR "cannot connect to $host: $port in $i try/tries\n";
+         sleep $retry_interval;
+       $i++;
+         next;
+      } else {
+         my $sock_address = $server_socket->sockhost();
+         my $sock_port    = $server_socket->sockport();
+
+         $verbose && print STDERR "connected to $host:$port from $sock_address:$sock_port after $i try/tries\n";
+         last;
+      }
+   }
+
+   die "ERROR: give up after total $number_of_retries tries" if !$server_socket;
+
+   send_and_receive($server_socket, {verbose=>$verbose});
+
+   close($server_socket);
+}
+
+exit 0;
+
+#################################################################
+# subs
+#################################################################
+
+sub send_and_receive {
+   my ($socket, $opt) = @_;
+
+   my $verbose = $opt->{verbose};
+
+   my $select = IO::Select->new($socket) or die "IO::Select $!";
+   $select->add(\*STDIN) or die "IO::Select $!";
+
+   SELECT:
+   while(1) {
+      $verbose && print STDERR "waiting for activities from stdin or remote\n";
+
+      if (my @ready = $select->can_read(300)) {
+         for my $fh (@ready) {
+            if ($fh == $socket) {
+               $verbose && print STDERR "found remote activities\n";
+
+               my $data;
+
+               $socket->recv($data,1024000);
+               if (!$data) {
+                  $verbose && print STDERR "remote closed.\n";
+                  last SELECT;
+               } else {
+                  $verbose && print STDERR "receiverd ", length($data), " bytes\n";
+                  print $data;
+               }
+            } else {
+               $verbose && print STDERR "found stdin activities\n";
+               my $data;
+               my $size = read(STDIN, $data, 1024000);
+               if (!$data) {
+                  $verbose && print STDERR "STDIN closed.\n";
+                  last SELECT;
+               } else {
+                  $verbose && print STDERR "sending $size bytes\n";
+                  $socket->send($data);
+               }
+            }
+         }
+      }
+   }
+
+   return;
+}

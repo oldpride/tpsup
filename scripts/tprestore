@@ -1,0 +1,248 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::CSV qw(/./);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $home = `/bin/bash -c "echo ~"`; chomp $home;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+Usage:
+
+   $prog do    file1, file2, ...
+   $prog list  file1, file2, ...
+   $prog check file1, file2, ...
+   $prog info
+
+   Restore files that were backed up by tpbackup. (see tpbackup. csv)
+
+   'action' can be
+       do    - do the restore
+       list  - list the backup folders
+       check - list the changes since the backup
+       info  - print the config
+
+   -v verbose mode
+
+   -d yyyymmdd   use this day's backup, default to the last day of backup.
+
+   -f tpbackup.csv
+                 default to ~/.tpsup/tpbackup.csv. Example of format:
+                         proj,source,backup_base,retention,comment
+                         tpsup,\$home/\$proj,\$home/backup/\$proj,5,scripts backups
+                         notes,\$home/\$proj,\$home/backup/\$proj,5,notes   backups
+
+Examples:
+
+   cd /a/b/c
+   $prog check d/e.txt
+   $prog do    d/e.txt
+   $prog list  d/e.txt
+   $prog info
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $yyyymmdd;
+my $CfgFile = "$home/.tpsup/tpbackup.csv";
+
+GetOptions(
+   'verbose' => \$verbose,
+   'd=s'     => \$yyyymmdd,
+   'f=s'     => \$CfgFile,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $action = shift @ARGV;
+
+usage("unknown action='$action'") if $action !~ /^(do|list|check|info)$/;
+
+my $cfg_by_proj = parse_csv_file($CfgFile, {keyColumn=>'proj',
+                                            excludePattern=>'^\s*$|^\s*#',
+                                           });
+
+if ($action eq 'info') {
+   usage("wrong number of args") if @ARGV;
+
+   print_cfg($cfg_by_proj);
+   exit 0;
+}
+
+usage("wrong number of args") if !@ARGV;
+
+my $today = `date +%Y%m%d`; chomp $today;
+
+my $cwd = `/bin/bash -c pwd`; chomp $cwd;
+
+my $error = 0;
+my @restore_cmds;
+
+for my $f (@ARGV) {
+   $f =~ s:/+$::; # remove ending /
+
+   my $source_full;
+
+   if ($f !~ m:^/:) {
+      $source_full = "$cwd/$f";
+   } else {
+      $source_full = "$f";
+   }
+
+   $verbose && print "source_full=$source_full\n";
+
+   my $backup_base;
+   my $source_base;
+   my $relative;
+
+   my $found;
+
+   PROJ:
+   for my $proj (sort keys(%$cfg_by_proj)) {
+      for my $row (@{$cfg_by_proj->{$proj}}) {
+         ($source_base, $backup_base) = @{$row}{qw(source_base backup_base)};
+         $source_base =~ s:\$home:$home:g;
+         $backup_base =~ s:\$home:$home:g;
+
+         $source_base =~ s:\$proj:$proj:g;
+         $backup_base =~ s:\$proj:$proj:g;
+
+         if ($source_full =~ /${source_base}(.*)/) {
+            $relative = $1;
+
+            $found ++;
+
+            last PROJ;
+         }
+      }
+   }
+
+   if (!$found) {
+      print "ERROR: $f ($source_full) is not backed up by any proj in $CfgFile\n";
+      print_cfg($cfg_by_proj);
+      $error ++;
+      next;
+   }
+
+   $verbose && print "relative=$relative\n";
+   $verbose && print "source_base=$source_base\n";
+   $verbose && print "backup_base=$backup_base\n";
+
+   if ($action eq 'list') {
+      my $cmd = "ls -ld $backup_base/*/$relative";
+      print "$cmd\n";
+      system($cmd);
+      next;
+   }
+
+   my $backup_dir;
+
+   if ($yyyymmdd) {
+      $backup_dir = "${backup_base}/$yyyymmdd";
+      usage("$backup_dir doesn't exist, we don't have a backup for $yyyymmdd") if ! -d $backup_dir;
+   } else {
+      $yyyymmdd = `/bin/ls ${backup_base} | tai1 -1`;
+      die "we don't have any backup" if ! $yyyymmdd;
+      chomp $yyyymmdd;
+      $backup_dir = "${backup_base}/$yyyymmdd";
+   }
+
+   my $backup_full = "$backup_dir/$relative";
+
+   $verbose && print "backup_dir=$backup_dir\n";
+   $verbose && print "backup_full=$backup_full\n";
+
+   my $need_restore;
+
+   if (! -e $backup_full ) {
+      print "ERROR: ${f}'s backup $backup_full doesn't exist. Please run 'check' to find anothere day's backup\n";
+      $error ++;
+      next;
+   } elsif (! -e $source_full ) {
+      print "We lost the source but we have backup.\n";
+      $need_restore ++;
+   } else {
+      my $cmd = "diff -r $backup_full $source_full|egrep -v '[.]svn|Common subdirectories'";
+
+      print "$cmd\n";
+
+      my @lines = "$cmd 2>&1";
+
+      print @lines;
+
+      if (@lines) {
+         $need_restore ++;
+      }
+   }
+
+   if ($need_restore) {
+      if (-f $backup_full) {
+         push @restore_cmds, "/bin/cp -p $backup_full $source_full";
+      } else {
+         # find the parent dir
+         my $source_full_parent = $source_full;
+         $source_full_parent =~ s:/+[^/]+$::;
+
+         push @restore_cmds, "rsync -av --delete $backup_full $source_full_parent";
+      }
+   }
+}
+
+if ($action eq 'check' || $action eq 'do' ) {
+   print "---------begin restore commands--------------------\n";
+   print join("\n", @restore_cmds);
+   print "\n";
+   print "---------end restore commands----------------------\n";
+   print "\n";
+}
+
+if ($action eq 'check' ) {
+   print "nothing done\n";
+} elsif ($action eq 'do' ) {
+   print "--------- executing restore commands ---------------\n";
+   for my $cmd (@restore_cmds) {
+      print "cmd= $cmd\n";
+      system($cmd);
+
+      if ($?) {
+         print "ERROR: cmd=$cmd failed\n";
+         $error ++;
+      }
+   }
+}
+
+if ($error) {
+   print "ERROR: total $error ERRORS\n";
+   exit 1;
+} else {
+   print "OK: All Good.\n";
+   exit 0;
+}
+
+##############################################################
+# subs
+##############################################################
+sub print_cfg {
+   my ($cfg_by_proj) = @_;
+
+   my @rows;
+
+   for my $proj (sort keys(%$cfg_by_proj)) {
+      push @rows, @{$cfg_by_proj->{$proj}};
+   }
+
+   render_csv (\@rows, [qw(proj source_base backup_base retention comment)], {verbose=>$verbose});
+}

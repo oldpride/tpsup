@@ -1,0 +1,120 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::TRACER qw(trace parse_cfg);
+use TPSUP::UTIL qw(resolve_scalar_var_in_string);
+
+# backoffice tracer is to search through the live cycle
+# 
+# there are many search points, each from different user's perspective
+# 
+# find the centeral point
+#    this is the databases table has the most information.
+#    the script will first try to reach this place, and then start trace life cycle
+# 
+# modulize and each moduele can be called in multiple ways: 
+#   different combination of search key words
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message, $opt) = @_;
+
+   print "$message\n" if $message;
+
+   my $caller1 = $opt->{Caller} ? $opt->{Caller} : "$prog file.cfg";
+   my $caller2 = $opt->{Caller} ? $opt->{Caller} : "$prog tptrace_test.cfg";
+
+   my $detail = $opt->{Detail} ? $opt->{Detail} : "";
+   my $example;
+   
+   if ($opt->{Example}) {
+     $example = $opt->{Example};
+     $example = resolve_scalar_var_in_string($example, {prog=>$caller2});
+   } else {
+     $example = <<"EOF";
+
+    # get options from a cfg file
+    $caller2 
+
+    # get an example from booking table, in order come up command args for testing purpose
+    $caller2 example=booking
+    $caller2 example=syslog
+
+    $caller2 tid=123
+    $caller2 sec=ABC orderqty=1,500 client=xyz
+    $caller2 sec=ABC filledqty=400 client=xyz
+    $caller2 sec=ABC client=xyz orderqty=1,500 # test the customized clause
+EOF
+   }
+
+   print STDERR << "END";
+
+usage: 
+
+   $caller1 key1=value1 key2=value2 ...
+   $caller1 example=entity_name
+   $caller1 ANY
+
+   'ANY' means no key-value on command line.
+
+   $detail
+   -v              verbose mode. each -v will increment level. max level is 2.
+   -f              force through. keep trace next even if failed.
+   -se             skip all entry points.
+
+   -t entity1,entity2
+                   trace through this route instead
+
+   -st all|entity1,entity2,...
+                   skip all or selected entities on trace routes.
+
+example:
+$example
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $caller;
+my $ForceThrough;
+my $SkipEntry;
+my $SkipTraceString;
+my $TraceString;
+
+GetOptions(
+   'v|verbose+'     => \$verbose,      # each -v will increment the verbose level
+   'f'              => \$ForceThrough,
+   'se'             => \$SkipEntry,
+   'st=s'           => \$SkipTraceString,
+   't=s'            => \$TraceString,
+   'c=s'            => \$caller,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $cfg_file = shift @ARGV;
+
+my $all_cfg = parse_cfg($cfg_file, {verbose=>$verbose});
+
+usage("wrong number of args", 
+      {Detail=>$all_cfg->{usage_detail}, 
+       Caller=>$caller, 
+       Example=>$all_cfg->{usage_example},
+      }) if !@ARGV;
+
+#print "tptrace ", __LINE__, "\n";
+
+trace($all_cfg, \@ARGV, {verbose=>$verbose, 
+                         ForceThrough=>$ForceThrough,
+                         SkipEntry=>$SkipEntry,
+                         SkipTrace=>$SkipTraceString,
+                         TraceString=>$TraceString,
+                        }
+     );

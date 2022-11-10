@@ -1,0 +1,397 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use Time::Local;
+use XML::Simple;
+use IO::Select;
+use File::Basename;
+use Cwd 'abs_path';
+
+my $prog = $0; $prog =~ s:.*/::;
+my $scriptdir = dirname(abs_path($0));
+my $default_config   = "$scriptdir/syslogmon.xml";
+my $default_lookback = 9999;
+my $default_syslog   = "/var/log/syslog";
+
+my $homedir = `echo ~`; chomp $homedir;
+my $debug_log = "$homedir/syslogmon.log";
+
+sub usage {
+   print STDERR << "END";
+usage:
+   $prog config.xml
+   $prog default
+
+   'default' points to $default_config.
+
+   -d              debug mode, debug output goes to $debug_log
+
+   -b lookback     look back this many lines, ie "tail -n 1000 -f ...",
+                   default to $default_lookback.
+
+   -s syslog       default to $default_syslog
+
+
+END
+
+    exit 1;
+}
+
+my $debug;
+my $lookback = $default_lookback;
+my $syslog   = $default_syslog;
+
+GetOptions(
+   'd|debug'        => \$debug,
+   'b|lookback'     => \$lookback,
+   's|syslog'       => \$syslog,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($cfg_xml) = @ARGV;
+
+if ( $cfg_xml eq 'default') {
+   $cfg_xml = $default_config;
+}
+
+my $user;
+{
+   my $id = `id`;
+   #uid=9020(tian) gid=7296(uniz)
+   ($user) = ( $id =~ /^.+?\((.+?)\)/ );
+ }
+
+
+my $debug_fh;
+if ($debug) {
+   print "debug output goes to $debug_log\n";
+   open $debug_fh, ">$debug_log" or die "cannot write to $debug_log";
+}
+
+my $command = "tail -n $lookback -f $syslog";
+
+$ENV{PATH} = "$ENV{PATH}:$scriptdir";
+
+$| = 1;
+
+open my $in_fh, "$command|" || die "$command failed. $?";
+my $io = new IO::Select( [ $in_fh ] );
+
+my $stdin_io = new IO::Select( [ *STDIN ] );
+
+my $now_sec;
+my $now_HHMMSS;
+my $today    = `date               +%Y%m%d`; chomp $today;
+my $tomorrow = `date -d 'tomorrow' +%Y%m%d`; chomp $tomorrow;
+my $weekday_today = `date +%A`; chomp $weekday_today;
+$now_sec = time();
+$now_HHMMSS = sec_to_HHMMSS($now_sec);
+
+my $time_by_cmd;
+my $reasons_by_cmd;
+my $need_refresh = 0;
+my $cmd_by_idx;
+my $idx = 0;
+my $max = -1;
+my $last_sec = time();
+my $total_processed_lines = 0;
+my $last_processed_lines = 0;
+
+while (1) {
+   $now_sec = time();
+   $now_HHMMSS = sec_to_HHMMSS($now_sec);
+
+   if ($now_HHMMSS gt '16:15:00') {
+      print "\n";
+      print "$now_HHMMSS time is after 16:15:00, exit.\n";
+      exit 0;
+   }
+
+   my $cfg = get_config($cfg_xml);
+
+   my $max_processed_at_a_time = 100;
+   my $processed = 0;
+
+   while( $io->can_read(1) ) {
+      $debug && flush $debug_fh;
+      #$debug && print {$debug_fh] "can_read\n"; 
+
+      if ( $processed >= $max_processed_at_a_time ) {
+         $debug && print {$debug_fh} "max $processed messages processed, will continue in next loop.\n";
+         last ;
+      }
+
+      $processed ++;
+      $total_processed_lines ++;
+
+      my $line = readline($in_fh);
+      if ($line =~ /syslogmon dismissed (.+)/) {
+         my $cmd = $1;
+         chomp $cmd;
+
+         if ($time_by_cmd->{$cmd}) {
+            delete $time_by_cmd->{$cmd};
+
+            @{$reasons_by_cmd->{$cmd}} = ();
+            delete $reasons_by_cmd->{$cmd};
+
+            $need_refresh ++;
+         }
+
+         next ;
+      }
+
+      #my $translated = translate($line);
+      my $translated = $line;
+
+      $debug && print {$debug_fh} "$translated";
+      # Jan 10 13:25:04 host01 appuser: QQQ (4002803) clrqoff'ed in AMEX ARCX C2 CBOE ISE NOM PHLX
+      my ($month, $day, $log_HHMMSS) = ($translated =~ /^(...) (..) (..:..:..)/);
+      for my $group (@{$cfg->{rules}->{group}}) {
+         my $group_name = $group->{name};
+
+         RULE:
+         for my $rule (@{$group->{rule}}) {
+            my $pattern = $rule->{pattern};
+            my $exclude = $rule->{exclude};
+            my $reason = $rule->{reason};
+
+            my $cmd;
+
+            if ($translated =~ /$pattern/) {
+               $debug && print {$debug_fh} "INFO: matched /$pattern/, \$1=$1\n";
+
+               if ($reason) {
+                  eval "\$reason = \"$reason\"";
+               }
+
+               if ($exclude) {
+                  my $string;
+                  eval "\$string = \"$exclude\"";
+
+                  $debug && print {$debug_fh} "INFO: matching exclude='$exclude', $string\n" ;
+
+                  my $expression = eval "use warnings; use strict; sub { $string }";
+                  die "Bad match expression '$exclude' : $@" if $@;
+
+                  if ($expression->()) {
+                     $debug && print {$debug_fh} "INFO: matched exclude='$exclude'\n";
+                     next RULE;
+                  }
+               }
+
+               $cmd = $rule->{cmd};
+               eval "\$cmd = \"$cmd\"";
+
+               if ($cmd =~ /^delete /) {
+                  $cmd = ~ s/^delete //;
+
+                  if ($time_by_cmd->{$cmd}) {
+                     $debug && print {$debug_fh} "INFO: deleted $time_by_cmd->{$cmd} $cmd\n";
+                     delete $time_by_cmd->{$cmd};
+                     @{$reasons_by_cmd->{$cmd}} = ();
+                     delete $reasons_by_cmd->{$cmd};
+
+                     $need_refresh = 1;
+                  } else {
+                     $debug && print {$debug_fh} "INFO: cannot find cmd='$cmd' to delete. time_by_cmd = ", Dumper($time_by_cmd);
+                  }
+               } elsif ($cmd =~ /^autorun /) {
+                  if ( diff_HHMMSS($log_HHMMSS, $now_HHMMSS)<120 ) {
+                     $cmd =~ s/^autorun //;
+                     $debug && print {$debug_fh} "INFO: autorun $cmd\n";
+                     system($cmd);
+                     $need_refresh = 1;
+                  }
+               } else {
+                  if (!$time_by_cmd->{$cmd}) {
+                      $time_by_cmd->{$cmd} = $log_HHMMSS;
+                      @{$reasons_by_cmd->{$cmd}} = ($reason) if $reason;
+                      $debug && print {$debug_fh} "INFO: added $log_HHMMSS $cmd\n";
+                  } else {
+                      push @{$reasons_by_cmd->{$cmd}}, $reason if $reason;
+                      $debug && print {$debug_fh} "INFO: added reason=$reason to $cmd\n";
+                  }
+                  $need_refresh = 1;
+               }
+            }
+         }
+      }
+   }
+
+   $now_sec = time ();
+
+   if ( $need_refresh ) {
+      $now_HHMMSS = sec_to_HHMMSS($now_sec);
+
+      $need_refresh = 0;
+
+      print "\n\n";
+      print "$now_HHMMSS current to-do list:\n";
+
+      for my $i (sort (keys %$cmd_by_idx)) {
+         delete $cmd_by_idx->{$i};
+      }
+
+      $idx = 0 ;
+
+      for my $cmd (sort {$time_by_cmd->{$a} cmp $time_by_cmd->{$b}} (keys %$time_by_cmd)) {
+         printf " %3d  %8s  %s", $idx, $time_by_cmd->{$cmd}, $cmd;
+         printf " ### %s", join(" ", @{$reasons_by_cmd->{$cmd}}) if $reasons_by_cmd->{$cmd};
+         print "\n";
+         $cmd_by_idx->{$idx} = $cmd;
+         $idx ++;
+      }
+
+      $max = $idx-1; # this is the max
+
+      if ( $max < 0 ) {
+         print "force a refresh [r] ? ";
+      } else {
+         print "execute [O-$max], all [a], dismiss [d], or force a refresh [r] ? ";
+      }
+   }
+
+   if ($stdin_io->can_read(0)) {
+      $need_refresh = 1;
+
+      $debug && print {$debug_fh} "can_read stdin\n";
+
+      my $action = readline(STDIN);
+
+      while (1) {
+         if ($action =~ /^([0-9]|a)/i) {
+            my @indices;
+
+            if ($action =~ /^a/i) {
+               @indices = sort(keys %$cmd_by_idx);
+            } else {
+               @indices = split /\s+/, $action;
+            }
+
+            for my $index (@indices) {
+               my $begin;
+               my $end;
+
+               if ($index =~ /(\d+)-(\d+)/) {
+                  $begin = $1;
+                  $end = $2;
+                  if ($begin > $end) {
+                     print "begin=$begin > end=$end in $begin-$end. skipped\n";
+                     next ;
+                  }
+               } else { 
+                  $begin = $index;
+                  $end   = $index;
+               }
+
+               for my $i ($begin..$end) {
+                  if ($cmd_by_idx->{$i}) {
+                     my $cmd = $cmd_by_idx->{$i};
+                     print "executing cmd = $cmd\n";
+                     system($cmd);
+
+                     delete $time_by_cmd->{$cmd};
+                     @{$reasons_by_cmd->{$cmd}} = ();
+                     delete $reasons_by_cmd->{$cmd};
+                  } else {
+                     print "ERROR: index $i corresponding no command.\n";
+                  }
+               }
+            }
+         } elsif ($action =~ /^d/i) {
+            print "\n";
+            print "dismiss a command number [O-$max], all (a), or go back (b): ";
+            my $answer = readline(STDIN);
+            last if $answer =~ /^b/i;
+            my @indices;
+            if ($answer =~ /^a/i) {
+               @indices = sort(keys %$cmd_by_idx);
+            } else {
+               @indices = split /\s+/, $answer;
+            }
+            for my $index (@indices) {
+               my $begin;
+               my $end;
+               if ($index =~ /(\d+)-(\d+)/) {
+                  $begin = $1;
+                  $end = $2;
+                  if ($begin > $end) {
+                     print "begin=$begin > end=$end in $begin-$end. skipped\n";
+                     next ;
+                  }
+               } else {
+                  $begin = $index;
+                  $end = $index;
+               }
+               for my $i ($begin..$end) {
+                  if ($cmd_by_idx->{$i}) {
+                     my $cmd = $cmd_by_idx->{$i};
+                     delete $time_by_cmd->{$cmd};
+                     @{$reasons_by_cmd->{$cmd}} = ();
+                     delete $reasons_by_cmd->{$cmd};
+                     $need_refresh = 1;
+                     system("logger -p locall.debug 'syslogmon dismissed $cmd'");
+                  } else {
+                     print "ERROR: index $i corresponding no command.\n";
+                  }
+               }
+            }
+         }
+         last ;
+      }
+   }
+
+   my $syslog_throttle_check_interval = 5;
+   my $syslog_throttle_check_threshold = 40; # lines per second
+   if ($now_sec - $last_sec > $syslog_throttle_check_interval) {
+      my $syslog_rate = sprintf("%d", ($total_processed_lines - $last_processed_lines)/($now_sec - $last_sec));
+      if ($syslog_rate > $syslog_throttle_check_threshold) {
+         print "\n$now_HHMMSS syslog logging too fast, $syslog_rate lines per second.\n";
+      }
+
+      $last_processed_lines = $total_processed_lines;
+      $last_sec = $now_sec;
+   }
+}
+
+exit 0;
+
+###############################################################
+# subs
+###############################################################
+
+my $last_cfg_load_time;
+my $cached_cfg;
+
+sub get_config {
+   my ($cfg_xml, $opt) = @_;
+   
+   my $mtime_sec = (stat($cfg_xml))[9];
+
+   return $cached_cfg if $last_cfg_load_time && $last_cfg_load_time <= $mtime_sec;
+
+   $last_cfg_load_time = $mtime_sec;
+
+   my $xs = XML::Simple->new();
+
+   my $ref = $xs->XMLin($cfg_xml, ForceArray=>['group', 'rule'], KeyAttr=>[]);
+
+   $debug && print {$debug_fh} "XML ref:\n", Dumper($ref);
+
+   if (!$ref) {
+      print "ERROR: failed to parse the updated $cfg_xml. stay with the old one\n";
+   } else {
+      print "\n";
+      print "reloaded $cfg_xml\n" if $cached_cfg;
+      $cached_cfg = $ref;
+      $need_refresh = 1;
+   }
+
+   return $cached_cfg;
+}

@@ -1,0 +1,23 @@
+*~
+
+# vi has upto 3 temp files
+*.swp
+*.swo
+*.swn
+
+.nfs*
+
+*.pyc
+.idea
+autopath
+tpstamp.txt*
+
+# password file for python-dotenv
+.env
+
+# perl performance profile
+nytprof.out
+nytprof
+
+
+__pycache__

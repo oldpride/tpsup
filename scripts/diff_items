@@ -1,0 +1,110 @@
+#! /usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::UTIL qw(get_in_fh get_items);
+use Carp;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog delimiter_pattern file1 file2
+
+description:
+
+   itemmize the files and find the difference between them.
+
+   -verbose             verbose mode
+   -u                   compare unique items. default to compare count
+
+examples:
+
+   $prog '[\\s,]+' diffcsvlong_test1.csv diffcsvlong_test2.csv
+
+   $prog '[\\s,]+' diffcsvlong_test1.csv diffcsvlong_test2.csv |grep  ^file1,|cut -d, -f2
+   $prog '[\\s,]+' diffcsvlong_test1.csv diffcsvlong_test2.csv |grep  ^file2,|cut -d, -f2
+   $prog '[\\s,]+' diffcsvlong_test1.csv diffcsvlong_test2.csv |grep ^common,|cut -d, -f2
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $unique;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   'u|unique'  => \$unique,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 3;
+
+my ($pattern, $file1, $file2) = @ARGV;
+
+my $seen1 = get_items($file1, {InlineDelimiter=>$pattern, ReturnHashCount=>1});
+my $seen2 = get_items($file2, {InlineDelimiter=>$pattern, ReturnHashCount=>1});
+   
+for my $k (keys %$seen1) {
+   if ($seen2->{$k}) {
+      if ($unique) {
+         print "common,$k\n";
+      } else {
+         if ($seen1->{$k} == $seen2->{$k}) {
+            print "common,$k\n";
+         } elsif ($seen1->{$k} > $seen2->{$k}) {
+            print "file1,$k,+", $seen1->{$k} - $seen2->{$k}, "\n";
+         } else {
+            print "file2,$k,+", $seen2->{$k} - $seen1->{$k}, "\n";
+         }
+      }
+      delete $seen2->{$k};
+   } else {
+      if ($unique) {
+         print "file1,$k\n";
+      } else {
+         print "file1,$k,+", $seen1->{$k}, "\n";
+      }
+   }
+}
+
+for my $k (keys %$seen2) {
+   if ($unique) {
+      print "file2,$k\n";
+   } else {
+      print "file2,$k,+", $seen2->{$k}, "\n";
+   }
+}
+
+exit 0;
+
+############################################################################
+# subs
+############################################################################
+
+sub parse_file {
+   my ($file, $pattern) = @_;
+   my $ret;
+   my $ifh = get_in_fh($file, {verbose=>$verbose});
+
+   while(<$ifh>) {
+      chomp;
+      next if /^\s^|^\s*#/; # skip comments and blank lines
+      s/#.*//;              # skip partial comments
+      for my $e (split /$pattern/, $_) {
+         next if ! defined $e;
+         $ret->{$e} ++;
+      }
+   }
+
+   close $ifh != \*STDIN;
+   return $ret;
+}

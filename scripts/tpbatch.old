@@ -1,0 +1,131 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+$Data::Dumper::Terse = 1;     # print without "$VAR1="
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(
+   resolve_scalar_var_in_string
+);
+use TPSUP::BATCH qw(
+   parse_cfg
+   run_batch
+);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message, $opt) = @_;
+
+   print "$message\n" if $message;
+
+   my   $usage_caller;
+   my $example_caller;
+
+   if ($opt->{caller}) {
+      $usage_caller = $opt->{caller};
+      if (exists $opt->{all_cfg}->{position_args}) {
+         $usage_caller .=  " " . join(" ", @{$opt->{all_cfg}->{position_args}});
+      } 
+      $example_caller = $opt->{caller};
+   } else {
+      # when we run tpbatch without $opt->{caller}
+      $usage_caller   = "$prog file.cfg pos_arg1 pos_arg2 ...";
+      $example_caller = "$prog tpslnm_test.cfg 192.168.1.179:9333";
+   }
+
+   my $detail = exists($opt->{all_cfg}->{usage_detail}) ? 
+                       $opt->{all_cfg}->{usage_detail} : "";
+
+   my $example;
+   if (exists $opt->{all_cfg}->{usage_example}) {
+      $example = $opt->{all_cfg}->{usage_example};
+      $example = resolve_scalar_var_in_string($example, {prog=>$example_caller});
+   } else {
+      $example = <<"EOF";
+
+   linux\$ $example_caller q=python
+   linux\$ $example_caller -batch tpslnm_test_batch.txt
+
+EOF
+   }
+
+   print STDERR << "END";
+
+usage: 
+
+   $usage_caller key1=value1 key2=value2 ...
+   $usage_caller suit=suit1  key1=value1 ...
+
+   $usage_caller -batch fille key1=value1 ...
+
+   $usage_caller ANY
+
+   $detail
+   -v              verbose mode. each -v will increment level. max level is 2.
+
+   -batch file     file has command args, one line per call.
+                   if file is '-', it means STDIN
+
+   'pos_arg' is required and defined in file.cfg
+
+   If value is '-', it will take from STDIN. click 'Enter' then 'Control+D' to end.
+   Only one '-' is allowed.
+
+   'suit' is a set of pre-defined keys; can be overwriten by command-line key=value.
+
+example:
+$example
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $caller;
+my $batch;
+my $dryrun;
+
+GetOptions(
+   'v|verbose+'     => \$verbose,      # each -v will increment the verbose level
+   'n|dryrun'       => \$dryrun,
+   'c=s'            => \$caller,
+   'batch=s'        => \$batch,
+) || usage ("cannot parse command line: $!");
+
+usage("missing cfg_file arg") if ! @ARGV ;
+
+my $cfg_file  = shift @ARGV;
+
+my $all_cfg = parse_cfg($cfg_file, {verbose=>$verbose});
+
+my $opt = {verbose=>$verbose, dryrun=>$dryrun};
+
+if ($all_cfg->{position_args}) {
+   my @position_args = @{$all_cfg->{position_args}};
+   if ( scalar(@position_args) > @ARGV) {
+      usage("missing positional args, expecting: @position_args", 
+            {caller=>$caller, 
+             all_cfg=>$all_cfg,
+            });
+   }
+
+   # use $opt to pass position args; therefore, be care of naming, avoid dups.
+   for my $pa (@position_args) {
+      $opt->{$pa} = shift @ARGV;
+   }
+}
+
+usage("must spec one of: key=value, -batch, or ANY",
+      {caller=>$caller, 
+       all_cfg=>$all_cfg,
+      }) if !@ARGV && !$batch;
+
+if ($batch) {
+   run_batch($all_cfg, $batch, $opt);
+} else {
+   run_batch($all_cfg, [\@ARGV], $opt);
+}

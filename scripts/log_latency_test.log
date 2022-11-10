@@ -1,0 +1,13 @@
+Sep 17 23:59:01 new oid=A1, 1 new overnight
+Sep 18 00:00:01 ack oid=A1, 1 ack overnight
+Sep 18 07:15:01 new oid=1, tid=1, 1 new for 2 things
+Sep 18 07:15:02 new oid=2, new tid=2, 2 new for 2 things
+Sep 18 07:15:03 ack oid=1, tid=1, channel=1, 1 ack for 2 things
+Sep 18 07:15:04 ack oid=2, channel=2, 1 ack
+Sep 18 07:15:05 ack tid=2, channel=3, 1 ack
+Sep 18 07:15:06 new oid=3, 1 new 
+Sep 18 07:15:07 ack oid=3, channel=1, new tid=3, mix ack and new
+Sep 18 07:15:08 new oid=4, ack tid=3, channel=2, mix ack and new
+Sep 18 07:15:09 ack oid=4, channel=3, 1 ack unmatched
+Sep 18 07:15:20 ack oid=5, tid=5, unmatched
+Sep 18 07:15:21 new oid=6, channel=1, unmatched

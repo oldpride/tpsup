@@ -1,0 +1,338 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::AUTOSYS qw(
+   get_dependency 
+   query_jobs_superset
+   print_autorep_J_header
+   get_autorep_J_format
+   autorep_J
+   print_autorep_J_job
+   parse_cmdline_jobs
+);
+use TPSUP::UTIL    qw(get_in_fh);
+use POSIX qw(strftime);
+# use Carp::Always;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $interval = 10;
+my $interval_limit = 60;
+my $DetailExpire = 24*3600;
+my $StatusExpire = $interval-1;
+my $repeat = 1;
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog    jobllist1.txt joblist2.txt ...
+   $prog -J job1 job2 ...
+ 
+description:
+
+   Run autosys jobs listed in a file, joblist.txt. Within the file, one job per line.
+   The file allows comments (#) and blank lines.
+
+   Before running autosys jobs. The script will check them first:
+      validate job's existence.
+      print the current job status.
+      spot jobs in OH (on-hold), OI (on-ice), or RU (running).
+      spot jobs that have downstream dependency. 
+      spot jobs that will trigger another job in the same list.
+
+   After the check, the script will prompt for whether to proceed to run. (use -f to skip
+   the prompt.)
+
+   The running job is checked in $interval seconds; if not done after, $interval increases
+   10 seconds for the next round, all the way up to $interval_limit seconds.
+
+   If the script aborted halfway, you can comment out the jobs already ran and start
+   again.
+
+   -x  ExcludePattern  perl regex pattern, exclude job matched this pattern, case insensitive
+
+   -m  MatchPattern    perl regex pattern, only run job matching this pattern, case insensitive
+
+   -repeat number      repeat the same list of jobs 'number' of times. default to $repeat.
+
+   -reset              reset caches on start, ie, time out all caches
+
+   -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
+
+   -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
+
+   -f                  force to run the jobs without prompt for confirmation.
+
+   -n                  dryrun mode, check-only. will print the command but won't run the jobs.
+
+   -v                  verbose mode
+
+   -J                  args are jobnames. default to filenames
+
+   -z                  skip checks
+
+examples:
+
+   $prog abatch_test_good.txt    # take from file
+   $prog -                       # take from STDIN
+
+   - test without autosys
+   $prog -n -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt abatch_test_fatal.txt
+   $prog -n -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt abatch_test_good.txt
+
+   $prog -n -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt -J test_box1 filter_data
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $MatchPattern;
+my $ExcludePattern;
+my $DetailFiles;
+my $StatusFiles;
+my $force;
+my $dryrun;
+my $reset;
+my $arg_is_job;
+my $skip_checks;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'z'             => \$skip_checks,
+   'n|dryrun'      => \$dryrun,
+   'reset'         => \$reset,
+   'repeat=s'      => \$repeat,
+   'f|force'       => \$force,
+   'J'             => \$arg_is_job,
+   'm=s'           => \$MatchPattern,
+   'x=s'           => \$ExcludePattern,
+   'df=s'          => \$DetailFiles,
+   'sf=s'          => \$StatusFiles,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if ! @ARGV;
+
+my ($jobs, $seen, $jobFlags)
+   = parse_cmdline_jobs(\@ARGV, {          JFlag=>$arg_is_job, 
+                                    MatchPattern=>$MatchPattern,
+                                  ExcludePattern=>$ExcludePattern,
+                                });
+
+$verbose && print "jobs = ", Dumper($jobs);
+
+my $opt = {
+   DetailExpire => $DetailExpire,
+   StatusExpire => $StatusExpire,
+   DetailFiles  => $DetailFiles,
+   StatusFiles  => $StatusFiles,
+   Jobs         => $jobs, # narrow the query to these jobs
+   verbose      => $verbose,
+
+   # In a support role, we are often asked to run a list of jobs in sequence. Before we
+   # run the list of jobs, we check whether one job will trigger (by a condition clause)
+   # another job (B) in the same list. If this were true, we could unintentionally run
+   # job B twice, which would be undesirable. We use the dependency module to look for
+   # this situation.
+   #
+   # But if a job has both a condition clause and a start_times clause defined, then it
+   # can run by itself only if both clauses are true.
+   #
+   # When we are asked to run a list of jobs manually on demand, the start_times clause
+   # normally is false, therefore, we can ignore the condition clause if the start_times
+   # is defined in the # same job.
+   IgnoreConditionWhenStartTimesDefined => 1,
+
+};
+my $info;
+if ($reset) {
+   my $opt2 = {%$opt};
+   $opt2->{DetailExpire} = 0; 
+   $opt2->{StatusExpire} = 0; 
+   $info = query_jobs_superset($seen, $opt2);
+} else {
+   $info = query_jobs_superset($seen, $opt);
+}
+
+my $exists_box_job;
+
+for my $job (keys %$info) {
+   my $box_name = $info->{box_name};
+
+   if ($box_name) {
+      $exists_box_job->{$box_name}->{$job} ++;
+   }
+}
+
+print_autorep_J_header();
+
+my $error = 0;
+my $fatal = 0;
+
+for my $job (@$jobs) {
+   print "\n";
+
+   if (!$info->{$job}) {
+      print "$job\n";
+      print "   FATAL: not found\n";
+      $error ++;
+      $fatal ++;
+      next;
+   }
+
+   if (!$info->{$job}->{Status}) {
+      print "$job\n";
+      print "   FATAL: status not found. just deleted?\n";
+      $error ++;
+      $fatal ++;
+      next;
+   }
+
+   printf get_autorep_J_format(), $job, $info->{$job}->{LastStart}, $info->{$job}->{LastEnd}, $info->{$job}->{Status};
+
+   if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+      print "   FATAL: in $info->{$job}->{Status} mode.\n";
+      $error ++;
+      $fatal ++;
+      next;
+   }
+
+   if ($info->{$job}->{Status} =~ /^(RU)$/) {
+      print "   ERROR: in $info->{$job}->{Status} mode.\n";
+      $error ++;
+      next;
+   }
+
+   my @downDeps;
+   my @willRunAgain;
+
+   #my $dependency = get_dependency($job, $opt);
+   my $dependency = get_dependency($job, {%$opt, DepExps=>['$Status !~ /OH|OI/']});
+
+   #print "$job dependency=", Dumper($dependency);
+
+   if ($dependency->{down}) {
+      for my $dep (@{$dependency->{down}}) {
+         if ($dep->{reason} ne 'box_child') {
+            push @downDeps, "$dep->{detail}->{JobName} ($dep->{reason})";
+         }
+
+         if ($seen->{$dep->{detail}->{JobName}} && $dep->{reason} ne 'box_parent') {
+            push @willRunAgain, $dep->{detail}->{JobName};
+         }
+      }
+   }
+    
+   if (@downDeps) {
+      print "   ERROR: downstream dependencies:\n      ", join("\n      ", @downDeps), "\n";
+      $error ++;
+   }
+
+   if (@willRunAgain) {
+      print "   FATAL: triggers other jobs in the list:\n      ", join("\n      ", @willRunAgain), "\n";
+      $fatal ++;
+      $error ++;
+   }
+}
+
+my $total_job_count = scalar(@$jobs);
+my $done_job_count = 0;
+
+print "\n";
+print "----------------------------------.\n";
+print "Total $total_job_count jobs, $error errors, $fatal fatal.\n";
+
+if ($fatal) {
+   if ($skip_checks) {
+      print "\n";
+      print "ERROR: there are fatal errors but '-z' is set to skip checks\n";
+   } else {
+      exit $error;
+   }
+}
+
+if (!$force) {
+   my $run = $dryrun ? "dryrun" : "run";
+   print "Do you want to proceed to $run the jobs $repeat time(s)? Y/N\n";
+   my $answer = readline(*STDIN);
+
+   if ($answer !~ /^\s*[yY]/) {
+      print "your answer is not yes. quit\n";
+      exit 0;
+   }
+}
+
+for (my $loop=1; $loop<=$repeat; $loop++) {
+   my @tally;
+   my @jobs_to_watch;
+   
+   for my $job (@$jobs) {
+      my $start_cmd = "sendevent -E FORCE_STARTJOB -J $job";
+      
+      if ($dryrun) {
+         print "dryrun = $start_cmd\n";
+      } else {
+         print "cmd = $start_cmd\n";
+         system($start_cmd);
+         if ($?) {
+            print "force start job failed: $!";
+            exit 1;
+         }   
+      }   
+   
+      next if $dryrun;
+      
+      sleep(1); # sleep one sec to throttle
+   }
+
+   my $sub_interval = $interval;
+   my $failed;
+
+   while (1) {
+      my $need_next_round = 0;
+   
+      print_autorep_J_header();
+   
+      my $info = query_jobs_superset(\@jobs_to_watch, $opt);
+      $failed = 0;
+   
+      for my $job (@$jobs) {
+         print_autorep_J_job($info, $job, "", $opt);
+         if ($info ->{$job}->{Status} =~ /^(RU|ST|AC)$/) {
+            $need_next_round ++;
+         }
+   
+         if ($info ->{$job}->{Status} =~ /^(TE|FA)$/) {
+               $failed ++;
+         }
+      }
+   
+      last if ! $need_next_round || $dryrun;
+      print "$need_next_round jobs not completed. $failed failed so far. sleep for $sub_interval\n";
+      sleep $sub_interval;
+      $sub_interval += 10;
+      $sub_interval = $interval_limit if $sub_interval > $interval_limit;
+      $info = query_jobs_superset(\@jobs_to_watch, $opt);
+   }
+   
+   print "\ntotal $failed failed, $error error(s)\n\n";
+
+   if ($dryrun) {
+      print "dryrun mode. nothing done.\n";
+   } else {
+      print "all complete successfully. \n";
+   }
+
+   print "loop #$loop of $repeat loops\n\n" if $repeat >1;
+}
+
+exit 0;

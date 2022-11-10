@@ -1,0 +1,84 @@
+#!/bin/bash
+
+timeout=5
+prog=`basename $0`
+
+known_db_types="mssql mysql"
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog db_type db_nickname
+
+   -c conn_file        change from the default connection file.
+   -v                  verbose mode
+
+   known database types are: $known_db_types
+
+example:
+
+   $prog a@b
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+conn=""
+
+while getopts c:m:t:vx: o;
+do
+   case "$o" in
+      c) conn="-conn $OPTARG";;
+      v) verbose=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 2 ]; then
+   echo "ERROR: wrong number of args" >&2
+   usage
+fi
+
+db_type=$1
+db_nick=$2
+error=0
+
+known=N
+for kdb in `echo $known_db_types`
+do
+   if [ $db_type = $kdb ]; then
+      known=Y
+      break
+   fi
+done
+
+if [ $known = N ]; then
+   echo "ERROR: $db_type is not supported. Supported db types: $known_db_types" >&2
+   usage
+fi
+
+if [ $verbose = Y ]; then
+   set -x
+fi
+
+if [ $db_type = mssql ]; then
+   sql $conn $db_nick "
+      select table_name, column_name
+        from Information_Schema.columns (nolock)
+       order by table_name, column_name
+    "
+elif [ $db_type = mysql ]; then
+   sql $conn $db_nick "
+      select tablename, column_name
+        from Information_Schema.columns
+       order by table_name, column_name
+    "
+fi
+
+exit $error
+

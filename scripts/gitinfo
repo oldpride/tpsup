@@ -1,0 +1,95 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog dir
+
+   show git info 
+
+   -v        verbose
+
+examples:
+
+   $prog $TPSUP/../rpm
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+while getopts v o;
+do
+   case "$o" in
+      v) verbose=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+dir=$1
+
+cd $dir || exit 1
+echo "pwd = `pwd`"
+
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+echo ""
+
+cmd="git config --get remote.origin.url"
+echo "cmd = $cmd"
+origin=`$cmd`
+
+if [ "X$origin" = "X" ]; then
+   echo "cannot find origin of $dir"
+   exit 1
+else
+   echo "origin=$origin"
+   echo ""
+fi
+
+# convert from
+#    git@github.com:oldpride/tpsup.git
+# to 
+#    https://github.com/oldpride/tpsup
+
+browser_url=$origin
+browser_url=`echo $browser_url|sed -e 's:[.]git$::'`                # chop ending git
+browser_url=`echo $browser_url|sed -e 's/:/\//'`                    
+browser_url=`echo $browser_url|sed -e 's/^git@/https:\/\//'`
+
+echo "browser_url=$browser_url"
+echo ""
+
+cmd="git rev-parse --show-toplevel"
+echo "cmd = $cmd"
+top_level=`$cmd`
+
+if [ "X$top_level" = "X" ]; then
+   echo "cannot find top_level of $dir"
+   exit 1
+else
+   echo "top_level=$top_level"
+   echo ""
+fi
+
+cd $top_level || exit 1
+
+echo ""
+cmd="git log -n 3"
+echo "cmd = $cmd"
+$cmd
+

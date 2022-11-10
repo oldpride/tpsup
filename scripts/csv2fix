@@ -1,0 +1,188 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::FIX qw(csv_to_fix);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir  = $0; $dir  =~ s:[^/]+$::;
+
+my $min_idle = 60;
+my $fdelimiter = ",";
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "END";
+usage:
+
+   $prog test.csv
+   $prog -
+
+description:
+   generate fix message from a CSV file
+
+   it takes tpcsv2's args as the function using query_csv2 to parse csv file
+
+   -me match_expression    perl style, cell-based, eg, -m '\$Column1==1 && \$Column2 eq "B"'
+   -xe exclude_expression  perl style, cell-based, eg, -m '\$Column3=~/junk/ || !\$Column4'
+
+   -mp match_pattern       perl style, line-based. Can be multiple, in AND logic.
+                           eg. -mp "junk1" -mp "junk2"
+                              will match both "junk1 junk2" and "junk2 junk1",
+                              but will not match "junk1" or "junk2" alone.
+
+   -xp exclude_pattern     perl style, line-based. Can be multiple, in AND logic.
+                           eg. -xp "junk1" -xp "junk2"
+                           will match both "junk1 junk2" and "junk2 junk1",
+                           but will not match "junk1" or "junk2" alone.
+
+   -ee export_expression   export new columns, perl style.
+
+   -ee sum=\$c1+\$c2       -ee diff=\$c1-\$c2 -ee diff=return "hardcode"
+   `
+   -f f1,f2,...            only output these fields will be converted into fix tag
+
+   -delimiter char         default to ','.      for csv input
+
+   -fixdelimiter char      default to ''(^A). for fix output
+   -fd char
+
+   -noheader               don't print output header.
+
+   -skip number            skip the first n lines of the file, because some files may comments
+                           above header, default to 0, no skipping.
+
+   -output output.csv      output, when in query mode      only,      default      to      STDOUT
+
+   -sort f1,f2,...         sort by      these fields
+
+   -ignore f1,f2           ignore these columns in the csv      file
+
+   -option setting         other options, eg,
+                              -op InputNoHeader  this indicates no header line in the input file
+                              -op UsePosition    this indicates to use c0,c1,... as column names
+                              -op OutputHeader=a,b,... use this as output's header
+                              -op DQuoteColumns=a,b,... use double quotes to wrap these columns
+                              -op SetInputHeader=a,b,... use this as input header, eg, when no header.
+                              -op QuotedInput      indicates some input cells may be quoted
+                              -op RenderStdout      to format output into grid
+                              -op InGroupGetFirst   get the first of each sort group
+                              -op InGroupGetLast    get the last of each sort group
+
+   -trimfloat f1,f2,...       trim floating points for these columns, eg 2.03000 -> 2.03
+
+   -protocol 4.x           default to 4.2
+
+examples:
+
+   - note to use \${..} to wrap around variable
+   $prog -fd , -ee '35="D"' \\
+      -ee '11=qq(\${_row}-\${"CLIENT ACRONYM"}-\${OnBehalfOfCompID}-\${SenderCompID}-\${SenderSubID}-\${TargetCompID}-\${TargetSubID})' \\
+      -ee '38=1' -ee '54=1' -ee '40=1' -ee '55="ZVZZT.OQ"' -ee '22=5' -ee '1="TEST DONT TRADE"' -ee '59=0'\\
+      -ignore "Comment,CLIENT ACRONYM" csv2fix_test.csv
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $delimiter = ',';
+my $fixdelimiter = '';
+my $skiplines;
+my @match_expression;
+my @exclude_expression;
+my @match_pattern;
+my @exclude_pattern;
+my $output;
+my @other_options;
+my $fieldString;
+my @ExportExps;
+my $sortString;
+my $trimfloatString;
+my $protocol = '4.2';
+my $ignore_tags;
+
+GetOptions(
+   'verbose'   =>      \$verbose,
+   'skip=s'    =>      \$skiplines,
+   'me=s'      =>      \@match_expression,
+   'xe=s'      =>      \@exclude_expression,
+   'mp=s'      =>      \@match_pattern,
+   'xp=s'      =>      \@exclude_pattern,
+   'ee=s'      =>      \@ExportExps,
+   'f|field=s' =>      \$fieldString,
+   'sort=s'    =>      \$sortString,
+   'o|output=s'=>      \$output,
+   'op|option=s' =>    \@other_options,
+   'trimfloat=s' =>    \$trimfloatString,
+   'ignore=s'    =>    \$ignore_tags,
+   'd|delimiter=s'     => \$delimiter,
+   'fd|fixdelimiter=s' => \$fixdelimiter,
+   'protocol=s'        => \$protocol,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $opt = {
+   MatchExps          => \@match_expression,
+   ExcludeExps        => \@exclude_expression,
+   MatchPatterns      => \@match_pattern,
+   ExcludePatterns    => \@exclude_pattern,
+   delimiter          => $delimiter,
+   skiplines          => $skiplines,
+   PrintCmd           => 1,
+   ShowDiff           => 1,
+   verbose            => $verbose,
+   ExportExps         => \@ExportExps,
+   CSV2FIX_Output     => $output,
+   CSV2FIX_delimiter  => $fixdelimiter,
+   CSV2FIX_Protocol   => $protocol,
+};
+
+if ($trimfloatString) {
+   my @a = split /,/, $trimfloatString;
+
+   $opt->{TrimFloats} = \@a;
+}
+
+if ($ignore_tags) {
+   my @a = split /,/, $ignore_tags;      
+   my @a = split /,/, $ignore_tags;
+   $opt->{DeleteColumns} = \@a;
+}
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      my ($k, $v) = ($1, $2);
+
+      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } else {
+         $opt->{$k} = $v;
+      }
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+if ($fieldString) {
+   @{$opt->{SelectColumns}} = split /,/, $fieldString;
+}
+
+if ($sortString) {
+   @{$opt->{SortKeys}} = split /,/, $sortString;
+}
+
+if (@ExportExps) {
+   $opt->{ExportExps} = \@ExportExps;
+}
+
+for my $file (@ARGV) { 
+   csv_to_fix($file, $opt);
+}

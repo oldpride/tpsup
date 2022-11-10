@@ -1,0 +1,260 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_tmp_file);
+use TPSUP::SQL qw(run_sql);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $output = '-'; #STDOUT
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+   $prog db_nickname sql
+   $prog db_nickname file file.sql
+   $prog db_nickname batch file.txt
+
+   $prog db_nickname (sql|file file.sql)+
+
+   $prog -s 'dbiString,login,password' (sql|file file.sql)+
+   
+   'batch' is for file containing multiple sql, for example, in this format,
+      <SQL>select * from tablel</SQL>
+      <SQL>select * from table2</SQL>
+   'file' is a sql script, with commands separated by ';', allowing comment /*..*/ and --.
+
+   -attr key=value extra dbh attribute, for example, to handle extra long cell
+                       -attr LongReadLen=12800
+
+   -conn conn.csv  connection file, default to \$HOME/.tpsup/conn.csv
+
+   -Dbistring      use "dbiString,login,password" instead of db nickname
+
+   -LowMemory      use as little memory as possible
+
+   -maxout int     print only this number of rows
+
+   -noheader       no header
+
+   -op key=value  other options: for example,
+                   -op NonQuery=1          # use this if the sql is not a query
+                   -op PrintConnInfo=1     # use this to print the connection info
+
+   -output output.csv
+                   default to STDOUT
+
+   -render         print output in grid
+
+   -vertical       print output vertically. best for 1-row result with many columns.
+
+   -OutputDelimiter string
+                   output delimiter, default to
+
+   -OutputHeader "c1,c2 ,..."
+                   output header, default to database column names
+
+   -plain          use plain password with '-DbiString'
+
+   -v              verbose
+
+   -NotSplitAtSemiColon
+                   for multiple sqls separated by ';', we treat them as one query.
+                   for example, below we cannot separate the DECLARE into a standalone query
+                   DECLARE \@json NVARCHAR(MAX);
+                   SET \@json ='{"info":{"address":[{"town": "Belgrade"}, {"town": "Paris"}]}}';
+                   SET \@json = JSON_MODIFY(\@json, '\$.info.address[1].town', 'London');
+                   SELECT modifiedJson = \@json;
+
+examples:
+
+   - oracle
+   sql -maxout 10 orauser1\@oradb1 "select * from all_synonyms"
+   sql -maxout 10 orauser1\@oradb1 file sql_test.sql
+   sql -maxout 10 orauser1\@oradb1 batch sql_test_batch.txt
+
+   - sybase
+   $prog sybuser1\@sybdb1 "select \@\@version"
+   $prog sybuser1\@sybdb1 file /apps/get_positions.sql
+
+   - mysql
+   $prog tian\@tiandb "SHOW TABLES"
+
+   - mssql
+   $prog tptest\@tpdbmssql "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'"
+
+   $prog tian\@tiandb "
+      SELECT m.firstname, m.lastname, r.ranking
+      FROM   tblMembers m, tblAssignment a, tblRanking r
+      WHERE m.id = a.MemberId and r.id = a.RankingId
+   "
+
+   $prog -render tian\@tiandb "
+      SELECT m.firstname, m.lastname, r.ranking
+      FROM   tblMembers m, tblAssignment a, tblRanking r
+      WHERE m.id = a.MemberId and r.id = a.RankingId
+   "
+
+   $prog -vertical tian\@tiandb "
+      SELECT m.firstname, m.lastname, r.ranking
+      FROM   tblMembers m, tblAssignment a, tblRanking r
+      WHERE m.id = a.MemberId and r.id = a.RankingId
+   "
+
+   - test passwords
+   $prog -maxout 10 -DbiString \\
+   'dbi:Oracle:host=h.db.com;service_name=h.db.com;port=l725,ORA_USER,\%encoded\%' \\
+   "select * from all_synonyms"
+   $prog -maxout 10 -DbiString -plain \\
+   'dbi:Oracle:host=h.db.com;service_name=h.db.com;port=l725,ORA_USER,plain' \\
+   "select * from all_synonyms"
+
+   - test LongReadLen
+   $prog -v -attr LongReadLen=12800 tian\@tiandb "select * from tblMembers"
+
+   - test multiple statements
+   $prog tian\@tiandb file sql_test_multiple_statements.sql
+
+END
+
+   exit 1;
+}
+
+my $tag_string;
+my $verbose;
+my $noheader;
+my $maxout;
+my $connfile;
+my $LowMemory;
+my $OutputDelimiter;
+my $OutputHeader;
+my $useDbiString;
+my $usePlainPassword;
+my @other_options;
+my $dbh_attr;
+my $RenderOutput;
+my $Vertical;
+my $NotSplitAtSemiColon;
+
+GetOptions(
+   'attr=s%'        => \$dbh_attr,  # Getopt::Long to load key-value-pair into a hash
+   'v|verbose'      => \$verbose,
+   'noheader'       => \$noheader,
+   'maxout=s'       => \$maxout,
+   'o|output=s'     => \$output,
+   'render'         => \$RenderOutput,
+   'vertical'       => \$Vertical,
+   'conn=s'         => \$connfile,
+   'LowMemory'      => \$LowMemory,
+   'OutputDelimiter=s' => \$OutputDelimiter,
+   'OutputHeader=s' => \$OutputHeader,
+   'DbiString'      => \$useDbiString,
+   'plain'          => \$usePlainPassword,
+   'op|option=s'    => \@other_options,
+   'NotSplitAtSemiColon' => \$NotSplitAtSemiColon,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+$RenderOutput = 1 if $Vertical;
+
+my $opt = {
+   dbh_attr=> $dbh_attr,
+   output=> $output,
+   Vertical=> $Vertical,
+   RenderOutput=> $RenderOutput,
+   noheader=>$noheader,
+   maxout=> $maxout,
+   connfile=>$connfile,
+   LowMemory=>$LowMemory,
+   OutputDelimiter=>$OutputDelimiter,
+   OutputHeader=>$OutputHeader,
+   verbose=>$verbose,
+   NotSplitAtSemiColon=>$NotSplitAtSemiColon,
+};
+
+my $arg1 = shift @ARGV;
+
+if ($useDbiString) {
+   my @triple = split /,/, $arg1;
+   $opt->{dbiArray} = \@triple;
+   $opt->{dbiPasswordLocked} = $usePlainPassword ? 0 : 1;
+} else {
+   $opt->{nickname} = $arg1;
+}
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      my ($k, $v) = ($1, $2);
+
+      if ($k =~ /(placeholder1|placeholder2)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } else {
+         $opt->{$k} = $v;
+      }
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+my $error = 0;
+
+while (@ARGV) {
+   my $sql;
+
+   my $a = shift @ARGV;
+
+   if ($a eq 'file' || $a eq 'batch') {
+      die "wrong number of args" if !@ARGV;
+      my $file = shift @ARGV;
+
+      if ($file ne '-') {
+         die "cannot find $file" if ! -f $file;
+         die "cannot read $file" if ! -r $file;
+      }
+
+      if ($a eq 'file') {
+         $sql = `cat $file`;
+         chomp $sql;
+
+         $verbose && print "sql ='$sql'\n";
+         my $ret = run_sql($sql, $opt);
+         $error ++ if !$ret;
+      } else {
+         # batch
+         #require TPSUP::XML qw(query_xml);
+         require TPSUP::XML;
+
+         my $sqls = TPSUP::XML::query_xml($file, { ForceArray => 'SQL',
+                                                   AddRootNode => 'xml',
+                                                   paths => ['$r->{SQL}'],
+                                                   verbose => $verbose});
+
+         print "sqls = ", Dumper($sqls) if $verbose;
+
+         if ($sqls->[0]) {
+            for my $sql (@{$sqls->[0]}) {
+               $verbose && print "sql='$sql'\n";
+               my $ret = run_sql($sql, $opt);
+               $error ++ if !$ret;
+            }
+         }
+      }
+   } else {
+      $sql = $a;
+
+      $verbose && print "sql='$sql'\n";
+      my $ret = run_sql($sql, $opt);
+      $error ++ if !$ret;
+   }
+}
+
+exit $error;

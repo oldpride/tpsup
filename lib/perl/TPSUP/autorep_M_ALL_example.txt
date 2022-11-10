@@ -1,0 +1,8 @@
+Machine Name                        Max Load   Current Load Factor  O/S         Status
+___________________________________ __________ ____________ _______ ___________ ______
+london                              100        0            1.00    Unix        Online
+berlin                              90         0            0.90    NT          Online
+v_italy.rome                        0          0            0.00    Unix        Online
+v_italy.venice                      0          0            0.00    Unix        Online
+v_italy.venice                      100        0            1.00    NT          Online
+v_france.cannes                     75         0            1.00    NT          Online

@@ -1,0 +1,151 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use File::Basename;
+#use TPSUP::CSV qw(parse_csv_file render_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $home = `/bin/bash -c "echo ~"`; chomp $home;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+Usage:
+
+   $prog pattern out_base_dir file1.zip file2.zip ...
+
+   unzip partial list of files by pattern from zip files.
+
+   "pattern" is a regex pattern, perl-style.
+
+   -c        check only. it only shows which file will come from which zip file.
+
+   note: to avoid overwriten existing files, the script will not extract a file if
+         the a file already exists at the target path.
+
+Examples:
+
+   $prog -c pattern out_base_dir file1.zip file2.zip ...
+   
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $check_only;
+
+GetOptions(
+   'verbose' => \$verbose,
+   'c'       => \$check_only,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 3;
+
+my $pattern      = shift @ARGV;
+my $out_base_dir = shift @ARGV;
+
+my $error = 0;
+my $unzipped;
+
+for my $zip (@ARGV) {
+   print "\n------------------- $zip ------------------------\n";
+   my $result = get_zipped_paths($zip, $pattern);
+   
+   $verbose && print "result = ", Dumper($result);
+
+   if ($result->{error}) {
+      $error ++;
+      next;
+   }
+
+   for my $zpath (@{$result->{paths}}) {
+      my $basename = basename($zpath);
+      my $unzipped_path = "$out_base_dir/$basename";
+
+      if ($unzipped->{$zpath}) {
+         $verbose && print "$zpath is already extracted to $unzipped_path from $unzipped->{$zpath}\n";
+         next;
+      }
+
+      if (-e $unzipped_path) {
+         $verbose && print "$zpath unzipped path $unzipped_path already exists. skipped\n";
+         next;
+      }
+      
+      print "\n";
+      
+      if ($check_only) {
+         print "dryrun extract $zpath to $unzipped_path\n";
+         $unzipped->{$zpath} ++;
+      } else {
+         # -n     never overwrite existing files.  
+         #        If a file already exists, skip the extraction of that file without
+         #        prompting.  By default unzip  queries  before  extracting
+         #        any  file  that already exists; the user may choose to overwrite
+         #        only the current file, overwrite all files, skip extraction  of
+         #        the  current  file,  skip extraction of all existing files, or 
+         #        rename the current file.
+         # -j     junk paths.  The archive's directory structure is not recreated; all 
+         #        files are deposited in the extraction directory (by default, the 
+         #        current one).
+   
+         my $cmd = qq(unzip -n -j "$zip" "$zpath" -d "$out_base_dir");
+         print "cmd = $cmd\n";
+         system($cmd);
+   
+         if ($? == 0 ) {
+            $unzipped->{$zpath} ++;
+         } else {
+            print "ERROR: unzip failed\n";
+            $error ++;
+         }
+      }
+   }
+}
+
+if ($error) {
+   print "ERROR: total $error ERRORS\n";
+} else {
+   print "All good\n";
+}
+
+exit $error;
+
+###################################################################
+# subs
+###################################################################
+
+sub get_zipped_paths {
+   my ($zip, $pattern, $opt) = @_;
+
+   my $compiled = qr/$pattern/;
+
+   my $result;
+   my $cmd = qq(zipinfo -1 "$zip");
+   print "cmd = $cmd\n";
+
+   my @lines = `$cmd`;
+   if ($? == 0) {
+      chomp @lines;
+      for my $l (@lines) {
+         if ($l =~ /$compiled/) {
+            chomp $l;
+            push @{$result->{paths}}, $l;
+         }
+      }
+   } else {
+      $result->{error} = "cmd=$cmd failed: $!";
+      print STDERR "ERROR: cmd=$cmd failed: $!\n";
+   }
+
+   return $result;
+}

@@ -1,0 +1,60 @@
+#!/bin/bash
+
+usage () {
+   cat <<EOF
+
+usage: 
+
+    $0 command.py ...
+
+    the script will try to use 'tptrace' in order to print full module name 
+    (urllib3.request vs request) because multiple packages may have the same
+    module (urllib3.request vs urllib.request).
+
+    -short     print short module name. ie, use 'trace' instead of 'tptrace'
+
+example:
+
+    $0        /home/tian/github/tpsup/python3/scripts/fixtag.py |grep modulename:
+    $0 -short /home/tian/github/tpsup/python3/scripts/fixtag.py |grep modulename:
+
+
+EOF
+
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "ERROR: wrong number of args"
+   usage
+fi
+
+use_shortname=N
+
+if [ "X$1" = "X-short" ]; then
+   use_shortname=Y
+   shift
+fi
+
+# prefer tptrace as it prints full mode name
+# request vs url.request, url2.request, url3.request
+
+# https://stackoverflow.com/questions/20947780/finding-full-pathname-in-a-python-trace
+
+# $ diff /usr/lib/python3.6/trace.py /usr/lib/python3.6/tptrace.py
+# 276c276
+# <                 modulename = _modname(filename)
+# ---
+# >                 modulename = _fullmodname(filename)
+# 587c587
+# <             print("%s(%d): %s" % (bname, lineno,
+# ---
+# >             print("%s(%d): %s" % (filename, lineno,
+
+if [ $use_shortname = N ] && echo "import tptrace"|python 2>/dev/null; then
+   echo "use tptrace module to trace"
+   python -m tptrace --trace "$@"
+else
+   echo "use standard trace module to trace"
+   python -m trace --trace "$@"
+fi

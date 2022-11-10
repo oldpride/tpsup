@@ -1,0 +1,402 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+
+use TPSUP::FIX qw(
+   filter_fix
+   map_desc_by_tag_value
+);
+
+use TPSUP::UTIL qw(
+   insert_namespaces
+   get_exps_from_string
+   get_ExpHash_from_ArrayOfStrings
+   get_out_fh
+);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+my $min_idle = 60;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+description:
+   extract log into csv
+
+   -xp exclude_pattern        Perl style, exclude lines with this pattern.
+                              Can use multiple times (AND logic).
+
+   -mp match_pattern          Perl style, exclude lines without this pattern.
+                              Can use multiple times (AND logic).
+
+   -xe exclude_expression     Perl style, eg, -xe '\${35}=~/[DGF]'.
+                              Can use multiple times (AND logic).
+
+   -me match_expression       Perl style, eg, -me '\${35}=~/[DGF]'.
+                              Can use multiple times (AND logic).
+
+   -o output.csv              default to STDOUT
+
+   -v verbose
+
+   -PrintMatch                Print out the matched line, much less wordy than 'verbose'
+                              This also works when output is in CSV mode.
+                              -op FixPrintLog will disable CSV mode, ie, no csv output.
+
+   -header string header
+
+   -fields "t1=exp1,t2=exp2,..."
+                              output these fields
+                              eg, '115=\${115},38=1,55="ZVZZT.OQ",54=1,40=1'
+                              eg, 'OnBehalfCompID=\${115},OrderQty=1,Symbol="ZVZZT.0Q",Side=1,OrdType=1'
+                              variables (\${115}) are picked from the input message
+
+   -ee new_col=exp            export new columns, perl style, can set multiple times
+
+                              -ee 'sum=\$c1+\$c2,diff=\$c1-\$c2,comment="hardcode"'
+
+   -te new_col=exp            temporary new columns, perl style, can set multiple times
+                              -te 'sum=\$c1+\$c2,diff=\$c1-\$c2,comment="hardcode"'
+                              temporary new columns can be used for sort key or match expression,
+                              but will not be printed out
+
+   -render                    print grid output
+
+   -maxmatch                  number match up to this many lines
+
+   -SourceNewOrder            if a tag is missing from existing message, use the tag from
+                              the NewOrder (35=D) message.
+                              for example, for an option fill, 35=8, if it misses the tag
+                              202 (StrikePrice), then we use its original order (35=D)'s
+                              tag 202. Like the following,
+                                 -SourceNewOrder -f StrikePrice='\$new{202}'
+   -code "namespace=perl_exp"
+                              insert some user code to the namespace.
+                              when 'namespace' is 'all', means all namespaces.
+                              can set multiple times.
+                              for example,
+                              to import a user module:
+                                  -code 'all=use lib "/my_path"; use MY_MODULE'
+                              to define a function:
+                                  -code 'TPSUP::Expression=sub my_sum {my(\$a,\$b)=@_; return \$a+\$b;}'
+
+   -nested                    handle nested fix messages: eg,
+                                 New List: 35=E, 66=ListID
+                                 New Multileg: 35=AB, 654=LegID
+
+   -delimiter string          input fix message delimiter, default to auto detect, slower
+
+   -codefile "namespace=file"
+                              same as '-code' but the real content is in the 'file'
+
+   -d dict_file               add new FIX dictionary, or overwrite standard tags
+                              see fixtag command for an example
+
+   NOTE: -mp/-xp are not as accurate as -me/-xe, but they are much faster and is a good
+         pre-filter. Using -mp/-xp and -me/-xe together will be much faster then using
+         -me/-xe alone.
+
+   The following switches are supported through TPSUP::CSV::query_csv2(). (see tpcsv2 usage)
+
+   -grpkeys f1,f2,...         group by these keys
+
+   -grpacts f1=maxnum,f2=medianstr,f3=sum,f4=avg,f5=set=Stock,...
+                              apply pre-defined actions to group.
+                              can set multiple times
+                              actions are:
+                                first,last,
+                                string: medianstr,maxstr,minstr,
+                                number: mediannum,maxnum,minnum,avg,sum
+                                hard code: set=...
+
+   -grpexps f1='\$ah->[0]->{Account}',f2='\$ah->[-1]->{Qty}',...
+                             apply these perl expressions to each group
+                             can set multiple times
+                             two pre-defined variables:
+                                \$c: current column name
+                                \$ah: ref to the array of hashes of the current group
+
+   -summary f1=maxnum,f2=medianstr,f3=sum,f4=avg,...
+                             apply these pre-defined function in summary
+                             can set multiple times
+
+   -summexp f1=exp1,f2=exp2,...
+                             apply these perl expressions in summary
+                             can set multiple times
+                             two pre-defined variables:
+                                \$c: current column name
+                                \$ah: ref to the array of hashes of the whole content
+
+   -sort f1,f2,...           sort by these fields
+
+   -delete tag1,tag2,...
+                             delete these tags in output, useful when you want all tags
+                             except tagl,tag2,.... (when -fields not specified)
+
+   other switches can be done through
+
+   -option setting           other options, eg,
+                             -op OutDelimiter='|' use pipe as output delimiter, default to ','
+                             -op DQuoteColumns=a,b,... use double quotes to wrap these columns
+                             -op InGroupGetFirst get the first of each sort group
+                             -op InGroupGetLast get the last of each sort group
+
+                             -op FixFilterTag=11 -op FixFilterFile=/tmp/tag11.txt
+                                        search for message with tag 11 in the file
+
+                             -op ShowProgress=10000 every 10,000 rows show a stat
+examples:
+
+   - Report
+   $prog -me '\${32}>0 && \${57} eq "AAA" && \${56} eq "BBB"' -mp '57=UF' -f 'Strategy=\${7800},Timestamp=\${52},Symbol=\${55},Side=\${54},Price=\${44},Shares=\${38},Liquidity Tag=\${9730},ExecutionID=\${17},Execution venue=\${30},Liquidity code=\${851}' ~/appia.log
+
+   - Report, using prefilter "-mp" to speed up
+   $prog -mp '(105|128)=(AAAA|BBBB)' -mp '35=[DGF8]' -f 'Message Type=\${35},Side=\${54},Symbol=\${55},ID Source=\${22},OrderQuantity=\${38},Price=\${44},Last Price=\${31},AveragePrice=\${6},Account=\${1},Execution ID=\${17},Process Code=\${81},Broker of Credit=\${92}' ~/appia.log
+
+   - basic export
+   $prog -ee '49=\${49},tmp=regsub(\${49}, "s:^(.).*:\\\$1:")' fixlog2csv_test.txt
+
+   - temp tags
+   $prog -te 'tmp=regsub(\${49}, "s:^(.).*:\\\$l:")' -ee '49=\${49},tmp=\${tmp}' fixlog2csv_test.txt
+
+   - print out all tags except tag 35 and tag 115
+   $prog -delete 35,115 fixlog2csv_test.txt
+
+   - handle nested fix message.
+   compare the 2 commands below, the 1st one can only show one 35=AB, while
+   the 2nd one correctly reports 2 35=AB
+   $prog         fixlog2csv_test_multileg.txt|csv2 -
+   $prog -nested fixlog2csv_test_multileg.txt|csv2 -
+
+   - Source Orignal order's (35=D,F,G,AB,AC,E) tags. Most executions (35=8) don't have complete tags
+   compare the following 2 commands: the 1st one cannot print LegMaturityDate, while the 2nd one can.
+   $prog            -nested -mp '39=2' -f 'Symbol=\${600},Maturity=\${611},Strike=\${612},PutCall=fixdesc(608),Side=fixdesc(54),Qty=\${14},AveragePrice=\${6}' fixlog2csv_test_multileg.txt
+   $prog -SourceNew -nested -mp '39=2' -f 'Symbol=\${600},Maturity=\${611},Strike=\${612},PutCall=fixdesc(608),Side=fixdesc(54),Qty=\${14},AveragePrice=\${6}' fixlog2csv_test_multileg.txt
+
+   - Source Orignal order's (35=D,F,G,AB,AC,E) tags after cancel happened
+   $prog -SourceNewOrder -me '\${35} eq "8" && \${39} =~ /^[24]\$/ && \${49} eq "TARGET1" && \${56} eq "SENDER1"' -f 'ClOrdID=\${11},CumQty=\${14},AvgPx=\${6},Side=\${54},Symbol=\${55}' fixlog2csv_test_cancel.txt
+
+   - test temporary tags -te
+   $prog -op SourceNewOrderQuiet=1 -SourceNewOrder -me '\${35} eq "8" && \${39} =~ /^[24]\$/' -te Prefix='regsub(\${11}, "s:-.*::")' -f 'ClOrdID=\${11},CumQty=\${14},AvgPx=\${6},Side=\${54},Symbol=\${55},Prefix=\${Prefix}' fixlog2csv_test_TempExps.txt | csv -
+
+   $prog -op SourceNewOrderQuiet=1 -SourceNewOrder -me '\${35} eq "8" && \${39} =~ /^[24]\$/' -te Prefix='regsub(\${11}, "s:-.*::")' -f 'ClOrdID=\${11},CumQty=\${14},AvgPx=\${6},Side=\${54},Symbol=\${55}' -grpkeys Prefix,Symbol,Side -grpacts 'ClOrdID=last,CumQty=sum,AvgPx=set="todo"' fixlog2csv_test_TempExps.txt | csv -
+
+   - print out matched log only
+   fixlog2csv -mp '39=4' -me '\${39} eq "4" && \${11} eq \${41}' junk.log
+EOF
+
+   exit 1;
+}
+
+my @exclude_pattern;
+my @match_pattern;
+my $verbose;
+my $PrintMatch;
+my @match_expression;
+my @exclude_expression;
+my @ExportExps;
+my @TempExps;
+my $output = '-';
+my @fields;
+my $header;
+my $render;
+my $FixDictFile;
+my $maxmatch;
+my $groupKeyString;
+my @groupActs;
+my @groupExps;
+my @summActs;
+my @summExps;
+my @SpaceCodes;
+my @SpaceFiles;
+my $delete_tags;
+my $SourceNewOrder;
+my @other_options;
+my $nested;
+my $SortKeyString;
+my $delimiter;
+
+GetOptions(
+   "xp=s" => \@exclude_pattern,
+   "mp=s" => \@match_pattern,
+   "me=s" => \@match_expression,
+   "xe=s" => \@exclude_expression,
+   "ee=s" => \@ExportExps,
+   "te=s" => \@TempExps,
+   "v" => \$verbose,
+   "PrintMatch" => \$PrintMatch,
+   "render" => \$render,
+   "delimiter=s" => \$delimiter,
+   "o|output=s" => \$output,
+   "h|header=s" => \$header,
+   "f|fields=s" => \@ExportExps,
+   "dict=s" => \$FixDictFile,
+   "maxmatch=s" => \$maxmatch,
+   "SourceNewOrder" => \$SourceNewOrder,
+   'grpkeys=s' => \$groupKeyString,
+   'grpacts=s' => \@groupActs,
+   'grpexps=s' => \@groupExps,
+   'summary=s' => \@summActs,
+   'summexp=s' => \@summExps,
+   'sort=s' => \$SortKeyString,
+   'code=s' => \@SpaceCodes,
+   'codefile=s' => \@SpaceFiles,
+   'delete=s' => \$delete_tags,
+   'op|option=s' => \@other_options,
+   'nested' => \$nested,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($file) = @ARGV;
+
+my $FixDict;
+if ($FixDictFile) {
+   croak "$FixDictFile not found" if ! -f $FixDictFile;
+
+   $FixDict = `cat $FixDictFile`;
+
+   # load the user-specified dict here because filter_fix may not take $opt when
+   # applying TPSUP::Expression
+   map_desc_by_tag_value({FixDict => $FixDict});
+}
+
+my $opt = {
+   MatchExps => \@match_expression,
+   ExcludeExps => \@exclude_expression,
+   MatchPatterns => \@match_pattern,
+   ExcludePatterns => \@exclude_pattern,
+   FixDelimiter => $delimiter,
+   Output => $output,
+   #SelectTags => $tags,
+   verbose => $verbose,
+   FixPrintMatch => $PrintMatch,
+   ExportExps => \@ExportExps,
+   TempExps => \@TempExps,
+   RenderOutput => $render,
+   FilterFixMaxMatch => $maxmatch,
+   SourceNewOrder => $SourceNewOrder,
+   NestedFix => $nested,
+   SortKeys => $SortKeyString,
+};
+
+insert_namespaces(\@SpaceCodes, 'code', $opt) if @SpaceCodes;
+insert_namespaces(\@SpaceFiles, 'file', $opt) if @SpaceFiles;
+
+for my $op (@other_options) {
+   if ($op =~ /^(.+?)=(.+)/) {
+      my ($k, $v) = ($1, $2);
+
+      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
+         @{$opt->{$k}} = split /,/, $v;
+      } else {
+         $opt->{$k} = $v;
+      }
+   } else {
+      $opt->{$op} = 1;
+   }
+}
+
+if ($groupKeyString) {
+   my @a = split /,/, $groupKeyString;
+
+   $opt->{GroupKeys} = \@a;
+}
+
+if (@groupActs) {
+   croak "must also set -grpkeys when you set -grpacts" if !$groupKeyString;
+
+   $opt->{GroupAction} = get_ExpHash_from_ArrayOfStrings(\@groupActs);
+}
+
+if (@groupExps) {
+   croak "must also set -grpkeys when you set -grpexps" if !$groupKeyString;
+
+   $opt->{GroupActExp} = get_ExpHash_from_ArrayOfStrings(\@groupExps);
+}
+
+if (@summActs) {
+   $opt->{SummaryAction} = get_ExpHash_from_ArrayOfStrings(\@summActs);
+}
+
+if (@summExps) {
+   $opt->{SummaryExp} = get_ExpHash_from_ArrayOfStrings(\@summExps);
+}
+
+if ($delete_tags) {
+   @{$opt->{DeleteColumns}} = split /,/, $delete_tags;
+}
+
+my $ret = filter_fix($file, $opt);
+
+$verbose && print "ret =", Dumper($ret);
+
+exit 0;
+
+package TPSUP::Expression;
+
+use TPSUP::DATE qw(/./);
+
+no strict 'refs';
+
+sub yyyymmdd_dMonyy {
+   my ($yyyymmdd) = @_;
+
+   return convert_from_yyyymmdd('${d}-${Mon}-${yy}', $yyyymmdd);
+}
+
+#backward compatiblity
+sub yyyymmdd_dMmmyy {
+   my ($yyyymmdd) = @_;
+   return yyyymmdd_dMonyy($yyyymmdd);
+}
+
+sub FixTime2Any {
+   my ($FixTime, $output_template, $opt) = @_;
+
+   # SendingTime 52 = 20170118-16:54:05.047
+   #TransactTime 60 = 20170118-16:54:05.047
+
+   if ($opt->{GetMillSec}) {
+      return date2any(
+                       $FixTime,
+                       '^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2}).(\d{3})',
+                       'yyyy,mm,dd,HH,MM,SS,mmm',
+                       "sprintf(\"$output_template\")",
+                       $opt # don't set FIX=>1 here because there is no numeric var, eg ${35}.
+                     );
+   } else {
+      return date2any(
+                       $FixTime,
+                       '^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})',
+                       'yyyy,mm,dd,HH,MM,SS',
+                       "sprintf(\"$output_template\")",
+                       $opt # don't set FIX=>1 here because there is no numeric var, eg ${35}.
+                     );
+   }
+
+   # $ echo "35=8;60=20170118-16:54:05.047" |\
+   # fixlog2csv-f 'Type=fixdesc(35),Time=FixTime2Any(${60}, "\$HH:\$MM:\$SS")' -
+   # Type,Time
+   # Execution Report <8>,16:54:05
+   # a tricky one: gmt21ocal=>1, $d (8), $Mon (Jan), $yy (17)
+   # $ echo "35=8;60=20170108-16:54:05.047" |\
+   # fixlog2csv-f 'Type=fixdesc(35),Time=FixTime2Any(${60}, "\$d-\$Mon-\$yy\$HH:\$MM:\$SS", {gmt21ocal=>1})' -
+   # Type,Time
+   # Execution Report <8>,8-Jan-17 11:54:05
+
+}
+1

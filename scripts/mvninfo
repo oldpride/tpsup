@@ -1,0 +1,188 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog any
+   $prog groupId [ artifactId version ]
+
+   check maven info 
+
+   'any' will print basic setup info
+
+   -v verbose
+
+   to add mvn to PATH, run mvnenv, a function in tpsup/profile
+
+examples:
+
+   1. just check setup
+   $prog any
+
+   2. check a plugin section in pom.xml
+   <plugins>
+     <plugin>
+       <groupId>org.apache.maven.plugins</groupId>
+       <artifactId>maven-compiler-plugin</artifactId>
+       <version>3.1</version>
+     </plugin>
+   </plugins>
+
+   $prog org.apache.maven.plugins
+   $prog org.apache.maven.plugins maven-compiler-plugin
+   $prog org.apache.maven.plugins maven-compiler-plugin 3.1
+
+   2. check a dependency section in pom.xml
+   <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
+   </dependencies>
+
+   $prog junit junit 3.8.1
+
+EOF
+   exit 1
+}
+
+
+verbose=N
+
+while getopts v o;
+do
+   case "$o" in
+      v)   verbose=Y; set -x;;
+      *)   usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+UNAME=`uname`
+   
+if [[ $UNAME =~ CYGWIN || $UNAME =~ MINGW64_NT ]]; then
+   HOMEDIR=$(cd $USERPROFILE; pwd -P)
+elif [[ $UNAME =~ Linux ]]; then
+   HOMEDIR=$HOME
+fi
+   
+REPODIR=$HOMEDIR/.m2
+   
+cat <<END
+maven local dir $REPODIR, normally has
+     .m2/repository
+     .m2/settings.xml
+END
+   
+cd $REPODIR || exit 1
+   
+cat <<END
+   
+ls $REPODIR
+END
+   
+ls $REPODIR
+   
+if [ $1 = any ]; then
+   cat <<END
+   
+Looking for nvm command
+   
+   M2_HOME vs MAVEN_HOME
+      MAVEN_HOME is for Maven 1, M2_HOME is for Maven 2 and later. 
+      Maven 2 was a complete rewrite from Maven 1 and was not backwards compatible.
+   
+   note: nvm in eclipse is part of a m2e plugin. it is no a standalone executable.
+   
+END
+   
+   
+   mvn_bin=`which mvn`
+   
+   if [ "X$mvn_bin" = "X" ]; then
+      if [ "X$M2_HOME" != "X" ]; then
+         echo "M2_HOME=$M2_HOME"
+      
+         $M2_HOME/bin/mvn --version
+      else
+         cat <<END
+
+M2_HOME is not set 
+   
+we will try to find a maven installation
+END
+         mvn_bin="`find $HOMEDIR/*maven* -mount \\( -name mvn -o -name mvn.exe \\)`"
+      
+         count=`echo "$mvn_bin"|wc -l`
+      
+         if [ $count -gt 1 ]; then
+            cat <<END
+      
+found more than one mvn executables:
+   $mvn_bin
+      
+END
+            unset mvn_bin
+         elif [ $count -eq 0 ]; then
+            echo ""
+            echo "no mvn found"
+         fi
+      fi
+   fi
+   
+   if [ "X$mvn_bin" != "X" ]; then
+      cat <<END
+   
+mvn is $mvn_bin
+   
+mvn --version
+END
+      $mvn_bin --version
+   fi
+   
+   echo ""
+   exit 0
+fi
+
+cat <<END
+
+Trace the repository
+
+END
+
+cd $REPODIR/repository || exit 1
+pwd
+
+groupId=$1
+groupId_dir=`echo $groupId |sed -e 's:[.]:/:g'`
+cd $groupId_dir || exit 1
+pwd
+
+if [ "X$2" = "X" ]; then
+   exit 0
+fi
+
+cd $2 || exit 1
+pwd
+
+if [ "X$3" = "X" ]; then
+   exit 0
+fi
+
+cd $3 || exit 1
+pwd
+
+ls -1
+
+ 

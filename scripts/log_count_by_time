@@ -1,0 +1,232 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_in_fh);
+use TPSUP::LOG qw(get_PatternCfg parse_PatternFile);
+use TPSUP::CSV qw(render_csv);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::; $dir =~ s:/+$::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+   $prog _list_pattern
+
+description:
+
+   to count a particular pattern in log.  '-'for STDIN.
+
+   The configurations are by default in ${dir}/log_pattern.csv.
+
+   -x exclude_pattern    Perl style, exclude lines with this pattern.
+   -m match_pattern      Perl style, only count the lines with this pattern.
+
+   -app App              As it is in pattern_file .
+   -pf patt ern_file     pattern file, default to $dir/log_pattern.csv.
+
+   -t TimePattern        Perl style. Default is in $dir/log_pattern.csv.
+   -a Assignment         How to assign the matched time_pattern. Default is in $dir/log_pattern.csv.
+   -k TimeKey            Default is in $dir/log pattern.csv. Use these keys to group the stats (eg, counts).
+   -e ExpressionKey      eg, -e '"\$yyyy/\$mm/\$dd \$HH:". HalfHour(\$MM)'
+                             -e '"\$yyyy/\$mm/\$dd \$HH:".   TenMin(\$MM)'
+                         Expression could be very slow on huge files
+
+examples:
+   
+   - count by hour
+   $prog -app appia -m 35= -k yyyy,mm,dd,HH log_count_by_time_example.txt
+
+   - use expression keys to count by 10 minutes and by half hours
+   $prog -app appia -m 35= -e '"\$yyyy/\$mm/\$dd \$HH:".   TenMin(\$MM)' log_count_by_time_example.txt
+   $prog -app appia -m 35= -e '"\$yyyy/\$mm/\$dd \$HH:". HalfHour(\$MM)' log_count_by_time_example.txt
+
+EOF
+
+   exit 1;
+}
+
+
+
+
+
+
+
+
+   
+our ($exclude_pattern, $match_pattern, $verbose, $App, $pattern_file, $TimePattern, $TimeKey, $Assignment, $ExpressionKey);
+
+GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "m=s"            => \$match_pattern,
+   "v"              => \$verbose,
+   "t=s"            => \$TimePattern,
+   "a|assignment=s" => \$Assignment,
+   "pf=s"           => \$pattern_file,
+   "app=s"          => \$App,
+   "k=s"            => \$TimeKey,
+   "e=s"            => \$ExpressionKey,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+if ($ExpressionKey && $TimeKey) {
+   print STDERR "WARN: both TimeKey and Expression Key are specified. TimeKey will be ignored.\n";
+}
+
+if ($ARGV[0] eq '_list_pattern') {
+   my $cfg = parse_PatternFile({
+      PatternFile => $pattern_file,
+      RemoveInputQuotes => 1,
+      CheckSettings => [],
+   });
+   #print Dumper($cfg);
+   
+   my @rows;
+   for my $App (sort (keys %$cfg)) {
+      for my $r (@{$cfg->{$App}}) {
+         push @rows, $r;
+      }
+   }
+   
+   render_csv(\@rows,['App','Example','TimePattern','Assignment','TimeKey','Comment']);
+   exit 0;
+}
+
+my $cfg = get_PatternCfg({
+   PatternFile       => $pattern_file,
+   RemoveInputQuotes => 1,
+   App               => $App,
+   TimePattern       => $TimePattern,
+   Assignment        => $Assignment,
+   TimeKey           => $TimeKey,
+   CheckSettings     => [ qw(TimePattern TimeKey Assignment) ],
+});
+
+my @assignments = split /,/, $cfg->{Assignment};
+
+my $TimePattern = qr/$cfg->{TimePattern}/;
+
+my @keys = split /,/, $cfg->{TimeKey};
+
+my $compiledKey;
+my $warn = $verbose ? 'use' : 'no';
+
+if ($ExpressionKey) {
+   $compiledKey = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $ExpressionKey }";
+   $@ && die "Bad expression '$ExpressionKey' : $@";
+}
+
+my $error = 0;
+
+for my $f (@ARGV) {
+   $verbose && print STDERR "parsing file = $f\n";
+
+   my $fh = get_in_fh($f);
+
+   if (!$fh) {
+      print STDERR "ERROR: cannot read $f\n";
+      $error ++;
+      next;
+   }
+
+   my $count_by_key;
+
+   while (<$fh>) {
+      my $line = $_;
+
+      chomp $line;
+
+      next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
+      next if defined   $match_pattern && $line !~   /$match_pattern/;
+      
+      
+
+
+      my @a = ($line =~ /$TimePattern/);
+      
+      next if ! @a;
+
+      my $r; # ref
+      @{$r}{@assignments} = @a;
+
+      my $key;
+
+      if ($ExpressionKey) {
+         TPSUP::Expression::export(%$r);
+         $key = $compiledKey->();
+      } else {
+         $key = join("-", @{$r}{@keys});
+      }
+
+      $count_by_key->{$key}++;
+   }
+
+   close $fh if $fh != \*STDIN;
+
+   if (@ARGV > 1) {
+      print "file,key,count\n";
+
+      for my $k (sort (keys %$count_by_key)) {
+         print " $f,$k,$count_by_key->{$k}\n";
+      }
+   } else {
+      print "key,count\n";
+      for my $k (sort (keys %$count_by_key)) {
+         print "$k,$count_by_key->{$k}\n";
+      }
+   }
+
+}
+
+if ($error) {
+   print STDERR "ERROR: total $error ERRORS\n";
+}
+
+exit $error;
+
+##################################################################
+# subs
+##################################################################
+
+package TPSUP::Expression;
+
+sub HalfHour {
+   my ($MM) = @_;
+   
+   if ($MM > 30) {
+      return '30' ;
+   } else {
+      return '00' ;
+   }
+}
+
+sub TenMin {
+   my ($MM) = @_;
+
+   if ($MM < 10) {
+      return '00';
+   } elsif ($MM < 20) {
+      return '10';
+   } elsif ($MM < 30) {
+      return '20';
+   } elsif ($MM < 40) {
+      return '30';
+   } elsif ($MM < 50) {
+      return '40';
+   } else {
+      return '50';
+   }
+}
+
+1

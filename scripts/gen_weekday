@@ -1,0 +1,48 @@
+#!/usr/bin/env perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use TPSUP::DATE qw(get_weekday_generator);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir = $0; $dir =~ s:[^/]+$::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog begin_yyyymmdd count
+
+description:
+   generate weekday list from begin_yyyymmdd, with 'count' number of days
+
+examples:
+
+   $prog 19700101 20800  # 260*80 about 80 years up to about 2050
+
+EOF
+
+   exit 1;
+}
+
+ our ($verbose);
+
+ GetOptions(
+   "v"              => \$verbose,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 2;
+
+my ($begin, $count) = @ARGV;
+
+my $generator = get_weekday_generator($begin);
+for (my $i=0; $i<$count; $i++) {
+   print $generator->(), "\n";
+}
+
+exit 0;

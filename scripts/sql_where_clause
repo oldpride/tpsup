@@ -1,0 +1,92 @@
+#!/usr/bin/env perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::UTIL qw(get_items);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir  = $0; $dir  =~ s:[^/]+$::;
+
+my $grepmax = 200;
+my $yyyy = `date +%Y`; chomp $yyyy;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog file.txt
+   $prog -
+   $prog str1 str2 ...
+   
+description:
+   generate 'where' clause from command line
+   
+   -x exclude_pattern  Perl style, exclude lines with this pattern
+   -m   match_pattern  Perl style, only count the lines with this pattern
+   
+   -delimiter string    inline, default is space.
+                        use 'none' if you want to keep space. meaning one item per line.
+
+   -v                   verbose. -v -v will increase verbose
+
+   -i                   integer mode
+
+examples:
+   
+   echo 'abc def ghi'    | $prog -
+
+   echo "
+abc
+def
+ghi
+" | $prog -
+
+   $prog abc def ghi 
+
+EOF
+   
+   exit 1;
+}
+   
+our ($exclude_pattern, $match_pattern);
+
+my $verbose = 0;
+my $delimiter = '\s';
+   
+GetOptions(
+   "m=s" => \$match_pattern,
+   "v+"  => \$verbose,  # accumulative   
+   "delimiter=s"=> \$delimiter,
+) or usage("Could not parse command line: $!");
+   
+usage("wrong number of args") if !@ARGV;
+   
+my $input;
+if (@ARGV == 1) {
+   ($input) = @ARGV;
+} else {
+   $input = \@ARGV;
+}
+
+if ($delimiter =~ /^none$/i) {
+   $delimiter = undef;
+}
+
+my $r = get_items($input, {
+                             ReturnHashCount=>1, 
+                             InlineDelimiter=>$delimiter,
+                          }
+                  );
+my @items = sort(keys %$r);
+
+print "('", join("', '", @items), "')\n";
+
+exit 0;
+
+

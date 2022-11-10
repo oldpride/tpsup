@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# this script is part of corporate survival
+
+prog=`basename $0`
+
+usage () {
+   cat <<END
+usage:
+
+   $0 [-d] 
+
+   -d       debug mode
+
+END
+   exit 1
+}
+
+debug='N'
+
+while getopts d o;
+do
+   case "$o" in
+      d) debug=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+if [ $debug = Y ]; then
+   set -x
+   delpath_flag=""
+else
+   delpath_flag="-q"
+fi
+
+# chrome will need chromium libs too
+
+# if need, remove anaconda3 libs which has conflict lib versions
+# delpath $delpath_flag anaconda3 LD_LIBRARY_PATH
+
+export LD_LIBRARY_PATH=$SITEBASE/chrome/opt/google/chrome:$SITEBASE/chromium/usr/lib64/chromium-browser:$SITEBASE/chromium/usr/lib64:$SITEBASE/Linux/3/usr/lib64:/lib:/lib64:/usr/lib:/usr/lib64
+
+# /lib, /lib64 on susex are links to /usr/lib, /usr/lib64
+# but on ubuntu, they are independent folders 
+
+# execuatables:
+# $SITEBASE/chromium/usr/bin/chromium-browser
+# $SITEBASE/chrome/opt/google/chrome
+export PATH=$SITEBASE/chrome/opt/google/chrome:$SITEBASE/chromium/usr/bin:$PATH
+
+if [ "X$tp_pac" = "X" ]; then
+   echo ""
+   echo "WARN: tp_pac is not defined in env."
+   echo ""
+   pac_flag=""
+else
+   pac_flag="--proxy-pac-url=$tp_pac"
+fi
+
+# tpchrome and tpchromium are linked to the same file
+
+if   [[ $prog =~ tpchrome   ]]; then
+   binary=chrome
+elif [[ $prog =~ tpchromium ]]; then
+   binary=chromium-browser
+else
+   echo "FATAL: unsupported command name: $prog"
+   return
+fi
+
+full=`which $binary` || exit 1
+
+if [ $debug = Y ]; then
+   ldd $full
+fi
+
+$binary $pac_flag --homepage about:blank --no-sandbox --user-data-dir=$HOME/${binary}-user-data-dir
+   
+
+

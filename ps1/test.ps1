@@ -1,0 +1,1 @@
+Split-Path -Parent $PSCommandPath

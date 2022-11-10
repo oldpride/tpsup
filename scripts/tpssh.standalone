@@ -1,0 +1,249 @@
+#!/usr/bin/perl  
+
+use warnings;
+use strict;
+use Data::Dumper;  
+use Getopt::Long;  
+use Carp;  
+
+my $prog = $0; $prog =~ s:.*/::;  
+
+sub usage {
+   my ($message) = @_; 
+
+   print "$message\n" if $message;  
+
+   print << "END";  
+usage:  
+
+   $0               host -- command
+
+   $0 remote_login\@host -- command  
+
+   $0 remote_login\@host -f local_file
+
+description:  
+
+   An alertnative to ssh to better handle command args, in particular, ' and ".
+
+   It runs in BatchMode only, no interactive shell.  
+
+   -l login            remote login
+   -v                  verbose mode
+   -sshargs string     args to pass to generic ssh command. can set multiple times.
+
+   -style bash|perl    Default to 'perl', because perl handles ' and " much better.
+                       Can also be 'bash'.
+
+   -timeout number     time out after this number of seconds, default to no timeout.  
+
+   -f                  get command from local file. The file can be bash, perl, binary, and
+                       anything executable on remote host.
+
+examples:  
+
+   - this command should return "File not found" because there is no such file '/etc /usr'
+   $prog          host1 ls '/etc /usr'
+   $prog -l user1 host1 ls '/etc /usr'
+   $prog    user1\@host1 ls '/etc /usr' 
+
+   - use -- to handle tricky options, eg "-l"
+   $prog -- user1\@host1 ls -l '/etc /usr'  
+   
+   - remote perl
+   $prog -- host1 perl -e 'print readlink("/bin"), "\\n";'
+
+   - test timout
+   $prog -t 3 host1 -- 'while :;do date;hostname;id;sleep 1; done'
+
+   - test -sshargs
+   $prog -sshargs=-q host1 hostname
+
+   - test -f 
+   $prog host1 -f tpssh_test_local.bash
+   $prog host1 -f tpssh_test_local.pl
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $remote_login;
+my $style = 'perl';
+my @sshargs;
+my $timeout;
+my $commands_from_local_file;
+
+GetOptions(
+   'v|verbose'   => \$verbose,
+   'l=s'         => \$remote_login,
+   'style=s'     => \$style,
+   'sshargs=s'   => \@sshargs,
+   't|timeout=s' => \$timeout,
+   'f'           => \$commands_from_local_file,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my ($host) = shift @ARGV;
+
+$verbose && print "command = ", Dumper (\@ARGV) ;
+
+my $opt = {
+   style        => $style,
+   timeout      => $timeout,
+   remote_login => $remote_login,
+   sshargs      => \@sshargs,
+   verbose      => $verbose,
+   'commands_from_local_file' => $commands_from_local_file,
+};
+
+tpssh($host, \@ARGV, $opt);
+
+#######################################
+# subs
+#######################################
+
+sub tpssh {
+   my ($host, $args, $opt) = @_;
+
+   my $local_login = `id | cut -d\\\( -f2 | cut -d\\\) -f1`;
+   chomp $local_login;
+
+   my $remote_login;
+
+   if ( $host =~ /(\S+)\@(\S+)/ ) {
+      $remote_login = $1;
+      $host = $2;
+   } elsif ($opt->{remote_login}) {
+      $remote_login = $opt->{remote_login};
+   } else {
+      $remote_login = $local_login;
+   }
+
+   my $local_cmd_file = `get_tmp /var/tmp $prog`; chomp $local_cmd_file;
+
+   my $remote_cmd_file = $local_cmd_file;
+
+   $remote_cmd_file =~ s:/var/tmp/tmp_${local_login}:/var/tmp/tmp_${remote_login}:;
+
+   my $verbose = $opt->{verbose} ? 1 : 0;
+
+   $verbose && print STDERR " local_cmd_file = $local_cmd_file\n";
+   $verbose && print STDERR "remote_cmd_file = $remote_cmd_file\n";
+
+   my ($ldir, $lfile) =  ($local_cmd_file =~ m:^(.*)/(.*):);
+   my ($rdir, $rfile) = ($remote_cmd_file =~ m:^(.*)/(.*):);
+
+   open my $cfh, ">$local_cmd_file" or die "cannot write to $local_cmd_file";
+
+   if ($opt->{commands_from_local_file}) {
+      die "wrong number of args" if @$args != 1;
+      my $cmd = "/bin/cp -f $args->[0] $local_cmd_file"; 
+      $verbose && print STDERR "cmd = $cmd\n";
+      system($cmd);
+      die "cmd = $cmd failed" if $? != 0;
+   } elsif ($opt->{style} eq 'bash') {
+      print {$cfh} "#!/bin/bash\n\n";
+      print {$cfh} join(" ", @$args), "\n";
+   } else {
+      # default to perl style
+      print {$cfh} <<"EOF";
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my \$verbose = $verbose;
+
+EOF
+
+      print {$cfh} "my ", Dumper(\@ARGV), "\n";
+
+      if (!$opt->{timeout}) {
+         print {$cfh} "exec \@\$VAR1;\n";
+      } else {
+         print {$cfh} "my \$seconds = $opt->{timeout};\n\n";
+
+         while (<DATA>) {
+             print {$cfh} $_;
+         }
+      }
+   }
+
+   close $cfh;
+
+   system("chmod 744 $local_cmd_file");
+
+   $? && exit 1;
+   $verbose && system("cat $local_cmd_file");
+
+   # idea was coming from:
+   # http://unix.stackexchange.com/quest ions/57 807/copy-over-ssh-and-execute-commands-in-one-sess ion
+   # my ?cmd = "tar cf - -C ?ldir $lfile | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 \\
+   # -o BatchMode=yes ${remote_login}\@${host} 'OWD="pwd";
+   # mkdir -p $rdir && cd $rdir && tar xf - && cd \$OWD && $remote_cmd_file'";
+   
+   my $extra_ssh = "";
+
+   if ($opt->{sshargs}) {
+      $extra_ssh .= join(" ", @{$opt->{sshargs}}) ;
+   }
+
+   my $ConnectTimeout = $opt->{ConnectTimeout} ? $opt->{ConnectTimeout} : 3;
+   
+   my $cmd = "cat $local_cmd_file| ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout -o BatchMode=yes $extra_ssh \\
+   ${remote_login}\@${host} 'mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file'";
+
+   $verbose && print "cmd = $cmd\n";
+
+   exec("$cmd");
+}
+
+__DATA__
+my $child_pid = fork();
+
+if ($child_pid) {
+   # this is parent
+   $SIG{ALRM} = sub {
+      my $HHMMSS = "date +%H:%M:%S"; chomp $HHMMSS;
+      print STDERR "$HHMMSS timed out after $seconds seconds, killing pid=$child_pid. return code set to 1\n";
+      kill('TERM', $child_pid);
+      sleep 1;
+
+      if (kill(0, $child_pid)) {
+         killf'KILL', $child_pid); # kill -9
+      }
+
+      waitpid(-1, 0);
+
+      exit 1;
+   };
+
+   alarm $seconds;
+
+   if (waitpid(-1, 0) ) {
+      my $rc = $?;
+
+      alarm 0; # clear the alarm
+
+      my $HHMMSS = "date +%H:%M:%S"; chomp $HHMMSS;
+      if ($? & 127) {
+         $verbose && printf STDERR "$HHMMSS child died with signal %d, %s coredump\n",
+             ($? & 127), ($? & 128) ? 'with' : 'without';
+         exit 1;
+      } else {
+         my $return_code = $? >> 8;
+         $verbose && printf STDERR "$HHMMSS child exited with value %d\n", $return_code;
+         exit $return_code;
+      }
+   }
+} elsif ($child_pid == 0) {
+   # this is child
+   exec @$VAR1;
+} else {
+   die "ERROR: Could not fork new process: $!\n";
+}
+   
+   

@@ -1,0 +1,62 @@
+#!/bin/bash
+   
+usage () {
+   cat <<EOF
+usage:
+
+   $0 pattern env
+   $0 pattern lib_dir1 lib_dir2 ...
+
+   find a lib.so matching the pattern
+
+   'env' means \$LD_LIBRARY_PATH /lib /lib64 /usr/lib /usr/lib64
+
+   on susex,  /lib, /lib64 are links to /usr/lib, /usr/lib64.
+   on ubuntu, they are independent folders.
+
+
+examples:
+   - to find libauth.so.123
+   $0 auth env
+
+EOF
+   exit 1
+}
+
+verbose=N
+
+while getopts v o
+do
+   case "$o" in
+      v) verbose=Y;;
+     #x) exclude=$OPTARG;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+pattern="$1"
+shift
+
+if [ "$1" = "env" ]; then
+   dirs="`echo $LD_LIBRARY_PATH|sed -e 's/:/ /g'` /lib /lib64 /usr/lib /usr/lib64"
+else 
+   dirs="$@"
+fi
+
+for d in `echo $dirs`
+do
+   if [ $verbose = Y ]; then      
+      ls -l $d/*"$pattern"*
+   else
+      ls -l $d/*"$pattern"* 2>/dev/null
+   fi
+done
+
+exit 0;

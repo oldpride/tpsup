@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# xterm for cygwin
+# the -xrm doesn't work: paste still relies on middle button
+
+UNAME=`uname -a`
+
+if [[ $UNAME =~ Msys ]]; then
+   export PATH=$PATH:/c/cygwin64/bin
+elif [[ $UNAME =~ Cygwin ]]; then
+   export PATH=$PATH:/cygdrive/c/cygwin64/bin
+fi
+
+# can also hardcode windows path
+#'C:/cygwin64/bin/xterm' -display :0 \
+
+xterm -display :0 \
+-fn '-adobe-courier-medium-r-normal--14-*' -geom 100x44 -fg white -bg black \
+-title test -sl 10000 -sb -ls \
+   -xrm '*selectToClipboard: true' \
+   -xrm '*.vt100.translations: #override \
+        <Btn1Down>: select-start(CLIPBOARD) \n\
+        <Btn1Up>: select-end(CLIPBOARD) \n\
+        <Btn3Down>: insert-selection(CLIPBOARD) \n\
+' &
+

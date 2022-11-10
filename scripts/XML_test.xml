@@ -1,0 +1,34 @@
+<xml>
+   <FIXSession
+      class="com.sr.biz.f ix.session.FIXSession"
+      sender-comp-id="SENDER1"
+      buy-side="false"
+      fix-version="4.2"
+      route-2-session-expr='"OMS"'
+      set-sender-comp-id="false"
+      strip-originating-session="true"
+      fix-event-factory-type="com.sr.biz.fix.event.FIXEventFactory"
+      fix-event-factory-name="fix-event-factory"
+      dispatch-expression="${49}"
+      auto-ack="false"
+      execidmap="true"
+      testperl="{$a=5;"
+      suppress-in='not( ${35} eq "D" or ${35} eq "G" or ${35} eq "F" or ${35} eq "Q" )
+                  or
+                  ( ${50} eq "ABC" and (${143} eq "STRAT1" or ${143} eq "DMA") )
+                  or
+                  ( ${50} eq "DEF" and (${143} eq "STRAT1" or ${143} eq "DMA"
+                     or ${143} eq "PROG" or ${143} eq "INTL") )
+                  or
+                  ( ${115} eq "GHI" )
+                  or
+                  ( ${143} eq "STRAT1" or ${143} eq "DMA"
+                    or ${143} eq "PROG" or ${143} eq "INTL")'
+
+      suppress-out='(${150} eq "3" and ${35} eq "8" and ${12201} eq "Y")
+           or
+                    (${150} eq "A" and ${35} eq "8" and ${12202} eq "Y")'
+
+      pending-new-street="true"
+   />
+</xml>

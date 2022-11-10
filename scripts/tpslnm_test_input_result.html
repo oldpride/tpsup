@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>tpslnm test input result</title>
+    <script>
+        const load = () => {
+            console.log("load event detected!");
+
+            // this overwrites the body
+            // document.write("this overwrites to page")
+
+            // this append to the body
+            document.body.innerHTML += "content from JS"
+
+            // this add to other part of the body
+            //document.getElementById('container').insertAdjacentHTML('beforeend', '<div id="idChild"> content html </div>');
+
+            var queryStr = window.location.search;
+
+            var paramPairs = queryStr.substr(1).split('&');
+
+            var params = {};
+            for (var i = 0; i < paramPairs.length; i++) {
+                var parts = paramPairs[i].split('=');
+                params[parts[0]] = parts[1];
+            }
+
+            for (const key in params) {
+                document.body.innerHTML += `<p>${key}=${params[key]}`
+            }
+        }
+        window.onload = load;
+    </script>
+</head>
+
+<body>
+    <p>The load event fires when the document has finished loading!</p>
+</body>
+
+</html>

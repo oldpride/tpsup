@@ -1,0 +1,40 @@
+20200210-00:20:33.699 processing log with 3 items
+   item 1
+   item 2
+   item 3 
+20200210-00:21:34.411 processing lone tag with many attributes
+<?xml version="1.0" encoding="UTF-8"?> 
+   <FIXSession 
+       class="com.sr.biz.fix.session.FIXSession" 
+       sender-comp-id="SENDER1"
+       buy-side="false"
+       fix-version="4.2"
+       route-2-session-expr='"OMS"'
+       set-sender-comp-id="false"
+       strip-originating-session="true"
+       fix-event-factory-type="com.sr.biz.fix.event.FIXEventFactory"
+       fix-event-factory-name="fix-event-factory"
+       dispatch-expression="${49}"
+       auto-ack="false" execidmap="true"
+       testperl="{$a=5;"
+       suppress-in='not( ${35} eq "D" or ${35} eq "G" or ${35} eq "F" or ${35} eq "Q" ) or ( ${50} eq "ABC" and (${143} eq "STRAT1" or ${143} eq "DMA") ) or ( ${50} eq "DEF" and (${143} eq "STRAT1" or ${143} eq "DMA" or ${143} eq "PROG" or ${143} eq "INTL") ) or ( ${115} eq "GHI" ) or ( ${143} eq "STRAT1" or ${143} eq "DMA" or ${143} eq "PROG" or ${143} eq "INTL")'
+       suppress-out='(${150} eq "3" and ${35} eq "8" and ${12201} eq "Y") or (${150} eq "A" and ${35} eq "8" and ${12202} eq "Y")'
+       pending-new-street="true" />
+20200210-00:21:34.444 a non-xml line
+20200210-00:21:34.555 there are 1990 songs
+20200210-00:21:33.556 processing log with 3 items
+   item 1
+   item 2
+   item 3 
+20200210-00:21:34.557 processing a nested xml
+<note>
+   <to>Tove</to>
+   <from>Jani</from>
+   <heading>Reminder</heading>
+   <body>Don't forget me this weekend!</body>
+</note>
+20200210-00:22:17.123 processing log with 4 items
+   item 1
+   item 2
+   item 3 
+   item 4

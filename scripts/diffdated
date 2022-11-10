@@ -1,0 +1,599 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_homedir);
+use TPSUP::DATE qw(yyyymmddHHMMSS_to_epoc get_tradeday);
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $BackDays = 5;
+
+sub usage {
+   my ($message, $opt) = @_;
+
+   print "$message\n" if $message;
+
+   my $caller1 = $opt->{Caller} ? $opt->{Caller} : "$prog file.cfg";
+   my $caller2 = $opt->{Caller} ? $opt->{Caller} : "$prog diffdated_test.cfg";
+
+   my $detail = $opt->{Detail} ? $opt->{Detail} : "";
+   my $example;
+
+   if ($opt->{Example}) {
+     $example = $opt->{Example};
+     $example =~ s/\{\{prog\}\}/$caller2/gi;
+   } else {
+     $example = <<"EOF";
+
+   - to set up test dirs
+       diffdated_test.bash
+
+   - diff 
+       diffdated diffdated_test.cfg today
+       diffdated diffdated_test.cfg `date +%Y%m%d`
+
+   - only test p2 and p3 and assume yesterday as 'today'. should be all matched
+       diffdated diffdated_test.cfg -t p2,p3 today=`tradeday -1`
+
+EOF
+   }
+
+   print STDERR << "END";
+
+Usage:
+
+   $prog cfg yyyymmdd1 yyyymmdd2
+
+   Compare dirs of two dates. This is used to search for missing files or missing sub dirs.
+
+   if yesterday's dir is still in today_pattern, for example, on weekend, before friday's
+   files are archived, they may still be in today_pattern, it this case use
+      today=yesterday_yyyymmdd
+   to specify that use today_pattern on yesterday's files.
+
+   -t p1,p2,...          only test these patterns
+
+   -v                    verbose
+
+   -backdays INT         default to $BackDays
+
+Examples:
+$example
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $test_patterns;
+my $caller;
+
+GetOptions(
+   'verbose'   =>      \$verbose,
+   'test=s'    =>      \$test_patterns,
+   'c=s'       =>      \$caller,
+   'backdays=s'=>      \$BackDays,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my $cfg_file = shift @ARGV;
+
+my $today  = `date +%Y%m%d`;   chomp $today;
+my $HHMMSS = `date +%H:%M:%S`; chomp $HHMMSS;
+
+our $cfg;
+
+# this changes global var $cfg
+parse_cfg_file($cfg_file, {verbose=>$verbose,
+                           test_patterns=>$test_patterns,
+                          }); 
+
+if ($verbose) {
+   print "cfg = ", Dumper($cfg);
+}
+ 
+usage("wrong number of args",
+      {Detail=>$cfg->{usage_detail},
+       Caller=>$caller,
+       Example=>$cfg->{example},
+      }) if @ARGV != 1;
+
+my ($date) = @ARGV;
+
+my $yyyymmdd_part;
+
+if ($date =~ /^today$/i) {
+   $date          = $today;
+   $yyyymmdd_part = $today;
+} elsif ($date =~ /^today=(.+)$/i) {
+   $yyyymmdd_part = $1;
+}
+
+my $agg;
+my @agg_attr = qw(mode uid gid size m_sec c_sec file count);
+for (my $i=1; $i<=$BackDays; $i++) {
+   my $day = get_tradeday(-$i, {Begin=>$yyyymmdd_part});
+   my $r = parse_dated_dir($cfg, $day, {verbose=>$verbose});
+   next if ! defined $r;
+
+   for my $k (keys %$r) {
+      for my $short (keys %{$r->{$k}}) {
+         for my $attr (@agg_attr) {
+            push @{$agg->{$k}->{$short}->{$attr}}, $r->{$k}->{$short}->{$attr} 
+                   if defined $r->{$k}->{$short}->{$attr};
+         }
+      }
+   }
+}
+
+$verbose && print "agg = ", Dumper($agg);
+
+our $old;
+for my $attr (qw(mode uid gid)) {
+   for my $k (keys %$agg) {
+      for my $short (keys %{$agg->{$k}}) {
+         $old->{$k}->{$short}->{$attr} = get_majority($agg->{$k}->{$short}->{$attr} );
+      }
+   }
+}
+
+for my $attr (qw(m_sec c_sec size count)) {
+   for my $k (keys %$agg) {
+      for my $short (keys %{$agg->{$k}}) {
+         $old->{$k}->{$short}->{$attr} = get_median($agg->{$k}->{$short}->{$attr});
+      }
+   }
+}
+
+for my $attr (qw(file)) {
+   for my $k (keys %$agg) {
+      for my $short (keys %{$agg->{$k}}) {
+         $old->{$k}->{$short}->{$attr} = $agg->{$k}->{$short}->{$attr};
+      }
+   }
+}
+
+our $new = parse_dated_dir($cfg,  $date, {verbose=>$verbose});
+
+if ($verbose) {
+   print "old = ", Dumper($new);
+   print "new = ", Dumper($old);
+}
+
+my $common;
+my $old_only;
+my $new_only;
+
+my $error = 0;
+
+for my $k (sort (keys %$old)) {
+   if (!exists $new->{$k}) {
+      print "ERROR: new missing key=$k completely\n\n";
+      $error ++;
+      next;
+   }
+
+   for my $short (sort (keys %{$old->{$k}})) {
+      if (!exists $new->{$k}->{$short}) {
+         print "ERROR: $date new/$k missing short=$short, old_files=\n";
+         ls_files($old->{$k}->{$short}->{file});
+         print "\n";
+         $error ++;
+         next;
+      }
+
+      $common->{$k}->{$short} ++;
+
+      my $r1 = $old->{$k}->{$short};
+      my $r2 = $new->{$k}->{$short};
+
+      my @node_errors;
+
+      my $tests = $cfg->{pattern_cfg}->{$k}->{tests};
+      if (defined $tests) {
+         for my $k2 (keys %$tests) {
+            my $t = $tests->{$k2}; 
+
+            next if ! defined $t->{compiled};
+
+            if ($verbose) {
+               print "test=$t->{test}\n",
+                     "r1=", Dumper($r1),
+                     "r2=", Dumper($r2);
+            }
+
+            if (! $t->{compiled}->($r1, $r2)) {
+               print "test failed\n" if $verbose;
+               if (defined $t->{error}) {
+                  push @node_errors, $t->{error};
+               } else {
+                  push @node_errors, "failed test: $t->{test}";
+               }
+            } else{
+               print "test successful\n" if $verbose;
+            } 
+         }
+      }
+
+      if (@node_errors) {
+         $error ++;
+         print "ERROR: $k/$short: ", join("; ", @node_errors), "\n";
+         ls_files($r1->{file});
+         ls_files($r2->{file});
+         print "\n";
+      } elsif ($verbose) {
+         print "OK: $k/$short: matched\n";
+         ls_files($r1->{file});
+         ls_files($r2->{file});
+         print "\n";
+      }
+   }
+}
+
+for my $k (sort (keys %$new)) {
+   for my $short (sort (keys %{$new->{$k}})) {
+      next if $common->{$k}->{$short};
+      print "WARN:  unmatched new $k/$short, new_file=$new->{$k}->{$short}->{file}\n";
+   }
+}
+
+
+print "\n";
+
+if ($error) {
+   print "ERROR: Total $error ERRORS\n";
+} else {
+   print "OK:    Total $error ERRORS\n";
+}
+   
+exit 0;
+
+########################################
+# subs
+########################################
+
+sub get_majority {
+   my ($array, $opt) = @_;
+
+   my $seen;
+
+   my $max = 0;
+   my $max_e;
+
+   for my $e (grep({defined $_} @$array)) {
+      $seen->{$e} ++;
+
+      if ($seen->{$e} > $max) {
+         $max   = $seen->{$e};
+         $max_e = $e;
+      }
+   }
+
+   return $max_e;
+}
+
+sub get_median {
+   my ($array, $opt) = @_;
+
+   my @sorted = sort {$a<=>$b} grep({defined $_} @$array);
+
+   return undef if !@sorted;
+
+   my $count = scalar(@sorted);
+
+   if ($count % 2) {
+      return $sorted[$count/2+1];
+   } else {
+      return ($sorted[$count/2] + $sorted[$count/2+1])/2;
+   } 
+}
+
+sub ls_files {
+   my ($files, $opt) = @_;
+
+   my $type = ref($files);
+   if (!$type) {
+      system("ls -lL $files");
+   } elsif ($type eq 'ARRAY') {
+      system("ls -lL " . join(" ", @$files));
+   } else {
+      confess "unsupported type='$type' files = ", Dumper($files);
+   }
+}
+
+sub parse_cfg_file {
+   my ($cfg_file, $opt) = @_;
+
+   my $verbose = $opt->{verbose};
+
+   die "cannot find $cfg_file" if ! $cfg_file;
+
+   my $cfg_string = `cat $cfg_file`;
+   die "cannot read $cfg_file: $!" if $?; 
+
+   our $cfg;
+
+   eval $cfg_string;
+   if ($@) {
+      # add this line in case the caller set up a trap
+      confess "ERROR in parsing $cfg_file: $@\n";
+      return;
+   }
+
+   if (defined $opt->{test_patterns}) {
+      my @test_patterns = split /,/, $opt->{test_patterns};
+      for my $k (keys %{$cfg->{pattern_cfg}})  {
+         my $matched;
+         for my $tp (@test_patterns) {
+            if ($k =~ /$tp/) {
+               $matched = 1;
+               last;
+            }
+         }
+
+         if (!$matched) {
+            delete $cfg->{pattern_cfg}->{$k};
+         }
+      }
+   }
+
+   my $default_tests = $cfg->{default_tests};
+
+   if ($default_tests) {
+      for my $k (keys %$default_tests) {
+          my $set = $default_tests->{$k};
+          for my $k2 (keys %$set) {
+             my $t = $set->{$k2};
+             $t->{compiled} = eval_exp_to_sub($t->{test}, {verbose=>$verbose});
+          }
+      }
+   }
+
+   # compile 
+   my $pattern_cfg = $cfg->{pattern_cfg};
+   if ($pattern_cfg) {
+      for my $k (keys (%$pattern_cfg)) {
+         my $pc = $pattern_cfg->{$k};
+
+         my $tests = $pc->{tests};
+         if ($tests) {
+            for my $k2 (keys %$tests) {
+               my $t = $tests->{$k2};
+               if (defined $t->{test}) {
+                  $t->{compiled} = eval_exp_to_sub($t->{test}, {verbose=>$verbose});
+               }
+            }
+         }
+
+         my $default_set_name = $pc->{default_set};
+         if (defined $default_set_name) {
+            my $default_tests = $cfg->{default_tests};
+
+            if (!$default_tests) {
+               confess "patern_cfg/$k set default_set=$default_set_name but default_tests is not even defined.";
+            }
+
+            if (!defined $default_tests->{$default_set_name}) {
+               confess "patern_cfg/$k set default_set=$default_set_name which is not defined in default_tests = " . Dumper($default_tests);
+            }
+            
+            my $default_set = $default_tests->{$default_set_name};
+            for my $k2 (keys %$default_set) {
+               # we uses $pc->{tests} instead of $tests in case $pc->{tests} is not
+               # defined, then newly created $tests would not be associated with
+               # $pc->{tests}
+               if (!exists $pc->{tests}->{$k2}) {
+                  $pc->{tests}->{$k2} = $default_set->{$k2};
+               }
+            }
+         }
+      }
+   }
+}
+
+sub eval_exp_to_sub {
+   my ($exp, $opt) = @_;
+
+   my $ExpName = $opt->{ExpName} ? $opt->{ExpName} : "";
+
+   my $sub;
+
+   # using variable is easier to work with data structures, eg, array
+   # using hash (%r) instead of ref ($r2) makes expression cleaner:
+   #     $r{name} vs $r2->{name}
+
+   my $code = '$sub = sub {
+      my ($a1, $a2, $opt)=@_;
+      my %r1=%$a1;
+      my %r2=%$a2;
+      my $verbose = $opt->{verbose};
+      if ($verbose) {
+         print STDERR "$ExpName $exp\n",
+                      "r1=", Dumper(\%r1),
+                      "r2=", Dumper(\%r2);
+      }
+      my $result = ' . $exp . ' ? 1 : 0;
+      if ($verbose) {
+         print STDERR "exp result=$result\n";
+      }
+      return $result;
+   }';
+
+   eval $code;
+   if ($@) {
+      # compile-time error happens here
+      my $numbered_code = add_line_number_to_code($code);
+      confess "failed to compile code='
+$numbered_code
+$@
+      '\n" ;
+   }
+
+   return $sub;
+}
+
+
+sub parse_dated_dir {
+   my ($cfg, $date, $opt) = @_;
+
+   my $verbose = $opt->{verbose};
+
+   my $is_today = 0;
+   my $yyyymmdd;
+
+   if ($date =~ /^today$/) {
+      $yyyymmdd = $today;
+      $is_today = 1;
+   } elsif ($date =~ /^today=(.*)$/) {
+      $yyyymmdd = $1;
+      $is_today = 1;
+   } elsif ($date =~ /^(\d{8})$/) {
+      $yyyymmdd = $1;
+      if ($yyyymmdd == $today) {
+         $is_today = 1;
+      }
+   } else {
+      confess "'$date' is neither yyyymmdd or today=yyyymmdd";
+   }
+
+   $verbose && print "is_today=$is_today\n";
+
+   my ($yyyy, $mm, $dd);
+   if ($yyyymmdd =~ /^(\d{4})(\d{2})(\d{2})$/) {
+      ($yyyy, $mm, $dd) = ($1, $2, $3);
+   } else {
+      confess "yyyymmdd='$yyyymmdd' is in bad format";
+   }
+    
+   my $midnight_seconds = yyyymmddHHMMSS_to_epoc("${yyyymmdd}000000");
+
+   my $ret = {};
+
+   for my $k (sort(keys %{$cfg->{pattern_cfg}})) {
+      my $pc = $cfg->{pattern_cfg}->{$k};
+
+      my $active_time = $pc->{active_time};
+      if (defined($active_time)) {
+         if ($active_time =~ /^(\S*?)-(\S*)$/) {
+            my ($begin, $end) = ($1, $2);
+            if ($begin) {
+               if ($begin !~ /^\d{2}:\d{2}:\d{2}$/) {
+                  confess "bad format at begin time in active_time, ", Dumper($pc);
+               }
+
+               next if $HHMMSS lt $begin;
+            }
+            if ($end) {
+               if ($end !~ /^\d{2}:\d{2}:\d{2}$/) {
+                  confess "bad format at end time in active_time, ", Dumper($pc);
+               }
+
+               next if $HHMMSS gt $end;
+            }
+         } else {
+            confess "bad format at active_time, ", Dumper($pc);
+         }
+      }
+
+      my $pattern;
+      if ($is_today) {
+         $pattern = defined($pc->{today_pattern}) ? $pc->{today_pattern} :
+                                                    $pc->{pattern} ;
+      } else {
+         $pattern = $pc->{pattern};
+      }
+
+      if (!defined($pattern)) {
+         confess "attr 'pattern' is not defined in ", Dumper($pc); 
+      }
+
+      $verbose && print "pattern=$pattern\n";
+
+      if ($pattern =~ /~/) {
+         my $homedir = get_homedir();
+         $pattern =~ s/~/$homedir/g;
+      }
+
+      $pattern = resolve_scalar_var($pattern, {
+                                                 yyyymmdd=>$yyyymmdd,
+                                                     yyyy=>$yyyy,
+                                                       mm=>$mm,
+                                                       dd=>$dd,
+                                              });
+
+      my $ls = defined($pc->{ls}) ? $pc->{ls} : "/bin/ls -1dtr";
+      my $cmd = "$ls $pattern";
+      $verbose && print "cmd = $cmd\n"; 
+      my @files = `$cmd`;
+
+      next if !@files;
+
+      chomp @files;
+
+      if (defined $pc->{ExcludePattern}) {
+         @files = grep {!/$pc->{ExcludePattern}/} @files; 
+         next if !@files;
+      }
+
+      for my $file (@files) {
+         my $short = $file;
+         $short =~ s:.*/::;
+
+         # this is used to link the same file of different day
+         $short =~ s/[.]gz//g;
+         $short =~ s/[.]\d+$//g;
+         $short =~ s/$yyyy.?$mm.?$dd//g;
+         $short =~ s/$yyyy.?$mm//g;
+         $short =~ s/$mm.?$dd//g;
+         $short =~ s/$yyyy//g;
+         $short =~ s/\d{3,}//g;
+         $short =~ s/[._:-]//g;
+
+         $verbose && print "file=$file, short=$short\n";
+
+         if (exists $ret->{$k}->{$short}->{file}) {
+            if ($verbose) { 
+               print "short=$short already exists. skipped this one.\n";
+               print "   existed = $ret->{$k}->{$short}->{file}\n";
+               print "   skipped = $file\n";
+            }
+            next;
+         }
+         
+         my $r;
+         $r->{file} = $file;
+
+         @{$r}{qw(dev inode mode nlink uid gid rdev size atime mtime ctime blksize blocks)}
+         = lstat($file);
+
+         # 'seconds' is the time from 12:00 AM of that day to mtime
+         $r->{m_sec} = $r->{mtime} - $midnight_seconds;
+         $r->{c_sec} = $r->{ctime} - $midnight_seconds;
+
+         $ret->{$k}->{$short} = $r;
+      }
+
+      # last;  # for test purpose
+   }
+
+   return $ret;
+}
+
+sub resolve_scalar_var {
+   my ($string, $Dict, $opt) = @_;
+
+   return $string if !$string;
+
+   for my $k (keys %$Dict) {
+      my $v = $Dict->{$k}; 
+      $string =~ s/\{\{$k\}\}/$v/ig;
+   }
+
+   return $string;
+}

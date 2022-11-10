@@ -1,0 +1,128 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::XML qw(explore_xml);
+#use TPSUP::UTIL qw(chkperl);
+   
+my $prog = $0; $prog =~ s:.*/::;
+   
+sub usage {
+   my ($message) = @_;
+   
+   print "$message\n" if $message;
+   
+   print STDERR << "END";
+usage:
+   
+   $prog file.xml
+   
+   This is a workaround when xmllint or xmlstarlet is not available. (We have
+   so many old machines missing the basic utilities.) I tried to install
+   XML::Parser but some of our platforms are too old to install.
+   
+   NOTE: XML protocol will replace newline with space in the attribute
+   
+   -v                          verbose.
+   
+   -path                       perl-style, eg, -path {FIXSession}->{suppress-out}.
+                               can repeat
+   
+   -ForceArray a,b,c           force these tags into array.
+   
+   -KeyAttr tag=attr           can repeat, eg, -KeyAttr t1=a1 -KeyAttr t2=a2
+   
+   -he handle_exp              eg '\$path =~ /suppress-(in|out)'
+   
+   -ha handle_act              eg 'chkperl(\$value)'
+   
+   -fe flow_exp                flow control expression
+   -fd flow_dir                flow control direction, eg, 'prune', 'exit'
+   
+   -depth                      number max level of recursion, no default
+   
+   -print                      prints the path as the script traverses
+   
+examples:
+   
+   # check perl expression inside an xml
+   $prog -he '\$path =~ /suppress-(in|out)/' -ha 'chkperl(\$value)' XML_test.xml
+
+   # dump a node
+   $prog -he '\$path =~ /suppress-(in|out)/' -ha 'print Data::Dumper::Dumper(\$current)' XML_test.xml
+   
+   # flow control
+   $prog -he '\$path =~ /FIXSession/' -ha 'print Data::Dumper::Dumper(\$current)' -fe '\$path =~ /FIXSession/' -fd 'prune' XML_test.xml
+   $prog -v -fe '\$path =~ /FIXSession/' -fd 'exit' XML_test.xml
+   
+   # use \$current
+   $prog -he '\$current->{"sender-comp-id"} eq "CLIENT3"' -ha 'print Data::Dumper::Dumper(\$current)' -fe '\$path =~ /FIXSession/' -fd 'prune' XML_test.xml
+   
+   # dump XML from root
+   $prog -he '\$path =~ /root/' -ha 'print Data::Dumper::Dumper(\$current)' -fe '\$path =~ /root/' -fd 'prune' XML_test.xml
+   
+   # print out all paths
+   $prog -he '\$path =~ /.*/' -ha 'print "\$path\\n"' XML_test.xml
+   
+   # print out some paths
+   $prog -path '\$root->{FIXSession}' -print XML_test.xml
+END
+   
+   exit 1;
+}
+   
+my $tag_string;
+my $verbose;
+   
+my %attr_by_key;
+my $ForceArrayString;
+my @paths;
+my @HandleExps;
+my @HandleActs;
+my @FlowExps;
+my @FlowDirs;
+my $print;
+my $depth;
+   
+GetOptions(
+   'v|verbose'       => \$verbose,
+   'ForceArray=s'    => \$ForceArrayString,
+   'KeyAttr=s'       => \%attr_by_key,
+   'p|path=s'        => \@paths,
+   'he=s'            => \@HandleExps,
+   'ha=s'            => \@HandleActs,
+   'fe=s'            => \@FlowExps,
+   'fd=s'            => \@FlowDirs,
+   'depth=s'         => \$depth,
+   'print'           => \$print,
+) || usage ("cannot parse command line: $!");
+   
+usage("wrong number of args") if @ARGV != 1 ;
+
+my $file = shift @ARGV;
+   
+my $ret = explore_xml($file, {
+                               KeyAttr        => \%attr_by_key,
+                               ForceArray     => $ForceArrayString,
+                               verbose        => $verbose,
+                               paths          => \@paths,
+                               HandleExps     => \@HandleExps,
+                               HandleActs     => \@HandleActs,
+                               FlowExps       => \@FlowExps,
+                               FlowDirs       => \@FlowDirs,
+                               RecursivePrint => $print,
+                               RecursiveDepth => $depth,
+                             }
+                      );
+   
+my $error = $ret->{error};
+   
+if ( $verbose || $error ) {
+   print STDERR "Total $error ERRORS\n";
+}
+   
+exit 0;
+   

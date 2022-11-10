@@ -1,0 +1,225 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use TPSUP::CSV qw(run_sqlcsv);
+use TPSUP::UTIL qw(get_tmp_file get_in_fh get_out_fh close_in_fh close_out_fh);
+
+my $prog = $0; $prog =~ s:.*/::;
+my $dir  = $0; $dir =~ s:[^/]+$::; $dir =~ s:/$:: if $dir ne '/';
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog log
+   $prog -
+
+description:
+   extract log into csv
+
+   The configurations are by default in $dir/log_pattern.cfg.
+   
+   -x exclude_pattern         Perl style, exclude lines with this pattern
+   -m   match_pattern         Perl style, only count the lines with this pattern
+   
+   -progress int              to show progress every this number of lines, a positive integer.
+
+   -o output.csv              default to STDOUT
+
+   -capture 'f1,f2...=pattern'
+   -c       'f1,f2...=pattern'
+                              capture strings from matched line and assign them to the fields,
+
+   -query select ...
+   -q     select ...
+                              sqlcsv query mode, see example below, default to just print out
+                              the captures
+   
+   -post "tpcsv_args" pipe the capturing to csv (command) with these args
+
+examples:
+
+   - link info from different lines together
+   $prog \\
+      -c 'TimeRcv,UpstreamOID=^\\S+\\s+(\\d{2}-\\d{2}-\\d{4} \\d{2}:\\d{2}:\\d{2}),.*?RECEIVED MSG.* 11=(.+?),' \\
+      -c "UpstreamOID,DownstreamOID=PREPARED MARSHALLED MESSAGE.* 20011=(.+?),11=(.+?)," \\
+      -q "select CSV1.TimeRcv as TimeRcv,
+                 CSV1.UpstreamOID as UpstreamOID,
+                 CSV2.DownstreamOID as DownstreamOID
+            from CSV1 left join CSV2 on CSV1.UpstreamOID = CSV2.UpstreamOID" \\
+      log2csv_test.log 
+   
+   $prog \\
+      -c 'aggUnit,instrument,Qty=aggUnit=(.+?), instrument=(.+?),.* Qty=(.+?),.* Type=SOD' \\
+      -post "-sort=aggUnit,instrument" \\
+      log2csv_test2.log
+
+EOF
+
+   exit 1;
+
+}
+
+our ($exclude_pattern, $match_pattern, $verbose);
+
+my @captures;
+my $sql;
+my $output = '-';
+my $post_args = '';
+my $progress;
+
+GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "m=s"            => \$match_pattern,
+   "v"              => \$verbose,
+   "progress=s"     => \$progress,
+   "c|capture=s"    => \@captures,
+   "q|query=s"      => \$sql,
+   "o=s"            => \$output,
+   "post=s"         => \$post_args,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my @CaptureCfgs;
+
+for my $capture (@captures) {
+   if ($capture =~ /^(.+?)=(.+)/) {
+      my ($LHS, $pattern) = ($1, $2);
+
+      my @fields = split /,/, $LHS;
+
+      my $r = {
+         pattern  => $pattern,
+         compiled => qr/$pattern/,
+         fields   => \@fields,
+      };
+
+      push @CaptureCfgs, $r;
+   } else {
+      usage "ERROR: bad format in capture: $capture\n";
+   }
+}
+
+$verbose && print "CaptureCfgs = ", Dumper(\@CaptureCfgs);
+
+my @csvs;
+my $i=1;
+
+for my $c (@CaptureCfgs) {
+   my $tmpfile = get_tmp_file("/var/tmp", "${prog}.CSV$i");
+
+   $verbose && print STDERR "CSV$i = $tmpfile\n";
+
+   my $ofh = get_out_fh($tmpfile);
+
+   print {$ofh} join(",", @{$c->{fields}}), "\n";
+
+   $c->{ofh}  = $ofh;
+   $c->{file} = $tmpfile;
+
+   push @csvs, $tmpfile;
+   $i++;
+}
+
+$verbose && print "CaptureCfgs = ", Dumper(\@CaptureCfgs);
+
+my $error = 0;
+
+my $exclude_pattern_compiled;
+if (defined $exclude_pattern) {
+   $exclude_pattern_compiled = qr/$exclude_pattern/;
+}
+
+my $match_pattern_compiled;
+if (defined $match_pattern) {
+   $match_pattern_compiled = qr/$match_pattern/;
+};
+
+for my $f (@ARGV) {
+   my $fh = get_in_fh($f);
+
+   my $last_time;
+   my $line_count =0;
+
+   LINE:
+   while (my $line = <$fh>) {
+      chomp $line;
+
+      $line_count ++;
+
+      if ($progress) {
+         if ($line_count % $progress == 0 ) {
+            my $now = time();
+
+            my $seconds = $now - $last_time;
+
+            $last_time = $now;
+
+            print STDERR "$line_count lines are processed forwards, $progress lines in $seconds seconds\n";
+         }
+      }
+      
+      next if defined $exclude_pattern && $line =~ /$exclude_pattern_compiled/;
+
+      next if defined   $match_pattern && $line !~   /$match_pattern_compiled/;
+
+      for my $c (@CaptureCfgs) {
+         my ($pattern, $compiled, $fields, $ofh) = @{$c}{qw(pattern compiled fields ofh)};
+
+         my @a = ($line =~ /$compiled/);
+
+         next if !@a;
+
+         print {$ofh} join(",", @a), "\n";
+
+         next LINE;
+      }
+   }
+   close_in_fh($fh);
+}
+
+for my $c (@CaptureCfgs) {
+   close_out_fh($c->{ofh});
+
+   if ($verbose) {
+      system("ls -l $c->{file} >&2");
+      system("wc -l $c->{file} >&2");
+   }
+}
+
+if ($sql) {
+   my $ref = run_sqlcsv($sql, \@csvs, {verbose=>$verbose, withHeader=>1});
+
+   die "querv failed" if !$ref;
+
+   my $out_fh;
+
+   if ($output) {
+      $out_fh = get_out_fh($output);
+   } else {
+      $out_fh = \*STDOUT;
+   }
+
+   for my $row (@$ref) {
+      print {$out_fh} join(",", @$row), "\n";
+   }
+
+   close_out_fh($out_fh);
+} else {
+   # use tpcsv as post-processor
+   for my $c (@CaptureCfgs) {
+      my $cmd = qq(csv -csv $post_args $c->{file}|tpcsv2 -o $output -);
+      print STDERR "cmd=$cmd\n";
+      system($cmd);
+   }
+}
+
+exit 0;
