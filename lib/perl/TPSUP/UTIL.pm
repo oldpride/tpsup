@@ -65,6 +65,7 @@ our @EXPORT_OK = qw(
    parse_rc
    resolve_scalar_var_in_string
    convert_to_uppercase
+   tp_join
 );
 
 
@@ -2398,6 +2399,49 @@ sub convert_to_uppercase {
    }
 }
 
+sub tp_join {
+   my ($a1, $opt) = @_;
+ 
+   return "" if ! defined $a1;
+   my $type = ref($a1);
+   croak "only support ARRAY. we got=" .Dumper($a1) if (!$type || $type ne 'ARRAY');
+
+   # join a array into a string:
+   # default delimiter is space.
+   # if an array element has space/tab inside, use ' or " to enclose it.
+   my $delimiter = defined $opt->{delimiter} ? $opt->{delimiter} : " ";
+
+   my $a2=[];
+   for my $e (@$a1) {
+      if ($e =~ /\s/) {
+         # elemet has space inside
+         if ($e =~ /^'.*'$/) {
+            # element is already enclosed
+            push @$a2, $e; 
+         } elsif ($e =~ /^".*"$/) {
+            # element is already enclosed
+            push @$a2, $e; 
+         } elsif ($e =~ /'/ && $e =~ /"/ ) {
+            # element has both ' and ", we leave it alone
+            push @$a2, $e; 
+         } elsif ($e =~ /'/) {
+            # if element has ', we enclose it with "
+            push @$a2, qq("$e"); 
+         } elsif ($e =~ /"/) {
+            # if element has ", we enclose it with '
+            push @$a2, "'$e'"; 
+         } else {
+            # we enclose it with '
+            push @$a2, "'$e'"; 
+         }
+      } else {
+         # elemet has no space inside, we leave it alone
+         push @$a2, "$e"; 
+      }
+   }
+
+   return join($delimiter, @$a2);
+}
 
 sub main {
    print "\n------------------------------------------------\n";
@@ -2553,6 +2597,13 @@ jkl
        print "key only = ",      Dumper(convert_to_uppercase($h, {ConvertKey=>1}));
        print "value only = ",    Dumper(convert_to_uppercase($h, {ConvertValue=>1}));
        print "key and value = ", Dumper(convert_to_uppercase($h, {ConvertKey=>1,ConvertValue=>1}));
+   }
+
+   print "\n------------------------------------------------\n";
+   {
+      my @a = ("no_need_wrapping", "has space", "'already wrapped'", "isn't wrapped");
+      print "original = ", Dumper(\@a);
+      print "tp_join = ",  tp_join(\@a), "\n";
    }
 }
 

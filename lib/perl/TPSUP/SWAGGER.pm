@@ -3,7 +3,7 @@ package TPSUP::SWAGGER;
 use strict;
 use base qw( Exporter );
 our @EXPORT_OK = qw(
-   get_mech
+   
 );
 
 
