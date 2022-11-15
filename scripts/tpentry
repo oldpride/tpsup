@@ -41,7 +41,7 @@ END
 my $book;
 
 GetOptions(
-   'book'       =>      \$book,
+   'book=s'       =>      \$book,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
