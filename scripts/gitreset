@@ -10,7 +10,7 @@ usage:
 
    reset the whole repo.
 
-   When we "git pull", if we  error: "fatal: refusing to merge unrelated histories",
+   When we "git pull", if we get error: "fatal: refusing to merge unrelated histories",
    it likely means we have some local changes.
    If we don't need to save the local changes, we can do this gitreset. 
 
@@ -22,7 +22,7 @@ examples:
 
    $prog .
 
-   # if got error with "Certificate Authority", try
+   # if got error with Certificate Authority (CA), try
    LD_LIBRARY_PATH="" $prog .
 
 EOF
