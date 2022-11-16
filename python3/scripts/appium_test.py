@@ -30,15 +30,16 @@ usage = textwrap.dedent(f"""
     """)
 
 examples = textwrap.dedent(f""" 
-    1. start Android Studio, start the device (real or emulator),
-       this step takes a long time.   
+    1. start a device (real or emulator),
+       from Android Studio (this step takes a long time) or from command line.   
+           C:\\Users\william\AppData\Local\Android\Sdk\emulator\emulator -avd myemulator      
         run 'adb devices' to get the device name
     2. start Appium Server, note down the host and port. 
        this step takes a long time.
+           appium --address localhost --port 4723 --log-no-colors --base-path /wd/hub      
     3. (optional) start Appium Inspector, use the desired capabilities in this script to connect
     4. run this script
-
-    {prog} localhost:4723 emulator-5554
+        {prog} localhost:4723 emulator-5554
 
     """)
 
