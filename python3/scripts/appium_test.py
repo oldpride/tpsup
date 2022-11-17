@@ -40,6 +40,14 @@ examples = textwrap.dedent(f"""
     3. (optional) start Appium Inspector, use the desired capabilities in this script to connect
     4. run this script
         {prog} localhost:4723 emulator-5554
+    5. run uiautomatorviewer to inspect element
+        C:\Users\william\appdata\local\android\Sdk\tools\bin\uiautomatorviewer
+        click snapshot
+    6. run Appium Inspector to inspect element
+        "C:\Program Files\Appium Inspector\Appium Inspector.exe"
+        set host/port/desired capability, then click start.
+        by default, inspector only shows resource_id. 
+        click "toggle attributes" button to see more attributes   
 
     """)
 

@@ -193,6 +193,97 @@ class AppiumEnv:
         print(f"service.is_listening={self.service.is_listening}")
         return (self.driver.session_id and self.service.is_listening and self.service.is_running)
 
+def get_driver(**args) -> webdriver :
+    appiumEnv = AppiumEnv(**args)
+    return appiumEnv.get_driver()
+
+step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
+step_compiled_action = re.compile(r"action=(.+)")
+step_compiled_string = re.compile(r"string=(.+)", re.MULTILINE | re.DOTALL)
+step_compiled_sleep = re.compile(r"sleep=(\d+)")
+
+def follow(driver:webdriver, steps:list, **opt):
+    if not list:
+        return
+
+    dryrun = opt.get("dryrun", 0)
+    interactive = opt.get("interactive", 0)
+    debug = opt.get("debug", 0)
+    global we_return
+    global action_data
+
+    element = None
+
+    helper = {}
+
+    for step in steps:
+        if m := step_compiled_findby.match(step):
+            tag, value, *_ = m.groups()
+            print(f"follow(): {tag}={value}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                if tag == 'id':
+                    element = driver.find_element(AppiumBy.ID, value)
+                elif tag == 'xpath':
+                    element = driver.find_element(AppiumBy.XPATH, value)
+                elif tag == 'css':
+                    element = driver.find_element(AppiumBy.CSS_SELECTOR, value)
+        elif m := step_compiled_sleep.match(step):
+            value, *_ = m.groups()
+            print(f"follow(): sleep {value} seconds")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                time.sleep(int(value))
+        elif m := step_compiled_string.match(step):
+            value, *_ = m.groups()
+            print(f"follow(): send_keys={value}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                element.send_keys(value)
+        elif step == 'dump':
+            dump_dir = opt.get('dump_dir', None)
+            if dump_dir:
+                print(f"follow(): dump to dir={dump_dir}")
+            else:
+                print(f"follow(): dump to dir=stdout")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                if dump_dir:
+                    os.makedirs(dump_dir, exist_ok=True)  # this does "mkdir -p"
+                    with open(f"{dump_dir}/page_source.html", 'w') as fh:
+                        fh.write(driver.page_source)
+                        fh.write('\n')
+                        fh.close()
+                else:
+                    print(driver.page_source)
+        elif m := step_compiled_action.match(step):
+            value, *_ = m.groups()
+            print(f"follow(): perform action={value}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.execute_script('mobile: performEditorAction', {'action': value})
+        elif step == 'click':
+            print(f"follow(): click")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                element.click()
+        elif step == 'home':
+            print(f"follow(): click home button")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.press_keycode(3)
+        else:
+            raise RuntimeError(f"unsupported 'step={step}'")
+
+        print(f"follow(): this step is done")
+
 
 def main():
     appiumEnv = AppiumEnv(adb_devicename='emulator-5558', host_port='localhost:4723', is_emulator=True)

@@ -29,7 +29,7 @@ our_cfg = {
     # appiumEnv = AppiumEnv(adb_devicename='emulator-5558', host_port='localhost:4723', is_emulator=True)
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args' : ['adb_devicename', 'host_port', 'output_dir'],
+    'position_args' : ['adb_devicename', 'host_port'],
 
     'extra_args' : [
         # argparse's args
@@ -76,12 +76,20 @@ our_cfg = {
             'type': int,
             'help': 'limit scan depth',
         },
+        {
+            'dest': 'dump_dir',
+            'default': None,
+            'action': 'store',
+            'help': 'dir where to dump page source',
+        },
     ],
 
     'usage_example' : f'''
     - test a static page with nested iframes, same origin
-    {{{{prog}}}} emulator-5558 localhost:4723 %USERPROFILE%/dumpdir2 --is_emulator 
-    ''',
+    {{{{prog}}}} emulator-5558 localhost:4723 -dump_dir %USERPROFILE%/dumpdir2 -is_emulator '''
+    'home id=com.android.quicksearchbox:id/search_widget_text click '
+    'id=com.android.quicksearchbox:id/search_src_text click string=Amazon action=Search '
+    'dump xpath="//*[@content-desc]" ',
 
     'show_progress': 1,
 
@@ -99,13 +107,10 @@ def code(all_cfg, known, **opt):
         print(f'from code(), opt = {pformat(opt)}')
 
     dryrun = opt.get('dryrun', 0)
-    url = opt.get('url')
-    output_dir = opt.get('output_dir')
     run_js = opt.get('js', 0)
     trap = opt.get('trap', 0)
 
     yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
-    os.makedirs(output_dir, exist_ok=True) # this does "mkdir -p"
 
     driver: webdriver = all_cfg["resources"]["appium"].get("driver", None)
     if driver is None:
@@ -114,19 +119,11 @@ def code(all_cfg, known, **opt):
         driver = method(**{**kwargs, "dryrun":0}) # overwrite kwargs
         all_cfg["resources"]["appium"]["driver"] = driver
 
-    actions = []
+    steps = []
+    steps = known['REMAININGARGS']
+    print(f'steps = {pformat(steps)}')
 
-    locator_chain = known['REMAININGARGS']
-    if run_js:
-        # js_list = tpsup.seleniumtools.locator_chain_to_js_list(locator_chain, trap=trap)
-        # locator_chain2 = tpsup.seleniumtools.js_list_to_locator_chain(js_list)
-        # actions.append([locator_chain2, f'dump_element={output_dir}', f'dump element to {output_dir}'])
-        pass
-    else:
-        actions.append([locator_chain, f'dump_element={output_dir}', f'dump element to {output_dir}'])
-
-    print(f'actions = {pformat(actions)}')
-    # result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    result = tpsup.appiumtools.follow(driver, steps, **opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     return { 'REMAININGARGS' : input }
@@ -140,5 +137,5 @@ def post_batch(all_cfg, known, **opt):
     else:
         print("driver didn't start.")
 
-    if tpsup.pstools.prog_running('chromed', printOutput=1):
-        print(f"seeing leftover chrome")
+    # if tpsup.pstools.prog_running('chromed', printOutput=1):
+    #     print(f"seeing leftover chrome")
