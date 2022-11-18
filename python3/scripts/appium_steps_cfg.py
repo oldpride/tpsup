@@ -85,11 +85,20 @@ our_cfg = {
     ],
 
     'usage_example' : f'''
-    - test a static page with nested iframes, same origin
-    {{{{prog}}}} emulator-5558 localhost:4723 -dump_dir %USERPROFILE%/dumpdir2 -is_emulator '''
+
+    {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator '''
     'home id=com.android.quicksearchbox:id/search_widget_text click '
     'id=com.android.quicksearchbox:id/search_src_text click string=Amazon action=Search '
-    'dump xpath="//*[@content-desc]" ',
+    'dump_page=%USERPROFILE%/dumpdir2/page_source.html '
+    'xpath="//*[@content-desc]" '
+    # 'context=webview dump_element=stdout '
+    '''
+    - test webview context
+    {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator context=webview
+    
+    '''
+    ,
+
 
     'show_progress': 1,
 

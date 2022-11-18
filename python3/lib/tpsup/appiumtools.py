@@ -6,31 +6,14 @@ import time
 from urllib.parse import urlparse
 from shutil import which
 
+from appium import webdriver
+
 from appium.webdriver.appium_service import AppiumService
+from appium.webdriver.common.appiumby import AppiumBy
+from appium.webdriver import WebElement
 
 import tpsup.env
-from appium import webdriver
-from appium.webdriver.common.appiumby import AppiumBy
-
-from selenium.common.exceptions import \
-    NoSuchElementException, ElementNotInteractableException, \
-    TimeoutException, NoSuchShadowRootException, \
-    StaleElementReferenceException, WebDriverException, UnexpectedAlertPresentException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.remote.webelement import WebElement
-
-# find_element_by_name('q') is replaced with find_element(By.NAME, 'q')
-from selenium.webdriver.common.by import By
-
-# https://stackoverflow.com/questions/36316465
-# from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait, Select
-from selenium.webdriver.support import expected_conditions as EC
-
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.by import By
-
-from selenium.webdriver.common.action_chains import ActionChains
+import tpsup.tpfile
 
 from tpsup.nettools import is_tcp_open, wait_tcps_open
 import tpsup.pstools
@@ -115,7 +98,13 @@ def start_proc(proc: str, **opt):
             # "--address", "0.0.0.0",  # this works on command line but in this script. Why?
             "--port", f"{port}",
             "--log-no-colors",
-            "--base-path", '/wd/hub'
+            "--base-path", '/wd/hub',
+
+            # this is called only when driver.switch_to.context("webview...")
+            # it may only work when desired_capacity has "app" set
+            # https://github.com/appium/appium-inspector/issues/465
+            # otherwise, error: unrecognized chrome option: androidDeviceSerial
+            "--chromedriver-executable", r"C:\Users\william\appium\bin\chromedriver108.exe",
         ]
         # f"--log={self.appium_log}"
 
@@ -164,11 +153,11 @@ class AppiumEnv:
             if not wait_tcps_open(['localhost:5554', 'localhost:4723'], timeout=60):
                 raise RuntimeError("either emulator or appium server is ready")
 
-        self.driver: webdriver = None
+        self.driver: webdriver.Remote = None
 
         self.desired_cap = {
             "appium:deviceName": adb_devicename,
-            "appium:platformName": "Android"
+            "appium:platformName": "Android",
         }
 
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
@@ -193,16 +182,20 @@ class AppiumEnv:
         print(f"service.is_listening={self.service.is_listening}")
         return (self.driver.session_id and self.service.is_listening and self.service.is_running)
 
-def get_driver(**args) -> webdriver :
+def get_driver(**args) -> webdriver.Remote :
     appiumEnv = AppiumEnv(**args)
     return appiumEnv.get_driver()
 
 step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
-step_compiled_action = re.compile(r"action=(.+)")
+step_compiled_action = re.compile(r"action=(Search)")
 step_compiled_string = re.compile(r"string=(.+)", re.MULTILINE | re.DOTALL)
 step_compiled_sleep = re.compile(r"sleep=(\d+)")
+step_compiled_dump = re.compile(r"dump_(page|element)=(.+)")
+step_compiled_context = re.compile(r"context=(native|webview)")
+context_compiled_native = re.compile(r'native', re.IGNORECASE)
+context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
 
-def follow(driver:webdriver, steps:list, **opt):
+def follow(driver:webdriver.Remote, steps:list, **opt):
     if not list:
         return
 
@@ -212,7 +205,7 @@ def follow(driver:webdriver, steps:list, **opt):
     global we_return
     global action_data
 
-    element = None
+    element:WebElement = None
 
     helper = {}
 
@@ -243,23 +236,33 @@ def follow(driver:webdriver, steps:list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 element.send_keys(value)
-        elif step == 'dump':
-            dump_dir = opt.get('dump_dir', None)
-            if dump_dir:
-                print(f"follow(): dump to dir={dump_dir}")
-            else:
-                print(f"follow(): dump to dir=stdout")
+        elif m := step_compiled_dump.match(step):
+            scope, path, *_ = m.groups()
+            print(f"follow(): dump {scope} to dir={path}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                if dump_dir:
-                    os.makedirs(dump_dir, exist_ok=True)  # this does "mkdir -p"
-                    with open(f"{dump_dir}/page_source.html", 'w') as fh:
-                        fh.write(driver.page_source)
+                if scope == 'element':
+                    # https://stackoverflow.com/questions/29671552/
+                    # io.appium.uiautomator2.common.exceptions.NoSuchAttributeException:
+                    # 'outerHTML' attribute is unknown for the element. Only the
+                    # following attributes are supported: [checkable, checked,
+                    # {class,className}, clickable, {content-desc,contentDescription},
+                    # enabled, focusable, focused, {long-clickable,longClickable},
+                    # package, password, {resource-id,resourceId}, scrollable,
+                    # selection-start, selection-end, selected, {text,name}, bounds,
+                    # displayed, contentSize]
+                    html = element.get_attribute('outerHTML')
+
+                else:
+                    html = driver.page_source
+                if path != 'stdout':
+                    with tpsup.tpfile.TpOutput(path) as fh:
+                        fh.write(html)
                         fh.write('\n')
                         fh.close()
                 else:
-                    print(driver.page_source)
+                    print(html)
         elif m := step_compiled_action.match(step):
             value, *_ = m.groups()
             print(f"follow(): perform action={value}")
@@ -267,6 +270,34 @@ def follow(driver:webdriver, steps:list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.execute_script('mobile: performEditorAction', {'action': value})
+        elif m := step_compiled_context.match(step):
+            value, *_ = m.groups()
+            print(f"follow(): switch to context matching {value}")
+            contexts = driver.contexts
+            context = None
+            for c in contexts:
+                if value == 'native':
+                    if m := context_compiled_native.match(c):
+                        context = c
+                        break
+                else:
+                    if m := context_compiled_webview.match(c):
+                        context = c
+                        break
+            if context:
+                print(f"found context={context} among {pformat(contexts)}")
+            else:
+                raise RuntimeError(f'no matching context among {pformat(contexts)}')
+
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                # when switch to webview context, appium needs a chromedriver
+                # selenium.common.exceptions.WebDriverException: Message: An unknown
+                # server-side error occurred while processing the command.
+                # Original error: No Chromedriver found that can automate Chrome
+                # '83.0.4103'. ...
+                driver.switch_to.context(context)
         elif step == 'click':
             print(f"follow(): click")
             if interactive:

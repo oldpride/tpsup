@@ -39,9 +39,9 @@ examples = textwrap.dedent(f"""
            appium --address localhost --port 4723 --log-no-colors --base-path /wd/hub      
     3. (optional) start Appium Inspector, use the desired capabilities in this script to connect
     4. run this script
-        {prog} localhost:4723 emulator-5554
+        python {prog} localhost:4723 emulator-5554
     5. run uiautomatorviewer to inspect element
-        C:\Users\william\appdata\local\android\Sdk\tools\bin\uiautomatorviewer
+        C:\\Users\william\appdata\local\android\Sdk\tools\bin\\uiautomatorviewer
         click snapshot
     6. run Appium Inspector to inspect element
         "C:\Program Files\Appium Inspector\Appium Inspector.exe"
@@ -85,11 +85,14 @@ desired_cap = {
 # https://www.youtube.com/watch?v=h8vvUcLo0d0
 driver = webdriver.Remote(f"http://{args['host_port']}/wd/hub", desired_cap)
 driver.implicitly_wait(60)
-
 print("driver started")
 
 print(f"sleep 3 seconds")
 time.sleep(3)
+
+# https://appium.io/docs/en/commands/context/get-contexts/S
+contexts = driver.contexts
+print(f'available contexts = {pformat(contexts)}')
 
 print(f"click home button")
 # https://developer.android.com/reference/android/view/KeyEvent#KEYCODE_ENTER
