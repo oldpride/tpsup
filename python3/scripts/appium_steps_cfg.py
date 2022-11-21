@@ -87,11 +87,11 @@ our_cfg = {
     'usage_example' : f'''
 
     {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator '''
-    'home id=com.android.quicksearchbox:id/search_widget_text click '
-    'id=com.android.quicksearchbox:id/search_src_text click string=Amazon action=Search '
-    'dump_page=%USERPROFILE%/dumpdir2/page_source.html '
-    'xpath="//*[@content-desc]" '
-    # 'context=webview dump_element=stdout '
+        'home id=com.android.quicksearchbox:id/search_widget_text click '
+        'id=com.android.quicksearchbox:id/search_src_text click string=Amazon action=Search '
+        'dump_page=%USERPROFILE%/dumpdir2/page_source.html '
+        'xpath="//*[@content-desc]" '
+        # 'context=webview dump_element=stdout '
     '''
     - test webview context
     {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator context=webview

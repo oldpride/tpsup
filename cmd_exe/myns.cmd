@@ -1,0 +1,1 @@
+@mycd "%MYBASE%/github/nativescript"
