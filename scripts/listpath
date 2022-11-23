@@ -1,0 +1,31 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage="
+usage:
+
+    $prog [path]
+
+   'path' can be any env var, default to PATH
+
+example:
+
+   $prog PATH
+   $prog LD_LIBRARY_PATH
+"
+
+if [ $# -ne 1 ]; then
+   echo "ERROR: wrong number of args" >&2
+   echo "$usage" >&2
+   exit 1
+fi
+
+path=$1
+
+resolved=`eval "echo \\\$$path"`
+
+echo "$resolved" | /bin/sed -e "s/:/\n/g" | while read line
+do
+   echo "$line"
+done
