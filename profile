@@ -753,5 +753,5 @@ mysitelib     () { cd "$MYBASE/github/$SPECNAME/lib/perl/${SPECNAME^^}"; } # ${x
 mysitep3      () { cd "$MYBASE/github/$SPECNAME/python3/scripts"; }
 mysitep3lib   () { cd "$MYBASE/github/$SPECNAME/python3/lib/tpsup"; }
 
-asdk () { echo "ANDROID_HOME=$ANDROID_HOME"; [ "X$ANDROID_HOME" = "X" ] || cd "$ANDROID_HOME"; }
+myandroid () { echo "ANDROID_HOME=$ANDROID_HOME"; [ "X$ANDROID_HOME" = "X" ] || cd "$ANDROID_HOME"; }
 
