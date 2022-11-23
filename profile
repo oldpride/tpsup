@@ -543,6 +543,14 @@ javaenv () {
    . $TPSUP/profile.d/javaenv
 }
 
+nsenv () {
+   # nativescript env
+
+   java11  # set JAVA_HOME to jdk 11
+   export PATH="$JAVA_HOME/bin:$PATH"
+   reduce PATH
+}
+
 diffalias () {
    local usage
    usage="

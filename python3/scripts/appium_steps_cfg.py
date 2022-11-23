@@ -77,10 +77,10 @@ our_cfg = {
             'help': 'limit scan depth',
         },
         {
-            'dest': 'dump_dir',
+            'dest': 'app',
             'default': None,
             'action': 'store',
-            'help': 'dir where to dump page source',
+            'help': 'app_path, /path/app.apk for android or https://app.com/app.ipa for ios',
         },
     ],
 
@@ -125,7 +125,13 @@ def code(all_cfg, known, **opt):
     if driver is None:
         method = all_cfg["resources"]["appium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["appium"]["driver_call"]["kwargs"]
-        driver = method(**{**kwargs, "dryrun":0}) # overwrite kwargs
+        opt2 = {}
+
+        for k in ["verbose", "app"]:
+            if v := opt.get(k, None):
+                opt2[k] = v
+
+        driver = method(**{**kwargs, "dryrun":0, **opt}) # overwrite kwargs
         all_cfg["resources"]["appium"]["driver"] = driver
 
     steps = []

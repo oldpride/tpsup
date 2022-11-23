@@ -160,6 +160,11 @@ class AppiumEnv:
             "appium:platformName": "Android",
         }
 
+        if app := opt.get("app", None):
+            self.desired_cap['app'] = app
+
+        if self.verbose:
+            print(f"desire_capabilities = {pformat(self.desired_cap)}")
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
         self.driver = webdriver.Remote(f"http://{host_port}/wd/hub", self.desired_cap)
         self.driver.implicitly_wait(60)
