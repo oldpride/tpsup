@@ -1,0 +1,9 @@
+# nativescript env
+
+java11  # set JAVA_HOME to jdk 11. ns needs this.
+
+# keytool is under $JAVA_HOME/bin
+export PATH="$JAVA_HOME/bin:$PATH"
+
+reduce PATH
+

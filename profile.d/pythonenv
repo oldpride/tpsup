@@ -31,10 +31,12 @@ if [ $expected_version = 3 ]; then
    if ! [ "X$TP_P3_PATH" = "X" ]; then
       export PATH="$TP_P3_PATH:$PATH"
    fi
+   function p3c { python3 -m py_compile $@; };
 elif [ $expected_version = 2 ]; then
    if ! [ "X$TP_P2_PATH" = "X" ]; then
       export PATH="$TP_P2_PATH:$PATH"
    fi
+   function p2c { python2 -m py_compile $@; };
 else 
    echo "$expected_version is not supported python major versions (2,3)"
    return
@@ -140,6 +142,8 @@ svenv () {
 dvenv () {
    deactivate
 }
+
+
 
 if [[ $UNAME =~ Cygwin && $quiet = N ]]; then
 cat <<END

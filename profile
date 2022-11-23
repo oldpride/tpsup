@@ -533,24 +533,6 @@ example:  itrs less '/apps/log/<today %Y%m%d>.log'
    eval "$args"
 }
 
-mvnenv () {
-   # no need to pass $@ to the sourced file
-   . $TPSUP/profile.d/mvnenv
-}
-
-javaenv () {
-   # no need to pass $@ to the sourced file
-   . $TPSUP/profile.d/javaenv
-}
-
-nsenv () {
-   # nativescript env
-
-   java11  # set JAVA_HOME to jdk 11
-   export PATH="$JAVA_HOME/bin:$PATH"
-   reduce PATH
-}
-
 diffalias () {
    local usage
    usage="
@@ -636,69 +618,18 @@ functions () {
    echo "to see detail: typeset -f"
 }
 
-tprefresh () {
-   # refresh variables
 
-   local OPTIND OPTARG verbose check_only
+cd "$TPSUP"/profile.d/
+for f in *
+do
+   if [[ $f =~ [.~] ]]; then   # regex
+      # skip .sav, .deco, .yyyymmdd
+      continue
+    fi
 
-   verbose=N
-   check_only=N
-
-   # don't forget to localize OPTIND OPTARG 
-   while getopts cv o;
-   do
-      case "$o" in
-         c) check_only=Y;;
-         v) verbose=Y;;
-         *) echo "unknow switch. $usage">&2; return 1;;
-      esac
-   done
-
-   shift $((OPTIND-1))
-
-   if [ $check_only = N ]; then
-      # today
-      export yyyymmdd=`date +%Y%m%d`
-      export yyyy=`echo $yyyymmdd|cut -c1-4`
-      export   mm=`echo $yyyymmdd|cut -c5-6`
-      export   dd=`echo $yyyymmdd|cut -c7-8`
-      export YYYY=$yyyy
-      export YYMD=$yyyymmdd
-   
-      # yesterday
-      export pyyyymmdd=`tradeday -1`
-      export pyyyy=`echo $pyyyymmdd|cut -c1-4`
-      export   pmm=`echo $pyyyymmdd|cut -c5-6`
-      export   pdd=`echo $pyyyymmdd|cut -c7-8`
-   
-      # tomorrow
-      export tyyyymmdd=`tradeday +1`
-      export tyyyy=`echo $tyyyymmdd|cut -c1-4`
-      export   tmm=`echo $tyyyymmdd|cut -c5-6`
-      export   tdd=`echo $tyyyymmdd|cut -c7-8`
-   
-      # time
-      export HHMMSS=`date +%H%M%S`
-      export HH=`echo $HHMMSS|cut -c1-2`
-      export MM=`echo $HHMMSS|cut -c3-4`
-      export SS=`echo $HHMMSS|cut -c5-6`
-   fi
-
-   if [ $verbose = Y -o $check_only = Y ]; then
-   cat >&2 <<EOF
-
-today:      yyyymmdd  yyyy  mm  dd = $yyyymmdd $yyyy $mm $dd
-yesterday: pyyyymmdd pyyyy pmm pdd = $pyyyymmdd $pyyyy $pmm $pdd
-tomorrow:  tyyyymmdd tyyyy tmm tdd = $tyyyymmdd $tyyyy $tmm $tdd
-
-HHMMSS HH MM SS = $HHMMSS $HH $MM $SS
-
-EOF
-   fi
-}
-
-alias p2c="python2 -m py_compile"
-alias p3c="python3 -m py_compile"
+    eval "function $f { . '$TPSUP/profile.d/$f'; }"
+done
+cd - >/dev/null
 
 wbar () {
    # window bar
@@ -707,11 +638,6 @@ wbar () {
    if [[ $TERM =~ ^xterm|^vt ]]; then
       PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
    fi
-}
-
-pythonenv () {
-   # no need to pass $@ to the sourced file
-   . "$TPSUP/profile.d/pythonenv"
 }
 
 p2env () {
