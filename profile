@@ -238,7 +238,17 @@ get_native_path () {
 
 functions () {
    typeset -F
-   echo 'use typeset -f to see detail'
+   cat <<EOF
+to list functions:
+   typeset -F
+
+to see function definition
+   typeset -f func_name
+
+to delete a function
+   unset -f func_name
+   
+EOF
 }
 
 export PERL_BINARY=perl

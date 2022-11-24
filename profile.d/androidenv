@@ -1,9 +1,19 @@
+#!/bin/bash
 
 if [ "X$ANDROID_HOME" = "X" ]; then
    echo "ANDROID_HOME not set"
    return
 fi
 
-export PATH="$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.0:$ANDROID_HOME/emulator"
+PATH="$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+local BUILD_TOOLS
+BUILD_TOOLS=`/bin/ls -d $ANDROID_HOME/build-tools/*|tail -1`
+
+if [ "X$BUILD_TOOLS" != "X" ]; then
+   PATH="$BUILD_TOOLS:$PATH"
+fi
+
+export PATH
 
 reduce PATH
