@@ -315,6 +315,12 @@ def follow(driver:webdriver.Remote, steps:list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.press_keycode(3)
+        elif step == 'launch_app':
+            print(f"follow(): launch_app")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.launch_app()
         else:
             raise RuntimeError(f"unsupported 'step={step}'")
 

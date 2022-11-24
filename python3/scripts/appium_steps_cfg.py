@@ -92,9 +92,16 @@ our_cfg = {
         'dump_page=%USERPROFILE%/dumpdir2/page_source.html '
         'xpath="//*[@content-desc]" '
         # 'context=webview dump_element=stdout '
-    '''
+        f'''
+    
+    - test with app
+    {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk"
+    - if app stuck, 
+    adb uninstall org.nativescript.test02ngchallenge
+    
     - test webview context
     {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator context=webview
+    this is not working yet. we may need to launch an webview app first
     
     '''
     ,
