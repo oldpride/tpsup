@@ -384,8 +384,8 @@ sub process_cmd {
          return;
       }
 
-      my $logic = get_value_by_key_case_insensitive($method_cfg, 'logic',{default=>'OR'});
-      my $grep  = get_value_by_key_case_insensitive($method_cfg, 'grep', {default=>'zgrep -E'});
+      my $logic=get_value_by_key_case_insensitive($method_cfg, 'logic',{default=>'OR'});
+      my $grep =get_value_by_key_case_insensitive($method_cfg, 'grep', {default=>'zgrep -E'});
 
       print "$method_cfg->{type} using logic = $logic\n";
 
