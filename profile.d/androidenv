@@ -3,6 +3,8 @@
 if [ "X$ANDROID_HOME" = "X" ]; then
    echo "ANDROID_HOME not set"
    return
+else
+   echo "ANDROID_HOME=$ANDROID_HOME"
 fi
 
 PATH="$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
@@ -17,3 +19,13 @@ fi
 export PATH
 
 reduce PATH
+
+echo "run android_studio to start android studio"
+android_studio () {
+   if [ "X$ANDROID_STUDIO" = "X" ]; then
+      echo "ANDROID_STUDIO is not defined. we don't know where android studio is installed"
+      return
+   fi
+
+   $ANDROID_STUDIO
+}
