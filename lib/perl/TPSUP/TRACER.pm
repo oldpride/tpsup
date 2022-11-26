@@ -400,6 +400,82 @@ sub process_cmd {
       } else {
          croak "unsupported logic='$logic' at cmd = " . Dumper($method_cfg);
       }
+   } elsif ($method_cfg->{type} eq 'pipe') {
+      # 2D array,
+      #    outer loop is connected by pipe
+      #    inner loop is for OR logic for grep command.
+      #
+      # method_cfg => {
+      #    type  => 'pipe',
+      #    value => [
+      #       ['grep=grep -i -E', 'OR11', 'OR12'],
+      #       ['grep=grep -v -E', 'OR21', 'OR22'],
+      #       ['grep=grep -E ',   'OR31', 'OR32'],
+      #       ['cmd=tail -10'],
+      #    ],
+      #    file => 'app.log',
+      # },
+      #
+      #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate 
+      #    grep -i -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|tail -10
+      #
+      # example:
+      #    value => [
+      #       [ 'grep', 'CUSIP', 'DUMMYCUSIP', 'SEDOL' ],
+      #       [ 'grep', 'CPTY'],
+      #       [ 'grep', 'QTY' ],
+      #       [ 'cmd=grep tian' ],
+      #    ],
+
+      my $file = get_value_by_key_case_insensitive($method_cfg, 'file');
+      croak "attr='file' is not defined at method_cfg=" . Dumper($method_cfg) 
+         if ! defined $file;
+      $file = resolve_scalar_var_in_string($file, {%known, %vars});
+     
+      my $rows = get_value_by_key_case_insensitive($method_cfg, 'value');
+      croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg) 
+         if ! defined $rows;
+
+      my @commands;
+      for my $r (@$rows) {
+         if ($r->[0] =~ /^grep=(.+)/) {
+            my $cmd2 = $1;
+
+            my $r_length = scalar(@$r);
+            if ($r_length == 1) {
+               croak "'grep' expects more elements, at " . Dumper($r);
+            }
+
+            my @values;
+            for (my $i=1; $i<$r_length; $i++) {
+                my $k = $r->[$i];
+                my $v = get_first_by_key([\%vars, \%known], $k);
+                if (defined $v) {
+                   push @values, $v;
+                }
+            }
+
+            next if !@values;
+
+            $cmd2 .= " '" . join('|', @values) . "'";
+            if (!@commands) {
+               $cmd2 .= " $file";
+            }
+            push @commands, $cmd2;
+         } elsif ($r->[0] =~ /^cmd=(.+)/) {
+            my $cmd2 = resolve_scalar_var_in_string($1, {%known, %vars});
+            push @commands, $cmd2;
+         } else {
+            croak "unsupported row at " . Dumper($r);
+         }
+      }
+
+      if (!@commands) {
+         print "'method_cfg didn't resolve to any command. " . Dumper($method_cfg);
+         return;
+      } else {
+         $cmd = join("|", @commands);
+      }
    } else {
       croak "unsupported type='$method_cfg->{type}' in cmd = ", Dumper($method_cfg);
    } 
