@@ -438,8 +438,9 @@ sub process_cmd {
 
       my @commands;
       for my $r (@$rows) {
+         my $cmd2;
          if ($r->[0] =~ /^grep=(.+)/) {
-            my $cmd2 = $1;
+            $cmd2 = $1;
 
             my $r_length = scalar(@$r);
             if ($r_length == 1) {
@@ -458,16 +459,16 @@ sub process_cmd {
             next if !@values;
 
             $cmd2 .= " '" . join('|', @values) . "'";
-            if (!@commands) {
-               $cmd2 .= " $file";
-            }
-            push @commands, $cmd2;
          } elsif ($r->[0] =~ /^cmd=(.+)/) {
-            my $cmd2 = resolve_scalar_var_in_string($1, {%known, %vars});
-            push @commands, $cmd2;
+            $cmd2 = resolve_scalar_var_in_string($1, {%known, %vars});
          } else {
             croak "unsupported row at " . Dumper($r);
          }
+
+         if (!@commands) {
+            $cmd2 .= " $file";
+         }
+         push @commands, $cmd2;
       }
 
       if (!@commands) {

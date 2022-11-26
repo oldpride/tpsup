@@ -2451,7 +2451,7 @@ sub main {
    eval {
       print "binary_search_numeric 5.5 = ", 
              binary_search_numeric(5.5, $aref, 0, scalar(@$aref -1)),
-            ", expecting 6\n\n";
+            ", expecting 7\n\n";
    };
 
    eval  {binary_search_numeric(15, $aref, 0, scalar(@$aref -1))};
@@ -2613,36 +2613,10 @@ sub resolve_scalar_var_in_string {
    # this function relies on %$Dict, not %vars or %known,
    return $clause if !$clause;
 
-   # scalar_vars is enclosed by double curlies {{...=default}},
+   # scalar_vars is enclosed by double curlies {{ ... }},
    # but exclude {{pattern::...} and {{where::...}}
    # /s mean stream, ie, multiline
-   # my @scalar_vars = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)\}\}/sg);  # get all scalar vars
-   my @vars_defaults = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)(=.{0,200}?)?\}\}/sg);
-   # there are 2 '?':
-   #    the 1st '?' is for ungreedy match
-   #    the 2nd '?' says the (...) is optional
-   # example:
-   #    .... {{VAR1=default1}}|{{VAR2=default2}}
-   # default can be multi-line
-   # default will be undef in the array if not defined.
-
-   my $defaults_by_var;
-   my @scalar_vars;
-   while (@vars_defaults) {
-      my $var     = shift @vars_defaults;
-      my $default = shift @vars_defaults;
-      if (defined $default) {
-         $default =~ s/^=//;
-      }
-
-      push @scalar_vars, $var;
-      push @{$defaults_by_var->{$var}}, $default; 
-
-      # note: @scalar_vars may have dups and we don't want to remove dups because
-      #       the dup var may have different default.
-      #       one scenario we cannot handle yet: for the same var, some has default
-      #       and some doesn't. if the var is not in %known, then, will be problem.
-   }
+   my @scalar_vars = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)\}\}/sg);  # get all scalar vars
 
    return $clause if !@scalar_vars;   # return when no variable found
 
@@ -2664,41 +2638,19 @@ sub resolve_scalar_var_in_string {
 
    $opt = {} if !$opt;
    my $old_clause = $clause;
-
-   my $idx_by_var;  # this is handle dup var
    for my $var (@scalar_vars) {
-      if (exists $idx_by_var->{$var}) {
-         $idx_by_var->{$var} ++;
-      } else {
-         $idx_by_var->{$var} = 0;
-      }
-      my $idx = $idx_by_var->{$var};
-
       my $value;
 
       # add 'use strict; use warnings;' to catch syntax errors. for example, once
       # i didn't define $opt, eval{} just failed silently without setting any error in $@.
       eval {use strict; use warnings; $value = get_value_by_key_case_insensitive({%$Dict, %$Dict2, %$opt}, $var)};
-      if ($@ ) {
-         if ($opt->{verbose}) {
-            print "cannot resolve var=$var in clause=$clause: $@\n";
-            print "Dict = ", Dumper({%$Dict, %$Dict2, %$opt});
-         }
-
-         my $default = $defaults_by_var->{$var}->[$idx];
-         if (defined $default) {
-            $opt->{verbose} && print "var=$var default=$default\n";
-            $value = $default;
-         } else {
-            $opt->{verbose} && print "var=$var default is undefined.\n";
-         }
+      if ($@ && $opt->{verbose}) {
+         print "cannot resolve var=$var in clause=$clause: $@\n";
+         print "Dict = ", Dumper({%$Dict, %$Dict2, %$opt});
       }
-
       next if ! defined $value;
-      # $clause =~ s/\{\{$var\}\}/$value/igs;
-      # don't do global replacement because dup var may have different default
-      $clause =~ s/\{\{$var(=.{0,200}?)?\}\}/$value/is;
-      $opt->{verbose} && print "replaced #${idx} {{$var}} with '$value'\n";
+      $clause =~ s/\{\{$var\}\}/$value/igs;
+      $opt->{verbose} && print "replaced {{$var}} with '$value'\n";
    }
 
    return $clause if $clause eq $old_clause;    # return when nothing can be resolved.
