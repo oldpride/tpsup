@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ "X$ANDROID_HOME" = "X" ]; then
-   echo "ANDROID_HOME not set"
+   echo "ANDROID_HOME not set. if android skd is not installed, install it from android studio"
    return
 else
    echo "ANDROID_HOME=$ANDROID_HOME"
@@ -20,8 +20,9 @@ export PATH
 
 reduce PATH
 
-echo "run android_studio to start android studio"
-android_studio () {
+echo "to start android studio, type: androidstudio"
+
+androidstudio () {
    if [ "X$ANDROID_STUDIO" = "X" ]; then
       echo "ANDROID_STUDIO is not defined. we don't know where android studio is installed"
       return
@@ -29,3 +30,6 @@ android_studio () {
 
    "$ANDROID_STUDIO"
 }
+
+echo "to go to android sdk folder, type:  androidsdk"
+androidsdk () { cd "$ANDROID_HOME"; }
