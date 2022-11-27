@@ -2404,7 +2404,13 @@ sub tp_quote_wrap {
    my ($e, $opt) = @_;
 
    my $e2;
-   if ($e =~ /\s/) {
+
+   my $vunerable_chars = '\s';
+   if ($opt->{ShellArg}) {
+      $vunerable_chars = '[\s|]';
+   }
+
+   if ($e =~ /$vunerable_chars/) {
       # elemet has space inside
       if ($e =~ /^'.*'$/) {
          # element is already enclosed

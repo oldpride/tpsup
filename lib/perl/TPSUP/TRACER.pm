@@ -421,13 +421,8 @@ sub process_cmd {
       #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate 
       #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
       #
-      # example:
-      #    value => [
-      #       [ 'grep', 'CUSIP', 'DUMMYCUSIP', 'SEDOL' ],
-      #       [ 'grep', 'CPTY'],
-      #       [ 'grep', 'QTY' ],
-      #       [ 'cmd=grep tian' ],
-      #    ],
+      #  other value:
+      #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
 
       my $file = get_value_by_key_case_insensitive($method_cfg, 'file');
       if (! defined $file) {
@@ -466,40 +461,54 @@ sub process_cmd {
          } elsif ($r->[0] =~ /^tpgrepl=(.+)/) {
             $cmd2 = $1;
 
+            # example:
+            #    ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+
             my $r_length = scalar(@$r);
             if ($r_length == 1) {
                croak "'tpgrepl' expects more elements, at " . Dumper($r);
             }
 
-            my $key_defined;
+            my $some_key_defined;
             for (my $i=1; $i<$r_length; $i++) {
                my $s = $r->[$i];
+               # example: 'TRADEID|ORDERID'
 
-               my $k;
+               my $keys;
                my $is_exclude;
                if ($s =~ /^x=(.+)/) {
                   # this is exclude
-                  $k = $1;
+                  $keys = $1;
                   $is_exclude = 1;
                } else {
                   # this is match
-                  $k = $s;
-                  $k =~ s/^m=//;
+                  $keys = $s;
+                  $keys =~ s/^m=//;
                }
 
-               my $v = get_first_by_key([\%vars, \%known], $k);
-               if (defined $v) {
-                  my $v2 = tp_quote_wrap($v);
-                  $key_defined = 1;
-                  if ($is_exclude) {
-                     $cmd2 .= " -x $v2";
-                  } else {
-                     $cmd2 .= " -m $v2";
+               my @values;
+               for my $k (split(/[|]/, $keys)) {
+                  # split 'TRADEID|ORDERID' into two
+                  my $v = get_first_by_key([\%vars, \%known], $k);
+
+                  if (defined $v) {
+                     push @values, $v;
                   }
                }
+               next if !@values;
 
-               next if ! $key_defined;
+               $some_key_defined = 1;
+               my $pattern = join("|", @values);
+               $pattern = tp_quote_wrap($pattern, {ShellArg=>1});
+
+               if ($is_exclude) {
+                  $cmd2 .= " -x $pattern";
+               } else {
+                  $cmd2 .= " -m $pattern";
+               }
             }
+
+            next if !$some_key_defined;
          } elsif ($r->[0] =~ /^cmd=(.+)/) {
             $cmd2 = resolve_scalar_var_in_string($1, {%known, %vars});
          } else {
