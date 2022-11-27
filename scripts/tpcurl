@@ -76,7 +76,7 @@ if ($entry_name) {
     push @cmds, ("/usr/bin/curl"); 
 }
 
-$command .= " " . tp_join(\@ARGV);
+$command .= " " . tp_join(\@ARGV); # tp_join takes care of wrapping with quotes
 push @cmds, @ARGV;
 
 if ($json_output) {

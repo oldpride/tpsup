@@ -43,6 +43,7 @@ use TPSUP::UTIL qw(
    top_array
    resolve_scalar_var_in_string
    tpfind
+   tp_quote_wrap
 );
 use TPSUP::LOG qw(
    get_log_sections
@@ -408,16 +409,17 @@ sub process_cmd {
       # method_cfg => {
       #    type  => 'pipe',
       #    value => [
-      #       ['grep=grep -i -E', 'OR11', 'OR12'],
+      #       ['grep=grep -E', 'OR11', 'OR12'],
       #       ['grep=grep -v -E', 'OR21', 'OR22'],
       #       ['grep=grep -E ',   'OR31', 'OR32'],
+      #       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
       #       ['cmd=tail -10'],
       #    ],
       #    file => 'app.log',
       # },
       #
       #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate 
-      #    grep -i -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|tail -10
+      #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
       #
       # example:
       #    value => [
@@ -428,9 +430,11 @@ sub process_cmd {
       #    ],
 
       my $file = get_value_by_key_case_insensitive($method_cfg, 'file');
-      croak "attr='file' is not defined at method_cfg=" . Dumper($method_cfg) 
-         if ! defined $file;
-      $file = resolve_scalar_var_in_string($file, {%known, %vars});
+      if (! defined $file) {
+         print "attr='file' is not defined at method_cfg=" . Dumper($method_cfg) 
+      } else {
+         $file = resolve_scalar_var_in_string($file, {%known, %vars});
+      }
      
       my $rows = get_value_by_key_case_insensitive($method_cfg, 'value');
       croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg) 
@@ -459,6 +463,43 @@ sub process_cmd {
             next if !@values;
 
             $cmd2 .= " '" . join('|', @values) . "'";
+         } elsif ($r->[0] =~ /^tpgrepl=(.+)/) {
+            $cmd2 = $1;
+
+            my $r_length = scalar(@$r);
+            if ($r_length == 1) {
+               croak "'tpgrepl' expects more elements, at " . Dumper($r);
+            }
+
+            my $key_defined;
+            for (my $i=1; $i<$r_length; $i++) {
+               my $s = $r->[$i];
+
+               my $k;
+               my $is_exclude;
+               if ($s =~ /^x=(.+)/) {
+                  # this is exclude
+                  $k = $1;
+                  $is_exclude = 1;
+               } else {
+                  # this is match
+                  $k = $s;
+                  $k =~ s/^m=//;
+               }
+
+               my $v = get_first_by_key([\%vars, \%known], $k);
+               if (defined $v) {
+                  my $v2 = tp_quote_wrap($v);
+                  $key_defined = 1;
+                  if ($is_exclude) {
+                     $cmd2 .= " -x $v2";
+                  } else {
+                     $cmd2 .= " -m $v2";
+                  }
+               }
+
+               next if ! $key_defined;
+            }
          } elsif ($r->[0] =~ /^cmd=(.+)/) {
             $cmd2 = resolve_scalar_var_in_string($1, {%known, %vars});
          } else {
@@ -466,7 +507,8 @@ sub process_cmd {
          }
 
          if (!@commands) {
-            $cmd2 .= " $file";
+            # for first command 
+            $cmd2 .= " $file" if defined $file;
          }
          push @commands, $cmd2;
       }

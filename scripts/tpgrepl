@@ -1,0 +1,118 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(
+   get_in_fh
+   close_in_fh
+);
+
+
+my $method = 'GET';
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog [-m regex ... ] [ -x regex ... ] file1 file2 ...
+
+   extend "grep -l" to support multiple patterns
+
+   -m   match_regex          can set multiple times           
+   -x exclude_regex          can set multiple times           
+
+   -r recursive
+   -v verbose
+
+example:
+   
+   - compare
+   grep     /bin/bash \$TPSUP/scripts/*
+   $prog -m /bin/bash \$TPSUP/scripts/*
+   $prog -m /bin/bash -m getopt \$TPSUP/scripts/*
+
+   - recursive
+   $prog -r -m /bin/bash -m getopt \$TPSUP/scripts/*
+   $prog -r -m /bin/bash -m /usr/bin/perl \$TPSUP/scripts/*
+
+END
+
+   exit 1;
+}
+
+my @match_exps;
+my @exclude_exps;
+my $recursive;
+my $verbose;
+
+GetOptions(
+   'm=s'          =>      \@match_exps,
+   'x=s'          =>      \@exclude_exps,
+   'r'            =>      \$recursive,
+   'v'            =>      \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+usage("at least one of -m and -x must be specified") if !@match_exps && !@exclude_exps;
+
+my @match_compiled;
+my @exclude_compiled;
+
+for my $p (@match_exps) {
+   push @match_compiled, qr/$p/;
+}
+
+for my $p (@exclude_exps) {
+   push @exclude_compiled, qr/$p/;
+}
+
+for my $path (@ARGV) {
+   my @files;
+   if ($recursive) {
+      @files = `find $path -type f|sort`;
+      chomp @files;
+   } else{
+      @files = ($path);
+   }
+
+   for my $f (@files) {
+      $verbose && print STDERR "scanning file=$f\n";
+      my $fh = get_in_fh($f);
+
+      LINE:
+      while(my $line = <$fh>) {
+         if (@match_compiled) {
+            for my $p (@match_compiled) {
+               if ($line !~ /$p/) {
+                  next LINE;        
+               }
+            }
+         }
+         if (@exclude_compiled) {
+            for my $p (@exclude_compiled) {
+               if ($line =~ /$p/) {
+                  next LINE;        
+               }
+            }
+         }
+
+         $verbose && print STDERR "found $f: $line";
+         print "$f\n";
+         last;
+      }
+
+      close_in_fh($fh);
+   }
+}
+
+exit 0;

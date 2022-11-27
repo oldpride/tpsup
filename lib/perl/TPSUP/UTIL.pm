@@ -66,6 +66,7 @@ our @EXPORT_OK = qw(
    resolve_scalar_var_in_string
    convert_to_uppercase
    tp_join
+   tp_quote_wrap
 );
 
 
@@ -2399,6 +2400,39 @@ sub convert_to_uppercase {
    }
 }
 
+sub tp_quote_wrap {
+   my ($e, $opt) = @_;
+
+   my $e2;
+   if ($e =~ /\s/) {
+      # elemet has space inside
+      if ($e =~ /^'.*'$/) {
+         # element is already enclosed
+         $e2 = $e; 
+      } elsif ($e =~ /^".*"$/) {
+         # element is already enclosed
+         $e2 = $e; 
+      } elsif ($e =~ /'/ && $e =~ /"/ ) {
+         # element has both ' and ", we leave it alone
+         $e2 = $e; 
+      } elsif ($e =~ /'/) {
+         # if element has ', we enclose it with "
+         $e2 =  qq("$e"); 
+      } elsif ($e =~ /"/) {
+         # if element has ", we enclose it with '
+         $e2 = "'$e'"; 
+      } else {
+         # we enclose it with '
+         $e2 = "'$e'"; 
+      }
+   } else {
+      # elemet has no space inside, we leave it alone
+      $e2 = "$e"; 
+   }
+
+   return $e2;
+}
+
 sub tp_join {
    my ($a1, $opt) = @_;
  
@@ -2413,31 +2447,8 @@ sub tp_join {
 
    my $a2=[];
    for my $e (@$a1) {
-      if ($e =~ /\s/) {
-         # elemet has space inside
-         if ($e =~ /^'.*'$/) {
-            # element is already enclosed
-            push @$a2, $e; 
-         } elsif ($e =~ /^".*"$/) {
-            # element is already enclosed
-            push @$a2, $e; 
-         } elsif ($e =~ /'/ && $e =~ /"/ ) {
-            # element has both ' and ", we leave it alone
-            push @$a2, $e; 
-         } elsif ($e =~ /'/) {
-            # if element has ', we enclose it with "
-            push @$a2, qq("$e"); 
-         } elsif ($e =~ /"/) {
-            # if element has ", we enclose it with '
-            push @$a2, "'$e'"; 
-         } else {
-            # we enclose it with '
-            push @$a2, "'$e'"; 
-         }
-      } else {
-         # elemet has no space inside, we leave it alone
-         push @$a2, "$e"; 
-      }
+      my $e2 = tp_quote_wrap($e);
+      push @$a2, $e2; 
    }
 
    return join($delimiter, @$a2);
