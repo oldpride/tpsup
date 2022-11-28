@@ -1,0 +1,139 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
+$Data::Dumper::Terse = 1;     # print without "$VAR1="
+
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(
+   get_in_fh
+   close_in_fh
+);
+
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog -b pattern1--pattern2 log
+
+   search a pattern and let it start a trunk/branches search
+
+   -t pattern1||patern2
+                           pattern1 is start-pattern; once matched, it starts a trunk. 
+                           pattern2 is continue-pattern; matches the rest file.
+
+                           -b can be used multiple times.
+
+   -m pattern              filter this pattern before start a trunk 
+
+   -v  verbose
+
+example:
+
+   # trace all trunks
+   $prog -t "received.*message_id=(?<MSGID>.+?),--ERROR:.*{{MSGID}}|{{MSGID}}.*SUCCESS" \\
+         logbranch_test.log 
+
+   # narrow down to onne trunk
+   $prog -t "received.*message_id=(?<MSGID>.+?),--ERROR:.*{{MSGID}}|{{MSGID}}.*SUCCESS" \\
+         -m ORD001 logbranch_test.log 
+
+END
+
+   exit 1;
+}
+
+my @trunks;
+my $match_pattern;
+my $verbose;
+
+GetOptions(
+   't=s'          =>      \@trunks,
+   'm=s'          =>      \$match_pattern,
+   'v'            =>      \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+usage("at least onne -t must be specified") if !@trunks;
+
+my @compiled_trunks;
+for my $b (@trunks) {
+   my ($p1, $p2) = split /--/, $b;
+
+   my $r = [ $p1, $p2, qr/$p1/, [] ];
+   # 1st element:    start-pattern
+   # 2st element: continue-pattern
+   # 3rd element: compiled start pattern
+   # 4th element: compiled continue-pattern, the brancch
+
+   push @compiled_trunks, $r;
+}
+
+my $match_compiled;
+if ($match_pattern) {
+   $match_compiled = qr/$match_pattern/;
+}
+
+for my $file (@ARGV) {
+   my $fh = get_in_fh($file);
+
+   while (my $line = <$fh>) {
+      for my $t (@compiled_trunks) {
+         #  $t->[3] contains the branches.
+         for my $b (@{$t->[3]}) {
+            # $b->[0] has the original contiune-pattern
+            # $b->[1] has the compiled contiune-pattern
+            if ($line =~ /$b->[1]/) {
+               print $line;
+            }
+         }
+      }
+
+      if ($match_compiled) {
+         if ($line !~ /$match_compiled/) {
+            next;
+         }
+      }
+
+      # check for new branches
+      for my $t (@compiled_trunks) {
+         if ($line =~ /$t->[2]/) {
+            my %matched = %+;
+
+            print $line;
+
+            $verbose && print "matched '$t->[0]', matched=", Dumper(\%matched);
+
+            my $continue_pattern = $t->[1];
+
+            for my $k (keys %matched) {
+               $continue_pattern =~ s/\{\{$k\}\}/$matched{$k}/g;
+            }
+
+            $verbose && 
+               print "continue_pattern '$t->[1]' resolved to '$continue_pattern'\n";
+
+            # build a new branch
+            my $b = [$continue_pattern, qr/$continue_pattern/];
+
+            # graft the branch to trunk
+            push @{$t->[3]}, $b;
+         }
+      }
+   }
+
+   close_in_fh($fh);
+}
+
+
+exit 0;

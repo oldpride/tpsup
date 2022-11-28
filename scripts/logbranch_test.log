@@ -1,0 +1,7 @@
+received order_id=ORD001, message_id=MSG001, 
+received order_id=ORD002, message_id=MSG002, 
+processing MSG001
+processing MSG002
+ERROR: processing MSG001, timed out
+processing MSG002 SUCCESS
+
