@@ -1537,16 +1537,20 @@ sub unique_array {
 
    #$in_arrays is a ref to array of arrays
 
+   my $CaseInsensitive = (exists($opt->{CaseInsensitive}) && $opt->{CaseInsensitive}) ? 1 : 0;
+
    my @out_array;
    my $seen;
       
    for my $in_array (@$in_arrays) {
       for my $e (@$in_array) {
-         next if $seen->{$e};
+         my $k = $CaseInsensitive ? uc($e) : $e;
+
+         next if $seen->{$k};
 
          push @out_array, $e;
 
-         $seen->{$e} = 1;
+         $seen->{$k} = 1;
       }
    }
       
