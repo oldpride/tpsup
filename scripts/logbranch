@@ -26,57 +26,65 @@ usage:
 
    $prog -b pattern1--pattern2 log
 
-   search a pattern and let it start a trunk/branches search
+   search a pattern and let it start a branch search
 
-   -t pattern1||patern2
-                           pattern1 is start-pattern; once matched, it starts a trunk. 
+   -b pattern1--patern2
+                           pattern1 is start-pattern; once matched, it starts a branch. 
                            pattern2 is continue-pattern; matches the rest file.
 
                            -b can be used multiple times.
 
-   -m pattern              filter this pattern before start a trunk 
+   -m pattern              filter this pattern before start a main 
 
    -v  verbose
 
 example:
 
-   # trace all trunks
-   $prog -t "received.*message_id=(?<MSGID>.+?),--ERROR:.*{{MSGID}}|{{MSGID}}.*SUCCESS" \\
-         logbranch_test.log 
+  # trace all branch_patterns
+  $prog -b "received.*?message_id=(?<MSGID>.+?),--ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"\\
+        logbranch_test.log 
 
-   # narrow down to onne trunk
-   $prog -t "received.*message_id=(?<MSGID>.+?),--ERROR:.*{{MSGID}}|{{MSGID}}.*SUCCESS" \\
-         -m ORD001 logbranch_test.log 
+  # narrow down to onne main
+  $prog -b "received.*?message_id=(?<MSGID>.+?),--ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"\\
+        -m ORD001 logbranch_test.log 
 
 END
 
    exit 1;
 }
 
-my @trunks;
+my @branch_patterns;
 my $match_pattern;
-my $verbose;
+my $verbose = 0;
 
 GetOptions(
-   't=s'          =>      \@trunks,
+   'b=s'          =>      \@branch_patterns,
    'm=s'          =>      \$match_pattern,
-   'v'            =>      \$verbose,
+   'v+'           =>      \$verbose,  # each -v will increment the verbose level
+
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
-usage("at least onne -t must be specified") if !@trunks;
+usage("at least onne -b must be specified") if !@branch_patterns;
 
-my @compiled_trunks;
-for my $b (@trunks) {
+my @compiled_branch_patterns;
+for my $b (@branch_patterns) {
+   # break the string
+   #    "received.*?message_id=(?<MSGID>.+?),--ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"
+   # into two patterns
+   #    "received.*?message_id=(?<MSGID>.+?),"
+   #    "ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"
    my ($p1, $p2) = split /--/, $b;
 
    my $r = [ $p1, $p2, qr/$p1/, [] ];
    # 1st element:    start-pattern
    # 2st element: continue-pattern
    # 3rd element: compiled start pattern
-   # 4th element: compiled continue-pattern, the brancch
+   # 4th element: branches.
+   #              each branch will have [ continue-pattern, compiled continue-pattern].
+   #              initially no branches, therefore empty array []
 
-   push @compiled_trunks, $r;
+   push @compiled_branch_patterns, $r;
 }
 
 my $match_compiled;
@@ -88,12 +96,15 @@ for my $file (@ARGV) {
    my $fh = get_in_fh($file);
 
    while (my $line = <$fh>) {
-      for my $t (@compiled_trunks) {
-         #  $t->[3] contains the branches.
-         for my $b (@{$t->[3]}) {
-            # $b->[0] has the original contiune-pattern
-            # $b->[1] has the compiled contiune-pattern
-            if ($line =~ /$b->[1]/) {
+      print "checking input: $line" if $verbose > 1;
+
+      for my $b (@compiled_branch_patterns) {
+         #  $b->[3] contains the branches.
+         for my $c (@{$b->[3]}) {
+            # $c->[0] has the original contiune-pattern
+            # $c->[1] has the compiled contiune-pattern
+            print "test continue-pattern=$c->[0]\n"  if $verbose > 1;
+            if ($line =~ /$c->[1]/) {
                print $line;
             }
          }
@@ -106,28 +117,28 @@ for my $file (@ARGV) {
       }
 
       # check for new branches
-      for my $t (@compiled_trunks) {
-         if ($line =~ /$t->[2]/) {
+      for my $b (@compiled_branch_patterns) {
+         if ($line =~ /$b->[2]/) {
             my %matched = %+;
 
             print $line;
 
-            $verbose && print "matched '$t->[0]', matched=", Dumper(\%matched);
+            $verbose && print "matched '$b->[0]', matched=", Dumper(\%matched);
 
-            my $continue_pattern = $t->[1];
+            my $continue_pattern = $b->[1];
 
             for my $k (keys %matched) {
                $continue_pattern =~ s/\{\{$k\}\}/$matched{$k}/g;
             }
 
             $verbose && 
-               print "continue_pattern '$t->[1]' resolved to '$continue_pattern'\n";
+               print "continue_pattern '$b->[1]' resolved to '$continue_pattern'\n";
 
             # build a new branch
-            my $b = [$continue_pattern, qr/$continue_pattern/];
+            my $b2 = [$continue_pattern, qr/$continue_pattern/];
 
-            # graft the branch to trunk
-            push @{$t->[3]}, $b;
+            # add the branch to branches
+            push @{$b->[3]}, $b2;
          }
       }
    }
