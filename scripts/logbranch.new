@@ -1,0 +1,417 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
+$Data::Dumper::Terse = 1;     # print without "$VAR1="
+
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(
+   get_in_fh
+   close_in_fh
+   gen_combinations_from_aa
+);
+
+my $delimiter = '--';
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog -b pattern1--pattern2 log
+
+   search a pattern and let it start a branch search
+
+   -t dependencies=pattern
+                           trigger-pattern; once matched, trigger a new search.
+                           can be specified multiple times.
+
+   -s dependencies=pattern
+                           search-pattern, matches the rest file.
+                           can be specified multiple times.
+
+
+   -m pattern              use this to narrow the trigger-pattern.
+                           only applies to INIT trigger.
+
+   -v                      verbose
+
+   -delimiter delimiter    default to '$delimiter'.
+                           settings are specified after delimiter
+
+example:
+
+  # linear linkage
+  $prog -t "INIT=received.*?, item_id=(?<A>.+?)," \\
+        -t "A={{A}} spawns (?<B>.+?),"  \\
+        -t "B={{B}} spawns (?<C>.+?),"  \\
+        -s "A=ERROR:.*? {{A}}|{{A}} .*?SUCCESS" \\
+        -s "B,C=({{B}}|{{C}}).*?(FAILED|SUCCESS|done)" \\
+        -m A001 \\
+        logbranch_test.log 
+
+  # recursive linkage, use 'ci': case-insensitive.
+  $prog -t "INIT=received.*?, item_id=(?<A>.+?)," \\
+        -t "A={{A}} spawns (?<A>.+?),"  \\
+        -s "A={{A}}.*?(FAILED|SUCCESS|done)--ci" \\
+        -m A002 \\
+        logbranch_test.log 
+
+  # recursive linkage, use 'ci': case-insensitive.
+  $prog -t "INIT=received.*?, item_id=(?<A>.+?)," \\
+        -t "A={{A}} spawns (?<A>.+)--sp=[, ]"  \\
+        -s "A={{A}}.*?(FAILED|SUCCESS|done)--ci" \\
+        -m A002 \\
+        logbranch_test.log 
+
+
+END
+
+   exit 1;
+}
+
+my @trigger_patterns;
+my @search_patterns;
+my $match_pattern;
+my $verbose = 0;
+
+GetOptions(
+   't=s'          =>      \@trigger_patterns,
+   's=s'          =>      \@search_patterns,
+   'm=s'          =>      \$match_pattern,
+   'd=s'          =>      \$delimiter,
+   'v+'           =>      \$verbose,  # each -v will increment the verbose level
+
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+usage("at least onne -t must be specified") if !@trigger_patterns;
+usage("at least onne -s must be specified") if  !@search_patterns;
+
+$verbose && print "trigger_patterns = ", Dumper(\@trigger_patterns);
+$verbose && print  "search_patterns = ", Dumper( \@search_patterns);
+
+
+my $known;
+my $cfg;
+
+$cfg->{triggers}  = parse_patterns(\@trigger_patterns);
+$cfg->{searchers} = parse_patterns( \@search_patterns);
+
+$verbose && print "cfg = ", Dumper($cfg);
+
+my $active;
+for my $t (@{$cfg->{triggers}->{INIT}}) {
+   my ($pattern, $setting) = @{$t}{qw(pattern setting)};
+   push @{$active->{triggers}}, 
+        ['INIT', 
+          $pattern, 
+          $setting->{CaseInsensitive} ?
+             qr/$pattern/i :
+             qr/$pattern/ ,
+          $setting
+        ];
+}
+
+$active->{searchers} = [];
+
+my $match_compiled;
+if ($match_pattern) {
+   $match_compiled = qr/$match_pattern/;
+}
+
+for my $file (@ARGV) {
+   my $fh = get_in_fh($file);
+
+   LINE:
+   while (my $line = <$fh>) {
+      print "checking input: $line" if $verbose > 1;
+
+      my $printed_line;
+
+      # apply searcher patterns
+      for my $r (@{$active->{searchers}}) {
+         my ($key, $pattern, $compiled, $setting) = @$r;
+
+         print "testing searcher key='$key', pattern='$pattern'\n" if $verbose >1;
+
+         if ($line =~ /$compiled/) {
+            if (!$printed_line) {
+               print $line;
+               $printed_line ++;
+            }
+
+            last;
+         }
+      }
+
+      # test trigger patterns
+      for my $r (@{$active->{triggers}}) {
+         my ($key, $pattern, $compiled, $setting) = @$r;
+
+         if ($key eq 'INIT') {
+            # match pattern only applies to INIT trigger
+            if ($match_compiled) {
+               if ($line !~ /$match_compiled/) {
+                  next;
+               }
+            }
+         }
+
+         $verbose > 1 && print "testing trigger key='$key', pattern='$pattern', setting=",
+                               Dumper($setting);
+
+         if ($line =~ /$compiled/) {
+            my %matched = %+;
+
+            if (!$printed_line) {
+               print $line;
+               $printed_line ++;
+            }
+
+            $verbose && print "key=$key, matched '$pattern', matched=", Dumper(\%matched);
+
+            for my $k (keys %matched) {
+               my $string = $matched{$k};
+
+               my @values;
+               my $delimiter = $setting->{SplitDelimiter};
+               if ($delimiter) {
+                  $verbose && print "captured string='$string' is to be splitted\n";
+                  for my $p (split /$delimiter/, $string) {
+                     next if !defined($p) && $p eq "";
+                     push @values, $p; 
+                  }
+               } else {
+                  @values = ($string);
+               }
+
+               for my $v (@values) {
+                  my $k2 = $setting->{assign}->{$k};
+                  if (!$k2) {
+                     $k2 = $k;
+                  }
+                  
+                  if ($known->{$k2}->{$v}) {
+                     # we already knew about this key and value. therefore, it won't trigger
+                     # new searches.
+                     $known->{$k2}->{$v} ++;
+                     next;
+                  } else {
+                     # first time know about this. it may trigger more patterns
+                     $known->{$k2}->{$v} =1;
+   
+                     $verbose && print "update \$known = ", Dumper($known);
+   
+                     for my $type (keys %$cfg) {
+                        my $related = $cfg->{$type}->{$k2};
+   
+                        if ($related) {
+                            $verbose && print "found related $type $k2 = ", 
+                                              Dumper($cfg->{$type}->{$k2});
+   
+                           for my $r2 (@$related) {
+                              my $has_all_deps = 1;
+      
+                              my @combo_input;
+                              for my $d (@{$r2->{dep}->{deps}}) {
+                                 if ($d eq $k2) {
+                                    push @combo_input, [$v];
+                                 } elsif ($known->{$d}) {
+                                    push @combo_input, [keys(%{$known->{$d}})];
+                                 } else {
+                                    $has_all_deps = 0;
+                                    last;
+                                 }
+                              }
+      
+                              if ($has_all_deps) {
+                                 my $combos = gen_combinations_from_aa(\@combo_input);
+      
+                                 $verbose && print "combos = ", Dumper($combos);
+                                 
+                                 my $key_prefix = join(",",@{$r2->{dep}->{deps}}) . "="; 
+      
+                                 for my $c (@$combos) {
+                                    my $key = $key_prefix . join(",", @$c);
+                                    my $resolved_pattern = resolve_pattern($r2, $c); 
+                                    push @{$active->{$type}},
+                                        [ $key, 
+                                          $resolved_pattern,
+                                          $r2->{setting}->{CaseInsensitive} ?
+                                              qr/$resolved_pattern/i  :
+                                              qr/$resolved_pattern/   ,
+                                          $r2->{setting},
+                                        ];
+                                 }
+                                 $verbose && print "updted \$active->{$type} = ", 
+                                                   Dumper($active->{$type});
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   close_in_fh($fh);
+}
+
+
+exit 0;
+
+#######################################################################
+# subs
+#######################################################################
+
+sub parse_setting {
+   my ($string, $opt) = @_;
+
+   my $setting = {};
+
+   return $setting if !$string;
+
+   # in
+   # -t "CHILD={{CHILD}} spawns (?<A>:.+?) and (?<B>:.+?),--assign=CHILD=A,assign=CHILD=B"
+   # setting string is
+   # assign=A=CHILD,assign=B=CHILD"
+
+   # originally, i had
+   #   for my $part (split /,/, $string) {
+   # but the above couldn't handle
+   #   -t "A={{A}} spawns (?<A>.+)--sp=[, ]"
+   # therefore, we use regex negative lookbehind.
+   #    https://stackoverflow.com/questions/2973436/
+   #       (?!) - negative lookahead
+   #       (?=) - positive lookahead
+   #       (?<=) - positive lookbehind
+   #       (?<!) - negative lookbehind
+   #       (?>) - atomic group
+   # also see
+   #    https://www.regular-expressions.info/lookaround.html
+   # we split at every ',' that is not behind a '['
+   for my $part (split qr/(?<!\[),/, $string) {
+
+      if ($part=~ /^(as.*?)=(.+)/) {
+         my $assign = $2;
+         if ($assign =~ /^(\S+)=(\S+)/) {
+            my ($var, $dep) = ($1, $2);
+            $setting->{assign}->{$var} = $dep;
+         } else {
+            croak "unsupported assignment at '$assign'";
+         } 
+      } elsif ($part=~ /^(case|ci)/) {
+         # print "part=$part, case-insensitive\n";
+         $setting->{CaseInsensitive} = 1;
+      } elsif ($part=~ /^(split|sp)=(.+)/) {
+         $setting->{SplitDelimiter} = $2;
+      } else {
+         croak "unsupported setting at part='$part'";
+      }
+
+   }
+
+   return $setting;
+}
+
+sub parse_dep {
+   my ($string, $opt) = @_;
+   # -t "CHILD(2)={{CHILD[0]}} and {{CHILD[1]}} spawns (?<CHILD>:.+?),"  \\
+   #    TODO: this cannot be handled yet
+   # -t "CHILD={{CHILD}} spawns (?<A>:.+?) and (?<B>:.+?),--assign=CHILD=A,assign=CHILD=B"  \\
+   # -t "A,B={{A}} and {{B}} spawns (?<CHILD>:.+?),"  \\
+
+   # CHILD(2)
+   # CHILD
+   # A,B
+
+   my $ret = {
+      string => $string,
+   };
+
+   for my $part (split(/,/, $string)) {
+      my $var;
+
+      if ($part =~ /^(\S+)\((\d)\)$/) {
+         my ($var, $count) = ($1, $2);
+         $ret->{need}->{$var} = $count;
+         if ($count>1) {
+            croak "count>1 is not supported yet, at part='$part'";
+         } else{
+            $ret->{need}->{$var} = 1;
+         }
+      } else {
+         $var = $part;
+         $ret->{need}->{$var} = 1;
+      }
+
+      push @{$ret->{deps}}, $var;
+   }
+
+   return $ret;
+}
+
+sub resolve_pattern {
+   my ($r, $combo, $opt) = @_;
+
+   # my $r2 = {
+   #    pattern=>$pattern,
+   #    setting=>$setting,
+   #    dep => {
+   #       need => {
+   #          var1 => 1, 
+   #          var2 => 2, 
+   #       },
+   #       deps => ['var1', 'var2'],
+   #    },
+   # };
+
+   my $pattern = $r->{pattern};
+   my @deps = @{$r->{dep}->{deps}};
+
+   for (my $i=0; $i<@deps; $i++) {
+      $pattern =~ s/\{\{$deps[$i]\}\}/$combo->[$i]/sg;
+   }
+
+   return $pattern;
+}
+
+sub parse_patterns {
+   my ($patterns, $opt) = @_;
+
+   my $ret;
+   for my $r (@$patterns) {
+      # -t "INIT=received.*?, item_id=(?<CHILD>.+?)," \\
+      # -t "CHILD(2)={{CHILD[0]}} and {{CHILD[1]}} spawns (?<CHILD>:.+?),"  \\
+      # -t "CHILD={{CHILD}} spawns (?<A>:.+?) and (?<B>:.+?),--assign=CHILD=A,assign=CHILD=B"  \\
+
+      my ($dep_string, $pattern_and_setting) = split /=/, $r, 2;   # split max/limit 
+      my ($pattern, $setting_string) 
+             = split /$delimiter/, $pattern_and_setting, 2; #split max/limit
+      my $dep     = parse_dep($dep_string);
+      my $setting = parse_setting($setting_string);
+
+      my $r2 = {
+         pattern=>$pattern,
+         setting=>$setting,
+         dep => $dep,
+      };
+
+      for my $d (@{$dep->{deps}}) {
+         push @{$ret->{$d}}, $r2;
+      }
+   }
+
+   return $ret;
+}

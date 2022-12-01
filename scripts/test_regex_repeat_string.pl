@@ -7,20 +7,17 @@ $Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
 $Data::Dumper::Terse = 1;     # print without "$VAR1="
 
 my @strings = (
-    "this is a var only: {{var}}. some tail ",
-    "this is a var with default: {{var=this is multiline 
-default}}. some tail",
-    "this has dup vars {{JUNK=junk1}}|{{JUNK=junk2}}",
-    "this has long default {{JUNK=this default is longer than to be accepted}}",
+    "this has 0 string: ",
+    "this has 1 string: abc",
+    "this has 2 repeat strings: abc abc",
+    "this has 3 repeat strings: abc abc abc",
 );
 
 my @patterns = (
-   '\{\{([0-9a-zA-Z_.-]+)\}\}',            # regex_var_only
-
-   '\{\{([0-9a-zA-Z_.-]+)(=.{0,25}?)?\}\}', # regex_var_with_default
-   # there are 2 ?,
-   #    the 1st ? is for ungreedy match
-   #    the 2nd ? says the (...) is optional
+   'this has .*:(?: (abc)){0,2}',
+   'this has .*:( abc){0,2}',
+   'this has .*:( abc{0,2})',
+   'this has .*:((?: abc){0,2})',   # this works
 );
 
 for my $s (@strings) {

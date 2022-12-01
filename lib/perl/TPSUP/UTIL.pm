@@ -67,6 +67,8 @@ our @EXPORT_OK = qw(
    convert_to_uppercase
    tp_join
    tp_quote_wrap
+   gen_combinations_from_a
+   gen_combinations_from_aa
 );
 
 
@@ -2464,6 +2466,187 @@ sub tp_join {
    return join($delimiter, @$a2);
 }
 
+sub resolve_scalar_var_in_string {
+   my ($clause, $Dict, $opt) = @_;
+ 
+   # this function relies on %$Dict, not %vars or %known,
+   return $clause if !$clause;
+
+   # scalar_vars is enclosed by double curlies {{...=default}},
+   # but exclude {{pattern::...} and {{where::...}}
+   # /s mean stream, ie, multiline
+   # my @scalar_vars = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)\}\}/sg);  # get all scalar vars
+   my @vars_defaults = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)(=.{0,200}?)?\}\}/sg);
+   # there are 2 '?':
+   #    the 1st '?' is for ungreedy match
+   #    the 2nd '?' says the (...) is optional
+   # example:
+   #    .... {{VAR1=default1}}|{{VAR2=default2}}
+   # default can be multi-line
+   # default will be undef in the array if not defined.
+
+   my $defaults_by_var;
+   my @scalar_vars;
+   while (@vars_defaults) {
+      my $var     = shift @vars_defaults;
+      my $default = shift @vars_defaults;
+      if (defined $default) {
+         $default =~ s/^=//;
+      }
+
+      push @scalar_vars, $var;
+      push @{$defaults_by_var->{$var}}, $default; 
+
+      # note: @scalar_vars may have dups and we don't want to remove dups because
+      #       the dup var may have different default.
+      #       one scenario we cannot handle yet: for the same var, some has default
+      #       and some doesn't. if the var is not in %known, then, will be problem.
+   }
+
+   return $clause if !@scalar_vars;   # return when no variable found
+
+   my $yyyymmdd = get_first_by_key([$Dict, $opt], 'YYYYMMDD');
+
+   my $Dict2 = {}; # this is a local Dict to avoid polluting caller's $Dict
+
+   if ($yyyymmdd) {
+      if ($yyyymmdd =~ /^(\d{4})(\d{2})(\d{2})$/) {
+         my ($yyyy, $mm, $dd) = ($1, $2, $3);
+         $Dict2->{yyyymmdd} = $yyyymmdd;
+         $Dict2->{yyyy}     = $yyyy;
+         $Dict2->{mm}       = $mm;
+         $Dict2->{dd}       = $dd;
+      } else {
+         confess "YYYYMMDD='$yyyymmdd' is in bad format";
+      }
+   }
+
+   $opt = {} if !$opt;
+   my $old_clause = $clause;
+
+   my $idx_by_var;  # this is handle dup var
+   for my $var (@scalar_vars) {
+      if (exists $idx_by_var->{$var}) {
+         $idx_by_var->{$var} ++;
+      } else {
+         $idx_by_var->{$var} = 0;
+      }
+      my $idx = $idx_by_var->{$var};
+
+      my $value;
+
+      # add 'use strict; use warnings;' to catch syntax errors. for example, once
+      # i didn't define $opt, eval{} just failed silently without setting any error in $@.
+      eval {use strict; use warnings; $value = get_value_by_key_case_insensitive({%$Dict, %$Dict2, %$opt}, $var)};
+      if ($@ ) {
+         if ($opt->{verbose}) {
+            print "cannot resolve var=$var in clause=$clause: $@\n";
+            print "Dict = ", Dumper({%$Dict, %$Dict2, %$opt});
+         }
+
+         my $default = $defaults_by_var->{$var}->[$idx];
+         if (defined $default) {
+            $opt->{verbose} && print "var=$var default=$default\n";
+            $value = $default;
+         } else {
+            $opt->{verbose} && print "var=$var default is undefined.\n";
+         }
+      }
+
+      next if ! defined $value;
+      # $clause =~ s/\{\{$var\}\}/$value/igs;
+      # don't do global replacement because dup var may have different default
+      $clause =~ s/\{\{$var(=.{0,200}?)?\}\}/$value/is;
+      $opt->{verbose} && print "replaced #${idx} {{$var}} with '$value'\n";
+   }
+
+   return $clause if $clause eq $old_clause;    # return when nothing can be resolved.
+
+   # use the following to guard against deadloop
+   my $level = defined $opt->{level} ? $opt->{level} : 0;
+   $level ++;
+   my $max_level = 10;
+   croak "max_level=$max_level reached when trying to resolve clause=$clause. use verbose mode to debug" if $level >= $max_level;
+
+   # recursive call
+   $clause = resolve_scalar_var_in_string($clause, $Dict, {%$opt, level=>$level});
+
+   return $clause;
+}
+
+sub gen_combinations_from_a {
+   my ($array, $number_of_items, $opt) = @_;
+
+   # select 2 from (1,2,3), we get (1,2), (1,3), (2,3)
+   # TODO: need to convert recursion to loop if need to handle large data set.
+ 
+   if ($number_of_items < 1) {
+      croak "number_of_items=$number_of_items cannot be less than 1";
+   } 
+
+   if ($number_of_items > @$array) {   
+      croak "number_of_items to be selected=$number_of_items > total=" . scalar(@$array);
+   }
+
+   if ($number_of_items == @$array) {
+      return [$array];
+   }
+
+   my @combos;
+   if ($number_of_items == 1) {
+      for my $e (@$array) {
+         push @combos, [$e];
+      }
+      return \@combos;
+   }
+
+   my @a = @$array;
+   my $head = shift @a;
+
+   # combos without head
+   @combos = @{gen_combinations_from_a(\@a, $number_of_items)};
+
+   # combos with head
+   my $combos2 = gen_combinations_from_a(\@a, $number_of_items-1);
+
+   for my $c (@$combos2) {
+      push @combos, [$head, @$c];
+   }
+
+   return \@combos;
+}
+
+sub gen_combinations_from_aa {
+   my ($array_of_array, $opt) = @_;
+ 
+   # select 1  from each ([1,2], ["A", "B"]),
+   # we get ([1,"A"], [1, "B"], [2, "A"], [2, "B"])
+   # TODO: need to convert recursion to loop if need to handle large data set.
+
+   return $array_of_array if ! @{$array_of_array};
+
+   my @a = @$array_of_array;
+
+   my $head = shift @a;
+
+   my @combos;
+   if (!@a) {
+      for my $e (@$head) {
+         push @combos, [$e];
+      }
+   } else {
+      my $sub_combos = gen_combinations_from_aa(\@a);
+
+      for my $e (@$head) {
+         for my $sc (@$sub_combos) {
+            push @combos, [$e, @$sc];
+         }
+      }
+   }
+
+   return \@combos;
+}
+
 sub main {
    print "\n------------------------------------------------\n";
    print "test binary search\n";
@@ -2626,115 +2809,22 @@ jkl
       print "original = ", Dumper(\@a);
       print "tp_join = ",  tp_join(\@a), "\n";
    }
+
+   print "\n------------------------------------------------\n";
+   {
+      my @a = (1,2,3,4);
+      print "a = ", Dumper(\@a);
+      print "gen_combinations_from_a(\\\@a, 2) = ",  Dumper(gen_combinations_from_a(\@a, 2)), "\n";
+   }
+
+   print "\n------------------------------------------------\n";
+   {
+      my @a = ([1,2], ['A', 'B'], ['a','b']);
+      print "a = ", Dumper(\@a);
+      print "gen_combinations_from_aa = ",  Dumper(gen_combinations_from_aa(\@a)), "\n";
+   }
 }
 
-sub resolve_scalar_var_in_string {
-   my ($clause, $Dict, $opt) = @_;
- 
-   # this function relies on %$Dict, not %vars or %known,
-   return $clause if !$clause;
-
-   # scalar_vars is enclosed by double curlies {{...=default}},
-   # but exclude {{pattern::...} and {{where::...}}
-   # /s mean stream, ie, multiline
-   # my @scalar_vars = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)\}\}/sg);  # get all scalar vars
-   my @vars_defaults = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)(=.{0,200}?)?\}\}/sg);
-   # there are 2 '?':
-   #    the 1st '?' is for ungreedy match
-   #    the 2nd '?' says the (...) is optional
-   # example:
-   #    .... {{VAR1=default1}}|{{VAR2=default2}}
-   # default can be multi-line
-   # default will be undef in the array if not defined.
-
-   my $defaults_by_var;
-   my @scalar_vars;
-   while (@vars_defaults) {
-      my $var     = shift @vars_defaults;
-      my $default = shift @vars_defaults;
-      if (defined $default) {
-         $default =~ s/^=//;
-      }
-
-      push @scalar_vars, $var;
-      push @{$defaults_by_var->{$var}}, $default; 
-
-      # note: @scalar_vars may have dups and we don't want to remove dups because
-      #       the dup var may have different default.
-      #       one scenario we cannot handle yet: for the same var, some has default
-      #       and some doesn't. if the var is not in %known, then, will be problem.
-   }
-
-   return $clause if !@scalar_vars;   # return when no variable found
-
-   my $yyyymmdd = get_first_by_key([$Dict, $opt], 'YYYYMMDD');
-
-   my $Dict2 = {}; # this is a local Dict to avoid polluting caller's $Dict
-
-   if ($yyyymmdd) {
-      if ($yyyymmdd =~ /^(\d{4})(\d{2})(\d{2})$/) {
-         my ($yyyy, $mm, $dd) = ($1, $2, $3);
-         $Dict2->{yyyymmdd} = $yyyymmdd;
-         $Dict2->{yyyy}     = $yyyy;
-         $Dict2->{mm}       = $mm;
-         $Dict2->{dd}       = $dd;
-      } else {
-         confess "YYYYMMDD='$yyyymmdd' is in bad format";
-      }
-   }
-
-   $opt = {} if !$opt;
-   my $old_clause = $clause;
-
-   my $idx_by_var;  # this is handle dup var
-   for my $var (@scalar_vars) {
-      if (exists $idx_by_var->{$var}) {
-         $idx_by_var->{$var} ++;
-      } else {
-         $idx_by_var->{$var} = 0;
-      }
-      my $idx = $idx_by_var->{$var};
-
-      my $value;
-
-      # add 'use strict; use warnings;' to catch syntax errors. for example, once
-      # i didn't define $opt, eval{} just failed silently without setting any error in $@.
-      eval {use strict; use warnings; $value = get_value_by_key_case_insensitive({%$Dict, %$Dict2, %$opt}, $var)};
-      if ($@ ) {
-         if ($opt->{verbose}) {
-            print "cannot resolve var=$var in clause=$clause: $@\n";
-            print "Dict = ", Dumper({%$Dict, %$Dict2, %$opt});
-         }
-
-         my $default = $defaults_by_var->{$var}->[$idx];
-         if (defined $default) {
-            $opt->{verbose} && print "var=$var default=$default\n";
-            $value = $default;
-         } else {
-            $opt->{verbose} && print "var=$var default is undefined.\n";
-         }
-      }
-
-      next if ! defined $value;
-      # $clause =~ s/\{\{$var\}\}/$value/igs;
-      # don't do global replacement because dup var may have different default
-      $clause =~ s/\{\{$var(=.{0,200}?)?\}\}/$value/is;
-      $opt->{verbose} && print "replaced #${idx} {{$var}} with '$value'\n";
-   }
-
-   return $clause if $clause eq $old_clause;    # return when nothing can be resolved.
-
-   # use the following to guard against deadloop
-   my $level = defined $opt->{level} ? $opt->{level} : 0;
-   $level ++;
-   my $max_level = 10;
-   croak "max_level=$max_level reached when trying to resolve clause=$clause. use verbose mode to debug" if $level >= $max_level;
-
-   # recursive call
-   $clause = resolve_scalar_var_in_string($clause, $Dict, {%$opt, level=>$level});
-
-   return $clause;
-}
 
 
 

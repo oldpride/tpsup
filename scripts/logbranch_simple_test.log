@@ -1,0 +1,15 @@
+received order_id=ORD001, message_id=MSG_ORD001, 
+received order_id=ORD002, message_id=MSG_ORD002, 
+irrelevent message 1
+processing MSG_ORD001
+received trade_id=TRD001, trade_message=MSG_TRD001, 
+processing MSG_ORD002
+irrelevent message 2
+received trade_id=TRD002, trade_message=MSG_TRD002, 
+ERROR: processing MSG_ORD001, timed out
+processing MSG_ORD002 SUCCESS
+processing MSG_TRD001
+irrelevent message 3
+processing MSG_TRD002
+ERROR: processing MSG_TRD001, timed out
+processing MSG_TRD002 SUCCESS
