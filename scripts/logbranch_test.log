@@ -2,14 +2,14 @@ received MSG001, item_id=A001,
 A001 spawns B001,
 B001 spawns C001,
 OK: A001 SUCCESS
-ERROR: B001 and C001 not all done
+ERROR: B001 and C001 not all done (lower-case)
 DETAIL: B001 SUCCESS
 DETAIL: C001 FAILED,
 
 received MSG002, item_id=A002, 
 A002 spawns B002, C002, D002
 B002 spawns E002,
-OK: A002 success,
+OK: A002 success, lower case to test case insenstive
 ERROR: B002 and C002 FAILED,
 DETAIL: D002 SUCCESS,
 DETAIL: E002 SUCCESS,
