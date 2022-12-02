@@ -45,16 +45,16 @@ example:
 
   # one -b
   $prog -b "received.*?message_id=(?<MSGID>.+?),--ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"\\
-        logbranch_test.log 
+        logbranch_simple_test.log 
 
   # multiple -b
   $prog -b "received.*?message_id=(?<MSGID>.+?),--ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"\\
         -b "received.*?trade_message=(?<MSGID>.+?),--ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"\\
-        logbranch_test.log 
+        logbranch_simple_test.log 
 
   # narrow down start-pattern using -m
   $prog -b "received.*?message_id=(?<MSGID>.+?),--ERROR:.*?{{MSGID}}|{{MSGID}}.*?SUCCESS"\\
-        -m ORD001 logbranch_test.log 
+        -m ORD001 logbranch_simple_test.log 
 
 END
 
