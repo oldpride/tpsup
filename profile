@@ -765,3 +765,12 @@ mysitep3lib   () { cd "$MYBASE/github/$SPECNAME/python3/lib/tpsup"; }
 
 myandroid () { echo "ANDROID_HOME=$ANDROID_HOME"; [ "X$ANDROID_HOME" = "X" ] || cd "$ANDROID_HOME"; }
 
+mydir () { 
+   if [ $# -ne 1 ]; then
+      echo "ERROR: wrong number of args"
+      echo "usage:   mydir app"
+      echo "example: mydir angular"
+   fi
+   cd "$MYBASE/github/$1";
+}
+

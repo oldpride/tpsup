@@ -35,12 +35,19 @@ fi
 
 . $TPSUP/profile
 
-for cmd in mydjango myangular kdbnotes mycpp myfront myjava myjoomla mykivy mynotes myns mysite mytp kungfusql mycad myduino mydice 
+for cmd in mydjango myangular kdbnotes mycpp myfront myjava myjoomla mykivy mynotes myns mysite mytp kungfusql mycad myduino mydice myvue
 do 
    echo ""
    echo "------ $cmd -------"
    echo ""
-   $cmd 2>/dev/null || continue
+
+   subdir=`echo $cmd|cut -c3-`
+   if ! $cmd 2>/dev/null; then
+      if ! mydir $subdir 2>/dev/null; then
+         continue
+      fi
+   fi
+
    #(set -x; git status)
    #echo ""
    #(set -x; git fetch --dry-run)
