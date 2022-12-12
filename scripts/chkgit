@@ -35,7 +35,7 @@ fi
 
 . $TPSUP/profile
 
-for cmd in mydjango myangular kdbnotes mycpp myfront myjava myjoomla mykivy mynotes myns mysite mytp kungfusql mycad myduino mydice myvue
+for cmd in mydjango myangular kdbnotes mycpp myfront myjava myjoomla myjs mykivy mynotes myns mysite mytp kungfusql mycad myduino mydice myvue
 do 
    echo ""
    echo "------ $cmd -------"
