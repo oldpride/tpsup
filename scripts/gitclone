@@ -1,0 +1,63 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog user proj
+
+   -n       dryrun mode
+
+   if its our own user, use ssh to clone, so that we can check in right away.
+   otherwise, use https to clone.
+
+examples:
+
+   $prog oldpride js
+
+EOF
+
+   exit 1
+}
+
+dryrun=N
+while getopts n o;
+do
+   case "$o" in
+      n) dryrun=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 2 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+user=$1
+proj=$2
+
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+if [ "$user" = "oldpride" ]; then
+   command="git clone git@github.com:$user/$proj.git"
+else
+   command="git clone https://github.com/$user/${proj}.git"
+fi
+
+if [ $dryrun = Y ]; then
+   echo "dryrun: $command"
+else
+   echo "$command"
+
+   $command
+fi
+
+
