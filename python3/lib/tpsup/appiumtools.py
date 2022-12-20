@@ -86,7 +86,7 @@ def start_proc(proc: str, **opt):
         #             # f"--log={self.appium_log}","
         print(f"cmd = {cmd}")
         subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, **opt2)
-        return {'status': 'started', 'error': 0}
+        return {'status': 'started', 'error': 0, 'host_port': host_port}
     else:
         # appium server args
         #   https://appium.io/docs/en/writing-running-appium/server-args/
@@ -113,11 +113,64 @@ def start_proc(proc: str, **opt):
         print(f"service.is_running={service.is_running}")
         print(f"service.is_listening={service.is_listening}")
         # service.stop()
-        return {'status': 'started', 'error': 0, 'service': service}
+        return {
+            'status': 'started',
+            'error': 0,
+            'service': service,
+            'host_port': host_port
+        }
+
+
+def get_setup_info():
+    return '''
++----------+       +----------+      +-----+    +---------+
+| appium   +------>| appium   +----->+ adb +--->+ phone / | +---->internet
+| python   |       | server   |      |     |    | emulator|
+| webdriver|       |GUI/Nodejs|      |     |    |         |
++----------+       +----------+      +-----+    +---------+
+
+to test with emulator, 
+    just set is_emulator = True.
+    this call will start an emulator
+to test with real device running android,
+    on the device, settings->system->developer options->USB debugging, turn on.
+    if device is connected with USB cable
+        no extra steps  
+    if device is connected with Wi-fi (must be on the same wifi network)
+        settings->system->developer options-Wireless debugging, turn on
+        go into Wireless debugging, 
+            under IP address and Port
+                write down the host:port1, 
+                this will be the 'connect' port, not the pairing port.
+        if PC and device haven't been paired, do the following
+            under Wireless Debugging, click Pair device with pairing code.
+            write down the paring code.
+            write down the host:port2, which is the pairing port.
+            from PC,
+                adb pair host:port2
+                enter pairing code
+        from PC command line:
+            adb connect "host:port1"
+            adb devices
+              "host:port1" will be the device name in the output, and this
+              will be the adb_device_name
+              
+Note: there are many host:port pairs involved
+    appium-server host:port
+    emulator host:port
+    device pairing host:port
+    device connect host:port
+        '''
 
 
 class AppiumEnv:
     def __init__(self, adb_devicename: str, host_port: str, **opt):
+        # adb_devicename is what command "adb devices" shows.
+        # host_port is appium server's host and port,
+        #   not to be confused with emulator's host and port.
+        #   if host_port is not open and host is localhost, this call will start
+        #   the appium server at the port.
+
         self.host_port = host_port
         self.verbose = opt.get("verbose", 0)
         self.env = tpsup.env.Env()
@@ -129,12 +182,12 @@ class AppiumEnv:
         self.dryrun = opt.get("dryrun", False)
         self.appium_log = os.path.join(self.log_base, "appium_.log")
 
-        need_wait = 0
+        need_wait = []
         if opt.get('is_emulator', False):
             response = start_proc('emulator', **opt)
             print(f"emulator response = {pformat(response)}")
             if response.get('status', None) == "started":
-                need_wait = 1
+                need_wait.append(response.get("host_port"))
 
         appium_exe = which('appium')
         if appium_exe:
@@ -146,12 +199,12 @@ class AppiumEnv:
         print(f"appium response = {pformat(response)}")
         self.service: AppiumService = response.get('service', None)
         if response.get('status', None) == "started":
-            need_wait = 1
+            need_wait.append(response.get("host_port"))
 
         if need_wait:
-            print("wait 60 seconds for appium and/or emulator to start")
-            if not wait_tcps_open(['localhost:5554', 'localhost:4723'], timeout=60):
-                raise RuntimeError("either emulator or appium server is ready")
+            print(f"wait max 60 seconds for: {need_wait}")
+            if not wait_tcps_open(need_wait, timeout=60):
+                raise RuntimeError(f"one of port is not ready: {need_wait}")
 
         self.driver: webdriver.Remote = None
 
@@ -161,7 +214,7 @@ class AppiumEnv:
         }
 
         if app := opt.get("app", None):
-            self.desired_cap['app'] = app
+            self.desired_cap['app'] = app # this actually installs the app
 
         if self.verbose:
             print(f"desire_capabilities = {pformat(self.desired_cap)}")
@@ -187,9 +240,11 @@ class AppiumEnv:
         print(f"service.is_listening={self.service.is_listening}")
         return (self.driver.session_id and self.service.is_listening and self.service.is_running)
 
-def get_driver(**args) -> webdriver.Remote :
+
+def get_driver(**args) -> webdriver.Remote:
     appiumEnv = AppiumEnv(**args)
     return appiumEnv.get_driver()
+
 
 step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
 step_compiled_action = re.compile(r"action=(Search)")
@@ -199,8 +254,11 @@ step_compiled_dump = re.compile(r"dump_(page|element)=(.+)")
 step_compiled_context = re.compile(r"context=(native|webview)")
 context_compiled_native = re.compile(r'native', re.IGNORECASE)
 context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
+step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
 
-def follow(driver:webdriver.Remote, steps:list, **opt):
+
+def follow(driver: webdriver.Remote, steps: list, **opt):
+
     if not list:
         return
 
@@ -210,7 +268,7 @@ def follow(driver:webdriver.Remote, steps:list, **opt):
     global we_return
     global action_data
 
-    element:WebElement = None
+    element: WebElement = None
 
     helper = {}
 
@@ -260,14 +318,24 @@ def follow(driver:webdriver.Remote, steps:list, **opt):
                     html = element.get_attribute('outerHTML')
 
                 else:
+                    # scope == 'page'
                     html = driver.page_source
                 if path != 'stdout':
-                    with tpsup.tpfile.TpOutput(path) as fh:
+                    with tpsup.tpfile.TpOutput(f"{path}/dump.html") as fh:
                         fh.write(html)
                         fh.write('\n')
                         fh.close()
+                    with tpsup.tpfile.TpOutput(f"{path}/context.txt") as fh:
+                        fh.write(f"{driver.contexts}")
+                        fh.write('\n')
+                        fh.close()
                 else:
+                    print("------------- html     --------------")
                     print(html)
+                    print("")
+                    print("------------- contexts ---------------")
+                    print(f"{driver.contexts}")
+                    print("")
         elif m := step_compiled_action.match(step):
             value, *_ = m.groups()
             print(f"follow(): perform action={value}")
@@ -315,12 +383,17 @@ def follow(driver:webdriver.Remote, steps:list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.press_keycode(3)
-        elif step == 'launch_app':
-            print(f"follow(): launch_app")
+        elif m := step_compiled_run.match(step):
+            pkg, activity, *_ = m.groups()
+            print(f"follow(): run pkg='{pkg}', activity='{activity}'")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                driver.launch_app()
+                # https://stackoverflow.com/questions/57644620/
+                # driver.launch_app() # launch_app is deprecated
+                driver.start_activity(pkg, activity)
+                print("launched activity, waiting for 60 seconds for its ready")
+                driver.wait_activity(activity, timeout=60)
         else:
             raise RuntimeError(f"unsupported 'step={step}'")
 

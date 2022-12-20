@@ -1,0 +1,103 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+my $method = 'GET';
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog port
+
+   Use adb to fix android device's wireless debug port.
+   The fix works till the next phone reboot.
+
+   -n|-dryrun     dryrun
+   -v             verbose
+
+example:
+
+   $prog 5555
+
+END
+
+   exit 1;
+}
+
+my $dryrun;
+my $verbose;
+
+GetOptions(
+   'n'            =>      \$dryrun,
+   'dryrun'       =>      \$dryrun,
+   'v'            =>      \$verbose,
+) || usage ("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($new_port) = @ARGV;
+
+# $ adb devices
+# List of devices attached
+# 192.168.1.66:46245      device
+
+my $cmd = "adb devices";
+print "cmd=$cmd\n";
+my @lines = `$cmd`;
+print "@lines";
+if ($? != 0) {
+   print "ERROR: cmd=$cmd failed.\n";
+   exit 1;
+}
+
+my @found = ();
+for my $l (@lines) {
+   if ($l =~ /^\s*(\d+[.]\d+[.]\d+[.]\d+):(\d+)\s+device/) {
+      push @found, [ $1, $2 ]; 
+   }
+}
+
+if (!@found) {
+   print "ERROR: no connected device found\n";
+   exit 1;
+}
+
+if (@found>1) {
+   print "ERROR: more than 1 connected device found\n";
+   exit 1;
+}
+
+my ($ip, $old_port) = @{$found[0]};
+
+my @commands = (
+   "adb tcpip $new_port",
+   "adb kill-server",
+   "adb start-server",
+   "adb connect $ip:$new_port",
+);
+
+for my $cmd (@commands) {
+   print "\n";
+   print "cmd=$cmd\n";
+   if ($dryrun) {
+      print "dryrun\n";
+      next;
+   }
+
+   system($cmd);
+   if ($? != 0) {
+      print "ERROR: cmd=$cmd failed\n";
+      exit 1;
+   }
+}
