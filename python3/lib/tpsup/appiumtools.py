@@ -164,12 +164,14 @@ Note: there are many host:port pairs involved
 
 
 class AppiumEnv:
-    def __init__(self, adb_devicename: str, host_port: str, **opt):
-        # adb_devicename is what command "adb devices" shows.
+    def __init__(self, host_port: str, **opt):
         # host_port is appium server's host and port,
         #   not to be confused with emulator's host and port.
         #   if host_port is not open and host is localhost, this call will start
         #   the appium server at the port.
+        # note: we don't need to specify deviceName as shown in 'adb devices' because the
+        #   appium server will automatically find the device and
+        #   appium only support one device.
 
         self.host_port = host_port
         self.verbose = opt.get("verbose", 0)
@@ -209,7 +211,6 @@ class AppiumEnv:
         self.driver: webdriver.Remote = None
 
         self.desired_cap = {
-            "appium:deviceName": adb_devicename,
             "appium:platformName": "Android",
         }
 
@@ -401,7 +402,7 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
 
 
 def main():
-    appiumEnv = AppiumEnv(adb_devicename='emulator-5558', host_port='localhost:4723', is_emulator=True)
+    appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
     driver = appiumEnv.get_driver()
 
     print(f"click home button")

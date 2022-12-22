@@ -25,10 +25,10 @@ our_cfg = {
         },
     },
 
-    # appiumEnv = AppiumEnv(adb_devicename='emulator-5558', host_port='localhost:4723', is_emulator=True)
+    # appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args': ['adb_devicename', 'host_port'],
+    'position_args': ['host_port'],
 
     'extra_args': [
         # argparse's args
@@ -91,8 +91,11 @@ our_cfg = {
     +----------+       +----------+      +-----+    +---------+
                        host_port     adb_device_name
     
-    adb_device_name is what command "adb devices" shows.
     host_port is appium sever's host and port.
+    adb_device_name is what command "adb devices" shows.
+    Note: we won't mention adb_device_name on command line because
+        1. appium server will auto find the device from "adb devices"
+        2. appium only works when "adb devices" has only one device.
     
     to test with emulator, 
         just set is_emulator = True.
@@ -126,7 +129,7 @@ our_cfg = {
         device pairing host:port
         device connect host:port
 
-    {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator '''
+    {{{{prog}}}} localhost:4723 -is_emulator '''
                      'home id=com.android.quicksearchbox:id/search_widget_text click '
                      'id=com.android.quicksearchbox:id/search_src_text click string=Amazon action=Search '
                      'dump_page=%USERPROFILE%/dumpdir2/page_source.html '
@@ -135,18 +138,17 @@ our_cfg = {
                      f'''
     
     - test with app
-    {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk"
+    {{{{prog}}}} localhost:4723 -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk"
     - if app stuck, 
     adb uninstall org.nativescript.test02ngchallenge
     
     - test webview context
-    {{{{prog}}}} emulator-5558 localhost:4723 -is_emulator context=webview
+    {{{{prog}}}} localhost:4723 -is_emulator context=webview
     this is not working yet. we may need to launch an webview app first
     
     - test with real device, 
-    - 192.168.1.66:33013 is the adb_devicename in the 'adb devices' output.
-      the following command load the package
-    {{{{prog}}}} 192.168.1.66:33013 localhost:4723  -np -v -app "%TPSUP%/python3/scripts/test02.apk"
+    - the following command load the package onto the device
+    {{{{prog}}}} localhost:4723  -np -v -app "%TPSUP%/python3/scripts/test02.apk"
     
     - find package name
     adb shell "pm list packages|grep test02"
@@ -158,10 +160,10 @@ our_cfg = {
         b20ec9c org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - run the package's activity
-    {{{{prog}}}} 192.168.1.66:33013 localhost:4723  -np -v run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
+    {{{{prog}}}} localhost:4723  -np -v run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - the above can be done in one command assuming knowing pkg and activity beforehand
-    {{{{prog}}}} 192.168.1.66:33013 localhost:4723 -np -v -app "%TPSUP%/python3/scripts/test02.apk" run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
+    {{{{prog}}}} localhost:4723 -np -v -app "%TPSUP%/python3/scripts/test02.apk" run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 '''
     ,
 
@@ -197,7 +199,7 @@ def code(all_cfg, known, **opt):
                 opt2[k] = v
 
         driver = method(**{**kwargs, "dryrun": 0, **opt})  # overwrite kwargs
-        # 'adb_devicename', 'host_port' are in **opt
+        # 'host_port' are in **opt
         all_cfg["resources"]["appium"]["driver"] = driver
 
     steps = known['REMAININGARGS']
