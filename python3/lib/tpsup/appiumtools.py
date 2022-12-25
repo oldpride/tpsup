@@ -12,6 +12,9 @@ from appium.webdriver.appium_service import AppiumService
 from appium.webdriver.common.appiumby import AppiumBy
 from appium.webdriver import WebElement
 
+# import appium webdriver extensions
+import appium.webdriver.extensions.android.nativekey as nativekey
+
 import tpsup.env
 import tpsup.tpfile
 
@@ -256,6 +259,7 @@ step_compiled_context = re.compile(r"context=(native|webview)")
 context_compiled_native = re.compile(r'native', re.IGNORECASE)
 context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
 step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
+step_compiled_key = re.compile(r"key=(.+)", re.IGNORECASE)
 
 
 def follow(driver: webdriver.Remote, steps: list, **opt):
@@ -293,9 +297,25 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 time.sleep(int(value))
+        elif m := step_compiled_key.match(step):
+            value, *_ = m.groups()
+            value = value.upper()
+            print(f"follow(): key={value}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                # https://stackoverflow.com/questions/74188556
+                androidkey = nativekey.AndroidKey
+                keycode = androidkey.__dict__.get(value, None)
+                if debug:
+                    print(f"key={value}, keycode={keycode}")
+                if keycode:
+                    driver.press_keycode(keycode)
+                else:
+                    raise RuntimeError(f"key={value} is not supported")
         elif m := step_compiled_string.match(step):
             value, *_ = m.groups()
-            print(f"follow(): send_keys={value}")
+            print(f"follow(): string={value}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
