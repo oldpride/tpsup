@@ -14,6 +14,7 @@ from appium.webdriver import WebElement
 
 # import appium webdriver extensions
 import appium.webdriver.extensions.android.nativekey as nativekey
+from appium.webdriver.common.touch_action import TouchAction
 
 import tpsup.env
 import tpsup.tpfile
@@ -220,6 +221,13 @@ class AppiumEnv:
         if app := opt.get("app", None):
             self.desired_cap['app'] = app # this actually installs the app
 
+        # these two can be replaced with run=app/activity
+        # if appPackage := opt.get("appPackage", None):
+        #     self.desired_cap['appPackage'] = appPackage
+        #
+        # if appActivity := opt.get("appActivity", None):
+        #     self.desired_cap['appActivity'] = appActivity
+
         if self.verbose:
             print(f"desire_capabilities = {pformat(self.desired_cap)}")
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
@@ -337,7 +345,6 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                     # selection-start, selection-end, selected, {text,name}, bounds,
                     # displayed, contentSize]
                     html = element.get_attribute('outerHTML')
-
                 else:
                     # scope == 'page'
                     html = driver.page_source
@@ -346,8 +353,12 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                         fh.write(html)
                         fh.write('\n')
                         fh.close()
-                    with tpsup.tpfile.TpOutput(f"{path}/context.txt") as fh:
+                    with tpsup.tpfile.TpOutput(f"{path}/contexts.txt") as fh:
                         fh.write(f"{driver.contexts}")
+                        fh.write('\n')
+                        fh.close()
+                    with tpsup.tpfile.TpOutput(f"{path}/current_context.txt") as fh:
+                        fh.write(f"{driver.current_context}")
                         fh.write('\n')
                         fh.close()
                 else:
@@ -398,6 +409,13 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 element.click()
+        elif step == 'doubleclick':
+            print(f"follow(): doubleclick")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                actions = TouchAction(driver)
+                actions.tap(element).wait(10).tap(element).perform()
         elif step == 'home':
             print(f"follow(): click home button")
             if interactive:

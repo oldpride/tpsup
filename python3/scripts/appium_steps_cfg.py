@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import os
+
 import time
 from typing import Union
 
@@ -81,7 +82,23 @@ our_cfg = {
             'action': 'store',
             'help': 'app_path, /path/app.apk for android or https://app.com/app.ipa for ios. this copies the package onto device',
         },
+
+        # these two can be replaced with run=app/activity
+        # {
+        #     'dest': 'appPackage',
+        #     'default': None,
+        #     'action': 'store',
+        #     'help': 'appPackage, eg. com.android.chrome',
+        # },
+        #
+        # {
+        #     'dest': 'appActivity',
+        #     'default': None,
+        #     'action': 'store',
+        #     'help': 'appActivity, eg. com.android.chrome.Main',
+        # }
     ],
+
 
     'usage_example': f'''
     +----------+       +----------+      +-----+    +---------+
@@ -164,8 +181,9 @@ our_cfg = {
 
     - the above can be done in one command assuming knowing pkg and activity beforehand
     {{{{prog}}}} localhost:4723 -np -v -app "%TPSUP%/python3/scripts/test02.apk" run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
-'''
-    ,
+
+''',
+
 
     'show_progress': 1,
 
