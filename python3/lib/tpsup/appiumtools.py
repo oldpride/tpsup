@@ -257,7 +257,7 @@ def get_driver(**args) -> webdriver.Remote:
     appiumEnv = AppiumEnv(**args)
     return appiumEnv.get_driver()
 
-
+step_compiled_blockstart = re.compile(r"\s*(while|if)=(.+)")
 step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
 step_compiled_action = re.compile(r"action=(Search)")
 step_compiled_string = re.compile(r"string=(.+)", re.MULTILINE | re.DOTALL)
@@ -268,7 +268,7 @@ context_compiled_native = re.compile(r'native', re.IGNORECASE)
 context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
 step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
 step_compiled_key = re.compile(r"key=(.+)", re.IGNORECASE)
-
+step_compiled_swipe = re.compile(r"swipe=(right|left|up|down)")
 
 def follow(driver: webdriver.Remote, steps: list, **opt):
 
@@ -283,9 +283,51 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
 
     element: WebElement = None
 
-    helper = {}
+    helper = opt.get("helper", {})
+
+    # we support single-level block, just for convenience when testing using appium_steps
+    # we don't support nested blocks; for nested block, use python directly
+    block = []
+    blockend=None
+    condition = None
+    blockstart = None
 
     for step in steps:
+        # check blockstack empty
+        if blockend:
+            if step == blockend:
+                blockend = None
+                print(f"matched blockend={blockend}, running block={block}, condition={condition}")
+                if not block:
+                    raise RuntimeError(f"block is empty")
+                if interactive:
+                    hit_enter_to_continue(helper=helper)
+                if not dryrun:
+                    run_block(driver, blockstart, condition, block, helper, **opt)
+                print(f"blockend={blockend} done")
+                continue
+            else:
+                block.append(step)
+                continue
+
+        if m := step_compiled_blockstart.match(step):
+            blockstart = m.group(1)
+            condition = m.group(2)
+
+            if m := step_compiled_findby.match(condition):
+                tag, value, *_ = m.groups()
+                if tag == 'id':
+                    condition = f"driver.find_element(AppiumBy.ID, '{value}')"
+                elif tag == 'xpath':
+                    condition = f"driver.find_element(AppiumBy.XPATH, '{value}')"
+                elif tag == 'css':
+                    condition = f"driver.find_element(AppiumBy.CSS_SELECTOR, '{value}')"
+
+            blockend = f"end_{blockstart}"
+            block = []
+            print(f"blockstart={blockstart}, condition={condition}, blockend={blockend}")
+            continue
+
         if m := step_compiled_findby.match(step):
             tag, value, *_ = m.groups()
             print(f"follow(): {tag}={value}")
@@ -433,11 +475,44 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 driver.start_activity(pkg, activity)
                 print("launched activity, waiting for 60 seconds for its ready")
                 driver.wait_activity(activity, timeout=60)
+        elif m := step_compiled_swipe.match(step):
+            direction, *_ = m.groups()
+            print(f"follow(): swipe {direction}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                window_size = driver.get_window_size()
+                width = window_size['width']
+                height = window_size['height']
+                if (direction == 'up'):
+                    driver.swipe(width*0.5, height*0.8, width*0.5, height*0.2)
+                elif (direction == 'down'):
+                    driver.swipe(width*0.5, height*0.2, width*0.5, height*0.8)
+                elif (direction == 'left'):
+                    driver.swipe(width*0.8, height*0.5, width*0.2, height*0.5)
+                elif (direction == 'right'):
+                    driver.swipe(width*0.2, height*0.5, width*0.8, height*0.5)
         else:
             raise RuntimeError(f"unsupported 'step={step}'")
 
         print(f"follow(): this step is done")
 
+def run_block(driver: webdriver.Remote, blockstart: str, condition: str, block: list, **opt):
+    if blockstart == 'while':
+        while True:
+            try:
+                eval (condition)
+            except Exception as e:
+                print(f"run_block(): condition '{condition}' is not true, break")
+                break
+            follow(driver, block, **opt)
+    elif blockstart == 'if':
+        try:
+            eval(condition)
+        except Exception as e:
+            print(f"run_block(): condition '{condition}' is not true, skip")
+            return
+        follow(driver, block, **opt)
 
 def main():
     appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
