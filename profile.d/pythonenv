@@ -30,6 +30,7 @@ expected_version=$1
 if [ $expected_version = 3 ]; then
    if ! [ "X$TP_P3_PATH" = "X" ]; then
       export PATH="$TP_P3_PATH:$PATH"
+      export PYTHONIOENCODING=utf8
    fi
    function p3c { python3 -m py_compile $@; };
 elif [ $expected_version = 2 ]; then

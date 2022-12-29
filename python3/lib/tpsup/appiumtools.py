@@ -232,7 +232,8 @@ class AppiumEnv:
             print(f"desire_capabilities = {pformat(self.desired_cap)}")
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
         self.driver = webdriver.Remote(f"http://{host_port}/wd/hub", self.desired_cap)
-        self.driver.implicitly_wait(60)
+        # appium implicit wait is default 0. there is no get implicitly_wait() method
+        # self.driver.implicitly_wait(60)
 
         self.driver.Env = self  # monkey patching for convenience
 
@@ -257,7 +258,7 @@ def get_driver(**args) -> webdriver.Remote:
     appiumEnv = AppiumEnv(**args)
     return appiumEnv.get_driver()
 
-step_compiled_blockstart = re.compile(r"\s*(while|if)=(.+)")
+step_compiled_blockstart = re.compile(r"\s*(while|if)(_not)?=(.+)")
 step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
 step_compiled_action = re.compile(r"action=(Search)")
 step_compiled_string = re.compile(r"string=(.+)", re.MULTILINE | re.DOTALL)
@@ -269,8 +270,10 @@ context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
 step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
 step_compiled_key = re.compile(r"key=(.+)", re.IGNORECASE)
 step_compiled_swipe = re.compile(r"swipe=(right|left|up|down)")
+step_compiled_wait = re.compile(r"wait=(\d+)")
 
 def follow(driver: webdriver.Remote, steps: list, **opt):
+    # driver.implicitly_wait(5)  # waits 5 seconds, TODO: make it configurable
 
     if not list:
         return
@@ -291,6 +294,7 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
     blockend=None
     condition = None
     blockstart = None
+    negation = False
 
     for step in steps:
         # check blockstack empty
@@ -303,7 +307,7 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 if interactive:
                     hit_enter_to_continue(helper=helper)
                 if not dryrun:
-                    run_block(driver, blockstart, condition, block, helper, **opt)
+                    run_block(driver, blockstart, negation, condition, block, **opt)
                 print(f"blockend={blockend} done")
                 continue
             else:
@@ -312,20 +316,21 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
 
         if m := step_compiled_blockstart.match(step):
             blockstart = m.group(1)
-            condition = m.group(2)
+            negation = m.group(2)
+            condition = m.group(3)
 
             if m := step_compiled_findby.match(condition):
                 tag, value, *_ = m.groups()
                 if tag == 'id':
-                    condition = f"driver.find_element(AppiumBy.ID, '{value}')"
+                    condition = f"driver.find_element(AppiumBy.ID, '''{value}''')"
                 elif tag == 'xpath':
-                    condition = f"driver.find_element(AppiumBy.XPATH, '{value}')"
+                    condition = f"driver.find_element(AppiumBy.XPATH, '''{value}''')"
                 elif tag == 'css':
-                    condition = f"driver.find_element(AppiumBy.CSS_SELECTOR, '{value}')"
+                    condition = f"driver.find_element(AppiumBy.CSS_SELECTOR, '''{value}''')"
 
             blockend = f"end_{blockstart}"
             block = []
-            print(f"blockstart={blockstart}, condition={condition}, blockend={blockend}")
+            print(f"blockstart={blockstart}, negation={negation}, condition={condition}, looking for blockend={blockend}")
             continue
 
         if m := step_compiled_findby.match(step):
@@ -347,6 +352,13 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 time.sleep(int(value))
+        elif m := step_compiled_wait.match(step):
+            value, *_ = m.groups()
+            print(f"follow(): set implicit wait {value} seconds")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.implicitly_wait(int(value))
         elif m := step_compiled_key.match(step):
             value, *_ = m.groups()
             value = value.upper()
@@ -456,6 +468,7 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
+                print(f"element = {element}")
                 actions = TouchAction(driver)
                 actions.tap(element).wait(10).tap(element).perform()
         elif step == 'home':
@@ -464,6 +477,12 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.press_keycode(3)
+        elif step == 'refresh':
+            print(f"follow(): refresh driver")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.refresh()
         elif m := step_compiled_run.match(step):
             pkg, activity, *_ = m.groups()
             print(f"follow(): run pkg='{pkg}', activity='{activity}'")
@@ -476,43 +495,76 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 print("launched activity, waiting for 60 seconds for its ready")
                 driver.wait_activity(activity, timeout=60)
         elif m := step_compiled_swipe.match(step):
-            direction, *_ = m.groups()
-            print(f"follow(): swipe {direction}")
+            param, *_ = m.groups()
+            print(f"follow(): swipe {param}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 window_size = driver.get_window_size()
                 width = window_size['width']
                 height = window_size['height']
-                if (direction == 'up'):
-                    driver.swipe(width*0.5, height*0.8, width*0.5, height*0.2)
-                elif (direction == 'down'):
-                    driver.swipe(width*0.5, height*0.2, width*0.5, height*0.8)
-                elif (direction == 'left'):
-                    driver.swipe(width*0.8, height*0.5, width*0.2, height*0.5)
-                elif (direction == 'right'):
-                    driver.swipe(width*0.2, height*0.5, width*0.8, height*0.5)
+
+                factor = 0.8
+                if 'small' in param:
+                    factor = 0.53
+
+                # top-left corner is (0, 0)
+                if 'up' in param:
+                    driver.swipe(width*0.5, height*factor, width*0.5, height(1-factor))
+                elif 'down' in param:
+                    driver.swipe(width*0.5, height*(1-factor), width*0.5, height*factor)
+                elif 'left' in param:
+                    driver.swipe(width*factor, height*0.5, width*(1-factor), height*0.5)
+                elif 'right' in param:
+                    driver.swipe(width*(1-factor), height*0.5, width*factor, height*0.5)
+
         else:
             raise RuntimeError(f"unsupported 'step={step}'")
 
         print(f"follow(): this step is done")
 
-def run_block(driver: webdriver.Remote, blockstart: str, condition: str, block: list, **opt):
+def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  condition: str, block: list, **opt):
+    # we separate condition and negation because condition test may fail with exception, which is
+    # neither True or False.  In this case, we want to know the condition test failed.
+    verbose = opt.get('verbose', False)
+
     if blockstart == 'while':
         while True:
-            try:
-                eval (condition)
-            except Exception as e:
-                print(f"run_block(): condition '{condition}' is not true, break")
+            res = if_block(driver, negation, condition, block, **opt)
+            if not res['executed']:
                 break
-            follow(driver, block, **opt)
     elif blockstart == 'if':
-        try:
-            eval(condition)
-        except Exception as e:
-            print(f"run_block(): condition '{condition}' is not true, skip")
-            return
-        follow(driver, block, **opt)
+        if_block(driver, negation, condition, block, **opt)
+
+def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: list, **opt):
+    # we separate condition and negation because condition test may fail with exception, which is
+    # neither True or False.  In this case, we want to know the condition test failed.
+
+    verbose = opt.get('verbose', False)
+
+    try:
+        passed_condition = eval(condition)
+    except Exception as e:
+        if verbose:
+            print(f"if_block(): condition test failed with exception={e}")
+        passed_condition = False
+
+    if passed_condition and negation:
+        print(f"if_block(): condition '{condition}' is true, but negated, break")
+        executed = False
+    elif not passed_condition and not negation:
+        print(f"if_block(): condition '{condition}' is not true, break")
+        executed = False
+    else:
+        executed = True
+
+    ret = {'executed': executed}
+
+    if executed :
+        ret['result'] = follow(driver, block, **opt)
+
+    return ret
+
 
 def main():
     appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
