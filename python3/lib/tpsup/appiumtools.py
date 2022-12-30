@@ -15,6 +15,7 @@ from appium.webdriver import WebElement
 # import appium webdriver extensions
 import appium.webdriver.extensions.android.nativekey as nativekey
 from appium.webdriver.common.touch_action import TouchAction
+# from selenium.webdriver import ActionChains
 
 import tpsup.env
 import tpsup.tpfile
@@ -73,10 +74,9 @@ def start_proc(proc: str, **opt):
         else:
             raise RuntimeError("cannot proceed")
 
-    opt2 = {}
-    log = opt.get(f'{proc}_log', None)
-    if log:
-        opt2['stdout'] = opt[f'{proc}_log']
+    log = opt.get('log', None)
+    if not log:
+        log = os.path.expanduser("~") + f"/{proc}.log"
 
     # https://developer.android.com/studio/run/emulator-commandline
     # https://stackoverflow.com/questions/42604543/launch-emulator-from-appium-python-client
@@ -89,7 +89,7 @@ def start_proc(proc: str, **opt):
         #     cmd = f"appium --address localhost -p {port} --log-no-colors"
         #             # f"--log={self.appium_log}","
         print(f"cmd = {cmd}")
-        subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, **opt2)
+        subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, stdout=log)
         return {'status': 'started', 'error': 0, 'host_port': host_port}
     else:
         # appium server args
@@ -103,6 +103,7 @@ def start_proc(proc: str, **opt):
             "--port", f"{port}",
             "--log-no-colors",
             "--base-path", '/wd/hub',
+            #"--log", log,
 
             # this is called only when driver.switch_to.context("webview...")
             # it may only work when desired_capacity has "app" set
@@ -190,7 +191,9 @@ class AppiumEnv:
 
         need_wait = []
         if opt.get('is_emulator', False):
-            response = start_proc('emulator', **opt)
+            emulator_log = os.path.join(self.log_base, "emulator.log")
+            print(f"emulator_log={emulator_log}")
+            response = start_proc('emulator', log=emulator_log, **opt)
             print(f"emulator response = {pformat(response)}")
             if response.get('status', None) == "started":
                 need_wait.append(response.get("host_port"))
@@ -201,7 +204,9 @@ class AppiumEnv:
         else:
             raise RuntimeError(f"appium is not in PATH={os.environ['PATH']}")
 
-        response = start_proc('appium', **opt)
+        appium_log = os.path.join(self.log_base, "appium.log")
+        print(f"appium_log={appium_log}")
+        response = start_proc('appium', log=appium_log, **opt)
         print(f"appium response = {pformat(response)}")
         self.service: AppiumService = response.get('service', None)
         if response.get('status', None) == "started":
@@ -269,7 +274,7 @@ context_compiled_native = re.compile(r'native', re.IGNORECASE)
 context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
 step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
 step_compiled_key = re.compile(r"key=(.+)", re.IGNORECASE)
-step_compiled_swipe = re.compile(r"swipe=(right|left|up|down)")
+step_compiled_swipe = re.compile(r"swipe=(.+)")
 step_compiled_wait = re.compile(r"wait=(\d+)")
 
 def follow(driver: webdriver.Remote, steps: list, **opt):
@@ -281,10 +286,11 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
     dryrun = opt.get("dryrun", 0)
     interactive = opt.get("interactive", 0)
     debug = opt.get("debug", 0)
+    verbose = opt.get("verbose", 0)
     global we_return
     global action_data
 
-    element: WebElement = None
+    element:WebElement = None
 
     helper = opt.get("helper", {})
 
@@ -385,43 +391,8 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
         elif m := step_compiled_dump.match(step):
             scope, path, *_ = m.groups()
             print(f"follow(): dump {scope} to dir={path}")
-            if interactive:
-                hit_enter_to_continue(helper=helper)
-            if not dryrun:
-                if scope == 'element':
-                    # https://stackoverflow.com/questions/29671552/
-                    # io.appium.uiautomator2.common.exceptions.NoSuchAttributeException:
-                    # 'outerHTML' attribute is unknown for the element. Only the
-                    # following attributes are supported: [checkable, checked,
-                    # {class,className}, clickable, {content-desc,contentDescription},
-                    # enabled, focusable, focused, {long-clickable,longClickable},
-                    # package, password, {resource-id,resourceId}, scrollable,
-                    # selection-start, selection-end, selected, {text,name}, bounds,
-                    # displayed, contentSize]
-                    html = element.get_attribute('outerHTML')
-                else:
-                    # scope == 'page'
-                    html = driver.page_source
-                if path != 'stdout':
-                    with tpsup.tpfile.TpOutput(f"{path}/dump.html") as fh:
-                        fh.write(html)
-                        fh.write('\n')
-                        fh.close()
-                    with tpsup.tpfile.TpOutput(f"{path}/contexts.txt") as fh:
-                        fh.write(f"{driver.contexts}")
-                        fh.write('\n')
-                        fh.close()
-                    with tpsup.tpfile.TpOutput(f"{path}/current_context.txt") as fh:
-                        fh.write(f"{driver.current_context}")
-                        fh.write('\n')
-                        fh.close()
-                else:
-                    print("------------- html     --------------")
-                    print(html)
-                    print("")
-                    print("------------- contexts ---------------")
-                    print(f"{driver.contexts}")
-                    print("")
+            # print(f"before dump, element.__getattribute__('id') = {element.__getattribute__('id')}")
+            dump(driver, element, scope, path, verbose=verbose)
         elif m := step_compiled_action.match(step):
             value, *_ = m.groups()
             print(f"follow(): perform action={value}")
@@ -469,14 +440,8 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 print(f"element = {element}")
-                actions = TouchAction(driver)
-                actions.tap(element).wait(10).tap(element).perform()
-        elif step == 'home':
-            print(f"follow(): click home button")
-            if interactive:
-                hit_enter_to_continue(helper=helper)
-            if not dryrun:
-                driver.press_keycode(3)
+                print(f"element.id = {element.id}")
+                doubleclick(driver, element, **opt)
         elif step == 'refresh':
             print(f"follow(): refresh driver")
             if interactive:
@@ -500,24 +465,7 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                window_size = driver.get_window_size()
-                width = window_size['width']
-                height = window_size['height']
-
-                factor = 0.8
-                if 'small' in param:
-                    factor = 0.53
-
-                # top-left corner is (0, 0)
-                if 'up' in param:
-                    driver.swipe(width*0.5, height*factor, width*0.5, height(1-factor))
-                elif 'down' in param:
-                    driver.swipe(width*0.5, height*(1-factor), width*0.5, height*factor)
-                elif 'left' in param:
-                    driver.swipe(width*factor, height*0.5, width*(1-factor), height*0.5)
-                elif 'right' in param:
-                    driver.swipe(width*(1-factor), height*0.5, width*factor, height*0.5)
-
+                swipe(driver, param, **opt)
         else:
             raise RuntimeError(f"unsupported 'step={step}'")
 
@@ -535,6 +483,7 @@ def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  conditi
                 break
     elif blockstart == 'if':
         if_block(driver, negation, condition, block, **opt)
+
 
 def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is
@@ -564,6 +513,144 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
         ret['result'] = follow(driver, block, **opt)
 
     return ret
+
+def dump(driver: webdriver.Remote, element:WebElement, scope:str, path: str, **opt):
+    verbose = opt.get('verbose', False)
+
+    if scope == 'element':
+        if path == 'stdout':
+            output_filename = '-'
+        else:
+            output_filename = f"{path}/element.txt"
+
+        with tpsup.tpfile.TpOutput(output_filename) as fh:
+            if context_compiled_webview.match(driver.current_context):
+                html = element.get_attribute('outerHTML')
+                fh.write(html)
+                fh.write('\n')
+            else:
+                # dump native element
+                for attr in ['text', 'content-desc', 'resource-id', 'id', 'outerHTML']:
+                    value = None
+                    try:
+                        value = element.__getattribute__(attr)
+                    except Exception as e:
+                        if verbose:
+                            print(f"dump(): element.__getattribute__('{attr}') failed with exception={e}")
+                    fh.write(f"{attr}={value}\n\n")
+    else:
+        # scope == 'page
+        if path == 'stdout':
+            output_filename = '-'
+        else:
+            output_filename = f"{path}/page.txt"
+
+        with tpsup.tpfile.TpOutput(output_filename) as fh:
+            fh.write(driver.page_source)
+            fh.write('\n')
+
+    if path != 'stdout':
+        with tpsup.tpfile.TpOutput(f"{path}/contexts.txt") as fh:
+            fh.write(f"{driver.contexts}")
+            fh.write('\n')
+            fh.close()
+        with tpsup.tpfile.TpOutput(f"{path}/current_context.txt") as fh:
+            fh.write(f"{driver.current_context}")
+            fh.write('\n')
+            fh.close()
+    else:
+        print("------------- contexts ---------------")
+        print(f"{driver.contexts}")
+        print("")
+        print("------------- current_context ---------------")
+        print(f"{driver.current_context}")
+        print("")
+
+def doubleclick(driver: webdriver.Remote, element: WebElement, **opt):
+    # actions = ActionChains(driver)
+    # actions.move_to(element)
+    # actions.perform()
+
+    action = TouchAction(driver)
+    action.tap(element).perform()
+    action.tap().wait(10).tap().perform()
+
+def doubleclick2(driver: webdriver.Remote, element, **opt):
+    verbose = opt.get('verbose', False)
+
+    # not working
+    # element.click()
+    # element.click()
+
+    actions = TouchAction(driver)
+
+    # actions.double_tap(element).perform() # not available
+    # actions.double_click() # not available
+    # actions.press(element).wait(10).release().press(element).release().perform() # wrong action
+    # actions.perform()
+
+    # double click is very tricky to set up
+    #    1. add sleep time before it so that no backlogged action
+    #    2. add sleep time after it so that the action is performed
+    #    3. the wait time in the middle depends on the network speed. turn on
+    #          developer tools -> show taps: turn on
+    #          developer tools -> pointer location: turn on
+    #    4. you should see the 2 clicks on the device when it happens
+    #    5. if the interval between 2 clicks too long, it will not be effective.
+    #    6. the interval is not controllable in wireless debugging.
+    # actions.tap(element).wait(1).tap(element).perform()
+    # actions.tap(element).tap(element).perform()
+
+    i = 0
+    max = 8
+    while i < max:
+        i += 1
+        print(f"doubleclick: try {i}/{max}")
+
+        try:
+            # because the wait interval is not controllable in wireless debugging, we
+            # try different wait intervals to see if it works
+            if i % 2 == 1:
+                actions.tap(element).wait(10).tap(element).perform()
+                # actions.tap(element).wait(10).tap(element).tap(element).perform()
+                # actions.press(element).wait(10).release().press(element).release().perform()
+            else:
+                actions.tap(element).tap(element).perform()
+                # actions.tap(element).tap(element).tap(element).perform()
+        except Exception as e:
+            if verbose:
+                print(f"tap failed, meaning previous tap worked: {e}")
+            break
+
+        print(f"sleep 3 seconds before next try")
+        time.sleep(3)
+
+
+def swipe(driver: webdriver.Remote, param: str, **opt):
+    window_size = driver.get_window_size()
+    width = window_size['width']
+    height = window_size['height']
+    print(f"swipe: window_size={window_size}")
+
+    actions = TouchAction(driver)
+
+    if 'small' in param:
+        factor = 0.55
+    elif 'large' in param:
+        factor = 0.9
+    else:
+        # default, a little less than 1 page
+        factor = 0.7
+
+    # top-left corner is (0, 0)
+    if 'up' in param:
+        driver.swipe(width * 0.5, height * factor, width * 0.5, height(1 - factor))
+    elif 'down' in param:
+        driver.swipe(width * 0.5, height * (1 - factor), width * 0.5, height * factor)
+    elif 'left' in param:
+        driver.swipe(width * factor, height * 0.5, width * (1 - factor), height * 0.5)
+    elif 'right' in param:
+        driver.swipe(width * (1 - factor), height * 0.5, width * factor, height * 0.5)
 
 
 def main():
