@@ -6,6 +6,7 @@ import time
 from urllib.parse import urlparse
 from shutil import which
 
+import lxml.etree
 from appium import webdriver
 
 from appium.webdriver.appium_service import AppiumService
@@ -103,7 +104,8 @@ def start_proc(proc: str, **opt):
             "--port", f"{port}",
             "--log-no-colors",
             "--base-path", '/wd/hub',
-            #"--log", log,
+            "--log", log,
+            "--log-level", "debug",
 
             # this is called only when driver.switch_to.context("webview...")
             # it may only work when desired_capacity has "app" set
@@ -277,9 +279,7 @@ step_compiled_key = re.compile(r"key=(.+)", re.IGNORECASE)
 step_compiled_swipe = re.compile(r"swipe=(.+)")
 step_compiled_wait = re.compile(r"wait=(\d+)")
 
-def follow(driver: webdriver.Remote, steps: list, **opt):
-    # driver.implicitly_wait(5)  # waits 5 seconds, TODO: make it configurable
-
+def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
     if not list:
         return
 
@@ -287,6 +287,9 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
     interactive = opt.get("interactive", 0)
     debug = opt.get("debug", 0)
     verbose = opt.get("verbose", 0)
+    checkonly = opt.get("checkonly", 0)
+    if checkonly:
+        dryrun = 1
     global we_return
     global action_data
 
@@ -306,15 +309,14 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
         # check blockstack empty
         if blockend:
             if step == blockend:
-                blockend = None
                 print(f"matched blockend={blockend}, running block={block}, condition={condition}")
+                blockend = None
                 if not block:
                     raise RuntimeError(f"block is empty")
                 if interactive:
                     hit_enter_to_continue(helper=helper)
                 if not dryrun:
                     run_block(driver, blockstart, negation, condition, block, **opt)
-                print(f"blockend={blockend} done")
                 continue
             else:
                 block.append(step)
@@ -330,13 +332,23 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 if tag == 'id':
                     condition = f"driver.find_element(AppiumBy.ID, '''{value}''')"
                 elif tag == 'xpath':
+                    if checkonly:
+                        print(f"check xpath={value}")
+                        try:
+                            lxml.etree.XPath(value)
+                        except lxml.etree.XPathSyntaxError as e:
+                            raise RuntimeError(f"XPath syntax error in step={step}: {e}")
                     condition = f"driver.find_element(AppiumBy.XPATH, '''{value}''')"
                 elif tag == 'css':
                     condition = f"driver.find_element(AppiumBy.CSS_SELECTOR, '''{value}''')"
 
-            blockend = f"end_{blockstart}"
+            if negation:
+                blockend = f"end_{blockstart}{negation}"
+            else:
+                blockend = f"end_{blockstart}"
             block = []
-            print(f"blockstart={blockstart}, negation={negation}, condition={condition}, looking for blockend={blockend}")
+            print(f"blockstart={blockstart}, negation={negation}, condition={condition}, "
+                  f"looking for blockend={blockend}")
             continue
 
         if m := step_compiled_findby.match(step):
@@ -344,6 +356,10 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
             print(f"follow(): {tag}={value}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
+            if checkonly:
+                if tag == 'xpath':
+                    print(f"validate xpath={value}")
+                    lxml.etree.XPath(value)
             if not dryrun:
                 if tag == 'id':
                     element = driver.find_element(AppiumBy.ID, value)
@@ -371,6 +387,11 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
             print(f"follow(): key={value}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
+            if checkonly:
+                print(f"validate key={value}")
+                keycode = androidkey.__dict__.get(value, None)
+                if not keycode:
+                    raise RuntimeError(f"key={value} is not supported")
             if not dryrun:
                 # https://stackoverflow.com/questions/74188556
                 androidkey = nativekey.AndroidKey
@@ -442,6 +463,14 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
                 print(f"element = {element}")
                 print(f"element.id = {element.id}")
                 doubleclick(driver, element, **opt)
+        elif step == 'tap2':
+            print(f"follow(): tap2")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                print(f"element = {element}")
+                print(f"element.id = {element.id}")
+                tap2(driver, element, **opt)
         elif step == 'refresh':
             print(f"follow(): refresh driver")
             if interactive:
@@ -471,6 +500,10 @@ def follow(driver: webdriver.Remote, steps: list, **opt):
 
         print(f"follow(): this step is done")
 
+    if blockend:
+        raise RuntimeError(f"mismatched blockend={blockend} at the end of {pformat(steps)}")
+
+
 def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is
     # neither True or False.  In this case, we want to know the condition test failed.
@@ -490,6 +523,7 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
     # neither True or False.  In this case, we want to know the condition test failed.
 
     verbose = opt.get('verbose', False)
+    checkonly = opt.get('checkonly', False)
 
     try:
         passed_condition = eval(condition)
@@ -510,7 +544,8 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
     ret = {'executed': executed}
 
     if executed :
-        ret['result'] = follow(driver, block, **opt)
+        if not checkonly:
+            ret['result'] = follow(driver, block, **opt)
 
     return ret
 
@@ -565,58 +600,85 @@ def dump(driver: webdriver.Remote, element:WebElement, scope:str, path: str, **o
         print("------------- current_context ---------------")
         print(f"{driver.current_context}")
         print("")
-
-def doubleclick(driver: webdriver.Remote, element: WebElement, **opt):
-    # actions = ActionChains(driver)
-    # actions.move_to(element)
-    # actions.perform()
-
-    action = TouchAction(driver)
-    action.tap(element).perform()
-    action.tap().wait(10).tap().perform()
-
-def doubleclick2(driver: webdriver.Remote, element, **opt):
+def tap2(driver: webdriver.Remote, element: WebElement, **opt):
     verbose = opt.get('verbose', False)
 
-    # not working
-    # element.click()
-    # element.click()
+    location = element.location # (0, 0) is the top left corner of the element
+    size = element.size # (width, height) of the element
 
-    actions = TouchAction(driver)
-
-    # actions.double_tap(element).perform() # not available
-    # actions.double_click() # not available
-    # actions.press(element).wait(10).release().press(element).release().perform() # wrong action
-    # actions.perform()
-
-    # double click is very tricky to set up
-    #    1. add sleep time before it so that no backlogged action
-    #    2. add sleep time after it so that the action is performed
-    #    3. the wait time in the middle depends on the network speed. turn on
-    #          developer tools -> show taps: turn on
-    #          developer tools -> pointer location: turn on
-    #    4. you should see the 2 clicks on the device when it happens
-    #    5. if the interval between 2 clicks too long, it will not be effective.
-    #    6. the interval is not controllable in wireless debugging.
-    # actions.tap(element).wait(1).tap(element).perform()
-    # actions.tap(element).tap(element).perform()
+    # get element's center
+    x = location['x'] + size['width'] / 2
+    y = location['y'] + size['height'] / 2
+    action = TouchAction(driver)
 
     i = 0
-    max = 8
+    max = 3
     while i < max:
         i += 1
         print(f"doubleclick: try {i}/{max}")
 
+        action.tap2(x=x, y=y).perform()
+
+        print(f"sleep 3 seconds before check")
+        time.sleep(3)
         try:
-            # because the wait interval is not controllable in wireless debugging, we
-            # try different wait intervals to see if it works
-            if i % 2 == 1:
-                actions.tap(element).wait(10).tap(element).perform()
-                # actions.tap(element).wait(10).tap(element).tap(element).perform()
-                # actions.press(element).wait(10).release().press(element).release().perform()
-            else:
-                actions.tap(element).tap(element).perform()
-                # actions.tap(element).tap(element).tap(element).perform()
+            location = element.location  # (0, 0) is the top left corner of the element
+        except Exception as e:
+            if verbose:
+                print(f"tap failed, meaning previous tap worked: {e}")
+            break
+
+        print(f"sleep 3 seconds before next try")
+        time.sleep(3)
+
+def doubleclick(driver: webdriver.Remote, element: WebElement, **opt):
+    verbose = opt.get('verbose', False)
+
+    location = element.location # (0, 0) is the top left corner of the element
+    size = element.size # (width, height) of the element
+
+    # get element's center
+    x = location['x'] + size['width'] / 2
+    y = location['y'] + size['height'] / 2
+    action = TouchAction(driver)
+
+    i = 0
+    max = 10
+    while i < max:
+        i += 1
+        print(f"doubleclick: try {i}/{max}")
+
+        # wait time between taps is critial for double click to work.
+        # ideally, the following should work
+        #       action.tap(element).wait(100).tap(element).perform()
+        # but looking into appium log we see
+        #    tap(element) = locate element's (x,y) + tap (x,y)
+        # the locate part took extra time. therefore, we locate the element
+        # in a separate action, and then tap it in the next action.
+        # Because the wait interval is not controllable in wireless debugging, we
+        # try different wait intervals to see if it work
+        if i % 5 == 4:
+            action.tap(x=x, y=y).wait(50).tap(x=x, y=y).perform()
+        elif i % 5 == 3:
+            action.tap(x=x, y=y).wait(10).tap(x=x, y=y).perform()
+        else:
+            # the following 2 are the same. They are more likely to succeed due to network latency.
+            # action.tap(x=x, y=y).tap(x=x, y=y).perform()
+            action.tap(x=x, y=y, count=2).perform()
+
+            # sometimes, even no-wait is not fast enough. the following is from appium server log. we
+            # can see no-wait still took about 1 second, because the 2nd tap had to wait for the response
+            # from the first tap.
+            # 2023-01-01 00:45:15:379 [W3C (0e33c728)] Calling AppiumDriver.performTouch() with args: [[{"action":"tap","options":{"x":551.5,"y":1107,"count":1}},{"action":"tap","options":{"x":551.5,"y":1107,"count":1}}],"0e33c728-8dc6-49b5-82dd-567c1508a410"]
+            # 2023-01-01 00:45:15:382 [WD Proxy] Proxying [POST /appium/tap] to [POST http://127.0.0.1:8200/wd/hub/session/448df8e5-309e-4448-bf69-dbfd36602b77/appium/tap] with body: {"x":551.5,"y":1107,"undefined":null}
+            # 2023-01-01 00:45:16:256 [WD Proxy] Got response with status 200: {"sessionId":"448df8e5-309e-4448-bf69-dbfd36602b77","value":null}
+            # 2023-01-01 00:45:16:259 [WD Proxy] Proxying [POST /appium/tap] to [POST http://127.0.0.1:8200/wd/hub/session/448df8e5-309e-4448-bf69-dbfd36602b77/appium/tap] with body: {"x":551.5,"y":1107,"undefined":null}
+            # 2023-01-01 00:45:16:931 [WD Proxy] Got response with status 200: {"sessionId":"448df8e5-309e-4448-bf69-dbfd36602b77","value":null}
+            # when it works, i saw the interval was 280 ms
+        print(f"sleep 3 seconds before check")
+        time.sleep(3)
+        try:
+            location = element.location # (0, 0) is the top left corner of the element
         except Exception as e:
             if verbose:
                 print(f"tap failed, meaning previous tap worked: {e}")

@@ -85,6 +85,7 @@ my @commands = (
    "adb kill-server",
    "adb start-server",
    "adb connect $ip:$new_port",
+   "adb devices",
 );
 
 for my $cmd (@commands) {

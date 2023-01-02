@@ -206,6 +206,14 @@ def code(all_cfg, known, **opt):
 
     yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
+    steps = known['REMAININGARGS']
+    print(f'steps = {pformat(steps)}')
+
+    # check first
+    print(f'---------- begin checking steps -----------')
+    tpsup.appiumtools.follow(None, steps, checkonly=1, **opt)
+    print(f'---------- end checking steps -----------')
+
     driver: webdriver = all_cfg["resources"]["appium"].get("driver", None)
     if driver is None:
         method = all_cfg["resources"]["appium"]["driver_call"]['method']
@@ -220,8 +228,7 @@ def code(all_cfg, known, **opt):
         # 'host_port' are in **opt
         all_cfg["resources"]["appium"]["driver"] = driver
 
-    steps = known['REMAININGARGS']
-    print(f'steps = {pformat(steps)}')
+
 
     result = tpsup.appiumtools.follow(driver, steps, **opt)
 
