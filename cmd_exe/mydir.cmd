@@ -1,7 +1,5 @@
 @echo off
 
-@echo off
-
 set "prog=%~n0"
 
 setlocal EnableDelayedExpansion
@@ -20,5 +18,12 @@ if NOT %argC% == 1 (
 
 set var=%1
 
-endlocal & @mycd "%MYBASE%/github/%var%"
+endlocal & (
+   if "%MYBASE%"=="" (
+      echo ERROR:   MYBASE is not defined. run 'siteenv' first
+      exit /b
+   )
+ 
+   @mycd "%MYBASE%/github/%var%"
+)
 
