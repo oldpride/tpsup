@@ -600,6 +600,8 @@ def dump(driver: webdriver.Remote, element:WebElement, scope:str, path: str, **o
         print("------------- current_context ---------------")
         print(f"{driver.current_context}")
         print("")
+
+
 def tap2(driver: webdriver.Remote, element: WebElement, **opt):
     verbose = opt.get('verbose', False)
 
@@ -612,12 +614,17 @@ def tap2(driver: webdriver.Remote, element: WebElement, **opt):
     action = TouchAction(driver)
 
     i = 0
-    max = 3
+    max = 9
     while i < max:
         i += 1
         print(f"doubleclick: try {i}/{max}")
 
-        action.tap2(x=x, y=y).perform()
+        if i % 3 == 1:
+            action.tap2(x=x, y=y, wait=100).perform()
+        elif i % 3 == 2:
+            action.tap2(x=x, y=y, wait=200).perform()
+        else:
+            action.tap2(x=x, y=y, wait=250).perform()
 
         print(f"sleep 3 seconds before check")
         time.sleep(3)
@@ -625,7 +632,7 @@ def tap2(driver: webdriver.Remote, element: WebElement, **opt):
             location = element.location  # (0, 0) is the top left corner of the element
         except Exception as e:
             if verbose:
-                print(f"tap failed, meaning previous tap worked: {e}")
+                print(f"cannot find element location any more, meaning previous tap worked: {e}")
             break
 
         print(f"sleep 3 seconds before next try")
@@ -681,7 +688,7 @@ def doubleclick(driver: webdriver.Remote, element: WebElement, **opt):
             location = element.location # (0, 0) is the top left corner of the element
         except Exception as e:
             if verbose:
-                print(f"tap failed, meaning previous tap worked: {e}")
+                print(f"cannot find element location any more, meaning previous tap worked: {e}")
             break
 
         print(f"sleep 3 seconds before next try")
