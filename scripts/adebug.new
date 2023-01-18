@@ -228,7 +228,7 @@ for my $attr (qw(std_out_file std_err_file)) {
          print "LastStart was $yyyymmdd2, not today=$yyyymmdd, may change $attr\n";
          # the last run may be yesterday
          print {$cfh} <<"END";
-$attr=\`echo $file|sed 's/$yyyymmdd/$yyyymmdd2/g;s/$yyyy\\(.\\)$mm\\(.\\)\\$dd/$yyyy2\\1$mm2\\2$dd2/g'\`
+$attr=\`echo $file|sed 's/$yyyymmdd/$yyyymmdd2/g;s/$yyyy\\(.\\)$mm\\(.\\)$dd/$yyyy2\\1$mm2\\2$dd2/g'\`
 $attr=\$attr
 echo $attr=\$attr
 END
