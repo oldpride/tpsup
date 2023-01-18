@@ -129,7 +129,7 @@ my $LastStart = $info->{$job}->{LastStart};
 # 01/17/2023 18:00:31
 
 my ($yyyy2, $mm2, $dd2, $yyyymmdd2);
-if ($LastStart =~ m:^(\d{2})/(\d{2})/(\d{4})$:) {
+if ($LastStart =~ m:^(\d{2})/(\d{2})/(\d{4}):) {
    ($mm2, $dd2, $yyyy2) = ($1, $2, $3);
 
    $yyyymmdd2 = "$yyyy2$mm2$dd2";
