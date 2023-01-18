@@ -133,7 +133,12 @@ if ($LastStart =~ m:^(\d{2})/(\d{2})/(\d{4}):) {
    ($mm2, $dd2, $yyyy2) = ($1, $2, $3);
 
    $yyyymmdd2 = "$yyyy2$mm2$dd2";
-} 
+} else {
+   $yyyymmdd2 = "";
+}
+
+print "yyyyymmdd  = $yyyymmdd\n";
+print "yyyyymmdd2 = $yyyymmdd2\n";
 
 if (!$info->{$job}->{defination}) {
    print "\$info->{$job} = ", Dumper($info->{$job});
