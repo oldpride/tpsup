@@ -122,7 +122,7 @@ if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
 }
 
 my $yyyymmdd = `date +%Y%m%d`; chomp $yyyymmdd;
-my ($yyyy, $mm, $dd) = ( $yyyymmdd =~ m:^(\d{2})/(\d{2})/(\d{4})$: );
+my ($yyyy, $mm, $dd) = ( $yyyymmdd =~ m:^(\d{4})(\d{2})(\d{2})$: );
 
 my $LastStart = $info->{$job}->{LastStart};
 
