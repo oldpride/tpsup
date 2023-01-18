@@ -1,0 +1,281 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::AUTOSYS qw( 
+   query_jobs_superset 
+   print_autorep_J_header
+   get_autorep_J_format
+   print_autorep_J_job
+   autorep_J
+   autorep_q_J
+);
+use TPSUP::UTIL qw(
+   source_profile
+   resolve_string_in_env
+);
+# use Carp::Always;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+my $DetailExpire = 24*3600;
+my $StatusExpire = 10;  
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print << "END";
+usage:
+
+   $prog jobname
+   
+description:
+
+   debug an autosys job:
+      - support job_types: CMD, FW
+      - load the profile if defined
+      - resolve variables in attributes: command, std_out_file, std_err_file, watch_file
+      - find the command path
+      - ls -l file
+
+   -df DetailFiles     Use DetailFiles instead. multiple filenames separated by coma.
+
+   -sf StatusFiles     Use StatusFiles instead. multiple filenames separated by coma.
+
+   -v                  verbose mode
+
+   -m pattern          egrep pattern. will be used in 'egrep pattern applog'
+
+examples:
+
+   - test without autosys, a CMD
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_job2
+
+   - test without autosys, a FW, file watcher
+   $prog -df adep_autorep_q_J_example.txt -sf adep_autorep_J_example.txt test_job3
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $DetailFiles;
+my $StatusFiles;
+my $reset;
+my $arg_is_job;
+my $pattern;
+
+GetOptions(
+   'v|verbose'     => \$verbose,
+   'df=s'          => \$DetailFiles,
+   'sf=s'          => \$StatusFiles,
+   'm=s'           => \$pattern,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($job) = @ARGV;
+
+my $opt = {
+   StatusExpire => $StatusExpire,  # always need the latest info
+   DetailFiles  => $DetailFiles,
+   StatusFiles  => $StatusFiles,
+   verbose      => $verbose,
+};
+
+my $info;
+
+if ($StatusFiles || $DetailFiles) { 
+   $info = query_jobs_superset($job, $opt);
+} else {
+   my $status_ref = autorep_J($job, $opt);
+   my $detail_ref = autorep_q_J($job, $opt);
+
+   die "cannot find job detail for $job\n" if ! $detail_ref->{$job};
+   die "cannot find job status for $job\n" if ! $status_ref->{$job};
+
+   $info->{$job} = {%{$status_ref->{$job}}, %{$detail_ref->{$job}}};
+}
+
+my $error = 0;
+if (!exists $info->{$job}) {
+   die "$job not found.\n";
+}
+
+if (!exists $info->{$job}->{Status}) {
+   die "$job status not found. just deleted?\n";
+}
+
+print_autorep_J_header();
+print_autorep_J_job($info, $job, "", $opt);
+print "\n";
+
+if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+   print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
+   print "\n";
+   $error ++;
+}
+
+my $yyyymmdd = `date +%Y%m%d`; chomp $yyyymmdd;
+my ($yyyy, $mm, $dd) = ( $yyyymmdd =~ m:^(\d{2})/(\d{2})/(\d{4})$: );
+
+my $LastStart = $info->{$job}->{LastStart};
+# 01/17/2023 18:00:31
+
+my ($yyyy2, $mm2, $dd2, $yyyymmdd2);
+if ($LastStart =~ m:^(\d{2})/(\d{2})/(\d{4})$:) {
+   ($yyyy2, $mm2, $dd2) = ($1, $2, $3);
+
+   $yyyymmdd2 = "$yyyy2$mm2$dd2";
+} 
+
+if (!$info->{$job}->{defination}) {
+   print "\$info->{$job} = ", Dumper($info->{$job});
+   die "$job missing defination. just deleted?\n";
+}
+
+print $info->{$job}->{defination};
+print "\n";
+
+my $machine = $info->{$job}->{machine};
+my $owner   = $info->{$job}->{owner};
+
+my $local_cmd_file = `get_tmp /var/tmp $prog`; chomp $local_cmd_file;
+
+my $fh_cmd = "sed 's/\\\$AUTO_JOB_NAME/$job/g' >$local_cmd_file";
+open my $cfh, "|$fh_cmd" or die "$fh_cmd failed";
+
+print {$cfh} "#!/bin/bash\n\n";
+
+print {$cfh} <<'END';
+dig_app_log () {
+   autosyslog=$1
+   pattern=$2
+
+   APPLOG=`perl -e '
+      while (<>) { 
+         #if (m:\bLOG[\s_-]*FILE[^a-zA-Z0-9]+(/\S+?/\S+):i) {
+         #   print $1, "\n";
+         #} elsif (m:\bLOG[^a-zA-Z0-9]+(/\S+?/\S+):i) {
+         if (/\b(?:LOG\b|LOGFILE\b|LOG_)[^\/]{0,30}(\/\S+?\/\S+)/i) {
+            # (?:...)? is non-capturing group
+            # https://stackoverflow.com/questions/3512471/what-is-a-non-capturing-group-in-regular-expressions
+            print $1, "\n";
+         }
+      }' <$autosyslog |tail -1`
+
+   if [ "X$APPLOG" != "X" ]; then
+      echo ""
+      echo "found separate application log $APPLOG";
+
+      if [ "X$pattern" = "X" ]; then
+         echo ""
+         echo tail $APPLOG
+         echo ""
+         tail $APPLOG
+         echo ""
+         cmd="egrep 'ERROR|FATAL|SEVERE|EXCEPTION' $APPLOG|tail -10"
+         echo $cmd
+         eval $cmd
+      else
+         echo ""
+         echo "egrep '$pattern' $APPLOG"
+         echo ""
+         egrep '$pattern' $APPLOG
+      fi
+   else
+      echo "no separate application log found in autosyslog";
+   fi
+
+   echo ""
+}
+
+END
+
+print "\n";
+
+print {$cfh} ". $info->{$job}->{profile};\n\n"        if $info->{$job}->{profile};
+print {$cfh} "ls -l $info->{$job}->{watch_file};\n\n" if $info->{$job}->{watch_file};
+
+if ($info->{$job}->{command}) {
+   my ($exe, $args) = split /[\s&|]/, $info->{$job}->{command}, 2;
+   print {$cfh} "which $exe; echo \"\";\n\n";
+}
+
+for my $attr (qw(std_out_file std_err_file)) {
+   my $file = $info->{$job}->{$attr};
+
+   if ($yyyymmdd2 && $yyyymmdd2 ne $yyyymmdd) {
+      # the last run may be yesterday
+      $file =~ s/$yyyymmdd/$yyyymmdd2/g;
+      $file =~ s/${yyyy}(.)${mm}(.)${dd}/$yyyy2$1$mm2$2$dd2/g;
+   }
+
+   if ($file) {
+      # sometimes people put > in the output file, like below
+      #    std_out_file: ">/tmp/test.log"
+      #    std_err_file: ">/tmp/test.err"
+      # remove the >
+      $file =~ s/[>]+//g;
+   
+      print {$cfh} "ls -l $file;\n";
+      
+      if (defined $pattern) {
+         print {$cfh} "egrep '$pattern' $file;\n";
+      } else {
+         print {$cfh} "tail $file;\n";
+      } 
+      print {$cfh} "echo \"\";\n\n";
+
+      if ($attr eq 'std_out_file') {
+         if (defined $pattern) {
+            print {$cfh} "dig_app_log $file '$pattern';\n\n";
+         } else {
+            print {$cfh} "dig_app_log $file;\n\n";
+         }
+      }
+   }
+}
+
+close $cfh;
+
+{ 
+   my $cmd = "chmod 744 $local_cmd_file";
+   system($cmd);
+   die "cmd = $cmd failed" if $? != 0;
+}
+
+my $run_with_ssh;
+if ($machine) {
+   my $ssh = "ssh -n -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
+   my $test_cmd = "$ssh $owner\@$machine hostname >/dev/null";
+   print "test_cmd = $test_cmd\n";
+   system($test_cmd);
+   if ($?==0) {
+      # we can ssh to the machine, then run the script remotely
+      print "ssh worked. we will run debug script using ssh.\n";
+      $run_with_ssh ++;
+   } else {
+      print "ssh didn't work. we will run debug script locally.\n";
+   }
+}
+
+my $cmd;
+if ($run_with_ssh) {
+   my $flag = $verbose ? "-v" : "";
+   $cmd = "tpssh $flag -sshargs=-q $owner\@$machine -cpRun $local_cmd_file";
+} else {
+   $cmd = "$local_cmd_file";
+}
+
+print "\n\n";
+print "local_cmd_file=$local_cmd_file\n";
+system("cat $local_cmd_file");
+print "cmd = $cmd\n\n";
+system($cmd);
+
