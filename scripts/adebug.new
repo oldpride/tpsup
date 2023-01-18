@@ -211,10 +211,13 @@ for my $attr (qw(std_out_file std_err_file)) {
    my $file = $info->{$job}->{$attr};
 
    if ($yyyymmdd2 && $yyyymmdd2 ne $yyyymmdd) {
+      print "LastStart was $yyyymmdd2, not today=$yyyymmdd, may change $attr\n";
       # the last run may be yesterday
       $file =~ s/$yyyymmdd/$yyyymmdd2/g;
       $file =~ s/${yyyy}(.)${mm}(.)${dd}/$yyyy2$1$mm2$2$dd2/g;
    }
+
+   print "$attr=$file\n";
 
    if ($file) {
       # sometimes people put > in the output file, like below
