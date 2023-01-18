@@ -229,25 +229,25 @@ for my $attr (qw(std_out_file std_err_file)) {
          # the last run may be yesterday
          print {$cfh} <<"END";
 $attr=\`echo $file|sed 's/$yyyymmdd/$yyyymmdd2/g;s/$yyyy\\(.\\)$mm\\(.\\)$dd/$yyyy2\\1$mm2\\2$dd2/g'\`
-$attr=\$attr
-echo $attr=\$attr
+$attr=\$$attr
+echo $attr=\$$attr
 END
       }
 
-      print {$cfh} "ls -l \$attr;\n";
+      print {$cfh} "ls -l \$$attr;\n";
       
       if (defined $pattern) {
-         print {$cfh} "egrep '$pattern' \$attr;\n";
+         print {$cfh} "egrep '$pattern' \$$attr;\n";
       } else {
-         print {$cfh} "tail \$attr;\n";
+         print {$cfh} "tail \$$attr;\n";
       } 
       print {$cfh} "echo \"\";\n\n";
 
       if ($attr eq 'std_out_file') {
          if (defined $pattern) {
-            print {$cfh} "dig_app_log \$attr '$pattern';\n\n";
+            print {$cfh} "dig_app_log \$$attr '$pattern';\n\n";
          } else {
-            print {$cfh} "dig_app_log \$attr;\n\n";
+            print {$cfh} "dig_app_log \$$attr;\n\n";
          }
       }
    }
