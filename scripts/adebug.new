@@ -125,11 +125,12 @@ my $yyyymmdd = `date +%Y%m%d`; chomp $yyyymmdd;
 my ($yyyy, $mm, $dd) = ( $yyyymmdd =~ m:^(\d{2})/(\d{2})/(\d{4})$: );
 
 my $LastStart = $info->{$job}->{LastStart};
+
 # 01/17/2023 18:00:31
 
 my ($yyyy2, $mm2, $dd2, $yyyymmdd2);
 if ($LastStart =~ m:^(\d{2})/(\d{2})/(\d{4})$:) {
-   ($yyyy2, $mm2, $dd2) = ($1, $2, $3);
+   ($mm2, $dd2, $yyyy2) = ($1, $2, $3);
 
    $yyyymmdd2 = "$yyyy2$mm2$dd2";
 } 
@@ -209,15 +210,7 @@ if ($info->{$job}->{command}) {
 
 for my $attr (qw(std_out_file std_err_file)) {
    my $file = $info->{$job}->{$attr};
-
-   if ($yyyymmdd2 && $yyyymmdd2 ne $yyyymmdd) {
-      print "LastStart was $yyyymmdd2, not today=$yyyymmdd, may change $attr\n";
-      # the last run may be yesterday
-      $file =~ s/$yyyymmdd/$yyyymmdd2/g;
-      $file =~ s/${yyyy}(.)${mm}(.)${dd}/$yyyy2$1$mm2$2$dd2/g;
-   }
-
-   print "$attr=$file\n";
+   print {$cfh} "attr=$file;\n";
 
    if ($file) {
       # sometimes people put > in the output file, like below
@@ -226,20 +219,30 @@ for my $attr (qw(std_out_file std_err_file)) {
       # remove the >
       $file =~ s/[>]+//g;
    
-      print {$cfh} "ls -l $file;\n";
+      if ($yyyymmdd2 && $yyyymmdd2 ne $yyyymmdd) {
+         print "LastStart was $yyyymmdd2, not today=$yyyymmdd, may change $attr\n";
+         # the last run may be yesterday
+         print {$cfh} <<"END";
+$attr=\`echo $file|sed 's/$yyyymmdd/$yyyymmdd2/g;s/$yyyy\\(.\\)$mm\\(.)\\$dd/$yyyy2\\1$mm2\\2$dd2/g'\`
+$attr=\$attr
+echo $attr=\$attr
+END
+      }
+
+      print {$cfh} "ls -l \$attr;\n";
       
       if (defined $pattern) {
-         print {$cfh} "egrep '$pattern' $file;\n";
+         print {$cfh} "egrep '$pattern' \$attr;\n";
       } else {
-         print {$cfh} "tail $file;\n";
+         print {$cfh} "tail \$attr;\n";
       } 
       print {$cfh} "echo \"\";\n\n";
 
       if ($attr eq 'std_out_file') {
          if (defined $pattern) {
-            print {$cfh} "dig_app_log $file '$pattern';\n\n";
+            print {$cfh} "dig_app_log \$attr '$pattern';\n\n";
          } else {
-            print {$cfh} "dig_app_log $file;\n\n";
+            print {$cfh} "dig_app_log \$attr;\n\n";
          }
       }
    }
