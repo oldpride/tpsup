@@ -1257,10 +1257,10 @@ sub process_entity {
 
    my $entity_vars = $entity_cfg->{vars};
    if ($entity_vars) {
-      $entity_vars = resolve_vars_array($entity_vars, {%vars, %known}, $opt);
+      $entity_vars = resolve_vars_array($entity_vars, {%vars, %known, entity=>$entity}, $opt);
       $verbose && print "resolved entity=$entity entity_vars=", Dumper($entity_vars);
    } else {
-      $entity_vars = {};
+      $entity_vars = {entity=>$entity};
    }
 
    # we check entity-level condition after resolving entity-level vars.
