@@ -232,7 +232,7 @@ for my $attr (qw(std_out_file std_err_file)) {
          # sometimes the output file is using variable
          #    std_out_file: ">$MY_PROJ_DIR/$AUTO_JOB_NAME.log"
          #    std_err_file: ">$MY_PROJ_DIR/$AUTO_JOB_NAME.err"
-         # therefore, we have to resolve the path later 
+         # therefore, we have to let the remote script to resolve it
          print {$cfh} <<"END";
 $attr=\`echo $file|sed 's/$yyyymmdd/$yyyymmdd2/g;s/$yyyy\\(.\\)$mm\\(.\\)$dd/$yyyy2\\1$mm2\\2$dd2/g'\`
 $attr=\$$attr
