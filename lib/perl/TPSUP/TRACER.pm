@@ -320,7 +320,7 @@ my $attr_syntax = {
 
 my $entity_syntax = {
  required => [qw(method)],
- optional => [qw(method_cfg AllowZero AllowMultiple comment top update_key
+ optional => [qw(method_cfg AllowZero AllowMultiple comment top tail update_key
                  code pre_code post_code vars condition tests csv_filter
                  MaxColumnWidth output_key)],
 };
