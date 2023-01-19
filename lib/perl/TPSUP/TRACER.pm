@@ -1344,8 +1344,8 @@ EOF
    #}
    apply_csv_filter($entity_cfg->{csv_filter}, $opt);
 
-   my $Tail = get_first_by_key([$opt, $entity_cfg], 'Top', {default=>undef});
-   my $Top  = get_first_by_key([$opt, $entity_cfg], 'Top', {default=>5});
+   my $Tail = get_first_by_key([$opt, $entity_cfg], 'tail', {default=>undef});
+   my $Top  = get_first_by_key([$opt, $entity_cfg], 'top', {default=>5});
 
    # display the top results
    if (@lines) {
