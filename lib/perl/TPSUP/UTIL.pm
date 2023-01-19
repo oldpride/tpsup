@@ -62,6 +62,7 @@ our @EXPORT_OK = qw(
    arrays_to_hashes
    hashes_to_arrays
    top_array
+   tail_array
    parse_rc
    resolve_scalar_var_in_string
    convert_to_uppercase
@@ -2334,6 +2335,25 @@ sub top_array {
    return \@output;
 }
 
+
+sub tail_array {
+   # get tail slice of an array
+   my ($aref, $max, $opt) = @_;
+
+   return $aref if ! defined $max;
+
+   my @output;
+
+   my $total = scalar(@$aref);
+   my $start = $total - $max;
+   $start = 0 if $start < 0;
+
+   for (my $i=$start; $i<$total; $i++) {
+      push @output, $aref->[$i];
+   }
+
+   return \@output;
+}
 
 sub parse_rc {
    my ($code, $opt) = @_;

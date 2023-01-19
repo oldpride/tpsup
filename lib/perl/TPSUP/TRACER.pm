@@ -41,6 +41,7 @@ use TPSUP::UTIL qw(
    hashes_to_arrays
    unique_array
    top_array
+   tail_array
    resolve_scalar_var_in_string
    tpfind
    tp_quote_wrap
@@ -1343,13 +1344,18 @@ EOF
    #}
    apply_csv_filter($entity_cfg->{csv_filter}, $opt);
 
-   my $Top = get_first_by_key([$opt, $entity_cfg], 'Top', {default=>5});
+   my $Tail = get_first_by_key([$opt, $entity_cfg], 'Top', {default=>undef});
+   my $Top  = get_first_by_key([$opt, $entity_cfg], 'Top', {default=>5});
 
    # display the top results
    if (@lines) {
       print "----- lines begin ------\n";
       #print @lines[0..$Top];  # array slice will insert undef element if beyond range.
-      print @{top_array(\@lines, $Top)};
+      if ($Tail) {
+         print @{tail_array(\@lines, $Top)};
+      } else {
+         print @{top_array(\@lines, $Top)};
+      }
       print "----- lines end ------\n";
       print "\n";
 
@@ -1357,7 +1363,11 @@ EOF
       #    - sometime the code forgot updating it
       #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
       my $count = scalar(@lines);
-      print "(Truncated. Total $count, only displayed top $Top.)\n" if $count > $Top;
+      if ($Tail) {
+         print "(Truncated. Total $count, only displayed tail $Tail.)\n" if $count > $Tail;
+      } else {
+         print "(Truncated. Total $count, only displayed top  $Top.)\n"  if $count > $Top;
+      }
    } 
 
    if (@headers) {
