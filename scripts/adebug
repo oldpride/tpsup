@@ -215,7 +215,6 @@ if ($info->{$job}->{command}) {
 
 for my $attr (qw(std_out_file std_err_file)) {
    my $file = $info->{$job}->{$attr};
-   print {$cfh} "$attr=$file\n";
 
    if ($file) {
       # sometimes people put > in the output file, like below
@@ -224,6 +223,8 @@ for my $attr (qw(std_out_file std_err_file)) {
       # remove the >
       $file =~ s/[>]+//g;
    
+      print {$cfh} "$attr=$file\n";
+
       if ($yyyymmdd2 && $yyyymmdd2 ne $yyyymmdd) {
          # the last run is not today.
          print "LastStart was $yyyymmdd2, not today=$yyyymmdd, may change $attr\n";
