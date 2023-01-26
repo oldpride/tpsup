@@ -225,6 +225,12 @@ usage("missing args",
 
 # @{$opt->{ARGV}} = @ARGV;  # copying is safer
 
+# run_batch takes 
+#    either a file name which contains rows of input - command line args
+#        or an array    which contains rows of input - command line args
+# each of the row is called an input.
+# an input = one command line of @ARGV
+
 if ($batch) {
    run_batch($all_cfg, $batch, $opt);
 } else {

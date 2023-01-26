@@ -214,6 +214,12 @@ sub tpbatch_parse_hash_cfg {
 
             $example .= "      $cfg->{comment}\n" if defined $cfg->{comment};
 
+            if (defined $cfg->{json}) {
+               $example .= "      expect json in output\n" 
+            } else {
+               $example .= "      not expect json in output\n" 
+            }
+
             $example .= "      validator: $cfg->{validator}\n" if defined $cfg->{validator};
             if (defined $cfg->{test_str}) {
                for my $test_str (@{$cfg->{test_str}}) {
@@ -258,7 +264,8 @@ sub tpbatch_parse_hash_cfg {
 
     {{prog}} base operation arg1 arg2
 
-    -nojson       don't apply json parser on output 
+    -nojson        don't apply json parser on output 
+    -n | -dryrun   dryrun. only print out command.
 END
    }
 
