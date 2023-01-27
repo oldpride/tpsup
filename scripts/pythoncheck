@@ -1,0 +1,27 @@
+#!/bin/bash
+
+usage () {
+   prog=`basename $0`
+
+   cat <<END
+
+usage:
+
+   check syntax
+
+   $0 file1.py file2.py ... 
+
+END
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "missing args"
+   usage
+fi
+
+for f in "$@"
+do
+   python -m py_compile $f
+   [ $? -ne 0 ] && echo "file failed check: $f" && echo ""
+done

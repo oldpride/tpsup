@@ -622,7 +622,7 @@ def tap2(driver: webdriver.Remote, element: WebElement, **opt):
         if i % 3 == 1:
             action.tap2(x=x, y=y, wait=100).perform()
         elif i % 3 == 2:
-            action.tap2(x=x, y=y, wait=200).perform()
+            action.tap2(x=x, y=y, wait=175).perform()
         else:
             action.tap2(x=x, y=y, wait=250).perform()
 
