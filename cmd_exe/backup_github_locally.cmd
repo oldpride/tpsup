@@ -8,7 +8,8 @@ call "c:/users/william/sitebase/github/site-spec/cmd_exe/siteenv.cmd"
 set "source=%SITEBASE%\github"
 
 :: set "backup_base=F:\backup\"
-set "backup_base=D:\backup\"
+:: set "backup_base=D:\backup\"
+set "backup_base=E:\backup\"
 set "backup_dir=%backup_base%\%yyyymmdd%\github\"
 
 xcopy "%source%" "%backup_dir%" /s /e /y /exclude:%TPSUP%\cmd_exe\backup_github_locally_ex.txt || goto :error
