@@ -17,7 +17,7 @@ xcopy "%source%" "%backup_dir%" /s /e /y /exclude:%TPSUP%\cmd_exe\backup_github_
 cd /D "%backup_base%" || goto :error
 REM https://stackoverflow.com/questions/5497211/batch-file-to-delete-folders-older-than-10-days-in-windows-7
 REM FORFILES /D -20 /M 20* /C "cmd /c echo @path"
-    FORFILES /D -20 /M 20* /C "cmd /c rd /S /Q @path"
+    FORFILES /D -30 /M 20* /C "cmd /c rd /S /Q @path"
 
 REM sleep a little so that user can see the output
 timeout /t 60
