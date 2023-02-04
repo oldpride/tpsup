@@ -1,0 +1,104 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog js|node    file1.js file2.js ...
+   $prog pl|perl    file1.pl file2.pl ...
+   $prog py|pypthon file1.py file2.py ...
+
+description:
+   
+   check syntax without execution
+
+   -v                     verbose mode
+
+   -x exclude_pattern     Perl style, exclude file names with this pattern.
+
+   -m  match_pattern      Perl style, only    file names with this pattern.
+
+   -i case_insensitive    case insenstive for above patterns
+
+EOF
+
+   exit 1;
+}
+
+my ($verbose, $exclude_pattern, $match_pattern, $case_insensitive);
+
+ GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "m=s"            => \$match_pattern,
+   "v"              => \$verbose,
+   "i"              => \$case_insensitive,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my $lang = shift @ARGV;
+
+my $compiled_match;
+if ($match_pattern) {
+   if ($case_insensitive) {
+      $compiled_match = qr/$match_pattern/i;
+   } else {
+      $compiled_match = qr/$match_pattern/;
+   }
+}
+
+my $compiled_exclude;
+if ($exclude_pattern) {
+   if ($case_insensitive) {
+      $compiled_exclude = qr/$exclude_pattern/i;
+   } else {
+      $compiled_exclude = qr/$exclude_pattern/;
+   }
+}
+
+my $error = 0;
+
+for my $f (@ARGV) {
+   if ($compiled_match) {
+      next if $f !~ /$compiled_match/;
+   }
+   
+   if ($compiled_exclude) {
+      next if $f =~ /$compiled_exclude/;
+   }
+
+   print "checking $f\n";
+   my $cmd;
+   if ($lang eq 'pl' or $lang eq 'perl') {
+      $cmd = "perl -c $f";
+   } elsif ($lang eq 'py' or $lang eq 'python') {
+      $cmd = "python -m py_compile $f";
+   } elsif ($lang eq 'js' or $lang eq 'node') {
+      $cmd = "node --check $f";
+   } else {
+      usage("ERROR: unsupported language='$lang'");
+   }
+
+   $verbose && print "cmd=$cmd\n";
+   system($cmd);
+
+   if ($? != 0 ) {
+      $error ++;
+   }
+}   
+
+print "\n";
+print "----------------------------------\n";
+print "total $error ERRORS\n";
+
+exit $error;
