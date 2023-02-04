@@ -515,10 +515,10 @@ usage:    itrs command args
           itrs -r
           >> command args
 
-example:  itrs less '/apps/log/<today %Y%m%d>.log'
+example:  itrs ls '/apps/log/<today %Y%m%d>.log'
 
           itrs -r
-          >> less /apps/log/<today %Y%m%d>.log
+          >> ls /apps/log/<today %Y%m%d>.log
    
 "
    if [ $# -eq 0 ]; then
@@ -538,7 +538,7 @@ example:  itrs less '/apps/log/<today %Y%m%d>.log'
       args="$@"
    fi
 
-   args=`echo "$args"|sed -e 's:%Y:$yyyy:g; s:%m:$mm:g; s:%d:$dd:g; s:<today[ ]*::; s:>::'`
+   args=`echo "$args"|sed -e 's:%Y:$yyyy:g; s:%m:$mm:g; s:%d:$dd:g; s:<today[ ]*::g; s:>::g'`
 
    eval "$args"
 }
