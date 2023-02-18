@@ -1,0 +1,133 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog check     pattern
+   $prog restart   pattern
+
+description:
+   
+   check and restart PnPUtil class, eg Mouse, TouchPad, ...
+
+   -v                     verbose mode
+
+   -x exclude_pattern     Perl style, exclude file names with this pattern.
+
+   -s case_sensitive      case senstive for above patterns. default to insensitive
+
+examples:
+
+   $prog check   Mouse
+   $prog restart Mouse
+
+EOF
+
+   exit 1;
+}
+
+my ($verbose, $exclude_pattern, $case_sensitive);
+
+ GetOptions(
+   "x=s"            => \$exclude_pattern,
+   "v"              => \$verbose,
+   "s"              => \$case_sensitive,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 2;
+
+my ($action, $pattern) = @ARGV;
+
+my $compiled_match;
+{
+   if ($case_sensitive) {
+      $compiled_match = qr/$pattern/;
+   } else {
+      $compiled_match = qr/$pattern/i;
+   }
+}
+
+my $compiled_exclude;
+if ($exclude_pattern) {
+   if ($case_sensitive) {
+      $compiled_exclude = qr/$exclude_pattern/;
+   } else {
+      $compiled_exclude = qr/$exclude_pattern/i;
+   }
+}
+
+# Instance ID:                ACPI\INT3403\NGFF
+# Device Description:         Intel(R) Dynamic Platform and Thermal Framework Generic Participant
+# Class Name:                 System
+# Class GUID:                 {4d36e97d-e325-11ce-bfc1-08002be10318}
+# Manufacturer Name:          Intel
+# Status:                     Started
+# Driver Name:                oem94.inf
+# 
+# Instance ID:                HID\DLL079f&Col03\5&3b8db86c&0&0002
+# Device Description:         Dell Touchpad
+# Class Name:                 HIDClass
+# Class GUID:                 {745a17a0-74d3-11d0-b6fe-00a0c90f57da}
+# Manufacturer Name:          ALPSALPINE
+# Status:                     Started
+# Driver Name:                oem67.inf
+
+my $cmd = "pnputil /enum-devices";
+print "cmd = $cmd\n";
+my @lines = `$cmd`;
+die "cmd failed" if $?;
+
+chomp @lines;
+
+my $error = 0;
+
+my $current;
+my $current_matched;
+
+for my $l (@lines) {
+   if ($l =~ /^\s*$/) {
+      # a section finished
+      $verbose && print "current = ", Dumper($current);
+
+      if ($current) {
+         if ($current_matched) {
+            print "\n", join("\n", @{$current->{lines}}), "\n";
+            if ($action eq 'restart') {
+               my $cmd2 = qq(pnputil /restart-device '$current->{"Instance ID"}'); 
+               print "cmd2 = $cmd2\n";
+               system($cmd2);
+            }
+         }
+      }
+
+      # reset current buffer
+      $current_matched = 0;
+      $current = undef;
+      next;
+   } 
+
+   push @{$current->{lines}}, $l;
+
+   if ($l =~ /^(.+?):\s*(\S.+)/) {
+      my ($k, $v) = ($1, $2);
+      $v =~ s///g;
+      $current->{$k} = $v;
+   }
+
+   if ($l =~ /$compiled_match/) {
+      $current_matched ++;
+   }
+}
+
+exit 0;
