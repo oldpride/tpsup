@@ -1,0 +1,39 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog path
+
+   this does
+      git rm --cached -r path
+
+   it is useful when
+      if I mistakenly added/committed unneeded files, .pyc for example, 
+      before 'git push', i can run this command to back out them.
+      
+examples:
+
+   $prog .
+
+EOF
+
+   exit 1
+}
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+path=$1
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+echo "git rm --cached -r $path"
+git rm --cached -r $path
+
