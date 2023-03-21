@@ -265,7 +265,7 @@ sub parse_sql {
       my @sqls = split /;/, $sql;
       @sqls = grep { ! /^\s*$/ } @sqls;
 
-      $verbose && print "sqls = ", Dumper(\@sqls);
+      $verbose > 1 && print "sqls = ", Dumper(\@sqls);
 
       return @sqls;
    }
@@ -289,6 +289,8 @@ sub handle_output_out_fh {
 sub run_sql {
    my ($sql, $opt) = @_;
    
+   my $verbose = $opt->{verbose} ? $opt->{verbose} : 0;
+
    my @sqls = parse_sql($sql, $opt);
 
    my ($out_fh, $out_fh_need_closing) = handle_output_out_fh($opt);
@@ -335,7 +337,7 @@ sub run_sql {
 
       next if $s =~ /^\s*GO\s*;?$/i;
 
-      $opt->{verbose} && print "single sql = $sql\n";
+      $opt->{verbose} > 1 && print "single sql = $sql\n";
       $ret = run_single_sql($s, {%$opt, out_fh=>$out_fh});
       #print "ret = ", Dumper($ret);
 
@@ -394,7 +396,7 @@ sub run_single_sql {
             delete $dbh->{$k};
          } else {
             $dbh->{$k} = $opt->{dbh_attr}->{$k};
-            $verbose && print STDERR "\$dbh->{$k} = $dbh->{$k}\n";
+            $verbose > 1 && print STDERR "\$dbh->{$k} = $dbh->{$k}\n";
          }
       }
 
@@ -463,7 +465,7 @@ sub run_single_sql {
    #    attribute holds the number of un-fetched rows in the cache. If the driver doesn't, 
    #    then it returns undef. Note that some drivers pre-fetch rows on execute, whereas
    #     others wait till the first fetch.
-   $verbose && print STDERR "RowsInCache = ", Dumper($sth->{RowsInCache}); 
+   $verbose > 1 && print STDERR "RowsInCache = ", Dumper($sth->{RowsInCache}); 
    #if (!$sth->{RowsInCache}) {
    #   #return a ref to empty array to indicate query successful but returned nothing
    #   return [];

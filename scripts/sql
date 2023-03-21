@@ -146,7 +146,7 @@ my $NotSplitAtSemiColon;
 
 GetOptions(
    'attr=s%'        => \$dbh_attr,  # Getopt::Long to load key-value-pair into a hash
-   'v|verbose'      => \$verbose,
+   'v|verbose+'     => \$verbose,
    'noheader'       => \$noheader,
    'maxout=s'       => \$maxout,
    'o|output=s'     => \$output,
