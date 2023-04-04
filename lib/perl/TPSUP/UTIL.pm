@@ -37,7 +37,6 @@ our @EXPORT_OK = qw(
    sort_unique
    trim_path
    reduce_path
-   get_pw_by_key
    get_java
    glob2regex
    get_timestamp
@@ -70,6 +69,7 @@ our @EXPORT_OK = qw(
    tp_quote_wrap
    gen_combinations_from_a
    gen_combinations_from_aa
+   sort_pattern
 );
 
 
@@ -2667,6 +2667,36 @@ sub gen_combinations_from_aa {
    return \@combos;
 }
 
+sub sort_pattern {
+   my ($array, $pattern, $opt) = @_;
+
+   return $array if !$array || !@$array;
+
+   my $strings_by_key;
+
+   for my $line (@$array) {
+      my @keys = ($line =~ /$pattern/);
+      if (@keys) {
+         my $key = join(",", @keys);
+         push @{$strings_by_key->{$key}}, $line;
+     } else {
+         $opt->{verbose} && print "pattern=$pattern didn't match: $line\n";
+     }
+   }
+
+   my @sorted;
+   my @sorted_keys = $opt->{numeric} ? sort {$a<=>$b} keys(%$strings_by_key) : 
+                                       sort           keys(%$strings_by_key) ;
+                                       
+   $opt->{verbose} && print "sorted_keys=", Dumper(\@sorted_keys);
+
+   for my $key (@sorted_keys) {
+      push @sorted, @{$strings_by_key->{$key}};
+   }
+
+   return \@sorted;
+}
+
 sub main {
    print "\n------------------------------------------------\n";
    print "test binary search\n";
@@ -2843,10 +2873,22 @@ jkl
       print "a = ", Dumper(\@a);
       print "gen_combinations_from_aa = ",  Dumper(gen_combinations_from_aa(\@a)), "\n";
    }
+
+   print "\n------------------------------------------------\n";
+   {
+      my @a = (
+         "abc12.dat",
+         "abc1.dat",
+         "abc2.dat",
+         "abc9.dat",
+         "abc101.dat",
+      );
+      print "a = ", Dumper(\@a);
+      print "sort_pattern = ",  
+            Dumper(sort_pattern(\@a, '^...(\d+).dat', {numeric=>1, verbose=>1})), 
+            "\n";
+   }
 }
-
-
-
 
 main() unless caller();
 
