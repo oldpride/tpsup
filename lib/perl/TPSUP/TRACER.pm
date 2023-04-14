@@ -799,16 +799,26 @@ sub process_section {
    $row_count = scalar(@hashes);
 }
 
-
-sub apply_csv_filter {
-   # this sub relies on gloabl buffer and only affects global buffer
+sub apply_csv_filter_href {
    my ($filter1, $opt) = @_;
 
    return if ! defined $filter1;   # do nothing if no filter
+   my $type = ref($filter1);
+   $type = "" if !$type;
 
-   # make a copy of filter,trying to avoid modifying the original filter
-   my $filter2 = {};
+   if ($type ne 'HASH') {
+      croak "wrong type='$type'. Only HASH is supported";
+   }
 
+   # example of $filter1:
+   #            {
+   #             ExportExps => [
+   #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+   #                ],
+   #              SortKeys => [ 'weight' ],
+   #            },
+
+   my $filter2;
    my $changed;
    for my $k (sort (keys %$filter1)) {
       if ($k =~ /Exps/) {
@@ -831,11 +841,69 @@ sub apply_csv_filter {
    }
 
    if ($changed) {
-      print "original filter = ", Dumper($filter1);
-      print "resolved filter = ", Dumper($filter2);
+      print "original filter1 = ", Dumper($filter1);
+      print "resolved filter2 = ", Dumper($filter2);
    } else {
-      print "static filter = ", Dumper($filter2);
+      print "static filter2 = ", Dumper($filter2);
    }
+
+   return $filter2;
+}
+
+sub apply_csv_filter {
+   # this sub relies on gloabl buffer and only affects global buffer
+   my ($filters, $opt) = @_;
+
+   return if ! defined $filters;   # do nothing if no filter
+   my $type = ref($filters);
+   $type = "" if !$type;
+
+   if ($type ne 'ARRAY' && $type ne 'HASH') {
+      croak "wrong type='$type'. Only ARRAY and HASH are supported";
+   } elsif ($type eq 'HASH') {
+      $filters = [ [], $filters ];
+   }
+
+   # examples:
+   # can be array, which depending knowledge keys
+   # $csv_filter => [
+   #          [
+   #            [ ], # depending keys, like entry_points
+   #            {
+   #             ExportExps => [
+   #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+   #                ],
+   #              SortKeys => [ 'weight' ],
+   #            },
+   #          ]
+   #       ],
+   # can be Hash
+   # $csv_filter => 
+   #       {
+   #          ExportExps => [
+   #             'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+   #             ],
+   #          SortKeys => [ 'weight' ],
+   #       },
+
+   my $filter3 = {};
+   ROW:
+   for my $row (@$filters) {
+      my ($keys, $href) = @$row;
+   
+      for my $k (@$keys) {
+         next ROW if !defined $known{$k};
+      }
+
+      my $filter4 =  apply_csv_filter_href($href, $opt);
+      $filter3 = {%$filter3, %$filter4};
+   }
+
+   if ($type eq 'ARRAY') {
+      # if $type was HASH, it was already printed by apply_csv_filter()
+      # if $type was ARRAY, we print the finalized filter
+      print "filter3 = ", Dumper($filter3);
+  }
 
    my $PrintCsvMaxRows = $opt->{MaxExtracts};
 
@@ -846,7 +914,7 @@ sub apply_csv_filter {
                      PrintCsvMaxRows => $PrintCsvMaxRows,
                      PrintCsvMaxRowsWarn => 1,
                      NoPrint => !$opt->{verbose},
-                     %$filter2
+                     %$filter3
                     }
                    );
 
