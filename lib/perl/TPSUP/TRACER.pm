@@ -601,11 +601,17 @@ sub perform_tests {
    $verbose && print "\n---- testing result ----\n\n";
    
    for my $item (@$tests) {
-      my          ($test, $if_success, $if_failed) = 
-        @{$item}{qw(test   if_success   if_failed)};
+      my          ($test, $if_success, $if_failed, $condition) = 
+        @{$item}{qw(test   if_success   if_failed   condition)};
    
       next if ! defined $test;
    
+      if (defined($condition)) {
+         if (!tracer_eval_code($condition, $opt)) {
+            print "OK, condition=$condition failed. skipped test\n";
+            next;
+         }
+      }
       if (tracer_eval_code($test, $opt)) {
          $verbose && print "test success\n";
          tracer_eval_code($if_success, $opt) if defined $if_success;
