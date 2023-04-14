@@ -291,12 +291,16 @@ sub process_code {
 }
 
 my $method_syntax = {
+       code => { required => [],
+                 optional => [],
+              },
        db  => { required => [qw(db db_type)],
                 optional => [qw(table template where_clause order_clause example_clause
                             extra_clause header)],
               },
        cmd => { required => [qw(type value)],
-                optional => [qw(example file grep logic MatchPattern ExcludePattern extract)],
+                optional => [qw(example file grep logic MatchPattern ExcludePattern 
+                                extract)],
               },
        log => { required => [qw(log extract)],
                 optional => [qw(MatchPattern ExcludePattern)],
@@ -314,7 +318,7 @@ my $method_syntax = {
 
 my $attr_syntax = {
        tests  => { required => [qw(test)],
-                   optional => [qw(if_success if_failed)],
+                   optional => [qw(if_success if_failed condition)],
                  },
 };
 
@@ -1779,8 +1783,8 @@ sub parse_cfg {
          if ($method_cfg) {
             print "entity=$e is method=$method which should not have method_cg\n";
             $failed ++;
+            next;
          }
-         next;
       }
       
       if (!$method_syntax->{$method}) {
