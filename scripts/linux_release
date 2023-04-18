@@ -1,0 +1,49 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+
+my $prog = $0; $prog =~ s:.*/::;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog 
+
+description:
+   
+   display linux version and release
+
+EOF
+
+   exit 1;
+}
+
+my ($verbose);
+
+ GetOptions(
+   "v"              => \$verbose,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV;
+
+sub run_cmd {
+   my ($cmd) = @_;
+   print "$cmd\n";
+   print "---------------------------\n";
+   system($cmd);
+   print "\n";
+}
+
+
+run_cmd("uname -a");
+
+for my $f (glob("/etc/*-release")) {
+   run_cmd("cat $f");
+}   
