@@ -769,8 +769,17 @@ mydir () {
    if [ $# -ne 1 ]; then
       echo "ERROR: wrong number of args"
       echo "usage:   mydir app"
+      echo "         mydir list"
       echo "example: mydir angular"
+      echo "         mydir vercel*"
+      echo "         mydir list"
+      return
    fi
-   cd "$MYBASE/github/$1";
+
+   if [ "$1" = "list" ]; then
+      ls -d "$MYBASE"/github/* 
+   else 
+      cd    "$MYBASE"/github/$1;
+   fi
 }
 
