@@ -11,8 +11,11 @@ rem echo %argC%
 
 if NOT %argC% == 1 (
    echo ERROR:   wrong number of args. got %argC%, expected 1. args=%*
-   echo usage:   %prog% app
+   echo usage:   %prog% pattern
+   echo          %prog% list
+   echo          script will append * at the end of pattern
    echo example: %prog% angular
+   echo          %prog% list
    exit /b
 )
 
@@ -23,7 +26,11 @@ endlocal & (
       echo ERROR:   MYBASE is not defined. run 'siteenv' first
       exit /b
    )
- 
-   @mycd "%MYBASE%/github/%var%"
+
+   if "%var%"=="list" (
+      @dir "%MYBASE%/github/"
+   ) else (
+      @mycd "%MYBASE%/github/"%var%*
+   )
 )
 

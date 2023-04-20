@@ -768,10 +768,10 @@ myandroid () { echo "ANDROID_HOME=$ANDROID_HOME"; [ "X$ANDROID_HOME" = "X" ] || 
 mydir () { 
    if [ $# -ne 1 ]; then
       echo "ERROR: wrong number of args"
-      echo "usage:   mydir app"
+      echo "usage:   mydir pattern"
       echo "         mydir list"
+      echo "         script will auto add * at the end pattern"
       echo "example: mydir angular"
-      echo "         mydir vercel*"
       echo "         mydir list"
       return
    fi
@@ -779,7 +779,7 @@ mydir () {
    if [ "$1" = "list" ]; then
       ls -d "$MYBASE"/github/* 
    else 
-      cd    "$MYBASE"/github/$1;
+      cd    "$MYBASE"/github/$1*;
    fi
 }
 
