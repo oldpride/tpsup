@@ -79,8 +79,10 @@ sub itemize_log {
    }
 
    my $maxlen     = $opt->{MaxLen}     ? $opt->{MaxLen}     : 64000;
-   my $maxcount   = $opt->{MaxCount};
+   my $maxlines   = $opt->{MaxLines}   ? $opt->{MaxLines}   : 100;
    my $warnMaxlen = $opt->{warnMaxlen} ? $opt->{WarnMaxlen} : 0;
+
+   my $maxcount   = $opt->{MaxCount};
 
    my $ifh = get_in_fh($input, $opt);
    return undef if !$ifh;
@@ -91,6 +93,7 @@ sub itemize_log {
 
    return sub {
       my $item;
+      my $line_count = 0;
 
       # item will be undefined before 1st item
       if (defined($line) && $started) {
@@ -105,9 +108,10 @@ sub itemize_log {
             # $item, unless this is the first line.
 
             $started = 1;
+            $line_count = 1;
 
             if (defined $item) {
-               # this is not the first line
+               # this is not the first line of file
 
                if ( (  $match_pattern && $item !~   /$match_pattern/) || 
                     ($exclude_pattern && $item =~ /$exclude_pattern/) ){
@@ -125,11 +129,16 @@ sub itemize_log {
 
          # this is not a starting line
          $item .= $line;
+         $line_count ++;
          my $length = length($item);
 
-         if ($length > $maxlen) {
+         if ($length > $maxlen || $line_count > $maxlines) {
             if ($warnMaxlen) {
-               carp "item size ($length) over limit ($maxlen); returned this much.";
+               if ($length > $maxlen) {
+                  carp "item cut off here: length ($length) > limit ($maxlen).";
+               } else {
+                  carp "item cut off here: line count ($line_count) > limit ($maxlines).";
+               }
             }
 
             # undef $line before skipping or returning the item

@@ -27,9 +27,12 @@ usage:
    -maxlen   INT     max length of each item. this prevents running out of memory 
                      when mistakenly worked on a binary file. default to 64000.
 
+   -maxlines INT     max number of lines each item. this prevents running out of memory 
+                     when mistakenly worked on a binary file. default to 100.
+
    -warnMaxlen       warn when itemsize exceeds max length.
 
-   -maxcount INT     max number of output  
+   -maxcount INT     max number of items returned in output  
 
    -p                prefix log file name
 
@@ -38,7 +41,10 @@ examples:
    $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'com[.]sr[.]biz'     greplog_test.log
    $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1'             greplog_test.log
    $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxcount 1 greplog_test.log
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlen 10  greplog_test.log
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlines 1 greplog_test.log  # no  output
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlines 2 greplog_test.log  # has output
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlen  30 greplog_test.log  # no  output
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlen  50 greplog_test.log  # has output
 
 END
 
@@ -46,7 +52,8 @@ END
 }
 
 my $verbose;
-my $maxlen = 64000;
+my $maxlen   = 64000;
+my $maxlines = 100;
 my $maxcount;
 my $warnMaxlen;
 my $prefixLogName;
@@ -54,6 +61,7 @@ my $prefixLogName;
 GetOptions(
    'verbose'     => \$verbose,
    'maxlen=s'    => \$maxlen,
+   'maxlines=s'  => \$maxlines,
    'maxcount=s'  => \$maxcount,
    'warnMaxlen'  => \$warnMaxlen,
    'p'           => \$prefixLogName,
@@ -68,6 +76,7 @@ for my $input (@ARGV) {
    my $iterator = itemize_log($input, $start_pattern, {
                                                          MatchPattern=>$content_pattern,
                                                          MaxLen      =>$maxlen,
+                                                         MaxLines    =>$maxlines,
                                                          MaxCount    =>$maxcount,
                                                          WarnMaxlen  =>$warnMaxlen,
                                                       });
