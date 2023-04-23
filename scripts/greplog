@@ -24,13 +24,13 @@ usage:
 
    -v                verbose mode
 
-   -maxlen   INT     max length of each item. this prevents running out of memory 
+   -itemchars INT    max length of each item. this prevents running out of memory 
                      when mistakenly worked on a binary file. default to 64000.
 
-   -maxlines INT     max number of lines each item. this prevents running out of memory 
+   -itemlines INT    max number of lines each item. this prevents running out of memory 
                      when mistakenly worked on a binary file. default to 100.
 
-   -warnMaxlen       warn when itemsize exceeds max length.
+   -itemwarn         warn when itemsize exceeds max length.
 
    -maxcount INT     max number of items returned in output  
 
@@ -38,13 +38,13 @@ usage:
 
 examples:
 
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'com[.]sr[.]biz'     greplog_test.log
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1'             greplog_test.log
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxcount 1 greplog_test.log
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlines 1 greplog_test.log  # no  output
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlines 2 greplog_test.log  # has output
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlen  30 greplog_test.log  # no  output
-   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxlen  50 greplog_test.log  # has output
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'com[.]sr[.]biz'       greplog_test.log
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1'               greplog_test.log
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -maxcount  1  greplog_test.log
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -itemlines  1 greplog_test.log  # no  output
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -itemlines  2 greplog_test.log  # has output
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -itemchars 30 greplog_test.log  # no  output
+   $prog '\\d{8}-\\d{2}:\\d{2}:\\d{2}' 'item 1' -itemchars 50 greplog_test.log  # has output
 
 END
 
@@ -52,18 +52,18 @@ END
 }
 
 my $verbose;
-my $maxlen   = 64000;
-my $maxlines = 100;
+my $itemchars = 64000;
+my $itemlines = 100;
 my $maxcount;
-my $warnMaxlen;
+my $itemwarn;
 my $prefixLogName;
 
 GetOptions(
    'verbose'     => \$verbose,
-   'maxlen=s'    => \$maxlen,
-   'maxlines=s'  => \$maxlines,
+   'itemchars=s' => \$itemchars,
+   'itemlines=s' => \$itemlines,
+   'itemwarn'    => \$itemwarn,
    'maxcount=s'  => \$maxcount,
-   'warnMaxlen'  => \$warnMaxlen,
    'p'           => \$prefixLogName,
 ) || usage ("cannot parse command line: $!");
 
@@ -75,10 +75,10 @@ my $content_pattern = shift @ARGV;
 for my $input (@ARGV) {
    my $iterator = itemize_log($input, $start_pattern, {
                                                          MatchPattern=>$content_pattern,
-                                                         MaxLen      =>$maxlen,
-                                                         MaxLines    =>$maxlines,
+                                                         ItemChars   =>$itemchars,
+                                                         ItemLines   =>$itemlines,
+                                                         ItemWarn    =>$itemwarn,
                                                          MaxCount    =>$maxcount,
-                                                         WarnMaxlen  =>$warnMaxlen,
                                                       });
 
    my $prefix = $prefixLogName ? "$input:" : "";

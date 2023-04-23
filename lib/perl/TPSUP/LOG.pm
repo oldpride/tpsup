@@ -78,9 +78,9 @@ sub itemize_log {
       $exclude_pattern = qr/$opt->{ExcludePattern}/s;  # 's' for multiline regex
    }
 
-   my $maxlen     = $opt->{MaxLen}     ? $opt->{MaxLen}     : 64000;
-   my $maxlines   = $opt->{MaxLines}   ? $opt->{MaxLines}   : 100;
-   my $warnMaxlen = $opt->{warnMaxlen} ? $opt->{WarnMaxlen} : 0;
+   my $ItemChars  = $opt->{ItemChars}   ? $opt->{ItemChars}   : 64000;
+   my $ItemLines  = $opt->{ItemLines}   ? $opt->{ItemLines}   : 100;
+   my $ItemWarn   = $opt->{ItemWarn}    ? $opt->{ItemWarn}    : 0;
 
    my $maxcount   = $opt->{MaxCount};
 
@@ -130,14 +130,14 @@ sub itemize_log {
          # this is not a starting line
          $item .= $line;
          $line_count ++;
-         my $length = length($item);
+         my $char_count = length($item);
 
-         if ($length > $maxlen || $line_count > $maxlines) {
-            if ($warnMaxlen) {
-               if ($length > $maxlen) {
-                  carp "item cut off here: length ($length) > limit ($maxlen).";
+         if ($char_count > $ItemChars || $line_count > $ItemLines) {
+            if ($ItemWarn) {
+               if ($char_count > $ItemChars) {
+                  carp "item cut off here: char count ($char_count) > limit ($ItemChars).";
                } else {
-                  carp "item cut off here: line count ($line_count) > limit ($maxlines).";
+                  carp "item cut off here: line count ($line_count) > limit ($ItemLines).";
                }
             }
 
