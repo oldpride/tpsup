@@ -4,6 +4,7 @@
 hooks\
 node_modules\
 platforms\
+__pycache__\
 
 # angular
 .angular\
@@ -19,4 +20,11 @@ App_Resources\
 .FCStd4\
 .FCStd5\
 
-__pycache__\
+# nextjs
+.next\
+
+# hardhat
+artifacts\
+
+# openzeppline
+out\
