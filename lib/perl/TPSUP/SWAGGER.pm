@@ -107,6 +107,11 @@ sub swagger {
       my $entry_name = $cfg->{entry};
       my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
       my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
+
+      # there are two places mentioning json
+      #    --header 'Content-Type: application/json'
+      #    --header 'Accept: application/json'
+      # the 1st is for input when POST data. the 2nd is for output
    
       my $command;
       if ($entry_name) {
@@ -129,8 +134,10 @@ sub swagger {
       
       $command .= " '$base_url/$sub_url'";
    
-      if ($cfg->{json} && !$opt->{nojson}) {
-         $command .= " |python -m json.tool";
+      if (!$Accept || $Accept =~ /json/) {
+         if ($cfg->{json} && !$opt->{nojson}) {
+            $command .= " |python -m json.tool";
+         }
       }
    
       if ($opt->{dryrun}) {
