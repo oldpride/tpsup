@@ -134,8 +134,8 @@ sub swagger {
       
       $command .= " '$base_url/$sub_url'";
    
-      if (!$Accept || $Accept =~ /json/) {
-         if ($cfg->{json} && !$opt->{nojson}) {
+      if ($Accept =~ /json/ || $cfg->{json}) {
+         if (!$opt->{nojson}) {
             $command .= " |python -m json.tool";
          }
       }
@@ -223,7 +223,9 @@ sub tpbatch_parse_hash_cfg {
 
             $example .= "      $cfg->{comment}\n" if defined $cfg->{comment};
 
-            if (defined $cfg->{json}) {
+            my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
+
+            if (($Accept =~ /json/ || $cfg->{json}) && !$opt->{nojson}) {
                $example .= "      expect json in output\n" 
             } else {
                $example .= "      not expect json in output\n" 
