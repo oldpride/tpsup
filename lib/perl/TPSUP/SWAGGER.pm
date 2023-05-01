@@ -134,10 +134,8 @@ sub swagger {
       
       $command .= " '$base_url/$sub_url'";
    
-      if ($Accept =~ /json/ || $cfg->{json}) {
-         if (!$opt->{nojson}) {
+      if (($Accept =~ /json/ || $cfg->{json}) && !$opt->{nojson}) {
             $command .= " |python -m json.tool";
-         }
       }
    
       if ($opt->{dryrun}) {
