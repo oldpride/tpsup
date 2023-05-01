@@ -106,12 +106,13 @@ sub swagger {
 
       my $entry_name = $cfg->{entry};
       my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
+      my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
    
       my $command;
       if ($entry_name) {
-         $command = "tpentry -- /usr/bin/curl -u tpentry{$entry_name}{user}:tpentry{$entry_name}{decoded} $silent -X $method --header 'Accept: application/json'";
+         $command = "tpentry -- /usr/bin/curl -u tpentry{$entry_name}{user}:tpentry{$entry_name}{decoded} $silent -X $method --header 'Accept: $Accept'";
       } else {
-         $command = "/usr/bin/curl -X $method --header 'Accept: application/json'";
+         $command = "/usr/bin/curl -X $method --header 'Accept: $Accept'";
       }
    
       if ($method eq 'POST') {
