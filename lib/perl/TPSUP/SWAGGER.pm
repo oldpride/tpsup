@@ -164,6 +164,7 @@ my $swagger_syntax = {
        num_args  => { type => 'SCALAR', pattern=>qr/^\d+$/ },
        json      => { type => 'SCALAR', pattern=>qr/^\d+$/ },
        method    => { type => 'SCALAR', pattern=>qr/^(GET|POST|DELETE)$/ },
+       Accept    => { type => 'SCALAR' },
        comment   => { type => 'SCALAR' },
        validator => { type => 'SCALAR' },
        post_data => { type => 'SCALAR' },
