@@ -215,7 +215,7 @@ class SeleniumEnv:
         if host_port == "auto":
             sys.stderr.write("chromedriver will auto start a browser and pick a port\n")
 
-            self.browser_options.binary_location = self.get_browser_path()
+            self.browser_options.binary_location = get_browser_path()
 
             if self.headless:
                 self.browser_options.add_argument("--headless")
@@ -235,7 +235,7 @@ class SeleniumEnv:
                     raise RuntimeError("cannot connect to remote browser.")
             else:
                 sys.stderr.write("cannot connect to an existing local browser. we will start up one.\n")
-                self.browser_options.binary_location = self.get_browser_path()
+                self.browser_options.binary_location = get_browser_path()
 
                 if self.headless:
                     self.browser_options.add_argument("--headless")
@@ -399,19 +399,22 @@ class SeleniumEnv:
         else:
             raise RuntimeError(f"unsupported method={method}. accepted: bs4 or js")
 
-    def get_browser_path(self) -> str:
-        browser_path = None
-        if self.env.isLinux:
-            browser_path = which('google-chrome')
-            # /usr/bin/google-chrome is preferred on linux. It is a wrapper to /opt/google/chrome/chrome
-        if not browser_path:
-            browser_path = which('chrome')
-        if browser_path:
-            print(f"chrome is at {browser_path}")
-        else:
-            raise RuntimeError(f"cannot find chrome in PATH={os.environ['PATH']}")
+def get_browser_path() -> str:
+    env = tpsup.env
+    env.adapth()
 
-        return browser_path
+    browser_path = None
+    if env.isLinux:
+        browser_path = which('google-chrome')
+        # /usr/bin/google-chrome is preferred on linux. It is a wrapper to /opt/google/chrome/chrome
+    if not browser_path:
+        browser_path = which('chrome')
+    if browser_path:
+        print(f"chrome is at {browser_path}")
+    else:
+        raise RuntimeError(f"cannot find chrome in PATH={os.environ['PATH']}")
+
+    return browser_path
 
 def print_js_console_log(driver:webdriver.Chrome, **opt):
     printed_header = 0
@@ -436,6 +439,35 @@ def get_driver(**args) -> webdriver.Chrome :
     seleniumEnv = SeleniumEnv(**args)
     return seleniumEnv.get_driver()
 
+def get_setup(**opt):
+    env = tpsup.env.Env()
+    env.adapt()
+    setup = {}
+    if env.isWindows:
+        static_browser_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/Chrome/Application/chrome.exe"
+        static_browser_path = tpsup.env.get_native_path(static_browser_path)
+        # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
+        setup['browser_path'] = static_browser_path
+
+        static_driver_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/chrommedriver/chromedriver.exe"
+        static_driver_path = tpsup.env.get_native_path(static_driver_path)
+        # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
+        setup['driver_path'] = static_driver_path
+
+        return setup
+    
+def check_setup(**opt):
+    setup = get_setup(**opt)
+
+    for k,v in setup:
+        if os.path.isfile(vars):
+            print(f"we found {k} at {v}.")
+        else:
+            print(f"{k} is not found at {v}. we will find it in PATH")
+            if k == 'browser_path':
+                browser_path = get_browser_path()
+                print(f"found {k} at {browser_path}")
+            # else:
 
 # https://stackoverflow.com/questions/47420957/create-custom-wait-until-condition-in-python
 class tp_find_element_by_paths:
