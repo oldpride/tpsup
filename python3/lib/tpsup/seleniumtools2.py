@@ -53,7 +53,8 @@ class SeleniumEnv:
         self.verbose = opt.get("verbose", 0)
         self.env = tpsup.env.Env()
         self.env.adapt()
-        home_dir = tpsup.env.get_native_path(self.env.home_dir) # get_native_path() is for cygwin
+        home_dir = tpsup.env.get_native_path(
+            self.env.home_dir)  # get_native_path() is for cygwin
         self.log_base = opt.get('log_base', home_dir)
         system = self.env.system
 
@@ -71,6 +72,14 @@ class SeleniumEnv:
 
         self.headless = opt.get("headless", False)
         self.driver_exe = opt.get("driver", "chromedriver")
+        if self.driver_exe:
+            if not which(self.driver_exe):
+                raise RuntimeError(f"cannot find {self.driver_exe} in $PATH")
+        else:
+            self.driver_exe = check_setup('chromedriver').get('chromedriver')
+            if not self.driver_exe:
+                raise RuntimeError("cannot find chromedriver in PATH")
+
         # old hard-coded implementation
         # driver_path = f"{os.environ['SITEBASE']}/{self.env.system}/
         #                   {self.env.os_major}.{self.env.os_minor}/chromedriver"
@@ -99,12 +108,6 @@ class SeleniumEnv:
         #         raise Exception(
         #             f"cannot find {self.driver_exe} not found. pwd={os.getcwd()}\n"
         #         )
-
-        driver_exe = which('chromedriver')
-        if driver_exe:
-            print(f"chromedriver is {driver_exe}")
-        else:
-            raise RuntimeError(f"chromedriver is not in PATH={os.environ['PATH']}")
 
         # chromedriver knows chrome.exe's path, therefore, normally we don't need to set it.
         # however, Windows keeps updating the system chrome.exe, making it incompatible with chromedriver,
@@ -177,7 +180,7 @@ class SeleniumEnv:
         self.desiredCapbilities = webdriver.DesiredCapabilities.CHROME.copy()
         self.desiredCapbilities['goog:loggingPrefs'] = {'browser': 'ALL'}
 
-        self.driver:webdriver.Chrome = None
+        self.driver: webdriver.Chrome = None
         if host_port != "auto":
             # try to connect the browser in case already exists.
             # by setting this, we tell chromedriver not to start a browser
@@ -187,18 +190,21 @@ class SeleniumEnv:
             self.connected_existing_browser = False
             (host, port) = host_port.split(":", 1)
             if is_tcp_open(host, port):
-                sys.stderr.write(f"{host_port} is open. let chromedriver to connect to it\n")
+                sys.stderr.write(
+                    f"{host_port} is open. let chromedriver to connect to it\n")
                 if self.dryrun:
-                    sys.stderr.write(f"this is dryrun; we will not start chromedriver\n")
+                    sys.stderr.write(
+                        f"this is dryrun; we will not start chromedriver\n")
                 else:
                     try:
                         self.driver = webdriver.Chrome(
                             self.driver_exe,
                             options=self.browser_options,
                             service_args=self.driver_args,
-                            desired_capabilities=self.desiredCapbilities, # to get js console log
+                            desired_capabilities=self.desiredCapbilities,  # to get js console log
                         )
-                        sys.stderr.write(f"chromedriver has connected to chrome at {host_port}\n")
+                        sys.stderr.write(
+                            f"chromedriver has connected to chrome at {host_port}\n")
                         self.connected_existing_browser = True
                     except Exception as e:
                         print(e)
@@ -213,7 +219,8 @@ class SeleniumEnv:
         self.browser_options = Options()  # reset the browser options
 
         if host_port == "auto":
-            sys.stderr.write("chromedriver will auto start a browser and pick a port\n")
+            sys.stderr.write(
+                "chromedriver will auto start a browser and pick a port\n")
 
             self.browser_options.binary_location = get_browser_path()
 
@@ -223,7 +230,8 @@ class SeleniumEnv:
 
         else:
             host, port = host_port.split(":", 1)
-            self.browser_options.add_argument(f"--remote-debugging-port={port}")
+            self.browser_options.add_argument(
+                f"--remote-debugging-port={port}")
             # self.browser_options.add_argument(f'--remote-debugging-address=127.0.0.1')
 
             if host.lower() != "localhost" and host != "127.0.0.1" and host != "":
@@ -234,7 +242,8 @@ class SeleniumEnv:
                 else:
                     raise RuntimeError("cannot connect to remote browser.")
             else:
-                sys.stderr.write("cannot connect to an existing local browser. we will start up one.\n")
+                sys.stderr.write(
+                    "cannot connect to an existing local browser. we will start up one.\n")
                 self.browser_options.binary_location = get_browser_path()
 
                 if self.headless:
@@ -244,8 +253,10 @@ class SeleniumEnv:
                     sys.stderr.write("\n")
 
         if self.env.isLinux:
-            self.browser_options.add_argument("--no-sandbox")  # allow to run without root
-            self.browser_options.add_argument("--disable-dev_shm-usage")  # allow to run without root
+            self.browser_options.add_argument(
+                "--no-sandbox")  # allow to run without root
+            self.browser_options.add_argument(
+                "--disable-dev_shm-usage")  # allow to run without root
 
         self.chromedir = self.chromedir.replace('\\', '/')
 
@@ -265,16 +276,16 @@ class SeleniumEnv:
         # https://stackoverflow.com/questions/48450594/selenium-timed-out-receiving-message-from-renderer
         # self.browser_options.add_argument("--window-size=1366,768");
         # self.browser_options.add_argument("--no-sandbox");
-        self.browser_options.add_argument("--disable-gpu");
-        self.browser_options.add_argument("--enable-javascript");
-        self.browser_options.add_argument("disable-infobars");
-        self.browser_options.add_argument("--disable-infobars");
+        self.browser_options.add_argument("--disable-gpu")
+        self.browser_options.add_argument("--enable-javascript")
+        self.browser_options.add_argument("disable-infobars")
+        self.browser_options.add_argument("--disable-infobars")
         # self.browser_options.add_argument("--single-process");
-        self.browser_options.add_argument("--disable-extensions");
-        self.browser_options.add_argument("--disable-dev-shm-usage");
+        self.browser_options.add_argument("--disable-extensions")
+        self.browser_options.add_argument("--disable-dev-shm-usage")
         # self.browser_options.add_argument("--headless");
-        self.browser_options.add_argument("enable-automation");
-        self.browser_options.add_argument("--disable-browser-side-navigation");
+        self.browser_options.add_argument("enable-automation")
+        self.browser_options.add_argument("--disable-browser-side-navigation")
 
         # for file download
         self.browser_options.add_experimental_option(
@@ -308,7 +319,8 @@ class SeleniumEnv:
             self.browser_options.add_argument(f"--{arg}")
             # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
 
-        print(f"browser_options.arguments = {pformat(self.browser_options.arguments)}")
+        print(
+            f"browser_options.arguments = {pformat(self.browser_options.arguments)}")
 
         if self.dryrun:
             sys.stderr.write(
@@ -320,7 +332,7 @@ class SeleniumEnv:
                 self.driver_exe,  # make sure chromedriver is in the PATH
                 options=self.browser_options,  # for chrome browser
                 service_args=self.driver_args,  # for chromedriver
-                desired_capabilities=self.desiredCapbilities, # to get js console log
+                desired_capabilities=self.desiredCapbilities,  # to get js console log
             )
             sys.stderr.write("started\n")
             # if self.headless:
@@ -333,7 +345,7 @@ class SeleniumEnv:
             )  # for chromedriver.
             # other driver use implicitly_wait()
 
-            self.driver.seleniumEnv = self # monkey patching for convenience
+            self.driver.seleniumEnv = self  # monkey patching for convenience
 
     def get_driver(self) -> webdriver.Chrome:
         return self.driver
@@ -397,16 +409,19 @@ class SeleniumEnv:
             attrs = self.driver.execute_script(js_script, element)
             return attrs
         else:
-            raise RuntimeError(f"unsupported method={method}. accepted: bs4 or js")
+            raise RuntimeError(
+                f"unsupported method={method}. accepted: bs4 or js")
 
-def get_browser_path() -> str:
+
+def get_browser_path_decoed() -> str:
     env = tpsup.env
     env.adapth()
 
     browser_path = None
     if env.isLinux:
         browser_path = which('google-chrome')
-        # /usr/bin/google-chrome is preferred on linux. It is a wrapper to /opt/google/chrome/chrome
+        # /usr/bin/google-chrome is preferred on linux.
+        # It is a wrapper to /opt/google/chrome/chrome
     if not browser_path:
         browser_path = which('chrome')
     if browser_path:
@@ -416,7 +431,15 @@ def get_browser_path() -> str:
 
     return browser_path
 
-def print_js_console_log(driver:webdriver.Chrome, **opt):
+
+def get_browser_path() -> str:
+    path = check_setup('chrome').get('chrome')
+    if not path:
+        raise RuntimeError(f"cannot find chrome execuatble")
+    return path
+
+
+def print_js_console_log(driver: webdriver.Chrome, **opt):
     printed_header = 0
     for entry in driver.get_log('browser'):
         if not printed_header:
@@ -434,42 +457,88 @@ def print_js_console_log(driver:webdriver.Chrome, **opt):
     if printed_header:
         print("------ end console log -------")
 
-def get_driver(**args) -> webdriver.Chrome :
+
+def get_driver(**args) -> webdriver.Chrome:
     # seleniumEnv = tpsup.seleniumtools.SeleniumEnv(**args)
     seleniumEnv = SeleniumEnv(**args)
     return seleniumEnv.get_driver()
 
-def get_setup(**opt):
+
+def get_static_setup(**opt):
     env = tpsup.env.Env()
     env.adapt()
-    setup = {}
+    static_setup = {}
     if env.isWindows:
+        # as of now, only windows has static setup
         static_browser_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/Chrome/Application/chrome.exe"
         static_browser_path = tpsup.env.get_native_path(static_browser_path)
         # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
-        setup['browser_path'] = static_browser_path
+        static_setup['chrome'] = static_browser_path
+        # print(f"static_setup['chrome']={static_setup['chrome']}")
 
         static_driver_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/chrommedriver/chromedriver.exe"
         static_driver_path = tpsup.env.get_native_path(static_driver_path)
         # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
-        setup['driver_path'] = static_driver_path
+        static_setup['chromedriver'] = static_driver_path
 
-        return setup
-    
+    return static_setup
+
+
+def search_exec_in_path(execList: list, **opt) -> str:
+    # search executable in PATH
+    env = tpsup.env.Env()
+    env.adapt()
+    for exec in execList:
+        exec_path = which(exec)
+        if exec_path:
+            return exec_path
+    return None
+
+
 def check_setup(**opt):
-    setup = get_setup(**opt)
+    target = opt.get('target')
 
-    for k,v in setup:
-        if os.path.isfile(vars):
-            print(f"we found {k} at {v}.")
+    if target:
+        targetList = [target]
+    else:
+        targetList = ['chrome', 'chromedriver']
+
+    static_setup = get_static_setup(**opt)
+
+    found_path = {}
+
+    for exec in targetList:
+        path = None
+        if exec in static_setup:
+            static_path = static_setup[exec]
+            if os.path.isfile(static_path):
+                path = static_setup[exec]
+                print(f"static setup's {exec}={static_path} exists.")
+            else:
+                print(f"static setup's {exec}={static_path} doesn't exist.")
+
+        if path:
+            found_path[exec] = path
+            continue
+
+        if exec == 'chrome':
+            execList = ['google-chrome', 'chrome']
         else:
-            print(f"{k} is not found at {v}. we will find it in PATH")
-            if k == 'browser_path':
-                browser_path = get_browser_path()
-                print(f"found {k} at {browser_path}")
-            # else:
+            execList = [exec]
+
+        path = search_exec_in_path(execList)
+        if path:
+            print(f"found {exec}={path} in PATH")
+            found_path[exec] = path
+        else:
+            print(f"cannot find {exec} in PATH")
+
+    return found_path
+
 
 # https://stackoverflow.com/questions/47420957/create-custom-wait-until-condition-in-python
+
+
 class tp_find_element_by_paths:
     def __init__(self, type_paths: list, **opt):
         self.type_paths = type_paths
@@ -512,19 +581,20 @@ class tp_find_element_by_paths:
             if 'click_' in ptype:
                 # click_xpath=//...
                 # e.click()
-                tp_click(driver,e)
+                tp_click(driver, e)
 
             print(f'found {ptype}="{path}"')
 
             # monkey-patch some self-identification info for convenience
             e.tpdata = {
-                "ptype" : ptype,
-                "path" : path,
-                "position" : i
+                "ptype": ptype,
+                "path": path,
+                "position": i
             }
             break
 
         return e
+
 
 class tp_find_element_by_chains:
     # check whether one of the chains matches any element
@@ -572,7 +642,8 @@ class tp_find_element_by_chains:
                     self.chains[i].append([[locator]])
                 elif m1 := locator_compiled_path1.match(locator):
                     ptype, paths_string = m1.groups()
-                    paths_string = paths_string.strip()  # default to strip blanks: space, tab, newline ...
+                    # default to strip blanks: space, tab, newline ...
+                    paths_string = paths_string.strip()
 
                     type_paths = []
                     while m2 := locator_compiled_path2.match(paths_string):
@@ -604,9 +675,8 @@ class tp_find_element_by_chains:
                 else:
                     raise RuntimeError(f"unsupported 'locator={locator}'")
 
-
     def __call__(self, driver):
-        e:WebElement = None
+        e: WebElement = None
 
         if self.verbose:
             print(f'parsed chains = {pformat(self.chains)}')
@@ -668,12 +738,14 @@ class tp_find_element_by_chains:
                                 continue
                         elif "css" in ptype:
                             try:
-                                e = locator_driver.find_element(By.CSS_SELECTOR, path)
+                                e = locator_driver.find_element(
+                                    By.CSS_SELECTOR, path)
                             except Exception:
                                 j += 1
                                 continue
                         else:
-                            raise RuntimeError(f"unsupported path type={ptype}")
+                            raise RuntimeError(
+                                f"unsupported path type={ptype}")
 
                         self.matched_numbers[i].append(f"{j}")
                         self.matched_paths[i].append(f"{ptype}={path}")
@@ -682,7 +754,8 @@ class tp_find_element_by_chains:
                         one_parallel_path_matched = True
                         break
                     if self.verbose:
-                        print(f'one_parallel_path_matched={pformat(one_parallel_path_matched)}')
+                        print(
+                            f'one_parallel_path_matched={pformat(one_parallel_path_matched)}')
                     if not one_parallel_path_matched:
                         found_chain = False
                         break
@@ -699,15 +772,16 @@ class tp_find_element_by_chains:
 
                 e.tpdata = {
                     "matched_chain": self.matched_paths[i].copy(),
-                    "position" : f"{i}." + ".".join(self.matched_numbers[i])
-                } # monkey patch for convenience
+                    "position": f"{i}." + ".".join(self.matched_numbers[i])
+                }  # monkey patch for convenience
 
                 return e
         return None
 
 
-we_return = 0 # global var, note: only global to this filewe_return
-action_data = {} # global var
+we_return = 0  # global var, note: only global to this filewe_return
+action_data = {}  # global var
+
 
 def run_actions(driver: webdriver.Chrome, actions: List, **opt):
     dryrun = opt.get("dryrun", 0)
@@ -719,14 +793,14 @@ def run_actions(driver: webdriver.Chrome, actions: List, **opt):
     #     global we_return, driver, element
     #     driver = _driver
 
-    global we_return # global var, note: only global to this file
+    global we_return  # global var, note: only global to this file
     global action_data
 
     we_return = 0
     if not opt.get('keep_action_data', 0):
         action_data = {}
 
-    element:WebElement = None
+    element: WebElement = None
 
     for row in actions:
         #   locator                             input         comment
@@ -772,7 +846,8 @@ def run_actions(driver: webdriver.Chrome, actions: List, **opt):
 
     return globals()
 
-def tp_get_url(driver: webdriver.Chrome, url:str, **opt):
+
+def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
     # driver.get(url) often got the following error:
     #   selenium.common.exceptions.TimeoutException:
     #   Message: timeout: Timed out receiving message from renderer: 10.243
@@ -796,7 +871,7 @@ def tp_get_url(driver: webdriver.Chrome, url:str, **opt):
         print(f"\nseen 'WebDriverException Message: target frame detached' again? try the url again.\n")
         driver.get(url)
     if opt.get('accept_alert', 0):
-        time.sleep(1) # sleep 1 second to let alert to show up
+        time.sleep(1)  # sleep 1 second to let alert to show up
         if opt.get('interactive'):
             print("expect alert to show up")
             hit_enter_to_continue()
@@ -804,14 +879,15 @@ def tp_get_url(driver: webdriver.Chrome, url:str, **opt):
         # https://stackoverflow.com/questions/19003003/check-if-any-alert-exists-using-selenium-with-python
         try:
             WebDriverWait(driver, 3).until(EC.alert_is_present(),
-                                            'Timed out waiting for PA creation ' +
-                                            'confirmation popup to appear.')
+                                           'Timed out waiting for PA creation ' +
+                                           'confirmation popup to appear.')
 
             alert = driver.switch_to.alert
             alert.accept()
             print("alert accepted")
         except TimeoutException:
             print("no alert")
+
 
 locator_compiled_url = re.compile(r"(url|url_accept_alert)=(.+)")
 locator_compiled_tab = re.compile(r"tab=(.+)")
@@ -823,11 +899,12 @@ locator_compiled_path2 = re.compile(
     r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*(xpath|css|click_xpath|click_css)=",
     re.MULTILINE | re.DOTALL,
 )
-locator_compiled_js = re.compile(r"js=(.+)", re.MULTILINE|re.DOTALL)
+locator_compiled_js = re.compile(r"js=(.+)", re.MULTILINE | re.DOTALL)
 locator_compiled_code = re.compile(r"code=(.+)", re.MULTILINE | re.DOTALL)
 
-locator_driver:webdriver = None
+locator_driver: webdriver = None
 driver_url = None
+
 
 def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
     dryrun = opt.get("dryrun", 0)
@@ -838,7 +915,8 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
     if interactive:
         helper = {
             'd': ['dump page', dump,
-                  {'driver': driver, 'output_dir': tpsup.tptmp.tptmp().get_nowdir(mkdir_now=0)}
+                  {'driver': driver,
+                      'output_dir': tpsup.tptmp.tptmp().get_nowdir(mkdir_now=0)}
                   # we delay mkdir, till we really need it
                   ],
         }
@@ -900,7 +978,6 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
     #         ],
     #     ],
 
-
     if (type(locator2) == dict) and ('chains' in locator2):
         h = locator2
         print(f"locate(): search for chains = {pformat(h['chains'])}")
@@ -914,7 +991,8 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
 
             try:
                 # wait.until() takes the object.
-                element = wait.until(finder) # note: here we used finder, not finder(driver).
+                # note: here we used finder, not finder(driver).
+                element = wait.until(finder)
             except Exception as ex:
                 print(f"locate failed. {ex}")
                 print(f"matched_paths = {pformat(finder.matched_paths)}")
@@ -937,7 +1015,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 print(f"tpdata = {pformat(tpdata)}")
         return element
 
-    h = {} # hash
+    h = {}  # hash
     if (not locator2) or (type(locator2) == str):
         h["locator"] = [locator2]
     elif type(locator2) == list:
@@ -947,7 +1025,8 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
         if type(h["locator"]) == str:
             h["locator"] = [h["locator"]]
     else:
-        raise RuntimeError(f"unsupported locator data type {pformat(locator2)}")
+        raise RuntimeError(
+            f"unsupported locator data type {pformat(locator2)}")
 
     print(f"h={pformat(h)}")
 
@@ -980,7 +1059,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
 
     # https://selenium-python.readthedocs.io/locating-elements.html
     for locator in locator_chain:
-        if not locator: # None, empty, 0
+        if not locator:  # None, empty, 0
             print(f"locate(): no locator")
         elif m := locator_compiled_url.match(locator):
             tag, url, *_ = m.groups()
@@ -991,7 +1070,8 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                tp_get_url(driver, url, accept_alert=accept_alert, interactive=interactive)
+                tp_get_url(driver, url, accept_alert=accept_alert,
+                           interactive=interactive)
                 locator_driver = driver
                 # the following doesn't work. i had to move it into tp_get_url()
                 # try:
@@ -1070,7 +1150,8 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 # once we switch into an iframe, we should use original driver to locate
         elif m1 := locator_compiled_path1.match(locator):
             ptype, paths_string = m1.groups()
-            paths_string = paths_string.strip() # default to strip blanks: space, tab, newline ...
+            # default to strip blanks: space, tab, newline ...
+            paths_string = paths_string.strip()
 
             type_paths = []
             while m2 := locator_compiled_path2.match(paths_string):
@@ -1092,7 +1173,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 ptype = type2  # to be used in next round
                 paths_string = paths_string[end_pos:]
 
-            path = paths_string # leftover is a path
+            path = paths_string  # leftover is a path
             # todo: find a better way to strip endinng space and comma
             # print(f'path1={pformat(path)}')
             path = path.rstrip().rstrip(",").rstrip()
@@ -1142,6 +1223,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
 
     return element
 
+
 input_compiled_code = re.compile(r"code=(.+)", re.MULTILINE | re.DOTALL)
 input_compiled_js = re.compile(r"js=(.+)", re.MULTILINE | re.DOTALL)
 input_compiled_sleep = re.compile(r"sleep=(.+)")
@@ -1159,6 +1241,7 @@ input_compiled_gone_path2 = re.compile(
 input_compiled_select = re.compile(r"select=(value|index|text),(.+)")
 input_compiled_dump = re.compile(r"dump_(element|all)=(.+)")
 input_compiled_we_return = re.compile(r"we_return=(.+)")
+
 
 def send_input(
     driver: webdriver.Chrome,
@@ -1216,22 +1299,25 @@ def send_input(
                     raise RuntimeError(f"input[{position}] type={type(input2)} is not supported. "
                                        f"input={pformat(input)}")
             else:
-                raise RuntimeError(f"position={position} is not defined in input={pformat(input)}")
+                raise RuntimeError(
+                    f"position={position} is not defined in input={pformat(input)}")
         else:
             raise RuntimeError(f"tpdata is not available from element")
     else:
-        raise RuntimeError(f"send_input type={input_type} is not supported. input={pformat(input)}")
+        raise RuntimeError(
+            f"send_input type={input_type} is not supported. input={pformat(input)}")
 
     if not interactive and humanlike:
         human_delay()
 
-    helper = {} # interactivity helper
+    helper = {}  # interactivity helper
     if interactive:
         helper = {
-            'd' : [ 'dump page', dump,
-                    {'driver':driver, 'output_dir' : tpsup.tptmp.tptmp().get_nowdir(mkdir_now=0)}
-                    # we delay mkdir, till we really need it
-            ],
+            'd': ['dump page', dump,
+                  {'driver': driver,
+                      'output_dir': tpsup.tptmp.tptmp().get_nowdir(mkdir_now=0)}
+                  # we delay mkdir, till we really need it
+                  ],
         }
 
     for step in steps:
@@ -1268,7 +1354,8 @@ def send_input(
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                ActionChains(driver).move_to_element(element).pause(seconds).perform()
+                ActionChains(driver).move_to_element(
+                    element).pause(seconds).perform()
         elif m := input_compiled_string.match(step):
             # even if only capture group, still add *_; other string would become list, not scalar
             string, *_ = m.groups()
@@ -1294,7 +1381,8 @@ def send_input(
                     )
         elif m := input_compiled_is_attr_empty.match(step):
             attr, *_ = m.groups()
-            print(f"action: check whether {attr} is empty. If yes, we will do next step")
+            print(
+                f"action: check whether {attr} is empty. If yes, we will do next step")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
@@ -1309,7 +1397,8 @@ def send_input(
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                element.send_keys(Keys.__getattribute__(Keys, key.upper()) * count)
+                element.send_keys(Keys.__getattribute__(
+                    Keys, key.upper()) * count)
         elif m := locator_compiled_tab.match(step):
             count_str, *_ = m.groups()
             count = int(count_str)
@@ -1354,7 +1443,8 @@ def send_input(
 
             interval = opt.get("gone_interval", 60)
 
-            print(f"action: wait {interval} seconds for elements gone, paths = {pformat(type_paths)}")
+            print(
+                f"action: wait {interval} seconds for elements gone, paths = {pformat(type_paths)}")
 
             if interactive:
                 hit_enter_to_continue(helper=helper)
@@ -1364,7 +1454,8 @@ def send_input(
 
                 while i < interval:
                     i = i + 1
-                    time.sleep(1)  # wait at least a second to let the element show up
+                    # wait at least a second to let the element show up
+                    time.sleep(1)
                     for ptype, path in type_paths:
                         e = None
                         if ptype == "xpath":
@@ -1388,7 +1479,7 @@ def send_input(
                 if e:
                     js_print_debug(driver, e)
                     raise RuntimeError(f"not all paths gone in {i} seconds")
-        elif (step == "iframe") :
+        elif (step == "iframe"):
             print(f"action: switch iframe")
             if interactive:
                 hit_enter_to_continue(helper=helper)
@@ -1409,11 +1500,13 @@ def send_input(
             # we group output_dir into **opt, allowing override kwargs
             #
             if scope == 'all':
-                dump(driver, **{**opt, 'output_dir':output_dir})
+                dump(driver, **{**opt, 'output_dir': output_dir})
             else:
                 if element is None:
-                    print("dump_element() is called but element is None, we dump_all() instead")
-                dump(driver, element=element, **{**opt, 'output_dir':output_dir})
+                    print(
+                        "dump_element() is called but element is None, we dump_all() instead")
+                dump(driver, element=element, **
+                     {**opt, 'output_dir': output_dir})
         elif m := input_compiled_we_return.match(step):
             we_return, *_ = m.groups()
             print(f"we_return={we_return}")
@@ -1423,11 +1516,12 @@ def send_input(
         else:
             raise RuntimeError(f'unsupported input step="{step}"')
 
-def dump(driver: webdriver.Chrome, output_dir: str, element:WebElement=None, **opt):
+
+def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, **opt):
     verbose = opt.get('verbose', 0)
 
     source_file = f"{output_dir}/source.html"
-    os.makedirs(output_dir, exist_ok=True) # this is mkdir -p
+    os.makedirs(output_dir, exist_ok=True)  # this is mkdir -p
     with open(source_file, "w", encoding="utf-8") as source_fh:
         if element:
             source_fh.write(element.get_attribute('outerHTML'))
@@ -1443,11 +1537,11 @@ def dump(driver: webdriver.Chrome, output_dir: str, element:WebElement=None, **o
         iframe_list = element.find_elements(By.XPATH, './/iframe')
 
     dump_state = {
-        'output_dir' : output_dir,
-        'type_chain' : [], # iframe, shadow
-        'typekey_chain': [], # iframe001, shadow001
-        'locator_chain' : [], # 'xpath=/a/b', 'shadow', 'css=div'
-        'xpath_chain': [], # /a/b, shadow, /div
+        'output_dir': output_dir,
+        'type_chain': [],  # iframe, shadow
+        'typekey_chain': [],  # iframe001, shadow001
+        'locator_chain': [],  # 'xpath=/a/b', 'shadow', 'css=div'
+        'xpath_chain': [],  # /a/b, shadow, /div
         'scan_count': {
             'iframe': 0,
             'shadow': 0,
@@ -1459,7 +1553,7 @@ def dump(driver: webdriver.Chrome, output_dir: str, element:WebElement=None, **o
         'max_depth_so_far': 0,
     }
 
-    for format in [ 'list', 'map']:
+    for format in ['list', 'map']:
         dump_state[format] = {}
         for scheme in ['locator_chain', 'xpath_chain', 'xpath']:
             f = f"{output_dir}/{scheme}_{format}.txt"
@@ -1486,7 +1580,8 @@ def dump(driver: webdriver.Chrome, output_dir: str, element:WebElement=None, **o
     else:
         start_node = element
         find_path = './/*'
-        dump_deeper(driver, element, dump_state, 'shadow', **opt) # don't forget element itself
+        dump_deeper(driver, element, dump_state, 'shadow',
+                    **opt)  # don't forget element itself
 
     for e in start_node.find_elements(By.XPATH, find_path):
         dump_deeper(driver, e, dump_state, 'shadow', **opt)
@@ -1504,11 +1599,13 @@ def dump(driver: webdriver.Chrome, output_dir: str, element:WebElement=None, **o
     max_depth_so_far = dump_state['max_depth_so_far']
     print(f"total scanned {total_scan_count}, for iframe {iframe_scan_count}, "
           f"for shadow {shadow_scan_count}. iframe can be scanned by locator, therefore, less count.")
-    print(f"current depth={scan_depth}, max depth so far={max_depth_so_far}, max_exist_depth is 1 less")
+    print(
+        f"current depth={scan_depth}, max depth so far={max_depth_so_far}, max_exist_depth is 1 less")
 
     # we put the chain check at last so that we won't miss the summary
-    if scan_depth !=0 :
+    if scan_depth != 0:
         raise RuntimeError(f"dump_state type_chain is not empty")
+
 
 def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: str, **opt):
     verbose = opt.get('verbose', 0)
@@ -1526,11 +1623,14 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     limit_depth = opt.get('limit_depth', 5)
 
     if ((total_scan_count % 100) == 0) or (scan_depth >= limit_depth):
-        print(f"total scanned {total_scan_count}, for iframe {iframe_scan_count}, for shadow {shadow_scan_count}")
-        print(f"current depth={scan_depth}, max depth so far={max_depth_so_far}, max_exist_depth is 1 less")
+        print(
+            f"total scanned {total_scan_count}, for iframe {iframe_scan_count}, for shadow {shadow_scan_count}")
+        print(
+            f"current depth={scan_depth}, max depth so far={max_depth_so_far}, max_exist_depth is 1 less")
         if scan_depth >= limit_depth:
             # raise RuntimeError(f"current depth={scan_depth} > limit_depth={limit_depth}")
-            print(f"current depth={scan_depth} >= limit_depth={limit_depth}, we stop going deeper, going back")
+            print(
+                f"current depth={scan_depth} >= limit_depth={limit_depth}, we stop going deeper, going back")
             return
 
     if type == 'shadow':
@@ -1548,8 +1648,8 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
 
     # selenium.common.exceptions.StaleElementReferenceException: Message: stale element reference:
     #   element is not attached to the page document
-    xpath:str = None
-    css:str = None
+    xpath: str = None
+    css: str = None
 
     try:
         xpath = js_get(driver, element, 'xpath', **opt)
@@ -1576,7 +1676,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     dump_state['exist_count'][type] += 1
     i = dump_state['exist_count'][type]
 
-    typekey = f'{type}{i:03d}' # padding
+    typekey = f'{type}{i:03d}'  # padding
     dump_state['type_chain'].append(type)
     dump_state['typekey_chain'].append(typekey)
     dump_state['xpath_chain'].extend([xpath, type])
@@ -1590,7 +1690,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     line = f"{typekey_chain}: {xpath}"
     print(line)
     dump_state['map']['xpath'].write(line + "\n")
-    dump_state['list']['xpath'].write(xpath  + "\n")
+    dump_state['list']['xpath'].write(xpath + "\n")
 
     xpath_chain = ' '.join(dump_state['xpath_chain'])
     line = f'{typekey_chain}: {xpath_chain}'
@@ -1600,7 +1700,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     locator_chain = "'" + "', '".join(dump_state['locator_chain']) + "'"
     line = f'{typekey_chain}: {locator_chain}'
     dump_state['map']['locator_chain'].write(line + "\n")
-    dump_state['list']['locator_chain'].write( locator_chain + "\n")
+    dump_state['list']['locator_chain'].write(locator_chain + "\n")
 
     if type == 'iframe':
         driver.switch_to.frame(element)
@@ -1683,15 +1783,17 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     poptype = dump_state['type_chain'].pop()
     popkey = dump_state['typekey_chain'].pop()
     if popkey != typekey:
-        raise RuntimeError(f"pop_key={popkey} is not the same expected type_key={typekey}")
+        raise RuntimeError(
+            f"pop_key={popkey} is not the same expected type_key={typekey}")
 
     pop_xpath_chain1 = dump_state['xpath_chain'].pop()
     pop_xpath_chain2 = dump_state['xpath_chain'].pop()
     pop_locator_chain1 = dump_state['locator_chain'].pop()
     pop_locator_chain2 = dump_state['locator_chain'].pop()
 
-def locator_chain_to_js_list(locator_chain:list, **opt)->list :
-    js_list:list = []
+
+def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
+    js_list: list = []
     trap = opt.get('trap', 0)
 
     js = 'var e = document'
@@ -1703,7 +1805,8 @@ def locator_chain_to_js_list(locator_chain:list, **opt)->list :
             elif ptype == 'css':
                 js += f'.querySelector("{path}")'
             else:
-                raise RuntimeError(f"unsupported ptype={ptype} in locator={locator}")
+                raise RuntimeError(
+                    f"unsupported ptype={ptype} in locator={locator}")
         elif locator == 'shadow':
             js += '.shadowRoot'
         elif locator == 'iframe':
@@ -1711,32 +1814,32 @@ def locator_chain_to_js_list(locator_chain:list, **opt)->list :
 
             # cd(iframe_element) only works in Firefox
             # js += '.contentWindow;\ncd(element);\nelement = document'
-#             js += ''';
-# const current_origin = window.location.origin;
-#
-# var iframe_src = e.getAttribute('src');
-# // alert(`iframe_src=${iframe_src}`);
-# var iframe_url = null
-# var iframe_origin = null
-# if (iframe_src) {
-#     //https://developer.mozilla.org/en-US/docs/Web/API/URL/origin
-#     iframe_url = new URL(iframe_src);
-#     // console.log(`iframe_url=${iframe_url}`);
-#     alert(`iframe_url=${iframe_url}`);
-#     iframe_origin = iframe_url.origin;
-# }
-#
-# var iframe_inner = null;
-# if ( (!iframe_origin) || (current_origin.toUpperCase() === iframe_origin.toUpperCase()) ) {
-#     //case-insensitive compare
-#     console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
-#     iframe_inner=e.contentDocument || e.contentWindow.document;
-#     document = iframe_inner
-# } else {
-#     console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
-#     window.location.replace(iframe_url);
-# }
-#     '''
+            #             js += ''';
+            # const current_origin = window.location.origin;
+            #
+            # var iframe_src = e.getAttribute('src');
+            # // alert(`iframe_src=${iframe_src}`);
+            # var iframe_url = null
+            # var iframe_origin = null
+            # if (iframe_src) {
+            #     //https://developer.mozilla.org/en-US/docs/Web/API/URL/origin
+            #     iframe_url = new URL(iframe_src);
+            #     // console.log(`iframe_url=${iframe_url}`);
+            #     alert(`iframe_url=${iframe_url}`);
+            #     iframe_origin = iframe_url.origin;
+            # }
+            #
+            # var iframe_inner = null;
+            # if ( (!iframe_origin) || (current_origin.toUpperCase() === iframe_origin.toUpperCase()) ) {
+            #     //case-insensitive compare
+            #     console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
+            #     iframe_inner=e.contentDocument || e.contentWindow.document;
+            #     document = iframe_inner
+            # } else {
+            #     console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
+            #     window.location.replace(iframe_url);
+            # }
+            #     '''
             js += '''
 try {
     let iframe_inner = e.contentDocument || e.contentWindow.document;
@@ -1771,7 +1874,8 @@ try {
 
     return js_list
 
-def wrap_js_in_trap(js:str) -> str:
+
+def wrap_js_in_trap(js: str) -> str:
     js2 = f'''
 try {{
 {js}
@@ -1783,19 +1887,22 @@ try {{
     return js2
 
 
-def js_list_to_locator_chain(js_list:list, **opt) -> list :
+def js_list_to_locator_chain(js_list: list, **opt) -> list:
     locator_chain = []
     for js in js_list:
         locator_chain.append(f'js={js}')
     return locator_chain
 
-def human_delay(max_delay:int = 3, min_delay:int = 1):
+
+def human_delay(max_delay: int = 3, min_delay: int = 1):
     # default to sleep, 1, 2, or 3 seconds
 
     if min_delay < 0:
-        raise RuntimeError(f"min={min_delay} is less than 0, not acceptable. min must >= 0")
+        raise RuntimeError(
+            f"min={min_delay} is less than 0, not acceptable. min must >= 0")
     if max_delay < 0:
-        raise RuntimeError(f"max={max_delay} is less than 0, not acceptable. max must >= 0")
+        raise RuntimeError(
+            f"max={max_delay} is less than 0, not acceptable. max must >= 0")
     if max_delay < min_delay:
         raise RuntimeError(f"max ({max_delay}) < min ({min_delay})")
     elif max_delay == min_delay:
@@ -1811,7 +1918,8 @@ def human_delay(max_delay:int = 3, min_delay:int = 1):
         if random_seconds > 0:
             time.sleep(random_seconds)
 
-def tp_click(driver:webdriver.Chrome, element:WebElement, **opt):
+
+def tp_click(driver: webdriver.Chrome, element: WebElement, **opt):
     try:
         # this didn't improve
         #   print("first scrowIntoView")
@@ -1838,7 +1946,6 @@ def tp_click(driver:webdriver.Chrome, element:WebElement, **opt):
         print(ex.msg)
         print(f"\nseen 'WebDriverException: Message: target frame detached' again? click() again\n")
         element.click()
-
 
 
 js_by_key = {
@@ -1992,7 +2099,8 @@ def js_get(driver: webdriver.Chrome, element: WebElement, key: str, **opt):
             # print full xpath
             extra_args.append('full')
 
-    return driver.execute_script(js, element, *extra_args) # use * to flatten list (array)
+    # use * to flatten list (array)
+    return driver.execute_script(js, element, *extra_args)
 
 
 def js_print(driver: webdriver.Chrome, element: WebElement, key: str, **opt):
@@ -2010,6 +2118,7 @@ def js_print_debug(driver: webdriver.Chrome, element: WebElement, **opt):
     for key in keys:
         js_print(driver, active_element, key)
     print(f"tpdata = {pformat(getattr(element, 'tpdata', None))}")
+
 
 def test_basic():
     # if need to manually start Chrome (c1) on localhost with debug port 19999,
@@ -2129,6 +2238,7 @@ def test_actions():
 
     driver.quit()
 
+
 step_compiled_blockstart = re.compile(r"\s*(while|if)(_not)?=(.+)")
 step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
 step_compiled_action = re.compile(r"action=(Search)")
@@ -2143,6 +2253,7 @@ step_compiled_key = re.compile(r"key=(.+?),(\d+)", re.IGNORECASE)
 # step_compiled_swipe = re.compile(r"swipe=(.+)")
 step_compiled_wait = re.compile(r"wait=(\d+)")
 
+
 def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     if not list:
         return
@@ -2156,15 +2267,15 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
         dryrun = 1
     global we_return
     global action_data
- 
-    element:WebElement = None
+
+    element: WebElement = None
 
     helper = opt.get("helper", {})
 
     # we support single-level block, just for convenience when testing using appium_steps
     # we don't support nested blocks; for nested block, use python directly
     block = []
-    blockend=None
+    blockend = None
     condition = None
     blockstart = None
     negation = False
@@ -2173,14 +2284,16 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
         # check blockstack empty
         if blockend:
             if step == blockend:
-                print(f"matched blockend={blockend}, running block={block}, condition={condition}")
+                print(
+                    f"matched blockend={blockend}, running block={block}, condition={condition}")
                 blockend = None
                 if not block:
                     raise RuntimeError(f"block is empty")
                 if interactive:
                     hit_enter_to_continue(helper=helper)
                 if not dryrun:
-                    run_block(driver, blockstart, negation, condition, block, **opt)
+                    run_block(driver, blockstart, negation,
+                              condition, block, **opt)
                 continue
             else:
                 block.append(step)
@@ -2201,7 +2314,8 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                         try:
                             lxml.etree.XPath(value)
                         except lxml.etree.XPathSyntaxError as e:
-                            raise RuntimeError(f"XPath syntax error in step={step}: {e}")
+                            raise RuntimeError(
+                                f"XPath syntax error in step={step}: {e}")
                     condition = f"driver.find_element(By.XPATH, '''{value}''')"
                 elif tag == 'css':
                     condition = f"driver.find_element(By.CSS_SELECTOR, '''{value}''')"
@@ -2252,7 +2366,8 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                element.send_keys(Keys.__getattribute__(Keys, key.upper()) * count)
+                element.send_keys(Keys.__getattribute__(
+                    Keys, key.upper()) * count)
         elif m := step_compiled_string.match(step):
             value, *_ = m.groups()
             print(f"follow(): string={value}")
@@ -2271,7 +2386,8 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                driver.execute_script('mobile: performEditorAction', {'action': value})
+                driver.execute_script(
+                    'mobile: performEditorAction', {'action': value})
         elif step == 'click':
             print(f"follow(): click")
             if interactive:
@@ -2290,7 +2406,8 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
         print(f"follow(): this step is done")
 
     if blockend:
-        raise RuntimeError(f"mismatched blockend={blockend} at the end of {pformat(steps)}")
+        raise RuntimeError(
+            f"mismatched blockend={blockend} at the end of {pformat(steps)}")
 
 
 def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  condition: str, block: list, **opt):
@@ -2322,7 +2439,8 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
         passed_condition = False
 
     if passed_condition and negation:
-        print(f"if_block(): condition '{condition}' is true, but negated, break")
+        print(
+            f"if_block(): condition '{condition}' is true, but negated, break")
         executed = False
     elif not passed_condition and not negation:
         print(f"if_block(): condition '{condition}' is not true, break")
@@ -2332,11 +2450,12 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
 
     ret = {'executed': executed}
 
-    if executed :
+    if executed:
         if not checkonly:
             ret['result'] = follow(driver, block, **opt)
 
     return ret
+
 
 def main():
     # test_basic()
