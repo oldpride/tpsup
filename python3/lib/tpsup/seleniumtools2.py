@@ -550,14 +550,15 @@ def check_setup(**opt):
             chrome_vesion = subprocess.check_output(
                 ["chrome_version", found_path['chrome']]).strip()
             # 99.0.4844.74
+
             print(f"chrome version={chrome_vesion}")
 
         if found_path.get('chromedriver'):
             chromedriver_vesion = subprocess.check_output(
                 [found_path['chromedriver'], '--version']).strip()
-            # Google Chrome 99.0.4844.74
+            # ChromeDriver 99.0.4844.51 (d537ec02474b5afe23684e7963d538896c63ac77-refs/branch-heads/4844@{#875})
 
-            chromedriver_vesion = chromedriver_vesion.split()[2]
+            chromedriver_vesion = chromedriver_vesion.split()[1]
             # 99.0.4844.74
 
             print(f"chromedriver version={chromedriver_vesion}")
