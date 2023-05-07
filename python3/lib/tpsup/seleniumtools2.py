@@ -553,6 +553,8 @@ def check_setup(**opt):
 
             print(f"chrome version={chrome_vesion}")
 
+            chrome_major = chrome_vesion.split('.')[0]
+
         if found_path.get('chromedriver'):
             chromedriver_vesion = subprocess.check_output(
                 [found_path['chromedriver'], '--version']).strip()
@@ -561,15 +563,19 @@ def check_setup(**opt):
             chromedriver_vesion = chromedriver_vesion.split()[1]
             # 99.0.4844.74
 
+            chromedriver_major = chromedriver_vesion.split('.')[0]
+
             print(f"chromedriver version={chromedriver_vesion}")
 
         if chrome_vesion and chromedriver_vesion:
-            if chrome_vesion != chromedriver_vesion:
+            if chrome_major != chromedriver_major:
+                print(
+                    f"chrome major version {chrome_major} doesn't match chromedriver major version {chromedriver_major}")
                 raise RuntimeError(
-                    f"chrome version={chrome_vesion} != chromedriver version={chromedriver_vesion}")
+                    f"chrome major version {chrome_major} doesn't match chromedriver major version {chromedriver_major}")
             else:
                 print(
-                    f"chrome version={chrome_vesion} == chromedriver version={chromedriver_vesion}")
+                    f"chrome major version {chrome_major} matches chromedriver major version {chromedriver_major}")
     return found_path
 
 
