@@ -535,7 +535,7 @@ def check_setup(**opt):
             print(f"found {exec}={path} in PATH")
             found_path[exec] = path
         else:
-            print(f"cannot find {exec} in PATH")
+            print(f"cannot find {exec} in PATH={os.environ['PATH']}")
 
     return found_path
 
