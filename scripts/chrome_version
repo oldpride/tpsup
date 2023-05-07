@@ -3,7 +3,7 @@
 prog=`basename $0`
 
 usage () {
-   cat <<EOF
+   cat >&2 <<EOF
 usage:
 
    $prog chrome_path
@@ -11,6 +11,9 @@ usage:
 
    print chrome version
 
+   'default' means searching chrome in PATH, not necessarily the default installation path.
+
+   -v        verbose
 examples:
 
    $prog default
@@ -27,14 +30,16 @@ EOF
    exit 1
 }
 
-# powershell -command "&{(Get-Item 'C:/Program Files/Google/Chrome/Application/chrome.exe').VersionInfo.ProductVersion}"
-# (win10-python3.10) william@tianpc2:/c/Users/william/chrome/Application$ powershell -command "&{(Get-Item 'c:/Users/william/chrome/Application/chrome.exe').VersionInfo.ProductVersion}"
+# https://stackoverflow.com/questions/50880917/
+# examples:
+#     powershell -command "&{(Get-Item 'C:/Program Files/Google/Chrome/Application/chrome.exe').VersionInfo.ProductVersion}"
+#     (win10-python3.10) william@tianpc2:/c/Users/william/chrome/Application$ powershell -command "&{(Get-Item 'c:/Users/william/chrome/Application/chrome.exe').VersionInfo.ProductVersion}"
 
-dryrun=N
-while getopts n o;
+verbose=N
+while getopts v o;
 do
    case "$o" in
-      n) dryrun=Y;;
+      v) verbose=Y;;
       #s) site_dir="$OPTARG";;
       *) echo "unknow switch '$o'"; usage;;
    esac
@@ -47,28 +52,33 @@ if [ $# -ne 1 ]; then
    usage
 fi
 
-path=$1
+p=$1
 
 uname=`uname -a`
 
-if [ "$path" = "default" ]; then
+if [ "$p" = "default" ]; then
    if [[ "$uname" =~ Linux ]]; then
       target=google-chrome
    else 
       target=chrome
    fi
 
-   path=`which $target`
-   if [ "X$path" = "X" ]; then
+   p=`which $target`
+   if [ "X$p" = "X" ]; then
       echo "ERROR: cannot find $target in PATH=$PATH" >&2
       exit 1
    fi
+
+   [ $verbose = Y ] && echo "p=$p" >&2
 fi   
 
 if [[ "$uname" =~ Linux ]]; then
    # $ google-chrome --version
    # Google Chrome 99.0.4844.74 
-   $path --version | cut -d" " -f3
+
+   [ $verbose = Y ] && set -x
+   $p --version | cut -d" " -f3
 else 
-   powershell -command "&{(Get-Item '$path').VersionInfo.ProductVersion}"
+   [ $verbose = Y ] && set -x
+   powershell -command "&{(Get-Item '$p').VersionInfo.ProductVersion}"
 fi
