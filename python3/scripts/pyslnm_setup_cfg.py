@@ -33,4 +33,4 @@ def code(all_cfg, known, **opt):
 
     action = opt.get('action')
 
-    result = tpsup.seleniumtools2.check_setup(**opt)
+    result = tpsup.seleniumtools2.check_setup(versionCompare=1)

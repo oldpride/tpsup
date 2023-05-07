@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import time
+import subprocess
 from urllib.parse import urlparse
 from shutil import which
 import tpsup.env
@@ -537,6 +538,17 @@ def check_setup(**opt):
         else:
             print(f"cannot find {exec} in PATH={os.environ['PATH']}")
 
+    if opt.get('compareVersion', 0) and found_path.get('chrome') and found_path.get('chromedriver'):
+        chrome_vesion = subprocess.check_output(
+            ["chrome_version", found_path['chrome']]).strip()
+        chromedriver_vesion = subprocess.check_output(
+            [found_path['chrome'], '--version']).strip()
+        if chrome_vesion != chromedriver_vesion:
+            raise RuntimeError(
+                f"chrome version={chrome_vesion} != chromedriver version={chromedriver_vesion}")
+        else:
+            print(
+                f"chrome version={chrome_vesion} == chromedriver version={chromedriver_vesion}")
     return found_path
 
 
