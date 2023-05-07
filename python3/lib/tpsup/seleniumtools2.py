@@ -541,16 +541,13 @@ def check_setup(**opt):
             print(f"cannot find {exec} in PATH={os.environ['PATH']}")
 
     if opt.get('compareVersion', 0):
-        print("")
-
         chrome_vesion = None
         chromedriver_vesion = None
 
         if found_path.get('chrome'):
-            print("here")
-
+            full_path = which('chrome_version')
             chrome_vesion = str(subprocess.check_output(
-                ["chrome_version", found_path['chrome']]).strip(), 'utf-8')
+                [full_path, found_path['chrome']]).strip(), 'utf-8')
             # 99.0.4844.74
 
             # use str() to convert bytes to string
