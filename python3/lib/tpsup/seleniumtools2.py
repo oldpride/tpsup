@@ -547,6 +547,8 @@ def check_setup(**opt):
         chromedriver_vesion = None
 
         if found_path.get('chrome'):
+            print "here"
+
             chrome_vesion = str(subprocess.check_output(
                 ["chrome_version", found_path['chrome']]).strip(), 'utf-8')
             # 99.0.4844.74
