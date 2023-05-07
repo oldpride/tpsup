@@ -509,8 +509,10 @@ def check_setup(**opt):
 
     for exec in targetList:
         path = None
+        static_path = None
         if exec in static_setup:
             static_path = static_setup[exec]
+            print(f"static setup configured {exec}={static_path}")
             if os.path.isfile(static_path):
                 path = static_setup[exec]
                 print(f"static setup's {exec}={static_path} exists.")
@@ -521,6 +523,8 @@ def check_setup(**opt):
             found_path[exec] = path
             continue
 
+        if not static_path:
+            print(f"static setup didn't configure {exec}.")
         if exec == 'chrome':
             execList = ['google-chrome', 'chrome']
         else:
