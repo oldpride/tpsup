@@ -541,8 +541,15 @@ def check_setup(**opt):
     if opt.get('compareVersion', 0) and found_path.get('chrome') and found_path.get('chromedriver'):
         chrome_vesion = subprocess.check_output(
             ["chrome_version", found_path['chrome']]).strip()
+        # 99.0.4844.74
+
         chromedriver_vesion = subprocess.check_output(
             [found_path['chrome'], '--version']).strip()
+        # Google Chrome 99.0.4844.74
+
+        chromedriver_vesion = chromedriver_vesion.split()[2]
+        # 99.0.4844.74
+
         if chrome_vesion != chromedriver_vesion:
             raise RuntimeError(
                 f"chrome version={chrome_vesion} != chromedriver version={chromedriver_vesion}")
