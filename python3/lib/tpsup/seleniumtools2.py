@@ -547,23 +547,34 @@ def check_setup(**opt):
         chromedriver_vesion = None
 
         if found_path.get('chrome'):
-            chrome_vesion = subprocess.check_output(
-                ["chrome_version", found_path['chrome']]).strip()
+            chrome_vesion = str(subprocess.check_output(
+                ["chrome_version", found_path['chrome']]).strip(), 'utf-8')
             # 99.0.4844.74
+
+            # use str() to convert bytes to string
 
             print(f"chrome version={chrome_vesion}")
 
             chrome_major = chrome_vesion.split('.')[0]
 
+            print(f"chrome major={chrome_major}")
+
         if found_path.get('chromedriver'):
-            chromedriver_vesion = subprocess.check_output(
-                [found_path['chromedriver'], '--version']).strip()
+            chromedriver_vesion = str(subprocess.check_output(
+                [found_path['chromedriver'], '--version']).strip(), 'utf-8')
             # ChromeDriver 99.0.4844.51 (d537ec02474b5afe23684e7963d538896c63ac77-refs/branch-heads/4844@{#875})
+
+            # use str() to convert bytes to string
+
+            print(f"chromedriver version={chromedriver_vesion}")
 
             chromedriver_vesion = chromedriver_vesion.split()[1]
             # 99.0.4844.74
 
+            print(f"chromedriver version={chromedriver_vesion}")
+
             chromedriver_major = chromedriver_vesion.split('.')[0]
+            chromedriver_major = chromedriver_major
 
             print(f"chromedriver version={chromedriver_vesion}")
 
