@@ -1,0 +1,74 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog chrome_path
+   $prog default
+
+   print chrome version
+
+examples:
+
+   $prog default
+
+   for windows
+   $prog 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+   $prog c:/Users/william/chrome/Application/chrome.exe
+
+   for linux
+   $prog /usr/bin/google-chrome
+
+EOF
+
+   exit 1
+}
+
+# powershell -command "&{(Get-Item 'C:/Program Files/Google/Chrome/Application/chrome.exe').VersionInfo.ProductVersion}"
+# (win10-python3.10) william@tianpc2:/c/Users/william/chrome/Application$ powershell -command "&{(Get-Item 'c:/Users/william/chrome/Application/chrome.exe').VersionInfo.ProductVersion}"
+
+dryrun=N
+while getopts n o;
+do
+   case "$o" in
+      n) dryrun=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+path=$1
+
+uname=`uname -a`
+
+if [ "$path" = "default" ]; then
+   if [[ "$uname" =~ Linux ]]; then
+      target=google-chrome
+   else 
+      target=chrome
+   fi
+
+   path=`which $target`
+   if [ "X$path" = "X" ]; then
+      echo "ERROR: cannot find $target in PATH=$PATH" >&2
+      exit 1
+   fi
+fi   
+
+if [[ "$uname" =~ Linux ]]; then
+   # $ google-chrome --version
+   # Google Chrome 99.0.4844.74 
+   $path --version | cut -d" " -f3
+else 
+   powershell -command "&{(Get-Item '$path').VersionInfo.ProductVersion}"
+fi
