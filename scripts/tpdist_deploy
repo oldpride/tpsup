@@ -105,17 +105,17 @@ if (!$cfg_file) {
    die "\$SITESPEC is not defined" if !defined $sitedir;
 
    $cfg_file = "$sitedir/cfg/tpdist_deploy.cfg";
-   die "default cfg $cfg_file not found" if ! -f $cfg_file;
+   die "default cfg '$cfg_file' not found" if ! -f $cfg_file;
 } else {
-   die "cfg $cfg_file not found" if ! -f $cfg_file;
+   die "cfg '$cfg_file' not found" if ! -f $cfg_file;
 }
 
-my $string = `cat $cfg_file`;
-die "cannot read $cfg_file" if $?;
+my $string = `cat '$cfg_file'`;
+die "cannot read '$cfg_file'" if $?;
 
 eval $string;
 if ($@) {
-   croak "ERROR in parsing $cfg_file: $@\n";
+   croak "ERROR in parsing '$cfg_file': $@\n";
    return undef;
 }
 
@@ -146,6 +146,8 @@ my @ua = split /\s/, $uname;
 if ($ua[0] =~ /Linux/) {
    $dict->{OS_FAMILY} = "Linux";
 } elsif ($ua[0] =~ /CYGWIN/) {
+   $dict->{OS_FAMILY} = "Windows";
+} elsif ($ua[0] =~ /MINGW.*Msys/) {
    $dict->{OS_FAMILY} = "Windows";
 } else {
    $dict->{OS_FAMILY} = "Unknown";
