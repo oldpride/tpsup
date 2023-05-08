@@ -11,7 +11,7 @@ from pprint import pformat
 
 import tpsup.env
 import tpsup.nettools
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.tpsocketserver
 from tpsup.modtools import run_module
 from tpsup.util import tplog, tplog_exception
@@ -255,7 +255,7 @@ if not args['listenerPort'] and not args['mod_file']:
     parser.print_usage()    # short version help
     sys.exit(1)
 
-seleniumEnv = tpsup.seleniumtools_old.SeleniumEnv(**args)
+seleniumEnv = tpsup.seleniumtools.SeleniumEnv(**args)
 
 driver = seleniumEnv.get_driver()
 

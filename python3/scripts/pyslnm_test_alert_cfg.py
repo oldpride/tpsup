@@ -2,7 +2,7 @@
 from pprint import pformat
 import time
 
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.env
 import os
@@ -11,7 +11,7 @@ from selenium import webdriver
 
 our_cfg = {
     "resources": {
-        "selenium": {"method": tpsup.seleniumtools_old.get_driver, "cfg": {}},
+        "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
     },
     "extra_args": [
         {
@@ -52,7 +52,7 @@ def code(all_cfg: dict, known: dict, **opt):
     print(f"test actions = {pformat(actions)}")
 
     # '-interactive' is passed through **opt
-    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
 
 
 def post_batch(all_cfg, known, **opt):

@@ -2,7 +2,7 @@
 from pprint import pformat
 import time
 
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.env
 import os
@@ -11,7 +11,7 @@ from selenium import webdriver
 
 our_cfg = {
     "resources": {
-        "selenium": {"method": tpsup.seleniumtools_old.get_driver, "cfg": {}},
+        "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
     },
     # position_args will be inserted into $opt hash to pass forward
     "position_args": ["host_port"],
@@ -88,16 +88,16 @@ def code(all_cfg: dict, known: dict, **opt):
     print(f"test actions = {pformat(actions)}")
 
     # '-interactive' is passed through **opt
-    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
 
     print(f'active element in current context')
     element = driver.switch_to.active_element
-    tpsup.seleniumtools_old.js_print_debug(driver, element)
+    tpsup.seleniumtools.js_print_debug(driver, element)
 
     print('')
     print(f'active element in run_actions()')
     element = result['element']
-    tpsup.seleniumtools_old.js_print_debug(driver, element)
+    tpsup.seleniumtools.js_print_debug(driver, element)
 
     actions2 = [
         [
@@ -138,7 +138,7 @@ def code(all_cfg: dict, known: dict, **opt):
         ],
     ]
     print(f"test actions2 = {pformat(actions2)}")
-    result = tpsup.seleniumtools_old.run_actions(driver, actions2, **opt)
+    result = tpsup.seleniumtools.run_actions(driver, actions2, **opt)
 
     # print(f"test result = {pformat(result)}")
     print(f"test result['we_return'] = {result['we_return']}")

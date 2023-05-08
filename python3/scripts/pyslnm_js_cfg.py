@@ -9,7 +9,7 @@ import tpsup.env
 import json
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
@@ -19,7 +19,7 @@ our_cfg = {
 
     'resources': {
         'selenium': {
-            'method': tpsup.seleniumtools_old.get_driver,
+            'method': tpsup.seleniumtools.get_driver,
             'cfg': {
                 # 'host_port': 'auto'
             },
@@ -95,14 +95,14 @@ def code(all_cfg, known, **opt):
                 js = ifh.read()
                 ifh.close()
                 if trap:
-                    js = tpsup.seleniumtools_old.wrap_js_in_trap(js)
+                    js = tpsup.seleniumtools.wrap_js_in_trap(js)
                 actions.append([f'js={js}', None,  f'run #{i} file {js_file}'])
 
     print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
 
     print(f"result element = {result['element'].get_attribute('outerHTML')}")
-    tpsup.seleniumtools_old.js_print_debug(driver, result['element'])
+    tpsup.seleniumtools.js_print_debug(driver, result['element'])
 
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):

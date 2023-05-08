@@ -7,14 +7,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 from pprint import pformat
 import time
 
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.env
 
 our_cfg = {
     'resources': {
         'selenium': {
-            'method': tpsup.seleniumtools_old.get_driver,
+            'method': tpsup.seleniumtools.get_driver,
             'cfg': {}
         },
     },
@@ -117,7 +117,7 @@ from code(), opt =
 
     print(f'test actions = {pformat(actions)}')
 
-    tpsup.seleniumtools_old.run_actions(driver, actions)
+    tpsup.seleniumtools.run_actions(driver, actions)
 
     for tag_a in driver.find_elements(by=By.TAG_NAME, value='a'):
         link = None
