@@ -11,7 +11,7 @@ from pprint import pformat
 
 import tpsup.env
 import tpsup.nettools
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.tpsocketserver
 from tpsup.modtools import run_module
 from tpsup.util import tplog, tplog_exception
@@ -221,7 +221,8 @@ if serverHostPort:
 
     tplog("Sent. waiting response")
     if request['accept'] == 'json':
-        received_bytes = ensock.recv_and_decode(timeout=60) # this needs a long wait
+        received_bytes = ensock.recv_and_decode(
+            timeout=60)  # this needs a long wait
         tplog(f"received {received_bytes} bytes")
         received_str = str(received_bytes, 'utf-8')
         received_structure = json.loads(received_str)
@@ -229,10 +230,12 @@ if serverHostPort:
     elif request['accept'] == 'tar':
         tar_name = os.path.join(tmpdir, "reply.tar")
         recv_size = ensock.recv_and_decode(timeout=60, file=tar_name)
-        tplog(f"received size={recv_size}, file={tar_name}, file_size={os.path.getsize(tar_name)}")
+        tplog(
+            f"received size={recv_size}, file={tar_name}, file_size={os.path.getsize(tar_name)}")
         exception_str = None
         try:
-            exception_str = tpsup.tartools.extract_tar_to_string(tar_name, "exception.txt")
+            exception_str = tpsup.tartools.extract_tar_to_string(
+                tar_name, "exception.txt")
         except KeyError:
             pass
 
@@ -246,12 +249,13 @@ if serverHostPort:
     sys.exit(0)
 
 if not args['listenerPort'] and not args['mod_file']:
-    print(f"ERROR: {prog} in non-server mode must specify at least one mod_file", file=sys.stderr)
+    print(
+        f"ERROR: {prog} in non-server mode must specify at least one mod_file", file=sys.stderr)
     # parser.print_help()   # long version help
     parser.print_usage()    # short version help
     sys.exit(1)
 
-seleniumEnv = tpsup.seleniumtools.SeleniumEnv(**args)
+seleniumEnv = tpsup.seleniumtools_old.SeleniumEnv(**args)
 
 driver = seleniumEnv.get_driver()
 
@@ -261,11 +265,13 @@ if driver is None and not args['dryrun']:
 if args['modOnly']:
     # all optional args at the end are module files
     for mod_file in [args['mod_file']] + args['remainingArgs']:
-        run_module(mod_file, mod_type='file', seleniumEnv=seleniumEnv, verbose=verbose)
+        run_module(mod_file, mod_type='file',
+                   seleniumEnv=seleniumEnv, verbose=verbose)
 else:
     # all optional args at the end are args to the preceding mod_file
     mod_file = args['mod_file']
-    run_module(mod_file, mod_type='file', seleniumEnv=seleniumEnv, verbose=verbose, argList=args['remainingArgs'])
+    run_module(mod_file, mod_type='file', seleniumEnv=seleniumEnv,
+               verbose=verbose, argList=args['remainingArgs'])
 
 base = args['base']
 if not base:
@@ -278,8 +284,10 @@ if (listenerPort):
     listener = tpsup.tpsocketserver.tpsocketserver(listenerPort)
     listener_max_idle = 3600
     while True:
-        tplog(f"waiting for new client connection. will time out after {listener_max_idle} idle seconds")
-        ensock = listener.accept(key=key, timeout=listener_max_idle)  # this timeout only only affects listener\
+        tplog(
+            f"waiting for new client connection. will time out after {listener_max_idle} idle seconds")
+        ensock = listener.accept(
+            key=key, timeout=listener_max_idle)  # this timeout only only affects listener\
         if not ensock:
             tplog(f"timed out after {listener_max_idle} idle seconds")
             listener.close()
@@ -308,7 +316,7 @@ if (listenerPort):
         result = None
         exception_str = None
         try:
-            result = run_module(os.path.join(base,request['mod_file']),
+            result = run_module(os.path.join(base, request['mod_file']),
                                 mod_type='file', seleniumEnv=seleniumEnv,
                                 verbose=verbose, argList=request['args'])
         except Exception as e:
@@ -324,7 +332,8 @@ if (listenerPort):
             tplog(f"reply = {pformat(reply)}")
             reply_str = json.dumps(reply)
             reply_bytes = bytes(reply_str, "utf-8")
-            tplog(f"sending {len(reply_bytes)} bytes to client and closing connection")
+            tplog(
+                f"sending {len(reply_bytes)} bytes to client and closing connection")
             ensock.send_and_encode(reply_bytes)
             ensock.close()
         if request['accept'] == 'tar':
@@ -334,19 +343,23 @@ if (listenerPort):
                 download_dir = result
                 tplog(f"creating {tar_name} from {download_dir}")
                 try:
-                    tpsup.tartools.create_tar_from_dir_root(tar_name, download_dir)
+                    tpsup.tartools.create_tar_from_dir_root(
+                        tar_name, download_dir)
                 except Exception as e:
                     exception_str = tpsup.util.print_exception(e, file=str) + \
-                                    f"\ntar_name={tar_name}\ndownload_dir={download_dir}"
+                        f"\ntar_name={tar_name}\ndownload_dir={download_dir}"
                     if isinstance(e, TypeError):
                         exception_str += "\n\nshould you instead use: -accept json ?"
 
             if exception_str:
                 short_name = "exception.txt"
-                tplog(f"creating {tar_name} containing {short_name} form exception_str")
-                tpsup.tartools.create_tar_from_string(tar_name, short_name, exception_str)
+                tplog(
+                    f"creating {tar_name} containing {short_name} form exception_str")
+                tpsup.tartools.create_tar_from_string(
+                    tar_name, short_name, exception_str)
 
-            tplog(f"sending {tar_name}, size={os.path.getsize(tar_name)} to client and closing connection")
+            tplog(
+                f"sending {tar_name}, size={os.path.getsize(tar_name)} to client and closing connection")
             ensock.send_and_encode(tar_name, data_is_file=True)
             ensock.close()
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
+from pprint import pformat
 import time
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.env
 import os
@@ -10,7 +11,7 @@ from selenium import webdriver
 
 our_cfg = {
     "resources": {
-        "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
+        "selenium": {"method": tpsup.seleniumtools_old.get_driver, "cfg": {}},
     },
 
     "extra_args": [
@@ -29,7 +30,6 @@ our_cfg = {
 
 }
 
-from pprint import pformat
 
 def code(all_cfg: dict, known: dict, **opt):
     verbose = opt.get("verbose", 0)
@@ -39,7 +39,7 @@ def code(all_cfg: dict, known: dict, **opt):
 
     url = "chrome-search://local-ntp/local-ntp.html"
 
-    driver:webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
+    driver: webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
 
     actions = [
         [f"url={url}"],
@@ -47,13 +47,13 @@ def code(all_cfg: dict, known: dict, **opt):
             [
                 'xpath=/html/body/ntp-app',
                 'shadow',
-                'css=ntp-realbox', # within shadow root, only css selector
+                'css=ntp-realbox',  # within shadow root, only css selector
                 'shadow',
                 'css=input',
             ],
             [
                 f'string=Selenium Python',
-                f'key=Enter,1', # key name is case-insensitive
+                f'key=Enter,1',  # key name is case-insensitive
             ],
             "search",
         ],
@@ -62,12 +62,12 @@ def code(all_cfg: dict, known: dict, **opt):
     print(f"test actions = {pformat(actions)}")
 
     # '-interactive' is passed through **opt
-    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
 
 
 def post_batch(all_cfg, known, **opt):
     print(f"running post batch")
-    driver:webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
+    driver: webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
     driver.quit()
     if tpsup.pstools.prog_running("chrome", printOutput=1):
         print(f"seeing leftover chrome")

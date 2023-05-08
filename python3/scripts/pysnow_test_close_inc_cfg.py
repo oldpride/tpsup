@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 
-import tpsup.seleniumtools
+from urllib.parse import urlparse
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from pprint import pformat
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.env
 
@@ -8,13 +14,14 @@ our_cfg = {
 
     'resources': {
         'selenium': {
-            'method': tpsup.seleniumtools.get_driver,
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {}
         },
     },
 
     'extra_args': [
-        {'dest': 'headless', 'default': False, 'action': 'store_true', 'help': 'run in headless mode'},
+        {'dest': 'headless', 'default': False,
+            'action': 'store_true', 'help': 'run in headless mode'},
     ],
 
     'usage_example': '''
@@ -53,13 +60,6 @@ our_cfg = {
     'show_progress': 1,
 }
 
-from pprint import pformat
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-from urllib.parse import urlparse
-
 
 def code(all_cfg, known, **opt):
     verbose = opt.get('verbose', 0)
@@ -94,13 +94,14 @@ from code(), opt =
             'url==my self-closable url'  # this URL should be replaced by the filter URL
         ],
         ['xpath=//iframe[@name="gsft_main"]', 'frame', 'go to main frame'],
-        ['xpath=//div[@id="AC.incident.caller_id"]', 'key=backspace,30', 'clear caller name', {'post':'sleep 1'}],
+        ['xpath=//div[@id="AC.incident.caller_id"]', 'key=backspace,30',
+            'clear caller name', {'post': 'sleep 1'}],
     ]
 
     print(f'actions = {pformat(actions)}')
 
     # make sure pass along **opt, which has flogs: -interactive, -show_progress, ...
-    tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
 
     i = 0
     while True:
@@ -138,7 +139,8 @@ from code(), opt =
                 'click resolution tab'
             ],
             ['tab=3', f"string={known['RESOLUTIONCODE']}", 'resolution code'],
-            ['tab=1', f"string={known['RESOLUTIONNOTES']}", 'resolution notes'],
+            ['tab=1', f"string={known['RESOLUTIONNOTES']}",
+                'resolution notes'],
             ['tab=1', f"string={known['CAUSE']}", 'enter cause'],
             ['tab=1', f"string={known['SUBCAUSE']}", 'enter subcause'],
             ['tab=3', ["click", "sleep=3"], 'click Resolve button'],
@@ -149,15 +151,16 @@ from code(), opt =
                 {
                     'locator': 'xpath=//div[@id="ui_notification"]/div[@class="panel-body"]/div/span[@class="icon-cross close"]',
                     'NotFound': 'next',
-                    },
+                },
                 'click', 'close popup if found'
             ],
 
-            ['xpath=//button[@onclick="gsftSubtmitBack()"]]', 'click', 'Go Back'],
+            ['xpath=//button[@onclick="gsftSubtmitBack()"]]', 'click',
+             'Go Back'],
             ['code=sleep 2'],
         ]
 
-        result = tpsup.seleniumtools.run_actions(driver, actions2, **opt)
+        result = tpsup.seleniumtools_old.run_actions(driver, actions2, **opt)
         print(f"result['we_return'] = {result['we_return']}")
 
         if result['we_return']:
@@ -167,6 +170,7 @@ from code(), opt =
             break
 
         print("")
+
 
 def post_batch(all_cfg, known, **opt):
     print(f'running post batch')

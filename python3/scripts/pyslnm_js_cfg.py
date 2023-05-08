@@ -9,7 +9,7 @@ import tpsup.env
 import json
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
@@ -18,35 +18,36 @@ from selenium import webdriver
 our_cfg = {
 
     'resources': {
-        'selenium' : {
-            'method': tpsup.seleniumtools.get_driver,
+        'selenium': {
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {
                 # 'host_port': 'auto'
             },
-            'init_resource': 0, # we delay the driver init till we really need it.
+            # we delay the driver init till we really need it.
+            'init_resource': 0,
         },
     },
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args' : ['host_port', 'url'],
+    'position_args': ['host_port', 'url'],
 
-    'extra_args' : [
+    'extra_args': [
         # argparse's args
         {
-            'dest' : 'headless',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'run in headless mode',
+            'dest': 'headless',
+            'default': False,
+            'action': 'store_true',
+            'help': 'run in headless mode',
         },
         {
-            'dest' : 'trap',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'add try{...}catch{...}',
+            'dest': 'trap',
+            'default': False,
+            'action': 'store_true',
+            'help': 'add try{...}catch{...}',
         },
     ],
 
-    'usage_example' : '''
+    'usage_example': '''
     - run java script
     
     from cmd.exe
@@ -59,7 +60,9 @@ our_cfg = {
     'show_progress': 1,
 }
 
-driver: webdriver.Chrome = None # we define this globally so that post_code() can use it too
+# we define this globally so that post_code() can use it too
+driver: webdriver.Chrome = None
+
 
 def code(all_cfg, known, **opt):
     global driver
@@ -76,7 +79,7 @@ def code(all_cfg, known, **opt):
     if driver is None:
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        driver = method(**{**kwargs, "dryrun":0}) # overwrite kwargs
+        driver = method(**{**kwargs, "dryrun": 0})  # overwrite kwargs
 
     actions = [
         [f'url={url}', 'sleep=2', 'go to url'],
@@ -92,17 +95,19 @@ def code(all_cfg, known, **opt):
                 js = ifh.read()
                 ifh.close()
                 if trap:
-                    js = tpsup.seleniumtools.wrap_js_in_trap(js)
+                    js = tpsup.seleniumtools_old.wrap_js_in_trap(js)
                 actions.append([f'js={js}', None,  f'run #{i} file {js_file}'])
 
     print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
 
     print(f"result element = {result['element'].get_attribute('outerHTML')}")
-    tpsup.seleniumtools.js_print_debug(driver, result['element'])
+    tpsup.seleniumtools_old.js_print_debug(driver, result['element'])
+
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
-    return { 'REMAININGARGS' : input }
+    return {'REMAININGARGS': input}
+
 
 def post_batch(all_cfg, known, **opt):
     global driver

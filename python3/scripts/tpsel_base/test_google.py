@@ -1,9 +1,10 @@
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from urllib.parse import urlparse
 
-def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
+
+def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
     driver = seleniumEnv.get_driver()
 
     # print(f'driver.title={driver.title}')
@@ -30,15 +31,15 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     urls = []
 
     for tag_a in driver.find_elements_by_tag_name('a'):
-       link = None
-       try:
-           url = tag_a.get_attribute('href')
-       except NoSuchElementException as e:
-           pass
-       else:
-           # print(f'url={url}')
-           urls.append(url)
-           print(f'hostname = {urlparse(url).hostname}')
+        link = None
+        try:
+            url = tag_a.get_attribute('href')
+        except NoSuchElementException as e:
+            pass
+        else:
+            # print(f'url={url}')
+            urls.append(url)
+            print(f'hostname = {urlparse(url).hostname}')
 
     error = None
 

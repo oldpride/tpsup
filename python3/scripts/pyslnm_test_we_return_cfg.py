@@ -1,14 +1,15 @@
 #!/usr/bin/env python
+from pprint import pformat
 import time
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.env
 import os
 
 our_cfg = {
     "resources": {
-        "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
+        "selenium": {"method": tpsup.seleniumtools_old.get_driver, "cfg": {}},
     },
     # position_args will be inserted into $opt hash to pass forward
     "position_args": ["host_port"],
@@ -47,8 +48,6 @@ our_cfg = {
     "keychains": {"username": "userid"},
 }
 
-from pprint import pformat
-
 
 def code(all_cfg: dict, known: dict, **opt):
     verbose = opt.get("verbose", 0)
@@ -83,8 +82,9 @@ from code(), opt =
 
     driver = all_cfg["resources"]["selenium"]["driver"]
 
-    print(f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools, 'we_return')}")
-    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools.we_return}")
+    print(
+        f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools_old, 'we_return')}")
+    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools_old.we_return}")
 
     actions = [
         [f"url={url}"],
@@ -121,12 +121,13 @@ from code(), opt =
     ]
     print(f"test actions = {pformat(actions)}")
 
-    result = tpsup.seleniumtools.run_actions(driver, actions)
+    result = tpsup.seleniumtools_old.run_actions(driver, actions)
 
     # we can access we_return from result
     print(f"result['we_return'] = {result['we_return']}")
-    print(f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools, 'we_return')}")
-    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools.we_return}")
+    print(
+        f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools_old, 'we_return')}")
+    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools_old.we_return}")
 
     interval = 2
     print(f"sleep {interval} seconds so that you can see")

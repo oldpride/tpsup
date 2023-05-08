@@ -5,14 +5,14 @@ import sys
 from pprint import pformat
 from inspect import currentframe, getframeinfo
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 from selenium.common.exceptions import NoSuchElementException
 from urllib.parse import urlparse
 from tpsup.lock import EntryBook
 from tpsup.util import print_exception, tplog
 
 
-def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
+def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
     username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
@@ -31,12 +31,12 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     args = vars(parser.parse_args(argList))
 
     if not verbose:
-        verbose = args.get('verbose',0)
+        verbose = args.get('verbose', 0)
 
     if verbose:
         tplog(f"args = {pformat(args)}")
 
-    username=args['username']
+    username = args['username']
 
     entryBook = EntryBook()
     password = entryBook.get_entry_by_key(username).get('decoded')
@@ -69,7 +69,8 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
         found_logout = False
 
     if found_logout:
-        tplog(f"found logout button, meaning someone already logged in. css_selector='{logout_css_selector}'")
+        tplog(
+            f"found logout button, meaning someone already logged in. css_selector='{logout_css_selector}'")
         need_to_logout = True
         greeting_text = None
         greeting_css = '#login-form > div.login-greeting'
@@ -84,23 +85,27 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
             tplog(f"greeting_text='{greeting_text}' at css='{greeting_css}'")
         except Exception as e:
             print_exception(e)
-            tplog(f"cannot find greeting_text at css='{greeting_css}'. need to log out")
+            tplog(
+                f"cannot find greeting_text at css='{greeting_css}'. need to log out")
         if greeting_text:
             greeting_pattern = "^Hi (.+),"
-            m = re.search(greeting_pattern,greeting_text)
+            m = re.search(greeting_pattern, greeting_text)
             if m:
                 username = m.group(1)
                 expected_username = "LCA Editor Tester"
                 if not username == expected_username:
-                    tplog(f"username='{username}' did not match expected username='{expected_username}'. need to log out")
+                    tplog(
+                        f"username='{username}' did not match expected username='{expected_username}'. need to log out")
                 else:
                     need_to_logout = False
-                    tplog(f"username='{username}' matched expected username='{expected_username}'. no need to log in again")
+                    tplog(
+                        f"username='{username}' matched expected username='{expected_username}'. no need to log in again")
             else:
                 tplog(f"greeting_text='{greeting_text}', not matching expected greeting_pattern='{greeting_pattern}'. "
                       f"need to log out")
         else:
-            tplog(f"cannot find greeting_text at css_selector={greeting_css}. need to log out")
+            tplog(
+                f"cannot find greeting_text at css_selector={greeting_css}. need to log out")
 
         if need_to_logout:
             need_to_login = True
@@ -123,8 +128,9 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
 
         # from Edge/Chrome, right click the item -> inspect
         # because login button has no "id", so I used xpath. xpath is very sensitive to changes in the page
-        driver.find_element_by_xpath('/html/body/div[1]/div/div/div/div[1]/form/div/div[4]/div/button').click()
-        seleniumEnv.delay_for_viewer(1) # delay to mimic humane slowness
+        driver.find_element_by_xpath(
+            '/html/body/div[1]/div/div/div/div[1]/form/div/div[4]/div/button').click()
+        seleniumEnv.delay_for_viewer(1)  # delay to mimic humane slowness
 
         # this doesn't work as 'button' is a grand-child of form-login-sutmit
         # driver.find_element_by_id('form-login-submit').click()
@@ -132,7 +138,7 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     # frameinfo = getframeinfo(currentframe())
     # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
 
-    xpath='//*[@id=\"login-form\"]'
+    xpath = '//*[@id=\"login-form\"]'
     elem = driver.find_element_by_xpath('//*[@id=\"login-form\"]')
     welcomeText = elem.text
 
@@ -146,6 +152,6 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     if not re.search(pattern, welcomeText):
         error = f"xpath='{xpath}' failed to match pattern '{pattern}'"
 
-    result = {'error': error, 'data' : welcomeText }
+    result = {'error': error, 'data': welcomeText}
 
     return result

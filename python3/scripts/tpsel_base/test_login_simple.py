@@ -2,12 +2,12 @@ import argparse
 import re
 import sys
 from pprint import pformat
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 from tpsup.lock import EntryBook
 from tpsup.util import tplog
 
 
-def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
+def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
     username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
@@ -26,12 +26,12 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     args = vars(parser.parse_args(argList))
 
     if not verbose:
-        verbose = args.get('verbose',0)
+        verbose = args.get('verbose', 0)
 
     if verbose:
         tplog(f"args = {pformat(args)}")
 
-    username=args['username']
+    username = args['username']
 
     entryBook = EntryBook()
     password = entryBook.get_entry_by_key(username).get('decoded')
@@ -65,8 +65,9 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
 
     # from Edge/Chrome, right click the item -> inspect
     # because login button has no "id", so I used xpath. xpath is very sensitive to changes in the page
-    driver.find_element_by_xpath('/html/body/div[1]/div/div/div/div[1]/form/div/div[4]/div/button').click()
-    seleniumEnv.delay_for_viewer(1) # delay to mimic humane slowness
+    driver.find_element_by_xpath(
+        '/html/body/div[1]/div/div/div/div[1]/form/div/div[4]/div/button').click()
+    seleniumEnv.delay_for_viewer(1)  # delay to mimic humane slowness
 
     # this doesn't work as 'button' is a grand-child of form-login-sutmit
     # driver.find_element_by_id('form-login-submit').click()
@@ -74,7 +75,7 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     # frameinfo = getframeinfo(currentframe())
     # print(frameinfo.filename, frameinfo.lineno, file=sys.stderr)
 
-    xpath='//*[@id=\"login-form\"]'
+    xpath = '//*[@id=\"login-form\"]'
     elem = driver.find_element_by_xpath('//*[@id=\"login-form\"]')
     welcomeText = elem.text
 
@@ -88,6 +89,6 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     if not re.search(pattern, welcomeText):
         error = f"xpath='{xpath}' failed to match pattern '{pattern}'"
 
-    result = {'error': error, 'data' : welcomeText }
+    result = {'error': error, 'data': welcomeText}
 
     return result

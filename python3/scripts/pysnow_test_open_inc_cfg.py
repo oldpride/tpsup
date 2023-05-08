@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 
-import tpsup.seleniumtools
+from urllib.parse import urlparse
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from pprint import pformat
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.env
 
@@ -8,13 +14,14 @@ our_cfg = {
 
     'resources': {
         'selenium': {
-            'method': tpsup.seleniumtools.get_driver,
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {}
         },
     },
 
     'extra_args': [
-        {'dest': 'headless', 'default': False, 'action': 'store_true', 'help': 'run in headless mode'},
+        {'dest': 'headless', 'default': False,
+            'action': 'store_true', 'help': 'run in headless mode'},
     ],
 
     'usage_example': '''
@@ -78,13 +85,6 @@ our_cfg = {
     'show_progress': 1,
 }
 
-from pprint import pformat
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-from urllib.parse import urlparse
-
 
 def code(all_cfg, known, **opt):
     verbose = opt.get('verbose', 0)
@@ -105,19 +105,19 @@ from code(), opt =
         ['click_xpath=//div[@id="AC.incident.caller_id"]',
             ['clear_attr=value', f"string={known['MYNAME']}",],
             'enter caller name'
-        ],
+         ],
 
         ['tab=1',
-             [
-                 # it took a while for snow validate, until done, it will display "Invalid reference"
-                 'gone_xpath=//div[text()="Invalid reference"]',
+         [
+             # it took a while for snow validate, until done, it will display "Invalid reference"
+             'gone_xpath=//div[text()="Invalid reference"]',
 
-                 # we can input string but string changes often. so stay with index is safer
-                 # "string=$known->{CATEGORY}",
-                 "select=index,1",
-             ],
-             'enter category'
-        ],
+             # we can input string but string changes often. so stay with index is safer
+             # "string=$known->{CATEGORY}",
+             "select=index,1",
+         ],
+         'enter category'
+         ],
 
         [
             # somehow, tab to next element doesn't work from a select element. so we use xpath
@@ -138,11 +138,11 @@ from code(), opt =
         ],
 
         ['tab=1',
-             [
-                 'gone_xpath=//div[text()="Invalid reference"]',
-                 f"string={known['CI']}",
-             ],
-             'configuration item'
+         [
+             'gone_xpath=//div[text()="Invalid reference"]',
+             f"string={known['CI']}",
+         ],
+         'configuration item'
          ],
 
         ['tab=1', f"string={known['EXTERNAL']}", 'external client affected'],
@@ -173,17 +173,20 @@ from code(), opt =
         ],
 
         # put (self-closable) at front because short description field can be truncated.
-        ['tab=1', f"string=(self-closable) {known['DETAIL']}"[0:200], 'short desc'], # substr
+        # substr
+        ['tab=1',
+            f"string=(self-closable) {known['DETAIL']}"[0:200], 'short desc'],
 
         ['tab=1', f"string={known['DETAIL']}", 'detail desc'],
         ['xpath=//button[@id="sysverb_insert_bottom"]', 'click', 'click to submit'],
-        ['xpath=//a[starts-with(@aria-label, "Open record: INC")]', '', 'verify'],
+        ['xpath=//a[starts-with(@aria-label, "Open record: INC")]',
+         '', 'verify'],
     ]
 
     print(f'actions = {pformat(actions)}')
 
     # make sure pass along **opt, which has flogs: -interactive, -show_progress, ...
-    tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
 
 
 def post_batch(all_cfg, known, **opt):

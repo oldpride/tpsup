@@ -8,7 +8,7 @@ import tpsup.env
 
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools2
+import tpsup.seleniumtools
 import tpsup.pstools
 from pprint import pformat
 
@@ -33,4 +33,4 @@ def code(all_cfg, known, **opt):
 
     action = opt.get('action')
 
-    result = tpsup.seleniumtools2.check_setup(compareVersion=1)
+    result = tpsup.seleniumtools.check_setup(compareVersion=1)

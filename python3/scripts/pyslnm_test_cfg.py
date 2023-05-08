@@ -1,26 +1,33 @@
 #!/usr/bin/env python
+from urllib.parse import urlparse
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from pprint import pformat
 import time
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.env
 
 our_cfg = {
     'resources': {
-        'selenium' : {
-            'method': tpsup.seleniumtools.get_driver,
+        'selenium': {
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {}
         },
     },
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args' : ['host_port'],
+    'position_args': ['host_port'],
 
-    'extra_args' : [
-        {'dest' : 'headless', 'default' : False, 'action' : 'store_true', 'help' : 'run in headless mode'},
+    'extra_args': [
+        {'dest': 'headless', 'default': False,
+            'action': 'store_true', 'help': 'run in headless mode'},
     ],
 
-    'usage_example' : '''
+    'usage_example': '''
     - run everything locally and let chromedriver to start the browser and pick the port
     linux1$ {{prog}} auto s=henry
     
@@ -60,39 +67,32 @@ our_cfg = {
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
     # this way so that user can use case-insensitive keys on command line
-    'keys' : {
-        'userid' : None,
-        'username' : None,
-        'password' : None,
-        'dob' : None,
+    'keys': {
+        'userid': None,
+        'username': None,
+        'password': None,
+        'dob': None,
     },
 
-    'suits' : {
-        'henry' : {
+    'suits': {
+        'henry': {
             'userid': 'henry',
             'username': 'Henry King',
             'password': 'dummy',
-            'dob' : '11222001',
+            'dob': '11222001',
         },
     },
 
-    'aliases' : {
-        'i' : 'userid',
-        'n' : 'username',
-        'p' : 'password'
+    'aliases': {
+        'i': 'userid',
+        'n': 'username',
+        'p': 'password'
     },
 
-    'keychains' : {
-        'username' : 'userid'
+    'keychains': {
+        'username': 'userid'
     }
 }
-
-from pprint import pformat
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-from urllib.parse import urlparse
 
 
 def code(all_cfg, known, **opt):
@@ -117,7 +117,7 @@ from code(), opt =
 
     print(f'test actions = {pformat(actions)}')
 
-    tpsup.seleniumtools.run_actions(driver, actions)
+    tpsup.seleniumtools_old.run_actions(driver, actions)
 
     for tag_a in driver.find_elements(by=By.TAG_NAME, value='a'):
         link = None
@@ -129,7 +129,6 @@ from code(), opt =
         else:
             # print(f'url={url}')
             print(f'hostname = {urlparse(url).hostname}')
-
 
 
 def post_batch(all_cfg, known, **opt):

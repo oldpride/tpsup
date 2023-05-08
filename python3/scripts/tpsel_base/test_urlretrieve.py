@@ -3,11 +3,11 @@ import sys
 import urllib.request
 from pprint import pformat
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 from tpsup.util import tplog
 
 
-def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
+def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
 
@@ -35,7 +35,7 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     args = vars(parser.parse_args(argList))
 
     if not verbose:
-        verbose = args.get('verbose',0)
+        verbose = args.get('verbose', 0)
 
     if verbose:
         tplog(f"args = {pformat(args)}")
@@ -46,7 +46,8 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     driver.get(url)
 
     # https://stackoverflow.com/questions/46937319/how-to-use-chrome-webdriver-in-selenium-to-download-files-in-python
-    driver.command_executor._commands["send_command"] = ("POST", '/session/$sessionId/chromium/send_command')
+    driver.command_executor._commands["send_command"] = (
+        "POST", '/session/$sessionId/chromium/send_command')
     params = {'cmd': 'Page.setDownloadBehavior',
               'params': {'behavior': 'allow', 'downloadPath': seleniumEnv.download_dir}}
     command_result = driver.execute("send_command", params)
@@ -55,7 +56,7 @@ def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
 
     # <a style="color: #1b57b1; font-weight: normal; text-decoration: none;"
     # href="/LCA2/images/docs/public/lca_bylaw_2019_11.pdf">lick to view LCA By Law</a>
-    #elem = driver.find_element_by_css_selector("#content > div.item-page > div:nth-child(4) > pre:nth-child(15) > span > a")
+    # elem = driver.find_element_by_css_selector("#content > div.item-page > div:nth-child(4) > pre:nth-child(15) > span > a")
     elem = driver.find_element_by_partial_link_text("view LCA By Law")
 
     src = elem.get_attribute("href")

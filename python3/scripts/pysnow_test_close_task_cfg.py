@@ -1,52 +1,52 @@
 #!/usr/bin/env python
 
-import tpsup.seleniumtools
+from urllib.parse import urlparse
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from pprint import pformat
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.env
 
 our_cfg = {
 
     'resources': {
-        'selenium' : {
-            'method': tpsup.seleniumtools.get_driver,
+        'selenium': {
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {}
         },
     },
 
-    'extra_args' : [
-        {'dest' : 'headless', 'default' : False, 'action' : 'store_true', 'help' : 'run in headless mode'},
+    'extra_args': [
+        {'dest': 'headless', 'default': False,
+            'action': 'store_true', 'help': 'run in headless mode'},
     ],
 
-    'usage_example' : '''
+    'usage_example': '''
     - run everything locally and let chromedriver to start the browser and pick the port
     {{prog}} any
     ''',
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
     # this way so that user can use case-insensitive keys on command line
-    'keys' : {
-        'ASSIGNTO' : 'John Adams',
-              'CI' : 'My App',
+    'keys': {
+        'ASSIGNTO': 'John Adams',
+        'CI': 'My App',
     },
 
-    'suits' : {
+    'suits': {
     },
 
-    'aliases' : {
+    'aliases': {
     },
 
-    'keychains' : {
+    'keychains': {
     },
 
     'show_progress': 1,
 }
-
-from pprint import pformat
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-from urllib.parse import urlparse
 
 
 def code(all_cfg, known, **opt):
@@ -86,7 +86,7 @@ from code(), opt =
             #     Created by is <my user id>
             # each of the task can be assigned to Priority 1-4, with 1 the highest
             #
-            'url=https://google.com' # this URL should be replaced by the filter URL
+            'url=https://google.com'  # this URL should be replaced by the filter URL
         ],
         ['xpath=//iframe[@name="gsft_main"]', 'frame', 'go to main frame'],
         [
@@ -106,7 +106,7 @@ from code(), opt =
     print(f'actions = {pformat(actions)}')
 
     # make sure pass along **opt, which has flogs: -interactive, -show_progress, ...
-    tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
 
     i = 0
     while True:
@@ -148,7 +148,7 @@ from code(), opt =
             ],
         ]
 
-        result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
+        result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
         print(f"result['we_return'] = {result['we_return']}")
 
         if result['we_return']:
@@ -174,11 +174,12 @@ from code(), opt =
                 ],
                 'Set Priority'
             ],
-            [ 'tab=2', 'string=Closed Complete', 'Set State to Closed'],
-            [ 'xpath=//button[@id="sysverb_update"]', 'click', 'Click Update button'],
+            ['tab=2', 'string=Closed Complete', 'Set State to Closed'],
+            ['xpath=//button[@id="sysverb_update"]',
+                'click', 'Click Update button'],
         ]
 
-        result = tpsup.seleniumtools.run_actions(driver, actions3, **opt)
+        result = tpsup.seleniumtools_old.run_actions(driver, actions3, **opt)
 
         if opt.get('dryrun', 0) or result['we_return']:
             break

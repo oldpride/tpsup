@@ -2,6 +2,7 @@ import time
 from pprint import pformat
 from tpsup.util import print_exception
 
+
 def wait_for_max_try(maxTry, runFunction, param):
     while maxTry:
         print(f'{maxTry} times left')
@@ -12,15 +13,17 @@ def wait_for_max_try(maxTry, runFunction, param):
             time.sleep(1)
             maxTry -= 1
 
+
 def test_actions():
-    import tpsup.seleniumtools2
+    import tpsup.seleniumtools
     from urllib.parse import urlparse
 
     driver = tpsup.seleniumtools.get_driver(host_port="localhost:19999")
 
     url = 'http://www.google.com/'
     driver.get(url)
-    search_box = wait_for_max_try(5, driver.find_element_by_xpath, '//input[@name="q"]')
+    search_box = wait_for_max_try(
+        5, driver.find_element_by_xpath, '//input[@name="q"]')
 
     search_box.clear()
     search_box.send_keys('ChromeDriver')
@@ -53,8 +56,10 @@ def test_actions():
 
     driver.quit()
 
+
 def main():
     test_actions()
+
 
 if __name__ == '__main__':
     main()

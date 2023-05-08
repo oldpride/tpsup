@@ -8,7 +8,7 @@ import tpsup.env
 import json
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
@@ -17,49 +17,50 @@ from selenium import webdriver
 our_cfg = {
 
     'resources': {
-        'selenium' : {
-            'method': tpsup.seleniumtools.get_driver,
+        'selenium': {
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {
                 # 'host_port': 'auto'
             },
-            'init_resource': 0, # we delay the driver init till we really need it.
+            # we delay the driver init till we really need it.
+            'init_resource': 0,
         },
     },
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args' : ['host_port', 'url', 'output_dir'],
+    'position_args': ['host_port', 'url', 'output_dir'],
 
-    'extra_args' : [
+    'extra_args': [
         # argparse's args
         {
-            'dest' : 'headless',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'run in headless mode',
+            'dest': 'headless',
+            'default': False,
+            'action': 'store_true',
+            'help': 'run in headless mode',
         },
         {
-            'dest' : 'js',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'run js'
+            'dest': 'js',
+            'default': False,
+            'action': 'store_true',
+            'help': 'run js'
         },
         {
-            'dest' : 'trap',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'used with -js, to add try{...}catch{...}',
+            'dest': 'trap',
+            'default': False,
+            'action': 'store_true',
+            'help': 'used with -js, to add try{...}catch{...}',
         },
         {
-            'dest' : 'full',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
+            'dest': 'full',
+            'default': False,
+            'action': 'store_true',
+            'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
         },
         {
-            'dest' : 'print_console_log',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'print js console log',
+            'dest': 'print_console_log',
+            'default': False,
+            'action': 'store_true',
+            'help': 'print js console log',
         },
         {
             'dest': 'limit_depth',
@@ -70,7 +71,7 @@ our_cfg = {
         },
     ],
 
-    'usage_example' : f'''
+    'usage_example': f'''
     - test a static page with nested iframes, same origin
     {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
     {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
@@ -121,13 +122,15 @@ our_cfg = {
 
     'show_progress': 1,
 
-    'opt' : {
+    'opt': {
         # 'humanlike': 1, # slow down a bit, more human-like
         # "browserArgs": ["--disable-notifications"],
     },
 }
 
-driver: webdriver.Chrome = None # we define this globally so that post_code() can use it too
+# we define this globally so that post_code() can use it too
+driver: webdriver.Chrome = None
+
 
 def code(all_cfg, known, **opt):
     global driver
@@ -144,12 +147,12 @@ def code(all_cfg, known, **opt):
     trap = opt.get('trap', 0)
 
     yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
-    os.makedirs(output_dir, exist_ok=True) # this does "mkdir -p"
+    os.makedirs(output_dir, exist_ok=True)  # this does "mkdir -p"
 
     if driver is None:
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        driver = method(**{**kwargs, "dryrun":0}) # overwrite kwargs
+        driver = method(**{**kwargs, "dryrun": 0})  # overwrite kwargs
 
     actions = [
         [f'url={url}', 'sleep=2', 'go to url'],
@@ -157,17 +160,23 @@ def code(all_cfg, known, **opt):
 
     locator_chain = known['REMAININGARGS']
     if run_js:
-        js_list = tpsup.seleniumtools.locator_chain_to_js_list(locator_chain, trap=trap)
-        locator_chain2 = tpsup.seleniumtools.js_list_to_locator_chain(js_list)
-        actions.append([locator_chain2, f'dump_element={output_dir}', f'dump element to {output_dir}'])
+        js_list = tpsup.seleniumtools_old.locator_chain_to_js_list(
+            locator_chain, trap=trap)
+        locator_chain2 = tpsup.seleniumtools_old.js_list_to_locator_chain(
+            js_list)
+        actions.append(
+            [locator_chain2, f'dump_element={output_dir}', f'dump element to {output_dir}'])
     else:
-        actions.append([locator_chain, f'dump_element={output_dir}', f'dump element to {output_dir}'])
+        actions.append(
+            [locator_chain, f'dump_element={output_dir}', f'dump element to {output_dir}'])
 
     print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
-    return { 'REMAININGARGS' : input }
+    return {'REMAININGARGS': input}
+
 
 def post_batch(all_cfg, known, **opt):
     global driver

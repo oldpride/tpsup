@@ -7,29 +7,29 @@ import tpsup.env
 
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 from pprint import pformat
 
 
 our_cfg = {
-    'extra_args' : [
+    'extra_args': [
         # argparse's args
         {
-            'dest' : 'oprefix',
-            'default' : False,
-            'action' : 'store',
-            'help' : 'output with this prefix',
+            'dest': 'oprefix',
+            'default': False,
+            'action': 'store',
+            'help': 'output with this prefix',
         },
         {
-            'dest' : 'trap',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'add try{...}catch{...}',
+            'dest': 'trap',
+            'default': False,
+            'action': 'store_true',
+            'help': 'add try{...}catch{...}',
         },
     ],
 
-    'usage_example' : '''
+    'usage_example': '''
     - convert locator chain into javascript
     
     chrome-search://local-ntp/local-ntp.html
@@ -73,7 +73,7 @@ def code(all_cfg, known, **opt):
         prefix = os.path.basename(oprefix)
 
     locator_chain = known['REMAININGARGS']
-    js_list = tpsup.seleniumtools.locator_chain_to_js_list(locator_chain)
+    js_list = tpsup.seleniumtools_old.locator_chain_to_js_list(locator_chain)
 
     # print(f'js_list = {pformat(js_list)}')\
     i = 0
@@ -94,5 +94,4 @@ def code(all_cfg, known, **opt):
 
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
-    return { 'REMAININGARGS' : input }
-
+    return {'REMAININGARGS': input}

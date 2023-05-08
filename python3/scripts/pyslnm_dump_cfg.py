@@ -6,7 +6,7 @@ import tpsup.env
 import json
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
@@ -15,35 +15,36 @@ from selenium import webdriver
 our_cfg = {
 
     'resources': {
-        'selenium' : {
-            'method': tpsup.seleniumtools.get_driver,
+        'selenium': {
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {
                 # 'host_port': 'auto'
             },
-            'init_resource': 0, # we delay the driver init till we really need it.
+            # we delay the driver init till we really need it.
+            'init_resource': 0,
         },
     },
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args' : ['host_port', 'url', 'dir'],
+    'position_args': ['host_port', 'url', 'dir'],
 
-    'extra_args' : [
+    'extra_args': [
         # argparse's args
         {
-            'dest' : 'headless',
-            'default' : False,
-            'action' : 'store_true',
-            'help' : 'run in headless mode'
+            'dest': 'headless',
+            'default': False,
+            'action': 'store_true',
+            'help': 'run in headless mode'
         },
         {
-            'dest' : 'xpath',
-            'default' : None,
-            'action' : 'store',
-            'help' : 'specify a xpath'
+            'dest': 'xpath',
+            'default': None,
+            'action': 'store',
+            'help': 'specify a xpath'
         },
     ],
 
-    'usage_example' : '''
+    'usage_example': '''
     - this will dump out dynamically generated html too
     
     note: 
@@ -71,13 +72,15 @@ our_cfg = {
 
     'show_progress': 1,
 
-    'opt' : {
+    'opt': {
         # 'humanlike': 1, # slow down a bit, more human-like
         # "browserArgs": ["--disable-notifications"],
     },
 }
 
-driver: webdriver.Chrome = None # we define this globally so that post_code() can use it too
+# we define this globally so that post_code() can use it too
+driver: webdriver.Chrome = None
+
 
 def code(all_cfg, known, **opt):
     global driver
@@ -93,24 +96,27 @@ def code(all_cfg, known, **opt):
     xpath = opt.get('xpath')
 
     yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
-    os.makedirs(dir, exist_ok=True) # this does "mkdir -p"
+    os.makedirs(dir, exist_ok=True)  # this does "mkdir -p"
 
     if driver is None:
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        driver = method(**{**kwargs, "dryrun":0}) # overwrite kwargs
+        driver = method(**{**kwargs, "dryrun": 0})  # overwrite kwargs
 
     actions = [
         [f'url={url}', 'sleep=2', 'go to url'],
     ]
 
     if xpath:
-        actions.append([f'xpath={xpath}', f'dump_element={dir}', f'dump {xpath} to {dir}'])
+        actions.append(
+            [f'xpath={xpath}', f'dump_element={dir}', f'dump {xpath} to {dir}'])
     else:
         actions.append([None, f'dump_all={dir}', f'dump all to {dir}'])
 
     print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.run_actions(driver, actions, **{**opt, 'dryrun':0})
+    result = tpsup.seleniumtools_old.run_actions(
+        driver, actions, **{**opt, 'dryrun': 0})
+
 
 def post_batch(all_cfg, known, **opt):
     global driver
