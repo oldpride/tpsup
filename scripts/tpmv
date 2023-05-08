@@ -37,6 +37,8 @@ usage:
 
    -f              force mode. execute change without asking for confirmation
 
+   -r              recursive
+
    -v              verbose mode
 
    -n              dry run. just list the changes without making the changes
@@ -44,6 +46,7 @@ usage:
    -s              the next arg is a sed/perl substitution, eg s/old_pattern/new_pattern/ig
 
    -y              when prompt, simple return means 'Y'. default to 'N';
+
 
    -maxdepth MAXDEPTH 
                    max depth of dir. default to $default_maxdepth
@@ -84,12 +87,14 @@ my $insensitive;
 my $MatchPattern;
 my $ExcludePattern;
 my $dryrun;
+my $recursive;
 
 GetOptions(
    'v|verbose'  =>  \$verbose,
    'f'          =>  \$force,
    'n'          =>  \$dryrun,
    'y'          =>  \$default_yes,
+   'r'          =>  \$recursive,
    's=s'        =>  \$perl_substitution,
    'i'          =>  \$insensitive,
    'm=s'        =>  \$MatchPattern,
@@ -150,8 +155,10 @@ for my $path (@ARGV) {
    my $res = move_file($path, $path, $opt);
    $error += $res->{error};
 
-   my $ref = recursive_path($res->{new_path}, 1, $opt);
-   $error += $ref->{error};
+   if ($recursive) {
+      my $ref = recursive_path($res->{new_path}, 1, $opt);
+      $error += $ref->{error};
+   }
 }
 
 if ($error) {
