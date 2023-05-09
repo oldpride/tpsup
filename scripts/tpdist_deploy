@@ -203,8 +203,8 @@ if (!$local_base) {
 $local_base = resolve_scalar_var_in_string($local_base, $dict);
 
 my $parent_base = dirname($local_base);
-my $real_parent_base = `cd $parent_base || exit 1; pwd -P`;
-$? && die "cd $parent_base failed";
+my $real_parent_base = `cd '$parent_base' || exit 1; pwd -P`;
+$? && die "cd '$parent_base' failed";
 chomp $real_parent_base;
 
 my $real_local_base = "$real_parent_base/" . basename($local_base);
@@ -212,12 +212,12 @@ my $real_local_base = "$real_parent_base/" . basename($local_base);
 my $owner;
 my $target;
 if ( -e $real_local_base ) {
-   $owner = `/bin/ls -lLd $real_local_base|awk '{print \$3}'`; chomp $owner;
-   print "INFO: real_local_base $real_local_base owner=$owner\n";
+   $owner = `/bin/ls -lLd '$real_local_base'|awk '{print \$3}'`; chomp $owner;
+   print "INFO: real_local_base '$real_local_base' owner=$owner\n";
    $target = $real_local_base;
 } else {
-   $owner = `/bin/ls -lLd $real_parent_base|awk '{print \$3}'`; chomp $owner;
-   print "INFO: real_parent_base $real_parent_base owner=$owner\n";
+   $owner = `/bin/ls -lLd '$real_parent_base'|awk '{print \$3}'`; chomp $owner;
+   print "INFO: real_parent_base '$real_parent_base' owner=$owner\n";
    $target = $real_parent_base;
 }
 
