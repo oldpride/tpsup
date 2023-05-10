@@ -27,14 +27,14 @@ if [ $check_only = N ]; then
    export YYYY=$yyyy
    export YYMD=$yyyymmdd
 
-   # yesterday
+   # tradeday yesterday
    export pyyyymmdd=`tradeday -1`
    export PYYYYMMDD=$pyyyymmdd
    export pyyyy=`echo $pyyyymmdd|cut -c1-4`
    export   pmm=`echo $pyyyymmdd|cut -c5-6`
    export   pdd=`echo $pyyyymmdd|cut -c7-8`
 
-   # tomorrow
+   # tradeday tomorrow
    export tyyyymmdd=`tradeday +1`
    export tyyyy=`echo $tyyyymmdd|cut -c1-4`
    export   tmm=`echo $tyyyymmdd|cut -c5-6`
@@ -51,11 +51,15 @@ fi
 
    cat >&2 <<EOF
 
-   today:      yyyymmdd  yyyy  mm  dd = $yyyymmdd $yyyy $mm $dd
-   yesterday: pyyyymmdd pyyyy pmm pdd = $pyyyymmdd $pyyyy $pmm $pdd
-   tomorrow:  tyyyymmdd tyyyy tmm tdd = $tyyyymmdd $tyyyy $tmm $tdd
+                today:  yyyymmdd  yyyy  mm  dd = $yyyymmdd $yyyy $mm $dd
+   tradeday yesterday: pyyyymmdd pyyyy pmm pdd = $pyyyymmdd $pyyyy $pmm $pdd
+   tradeday  tomorrow: tyyyymmdd tyyyy tmm tdd = $tyyyymmdd $tyyyy $tmm $tdd
+
+   YYYYMMDD YYYY YYMD = $YYYYMMDD $YYYY $YYMD
 
    HHMMSS HH MM SS = $HHMMSS $HH $MM $SS
+   hhmmss          = $hhmmss
+
 
 EOF
 
