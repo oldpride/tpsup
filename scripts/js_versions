@@ -1,0 +1,61 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog package
+
+   print available versions of a package.
+
+   example, to find all available ethers versions, two ways
+      $ npm  view ethers versions --json
+      $ yarn info ethers versions
+
+   -n        use npm command. default to use yarn command.
+   -v        verbose mode.
+
+examples:
+
+   $prog    ethers                     # use yarn
+   $prog -n ethers                     # use npm
+
+   $prog    @openzeppelin/contracts    
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+npm=N
+while getopts vn o;
+do
+   case "$o" in
+      v) verbose=Y;;
+      n) npm=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+p=$1
+
+uname=`uname -a`
+
+if [ $npm = Y ]; then
+   [ $verbose = Y ] && set -x;
+   npm  view $p versions --json
+else
+   [ $verbose = Y ] && set -x;
+   yarn info ethers versions
+fi
