@@ -21,6 +21,13 @@ examples:
    $0 FileFixPublisher env
    $0 FileFixPublisher *jar
 
+   - often, we need set up env before search, 
+     for example, to search org.antlr.v4.runtime.ParserRuleContext
+   siteenv      # this loads antlrenv and javaenv functions
+   antlrenv     # this sets CLASSPATH
+   javaenv 1.8  # this sets java and jar executables path
+   findjar org.antlr.v4.runtime.ParserRuleContext env
+
    - to open a jar file
    mkdir junkdir
    cd junkdir

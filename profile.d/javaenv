@@ -60,7 +60,7 @@ else
    # favor jdk because jdk contains jre
    for j in jdk jre
    do
-      found=`/bin/ls -1d "$BASEDIR"/${j}${version}*|tail -1`
+      found=`/bin/ls -1d "$BASEDIR"/${j}?${version}*|tail -1`
    
       if [ "X$found" != X ]; then
          echo ""
