@@ -39,7 +39,10 @@ for /d %%a in (jdk, jre) do (
     set "output=%%i"
    )
 
-   rem setting var within loop must use "setlocal EnableDelayedExpansion"
+   rem setting var within loop must use
+   rem     setlocal EnableDelayedExpansion
+   rem otherwise the value would not be used inside loop or passed
+   rem to outside the loop.
    rem https://stackoverflow.com/questions/13805187/
    rem echo output=!output!
 

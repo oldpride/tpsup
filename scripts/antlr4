@@ -35,5 +35,5 @@ else
    usage 
 fi
 
-echo "CLASSPATH=$CLASSPATH"
+# echo "CLASSPATH=$CLASSPATH"
 java org.antlr.v4.Tool $@
