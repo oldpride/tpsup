@@ -79,6 +79,7 @@ else
          echo "verify PATH:"
          which java
          which javac
+         which jar
          break
       fi
    done

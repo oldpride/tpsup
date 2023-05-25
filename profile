@@ -791,3 +791,7 @@ antlrenv () {
       reduce CLASSPATH
    fi
 }
+
+antlr4env () {
+   antlrenv
+}
