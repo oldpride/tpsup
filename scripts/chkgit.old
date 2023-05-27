@@ -35,22 +35,17 @@ fi
 
 . $TPSUP/profile
 
-for repo in `cat $SITESPEC/cfg/repos.txt`
-do
+for cmd in mydjango myangular myantlr kdbnotes myblockchain mycpp myfront myjava myjoomla myjs mykivy mynotes myns mysite mytp kungfusql myduino mydice myterra myvue vercel*
+do 
    echo ""
-   echo "------ $repo -------"
+   echo "------ $cmd -------"
    echo ""
 
-   
-   if [ "X$SITEBASE" = "X" ]; then
-      echo "SITEBASE is not set. run sitenev first" 
-      exit 1
-   fi
-
-   if ! cd $SITEBASE/github/$repo; then
-      cd $SITEBASE/github || exit 1;
-      gitclone oldpride $repo
-      continue
+   subdir=`echo $cmd|cut -c3-`
+   if ! $cmd 2>/dev/null; then
+      if ! mydir $subdir 2>/dev/null; then
+         continue
+      fi
    fi
 
    #(set -x; git status)
