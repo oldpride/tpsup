@@ -1,0 +1,61 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog package
+
+   print available versions of a package.
+
+   example, to show currently installed version of a package
+      $ pip show antlr4-python3-runtime
+
+   example, to list all available version of a package
+      $ pip index versions antlr4-python3-runtime
+      https://stackoverflow.com/questions/4888027
+
+   -v        verbose mode.
+
+examples:
+
+   $prog    antlr4-python3-runtime
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+while getopts v o;
+do
+   case "$o" in
+      v) verbose=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+p=$1
+
+echo ""
+echo "installed version:"
+echo "-----------------------------"
+( set -x; pip show $p )
+
+echo ""
+
+# https://stackoverflow.com/questions/4888027
+echo "available versions:"
+echo "-----------------------------"
+( set -x; pip index versions $p )
+echo ""

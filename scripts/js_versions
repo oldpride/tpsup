@@ -10,7 +10,11 @@ usage:
 
    print available versions of a package.
 
-   example, to find all available ethers versions, two ways
+   example, to display installed ethers versions, two ways
+      $ npm  list ethers 
+      $ yarn list ethers 
+
+   example, to list all available ethers versions, two ways
       $ npm  view ethers versions --json
       $ yarn info ethers versions
 
@@ -53,9 +57,19 @@ p=$1
 uname=`uname -a`
 
 if [ $npm = Y ]; then
-   [ $verbose = Y ] && set -x;
-   npm  view $p versions --json
+   echo ""
+   echo "installed version:"
+   ( set -x; npm list $p )
+
+   echo ""
+   echo "available versions:"
+   ( set -x; npm view $p versions --json ) 
 else
-   [ $verbose = Y ] && set -x;
-   yarn info ethers versions
+   echo ""
+   echo "installed version:"
+   ( set -x; yarn list $p )
+
+   echo ""
+   echo "available versions:"
+   ( set -x; yarn info $p versions )
 fi
