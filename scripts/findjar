@@ -1,5 +1,7 @@
 #!/bin/bash
    
+prog=`basename $0`
+
 usage () {
    cat <<EOF
 usage:
@@ -7,10 +9,10 @@ usage:
    locate java code.
 
    - to use specific jar files
-   $0 pattern jarl jar2 ...
+   $prog pattern jarl jar2 ...
 
    - to use the CLASSPATH
-   $0 pattern env
+   $prog pattern env
 
    -d dump the code
    -h print header of the code
@@ -18,8 +20,8 @@ usage:
 
 examples:
 
-   $0 FileFixPublisher env
-   $0 FileFixPublisher *jar
+   $prog FileFixPublisher env
+   $prog FileFixPublisher *jar
 
    - often, we need set up env before search, 
      for example, to search org.antlr.v4.runtime.ParserRuleContext

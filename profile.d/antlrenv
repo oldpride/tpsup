@@ -1,0 +1,84 @@
+#!/bin/bash
+
+local usage default_version jar version separator
+
+default_version=4.13.0
+
+usage="
+usage:
+   antlrenv version
+   antlrenv default
+   antlrenv check
+   antlrenv list
+
+   default version is $default_version
+
+example:
+   antlrenv 4.13.0
+   antlrenv 4.9.3
+
+   antlrenv default
+   antlrenv check
+   antlrenv list
+"
+
+if [ $# -ne 1 ]; then
+   echo "$usage" >&2
+   return
+fi
+
+if [ "X$1" = 'Xcheck' ]; then
+   echo "in current CLASSPATH:"
+   findpath antlr CLASSPATH
+   return
+fi
+
+if [ "X$1" = 'Xlist' ]; then
+   echo "available jars:"
+   ls "$SITEBASE"/java/lib/antlr-*-complete.jar
+   return
+fi
+
+
+if [ "X$1" = "Xdefault" ]; then
+   version=$default_version
+else
+   version=$1
+fi
+
+jar="$SITEBASE/java/lib/antlr-$version-complete.jar"
+
+if [ ! -f "$jar" ]; then
+   echo "$jar is not found" >&2
+   return
+fi
+
+
+delpath -q antlr CLASSPATH
+
+if [[ $UNAME =~ Cygwin ]] ; then
+   # Cygwin - convert path from /cygdrive/c/... to C:\..., and convert : to ;
+   jar=`cygpath -w "$jar"`
+   export ANTLR_JAR="$jar"
+   separator=";"
+elif [[ $UNAME =~ Linux ]] || [[ $UNAME =~ Msys ]] ; then
+   # linux or GitBash.
+   # note: GitBash knows to convert : to ;
+   export ANTLR_JAR="$jar"
+   separator=":"
+else
+   echo "unsupported os: $UNAME" >&2
+   usage
+fi
+
+# antlr CLASSPATH need two parts
+#    the download jar file
+#    the dir - normally . - which has the generated class files.
+if [ "X$CLASSPATH" = "X" ]; then
+   export CLASSPATH="${jar}${separator}."
+else
+   export CLASSPATH="${jar}${separator}.${separator}$CLASSPATH"
+fi
+
+# echo CLASSPATH=$CLASSPATH
+

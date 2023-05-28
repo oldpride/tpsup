@@ -22,18 +22,14 @@ if [ $# -eq 0 ]; then
    usage
 fi
 
-UNAME=`uname -a`
-if [[ $UNAME =~ Cygwin ]] ; then
-   # Cygwin 
-   jar=`cygpath -w "$SITEBASE/java/lib/antlr-4.9.3-complete.jar"`
-   export CLASSPATH=".;$jar"
-elif [[ $UNAME =~ Linux ]] || [[ $UNAME =~ Msys ]] ; then
-   # linux or GitBash
-   export CLASSPATH=".:$SITEBASE/java/lib/antlr-4.9.3-complete.jar"
-else
-   echo "unsupported os: $UNAME" >&2
-   usage 
-fi
+. $TPSUP/profile
+antlrenv default
 
 # echo "CLASSPATH=$CLASSPATH"
-java org.antlr.v4.Tool $@
+# echo "ANTLR_JAR=$ANTLR_JAR"
+# export CLASSPATH
+# export ANTLR_JAR
+set -x
+# java org.antlr.v4.Tool $@
+# somehow CLASSPATH not working in gitbash
+java -cp "$ANTLR_JAR" org.antlr.v4.Tool $@

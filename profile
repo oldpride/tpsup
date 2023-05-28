@@ -784,14 +784,9 @@ mydir () {
 }
 
 antlrenv () {
-   if [ "X$CLASSPATH" = "X" ]; then
-      export CLASSPATH="$SITEBASE/java/lib/antlr-4.9.3-complete.jar"
-   else
-      export CLASSPATH="$SITEBASE/java/lib/antlr-4.9.3-complete.jar:$CLASSPATH"
-      reduce CLASSPATH
-   fi
+   . $TPSUP/profile.d/antlrenv $@
 }
 
 antlr4env () {
-   antlrenv
+   antlrenv $@
 }

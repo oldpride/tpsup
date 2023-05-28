@@ -19,7 +19,9 @@ Usage:
 
    delete path components matching the pattern
 
-   -v verbose mode
+   -v     verbose mode
+
+   -q     quite mode. this is the reverse of -v, for compatibility purpose.
 
 Examples:
 
@@ -32,14 +34,18 @@ END
 }
 
 my $verbose;
+my $quiet;
 
 GetOptions(
    'v|verbose' => \$verbose,
+   'q|quiet'   => \$quiet,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 2;
 
 my ($pattern, $old_path) = @ARGV;
+
+$verbose = 0 if $quiet;
 
 $verbose && print STDERR "old_path=$old_path\n";
 
