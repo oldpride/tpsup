@@ -8,13 +8,17 @@ usage:
 
    $prog jar
 
+   this script is normally not needed.
+      - normally jar file already has version as part of file name.
+      - the version inside the manifest may not be accurate either.
+
    print the version of jar file
       https://stackoverflow.com/questions/5834794
       unzip -p file.jar META-INF/MANIFEST.MF
 
 examples:
 
-   $prog   /c/users/william/sitebase/java/lib/antlr-4.9.3-complete.jar 
+   $prog /c/users/william/sitebase/java/lib/antlr-4.9.3-complete.jar 
 
 EOF
 
