@@ -14,7 +14,7 @@ usage:
    - to use the CLASSPATH
    $prog pattern env
 
-   -d dump the code
+   -d dump the code. it does "javap my.class" to disassemble class file.
    -h print header of the code
    -s save tmp dir for troubleshooting, default is no
 
@@ -24,16 +24,26 @@ examples:
    $prog FileFixPublisher *jar
 
    - often, we need set up env before search, 
-     for example, to search org.antlr.v4.runtime.ParserRuleContext
-   siteenv      # this loads antlrenv and javaenv functions
-   antlrenv     # this sets CLASSPATH
-   javaenv 1.8  # this sets java and jar executables path
-   findjar org.antlr.v4.runtime.ParserRuleContext env
+     for example, github/antlr/examples/06_vistor_if_else has this code
+        import org.antlr.v4.runtime.CharStreams;
+        ... CharStreams.fromFileName("test.mu") ...
+     to confirm formFileName was defined in CharStreams
+        $ siteenv             # this loads antlrenv and javaenv functions
+        $ antlrenv default    # this sets CLASSPATH
+        $ javaenv 11          # this sets java and jar executables path
+        $ findjar org.antlr.v4.runtime.CharStreams env
+        $ findjar -d org.antlr.v4.runtime.CharStreams env |grep fromFileName
 
-   - to open a jar file
-   mkdir junkdir
-   cd junkdir
-   jar -xvf found.jar
+   - to explode a jar file
+      mkdir junkdir
+      cd junkdir
+      jar -xvf found.jar
+
+   - to extract a component from a jar file to stdout.  
+      unzip -q -c /c/users/william/sitebase/java/lib/antlr-4.13.0-complete.jar \\
+         org/antlr/v4/runtime/CharStreams.class
+         -q    quiet
+         -c    to stdout
 
 EOF
    exit 1
@@ -96,6 +106,8 @@ check_jar () {
 
          if [ $dump = Y ]; then
             echo ""
+            # javap - Disassembles one or more class files.
+            #   -c  - prints disassembled code.
             javap -c $path
             echo ""
          fi
@@ -113,16 +125,27 @@ check_jar () {
 }
 
 if [ "$1" = "env" ]; then
-   for f in `echo $CLASSPATH|sed -e 's/:/ /g'`
-   do
-      check_jar $f "$pattern"
-   done
+   parts=`echo $CLASSPATH|sed -e 's/:/ /g'`
 else
-   for f in "$@"
-   do
-      check_jar $f "$pattern"
-   done
+   parts="$@"
 fi
+
+for f in `echo $parts`
+do
+   # https://medium.com/javarevisited/back-to-the-basics-of-java-part-1-classpath-47cf3f834ff
+   # The classpath is simply a list of 
+   #    - directories, 
+   #    - JAR files, 
+   #    - ZIP archives
+
+   if [ -d $f ]; then
+      echo "TODO: handle dir: $f"
+   elif [[ $f =~ jar$ ]]; then
+      check_jar $f "$pattern"
+   else
+      echo "TODO: unknow type at file: $f"
+   fi
+done
 
 exit 0;
 
