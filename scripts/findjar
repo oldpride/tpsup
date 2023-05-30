@@ -9,12 +9,14 @@ usage:
    locate java code.
 
    - to use specific jar files
-   $prog pattern jarl jar2 ...
+   $prog package_name jar1 jar2 ...
 
    - to use the CLASSPATH
-   $prog pattern env
+   $prog package_name env
 
    -d dump the code. it does "javap my.class" to disassemble class file.
+           $prog -d package_name env | grep function_name
+
    -h print header of the code
    -s save tmp dir for troubleshooting, default is no
 
@@ -23,16 +25,30 @@ examples:
    $prog FileFixPublisher env
    $prog FileFixPublisher *jar
 
-   - often, we need set up env before search, 
+   - test a jar file in CLASSPATH.
+     often, we need to set up env before search.
      for example, github/antlr/examples/06_vistor_if_else has this code
         import org.antlr.v4.runtime.CharStreams;
         ... CharStreams.fromFileName("test.mu") ...
      to confirm formFileName was defined in CharStreams
         $ siteenv             # this loads antlrenv and javaenv functions
-        $ antlrenv default    # this sets CLASSPATH
+        $ antlrenv default    # this sets CLASSPATH to a single jar file.
         $ javaenv 11          # this sets java and jar executables path
+
         $ findjar org.antlr.v4.runtime.CharStreams env
+          7710 Sun May 21 17:25:32 EDT 2023 org/antlr/v4/runtime/CharStreams.class
+          found in /c/users/william/sitebase/java/lib/antlr-4.13.0-complete.jar
+
         $ findjar -d org.antlr.v4.runtime.CharStreams env |grep fromFileName
+          public static org.antlr.v4.runtime.CharStream fromFileName(java.lang.String) ...
+          public static org.antlr.v4.runtime.CharStream fromFileName(java.lang.String, ...
+
+   - test a dir in CLASSPATH.
+     $ cd sitebase/github/java/examples/01_package/bin
+     $ unset CLASSPATH    # this effectively default CLASSPATH to "."
+     $ findjar myprogram.utils env
+       ./myprogram/utils
+       ./myprogram/utils/Util.class
 
    - to explode a jar file
       mkdir junkdir
@@ -79,14 +95,31 @@ check_jar () {
    f=$1
    pattern=$2
 
-   line=`jar -tvf $f |grep -si "$pattern"`
+   # jar structure is similar to tar structure.
+   # therefore, jar command is similar to tar command
+   #    $ jar -tvf project.jar
+   #       0 Sun May 28 22:44:42 EDT 2023 META-INF/
+   #      97 Sun May 28 22:44:42 EDT 2023 META-INF/MANIFEST.MF
+   #      476 Sun May 28 21:21:52 EDT 2023 myprogram/Main.class
+   #      687 Sun May 28 21:21:52 EDT 2023 myprogram/utils/Util.class
+   #
+   # can match by package name, connected by "."
+   #    $ jar -tvf project.jar |grep myprogram.utils
+   #      687 Sun May 28 21:21:52 EDT 2023 myprogram/utils/Util.class
+   #
+   # can also match using directory, connected by "/"
+   #    $ jar -tvf project.jar |grep myprogram/utils
+   #      687 Sun May 28 21:21:52 EDT 2023 myprogram/utils/Util.class
 
-   if [ "X$line" != "X" ];then
+   jar -tvf $f |grep -si "$pattern" | while read line
+   do
       echo ""
-      echo $line
       echo "found in $f"
+      echo "   $line"
 
       if [ $dump = Y -o $header = Y ]; then
+         # 687 Sun May 28 21:21:52 EDT 2023 myprogram/utils/Util.class
+         # get the last part
          path=`echo $line |sed -e 's:.* ::'`
          #echo $path
          tmpdir=`get_tmp /tmp findjar`
@@ -97,6 +130,10 @@ check_jar () {
          abspath=`readlink -f $f`
          cd $tmpdir
          jar -xvf $abspath $path
+         # can also use:      unzip -q    $abspath $path
+         #    in particular:  unzip -q -c $abspath $path
+         #        -q    quiet
+         #        -c    print to stdout
 
          if [ $header = Y ]; then
             echo ""
@@ -121,11 +158,45 @@ check_jar () {
 
          cd $oldpwd
       fi
-   fi
+   done
+}
+
+check_dir () {
+   f=$1
+   pattern=$2
+
+   find $f -type f -ls |grep -si "$pattern" | while read line
+   do
+      echo ""
+      echo "found in $f"
+      echo "   $line"
+
+      if [ $dump = Y -o $header = Y ]; then
+         path=`echo $line |sed -e 's:.* ::'`
+
+         if [ $header = Y ]; then
+            echo ""
+            javap $path
+            echo ""
+         fi
+
+         if [ $dump = Y ]; then
+            echo ""
+            # javap - Disassembles one or more class files.
+            #   -c  - prints disassembled code.
+            javap -c $path
+            echo ""
+         fi
+      fi
+   done
 }
 
 if [ "$1" = "env" ]; then
-   parts=`echo $CLASSPATH|sed -e 's/:/ /g'`
+   if [ "X$CLASSPATH" = "X" ]; then
+      parts="."
+   else
+      parts=`echo $CLASSPATH|sed -e 's/:/ /g'`
+   fi
 else
    parts="$@"
 fi
@@ -139,7 +210,8 @@ do
    #    - ZIP archives
 
    if [ -d $f ]; then
-      echo "TODO: handle dir: $f"
+      #find $f -mount |egrep "$pattern" 
+      check_dir $f "$pattern"
    elif [[ $f =~ jar$ ]]; then
       check_jar $f "$pattern"
    else
