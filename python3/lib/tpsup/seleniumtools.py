@@ -546,9 +546,14 @@ def check_setup(**opt):
         chromedriver_vesion = None
 
         if found_path.get('chrome'):
-            full_path = which('chrome_version')
+            chrome_version_full_path = which('chrome_version')
+
+            if not chrome_version_full_path:
+                raise RuntimeError(
+                    f"cannot find 'chrome_version' command in PATH={os.environ['PATH']}")
+
             chrome_vesion = str(subprocess.check_output(
-                [full_path, found_path['chrome']]).strip(), 'utf-8')
+                [chrome_version_full_path, found_path['chrome']]).strip(), 'utf-8')
             # 99.0.4844.74
 
             # use str() to convert bytes to string
