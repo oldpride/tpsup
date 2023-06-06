@@ -12,9 +12,10 @@ rem echo %argC%
 if NOT %argC% == 2 (
    echo ERROR:   wrong number of args. got %argC%, expected 1. args=%*
    echo usage:   %prog% var_name file
+   echo.
    echo example: %prog% PATH python 
-   echo example: %prog% PATH grep
-   echo example: %prog% PYTHONPATH tpsup
+   echo          %prog% PATH grep
+   echo          %prog% PYTHONPATH tpsup
    exit /b
 )
 

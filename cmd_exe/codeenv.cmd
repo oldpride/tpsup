@@ -40,7 +40,7 @@ if NOT %var% == set (
    goto :usage
 )
 
-endlocal  && (
+endlocal  & (
    if %var% == set (
       call addpath.cmd -p PATH "%BASE%"
       call which code

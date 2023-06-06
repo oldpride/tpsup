@@ -221,7 +221,29 @@ if ( -e $real_local_base ) {
    $target = $real_parent_base;
 }
 
-die "target $target is owned by $owner, not me ($me)" if $owner ne $me;
+CHECK_USER:
+{
+   
+   if ($owner eq $me) {
+      $verbose && print "target $target is owned by $owner, same as me ($me)\n";
+      last CHECK_USER;
+   }
+
+   # i noticed sometimes cygwin uses file acl, so that the owner is 'Administrator',
+   # but user can still access it through acl's user role.
+       
+   my $acl_users = get_acl_users($real_parent_base, {verbose=>$verbose});
+   $verbose && print "acl users: @$acl_users\n";
+
+   for my $au (@$acl_users) {
+      if ($owner eq $au) {
+         $verbose && print "me ($me) is in acl users: @$acl_users\n";
+         last CHECK_USER;
+      }
+   }
+
+   die "target $target is owned by $owner with acl users: (@$acl_users), none is me ($me)";
+}
 
 my $exclude_pattern = "[.]git/|[.]sw[op]|[.]nfs|[.]idea|[.]github|__pycache__";
 if (defined $exclude) {
@@ -354,3 +376,28 @@ sub get_homedir {
    return $homedir;
 }
 
+sub get_acl_users {
+   my ($path, $opt) = @_;
+
+   $verbose = $opt->{verbose};
+
+   if ($uname =~ /cygwin/i) {
+      my $cmd = "getfacl $path";
+      $verbose && print "cmd = $cmd\n";
+      my @lines = `$cmd`;
+      if ($? != 0) {
+         $verbose && print "cmd = $cmd failed\n";
+         return [];
+      } 
+      my $seen_user = {};
+      for my $l(@lines) {
+         if ($l =~ /^user:[^:]+?:/) {
+            $seen_user->{$1} ++;
+         }
+      }
+      my @users = keys %$seen_user;
+      return \@users;
+   } else {
+      return [];
+   }
+}

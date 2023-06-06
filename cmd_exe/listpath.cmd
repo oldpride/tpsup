@@ -24,6 +24,7 @@ set value=!%var%!
 rem how to split %path% which is delimited by ;
 rem https://stackoverflow.com/questions/14879105/windows-path-variable-how-to-split-on-in-cmd-shell-again
 for %%i in ("%value:;="; "%") do (
+   REM ~ in %%~i removes quotes
    echo. %%~i 
 )
 endlocal
