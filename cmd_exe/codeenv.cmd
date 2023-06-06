@@ -35,15 +35,15 @@ if %var% == check (
    exit /b
 )
 
-if %var% == set (
-   call addpath.cmd -p PATH "%BASE%"
-   call which code
-   exit /b
+if NOT %var% == set (
+   echo unknown action: %var%
+   goto :usage
 )
 
-echo unknown action: %var%
-
-goto :usage
-
-endlocal 
+endlocal  && (
+   if %var% == set (
+      call addpath.cmd -p PATH "%BASE%"
+      call which code
+   )
+)
 
