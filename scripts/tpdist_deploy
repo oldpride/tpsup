@@ -391,7 +391,7 @@ sub get_acl_users {
       } 
       my $seen_user = {};
       for my $l(@lines) {
-         if ($l =~ /^user:[^:]+?:/) {
+         if ($l =~ /^user:([^:]+?):/) {
             $seen_user->{$1} ++;
          }
       }
