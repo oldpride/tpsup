@@ -1,0 +1,50 @@
+# for vs code
+local found DIR usage prog
+
+prog=${FUNCNAME[1]}
+
+usage="
+
+usage:
+
+   $prog check
+   $prog set
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+action=$1
+
+
+if [[ $UNAME =~ CYGWIN ]]; then
+   DIR="/cygdrive/c/Program Files/Microsoft VS Code/bin"
+elif [[ $UNAME =~ MINGW64_NT ]]; then
+   DIR="/c/Program Files/Microsoft VS Code/bin"
+#elif [[ $UNAME =~ Linux ]]; then
+#   DIR=$HOME
+else
+   echo "unsupported UNAME='$UNAME'"
+   return
+fi
+
+if [ $action = check ]; then
+   echo ""
+   echo "current installations: "
+   /bin/ls -1d "$DIR"/code
+
+   echo ""
+   echo "check PATH"
+   which code
+elif [ $action = set ]; then
+   export PATH="$DIR:$PATH"
+   reduce PATH
+else
+   echo "unknown action='$action'"
+   usage
+fi
+

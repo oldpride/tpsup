@@ -783,10 +783,3 @@ mydir () {
    fi
 }
 
-antlrenv () {
-   . $TPSUP/profile.d/antlrenv $@
-}
-
-antlr4env () {
-   antlrenv $@
-}
