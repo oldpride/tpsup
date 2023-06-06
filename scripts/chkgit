@@ -42,13 +42,13 @@ do
    echo ""
 
    
-   if [ "X$SITEBASE" = "X" ]; then
-      echo "SITEBASE is not set. run sitenev first" 
+   if [ "X$MYBASE" = "X" ]; then
+      echo "MYBASE is not set. run sitenev first" 
       exit 1
    fi
 
-   if ! cd $SITEBASE/github/$repo; then
-      cd $SITEBASE/github || exit 1;
+   if ! cd $MYBASE/github/$repo; then
+      cd $MYBASE/github || exit 1;
       gitclone oldpride $repo
       continue
    fi
@@ -63,7 +63,7 @@ do
       (set -x; git fetch --dry-run)
    fi
 
-   # tian@linux1:/home/tian/sitebase/github/notes$ git status --show-stash
+   # $ git status --show-stash
    # On branch master
    # Your branch and 'origin/master' have diverged,
    # and have 3 and 3 different commits each, respectively.
