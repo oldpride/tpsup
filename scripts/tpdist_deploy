@@ -236,13 +236,13 @@ CHECK_USER:
    $verbose && print "acl users: @$acl_users\n";
 
    for my $au (@$acl_users) {
-      if ($owner eq $au) {
+      if ($au eq $me) {
          $verbose && print "me ($me) is in acl users: @$acl_users\n";
          last CHECK_USER;
       }
    }
 
-   die "target $target is owned by $owner with acl users: (@$acl_users), none is me ($me)";
+   die "target $target is owned by $owner with acl users: (@$acl_users), none is me ($me)\n";
 }
 
 my $exclude_pattern = "[.]git/|[.]sw[op]|[.]nfs|[.]idea|[.]github|__pycache__";
