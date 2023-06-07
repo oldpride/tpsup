@@ -38,20 +38,25 @@ if NOT '%3' == '' (
    goto :usage
 )
 
-
-set old=%1
-set new=%2
+REM generously use double quotes to avoid error when value contains () and spaces.
+set "old=%1"
+set "new=%2"
 
 REM before endlocal, use !var_name! to get the new value, except IF's condition part.
 REM after endlocal, use %var_name%
 
-set old_dir=%cd%
+set "old_dir=%cd%"
 
 REM string substitution. not regex
-Set new_dir=!old_dir:%old%=%new%!
+set "new_dir=!old_dir:%old%=%new%!"
+
+if "%old_dir%" == "%new_dir%" (
+   echo no change in dir
+   exit /b 0
+)
 
 endlocal & (
-   mycd %new_dir%
+   mycd "%new_dir%"
 )
 
 exit /b 0
