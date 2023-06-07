@@ -175,7 +175,6 @@ def get_user_fullname(user: str = None, **opt) -> str:
     if env.isWindows:
         # cmd = 'wmic useraccount where name="william" get fullname /value'
         cmd = 'wmic useraccount where name="%username%" get fullname /value'
-
         cmd = cmd.replace('%username%', user)
 
         if verbose:
@@ -190,7 +189,7 @@ def get_user_fullname(user: str = None, **opt) -> str:
         # Extract the full name from the output
         full_name = output.strip().split('=')[1]
     elif env.isLinux:
-        # https://stackoverflow.com/questions/1251999/
+        import pwd
         full_name = pwd.getpwnam(getpass.getuser()).pw_gecos.split(',')[0]
     else:
         raise RuntimeError(f"unsupported OS = {env.uname}")
