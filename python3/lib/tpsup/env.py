@@ -19,6 +19,7 @@ def flush_rightaway(func):
 
     return flushed
 
+
 class Env:
     def __init__(self, **opt):
         self.verbose = opt.get("verbose", 0)
@@ -44,7 +45,6 @@ class Env:
         self.ls_cmd = "ls"
         self.hostname = platform.node()
         # self.hostname = platform.node().split('.')[0]  # short name
-
 
         if re.search("Windows", self.system, re.IGNORECASE):
             self.isWindows = True
@@ -106,6 +106,7 @@ class Env:
 compiled_cyg_pattern = None
 compiled_win_pattern = None
 
+
 def cygpath(path: str, direction: Literal["win2cyg", "cyg2win"], **opt):
     # /cygdrive/c/Program Files;/cygdrive/c/Users;/cygdrive/d
     # c:/Program Files;c:/Users;d:
@@ -140,7 +141,7 @@ def cygpath(path: str, direction: Literal["win2cyg", "cyg2win"], **opt):
     return path2
 
 
-def get_native_path(path:str, **opt) -> str:
+def get_native_path(path: str, **opt) -> str:
     my_env = Env()
     if my_env.isCygwin or my_env.isGitBash:
         # when we run from cygwin, env var $TPSUP is /cygdrive/c/...
@@ -157,8 +158,44 @@ def get_native_path(path:str, **opt) -> str:
         new_path = path.replace("\\", "/")
     return new_path
 
+
 def get_tmp_dir(**opt) -> str:
     return Env().tmpdir
+
+
+def get_user_fullname(user: str = None, **opt) -> str:
+    verbose = opt.get('verbose', False)
+
+    user = opt.get('user', None)
+    if user is None:
+        user = getpass.getuser()
+
+    full_name = None
+    env = Env()
+    if env.isWindows:
+        # cmd = 'wmic useraccount where name="william" get fullname /value'
+        cmd = 'wmic useraccount where name="%username%" get fullname /value'
+
+        cmd = cmd.replace('%username%', user)
+
+        if verbose:
+            print(f"cmd={cmd}")
+
+        ps = subprocess.Popen(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        output = ps.communicate()[0].decode()
+        if verbose:
+            print(f"output='{output}'")
+
+        # Extract the full name from the output
+        full_name = output.strip().split('=')[1]
+    elif env.isLinux:
+        # https://stackoverflow.com/questions/1251999/
+        full_name = pwd.getpwnam(getpass.getuser()).pw_gecos.split(',')[0]
+    else:
+        raise RuntimeError(f"unsupported OS = {env.uname}")
+    return full_name
+
 
 def main():
     myenv = Env()
@@ -174,10 +211,15 @@ def main():
     sys.stderr.write("3\n")
 
     for path in ("/a/b/c", r"\a\b\c"):
-        print(f"converted path={path} to os standard path={myenv.adjpath(path)}")
+        print(
+            f"converted path={path} to os standard path={myenv.adjpath(path)}")
 
     native_test_url = f"file:///{get_native_path(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
     print(f"native_test_url = {native_test_url}")
+
+    print(f"tmpdir = {get_tmp_dir()}")
+    print(f"user full name = {get_user_fullname()}")
+
 
 if __name__ == "__main__":
     main()

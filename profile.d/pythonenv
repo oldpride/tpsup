@@ -132,6 +132,7 @@ svenv () {
    elif [[ $UNAME =~  MINGW64_NT ]]; then
       # this is gitbash
       # MINGW64_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
+      # echo "gitbash"
       . "$SITEVENV/Scripts/activate"
    elif [[ $UNAME =~ MSYS_NT ]]; then
       # this is vscode bash
