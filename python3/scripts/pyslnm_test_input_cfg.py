@@ -159,6 +159,6 @@ def post_batch(all_cfg, known, **opt):
     seleniumEnv = driver.seleniumEnv
     my_env = seleniumEnv.env
     # list all the log files for debug purpose
-    cmd = f"{my_env.ls_cmd} -ld {seleniumEnv.log_base}/selenium*"
+    cmd = f"{my_env.ls_cmd} -ld \"{seleniumEnv.log_base}/\"selenium*"
     print(cmd)
     os.system(cmd)

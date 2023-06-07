@@ -2236,7 +2236,8 @@ def test_basic():
 
     my_env = tpsup.env.Env()
     # list all the log files for debug purpose
-    cmd = f"{my_env.ls_cmd} -ld {seleniumEnv.log_base}/seleninum*"
+    # use double quotes to close "C:/Users/.../selenium*" because bare / is a switch in cmd.exe.
+    cmd = f"{my_env.ls_cmd} -ld \"{seleniumEnv.log_base}/\"seleninum*"
     print(cmd)
     os.system(cmd)
 
