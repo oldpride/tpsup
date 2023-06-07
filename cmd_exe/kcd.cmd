@@ -46,6 +46,8 @@ REM before endlocal, use !var_name! to get the new value, except IF's condition 
 REM after endlocal, use %var_name%
 
 set old_dir=%cd%
+
+REM string substitution. not regex
 Set new_dir=!old_dir:%old%=%new%!
 
 endlocal & (
