@@ -25,7 +25,12 @@ usage:
 
    $prog [-m regex ... ] [ -x regex ... ] file1 file2 ...
 
-   extend "grep -l" to support multiple patterns
+   extend "grep -l" to support multiple patterns.
+   
+   multiple patterns are applied to each line, so they are ANDed.
+   
+   (if you need to apply multiple patterns to the whole file, 
+   use 'grep -l' multiple times)
 
    -m   match_regex          can set multiple times           
    -x exclude_regex          can set multiple times           
