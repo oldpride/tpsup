@@ -30,8 +30,9 @@ usage:
    -m   match_regex          can set multiple times           
    -x exclude_regex          can set multiple times           
 
-   -r recursive
-   -v verbose
+   -r                        recursive
+   -v                        verbose
+   -c                        return count of each matched file
 
 example:
    
@@ -53,12 +54,14 @@ my @match_exps;
 my @exclude_exps;
 my $recursive;
 my $verbose;
+my $print_count;
 
 GetOptions(
    'm=s'          =>      \@match_exps,
    'x=s'          =>      \@exclude_exps,
    'r'            =>      \$recursive,
    'v'            =>      \$verbose,
+    'c'            =>      \$print_count,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -89,6 +92,8 @@ for my $path (@ARGV) {
       $verbose && print STDERR "scanning file=$f\n";
       my $fh = get_in_fh($f);
 
+      my $count = 0;
+
       LINE:
       while(my $line = <$fh>) {
          if (@match_compiled) {
@@ -107,11 +112,21 @@ for my $path (@ARGV) {
          }
 
          $verbose && print STDERR "found $f: $line";
-         print "$f\n";
-         last;
+         $count++;        
+         if (!$print_count) {
+            last;
+         }        
       }
 
       close_in_fh($fh);
+      if ($count) {
+        if ($print_count) {
+           print "$count $f\n";
+        } else {
+           print "$f\n";
+        }
+      }
+
    }
 }
 

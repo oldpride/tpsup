@@ -48,7 +48,7 @@ REM before endlocal, use !var_name! to get the new value
 REM after endlocal, use %var_name%k
 
 :main
-if "!way!" == "user" (
+if "!way!" == "local" (
     REM use ^ to escape | in the loop's command
     REM Full Name                John Smith
     REM tokens=2* means get 2nd and all tokens, assign to %%b.
@@ -65,7 +65,7 @@ if "!way!" == "user" (
     REM FullName=John Smith
     REM tokens=2 means get 2nd token, assign to %%a.
     REM delims== means use = as delimiter
-    for /f "tokens=2 delims==" %%a in ('wmic useraccount where name^="%user1%" get fullname /value ^| find /i "FullName"') do set DisplayName=%%a
+    for /f "tokens=2 delims==" %%a in ('wmic useraccount where name^="%user1%" get fullname /value ^| findstr /i "FullName"') do set DisplayName=%%a
     echo. !DisplayName!
 ) else (
     echo "unknown way=%way%"
@@ -88,13 +88,13 @@ exit /b 0
    echo 
    echo    -d               debug mode. besically turn on ECHO.
    echo    query_way        
-   echo              'user' - net user username. fast.
+   echo              'local'  - net user username. fast.
    echo              'domain' - net user username /domain. fast.
-   echo              'wmic' - wmic useraccount where name="username". slow.
+   echo              'wmic'   - wmic useraccount where name="username". slow.
    echo.
    echo example:
    echo.
-   echo    %prog% user   %%USERNAME%%
+   echo    %prog% local  %%USERNAME%%
    echo    %prog% domain %%USERNAME%%
    echo    %prog% wmic   %%USERNAME%%
    echo. 

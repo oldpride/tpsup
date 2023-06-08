@@ -164,18 +164,54 @@ def get_tmp_dir(**opt) -> str:
 
 
 def get_user_fullname(user: str = None, **opt) -> str:
+    # separate get_user_fullname() and query_user_fullname() so that
+    # we can add a cache layer
+
     verbose = opt.get('verbose', False)
 
-    user = opt.get('user', None)
+    myself = getpass.getuser()
     if user is None:
         user = getpass.getuser()
+
+    full_name = None
+    if user == myself:
+        # cache for myself
+        env = Env()
+        cache_file = env.home_dir + '/.tpsup/my_user_fullname.cache'
+        if os.path.exists(cache_file):
+            if verbose:
+                print(f"read user fullname from cache file {cache_file}")
+            with open(cache_file) as fh:
+                full_name = fh.read().strip()
+            if full_name is not None and full_name != '':
+                return full_name
+            else:
+                if verbose:
+                    print(f"cache file is empty, will query again")
+
+        full_name = query_user_fullname(user, **opt)
+        if full_name is None or full_name == '':
+            return None
+
+        with open(cache_file, 'w') as fh:
+            fh.write(full_name)
+        return full_name
+    else:
+        # no cache for other users
+        return query_user_fullname(user, **opt)
+
+
+def query_user_fullname(user: str, **opt) -> str:
+    verbose = opt.get('verbose', False)
 
     full_name = None
     env = Env()
     if env.isWindows:
         # cmd = 'wmic useraccount where name="william" get fullname /value'
-        cmd = 'wmic useraccount where name="%username%" get fullname /value'
-        cmd = cmd.replace('%username%', user)
+        # cmd = 'wmic useraccount where name="%username%" get fullname /value'
+        # cmd = cmd.replace('%username%', user)
+        user_source = os.environ.get('TPSUP_USER_SOURCE', 'wmic')
+        cmd = f"get_user_fullname.cmd {user_source} {user}"
 
         if verbose:
             print(f"cmd={cmd}")
@@ -187,7 +223,7 @@ def get_user_fullname(user: str = None, **opt) -> str:
             print(f"output='{output}'")
 
         # Extract the full name from the output
-        full_name = output.strip().split('=')[1]
+        full_name = output.strip()
     elif env.isLinux:
         # only available in linux, not windows. therefore, we need to put it here.
         import pwd
@@ -218,7 +254,8 @@ def main():
     print(f"native_test_url = {native_test_url}")
 
     print(f"tmpdir = {get_tmp_dir()}")
-    print(f"user full name = {get_user_fullname()}")
+    # print(f"query_user_fullname = {query_user_fullname(getpass.getuser())}")
+    print(f"get_user_fullname = {get_user_fullname(verbose=True)}")
 
 
 if __name__ == "__main__":
