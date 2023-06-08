@@ -1,5 +1,8 @@
 @echo off
 
+REM In windows, to unset a var, just set it to nothing
+set "USERFULLNAME="
+
 :: setlocal can be nested
 setlocal EnableDelayedExpansion
 :: when EnableDelayedExpansion is set, %var% becomes !var!, except in IF's condition part.
@@ -37,7 +40,6 @@ if NOT '%3' == '' (
    echo more args than expected
    goto :usage
 )
-
 
 set way=%1
 set user1=%2
@@ -81,6 +83,9 @@ exit /b 0
    echo.
    echo    %prog% [flags,options] query_way username
    echo.
+   echo    get user's full name.
+   echo    result is stored in %%USERFULLNAME%%.
+   echo 
    echo    -d               debug mode. besically turn on ECHO.
    echo    query_way        
    echo              'user' - net user username. fast.
@@ -89,9 +94,11 @@ exit /b 0
    echo.
    echo example:
    echo.
-   echo    %prog% user   %USERNAME%
-   echo    %prog% domain %USERNAME%
-   echo    %prog% wmic   %USERNAME%
+   echo    %prog% user   %%USERNAME%%
+   echo    %prog% domain %%USERNAME%%
+   echo    %prog% wmic   %%USERNAME%%
+   echo. 
+   echo    echo %%USERFULLNAME%%
    echo.
 
    REM this is function return; it doesn't exit the script.
