@@ -189,6 +189,7 @@ def get_user_fullname(user: str = None, **opt) -> str:
         # Extract the full name from the output
         full_name = output.strip().split('=')[1]
     elif env.isLinux:
+        # only available in linux, not windows. therefore, we need to put it here.
         import pwd
         full_name = pwd.getpwnam(getpass.getuser()).pw_gecos.split(',')[0]
     else:
