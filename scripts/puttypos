@@ -45,7 +45,7 @@ EOF
 
 
 verbose=N
-while getopts vnx o;
+while getopts vn:x: o;
 do
    case "$o" in
       v)  verbose=Y;;
