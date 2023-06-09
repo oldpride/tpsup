@@ -5,6 +5,7 @@ prog=`basename $0`
 posdir=$HOME/.tpsup
 posfile=$posdir/puttypos.cache
 
+min=0
 max=9
 
 usage () {
@@ -16,12 +17,27 @@ usage:
    position the current putty's window at position.
 
    pos can be
-      - 0, 1, 2, 3, ... $max 
-      - next  - position in $posfile + 1
-      - reset - this set the cache pos to max, so that the next one restart from 0.
-                ths doesn't move the current putty's position.
+      - min..max - default min=$min, max=$max
+      - next     - position in $posfile + 1
+      - last     - report last position. report-only, no movement.
+      - reset    - this set the cache pos to max, so that the next one restart from 0.
+                   ths doesn't move the current putty's position.
 
-   if $posfile has no cached position, then next will be 1.
+   if $posfile has no cached position, then next will be min.
+
+   -n min    set the min, default $min
+   -x max    set the max, default $max
+
+examples:
+
+   $prog 10
+
+   $prog next
+
+   $prog -n 10 -x 12 next
+   $prog -n 10 -x 12 next
+   $prog -n 10 -x 12 next
+   $prog -n 10 -x 12 next
 
 EOF
    exit 1
@@ -29,12 +45,12 @@ EOF
 
 
 verbose=N
-while getopts v o;
+while getopts vnx o;
 do
    case "$o" in
-       v)   verbose=Y;;
-      #c)   UseCmd=Y;;
-      #u)  id=$OPTARG;;
+      v)  verbose=Y;;
+      n)  min=$OPTARG;;
+      x)  max=$OPTARG;;
       *)   usage;;
    esac
 done
@@ -54,34 +70,35 @@ if [ $pos = reset ]; then
    # reset doesn't change current putty's position.
    echo $max  >$posfile
    exit 0;
+elif [ $pos = last ]; then
+   # reporting last position doesn't change current putty's position.
+   cat $posfile
+   exit 0;
 elif [ $pos = next ]; then
    touch $posfile
    cachepos=`cat $posfile`;
 
    if [[ $cachepos =~ ^[0-9]+$ ]]; then
       if [ $cachepos -ge $max ]; then
-         # cache pos is at max, the next one will be 0
-         pos=0
+         # if cache pos is at max, the next one will be $min
+         pos=$min
       else
          pos=`expr $cachepos + 1`
       fi
    else
-      pos=0
+      # if cache file is corrupted, reset to min
+      pos=$min
    fi
 else 
    if ! [[ $pos =~ ^[0-9]+$ ]]; then  # bash regex
       echo "unsupported pos='$pos'" >&2
       usage
    fi
-
-   if [ $pos -gt $max ]; then
-      echo "max pos=$max, your pos='$pos'" >&2
-      usage
-   fi
 fi
 
 offset=`expr 30 \* $pos`
 
+# https://superuser.com/questions/1162451
 printf '\033[3;'"$offset;$offset"'t'
 
 echo $pos >$posfile
