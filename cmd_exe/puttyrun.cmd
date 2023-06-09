@@ -74,18 +74,20 @@ exit /b 0
    echo.
    echo    %prog% config count
    echo.
-   echo    start putty with config for count times
+   echo    start putty with config for count times.
    echo.
-   echo    prep work: 
-   echo            in the config: Connection: SSH, 
-   echo            enable "share SSH connections if possible"
+   echo    prep: 
+   echo       in the config: Connection: SSH, 
+   echo          enable "share SSH connections if possible".
+   echo.         Remote Command: unset TMOUT; su - appid
+   echo    if done like this, only the first putty will ask for auth, 
+   echo    and only 1 putty needs to turn off the timeout: unset TMOUT.
    echo. 
-   echo    -d               debug mode. besically turn on ECHO.
-   echo.       
+   echo    -d               debug mode. besically turn on ECHO.      
    echo.
    echo example:
    echo.
-   echo    %prog% myappdev1 10
+   echo    %prog% myappcfg 5
    echo.
 
    REM this is function return; it doesn't exit the script.

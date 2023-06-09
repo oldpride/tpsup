@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# $USERPROFILE is from windows env variable %USERPROFILE%
+posdir='$USERPROFILE/.tpsup'
+posfile='$posdir/puttypos.cache'
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $0 pos
+
+   position a putty window at position.
+
+   pos can be
+      1, 2, 3, ... 10
+      next - position in $posfile + 1
+
+   if $posfile has no cached position, then next will be 1.
+
+EOF
+   exit 1
+}
+
+
+verbose=N
+while getopts v o;
+do
+   case "$o" in
+       v)   verbose=Y;;
+      #c)   UseCmd=Y;;
+      #u)  id=$OPTARG;;
+      *)   usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+pos=$1
+
+[ -d $posdir ] || mkdir -p $posdir
+
+if [ $pos = next ]; then
+   touch $posfile
+   cachepos=`cat $posfile`;
+
+   if [[ $cachepos =~ /^[0-9]+$/ ]]; then
+      if [ $cachepos -ge 10 ]; then
+         cachepos=0
+      fi
+   else
+      cachepos=0
+   fi
+
+   pos=`expr $pos + 1`
+else 
+   if ! [[ $pos =~ /^[0-9]+$/ ]]; then
+      echo "unsupported pos='$pos'" >&2
+      usage
+   fi
+
+   if ! [ $pos -gt 10 ]; then
+      echo "max pos=10, your pos='$pos'" >&2
+      usage
+   fi
+fi
+
+offset=`expr 20 \* $pos'
+
+printf '\033[3;'"$offset;$offset"'t'
+
