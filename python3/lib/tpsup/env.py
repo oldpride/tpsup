@@ -233,6 +233,19 @@ def query_user_fullname(user: str, **opt) -> str:
     return full_name
 
 
+def get_user_firstlast(user: str = None, **opt) -> str:
+    # convert "last, first" to "first last"
+    full_name = get_user_fullname(user, **opt)
+    if full_name is None:
+        return None
+
+    if ', ' in full_name:
+        (last, first) = full_name.split(', ')
+        return f"{first} {last}"
+    else:
+        return full_name
+
+
 def main():
     myenv = Env()
     print(myenv)
@@ -256,6 +269,7 @@ def main():
     print(f"tmpdir = {get_tmp_dir()}")
     # print(f"query_user_fullname = {query_user_fullname(getpass.getuser())}")
     print(f"get_user_fullname = {get_user_fullname(verbose=True)}")
+    print(f"get_user_firstlast = {get_user_firstlast()}")
 
 
 if __name__ == "__main__":
