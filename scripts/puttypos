@@ -79,7 +79,7 @@ elif [ $pos = next ]; then
    cachepos=`cat $posfile`;
 
    if [[ $cachepos =~ ^[0-9]+$ ]]; then
-      if [ $cachepos -ge $max ]; then
+      if [ $cachepos -lt $min  -o $cachepos -ge $max ]; then
          # if cache pos is at max, the next one will be $min
          pos=$min
       else
