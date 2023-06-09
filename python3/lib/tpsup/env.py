@@ -177,7 +177,12 @@ def get_user_fullname(user: str = None, **opt) -> str:
     if user == myself:
         # cache for myself
         env = Env()
-        cache_file = env.home_dir + '/.tpsup/my_user_fullname.cache'
+
+        cache_dir = env.home_dir + '/.tpsup'
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+            print(f"create cache dir {cache_dir}")
+        cache_file = cache_dir + '/my_user_fullname.cache'
         if os.path.exists(cache_file):
             if verbose:
                 print(f"read user fullname from cache file {cache_file}")
