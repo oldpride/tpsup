@@ -1,20 +1,25 @@
 #!/bin/bash
 
-# $USERPROFILE is from windows env variable %USERPROFILE%
-posdir='$USERPROFILE/.tpsup'
-posfile='$posdir/puttypos.cache'
+
+prog=`basename $0`
+posdir=$HOME/.tpsup
+posfile=$posdir/puttypos.cache
+
+max=9
 
 usage () {
    cat >&2 <<EOF
 usage:
 
-   $0 pos
+   $prog pos
 
-   position a putty window at position.
+   position the current putty's window at position.
 
    pos can be
-      1, 2, 3, ... 10
-      next - position in $posfile + 1
+      - 0, 1, 2, 3, ... $max 
+      - next  - position in $posfile + 1
+      - reset - this set the cache pos to max, so that the next one restart from 0.
+                ths doesn't move the current putty's position.
 
    if $posfile has no cached position, then next will be 1.
 
@@ -45,32 +50,38 @@ pos=$1
 
 [ -d $posdir ] || mkdir -p $posdir
 
-if [ $pos = next ]; then
+if [ $pos = reset ]; then
+   # reset doesn't change current putty's position.
+   echo $max  >$posfile
+   exit 0;
+elif [ $pos = next ]; then
    touch $posfile
    cachepos=`cat $posfile`;
 
-   if [[ $cachepos =~ /^[0-9]+$/ ]]; then
-      if [ $cachepos -ge 10 ]; then
-         cachepos=0
+   if [[ $cachepos =~ ^[0-9]+$ ]]; then
+      if [ $cachepos -ge $max ]; then
+         # cache pos is at max, the next one will be 0
+         pos=0
+      else
+         pos=`expr $cachepos + 1`
       fi
    else
-      cachepos=0
+      pos=0
    fi
-
-   pos=`expr $pos + 1`
 else 
-   if ! [[ $pos =~ /^[0-9]+$/ ]]; then
+   if ! [[ $pos =~ ^[0-9]+$ ]]; then  # bash regex
       echo "unsupported pos='$pos'" >&2
       usage
    fi
 
-   if ! [ $pos -gt 10 ]; then
-      echo "max pos=10, your pos='$pos'" >&2
+   if [ $pos -gt $max ]; then
+      echo "max pos=$max, your pos='$pos'" >&2
       usage
    fi
 fi
 
-offset=`expr 20 \* $pos'
+offset=`expr 30 \* $pos`
 
 printf '\033[3;'"$offset;$offset"'t'
 
+echo $pos >$posfile
