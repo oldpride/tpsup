@@ -87,7 +87,7 @@ exit /b 0
    echo.
    echo example:
    echo.
-   echo    %prog% myappcfg 5
+   echo    %prog% linux1 5
    echo.
 
    REM this is function return; it doesn't exit the script.
