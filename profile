@@ -27,7 +27,7 @@ get_bash_source () {
    unset TP_BASH_SOURCE_FILE
 
    if [ "X$BASH_SOURCE" != "X" ]; then
-      TP_BASH_SOURCE_DIR=` dirname  "$BASH_SOURCE"`
+      TP_BASH_SOURCE_DIR=`  dirname "$BASH_SOURCE"`
       TP_BASH_SOURCE_FILE=`basename "$BASH_SOURCE"`
 
       TP_BASH_SOURCE_DIR=$(cd "$TP_BASH_SOURCE_DIR"; pwd -P)

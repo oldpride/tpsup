@@ -18,13 +18,15 @@ from shlex import split
 from typing import Union, List, Dict
 from tpsup.exectools import exec_into_globals
 
+
 def exec_simple(source):
     return exec_into_globals(source, globals(), locals())
 
 # global vars needed for exec()
 # our_cfg = None
 
-def parse_cfg(cfg_file:str=None, **opt):
+
+def parse_cfg(cfg_file: str = None, **opt):
     verbose = opt.get('verbose', 0)
 
     # global vars needed for exec()
@@ -38,7 +40,7 @@ def parse_cfg(cfg_file:str=None, **opt):
     if verbose:
         print(f'after exec, our_cfg = {pformat(our_cfg)}')
 
-    #our_cfg = asdict(mod.our_cfg)
+    # our_cfg = asdict(mod.our_cfg)
 
     parse_dict_cfg_sub = parse_dict_cfg
 
@@ -54,29 +56,31 @@ def parse_cfg(cfg_file:str=None, **opt):
     return our_cfg
 
 
-def parse_dict_cfg(dict_cfg: type=dict, **opt):
+def parse_dict_cfg(dict_cfg: type = dict, **opt):
     # convert keys to uppercase
     for attr in ['keys', 'suits']:
         if dict_cfg.get(attr, None) is not None:
-            dict_cfg[attr] = convert_to_uppercase(dict_cfg[attr], ConvertKey=True)
+            dict_cfg[attr] = convert_to_uppercase(
+                dict_cfg[attr], ConvertKey=True)
 
     for attr in ['aliases', 'keychains']:
         if dict_cfg.get(attr, None) is not None:
-            dict_cfg[attr] = convert_to_uppercase(dict_cfg[attr], ConvertKey=True, ConvertValue=True)
+            dict_cfg[attr] = convert_to_uppercase(
+                dict_cfg[attr], ConvertKey=True, ConvertValue=True)
 
     keys = sorted(dict_cfg.get('keys', []))
     keys_string = ' '.join(keys)
     suits = dict_cfg.get('suits', {})
 
     suits_string = os.linesep
-    for name,suit in suits.items():
+    for name, suit in suits.items():
         section = f'      {name}{os.linesep}'
-        for k,v in sorted(suit.items()):
+        for k, v in sorted(suit.items()):
             section += f"         '{k}' : '{v}'{os.linesep}"
         suits_string += section
 
     aliases = []
-    for k,v in dict_cfg.get('aliases', {}).items():
+    for k, v in dict_cfg.get('aliases', {}).items():
         aliases.append(f"'{k}' : '{v}'")
     aliases_string = ','.join(aliases)
 
@@ -105,7 +109,7 @@ def parse_input(input: Union[str, List], all_cfg: dict, **opt):
     # 2. use the parser from 'module' attribute
     # 3. use the default parser in this module
 
-    if  not (parse_input_sub := globals().get("parse_input_sub", None)): # check function existence
+    if not (parse_input_sub := globals().get("parse_input_sub", None)):  # check function existence
         parse_input_sub = parse_input_default_way
 
     # # 2nd method to check function existence
@@ -120,7 +124,8 @@ def parse_input(input: Union[str, List], all_cfg: dict, **opt):
         if hasattr(imported, 'tppatch_parse_dict_cfg'):
             parse_input_sub = imported.tppatch_parse_dict_cfg
 
-    return parse_input_sub(input, all_cfg, **opt) # this set 'known' in caller
+    return parse_input_sub(input, all_cfg, **opt)  # this set 'known' in caller
+
 
 def parse_input_default_way(input: Union[str, List], all_cfg: dict, **opt):
     keys = all_cfg.get('keys', {})
@@ -150,8 +155,9 @@ def parse_input_default_way(input: Union[str, List], all_cfg: dict, **opt):
                 suit = suits.get(suitname, None)
                 if suit:
                     if opt.get('verbose', None):
-                        print(f"loading suit={suitname} {pformat(suit)}", file=sys.stderr)
-                    for k2,v2 in suit.items():
+                        print(
+                            f"loading suit={suitname} {pformat(suit)}", file=sys.stderr)
+                    for k2, v2 in suit.items():
                         if known.get(k2, None) is None:
                             # suit never overwrites known
                             known[k2] = v2
@@ -163,7 +169,8 @@ def parse_input_default_way(input: Union[str, List], all_cfg: dict, **opt):
             key2 = aliases.get(key, None)
             if key2 is not None:
                 if opt.get('verbose', None):
-                    print(f'converted alias={key} to key={key2}', file=sys.stderr)
+                    print(
+                        f'converted alias={key} to key={key2}', file=sys.stderr)
                 known[key2] = value
                 continue
 
@@ -171,8 +178,10 @@ def parse_input_default_way(input: Union[str, List], all_cfg: dict, **opt):
                 known[key] = value
                 continue
             else:
-                raise RuntimeError(f'key={key} in pair="{pair}" is not allowed')
-        raise RuntimeError(f'bad format at pair="{pair}", expected key=value format')
+                raise RuntimeError(
+                    f'key={key} in pair="{pair}" is not allowed')
+        raise RuntimeError(
+            f'bad format at pair="{pair}", expected key=value format')
 
     if keys.get('YYYYMMDD', None):
         today = datetime.today().strftime('%Y%m%d')
@@ -181,25 +190,28 @@ def parse_input_default_way(input: Union[str, List], all_cfg: dict, **opt):
             # don't overwrite
             known.setdefault('YYYYMMDD', today)
 
-    for k,v in keys.items():
+    for k, v in keys.items():
         if known.get(k, None) is None:
             # don't overwrite
             known[k] = v
 
-    for k,v in keychains.items():
+    for k, v in keychains.items():
         if known.get(k, None) is None:
             # don't overwrite
             known[k] = known.get(v, None)
 
     for k in keys.keys():
         if known.get(k, None) is None:
-            raise RuntimeError(f'key={k} is still not defined after parsing input={pformat(input)}')
+            raise RuntimeError(
+                f'key={k} is still not defined after parsing input={pformat(input)}')
 
     return known
 
+
 my_cfg = None
 
-def set_all_cfg(given_cfg:Union[str, Dict], **opt):
+
+def set_all_cfg(given_cfg: Union[str, Dict], **opt):
     global my_cfg
     if type(given_cfg) == 'str':
         cfg_file = given_cfg
@@ -207,18 +219,21 @@ def set_all_cfg(given_cfg:Union[str, Dict], **opt):
     else:
         my_cfg = given_cfg
 
+
 def get_all_cfg(**opt):
     global my_cfg
     if my_cfg is None:
         raise RuntimeError(f'my_cfg is not defined yet')
     return my_cfg
 
-def parse_batch(given_cfg:Union[str, Dict], batch:Union[str, List], **opt):
+
+def parse_batch(given_cfg: Union[str, Dict], batch: Union[str, List], **opt):
     set_all_cfg(given_cfg, **opt)
     all_cfg = get_all_cfg(**opt)
 
     parsed_batch = []
-    if type(batch) == 'str':
+    print(f"parse_batch: type(batch)={type(batch)}")
+    if type(batch) == str:
         filename = batch
         with open(filename, 'r') as fh:
             for line in fh:
@@ -241,24 +256,29 @@ def parse_batch(given_cfg:Union[str, Dict], batch:Union[str, List], **opt):
 
     if not parsed_batch:
         raise RuntimeError(f'no input parsed from batch = {pformat(batch)}')
-    elif opt.get('verbose',0):
+    elif opt.get('verbose', 0):
         print(f'parsed_batch = {pformat(parsed_batch)}', file=sys.stderr)
 
     for input in parsed_batch:
         # just validate input syntax, trying to avoid aborting in the middle of a batch.
         # therefore, we don't keep the result
-        discarded = parse_input(input, all_cfg, verbose=opt.get('verbose', None))
+        discarded = parse_input(
+            input, all_cfg, verbose=opt.get('verbose', None))
 
     return parsed_batch
 
-def run_batch(given_cfg:Union[str, dict], batch:list, **opt):
+
+def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
     # command line args coming in through **opt
     verbose = opt.get('verbose', 0)
 
     if verbose:
-        print(f'opt = {pformat(opt)}', file=sys.stderr)
-        print(f'given_cfg = {pformat(given_cfg)}', file=sys.stderr)
-        print(f'batch = {pformat(batch)}', file=sys.stderr)
+        print(f'run_batch: opt = {pformat(opt)}', file=sys.stderr)
+        print()
+        print(f'run_batch: given_cfg = {pformat(given_cfg)}', file=sys.stderr)
+        print()
+        print(f'run_batch: batch = {pformat(batch)}', file=sys.stderr)
+        print()
 
     parsed_batch = parse_batch(given_cfg, batch, **opt)
 
@@ -267,7 +287,7 @@ def run_batch(given_cfg:Union[str, dict], batch:list, **opt):
 
     cfg_opt = all_cfg.get('opt', {})
 
-    opt2 = {**cfg_opt, **opt} # combine dicts/kwargs
+    opt2 = {**cfg_opt, **opt}  # combine dicts/kwargs
 
     init_resources(all_cfg, **opt2)
 
@@ -279,12 +299,14 @@ def run_batch(given_cfg:Union[str, dict], batch:list, **opt):
     for pc in pre_checks:
         check = pc['check']
         if not eval(check):
-            raise RuntimeError(f'pre_check="{check}" failed, suggestion="{pc.get("suggestion", None)}"')
+            raise RuntimeError(
+                f'pre_check="{check}" failed, suggestion="{pc.get("suggestion", None)}"')
         elif verbose:
             print(f'pre_check="{check}" passed')
 
     # verbose implies show_progress
-    show_progress = verbose or opt.get('show_progress', 0) or all_cfg.get('show_progress', 0)
+    show_progress = verbose or opt.get(
+        'show_progress', 0) or all_cfg.get('show_progress', 0)
 
     total = len(parsed_batch)
     i = 0
@@ -298,16 +320,18 @@ def run_batch(given_cfg:Union[str, dict], batch:list, **opt):
     for input in parsed_batch:
         i = i+1
         if show_progress:
-            print(f'{os.linesep}---- running with input {i} of {total} ----', file=sys.stderr)
+            print(
+                f'{os.linesep}---- running with input {i} of {total} ----', file=sys.stderr)
             print(f'input = {pformat(input)}', file=sys.stderr)
 
         known = parse_input(input, all_cfg, verbose=verbose)
 
         if verbose:
-            print(f'after parsed input, known = {pformat(known)}', file=sys.stderr)
+            print(
+                f'after parsed input, known = {pformat(known)}', file=sys.stderr)
 
         code_sub = None
-        if code := globals().get("code", None): # check function existence
+        if code := globals().get("code", None):  # check function existence
             code_sub = code
         else:
             module = all_cfg.get('module', None)
@@ -319,14 +343,16 @@ def run_batch(given_cfg:Union[str, dict], batch:list, **opt):
         if code_sub:
             code_sub(all_cfg, known, **opt2)
         else:
-            print(f'function code is not defined in cfg or driver module, therefore, not run', file=sys.stderr)
+            print(
+                f'function code is not defined in cfg or driver module, therefore, not run', file=sys.stderr)
 
         if show_progress:
             now = time.time()
             duration = now - last_time
             total_time = total_time + duration
             average = total_time / i
-            print(f'round {i} duration={int(duration)}, total={int(total_time)}, avg={int(average)}', file=sys.stderr)
+            print(
+                f'round {i} duration={int(duration)}, total={int(total_time)}, avg={int(average)}', file=sys.stderr)
 
     if show_progress or verbose:
         print(f'{os.linesep}---- batch ends ----', file=sys.stderr)
@@ -337,12 +363,13 @@ def run_batch(given_cfg:Union[str, dict], batch:list, **opt):
 
     return
 
+
 def init_resources(all_cfg: Dict, **opt):
     if all_cfg.get('resources', None) is None:
         return
     resources = all_cfg['resources']
 
-    for k,res in resources.items():
+    for k, res in resources.items():
         if res.get('enabled', 1) == 0:
             continue
         if res.get('init_resource', 1) == 0:
@@ -355,25 +382,24 @@ def init_resources(all_cfg: Dict, **opt):
             kwargs['driver_cfg'] = res['cfg']
 
             resources[k]['driver_call'] = {
-                "method" : res['method'],
-                "kwargs" : kwargs
+                "method": res['method'],
+                "kwargs": kwargs
             }
             continue
         if opt.get('dryrun', 0) == 1:
             continue
         resources[k]['driver'] = res['method'](**opt, driver_cfg=res['cfg'])
 
+
 def main():
     cfg_file = f'{os.path.join(os.environ.get("TPSUP"), "python3", "scripts", "tpslnm_test_cfg.py")}'
     our_cfg = parse_cfg(cfg_file)
 
     print(f"after exec, our_cfg = {pformat(our_cfg)}{os.linesep}")
-    #print(f"locals = {pformat(locals())}{os.linesep}")
-
+    # print(f"locals = {pformat(locals())}{os.linesep}")
 
     dict_cfg = parse_dict_cfg(our_cfg)
     print(f"dict_cfg = {pformat(dict_cfg)}{os.linesep}")
-
 
     input = "s=PERL lines='test line'"
     known = parse_input(input, dict_cfg)

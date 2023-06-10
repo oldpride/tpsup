@@ -1,0 +1,2 @@
+s=user    d=APP1_START
+s=autosys d=APP1_STOP
