@@ -155,6 +155,7 @@ example:
 }
 
 findpath () {
+   # making findpath as function instead of a script is to make it usable when NFS hang.
    local pattern path usage o case_insensitive OPTIND OPTARG
 
 usage="
@@ -219,6 +220,33 @@ example:
         
       fi
    done
+}
+
+listpath () {
+   local pattern path usage o case_insensitive OPTIND OPTARG
+
+usage="
+usage: 
+
+   findpath path
+
+   'path' can be any env var, default to PATH
+
+example:
+
+   listpath PATH
+   findpath LD_LIBRARY_PATH
+"
+
+   if [ $# -ne 1  ]; then
+      echo "ERROR: wrong number of args" >&2
+      echo "$usage" >&2
+      return 1
+   fi
+
+   path=$1
+
+   findpath all $path
 }
 
 get_native_path () {
