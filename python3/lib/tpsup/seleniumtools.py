@@ -173,9 +173,6 @@ class SeleniumEnv:
                     #   { get-content C:/users/william/selenium_chromedriver.log -wait -tail 1 }
                     pass
 
-        # chrome_options will be used on chrome browser's command line not chromedriver's commandline
-        self.browser_options = Options()
-
         # to get js console log
         # https://stackoverflow.com/questions/20907180
         self.desiredCapbilities = webdriver.DesiredCapabilities.CHROME.copy()
@@ -183,6 +180,15 @@ class SeleniumEnv:
 
         self.driver: webdriver.Chrome = None
         if host_port != "auto":
+            # chrome_options will be used on chrome browser's command line not chromedriver's commandline
+            self.browser_options = Options()
+
+            # https://stackoverflow.com/questions/65080685
+            # disables USB: usb_device_handle_win.cc:
+            #     1048 Failed to read descriptor from node connection
+            self.browser_options.add_experimental_option(
+                'excludeSwitches', ['enable-logging'])
+
             # try to connect the browser in case already exists.
             # by setting this, we tell chromedriver not to start a browser
             self.browser_options.debugger_address = f"{host_port}"
@@ -215,9 +221,14 @@ class SeleniumEnv:
         if self.driver:
             return
 
+        self.browser_options = Options()  # reset the browser options
+
         # by doing one of the following, we tell chromedriver to start a browser
         # self.browser_options.debugger_address = None
-        self.browser_options = Options()  # reset the browser options
+
+        # https://stackoverflow.com/questions/65080685
+        self.browser_options.add_experimental_option(
+            'excludeSwitches', ['enable-logging'])
 
         if host_port == "auto":
             sys.stderr.write(
@@ -228,7 +239,6 @@ class SeleniumEnv:
             if self.headless:
                 self.browser_options.add_argument("--headless")
                 sys.stderr.write(" in headless mode\n")
-
         else:
             host, port = host_port.split(":", 1)
             self.browser_options.add_argument(
@@ -862,47 +872,81 @@ def run_actions(driver: webdriver.Chrome, actions: List, **opt):
     element: WebElement = None
 
     for row in actions:
+        sys.stdout.flush()
+
         #   locator                             input         comment
         # [ 'xpath=//botton[@id="Submit"',     'click',       'Submit' ]
-        locator, input, comment, *junk = row + [None] * 3
+        locator, input, comment, *rest = row + [None] * 3
 
         if comment is not None:
             print(f"{comment}")
 
-        if locator is not None:
-            element = locate(driver, locator, **opt)
-            # we will pass back element for caller's convenience. In theory, the caller could also
-            # use the following to get it.
-            #      element = driver.switch_to.active_element
-            # but if we didn't do
-            #      element.click()
-            # then it may not be active element. In this case, caller can use below to get the element.
-            globals()['element'] = element
-            # we don't need to do the same for driver. As Python function uses pass-by-reference,therefore
-            # driver stays the same.
-            # globals()['driver'] = driver
+        assure = None
+        assure_max_retry = 2
+        if rest[0]:
+            assure = rest[0].get("assure", None)
+            assure_max_retry = assure.get("assure_max_retry", assure_max_retry)
+
+        times = 1
+        while times <= assure_max_retry:
+            if locator is not None:
+                element = locate(driver, locator, **opt)
+                # we will pass back element for caller's convenience. In theory, the caller could also
+                # use the following to get it.
+                #      element = driver.switch_to.active_element
+                # but if we didn't do
+                #      element.click()
+                # then it may not be active element. In this case, caller can use below to get the element.
+                globals()['element'] = element
+                # we don't need to do the same for driver. As Python function uses pass-by-reference,therefore
+                # driver stays the same.
+                # globals()['driver'] = driver
+
+                if print_console_log:
+                    print_js_console_log(driver)
+
+            if debug:
+                js_print_debug(driver, element)
+
+            if we_return:
+                # we return globals() here because exec()'s effect are only in globals().
+                # globals() are only from to this module file, not the caller's globals().
+                return globals()
+
+            send_input(driver, element, input, **opt)
 
             if print_console_log:
                 print_js_console_log(driver)
 
-        if debug:
-            js_print_debug(driver, element)
+            if we_return:
+                return globals()
 
-        if we_return:
-            # we return globals() here because exec()'s effect are only in globals().
-            # globals() are only from to this module file, not the caller's globals().
-            return globals()
+            if assure:
+                # save current element, as it may be changed by 'assure'
+                current_element = element
+                assure_locator = assure.get("locator", None)
 
-        send_input(driver, element, input, **opt)
+                assure_element = None
+                try:
+                    assure_element = locate(driver, assure_locator, **opt)
+                except Exception as ex:
+                    assure_element = None
 
-        if print_console_log:
-            print_js_console_log(driver)
+                if assure_element:
+                    print(f"assure {assure_locator} found. times={times}")
+                    break
+                else:
+                    print(f"assure {assure_locator} not found. times={times}")
+                    if times >= assure_max_retry:
+                        if assure.get("fatal", 0):
+                            raise RuntimeError(
+                                f"assure {assure_locator} not found. reach max times={times}")
+                # restore current element
+                element = current_element
+            else:
+                break
 
-        if we_return:
-            return globals()
-
-        print("")
-
+            times += 1
     return globals()
 
 

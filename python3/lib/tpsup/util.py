@@ -64,7 +64,8 @@ def print_exception(e: Exception, stacktrace=True, **opt):
         print(traceback.format_exc(), file=file)
     else:
         # print("{0}: {1!r}".format(type(e).__name__, e.args), file=file, **opt)
-        print("{0}: {1}".format(type(e).__name__, ";".join(e.args)), file=file, **opt)
+        print("{0}: {1}".format(type(e).__name__,
+              ";".join(e.args)), file=file, **opt)
 
     if sio:
         string = sio.getvalue()
@@ -109,7 +110,8 @@ def convert_to_uppercase(h, **opt):
 
 step_count = 0
 
-def hit_enter_to_continue(initial_steps=0, helper:dict={}):
+
+def hit_enter_to_continue(initial_steps=0, helper: dict = {}, verbose=0):
     # helper example, see seleniumtools.py
     # helper = {
     #     'd' : ["dump page", dump, {'driver':driver, 'outputdir_dir' : tmpdir} ],
@@ -120,9 +122,11 @@ def hit_enter_to_continue(initial_steps=0, helper:dict={}):
 
     if step_count > 0:
         step_count -= 1
+        if verbose:
+            print(f"step_count left={step_count}")
     else:
         hint = f"Hit Enter to continue; a number to skip steps; q to quit"
-        for k,v in helper.items():
+        for k, v in helper.items():
             hint += f"; {k} to {v[0]}"
         hint += " : "
 
@@ -133,8 +137,8 @@ def hit_enter_to_continue(initial_steps=0, helper:dict={}):
             step_count = int(step_count_str)
         elif m := re.match("([qQ])", answer):
             print("quit")
-            quit(0) # same as exit
-        elif helper: # test dict empty
+            quit(0)  # same as exit
+        elif helper:  # test dict empty
             matched_helper = False
             for k, v in helper.items():
                 if m := re.match(k, answer):
@@ -146,6 +150,7 @@ def hit_enter_to_continue(initial_steps=0, helper:dict={}):
             if matched_helper:
                 # call recursively to get to the hint line
                 hit_enter_to_continue(initial_steps, helper)
+
 
 compiled_scalar_var_pattern = re.compile(r"{{([0-9a-zA-Z._-]+)}}")
 

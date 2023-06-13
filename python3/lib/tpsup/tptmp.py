@@ -5,9 +5,10 @@ import time
 import tpsup.env
 from time import strftime, localtime
 
+
 class tptmp:
     def __init__(self, retention_day: int = 7, retention_sec: int = None, base: str = None,
-                 suffix:str = '', verbose: int = 0):
+                 suffix: str = '', verbose: int = 0):
         """
         we don't but **kwargs because we want to catch wrong params, in particular, retention_day and retention_sec
         :param retention_day:
@@ -42,7 +43,7 @@ class tptmp:
                 self.clean_old_tmpdir()
         return self.dailydir
 
-    def get_nowdir(self, suffix:str = '', **opt):
+    def get_nowdir(self, suffix: str = '', **opt):
         dailydir = self.get_dailydir()
         HHMMSS = strftime("%H%M%S", localtime())
 
@@ -58,7 +59,7 @@ class tptmp:
             os.makedirs(nowdir, exist_ok=True)
         return nowdir
 
-    def clean_old_tmpdir(self, retention_day: int = None, retention_sec: int = None, dryrun: bool=False, verbose: int = 0):
+    def clean_old_tmpdir(self, retention_day: int = None, retention_sec: int = None, dryrun: bool = False, verbose: int = 0):
         if retention_sec is None:
             if retention_day is None:
                 retention_sec = self.retention_sec
@@ -80,6 +81,7 @@ class tptmp:
                     print(f"removing {fullname}")
                     # shutil.rmtree(fullname)
 
+
 def main():
     mytmp = tptmp()
     print(f"nowdir={mytmp.get_nowdir(suffix='test')}")
@@ -89,6 +91,7 @@ def main():
     mytmp.clean_old_tmpdir(retention_sec=1, dryrun=True, verbose=1)
 
     tpsup.env.Env().ls(mytmp.get_dailydir())
+
 
 if __name__ == '__main__':
     main()

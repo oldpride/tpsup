@@ -28,15 +28,16 @@ our_cfg = {
     ],
 
     'usage_example': '''
-    - run everything locally and let chromedriver to start the browser and pick the port
+    - this test script doesn't run selenium at all. it just shows how to use cfg.
     {{prog}} auto s=user
+    {{prog}} auto any
     {{prog}} auto -b tpbatch_test_batch.txt
     ''',
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
     # this way so that user can use case-insensitive keys on command line
     'keys': {
-        'MYNAME': 'John Smith',
+        'MYNAME': tpsup.env.get_user_firstlast(),
         'CATEGORY': 'Technology Processing',
         'SUBCATEGORY': 'User Complaint',
         'SERVICE': 'Trade Plant',
@@ -86,6 +87,7 @@ our_cfg = {
     },
 
     'keychains': {
+        # keychains are used to generate a key from other keys. won't cause dead loop.
         'DETAIL': 'SHORT',
         'SHORT': 'DETAIL',
         'ASSIGNTO': 'MYNAME',  # default to self-assigned
