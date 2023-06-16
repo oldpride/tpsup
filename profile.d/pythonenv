@@ -126,16 +126,14 @@ svenv () {
    # add path to Chrome.exe and chromedriver.exe
    export PATH="$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/Chrome/Application:$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/chromedriver:$PATH"
 
+   # unset OLD_VIRTUAL_PATH  # see notes/vscode.txt
+
    if [[ $UNAME =~ CYGWIN ]]; then
       # this is cygwin. the activate bash script needs removing ^M, ie, dos2unix. ^M doesn't affect gitbash
       . "$SITEVENV/Scripts/activate"
-   elif [[ $UNAME =~  MINGW64_NT ]]; then
-      # this is gitbash
+   elif [[ $UNAME =~  Msys ]]; then
+      # this is gitbash or vscode bash
       # MINGW64_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
-      # echo "gitbash"
-      . "$SITEVENV/Scripts/activate"
-   elif [[ $UNAME =~ MSYS_NT ]]; then
-      # this is vscode bash
       # MSYS_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
       . "$SITEVENV/Scripts/activate"
    elif [[ $UNAME =~ Linux ]]; then

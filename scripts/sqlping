@@ -71,7 +71,7 @@ fi
 for nickname in $pinglist
 do 
    if [ "X$match" != "X" ]; then
-      if ! [[ ${nickname,,} =~ ${match,,} ]]; then
+      if ! [[ ${nickname,,} =~ ${match,,} ]]; then  # coma,coma to convert to lower case
          continue 
       fi
    fi

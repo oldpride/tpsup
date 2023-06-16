@@ -1,0 +1,46 @@
+local usage prog f list
+prog=${FUNCNAME[1]}
+usage="
+usage:
+
+   $prog all
+   $prog function
+
+example:
+
+   $prog convertpath
+   type  convertpath  # check
+"
+
+if [ $# -ne 1 ]; then
+   echo "$usage" >&2
+   return
+fi
+
+list="$1"
+
+cd "$TPSUP"/profile.d/
+
+if [ "$list" = "all" ]; then
+   list=`/bin/ls *`
+fi
+
+for f in `echo $list`
+do
+   if [[ $f =~ [.~] ]]; then   # regex
+      # skip .sav, .deco, .yyyymmdd
+      continue
+   fi
+
+   if ! [ -f $f ]; then
+      echo "$TPSUP/profile.d/$f: not found" >&2
+   else
+      echo "loading $f" >&2
+      eval "function $f {
+         `cat $TPSUP/profile.d/$f`
+
+      }"
+   fi
+done
+cd - >/dev/null;
+

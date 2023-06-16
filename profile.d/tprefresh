@@ -49,8 +49,10 @@ if [ $check_only = N ]; then
    export SS=`echo $HHMMSS|cut -c5-6`
 fi
 
-   cat >&2 <<EOF
+#cat >&2 <<EOF
+#EOF
 
+echo "
                 today:  yyyymmdd  yyyy  mm  dd = $yyyymmdd $yyyy $mm $dd
    tradeday yesterday: pyyyymmdd pyyyy pmm pdd = $pyyyymmdd $pyyyy $pmm $pdd
    tradeday  tomorrow: tyyyymmdd tyyyy tmm tdd = $tyyyymmdd $tyyyy $tmm $tdd
@@ -59,7 +61,8 @@ fi
 
    HHMMSS HH MM SS = $HHMMSS $HH $MM $SS
    hhmmss          = $hhmmss
+"
 
 
-EOF
+
 

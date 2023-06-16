@@ -750,14 +750,14 @@ tp        () { cd "$TPSUP/scripts"; }
 tpcmd     () { cd "$TPSUP/cmd_exe"; }
 tpps1     () { cd "$TPSUP/ps1"; }
 tplib     () { cd "$TPSUP/lib/perl/TPSUP"; }
-tpp3      () { cd "$TPSUP/python3/scripts"; }
+tpp3      () { cd "$TPSUP/python3"; }
 tpp3lib   () { cd "$TPSUP/python3/lib/tpsup"; }
 
 site        () { cd "$SITESPEC/scripts"; }
 sitecmd     () { cd "$SITESPEC/cmd_exe"; }
 siteps1     () { cd "$SITESPEC/ps1"; }
 sitelib     () { cd "$SITESPEC/lib/perl/${SPECNAME^^}"; } # ${x,,} lower case, ${x^^} upper case
-sitep3      () { cd "$SITESPEC/python3/scripts"; }
+sitep3      () { cd "$SITESPEC/python3"; }
 sitep3lib   () { cd "$SITESPEC/python3/lib/tpsup"; }
 
 if [ "X$MYBASE" = "X" ]; then
@@ -775,20 +775,20 @@ mytp        () { cd "$MYBASE/github/tpsup/scripts"; }
 mytpcmd     () { cd "$MYBASE/github/tpsup/cmd_exe"; }
 mytpps1     () { cd "$MYBASE/github/tpsup/ps1"; }
 mytplib     () { cd "$MYBASE/github/tpsup/lib/perl/TPSUP"; }
-mytpp3      () { cd "$MYBASE/github/tpsup/python3/scripts"; }
+mytpp3      () { cd "$MYBASE/github/tpsup/python3"; }
 mytpp3lib   () { cd "$MYBASE/github/tpsup/python3/lib/tpsup"; }
 
 mycmd     () { cd "$MYBASE/github/tpsup/cmd_exe"; }
 myps1     () { cd "$MYBASE/github/tpsup/ps1"; }
 mylib     () { cd "$MYBASE/github/tpsup/lib/perl/TPSUP"; }
-myp3      () { cd "$MYBASE/github/tpsup/python3/scripts"; }
+myp3      () { cd "$MYBASE/github/tpsup/python3"; }
 myp3lib   () { cd "$MYBASE/github/tpsup/python3/lib/tpsup"; }
 
 mysite        () { cd "$MYBASE/github/$SPECNAME/scripts"; }
 mysitecmd     () { cd "$MYBASE/github/$SPECNAME/cmd_exe"; }
 mysiteps1     () { cd "$MYBASE/github/$SPECNAME/ps1"; }
 mysitelib     () { cd "$MYBASE/github/$SPECNAME/lib/perl/${SPECNAME^^}"; } # ${x,,} lc, ${x^^} uc
-mysitep3      () { cd "$MYBASE/github/$SPECNAME/python3/scripts"; }
+mysitep3      () { cd "$MYBASE/github/$SPECNAME/python3"; }
 mysitep3lib   () { cd "$MYBASE/github/$SPECNAME/python3/lib/tpsup"; }
 
 myandroid () { echo "ANDROID_HOME=$ANDROID_HOME"; [ "X$ANDROID_HOME" = "X" ] || cd "$ANDROID_HOME"; }
