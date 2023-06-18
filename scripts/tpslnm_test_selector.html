@@ -4,8 +4,6 @@
 
 <head>
     <title>Static Selenium test page </title>
-    <link rel="stylesheet" href="tpslnm_test_input.css">
-    <!-- link to an external css file is better than in file and better than in-line -->
 </head>
 
 <body>
@@ -106,9 +104,8 @@
         </fieldset>
     </form>
 
-    <form method="POST" enctype="multipart/form-data">
+    <form action="tpslnm_test_input_result.html" method="POST">
         <!-- file needs method POST -->
-        <!-- https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file -->
         <fieldset>
             <legend>Upload files</legend>
 
@@ -117,7 +114,7 @@
                 <input type="file" id="Resume" name="Resume" />
             </div>
             <div>
-                <button>Upload</button>
+                <button>Submit</button>
             </div>
         </fieldset>
     </form>

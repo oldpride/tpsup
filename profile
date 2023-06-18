@@ -608,6 +608,13 @@ example:
    fi
 }
 
+myappdata () {
+   local p
+   p="C:\\Users\\$USERNAME\\AppData\\Roaming"
+   p=`convertpath "$p"`
+   cd "$p"
+}
+
 wintmp () {
    # go to user tmp dir
    if [[ $UNAME =~ Msys ]]; then

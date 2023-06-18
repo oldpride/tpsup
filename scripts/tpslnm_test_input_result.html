@@ -18,16 +18,24 @@
 
             var queryStr = window.location.search;
 
-            var paramPairs = queryStr.substr(1).split('&');
+            console.log("window=", window);
+            console.log("window.location=", window.location);
+            console.log("queryStr=", queryStr);
 
-            var params = {};
-            for (var i = 0; i < paramPairs.length; i++) {
-                var parts = paramPairs[i].split('=');
-                params[parts[0]] = parts[1];
-            }
+            if (queryStr) {
+               var paramPairs = queryStr.substr(1).split('&');
 
-            for (const key in params) {
-                document.body.innerHTML += `<p>${key}=${params[key]}`
+               var params = {};
+               for (var i = 0; i < paramPairs.length; i++) {
+                   var parts = paramPairs[i].split('=');
+                   params[parts[0]] = parts[1];
+               }
+
+               for (const key in params) {
+                  document.body.innerHTML += `<p>${key}=${params[key]}`
+               }
+            } else {
+               document.body.innerHTML += `<p>queryStr is empty`
             }
         }
         window.onload = load;

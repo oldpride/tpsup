@@ -119,7 +119,7 @@ if [ $target_type = unknown ]; then
       target_type=cygwin
    elif [[ $UNAME =~ Msys ]]; then
       target_type=gitbash
-   else:
+   else
       echo "cannot figure our target type from UNAME='$UNAME'." >&2
       echo "$usage" >&2
       return
@@ -154,9 +154,9 @@ elif [ $source_type = gitbash ]; then
    fi
 else #[ $source_type = batch ]
    if [ $target_type = cygwin ]; then
-      new_string=`echo "$old_string" | sed -e "s%^\\([a-z]\\):/%/cygdrive/\\1/%i; s%${old_delimiter}\\([a-z]\\):/%${new_delimiter}/cygdrive/\\1/%ig"`
+      new_string=`echo "$old_string" | sed -e "s%^\\([a-z]\\):[\\/]%/cygdrive/\\1/%i; s%${old_delimiter}\\([a-z]\\):[\\/]%${new_delimiter}/cygdrive/\\1/%ig; s:[\\]:/:g"`
    elif [ $target_type = gitbash ]; then
-      new_string=`$echo "$old_string" | sed -e "s%^\\([a-z]\\)/%\\1:%ig; s%${old_delimiter}/\\([a-z]\\)/%${new_delimiter}\\1:%ig"`
+      new_string=`echo "$old_string" | sed -e "s%^\\([a-z]\\):[\\/]%/\\1/%ig;          s%${old_delimiter}\\([a-z]\\):[\\/]%${new_delimiter}/\\1/%ig;         s:[\\]:/:g"`
    else
       new_string="$old_string" 
    fi
