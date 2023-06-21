@@ -27,7 +27,7 @@ our_cfg = {
             'action': 'store_true', 'help': 'run in headless mode'},
         {'dest': 'record_file', 'default': None,
             'action': 'store', 'help': 'record test'},
-        {'dest': 'record_keys', 'default': None,
+        {'dest': 'record', 'default': None,
             'action': 'store', 'help': 'record keys'},
     ],
 
@@ -38,7 +38,7 @@ our_cfg = {
     {{prog}} auto -b tpbatch_test_batch.txt
 
     - test record log
-    {{prog}} auto -record /tmp/record.log -record_keys detail -b tpbatch_test_batch.txt
+    {{prog}} auto -record detail -b tpbatch_test_batch.txt
     ''',
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase

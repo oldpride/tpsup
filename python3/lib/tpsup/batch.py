@@ -12,7 +12,8 @@ import time
 # from tpsup.modtools import run_module, load_module
 from pprint import pformat, pprint
 import importlib
-from tpsup. util import convert_to_uppercase
+from tpsup.util import convert_to_uppercase
+import tpsup.tptmp
 from datetime import datetime
 from shlex import split
 from typing import Union, List, Dict
@@ -289,13 +290,24 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     opt2 = {**cfg_opt, **opt}  # combine dicts/kwargs
 
-    record_file = opt2.get('record_file', None)
     record = opt2.get('record', None)
     record_keys = []
     seen_record = set()
     record_ofh = None
-    if record_file and record_keys:
-        record_keys_list = record_keys.split(',')
+    if record:
+        record_keys = record.split(',')
+        record_file = opt2.get('record_file', None)
+        if record_file is None:
+            # both always return tpbatch.py
+            #   script_name = os.path.basename(sys.argv[0])
+            #   script_name = os.path.basename(
+            #     inspect.getframeinfo(sys._getframe(1)).filename)
+            # I'd like to use the cfg file name, which is passed from tpbatch.py
+            script_name = os.path.basename(opt2.get('cfg_file', 'unknown.txt'))
+
+            dailydir = tpsup.tptmp.tptmp().get_dailydir()
+            record_file = f'{dailydir}/{script_name.replace(".py", ".txt")}'
+        print("record_file = ", record_file, file=sys.stderr)
         # check whether record_file exists
         if os.path.exists(record_file):
             with open(record_file, 'r') as ifh:
@@ -350,8 +362,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             print(
                 f'after parsed input, known = {pformat(known)}', file=sys.stderr)
 
-        if record_ofh:
-            record_string = resolve_record_keys(record_keys_list, known)
+        if record:
+            record_string = resolve_record_keys(record_keys, known)
             if record_string in seen_record:
                 print(
                     f'already seen record, skipping: {record_string}', file=sys.stderr)

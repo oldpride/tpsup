@@ -2,7 +2,7 @@
 import argparse
 import os
 
-from tpsup.batch import  parse_cfg, run_batch
+from tpsup.batch import parse_cfg, run_batch
 from tpsup.exectools import exec_into_globals
 from pprint import pformat
 from tpsup.util import resolve_scalar_var_in_string
@@ -11,17 +11,19 @@ import sys
 
 prog = os.path.basename(sys.argv[0])
 
-args = sys.argv[1:] # shift
+args = sys.argv[1:]  # shift
 
 usage_str = ''
 
 
 prog = os.path.basename(__file__)
 
+
 def exec_simple(source):
     return exec_into_globals(source, globals(), locals())
 
-def usage(message:str=None, **opt):
+
+def usage(message: str = None, **opt):
     if message is not None:
         print(message)
 
@@ -49,7 +51,8 @@ def usage(message:str=None, **opt):
         detail = resolve_scalar_var_in_string(detail, {'prog': usage_caller})
 
     if example:
-        example = resolve_scalar_var_in_string(example, {'prog': example_caller})
+        example = resolve_scalar_var_in_string(
+            example, {'prog': example_caller})
     else:
         example = f'''
     on linux:
@@ -111,30 +114,32 @@ example:
 ''', file=sys.stderr)
     exit(1)
 
+
 if len(args) == 0:
     usage("missing args", caller=f'{prog} config.py')
 
 verbose = 0
 
 if args[0] == '-v':
-    verbose = verbose +1
-    args = args[1:] # shift away -v
+    verbose = verbose + 1
+    args = args[1:]  # shift away -v
     if len(args) == 0:
         usage("missing args", caller=f'{prog} config.py')
 
 all_cfg = parse_cfg(args[0])
+all_cfg['cfg_file'] = args[0]
 if verbose:
     print(f'all_cfg = {pformat(all_cfg)}')
 
-args = args[1:] # shift away config.py
+args = args[1:]  # shift away config.py
 
 parsers = []
 
 for i in range(2):
     parsers.append(argparse.ArgumentParser(
         prog=sys.argv[0],
-        #epilog=examples,
-        #description=get_usage_str(usage_caller=f'{prog} config.py', detail=''),
+        # epilog=examples,
+        # description=get_usage_str(usage_caller=f'{prog} config.py', detail=''),
         # formatter_class=argparse.RawTextHelpFormatter, # this honors \n but messed up indents
         formatter_class=argparse.RawDescriptionHelpFormatter
     ))
@@ -199,8 +204,10 @@ extra_args = all_cfg.get('extra_args', [])
 
 for argument_dict in extra_args:
     # convert dict to **kwargs
-    parser1 = parsers[0].add_argument(f'-{argument_dict["dest"]}', **argument_dict)
-    parser2 = parsers[1].add_argument(f'-{argument_dict["dest"]}', **argument_dict)
+    parser1 = parsers[0].add_argument(
+        f'-{argument_dict["dest"]}', **argument_dict)
+    parser2 = parsers[1].add_argument(
+        f'-{argument_dict["dest"]}', **argument_dict)
     parser2.default = argparse.SUPPRESS
 
 for i in range(2):
@@ -227,11 +234,12 @@ for i in range(2):
 #       user not set. this prevents the overwrite.
 
 saved = {}
-saved['verbose'] = verbose # verbose is additive, therefore, we need to keep track of it
+# verbose is additive, therefore, we need to keep track of it
+saved['verbose'] = verbose
 
 remainingArgs = []
 a = {}
-round=1
+round = 1
 while args:
     parser = None
     if round == 1:
@@ -247,14 +255,15 @@ while args:
     a.update(adict)
     if 'verbose' in adict:
         if verbose:
-            print(f"saved['verbose'] = {saved['verbose']},  adict['verbose']={adict['verbose']}")
+            print(
+                f"saved['verbose'] = {saved['verbose']},  adict['verbose']={adict['verbose']}")
         saved['verbose'] += adict['verbose']
     a.update(saved)
     if remainings:
         remainingArgs.append(remainings[0])
         args = remainings[1:]
     else:
-        args = remainings # this is empty
+        args = remainings  # this is empty
 
 verbose = saved['verbose']
 if verbose:
@@ -267,10 +276,10 @@ opt = {}
 caller = a['caller']
 if (len(position_args) > len(remainingArgs)):
     usage(f'missing positional args, expecting {len(position_args)}, '
-        f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
+          f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
 for pa in position_args:
     opt[pa] = remainingArgs[0]
-    remainingArgs = remainingArgs[1:] # shift
+    remainingArgs = remainingArgs[1:]  # shift
 
 # the goal is to print usage when user provides no args.
 # if we have required position args, we don't require remaining args.
@@ -283,9 +292,9 @@ else:
 batch = a['batch']
 if len(remainingArgs) < minimal_args and batch is None:
     usage(f'missing args, expecting {minimal_args}, '
-        f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
+          f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
 
-a.pop('batch') # remove batch from a
+a.pop('batch')  # remove batch from a
 opt.update(a)
 
 if verbose:
