@@ -101,7 +101,12 @@ our_cfg = {
         'CI': 'SERVICE',
     },
 
-    'show_progress': 1,
+    'show_progress': 1,  # this is permanent switch used by run_batch()
+
+    'opt': {
+        # "opt" are optional switches, to be passed into run_batch() and init_resource()
+        'record': 'detail',
+    }
 }
 
 

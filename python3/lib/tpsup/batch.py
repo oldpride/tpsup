@@ -285,10 +285,19 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     set_all_cfg(given_cfg, **opt)
     all_cfg = get_all_cfg(**opt)
+    if verbose:
+        print(f'run_batch: all_cfg = {pformat(all_cfg)}', file=sys.stderr)
+        print(file=sys.stderr)
 
     cfg_opt = all_cfg.get('opt', {})
+    if verbose:
+        print(f'run_batch: cfg_opt = {pformat(cfg_opt)}', file=sys.stderr)
+        print(file=sys.stderr)
 
     opt2 = {**cfg_opt, **opt}  # combine dicts/kwargs
+    if verbose:
+        print(f'run_batch: opt2 = {pformat(opt2)}', file=sys.stderr)
+        print(file=sys.stderr)
 
     record = opt2.get('record', None)
     record_keys = []
@@ -303,7 +312,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             #   script_name = os.path.basename(
             #     inspect.getframeinfo(sys._getframe(1)).filename)
             # I'd like to use the cfg file name, which is passed from tpbatch.py
-            script_name = os.path.basename(opt2.get('cfg_file', 'unknown.txt'))
+            script_name = os.path.basename(
+                all_cfg.get('cfg_file', 'unknown.txt'))
 
             dailydir = tpsup.tptmp.tptmp().get_dailydir()
             record_file = f'{dailydir}/{script_name.replace(".py", ".txt")}'
