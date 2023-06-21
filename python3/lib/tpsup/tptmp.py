@@ -96,16 +96,17 @@ def main():
     time.sleep(1)
 
     print("")
-    print(f"ls {mytmp.get_dailydir()}")
-    tpsup.env.Env().ls(mytmp.get_dailydir())
+    print(f"ls {mytmp.base}")
+    tpsup.env.Env().ls(mytmp.base)
 
     mytmp.clean_old_tmpdir(retention_sec=1,
                            #    dryrun=True,
                            verbose=1)
 
+    time.sleep(2)
     print("")
-    print(f"ls {mytmp.get_dailydir()}")
-    tpsup.env.Env().ls(mytmp.get_dailydir())
+    print(f"ls {mytmp.base}")
+    tpsup.env.Env().ls(mytmp.base)
 
 
 if __name__ == '__main__':
