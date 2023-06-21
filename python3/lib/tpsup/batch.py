@@ -289,6 +289,26 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     opt2 = {**cfg_opt, **opt}  # combine dicts/kwargs
 
+    record_file = opt2.get('record_file', None)
+    record = opt2.get('record', None)
+    record_keys = []
+    seen_record = set()
+    record_ofh = None
+    if record_file and record_keys:
+        record_keys_list = record_keys.split(',')
+        # check whether record_file exists
+        if os.path.exists(record_file):
+            with open(record_file, 'r') as ifh:
+                whole_file = ifh.read()
+                record_lines = whole_file.split('\n')
+                for line in record_lines:
+                    seen_record.add(line)
+        record_ofh = open(record_file, 'a')
+    elif record_file:
+        raise RuntimeError(f'record_file is defined but record_keys is not')
+    elif record_keys:
+        raise RuntimeError(f'record_keys is defined but record_file is not')
+
     init_resources(all_cfg, **opt2)
 
     if opt.get('verbose', 0) > 1:
@@ -330,6 +350,16 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             print(
                 f'after parsed input, known = {pformat(known)}', file=sys.stderr)
 
+        if record_ofh:
+            record_string = resolve_record_keys(record_keys_list, known)
+            if record_string in seen_record:
+                print(
+                    f'already seen record, skipping: {record_string}', file=sys.stderr)
+                continue
+            else:
+                seen_record.add(record_string)
+                record_ofh.write(record_string + '\n')
+
         code_sub = None
         if code := globals().get("code", None):  # check function existence
             code_sub = code
@@ -354,6 +384,9 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             print(
                 f'round {i} duration={int(duration)}, total={int(total_time)}, avg={int(average)}', file=sys.stderr)
 
+    if record_ofh:
+        record_ofh.close()
+
     if show_progress or verbose:
         print(f'{os.linesep}---- batch ends ----', file=sys.stderr)
 
@@ -362,6 +395,12 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             post_batch(all_cfg, known, **opt2)
 
     return
+
+
+def resolve_record_keys(keys, known):
+    values = [known.get(k.upper(), '') for k in keys]  # upper case keys
+    record_string = ','.join(values)
+    return record_string
 
 
 def init_resources(all_cfg: Dict, **opt):

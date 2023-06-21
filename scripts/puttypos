@@ -96,7 +96,7 @@ else
    fi
 fi
 
-offset=`expr 30 \* $pos`
+offset=`expr 35 \* $pos`
 
 # https://superuser.com/questions/1162451
 printf '\033[3;'"$offset;$offset"'t'
