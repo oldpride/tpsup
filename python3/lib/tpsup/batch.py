@@ -316,10 +316,6 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                 for line in record_lines:
                     seen_record.add(line)
         record_ofh = open(record_file, 'a')
-    elif record_file:
-        raise RuntimeError(f'record_file is defined but record_keys is not')
-    elif record_keys:
-        raise RuntimeError(f'record_keys is defined but record_file is not')
 
     init_resources(all_cfg, **opt2)
 
