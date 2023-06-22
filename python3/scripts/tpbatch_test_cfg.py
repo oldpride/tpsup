@@ -105,6 +105,7 @@ our_cfg = {
 
     'opt': {
         # "opt" are optional switches, to be passed into run_batch() and init_resource()
+        # command line switch with override opt switch, e.g, this 'record'.
         'record': 'detail',
     }
 }

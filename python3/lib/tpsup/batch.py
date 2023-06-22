@@ -275,11 +275,11 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     if verbose:
         print(f'run_batch: opt = {pformat(opt)}', file=sys.stderr)
-        print()
+        print(file=sys.stderr)
         print(f'run_batch: given_cfg = {pformat(given_cfg)}', file=sys.stderr)
-        print()
+        print(file=sys.stderr)
         print(f'run_batch: batch = {pformat(batch)}', file=sys.stderr)
-        print()
+        print(file=sys.stderr)
 
     parsed_batch = parse_batch(given_cfg, batch, **opt)
 
