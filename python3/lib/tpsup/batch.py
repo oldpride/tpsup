@@ -299,6 +299,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
         print(f'run_batch: opt2 = {pformat(opt2)}', file=sys.stderr)
         print(file=sys.stderr)
 
+    # record = all_cfg.get('record', None)
+    # we retrieve record from opt2, because it may be overwritten by command line
     record = opt2.get('record', None)
     record_keys = []
     seen_record = set()
@@ -324,7 +326,13 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                 whole_file = ifh.read()
                 record_lines = whole_file.split('\n')
                 for line in record_lines:
-                    seen_record.add(line)
+                    # split line at the first comma
+                    # use optional args to avoid ValueError:
+                    #      not enough values to unpack (expected at least 2, got 1)
+                    timestamp, record_string, *_ = line.split(',', 1) + [None]
+                    if record_string is None:
+                        continue
+                    seen_record.add(record_string)
         record_ofh = open(record_file, 'a')
 
     init_resources(all_cfg, **opt2)
@@ -376,7 +384,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                 continue
             else:
                 seen_record.add(record_string)
-                record_ofh.write(record_string + '\n')
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                record_ofh.write(f"{timestamp},{record_string}\n")
 
         code_sub = None
         if code := globals().get("code", None):  # check function existence

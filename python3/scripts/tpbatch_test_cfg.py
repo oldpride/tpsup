@@ -25,10 +25,6 @@ our_cfg = {
     'extra_args': [
         {'dest': 'headless', 'default': False,
             'action': 'store_true', 'help': 'run in headless mode'},
-        {'dest': 'record_file', 'default': None,
-            'action': 'store', 'help': 'record test'},
-        {'dest': 'record', 'default': None,
-            'action': 'store', 'help': 'record keys'},
     ],
 
     'usage_example': '''
@@ -37,8 +33,8 @@ our_cfg = {
     {{prog}} auto any
     {{prog}} auto -b tpbatch_test_batch.txt
 
-    - test record log
-    {{prog}} auto -record detail -b tpbatch_test_batch.txt
+    - run again to test record log
+    {{prog}} auto -b tpbatch_test_batch.txt
     ''',
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
@@ -101,17 +97,22 @@ our_cfg = {
         'CI': 'SERVICE',
     },
 
-    'show_progress': 1,  # this is permanent switch used by run_batch()
+    'show_progress': 1,
 
+
+    # settings outside 'opt' are normally used by batch.py's general logic, eg, run_batch().
+    # settings inside 'opt' are normally used by *_cfg.py's code() function; so are command line args.
     'opt': {
-        # "opt" are optional switches, to be passed into run_batch() and init_resource()
-        # command line switch with override opt switch, e.g, this 'record'.
+        # "opt" are optional switches, to be passed into *_cfg.py's code() function's **opt.
+
+        # we keep record in 'opt' to allow user to change it on command line.
         'record': 'detail',
     }
 }
 
 
 def code(all_cfg, known, **opt):
+    # **opt combines all_cfg['opt'] and command line args.
     verbose = opt.get('verbose', 0)
     if verbose:
         print(f'''
