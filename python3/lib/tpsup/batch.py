@@ -420,7 +420,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             else:
                 while True:
                     success = False
-                    input_retry_reset = opt2.get("input_retry_reset")
+                    input_retry_reset = opt2.get("input_retry_reset", 1)
                     try:
                         code_sub(all_cfg, known, **opt2)
                         # todo: check return value
