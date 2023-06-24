@@ -13,7 +13,7 @@ our_cfg = {
         "selenium": {
             "method": tpsup.seleniumtools.get_driver,
             "cfg": {},
-            "init_resource": 0,
+            "init_resource": 0,  # delay init until first use
         },
     },
     # position_args will be inserted into $opt hash to pass forward

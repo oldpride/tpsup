@@ -418,9 +418,9 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             if not input_retry:
                 code_sub(all_cfg, known, **opt2)
             else:
-                need_restart = False
                 while True:
                     success = False
+                    input_retry_reset = opt2.get("input_retry_reset")
                     try:
                         code_sub(all_cfg, known, **opt2)
                         # todo: check return value
@@ -429,7 +429,6 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                         print(f'exception caught: {e}', file=sys.stderr)
                         if verbose:
                             traceback.print_exc()
-                        need_restart = True
                     if success:
                         break
                     else:
@@ -438,7 +437,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                                 f'task failed, but input_retry={input_retry}, so we retry', file=sys.stderr)
                             input_retry = input_retry - 1
 
-                            if need_restart:
+                            if input_retry_reset:
                                 if post_batch:
                                     post_batch(all_cfg, known, **opt2)
                                 if pre_batch:
@@ -495,8 +494,8 @@ def init_resources(all_cfg: Dict, **opt):
 
             # this is the way to copy **kwargs
             kwargs = {}
-            kwargs.update(opt)
             kwargs['driver_cfg'] = res['cfg']
+            kwargs.update(opt)  # let command line options override cfg options
 
             resources[k]['driver_call'] = {
                 "method": res['method'],
