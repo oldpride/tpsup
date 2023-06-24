@@ -56,14 +56,7 @@ class SeleniumEnv:
         self.env.adapt()
         home_dir = tpsup.env.get_native_path(
             self.env.home_dir)  # get_native_path() is for cygwin
-        self.log_base = opt.get('log_base', home_dir)
-        system = self.env.system
 
-        self.page_load_timeout = page_load_timeout
-
-        self.dryrun = opt.get("dryrun", False)
-        self.driverlog = os.path.join(self.log_base, "selenium_driver.log")
-        self.chromedir = os.path.join(self.log_base, "selenium_browser")
         # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
         # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 

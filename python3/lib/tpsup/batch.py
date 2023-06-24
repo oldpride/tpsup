@@ -232,8 +232,11 @@ def parse_batch(given_cfg: Union[str, Dict], batch: Union[str, List], **opt):
     set_all_cfg(given_cfg, **opt)
     all_cfg = get_all_cfg(**opt)
 
+    verbose = opt.get('verbose', 0)
+
     parsed_batch = []
-    print(f"parse_batch: type(batch)={type(batch)}")
+    if verbose:
+        print(f"parse_batch: type(batch)={type(batch)}")
     if type(batch) == str:
         filename = batch
         with open(filename, 'r') as fh:
@@ -257,7 +260,7 @@ def parse_batch(given_cfg: Union[str, Dict], batch: Union[str, List], **opt):
 
     if not parsed_batch:
         raise RuntimeError(f'no input parsed from batch = {pformat(batch)}')
-    elif opt.get('verbose', 0):
+    elif verbose:
         print(f'parsed_batch = {pformat(parsed_batch)}', file=sys.stderr)
 
     for input in parsed_batch:
@@ -317,8 +320,9 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             script_name = os.path.basename(
                 all_cfg.get('cfg_file', 'unknown.txt'))
 
-            dailydir = tpsup.tptmp.tptmp().get_dailydir()
-            record_file = f'{dailydir}/{script_name.replace(".py", ".txt")}'
+            # dailydir = tpsup.tptmp.tptmp().get_dailydir()
+            # record_file = f'{dailydir}/{script_name.replace(".py", ".log")}'
+            record_file = tpsup.tptmp.tptmp().get_dailylog(prefix=script_name)
         print("record_file = ", record_file, file=sys.stderr)
         # check whether record_file exists
         if os.path.exists(record_file):
@@ -337,7 +341,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     init_resources(all_cfg, **opt2)
 
-    if opt.get('verbose', 0) > 1:
+    if verbose > 1:
         print(f'all_cfg = {pformat(all_cfg)}', file=sys.stderr)
         print(f'opt2 = {pformat(opt2)}', file=sys.stderr)
 
@@ -362,6 +366,18 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     if show_progress:
         print(f'{os.linesep}--------------- batch begins, total={total} ---------------------', file=sys.stderr)
+
+    pre_batch = None
+    if not opt.get('no_pre_batch', 0):
+        pre_batch = globals().get("pre_batch", None)
+
+    if pre_batch:
+        # pre_batch(all_cfg, known, **opt2)
+        pre_batch(all_cfg, **opt2)  # known is not available in pre_batch
+
+    post_batch = None
+    if not opt.get('no_post_batch', 0):
+        post_batch = globals().get("post_batch", None)
 
     for input in parsed_batch:
         i = i+1
@@ -398,7 +414,39 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                     code_sub = imported.code
 
         if code_sub:
-            code_sub(all_cfg, known, **opt2)
+            input_retry = int(opt2.get("input_retry", 0))
+            if not input_retry:
+                code_sub(all_cfg, known, **opt2)
+            else:
+                need_restart = False
+                while True:
+                    success = False
+                    try:
+                        code_sub(all_cfg, known, **opt2)
+                        # todo: check return value
+                        success = True
+                    except Exception as e:
+                        print(f'exception caught: {e}', file=sys.stderr)
+                        if verbose:
+                            traceback.print_exc()
+                        need_restart = True
+                    if success:
+                        break
+                    else:
+                        if input_retry > 0:
+                            print(
+                                f'task failed, but input_retry={input_retry}, so we retry', file=sys.stderr)
+                            input_retry = input_retry - 1
+
+                            if need_restart:
+                                if post_batch:
+                                    post_batch(all_cfg, known, **opt2)
+                                if pre_batch:
+                                    pre_batch(all_cfg, **opt2)
+                        else:
+                            raise RuntimeError(
+                                f'task failed after all retries. input={pformat(input)}')
+
         else:
             print(
                 f'function code is not defined in cfg or driver module, therefore, not run', file=sys.stderr)
@@ -417,9 +465,12 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
     if show_progress or verbose:
         print(f'{os.linesep}---- batch ends ----', file=sys.stderr)
 
-    if not opt.get('no_post_batch', 0):
-        if post_batch := globals().get("post_batch", None):
-            post_batch(all_cfg, known, **opt2)
+    if post_batch:
+        post_batch(all_cfg, known, **opt2)
+
+    # if not opt.get('no_post_batch', 0):
+    #     if post_batch := globals().get("post_batch", None):
+    #         post_batch(all_cfg, known, **opt2)
 
     return
 

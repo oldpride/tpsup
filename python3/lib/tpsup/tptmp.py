@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import time
 
 import tpsup.env
@@ -45,6 +46,14 @@ class tptmp:
                 # whenever we make new dailydir also clean old dailydir
                 self.clean_old_tmpdir(**opt)
         return self.dailydir
+
+    def get_dailylog(self, prefix: str = None, **opt):
+        dailydir = self.get_dailydir(**opt)
+        if not prefix:
+            prefix = sys.argv[0]
+        prefix = os.path.basename(prefix)
+        dailylog = f'{dailydir}/{prefix.replace(".py", ".log")}'
+        return dailylog
 
     def get_nowdir(self, suffix: str = '', **opt):
         dailydir = self.get_dailydir()

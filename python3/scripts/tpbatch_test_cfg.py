@@ -99,9 +99,13 @@ our_cfg = {
 
     'show_progress': 1,
 
-
-    # settings outside 'opt' are normally used by batch.py's general logic, eg, run_batch().
-    # settings inside 'opt' are normally used by *_cfg.py's code() function; so are command line args.
+    # where to put the setting?
+    # - settings outside 'opt' are normally used by batch.py's general logic, eg, run_batch().
+    # - settings inside 'opt' are normally used by *_cfg.py's code() function;
+    #   so are command line args.
+    #   use 'opt' if there is a chance that you want to move the setting to command line,
+    #       because this way you don't need to change the batch.py's general logic which
+    #       is likely shared by many scripts.
     'opt': {
         # "opt" are optional switches, to be passed into *_cfg.py's code() function's **opt.
 
