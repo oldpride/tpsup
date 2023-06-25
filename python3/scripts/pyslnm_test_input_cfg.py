@@ -13,6 +13,7 @@ our_cfg = {
     "resources": {
         "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
     },
+    'module': 'tpsup.seleniumtools',
     # position_args will be inserted into $opt hash to pass forward
     "position_args": ["host_port"],
     "extra_args": [
@@ -152,31 +153,3 @@ def code(all_cfg: dict, known: dict, **opt):
     interval = 2
     print(f"sleep {interval} seconds so that you can see")
     time.sleep(interval)
-
-
-def post_batch(all_cfg, known, **opt):
-    print(f"running post batch")
-    driver: webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
-    driver.quit()
-
-    seleniumEnv = driver.seleniumEnv
-    my_env = seleniumEnv.env
-
-    print(f"check if chromedriver is still running")
-    if tpsup.pstools.prog_running("chromedriver", printOutput=1):
-        print(f"seeing leftover chromedriver, kill it")
-        if my_env.isWindows:
-            cmd = f"pkill chromedriver"
-        else:
-            # -f means match the full command line. available in linux, not in windows
-            cmd = f"pkill -f chromedriver"
-        print(cmd)
-        os.system(cmd)
-
-    # list all the log files for debug purpose
-    if my_env.isWindows:
-        cmd = f"{my_env.ls_cmd} \"{seleniumEnv.log_base}\\selenium*\""
-    else:
-        cmd = f"{my_env.ls_cmd} -ld \"{seleniumEnv.log_base}\"/selenium*"
-    print(cmd)
-    os.system(cmd)

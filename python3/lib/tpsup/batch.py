@@ -45,10 +45,13 @@ def parse_cfg(cfg_file: str = None, **opt):
 
     parse_dict_cfg_sub = parse_dict_cfg
 
-    module = our_cfg.get('module', None)
+    if module := our_cfg.get('module', None):
+        if not type(module) is str:
+            raise Exception(
+                f"module must be a string, but it is {type(module)}")
+        our_cfg['imported_module'] = importlib.import_module(module)
 
-    if module is not None:
-        imported = importlib.import_module(module)
+    if imported := our_cfg.get('imported_module', None):
         if hasattr(imported, 'tpbatch_parse_dict_cfg'):
             parse_dict_cfg_sub = imported.parse_dict_cfg
 
@@ -120,8 +123,7 @@ def parse_input(input: Union[str, List], all_cfg: dict, **opt):
     # except NameError:
     #     parse_input_sub = parse_input_default_way
 
-    if module := all_cfg.get('module', None):
-        imported = importlib.import_module(module)
+    if imported := all_cfg.get('imported_module', None):
         if hasattr(imported, 'tppatch_parse_dict_cfg'):
             parse_input_sub = imported.tppatch_parse_dict_cfg
 
@@ -371,13 +373,23 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
     if not opt.get('no_pre_batch', 0):
         pre_batch = globals().get("pre_batch", None)
 
-    if pre_batch:
-        # pre_batch(all_cfg, known, **opt2)
-        pre_batch(all_cfg, **opt2)  # known is not available in pre_batch
+        if pre_batch is None:
+            if imported := all_cfg.get('imported_module', None):
+                if hasattr(imported, 'pre_batch'):
+                    pre_batch = imported.pre_batch
 
     post_batch = None
     if not opt.get('no_post_batch', 0):
         post_batch = globals().get("post_batch", None)
+
+        if post_batch is None:
+            if imported := all_cfg.get('imported_module', None):
+                if hasattr(imported, 'post_batch'):
+                    post_batch = imported.post_batch
+
+    if pre_batch:
+        # pre_batch(all_cfg, known, **opt2)
+        pre_batch(all_cfg, **opt2)  # known is not available in pre_batch
 
     for input in parsed_batch:
         i = i+1
@@ -407,9 +419,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
         if code := globals().get("code", None):  # check function existence
             code_sub = code
         else:
-            module = all_cfg.get('module', None)
-            if module:
-                imported = importlib.import_module(module)
+            if imported := all_cfg.get('imported_module', None):
                 if hasattr(imported, 'code'):
                     code_sub = imported.code
 

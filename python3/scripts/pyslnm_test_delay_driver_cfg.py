@@ -16,6 +16,7 @@ our_cfg = {
             "init_resource": 0,  # delay init until first use
         },
     },
+    'module': 'tpsup.seleniumtools',
     # position_args will be inserted into $opt hash to pass forward
     "position_args": ["host_port"],
     "extra_args": [
@@ -69,12 +70,6 @@ def code(all_cfg: dict, known: dict, **opt):
         print(f'from code(), opt = {pformat(opt)}')
 
     url = f"file:///{tpsup.env.get_native_path(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
-
-    if not 'driver' in all_cfg["resources"]["selenium"]:
-        print('we start driver at a delayed time')
-        method = all_cfg["resources"]["selenium"]["driver_call"]['method']
-        kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        all_cfg["resources"]["selenium"]['driver'] = method(**kwargs)
 
     driver: webdriver.Chrome = all_cfg["resources"]["selenium"]['driver']
 
@@ -155,13 +150,3 @@ def code(all_cfg: dict, known: dict, **opt):
     interval = 2
     print(f"sleep {interval} seconds so that you can see")
     time.sleep(interval)
-
-
-def post_batch(all_cfg, known, **opt):
-    print(f"running post batch")
-    driver: webdriver.Chrome = all_cfg["resources"]["selenium"].get(
-        'driver', None)
-    if driver:
-        driver.quit()
-    if tpsup.pstools.prog_running("chromedriver", printOutput=1):
-        print(f"seeing leftover chromedriver")

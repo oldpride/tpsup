@@ -2560,6 +2560,55 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
 
     return ret
 
+# pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
+# known is only available in post_batch, not in pre_batch.
+
+
+def pre_batch(all_cfg, **opt):
+    if not 'driver' in all_cfg["resources"]["selenium"]:
+        print('we start driver at a delayed time')
+        method = all_cfg["resources"]["selenium"]["driver_call"]['method']
+        kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
+        all_cfg["resources"]["selenium"]['driver'] = method(**kwargs)
+
+
+def post_batch(all_cfg, known, **opt):
+    print(f"running post batch")
+    if 'driver' in all_cfg["resources"]["selenium"]:
+        print(f"we have driver, quit it")
+        driver = all_cfg["resources"]["selenium"]["driver"]
+        driver.quit()
+        print("")
+
+        print(f"list all the log files for debug purpose")
+        seleniumEnv = driver.seleniumEnv
+        my_env = seleniumEnv.env
+        if my_env.isWindows:
+            cmd = f"{my_env.ls_cmd} \"{seleniumEnv.log_base}\\selenium*\""
+        else:
+            cmd = f"{my_env.ls_cmd} -ld \"{seleniumEnv.log_base}\"/selenium*"
+        print(cmd)
+        os.system(cmd)
+        print("")
+
+        # delete a key from a dict, we can use either del or pop
+        #    se d.pop if you want to capture the removed item, like in item = d.pop("keyA").
+        #    Use del if you want to delete an item from a dictionary.
+        #        if thekey in thedict: del thedict[thekey]
+        del all_cfg["resources"]["selenium"]["driver"]
+
+    print(f"check if chromedriver is still running")
+    my_env = tpsup.env.Env()
+    if tpsup.pstools.prog_running("chromedriver", printOutput=1):
+        print(f"seeing leftover chromedriver, kill it")
+        if my_env.isWindows:
+            cmd = f"pkill chromedriver"
+        else:
+            # -f means match the full command line. available in linux, not in windows
+            cmd = f"pkill -f chromedriver"
+        print(cmd)
+        os.system(cmd)
+
 
 def main():
     # test_basic()
