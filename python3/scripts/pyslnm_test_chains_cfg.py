@@ -14,6 +14,8 @@ our_cfg = {
         "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
     },
 
+    "module": "tpsup.seleniumtools",
+
     "usage_example": """
     $ {{prog}}  any
     """,
@@ -85,19 +87,3 @@ def code(all_cfg: dict, known: dict, **opt):
     # interval = 2
     # print(f"sleep {interval} seconds so that you can see")
     # time.sleep(interval)
-
-
-def post_batch(all_cfg, known, **opt):
-    print(f"running post batch")
-    driver: webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
-    driver.quit()
-
-    if tpsup.pstools.prog_running("chrome", printOutput=1):
-        print(f"seeing leftover chrome")
-
-    seleniumEnv = driver.seleniumEnv
-    my_env = seleniumEnv.env
-    # list all the log files for debug purpose
-    cmd = f"{my_env.ls_cmd} -ld {seleniumEnv.log_base}/selenium*"
-    print(cmd)
-    os.system(cmd)

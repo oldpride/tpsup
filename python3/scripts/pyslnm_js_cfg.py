@@ -28,6 +28,8 @@ our_cfg = {
         },
     },
 
+    'module': 'tpsup.seleniumtools',
+
     # position_args will be inserted into $opt hash to pass forward
     'position_args': ['host_port', 'url'],
 
@@ -60,9 +62,6 @@ our_cfg = {
     'show_progress': 1,
 }
 
-# we define this globally so that post_code() can use it too
-driver: webdriver.Chrome = None
-
 
 def code(all_cfg, known, **opt):
     global driver
@@ -76,10 +75,7 @@ def code(all_cfg, known, **opt):
     url = opt.get('url')
     trap = opt.get('trap', 0)
 
-    if driver is None:
-        method = all_cfg["resources"]["selenium"]["driver_call"]['method']
-        kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        driver = method(**{**kwargs, "dryrun": 0})  # overwrite kwargs
+    driver = all_cfg["resources"]["selenium"]["driver"]
 
     actions = [
         [f'url={url}', 'sleep=2', 'go to url'],
@@ -107,11 +103,3 @@ def code(all_cfg, known, **opt):
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     return {'REMAININGARGS': input}
-
-
-def post_batch(all_cfg, known, **opt):
-    global driver
-    print(f'running post batch')
-    driver.quit()
-    if tpsup.pstools.prog_running('chromed', printOutput=1):
-        print(f"seeing leftover chrome")

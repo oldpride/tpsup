@@ -19,6 +19,8 @@ our_cfg = {
         },
     },
 
+    'module': 'tpsup.seleniumtools',
+
     # position_args will be inserted into $opt hash to pass forward
     'position_args': ['host_port'],
 
@@ -111,7 +113,7 @@ from code(), opt =
     actions = [
         # ['url=https://google.com', 'tab=5'],
         ['url=https://google.com'],
-        ['xpath=//input[@name="q"]', 'string=perl selenium'],
+        ['xpath=//*[@name="q"]', 'string=perl selenium'],
         [None, 'key=enter,1'],
     ]
 
@@ -129,11 +131,3 @@ from code(), opt =
         else:
             # print(f'url={url}')
             print(f'hostname = {urlparse(url).hostname}')
-
-
-def post_batch(all_cfg, known, **opt):
-    print(f'running post batch')
-    driver = all_cfg['resources']['selenium']['driver']
-    driver.quit()
-    if tpsup.pstools.prog_running('chrome', printOutput=1):
-        print(f"seeing leftover chrome")

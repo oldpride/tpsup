@@ -2565,15 +2565,22 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
 
 
 def pre_batch(all_cfg, **opt):
+    print("")
+    print('running pre_batch()')
     if not 'driver' in all_cfg["resources"]["selenium"]:
-        print('we start driver at a delayed time')
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
         all_cfg["resources"]["selenium"]['driver'] = method(**kwargs)
+        print("pre_batch(): driver is created")
+    print("pre_batch(): done")
+    print("--------------------------------")
+    print("")
 
 
 def post_batch(all_cfg, known, **opt):
-    print(f"running post batch")
+    print("")
+    print("--------------------------------")
+    print(f"running post_batch()")
     if 'driver' in all_cfg["resources"]["selenium"]:
         print(f"we have driver, quit it")
         driver = all_cfg["resources"]["selenium"]["driver"]
