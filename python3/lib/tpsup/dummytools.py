@@ -20,6 +20,25 @@ def get_driver(**args):
     return dummy.get_driver()
 
 
+def pre_batch(all_cfg, **opt):  # known is not available to pre_batch()
+    verbose = opt.get('verbose', 0)
+    print(f'calling pre_batch()')
+    if not 'driver' in all_cfg["resources"]["dummy"]:
+        print('we start driver at a delayed time')
+        method = all_cfg["resources"]["dummy"]["driver_call"]['method']
+        kwargs = all_cfg["resources"]["dummy"]["driver_call"]["kwargs"]
+        all_cfg["resources"]["dummy"]['driver'] = method(**kwargs)
+
+
+def post_batch(all_cfg, known, **opt):
+    verbose = opt.get('verbose', 0)
+    print(f'calling post_batch()')
+    if 'driver' in all_cfg["resources"]["dummy"]:
+        all_cfg["resources"]["dummy"]["driver"] = None
+        # delete driver so that it will be re-created next time.
+        all_cfg["resources"]["dummy"].pop('driver')
+
+
 def main():
     print(f"call get_driver()")
     driver = Dummy('arg1', 'arg2').get_driver()

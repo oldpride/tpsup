@@ -371,8 +371,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     pre_batch = None
     if not opt.get('no_pre_batch', 0):
+        # pre_batch = all_cfg.get("pre_batch", None)
         pre_batch = globals().get("pre_batch", None)
-
         if pre_batch is None:
             if imported := all_cfg.get('imported_module', None):
                 if hasattr(imported, 'pre_batch'):
@@ -380,16 +380,14 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     post_batch = None
     if not opt.get('no_post_batch', 0):
+        # post_batch = all_cfg.get("post_batch", None)
         post_batch = globals().get("post_batch", None)
-
         if post_batch is None:
             if imported := all_cfg.get('imported_module', None):
                 if hasattr(imported, 'post_batch'):
                     post_batch = imported.post_batch
 
-    if pre_batch:
-        # pre_batch(all_cfg, known, **opt2)
-        pre_batch(all_cfg, **opt2)  # known is not available in pre_batch
+    pre_batch_alread_done = False
 
     for input in parsed_batch:
         i = i+1
@@ -415,8 +413,15 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 record_ofh.write(f"{timestamp},{record_string}\n")
 
+        if pre_batch and not pre_batch_alread_done:
+            pre_batch_alread_done = True
+
+            # known is not available in pre_batch, therefore not passed in as a parameter
+            pre_batch(all_cfg, **opt2)
+
         code_sub = None
         if code := globals().get("code", None):  # check function existence
+            # if code := all_cfg.get("code", None):  # check function existence
             code_sub = code
         else:
             if imported := all_cfg.get('imported_module', None):

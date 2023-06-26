@@ -6,19 +6,22 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from pprint import pformat
-import tpsup.seleniumtools
+import tpsup.dummytools
 import tpsup.pstools
 import tpsup.env
 
 our_cfg = {
 
     'resources': {
-        'selenium': {
-            'method': tpsup.seleniumtools.get_driver,
-            'cfg': {},
-            "init_resource": 0,
+        'dummy': {
+            'method': tpsup.dummytools.get_driver,
+            # will be overriden by extra_args, which is from command line.
+            'cfg': {'arg1': 3},
+            "init_resource": 0,  # delay init until first use
         },
     },
+
+    'module': 'tpsup.dummytools',
 
     'position_args': ['host_port'],
 

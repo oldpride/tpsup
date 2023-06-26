@@ -871,7 +871,9 @@ def run_actions(driver: webdriver.Chrome, actions: List, **opt):
 
     element: WebElement = None
 
-    for row in actions:
+    # for row in actions:
+    for i in range(0, len(actions)):
+        row = actions[i]
         sys.stdout.flush()
 
         #   locator                             input         comment
@@ -882,13 +884,14 @@ def run_actions(driver: webdriver.Chrome, actions: List, **opt):
             print(f"{comment}")
 
         assure = None
-        assure_max_retry = 2
+        assure_retry = 2
         if rest[0]:
             assure = rest[0].get("assure", None)
             assure_max_retry = assure.get("assure_max_retry", assure_max_retry)
 
-        times = 1
-        while times <= assure_max_retry:
+        times = 0
+        while times <= assure_retry:
+            times += 1
             if locator is not None:
                 element = locate(driver, locator, **opt)
                 # we will pass back element for caller's convenience. In theory, the caller could also
@@ -940,7 +943,7 @@ def run_actions(driver: webdriver.Chrome, actions: List, **opt):
                     if times >= assure_max_retry:
                         if assure.get("fatal", 0):
                             raise RuntimeError(
-                                f"assure {assure_locator} not found. reach max times={times}")
+                                f"assure {assure_locator} not found. reach max retry times={times}")
                 # restore current element
                 element = current_element
             else:

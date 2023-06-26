@@ -13,12 +13,15 @@ with open(testfile, 'w') as ofh:
 our_cfg = {
 
     'resources': {
-        'dummyDriver': {
+        'dummy': {
             'method': tpsup.dummytools.get_driver,
-            'cfg': {'arg1' :3}, # will be overriden by extra_args, which is from command line.
+            # will be overriden by extra_args, which is from command line.
+            'cfg': {'arg1': 3},
             "init_resource": 0,  # delay init until first use
         },
     },
+
+    'module': 'tpsup.dummytools',
 
     'position_args': ['input_retry'],
 
@@ -38,10 +41,10 @@ our_cfg = {
     'usage_example': '''
 
     # retry 2 times
-    {{prog}} 2 target=0
-    {{prog}} 2 target=1
-    {{prog}} 2 target=2
-    {{prog}} 2 target=3
+    {{prog}} 2 target=0  # success with 1st try
+    {{prog}} 2 target=1  # success with 2nd try - 1st retry
+    {{prog}} 2 target=2  # success with 3rd try - 2nd retry
+    {{prog}} 2 target=3  # fail with 3rd try - 2nd retry
     ''',
 
     'show_progress': 1,
@@ -61,7 +64,7 @@ from code(), opt =
 
 ''')
 
-    driver = all_cfg["resources"]["dummyDriver"]['driver']
+    driver = all_cfg["resources"]["dummy"]['driver']
     print(f'driver = {pformat(driver)}')
 
     target = int(known['TARGET'])
@@ -69,7 +72,8 @@ from code(), opt =
     current_number = None
     with open(testfile, 'r') as ifh:
         current_number = int(ifh.read().strip())
-    print
+
+    print(f'current_number = {current_number}')
 
     if current_number >= target:
         print(
@@ -81,24 +85,3 @@ from code(), opt =
 
     raise Exception(
         f'current_number {current_number} < target {target}, raise exception.')
-
-
-def pre_batch(all_cfg, **opt):  # known is not available to pre_batch()
-    verbose = opt.get('verbose', 0)
-    if verbose:
-        print(f'calling pre_batch()')
-    if not 'driver' in all_cfg["resources"]["dummyDriver"]:
-        print('we start driver at a delayed time')
-        method = all_cfg["resources"]["dummyDriver"]["driver_call"]['method']
-        kwargs = all_cfg["resources"]["dummyDriver"]["driver_call"]["kwargs"]
-        all_cfg["resources"]["dummyDriver"]['driver'] = method(**kwargs)
-
-
-def post_batch(all_cfg, known, **opt):
-    verbose = opt.get('verbose', 0)
-    if verbose:
-        print(f'calling post_batch()')
-    if 'driver' in all_cfg["resources"]["dummyDriver"]:
-        all_cfg["resources"]["dummyDriver"]["driver"] = None
-        # delete driver so that it will be re-created next time.
-        all_cfg["resources"]["dummyDriver"].pop('driver')
