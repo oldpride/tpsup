@@ -122,12 +122,6 @@ def code(all_cfg: dict, known: dict, **opt):
             'click_xpath=//select[@id="Expertise"]',
             "select=text,JavaScript",
             "select JavaScript",
-            {
-                'assure': {
-                    'locator': 'xpath=//select[@id="Expertise"]',
-                    'fatal': '1',
-                },
-            },
         ],
         # NOTE: !!!
         # after selection, somehow I have to use xpath to get to the next element, tab

@@ -883,73 +883,38 @@ def run_actions(driver: webdriver.Chrome, actions: List, **opt):
         if comment is not None:
             print(f"{comment}")
 
-        assure = None
-        assure_retry = 2
-        if rest[0]:
-            assure = rest[0].get("assure", None)
-            assure_max_retry = assure.get("assure_max_retry", assure_max_retry)
-
-        times = 0
-        while times <= assure_retry:
-            times += 1
-            if locator is not None:
-                element = locate(driver, locator, **opt)
-                # we will pass back element for caller's convenience. In theory, the caller could also
-                # use the following to get it.
-                #      element = driver.switch_to.active_element
-                # but if we didn't do
-                #      element.click()
-                # then it may not be active element. In this case, caller can use below to get the element.
-                globals()['element'] = element
-                # we don't need to do the same for driver. As Python function uses pass-by-reference,therefore
-                # driver stays the same.
-                # globals()['driver'] = driver
-
-                if print_console_log:
-                    print_js_console_log(driver)
-
-            if debug:
-                js_print_debug(driver, element)
-
-            if we_return:
-                # we return globals() here because exec()'s effect are only in globals().
-                # globals() are only from to this module file, not the caller's globals().
-                return globals()
-
-            send_input(driver, element, input, **opt)
+        if locator is not None:
+            element = locate(driver, locator, **opt)
+            # we will pass back element for caller's convenience. In theory, the caller could also
+            # use the following to get it.
+            #      element = driver.switch_to.active_element
+            # but if we didn't do
+            #      element.click()
+            # then it may not be active element. In this case, caller can use below to get the element.
+            globals()['element'] = element
+            # we don't need to do the same for driver. As Python function uses pass-by-reference,therefore
+            # driver stays the same.
+            # globals()['driver'] = driver
 
             if print_console_log:
                 print_js_console_log(driver)
 
-            if we_return:
-                return globals()
+        if debug:
+            js_print_debug(driver, element)
 
-            if assure:
-                # save current element, as it may be changed by 'assure'
-                current_element = element
-                assure_locator = assure.get("locator", None)
+        if we_return:
+            # we return globals() here because exec()'s effect are only in globals().
+            # globals() are only from to this module file, not the caller's globals().
+            return globals()
 
-                assure_element = None
-                try:
-                    assure_element = locate(driver, assure_locator, **opt)
-                except Exception as ex:
-                    assure_element = None
+        send_input(driver, element, input, **opt)
 
-                if assure_element:
-                    print(f"assure {assure_locator} found. times={times}")
-                    break
-                else:
-                    print(f"assure {assure_locator} not found. times={times}")
-                    if times >= assure_max_retry:
-                        if assure.get("fatal", 0):
-                            raise RuntimeError(
-                                f"assure {assure_locator} not found. reach max retry times={times}")
-                # restore current element
-                element = current_element
-            else:
-                break
+        if print_console_log:
+            print_js_console_log(driver)
 
-            times += 1
+        if we_return:
+            return globals()
+
     return globals()
 
 
