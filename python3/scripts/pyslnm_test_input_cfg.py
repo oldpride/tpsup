@@ -136,8 +136,8 @@ def code(all_cfg: dict, known: dict, **opt):
         [
             # test searching two elements
             # note: to fit into one string
-            ['xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"],xpath=//tr[@class="non exist"]'
-             ],
+            # 'xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"],xpath=//tr[@class="non exist"]',
+            'xpath=//tr[@class="non exist"],xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"]',
             ["click", 'gone_xpath=//select[@id="Expertise"]', "sleep=3"],
             "submit",
         ],

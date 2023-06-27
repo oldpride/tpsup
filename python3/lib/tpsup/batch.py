@@ -503,19 +503,23 @@ def init_resources(all_cfg: Dict, **opt):
     for k, res in resources.items():
         if res.get('enabled', 1) == 0:
             continue
+
+        if not 'cfg' in res:
+            res['cfg'] = {}
+
+        # this is the way to copy **kwargs
+        kwargs = {}
+        kwargs['driver_cfg'] = res['cfg']
+        kwargs.update(opt)  # let command line options override cfg options
+
+        resources[k]['driver_call'] = {
+            "method": res['method'],
+            "kwargs": kwargs
+        }
+
         if res.get('init_resource', 1) == 0:
             # if not initiate it now, we pass back function name and params, so that
             # caller can initiate it at another time
-
-            # this is the way to copy **kwargs
-            kwargs = {}
-            kwargs['driver_cfg'] = res['cfg']
-            kwargs.update(opt)  # let command line options override cfg options
-
-            resources[k]['driver_call'] = {
-                "method": res['method'],
-                "kwargs": kwargs
-            }
             continue
         if opt.get('dryrun', 0) == 1:
             continue

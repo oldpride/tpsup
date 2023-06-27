@@ -1258,7 +1258,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 # here we use 'locator_driver' so that we are in the correct DOM
-                wait = WebDriverWait(locator_driver, 10)
+                wait = WebDriverWait(locator_driver, 10)  # seconds
 
                 element = None
                 # this is needed; otherwise, if element is defined, a failed 'try' below
