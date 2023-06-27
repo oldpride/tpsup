@@ -104,6 +104,7 @@ def code(all_cfg: dict, known: dict, **opt):
         [
             "tab=4",
             [
+                # test getting element id
                 """code=print(f'element id = {element.get_attribute("id")}, expecting DateOfBirth')""",
                 """sleep=2""",
             ],
@@ -133,7 +134,10 @@ def code(all_cfg: dict, known: dict, **opt):
         [None, "code=print(f'test_var={test_var}')",
          "print test_var, should be 2"],
         [
-            'xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"]',
+            # test searching two elements
+            # note: to fit into one string
+            ['xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"],xpath=//tr[@class="non exist"]'
+             ],
             ["click", 'gone_xpath=//select[@id="Expertise"]', "sleep=3"],
             "submit",
         ],
