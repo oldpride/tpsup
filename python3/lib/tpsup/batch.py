@@ -408,10 +408,6 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                 print(
                     f'already seen record, skipping: {record_string}', file=sys.stderr)
                 continue
-            else:
-                seen_record.add(record_string)
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                record_ofh.write(f"{timestamp},{record_string}\n")
 
         if pre_batch and not pre_batch_alread_done:
             pre_batch_alread_done = True
@@ -464,6 +460,12 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
         else:
             print(
                 f'function code is not defined in cfg or driver module, therefore, not run', file=sys.stderr)
+
+        if record:
+            seen_record.add(record_string)
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            record_ofh.write(f"{timestamp},{record_string}\n")
+            # record_ofh.flush()
 
         if show_progress:
             now = time.time()
