@@ -308,7 +308,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
     # we retrieve record from opt2, because it may be overwritten by command line
     record = opt2.get('record', None)
     record_keys = []
-    seen_record = set()
+    seen_record = {}
     record_ofh = None
     if record:
         record_keys = record.split(',')
@@ -338,7 +338,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                     timestamp, record_string, *_ = line.split(',', 1) + [None]
                     if record_string is None:
                         continue
-                    seen_record.add(record_string)
+                    seen_record[record_string] = timestamp
         record_ofh = open(record_file, 'a')
 
     init_resources(all_cfg, **opt2)
@@ -406,7 +406,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             record_string = resolve_record_keys(record_keys, known)
             if record_string in seen_record:
                 print(
-                    f'already seen record, skipping: {record_string}', file=sys.stderr)
+                    f'already seen record at "{seen_record[record_string]},{record_string}". skipped.', file=sys.stderr)
                 continue
 
         if pre_batch and not pre_batch_alread_done:
@@ -464,7 +464,9 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
         if record:
             seen_record.add(record_string)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            record_ofh.write(f"{timestamp},{record_string}\n")
+            line = f"{timestamp},{record_string}"
+            print(f"record: {line}", file=sys.stderr)
+            record_ofh.write(f"{line}\n")
             # record_ofh.flush()
 
         if show_progress:
