@@ -462,8 +462,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                 f'function code is not defined in cfg or driver module, therefore, not run', file=sys.stderr)
 
         if record:
-            seen_record.add(record_string)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            seen_record[record_string] = timestamp
             line = f"{timestamp},{record_string}"
             print(f"record: {line}", file=sys.stderr)
             record_ofh.write(f"{line}\n")

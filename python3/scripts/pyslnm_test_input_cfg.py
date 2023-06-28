@@ -11,7 +11,10 @@ from selenium import webdriver
 
 our_cfg = {
     "resources": {
-        "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
+        "selenium": {
+            "method": tpsup.seleniumtools.get_driver,
+            # "cfg": {}
+        },
     },
     'module': 'tpsup.seleniumtools',
     # position_args will be inserted into $opt hash to pass forward
