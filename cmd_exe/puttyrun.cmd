@@ -51,6 +51,17 @@ REM after endlocal, use %var_name%k
 REM start in background
 START /b putty -load !cfg!
 
+REM EQU - equal
+REM NEQ - not equal
+REM LSS - less than
+REM LEQ - less than or equal
+REM GTR - greater than
+REM GEQ - greater than or equal
+
+
+REM if only starts 1, we can exit now.
+if !count! LEQ 1 exit /b 0
+
 REM wait for user to pass auth of the first putty.
 echo Hit ENTER to continue
 pause
@@ -59,8 +70,11 @@ REM the rest putty will use the same auth
 for /l %%x in (2, 1, !count!) do (
     echo %%x
     START /b putty -load !cfg!
-    REM sleep 1 second
-    timeout /t 1
+
+    REM sleep 1 second may not be enough, as 'START' is async, the command finish time
+    REM is unpredictable.
+    echo sleep 2 second
+    timeout /t 2
 )
 
 endlocal & set "USERFULLNAME=%DisplayName%"
