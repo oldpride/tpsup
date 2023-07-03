@@ -13,7 +13,6 @@ from selenium import webdriver
 
 
 our_cfg = {
-
     'resources': {
         'selenium': {
             'method': tpsup.seleniumtools.get_driver,
@@ -25,24 +24,20 @@ our_cfg = {
         },
     },
 
-    # position_args will be inserted into $opt hash to pass forward
-    'position_args': ['host_port', 'url', 'dir'],
+    'module': 'tpsup.seleniumtools',
 
-    'extra_args': [
+    # position_args will be inserted into $opt hash to pass forward
+    'position_args': ['url', 'dir'],
+
+    'extra_args': {
         # argparse's args
-        {
-            'dest': 'headless',
-            'default': False,
-            'action': 'store_true',
-            'help': 'run in headless mode'
-        },
-        {
-            'dest': 'xpath',
+        'xpath': {
+            'switches': ['-xpath'],
             'default': None,
             'action': 'store',
             'help': 'specify a xpath'
         },
-    ],
+    },
 
     'usage_example': '''
     - this will dump out dynamically generated html too
@@ -51,22 +46,22 @@ our_cfg = {
         as of 2022/09/04
         https://www.google.com and https://google.com are the same in the Chrome browser: no iframe nor shadow.
         however, Chrome's new tab default to a search page lookalike: has both iframes and shadow.
-    {{prog}} auto https://www.google.com ~/dumpdir -np
-    {{prog}} auto https://www.google.com %USERPROFILE%/dumpdir -np kqq
-    {{prog}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir -np # this is the new tab url
+    {{prog}} https://www.google.com ~/dumpdir -np
+    {{prog}} https://www.google.com %USERPROFILE%/dumpdir -np kqq
+    {{prog}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir -np # this is the new tab url
     
     - has shadows, no iframes, simple pages to test shadows
-    {{prog}} auto https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np
-    {{prog}} auto http://watir.com/examples/shadow_dom.html %USERPROFILE%/dumpdir -np
+    {{prog}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np
+    {{prog}} http://watir.com/examples/shadow_dom.html %USERPROFILE%/dumpdir -np
     
     - has both iframes and shadows
-    {{prog}} auto https://www.dice.com %USERPROFILE%/dumpdir -np
+    {{prog}} https://www.dice.com %USERPROFILE%/dumpdir -np
     
     - xpath, from cmd.exe
-    {{prog}} auto https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np -xpath //div[@class=\\"expofp-floorplan\\"]
+    {{prog}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np -xpath //div[@class=\\"expofp-floorplan\\"]
     
     - to test deep-nested shadow
-    {{prog}} auto chrome://settings %USERPROFILE%/dumpdir -np
+    {{prog}} chrome://settings %USERPROFILE%/dumpdir -np
     
     ''',
 
@@ -77,9 +72,6 @@ our_cfg = {
         # "browserArgs": ["--disable-notifications"],
     },
 }
-
-# we define this globally so that post_code() can use it too
-driver: webdriver.Chrome = None
 
 
 def code(all_cfg, known, **opt):
@@ -98,10 +90,7 @@ def code(all_cfg, known, **opt):
     yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
     os.makedirs(dir, exist_ok=True)  # this does "mkdir -p"
 
-    if driver is None:
-        method = all_cfg["resources"]["selenium"]["driver_call"]['method']
-        kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        driver = method(**{**kwargs, "dryrun": 0})  # overwrite kwargs
+    driver = all_cfg["resources"]["selenium"]["driver"]
 
     actions = [
         [f'url={url}', 'sleep=2', 'go to url'],
@@ -116,11 +105,3 @@ def code(all_cfg, known, **opt):
     print(f'actions = {pformat(actions)}')
     result = tpsup.seleniumtools.run_actions(
         driver, actions, **{**opt, 'dryrun': 0})
-
-
-def post_batch(all_cfg, known, **opt):
-    global driver
-    print(f'running post batch')
-    driver.quit()
-    if tpsup.pstools.prog_running('chrome', printOutput=1):
-        print(f"seeing leftover chrome")

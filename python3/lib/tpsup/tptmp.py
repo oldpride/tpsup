@@ -97,6 +97,11 @@ class tptmp:
                     shutil.rmtree(fullname)
 
 
+def get_dailydir(**opt):
+    mytmp = tptmp()
+    return mytmp.get_dailydir(**opt)
+
+
 def main():
     mytmp = tptmp()
     print(f"nowdir={mytmp.get_nowdir(suffix='test')}")

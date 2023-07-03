@@ -16,14 +16,6 @@ our_cfg = {
 
     "module": "tpsup.seleniumtools",
 
-    "extra_args": [
-        {
-            "dest": "headless",
-            "default": False,
-            "action": "store_true",
-            "help": "run in headless mode",
-        },
-    ],
     "usage_example": """
     
     {{prog}} any

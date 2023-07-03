@@ -29,53 +29,62 @@ our_cfg = {
 
     'module': 'tpsup.seleniumtools',
 
-    'position_args': ['url', 'output_dir'],
+    # position_args will be inserted into $opt hash to pass forward
+    'position_args': ['host_port', 'url', 'output_dir'],
 
-    'extra_args': {
-        'js': {'dest': ['-js', '--js'],
-               'default': False,
-               'action': 'store_true',
-               'help': 'run js'
-               },
-        'trap': {
-            'dest': ['-trap', '--trap'],
+    'extra_args': [
+        # argparse's args
+        {
+            'dest': 'headless',
+            'default': False,
+            'action': 'store_true',
+            'help': 'run in headless mode',
+        },
+        {
+            'dest': 'js',
+            'default': False,
+            'action': 'store_true',
+            'help': 'run js'
+        },
+        {
+            'dest': 'trap',
             'default': False,
             'action': 'store_true',
             'help': 'used with -js, to add try{...}catch{...}',
         },
-        'full': {
-            'dest': ['-full', '--full'],
+        {
+            'dest': 'full',
             'default': False,
             'action': 'store_true',
             'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
         },
-        'print_console_log': {
-            'dest': ['-ps', '--print_console_log'],
+        {
+            'dest': 'print_console_log',
             'default': False,
             'action': 'store_true',
             'help': 'print js console log',
         },
-        'limit_depth': {
-            'dest': ['--limit_depth'],
+        {
+            'dest': 'limit_depth',
             'default': 5,
             'action': 'store',
             'type': int,
             'help': 'limit scan depth',
         },
-    },
+    ],
 
     'usage_example': f'''
     - test a static page with nested iframes, same origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
+    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
+    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
     
     - test a static page with nested iframes, cross origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
+    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
+    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
     
     - this will dump out dynamically generated html too
     
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
+    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
     
     # iframe001: id("backgroundImage")
     # shadow001: /html[@class="focus-outline-visible"]/body[1]/ntp-app[1]
@@ -90,25 +99,25 @@ our_cfg = {
     #   double quotes cannot be escaped, 
     #   single quote is just a letter, cannot do grkouping. 
     # therefore, xpath=//div[@class="gb_Id"] will not work on cmd.exe
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
+    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
     
     # from bash
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html ~/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
+    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html ~/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
     
     # use -js
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
+    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
     
-    {{{{prog}}}} chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= %USERPROFILE%/dumpdir2 xpath=//div[3] -js
+    {{{{prog}}}} auto chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= %USERPROFILE%/dumpdir2 xpath=//div[3] -js
     
     # test a cross domain iframe
-    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1]
-    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1] -js
+    {{{{prog}}}} auto https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1]
+    {{{{prog}}}} auto https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1] -js
     
     # dump whole page, print xpath shortcut, eg id("mycontainer")
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html
+    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html
     
     # dump whole page, print full xpath
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
+    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
     ''',
 
     # use -js

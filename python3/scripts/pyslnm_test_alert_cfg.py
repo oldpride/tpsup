@@ -14,14 +14,7 @@ our_cfg = {
         "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
     },
     "module": "tpsup.seleniumtools",
-    "extra_args": [
-        {
-            "dest": "headless",
-            "default": False,
-            "action": "store_true",
-            "help": "run in headless mode",
-        },
-    ],
+
     "usage_example": """
     - because we need a load static test page, we run everything locally and let chromedriver 
       to start the browser and pick the port.

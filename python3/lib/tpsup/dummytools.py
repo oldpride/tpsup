@@ -39,6 +39,18 @@ def post_batch(all_cfg, known, **opt):
         all_cfg["resources"]["dummy"].pop('driver')
 
 
+tpbatch = {
+    'pre_batch': pre_batch,
+    'post_batch': post_batch,
+    'extra_args': {
+        'dummyarg1': {'dest': ['-da1', '-dummyarg1'], 'default': False,
+                      'action': 'store_true', 'help': 'dummyarg1 in dummytools.py'},
+        'dummyarg2': {'dest': ['-da2', '-dummyarg2'], 'default': False,
+                      'action': 'store_true', 'help': 'dummyarg2 in dummytools.py'},
+    },
+}
+
+
 def main():
     print(f"call get_driver()")
     driver = Dummy('arg1', 'arg2').get_driver()

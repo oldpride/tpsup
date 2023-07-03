@@ -2585,6 +2585,32 @@ def post_batch(all_cfg, known, **opt):
         os.system(cmd)
 
 
+tpbatch = {
+    'pre_batch': pre_batch,
+    'post_batch': post_batch,
+    "extra_args": {
+        'headless': {
+            "switches": ["--headless"],
+            "default": False,
+            "action": "store_true",
+            "help": "run in headless mode",
+        },
+        'humanlike': {
+            "switches": ["--humanlike"],
+            "default": False,
+            "action": "store_true",
+            "help": "add some random delay to make it more humanlike",
+        },
+        'host_port': {
+            "switches": ["-hp", "--host_port"],
+            "default": "auto",
+            "action": "store",
+            "help": "connect to a browser at host:port.  default is auto, which means to start a new browser",
+        },
+    },
+}
+
+
 def main():
     # test_basic()
     test_actions()

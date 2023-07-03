@@ -31,32 +31,26 @@ our_cfg = {
     'module': 'tpsup.seleniumtools',
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args': ['host_port', 'url'],
+    'position_args': ['url'],
 
-    'extra_args': [
+    'extra_args': {
         # argparse's args
-        {
-            'dest': 'headless',
-            'default': False,
-            'action': 'store_true',
-            'help': 'run in headless mode',
-        },
-        {
-            'dest': 'trap',
+        'trap': {
+            'dest': ['-trap', '--trap'],
             'default': False,
             'action': 'store_true',
             'help': 'add try{...}catch{...}',
         },
-    ],
+    },
 
     'usage_example': '''
     - run java script
     
     from cmd.exe
-    {{prog}} auto chrome-search://local-ntp/local-ntp.html "%TPSUP%"\\python3\\scripts\\locator_chain_test*.js
+    {{prog}} chrome-search://local-ntp/local-ntp.html "%TPSUP%"\\python3\\scripts\\locator_chain_test*.js
 
     from bash
-    {{prog}} auto chrome-search://local-ntp/local-ntp.html "$TPSUP"/python3/scripts/locator_chain_test*.js 
+    {{prog}} chrome-search://local-ntp/local-ntp.html "$TPSUP"/python3/scripts/locator_chain_test*.js 
     ''',
 
     'show_progress': 1,

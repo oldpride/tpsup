@@ -19,7 +19,11 @@ def exec_into_globals(_source, _globals, _locals, **opt):
     _source2 = correct_indent(_source)
     compiled = None
     try:
-        compiled = compile(_source2, "", "exec")
+        # https://docs.python.org/3/library/functions.html#compile
+        # The filename argument should give the file from which the code was read;
+        #    pass some recognizable value if it wasn’t read from a file
+        source_filename = opt.get("source_filename", "")
+        compiled = compile(_source2, source_filename, "exec")
     except Exception as e:
         # note: some errors are run time errors and will not be caught here. for example
         #     NameError: name 'b' is not defined

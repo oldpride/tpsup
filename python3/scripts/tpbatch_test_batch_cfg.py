@@ -25,10 +25,18 @@ our_cfg = {
 
     'position_args': ['host_port'],
 
-    'extra_args': [
-        {'dest': 'headless', 'default': False,
-            'action': 'store_true', 'help': 'run in headless mode'},
-    ],
+    'extra_args': {
+        'dummyarg1': {'dest': ['-da1', '-dummyarg1'], 'default': False,
+                      'action': 'store_true', 'help': 'dummyarg1 in cfg.py'},
+        'dummyarg3': {'dest': ['-da3', '-dummyarg3'], 'default': False,
+                      'action': 'store_true', 'help': 'dummyarg3 in cfg.py'},
+
+        # overwrite 'record' arg to set default to 'detail'.
+        'record': {'dest': ['--record'],
+                   'default': 'detail',
+                   'action': 'store',
+                   'help': 'record keys (separated by comma) to avoid run twice. default: detail'},
+    },
 
     'usage_example': '''
     - this test script doesn't run selenium at all. it just shows how to use cfg.
@@ -111,9 +119,6 @@ our_cfg = {
     #       is likely shared by many scripts.
     'opt': {
         # "opt" are optional switches, to be passed into *_cfg.py's code() function's **opt.
-
-        # we keep record in 'opt' to allow user to change it on command line.
-        'record': 'detail',
     }
 }
 

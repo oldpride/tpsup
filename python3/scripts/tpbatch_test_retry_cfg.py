@@ -23,14 +23,12 @@ our_cfg = {
 
     'module': 'tpsup.dummytools',
 
-    'position_args': ['input_retry'],
+    # 'position_args': ['input_retry'],
 
-    'extra_args': [
-        {'dest': 'input_retry_reset', 'default': 1, 'type': int,
-            'action': 'store', 'help': 'reset driver before retry input, default 1'},
-        {'dest': 'arg1', 'default': 5, 'type': int,
-            'action': 'store', 'help': 'arg1, default 5'},
-    ],
+    'extra_args': {
+        'arg1': {'dest': ['--arg1'], 'default': 5, 'type': int,
+                 'action': 'store', 'help': 'arg1, default 5'},
+    },
 
     "keys": {
         "target": 2,
@@ -41,10 +39,10 @@ our_cfg = {
     'usage_example': '''
 
     # retry 2 times
-    {{prog}} 2 target=0  # success with 1st try
-    {{prog}} 2 target=1  # success with 2nd try - 1st retry
-    {{prog}} 2 target=2  # success with 3rd try - 2nd retry
-    {{prog}} 2 target=3  # fail with 3rd try - 2nd retry
+    {{prog}} --retry 2 target=0  # success with 1st try
+    {{prog}} --retry 2 target=1  # success with 2nd try - 1st retry
+    {{prog}} --retry 2 target=2  # success with 3rd try - 2nd retry
+    {{prog}} --retry 2 target=3  # fail with 3rd try - 2nd retry
     ''',
 
     'show_progress': 1,

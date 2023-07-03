@@ -21,21 +21,13 @@ our_cfg = {
 
     'module': 'tpsup.seleniumtools',
 
-    # position_args will be inserted into $opt hash to pass forward
-    'position_args': ['host_port'],
-
-    'extra_args': [
-        {'dest': 'headless', 'default': False,
-            'action': 'store_true', 'help': 'run in headless mode'},
-    ],
-
     'usage_example': '''
     - run everything locally and let chromedriver to start the browser and pick the port
-    linux1$ {{prog}} auto s=henry
+    linux1$ {{prog}} s=henry
     
     - connect to a local browser at a port. 
     if the browser is not up, chromedriver will start a browser at that port.
-    linux1$ {{prog}} localhost:9222 s=henry
+    linux1$ {{prog}} -hp localhost:9222 s=henry
     
     - start Chrome (c1) on remote PC with debug port 9222.
 
@@ -58,13 +50,13 @@ our_cfg = {
    # prepare test
    cygwin$ win_chrome_netpipe -allow linux1
 
-   linux1$ {{prog}} 192.168.1.179:9333 i=jane n="Jane Queen" p=dummy, dob=09222014
-   linux1$ {{prog}} 192.168.1.179:9333 s=henry p=dummy2
-   linux1$ {{prog}} 192.168.1.179:9333 -batch tpslnm_test_batch.txt
+   linux1$ {{prog}} -hp 192.168.1.179:9333 i=jane n="Jane Queen" p=dummy, dob=09222014
+   linux1$ {{prog}} -hp 192.168.1.179:9333 s=henry p=dummy2
+   linux1$ {{prog}} -hp 192.168.1.179:9333 -batch tpslnm_test_batch.txt
    
    # on windows gitbash and cygwin, the same way
-   gitbash$ {{prog}} auto s=henry p=dummy2
-   cygwin$ {{prog}} auto s=henry p=dummy2
+   gitbash$ {{prog}} s=henry p=dummy2
+   cygwin$ {{prog}} s=henry p=dummy2
     ''',
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase

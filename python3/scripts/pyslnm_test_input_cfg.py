@@ -18,20 +18,13 @@ our_cfg = {
     },
     'module': 'tpsup.seleniumtools',
     # position_args will be inserted into $opt hash to pass forward
-    "position_args": ["host_port"],
-    "extra_args": [
-        {
-            "dest": "headless",
-            "default": False,
-            "action": "store_true",
-            "help": "run in headless mode",
-        },
-    ],
+    # "position_args": ["host_port"],
+
     "usage_example": """
     - because we need a load static test page, we run everything locally and let chromedriver 
       to start the browser and pick the port.
       the following is tested working in linux, windows cygwin/gitbash/cmd.exe.
-    $ {{prog}} auto s=henry
+    $ {{prog}} s=henry
     
     """,
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
@@ -58,7 +51,6 @@ our_cfg = {
         # "opt" will be passed into run_batch() and init_resource()
 
         # "browserArgs": ["window-size=960,540"], # use a small window as this page has no mobile mode.
-        # "humanlike": 1, # behave like human, eg, add some random delay
     },
 }
 

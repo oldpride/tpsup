@@ -69,9 +69,19 @@ def usage(message: str = None, **opt):
 
     extra_args_usage = ''
     extra_args = all_cfg.get('extra_args', [])
-    for arg_dict in extra_args:
+
+    # sort by key
+    for k, v in sorted(extra_args.items()):
+        print_type = ''
+        if v.get('action', None) == 'store':
+            v_type = v.get('type', None)
+            if not v_type:
+                print_type = 'str'
+            else:
+                print_type = v_type.__name__
+
         extra_args_usage += f'''
-    -{arg_dict["dest"]}       {arg_dict["help"]}
+    {"|".join(v["switches"])} {print_type}   {v["help"]}
     '''
 
     usage_top = all_cfg.get('usage_top', None)
@@ -83,14 +93,8 @@ def usage(message: str = None, **opt):
     {usage_caller} ANY
 
     {detail}
-    -v             verbose mode. each -v will increment level. max level is 2.
+    -v             verbose mode. each -v will increment level. eg -v -v, or -vv. max level is 2.
 
-    -batch file    file has command args, one line per call.
-                   if file is '-', it means STDIN
-
-    -dryrun        dryrun mode if implemented
-
-    -interactive   interactive mode if implemented
     {extra_args_usage}
    'pos_arg' is required and defined in file.cfg
 
@@ -126,6 +130,9 @@ if args[0] == '-v':
     if len(args) == 0:
         usage("missing args", caller=f'{prog} config.py')
 
+# print(f'args = {args}')
+# exit(1)
+
 all_cfg = parse_cfg(args[0])
 all_cfg['cfg_file'] = args[0]
 if verbose:
@@ -144,14 +151,8 @@ for i in range(2):
         formatter_class=argparse.RawDescriptionHelpFormatter
     ))
 
-parsers[0].add_argument(
-    '-c', '--caller', dest='caller', action='store', default=None,
-    help="caller name")
-
-parsers[1].add_argument(
-    '-c', '--caller', dest='caller', action='store', default=argparse.SUPPRESS,
-    help="caller name")
-
+# verbose is not moved into batch.py because its default value
+# comes from here.
 parsers[0].add_argument(
     '-v', '--verbose', default=verbose, action="count",
     help='verbose level: -v, -vv, -vvv')
@@ -160,54 +161,16 @@ parsers[1].add_argument(
     '-v', '--verbose', default=argparse.SUPPRESS, action="count",
     help='verbose level: -v, -vv, -vvv')
 
-parsers[0].add_argument(
-    '-dryrun', '--dryrun', default=False, action="store_true",
-    help='dryrun mode')
+extra_args = all_cfg.get('extra_args', {})
 
-parsers[1].add_argument(
-    '-dryrun', '--dryrun', default=argparse.SUPPRESS, action="store_true",
-    help='dryrun mode')
-
-parsers[0].add_argument(
-    '-debug', '--debug', default=False, action="store_true",
-    help='debug mode')
-
-parsers[1].add_argument(
-    '-debug', '--debug', default=argparse.SUPPRESS, action="store_true",
-    help='debug mode')
-
-parsers[0].add_argument(
-    '-interactive', '--interactive', default=False, action="store_true",
-    help='interactive mode')
-
-parsers[1].add_argument(
-    '-interactive', '--interactive', default=argparse.SUPPRESS, action="store_true",
-    help='interactive mode')
-
-parsers[0].add_argument(
-    '-np', '--no_post_batch', default=False, action="store_true",
-    help='not to run post_batch')
-
-parsers[1].add_argument(
-    '-np', '--no_post_batch', default=False, action="store_true",
-    help='not to run post_batch')
-
-parsers[0].add_argument(
-    '-b', '--batch', action='store', default=None,
-    help="batch file")
-
-parsers[1].add_argument(
-    '-b', '--batch', action='store', default=argparse.SUPPRESS,
-    help="batch file")
-
-extra_args = all_cfg.get('extra_args', [])
-
-for argument_dict in extra_args:
+for k, v in extra_args.items():
     # convert dict to **kwargs
     parser1 = parsers[0].add_argument(
-        f'-{argument_dict["dest"]}', **argument_dict)
+        *v["switches"], **{k2: v2 for k2, v2 in v.items() if k2 != 'switches'}, dest=k
+    )
     parser2 = parsers[1].add_argument(
-        f'-{argument_dict["dest"]}', **argument_dict)
+        *v["switches"], **{k2: v2 for k2, v2 in v.items() if k2 != 'switches'}, dest=k
+    )
     parser2.default = argparse.SUPPRESS
 
 for i in range(2):
@@ -274,6 +237,12 @@ position_args = all_cfg.get('position_args', [])
 opt = {}
 
 caller = a['caller']
+
+# if verbose:
+#     print(f'remainingArgs = {remainingArgs}')
+#     # exit
+#     exit(0)
+
 if (len(position_args) > len(remainingArgs)):
     usage(f'missing positional args, expecting {len(position_args)}, '
           f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
