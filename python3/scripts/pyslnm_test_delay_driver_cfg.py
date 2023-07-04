@@ -2,7 +2,6 @@
 from selenium import webdriver
 from pprint import pformat
 import time
-
 import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.env

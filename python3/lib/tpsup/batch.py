@@ -118,11 +118,22 @@ def parse_cfg(cfg_file: str = None, **opt):
     # unify all configs under our_cfg (later becomes all_cfg),
     # make it include functions of app_cfg.py (pre_batch, post_batch, ...).
     # this makes easier to access.
-
+    #
     # config precedence:
-    # 1. cfg file - eg, pyslnm_test_input_cfg.py, which is loaded into globals()
-    # 2. module - eg, seleniumtools.py - which is loaded into our_cfg['imported_tpbatch']
-    # 3. this file - batch.py - which is globals() too.
+    #     1. cfg file - eg, pyslnm_test_input_cfg.py, which is loaded into a our_cfg dict.
+    #     2. module - eg, seleniumtools.py - which is loaded into our_cfg['imported_tpbatch'].
+    #     3. this file - batch.py - which is globals().
+    # try to consolidate all the overrides logic here.
+
+    # globals() vs our_cfg (later becomes all_cfg).
+    #    globals() is the current module namespace.
+    #       it has all classes, functions, variables, ...
+    #    our_cfg (all_cfg) is one variable in globals().
+    #        it is a dict in app_cfg.py,
+    #        without functions of app_cfg.py.
+    # because pre_batch is a function, it is not in all_cfg.
+    # therefore, the following code will not work:
+    #    pre_batch = all_cfg.get("pre_batch", None)
 
     # dicts to be merged from 3 places: cfg file, module, this file.
     for k in [
@@ -149,26 +160,19 @@ def parse_cfg(cfg_file: str = None, **opt):
 
     # values or functions from 3 places: cfg file, module, this file.
     default_by_key = {
+        'pre_checks': [],
         'parse_input_sub': parse_input_default_way,
         'parse_dict_cfg': parse_dict_cfg,  # this function is only used in this funciton
     }
 
     for f in [
+        'pre_checks',
         'pre_batch',  # can be in 2 places: cfg file, module
         'post_batch',  # can be in 2 places: cfg file, module
         'code',  # can be in 2 places: cfg file, module
         'parse_input_sub',  # can be in 3 places: cfg file, module, this file.
         'parse_dict_cfg',  # can be in 3 places: cfg file, module, this file.
     ]:
-        # globals() vs our_cfg (later becomes all_cfg).
-        #    globals() is the current module namespace.
-        #       it has all classes, functions, variables, ...
-        #    our_cfg (all_cfg) is one variable in globals()
-        #        it is the dict of app_cfg.py,
-        #        without functions of app_cfg.py.
-        # because pre_batch is a function, it is not in all_cfg.
-        # therefore, the following code will not work:
-        #    pre_batch = all_cfg.get("pre_batch", None)
         if f in globals():
             our_cfg[f] = globals()[f]
         elif f in imported_tpbatch:
