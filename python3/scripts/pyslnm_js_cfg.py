@@ -36,7 +36,7 @@ our_cfg = {
     'extra_args': {
         # argparse's args
         'trap': {
-            'dest': ['-trap', '--trap'],
+            'switches': ['-trap', '--trap'],
             'default': False,
             'action': 'store_true',
             'help': 'add try{...}catch{...}',

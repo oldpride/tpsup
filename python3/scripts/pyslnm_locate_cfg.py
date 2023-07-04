@@ -32,31 +32,31 @@ our_cfg = {
     'position_args': ['url', 'output_dir'],
 
     'extra_args': {
-        'js': {'dest': ['-js', '--js'],
+        'js': {'switches': ['-js', '--js'],
                'default': False,
                'action': 'store_true',
                'help': 'run js'
                },
         'trap': {
-            'dest': ['-trap', '--trap'],
+            'switches': ['-trap', '--trap'],
             'default': False,
             'action': 'store_true',
             'help': 'used with -js, to add try{...}catch{...}',
         },
         'full': {
-            'dest': ['-full', '--full'],
+            'switches': ['-full', '--full'],
             'default': False,
             'action': 'store_true',
             'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
         },
         'print_console_log': {
-            'dest': ['-ps', '--print_console_log'],
+            'switches': ['-ps', '--print_console_log'],
             'default': False,
             'action': 'store_true',
             'help': 'print js console log',
         },
         'limit_depth': {
-            'dest': ['--limit_depth'],
+            'switches': ['--limit_depth'],
             'default': 5,
             'action': 'store',
             'type': int,

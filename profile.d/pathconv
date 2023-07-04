@@ -1,0 +1,91 @@
+# for vs code
+local prog usage action settings line key val
+
+prog=${FUNCNAME[1]}
+
+usage="
+
+usage:
+
+   $prog check      # check only
+   $prog disable    # disable path conversion
+   $prog enable     # enable  path conversion
+   $prog reset      # rest to default, ie, enable
+
+to manage Posix path convesion in MSYS2, MinGW, Git Bash. 
+   eg, xpath=/html to xpath=C:/Program Files/Git/html
+
+note:
+   - by default, this conversion is enabled.
+   - when enabled, the env variables are actually unset.
+   - The settings have no effect in Linux bash.
+
+background:
+
+   https://stackoverflow.com/questions/7250130
+   \"So in summary, to disable this Posix path convesion:
+        For MSYS2 (built-in):                    MSYS2_ARG_CONV_EXCL=\"*\"
+        For Git for Windows (built-in):          MSYS_NO_PATHCONV=1
+        For MinGW.org (with msys-core-extended): MSYS_NO_PATHCONV=1.
+   \"
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args" >&2
+   echo "$usage" >&2
+   return
+fi
+
+action=$1
+
+
+# 1. export from inside while loop vs for loop
+#    while loop creats a child shell, therefore var exported from inside while loop is lost.
+#    for   loop stays in same  shell, therefore var exported from inside for   loop stays.
+#    therefore, i abandond the follosing
+#        settings="
+#           MSYS2_ARG_CONV_EXCL=*
+#           MSYS_NO_PATHCONV=1
+#        "
+#        echo "$settings" | while read line
+#
+#  2. used array 
+#
+#  https://stackoverflow.com/questions/44429051
+
+settings=(
+"MSYS2_ARG_CONV_EXCL=*"
+"MSYS_NO_PATHCONV=1"
+)
+
+for line in "${settings[@]}"
+do
+   if [ "X$line" = "X" ]; then
+      continue
+   fi
+
+   key=`echo $line|cut -d= -f1`
+   val=`echo $line|cut -d= -f2`
+
+   if [ $action = check ]; then
+      if [ "$val" = "${!key}" ]; then
+         echo "disabled"
+      elif [ "X" = "X${!key}" ]; then
+         echo "enabled"
+      else
+         echo "unknown state"
+      fi
+   elif [ $action = disable ]; then
+      # echo "export $key=\"$val\""
+      export $key="$val"
+   elif [ $action = enable -o $action = reset ]; then
+      unset $key
+   else
+      echo "ERROR: unknown action='$action'" >&2
+      echo "$usage" >&2
+      return
+   fi
+
+   echo "$key=${!key}" # variable of variable
+done

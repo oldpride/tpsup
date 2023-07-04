@@ -22,83 +22,14 @@ our_cfg = {
             'cfg': {
                 # 'host_port': 'auto'
             },
-            'init_resource': 0,  # we delay the driver init till we really need it.
+            # we delay the driver init till we really need it.
+            'init_resource': 0,
         },
     },
 
+    'module': 'tpsup.appiumtools',
+
     # appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
-
-    # position_args will be inserted into $opt hash to pass forward
-    'position_args': ['host_port'],
-
-    'extra_args': [
-        # argparse's args
-        {
-            'dest': 'headless',
-            'default': False,
-            'action': 'store_true',
-            'help': 'run in headless mode',
-        },
-        {
-            'dest': 'is_emulator',
-            'default': False,
-            'action': 'store_true',
-            'help': 'this is emulator, therefore, auto start it if it is not running',
-        },
-        {
-            'dest': 'js',
-            'default': False,
-            'action': 'store_true',
-            'help': 'run js'
-        },
-        {
-            'dest': 'trap',
-            'default': False,
-            'action': 'store_true',
-            'help': 'used with -js, to add try{...}catch{...}',
-        },
-        {
-            'dest': 'full',
-            'default': False,
-            'action': 'store_true',
-            'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
-        },
-        {
-            'dest': 'print_console_log',
-            'default': False,
-            'action': 'store_true',
-            'help': 'print js console log',
-        },
-        {
-            'dest': 'limit_depth',
-            'default': 5,
-            'action': 'store',
-            'type': int,
-            'help': 'limit scan depth',
-        },
-        {
-            'dest': 'app',
-            'default': None,
-            'action': 'store',
-            'help': 'app_path, /path/app.apk for android or https://app.com/app.ipa for ios. this copies the package onto device',
-        },
-
-        # these two can be replaced with run=app/activity
-        # {
-        #     'dest': 'appPackage',
-        #     'default': None,
-        #     'action': 'store',
-        #     'help': 'appPackage, eg. com.android.chrome',
-        # },
-        #
-        # {
-        #     'dest': 'appActivity',
-        #     'default': None,
-        #     'action': 'store',
-        #     'help': 'appActivity, eg. com.android.chrome.Main',
-        # }
-    ],
-
 
     'usage_example': f'''
     +----------+       +----------+      +-----+    +---------+
@@ -146,8 +77,8 @@ our_cfg = {
         device pairing host:port
         device connect host:port
 
-    {{{{prog}}}} localhost:4723 -is_emulator '''
-                     'home id=com.android.quicksearchbox:id/search_widget_text click '
+    {{{{prog}}}} -is_emulator --humanlike '''
+                     'key=home id=com.android.quicksearchbox:id/search_widget_text click '
                      'id=com.android.quicksearchbox:id/search_src_text click string=Amazon action=Search '
                      'dump_page=%USERPROFILE%/dumpdir2/page_source.html '
                      'xpath="//*[@content-desc]" '
@@ -155,17 +86,17 @@ our_cfg = {
                      f'''
     
     - test with app
-    {{{{prog}}}} localhost:4723 -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk"
+    {{{{prog}}}} -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk"
     - if app stuck, 
     adb uninstall org.nativescript.test02ngchallenge
     
     - test webview context
-    {{{{prog}}}} localhost:4723 -is_emulator context=webview
+    {{{{prog}}}} -is_emulator context=webview
     this is not working yet. we may need to launch an webview app first
     
     - test with real device, 
     - the following command load the package onto the device
-    {{{{prog}}}} localhost:4723  -np -v -app "%TPSUP%/python3/scripts/test02.apk"
+    {{{{prog}}}} -np -v -app "%TPSUP%/python3/scripts/test02.apk"
     
     - find package name
     adb shell "pm list packages|grep test02"
@@ -177,10 +108,10 @@ our_cfg = {
         b20ec9c org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - run the package's activity
-    {{{{prog}}}} localhost:4723  -np -v run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
+    {{{{prog}}}} -np -v run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - the above can be done in one command assuming knowing pkg and activity beforehand
-    {{{{prog}}}} localhost:4723 -np -v -app "%TPSUP%/python3/scripts/test02.apk" run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
+    {{{{prog}}}} -np -v -app "%TPSUP%/python3/scripts/test02.apk" run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
 ''',
 
@@ -214,21 +145,7 @@ def code(all_cfg, known, **opt):
     tpsup.appiumtools.follow(None, steps, checkonly=1, **opt)
     print(f'---------- end checking steps -----------')
 
-    driver: webdriver = all_cfg["resources"]["appium"].get("driver", None)
-    if driver is None:
-        method = all_cfg["resources"]["appium"]["driver_call"]['method']
-        kwargs = all_cfg["resources"]["appium"]["driver_call"]["kwargs"]
-        opt2 = {}
-
-        for k in ["verbose", "app"]:
-            if v := opt.get(k, None):
-                opt2[k] = v
-
-        driver = method(**{**kwargs, "dryrun": 0, **opt})  # overwrite kwargs
-        # 'host_port' are in **opt
-        all_cfg["resources"]["appium"]["driver"] = driver
-
-
+    driver: webdriver = all_cfg["resources"]["appium"]["driver"]
 
     result = tpsup.appiumtools.follow(driver, steps, **opt)
 
@@ -238,16 +155,3 @@ def code(all_cfg, known, **opt):
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     return {'REMAININGARGS': input}
-
-
-def post_batch(all_cfg, known, **opt):
-    print(f'running post batch')
-    driver: webdriver = all_cfg["resources"]["appium"].get("driver", None)
-    if driver:
-        print('driver.quit()')
-        driver.quit()
-    else:
-        print("driver didn't start.")
-
-    # if tpsup.pstools.prog_running('chromed', printOutput=1):
-    #     print(f"seeing leftover chrome")

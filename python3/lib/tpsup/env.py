@@ -69,6 +69,9 @@ class Env:
                 self.term['term'] = "gitbash"
                 self.term['tmpdir'] = "/tmp"
                 self.term['ls_cmd'] = "ls"
+                self.term['/'] = subprocess.run(
+                    ["cygpath", "-m", "/"], capture_output=True, text=True
+                ).stdout.strip()
             elif "MINTTY_SHORTCUT" in os.environ:
                 # Cygwin signature:
                 # MINTTY_SHORTCUT=/cygdrive/c/Users/william/AppData/Roaming/Microsoft/Internet
@@ -149,6 +152,22 @@ def cygpath(path: str, direction: Literal["win2cyg", "cyg2win"], **opt):
                 ["cygpath", "-m", path], capture_output=True, text=True
             ).stdout.strip()
     return path2
+
+
+def restore_posix_paths(paths: list, **opt) -> list:
+    # by default, gitbash converts / to C:/Program Files/Git
+    # for example, xpath=/html becomes xpath=C:/Program Files/Git/html
+    # this function converts C:/Program Files/Git/html back to /html
+    # so that we can use xpath=/html in our code
+    my_env = Env()
+    if not my_env.term.get('term', None) == 'gitbash':
+        return paths
+
+    new_paths = []
+    for path in paths:
+        new_path = path.replace(my_env.term['/'], '/')
+        new_paths.append(new_path)
+    return new_paths
 
 
 def get_native_path(path: str, **opt) -> str:

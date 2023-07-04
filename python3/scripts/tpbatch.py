@@ -6,7 +6,7 @@ from tpsup.batch import parse_cfg, run_batch
 from tpsup.exectools import exec_into_globals
 from pprint import pformat
 from tpsup.util import resolve_scalar_var_in_string
-
+from tpsup.env import restore_posix_paths
 import sys
 
 prog = os.path.basename(sys.argv[0])
@@ -14,7 +14,6 @@ prog = os.path.basename(sys.argv[0])
 args = sys.argv[1:]  # shift
 
 usage_str = ''
-
 
 prog = os.path.basename(__file__)
 
@@ -130,15 +129,17 @@ if args[0] == '-v':
     if len(args) == 0:
         usage("missing args", caller=f'{prog} config.py')
 
-# print(f'args = {args}')
-# exit(1)
-
 all_cfg = parse_cfg(args[0])
 all_cfg['cfg_file'] = args[0]
 if verbose:
     print(f'all_cfg = {pformat(all_cfg)}')
 
 args = args[1:]  # shift away config.py
+
+# print(f'args = {args}')
+# restore 'xpath=C:/Program Files/Git/html' back to 'xpath=/html'
+args = restore_posix_paths(args)
+# print(f'args = {args}')
 
 parsers = []
 

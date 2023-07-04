@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from shutil import which
 import tpsup.env
 from selenium import webdriver
+from tpsup.human import human_delay
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -356,7 +357,7 @@ class SeleniumEnv:
             )  # for chromedriver.
             # other driver use implicitly_wait()
 
-            self.driver.seleniumEnv = self  # monkey patching for convenience
+            self.driver.driverEnv = self  # monkey patching for convenience
 
     def get_driver(self) -> webdriver.Chrome:
         return self.driver
@@ -470,9 +471,9 @@ def print_js_console_log(driver: webdriver.Chrome, **opt):
 
 
 def get_driver(**args) -> webdriver.Chrome:
-    # seleniumEnv = tpsup.seleniumtools.SeleniumEnv(**args)
-    seleniumEnv = SeleniumEnv(**args)
-    return seleniumEnv.get_driver()
+    # driverEnv = tpsup.seleniumtools.SeleniumEnv(**args)
+    driverEnv = SeleniumEnv(**args)
+    return driverEnv.get_driver()
 
 
 def get_static_setup(**opt):
@@ -1965,31 +1966,6 @@ def js_list_to_locator_chain(js_list: list, **opt) -> list:
     return locator_chain
 
 
-def human_delay(max_delay: int = 3, min_delay: int = 1):
-    # default to sleep, 1, 2, or 3 seconds
-
-    if min_delay < 0:
-        raise RuntimeError(
-            f"min={min_delay} is less than 0, not acceptable. min must >= 0")
-    if max_delay < 0:
-        raise RuntimeError(
-            f"max={max_delay} is less than 0, not acceptable. max must >= 0")
-    if max_delay < min_delay:
-        raise RuntimeError(f"max ({max_delay}) < min ({min_delay})")
-    elif max_delay == min_delay:
-        # not random any more
-        print(f"like human: sleep seconds = {max}")
-        if max_delay > 0:
-            time.sleep(max_delay)
-    else:
-        seconds = int(time.time())
-        # random_seconds = (seconds % max) + 1
-        random_seconds = (seconds % (max_delay+1-min_delay)) + min_delay
-        print(f"like human: sleep random_seconds = {random_seconds}")
-        if random_seconds > 0:
-            time.sleep(random_seconds)
-
-
 def tp_click(driver: webdriver.Chrome, element: WebElement, **opt):
     try:
         # this didn't improve
@@ -2203,8 +2179,8 @@ def test_basic():
     #         "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe" --window-size=960,540 \
     #         --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=19999
 
-    seleniumEnv = SeleniumEnv("localhost:19999", verbose=1)
-    driver = seleniumEnv.get_driver()
+    driverEnv = SeleniumEnv("localhost:19999", verbose=1)
+    driver = driverEnv.get_driver()
     print(f"driver.title={driver.title}")
 
     url = "http://www.google.com/"
@@ -2223,7 +2199,7 @@ def test_basic():
         # the following are the same
         # search_box.send_keys(webdriver.common.keys.Keys.RETURN)
         search_box.submit()
-        seleniumEnv.delay_for_viewer()  # Let the user actually see something!
+        driverEnv.delay_for_viewer()  # Let the user actually see something!
 
     for tag_a in driver.find_elements(by=By.TAG_NAME, value="a"):
         link = None
@@ -2249,7 +2225,7 @@ def test_basic():
     my_env = tpsup.env.Env()
     # list all the log files for debug purpose
     # use double quotes to close "C:/Users/.../selenium*" because bare / is a switch in cmd.exe.
-    cmd = f"{my_env.ls_cmd} -ld \"{seleniumEnv.log_base}/\"seleninum*"
+    cmd = f"{my_env.ls_cmd} -ld \"{driverEnv.log_base}/\"seleninum*"
     print(cmd)
     os.system(cmd)
 
@@ -2535,7 +2511,7 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
 def pre_batch(all_cfg, **opt):
     print("")
     print('running pre_batch()')
-    if not 'driver' in all_cfg["resources"]["selenium"]:
+    if all_cfg["resources"]["selenium"].get('driver', None) is None:
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
         all_cfg["resources"]["selenium"]['driver'] = method(**kwargs)
@@ -2556,12 +2532,12 @@ def post_batch(all_cfg, known, **opt):
         print("")
 
         print(f"list all the log files for debug purpose")
-        seleniumEnv = driver.seleniumEnv
-        my_env = seleniumEnv.env
+        driverEnv = driver.driverEnv
+        my_env = driverEnv.env
         if my_env.isWindows:
-            cmd = f"{my_env.ls_cmd} \"{seleniumEnv.log_base}\\selenium*\""
+            cmd = f"{my_env.ls_cmd} \"{driverEnv.log_base}\\selenium*\""
         else:
-            cmd = f"{my_env.ls_cmd} -ld \"{seleniumEnv.log_base}\"/selenium*"
+            cmd = f"{my_env.ls_cmd} -ld \"{driverEnv.log_base}\"/selenium*"
         print(cmd)
         os.system(cmd)
         print("")
