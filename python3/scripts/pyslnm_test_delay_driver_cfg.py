@@ -9,13 +9,6 @@ import tpsup.env
 import os
 
 our_cfg = {
-    "resources": {
-        "selenium": {
-            "method": tpsup.seleniumtools.get_driver,
-            "cfg": {},
-            "init_resource": 0,  # delay init until first use
-        },
-    },
     'module': 'tpsup.seleniumtools',
 
     "usage_example": """

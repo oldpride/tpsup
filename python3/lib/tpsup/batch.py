@@ -95,8 +95,7 @@ def parse_cfg(cfg_file: str = None, **opt):
 
     # our_cfg = asdict(mod.our_cfg)
 
-    imported = None
-    imported_tpbatch = None
+    imported_tpbatch = {}
     if module := our_cfg.get('module', None):
         if not type(module) is str:
             raise Exception(
@@ -108,28 +107,74 @@ def parse_cfg(cfg_file: str = None, **opt):
             imported_tpbatch = imported.tpbatch
             our_cfg['imported_tpbatch'] = imported_tpbatch
 
-    if imported_tpbatch and 'parse_dict_cfg' in imported_tpbatch:
-        parse_dict_cfg_sub = imported_tpbatch['parse_dict_cfg']
+    if parse_dict_cfg_sub := imported_tpbatch.get('parse_dict_cfg'):
+        pass
     else:
         # default is defined int this file
         parse_dict_cfg_sub = parse_dict_cfg
 
     our_cfg = parse_dict_cfg_sub(our_cfg, **opt)
 
-    cfg_extra_args = our_cfg.get('extra_args', {})
-    mod_extra_args = {}
-    if imported_tpbatch:
-        mod_extra_args = imported_tpbatch.get('extra_args', {})
+    # unify all configs under our_cfg (later becomes all_cfg),
+    # make it include functions of app_cfg.py (pre_batch, post_batch, ...).
+    # this makes easier to access.
 
-    # override order of extra_args
-    # 1. cfg file
-    # 2. module
-    # 3. this file
-    our_cfg['extra_args'] = {
-        **extra_args,
-        **mod_extra_args,
-        **cfg_extra_args
+    # config precedence:
+    # 1. cfg file - eg, pyslnm_test_input_cfg.py, which is loaded into globals()
+    # 2. module - eg, seleniumtools.py - which is loaded into our_cfg['imported_tpbatch']
+    # 3. this file - batch.py - which is globals() too.
+
+    # dicts to be merged from 3 places: cfg file, module, this file.
+    for k in [
+        'extra_args',  # can be in 3 places: cfg file, module, this file.
+        'resources',  # can be in 2 places: cfg file, module
+    ]:
+        our_cfg[k] = {
+            **globals().get(k, {}),
+            **imported_tpbatch.get(k, {}),
+            **our_cfg.get(k, {}),
+        }
+
+    # ways to check function existence
+    #   1st method to check function existence
+    #     if not (parse_input_sub := globals().get("parse_input_sub", None)):  # check function existence
+    #         parse_input_sub = parse_input_default_way
+    #
+    #   2nd method to check function existence
+    #     global parse_input_sub
+    #     try:
+    #         parse_input_sub
+    #     except NameError:
+    #         parse_input_sub = parse_input_default_way
+
+    # values or functions from 3 places: cfg file, module, this file.
+    default_by_key = {
+        'parse_input_sub': parse_input_default_way,
+        'parse_dict_cfg': parse_dict_cfg,  # this function is only used in this funciton
     }
+
+    for f in [
+        'pre_batch',  # can be in 2 places: cfg file, module
+        'post_batch',  # can be in 2 places: cfg file, module
+        'code',  # can be in 2 places: cfg file, module
+        'parse_input_sub',  # can be in 3 places: cfg file, module, this file.
+        'parse_dict_cfg',  # can be in 3 places: cfg file, module, this file.
+    ]:
+        # globals() vs our_cfg (later becomes all_cfg).
+        #    globals() is the current module namespace.
+        #       it has all classes, functions, variables, ...
+        #    our_cfg (all_cfg) is one variable in globals()
+        #        it is the dict of app_cfg.py,
+        #        without functions of app_cfg.py.
+        # because pre_batch is a function, it is not in all_cfg.
+        # therefore, the following code will not work:
+        #    pre_batch = all_cfg.get("pre_batch", None)
+        if f in globals():
+            our_cfg[f] = globals()[f]
+        elif f in imported_tpbatch:
+            our_cfg[f] = imported_tpbatch[f]
+        else:
+            our_cfg[f] = default_by_key.get(f, None)
 
     return our_cfg
 
@@ -182,36 +227,7 @@ def parse_dict_cfg(dict_cfg: type = dict, **opt):
 
 
 def parse_input(input: Union[str, List], all_cfg: dict, **opt):
-    # 1st method to check function existence
-    # if not (parse_input_sub := globals().get("parse_input_sub", None)):  # check function existence
-    #     parse_input_sub = parse_input_default_way
-
-    # # 2nd method to check function existence
-    # global parse_input_sub
-    # try:
-    #     parse_input_sub
-    # except NameError:
-    #     parse_input_sub = parse_input_default_way
-
-    # water-fall
-    # 1. use the parser from cfg.py
-    # 2. use the parser from 'module' attribute
-    # 3. use the default parser in this module
-    if parse_input_sub := globals().get("parse_input_sub", None):
-        # globals() is batch.py which loaded app_cfg.py.
-        # therefore app_cfg.py's functions are also in globals().
-        # to avoid dead loop,
-        #    app_cfg.py's function is parse_input_sub
-        #    batch.py's function is parse_input
-        # 'sub' naming was from 'subroutine', from perl.
-        pass
-    elif imported_tpbatch := all_cfg.get('imported_tpbatch', None):
-        if parse_input_sub := imported_tpbatch.get('parse_input', None):
-            pass
-
-    if not parse_input_sub:
-        parse_input_sub = parse_input_default_way
-
+    parse_input_sub = all_cfg["parse_input_sub"]
     return parse_input_sub(input, all_cfg, **opt)  # this set 'known' in caller
 
 
@@ -454,26 +470,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
     if show_progress:
         print(f'{os.linesep}--------------- batch begins, total={total} ---------------------', file=sys.stderr)
 
-    pre_batch = None
-    if not opt.get('no_pre_batch', 0):
-        # globals() vs all_cfg.
-        #    globals() is the current module namespace.
-        #       it has all classes, functions, variables, ...
-        #    all_cfg is one variable in globals()
-        #        it is the dict of app_cfg.py,
-        #        without functions of app_cfg.py.
-        # because pre_batch is a function, it is not in all_cfg.
-        # therefore, the following code will not work:
-        #    pre_batch = all_cfg.get("pre_batch", None)
-        if not (pre_batch := globals().get("pre_batch", None)):
-            if imported_tpbatch := all_cfg.get('imported_tpbatch', None):
-                pre_batch = imported_tpbatch.get('pre_batch', None)
-    post_batch = None
-    if not opt.get('no_post_batch', 0):
-        # post_batch = all_cfg.get("post_batch", None)
-        if not (post_batch := globals().get("post_batch", None)):
-            if imported_tpbatch := all_cfg.get('imported_tpbatch', None):
-                post_batch = imported_tpbatch.get('post_batch', None)
+    pre_batch = all_cfg.get("pre_batch", None)
+    post_batch = all_cfg.get("post_batch", None)
 
     pre_batch_alread_done = False
 
@@ -503,18 +501,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
             # known is not available in pre_batch, therefore not passed in as a parameter
             pre_batch(all_cfg, **opt2)
 
-        # waterfall
-        #   1. code in cfg file
-        #   2. code in imported_tpbatch
-        code_sub = None
-        if code := globals().get("code", None):  # check function existence
-            # all_cfg doesn't have functions, so we use globals()
-            #     if code := all_cfg.get("code", None):
-            code_sub = code
-        elif imported_tpbatch := all_cfg.get('imported_tpbatch', None):
-            code_sub = imported_tpbatch.get('code', None)
-
-        if code_sub:
+        if code_sub := all_cfg.get("code", None):
             retry = int(opt2.get("retry", 0))
             if not retry:
                 code_sub(all_cfg, known, **opt2)
@@ -573,12 +560,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
     if show_progress or verbose:
         print(f'{os.linesep}---- batch ends ----', file=sys.stderr)
 
-    if post_batch:
+    if post_batch and not opt.get('no_post_batch', 0):
         post_batch(all_cfg, known, **opt2)
-
-    # if not opt.get('no_post_batch', 0):
-    #     if post_batch := globals().get("post_batch", None):
-    #         post_batch(all_cfg, known, **opt2)
 
     return
 
@@ -590,9 +573,9 @@ def resolve_record_keys(keys, known):
 
 
 def init_resources(all_cfg: Dict, **opt):
-    if all_cfg.get('resources', None) is None:
-        return
-    resources = all_cfg['resources']
+    verbose = opt.get('verbose', 0)
+
+    resources = all_cfg.get('resources', {})
 
     for k, res in resources.items():
         if res.get('enabled', 1) == 0:

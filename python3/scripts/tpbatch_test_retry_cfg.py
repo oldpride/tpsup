@@ -26,7 +26,7 @@ our_cfg = {
     # 'position_args': ['input_retry'],
 
     'extra_args': {
-        'arg1': {'dest': ['--arg1'], 'default': 5, 'type': int,
+        'arg1': {'switches': ['--arg1'], 'default': 5, 'type': int,
                  'action': 'store', 'help': 'arg1, default 5'},
     },
 

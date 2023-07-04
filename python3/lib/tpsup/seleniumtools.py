@@ -2584,6 +2584,14 @@ tpbatch = {
             "help": "connect to a browser at host:port.  default is auto, which means to start a new browser",
         },
     },
+    "resources": {
+        "selenium": {
+            # "method": tpsup.seleniumtools.get_driver,
+            "method": get_driver,
+            # "cfg": {},
+            "init_resource": 0,  # delay init until first use
+        },
+    },
 }
 
 

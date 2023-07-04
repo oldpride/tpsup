@@ -11,28 +11,18 @@ import tpsup.pstools
 import tpsup.env
 
 our_cfg = {
-
-    'resources': {
-        'dummy': {
-            'method': tpsup.dummytools.get_driver,
-            # will be overriden by extra_args, which is from command line.
-            'cfg': {'arg1': 3},
-            "init_resource": 0,  # delay init until first use
-        },
-    },
-
     'module': 'tpsup.dummytools',
 
     'position_args': ['host_port'],
 
     'extra_args': {
-        'dummyarg1': {'dest': ['-da1', '-dummyarg1'], 'default': False,
+        'dummyarg1': {'switches': ['-da1', '-dummyarg1'], 'default': False,
                       'action': 'store_true', 'help': 'dummyarg1 in cfg.py'},
-        'dummyarg3': {'dest': ['-da3', '-dummyarg3'], 'default': False,
+        'dummyarg3': {'switches': ['-da3', '-dummyarg3'], 'default': False,
                       'action': 'store_true', 'help': 'dummyarg3 in cfg.py'},
 
         # overwrite 'record' arg to set default to 'detail'.
-        'record': {'dest': ['--record'],
+        'record': {'switches': ['--record'],
                    'default': 'detail',
                    'action': 'store',
                    'help': 'record keys (separated by comma) to avoid run twice. default: detail'},

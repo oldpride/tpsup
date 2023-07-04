@@ -16,17 +16,8 @@ from pprint import pformat
 from appium import webdriver
 
 our_cfg = {
-    'resources': {
-        'appium': {
-            'method': tpsup.appiumtools.get_driver,
-            'cfg': {
-                # 'host_port': 'auto'
-            },
-            # we delay the driver init till we really need it.
-            'init_resource': 0,
-        },
-    },
-
+    # this loads specified module's 'tpbatch', which contains
+    #    pre_batch(), post_batch(), 'extra_args', ...
     'module': 'tpsup.appiumtools',
 
     # appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
@@ -46,8 +37,9 @@ our_cfg = {
         2. appium only works when "adb devices" has only one device.
     
     to test with emulator, 
-        just set is_emulator = True.
+        just add -is_emulator 
         this call will start an emulator
+
     to test with real device running android,
         on the device, settings->system->developer options->USB debugging, turn on.
         if device is connected with USB cable
@@ -85,18 +77,18 @@ our_cfg = {
     # 'context=webview dump_element=stdout '
                      f'''
     
-    - test with app
-    {{{{prog}}}} -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk"
+    - test with app - this command installs the app too if not installed yet.
+    {{{{prog}}}} -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk" sleep=1
     - if app stuck, 
     adb uninstall org.nativescript.test02ngchallenge
     
     - test webview context
     {{{{prog}}}} -is_emulator context=webview
-    this is not working yet. we may need to launch an webview app first
+    todo: this is not working yet. we may need to launch an webview app first
     
     - test with real device, 
     - the following command load the package onto the device
-    {{{{prog}}}} -np -v -app "%TPSUP%/python3/scripts/test02.apk"
+    {{{{prog}}}} -np -v -app "%TPSUP%/python3/scripts/test02.apk" sleep=1
     
     - find package name
     adb shell "pm list packages|grep test02"
@@ -140,7 +132,7 @@ def code(all_cfg, known, **opt):
     steps = known['REMAININGARGS']
     print(f'steps = {pformat(steps)}')
 
-    # check first
+    # check first, then run. this saves time to catch errors early.
     print(f'---------- begin checking steps -----------')
     tpsup.appiumtools.follow(None, steps, checkonly=1, **opt)
     print(f'---------- end checking steps -----------')

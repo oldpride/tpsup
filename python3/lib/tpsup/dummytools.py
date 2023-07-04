@@ -43,10 +43,19 @@ tpbatch = {
     'pre_batch': pre_batch,
     'post_batch': post_batch,
     'extra_args': {
-        'dummyarg1': {'dest': ['-da1', '-dummyarg1'], 'default': False,
+        'dummyarg1': {'switches': ['-da1', '-dummyarg1'], 'default': False,
                       'action': 'store_true', 'help': 'dummyarg1 in dummytools.py'},
-        'dummyarg2': {'dest': ['-da2', '-dummyarg2'], 'default': False,
+        'dummyarg2': {'switches': ['-da2', '-dummyarg2'], 'default': False,
                       'action': 'store_true', 'help': 'dummyarg2 in dummytools.py'},
+    },
+
+    'resources': {
+        'dummy': {
+            'method': get_driver,
+            # will be overriden by extra_args, which is from command line.
+            'cfg': {'arg1': 3},
+            "init_resource": 0,  # delay init until first use
+        },
     },
 }
 

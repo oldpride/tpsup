@@ -8,10 +8,6 @@ import tpsup.env
 import os
 
 our_cfg = {
-    "resources": {
-        "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
-    },
-
     "module": "tpsup.seleniumtools",
 
     "usage_example": """

@@ -10,9 +10,6 @@ import os
 from selenium import webdriver
 
 our_cfg = {
-    "resources": {
-        "selenium": {"method": tpsup.seleniumtools.get_driver, "cfg": {}},
-    },
     "module": "tpsup.seleniumtools",
 
     "usage_example": """

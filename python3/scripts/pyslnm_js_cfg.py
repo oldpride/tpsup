@@ -16,18 +16,6 @@ from selenium import webdriver
 
 
 our_cfg = {
-
-    'resources': {
-        'selenium': {
-            'method': tpsup.seleniumtools.get_driver,
-            'cfg': {
-                # 'host_port': 'auto'
-            },
-            # we delay the driver init till we really need it.
-            'init_resource': 0,
-        },
-    },
-
     'module': 'tpsup.seleniumtools',
 
     # position_args will be inserted into $opt hash to pass forward

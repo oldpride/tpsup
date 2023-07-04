@@ -13,17 +13,6 @@ from selenium import webdriver
 
 
 our_cfg = {
-    'resources': {
-        'selenium': {
-            'method': tpsup.seleniumtools.get_driver,
-            'cfg': {
-                # 'host_port': 'auto'
-            },
-            # we delay the driver init till we really need it.
-            'init_resource': 0,
-        },
-    },
-
     'module': 'tpsup.seleniumtools',
 
     # position_args will be inserted into $opt hash to pass forward
@@ -104,4 +93,4 @@ def code(all_cfg, known, **opt):
 
     print(f'actions = {pformat(actions)}')
     result = tpsup.seleniumtools.run_actions(
-        driver, actions, **{**opt, 'dryrun': 0})
+        driver, actions, **opt)

@@ -465,26 +465,26 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
         elif m := step_compiled_context.match(step):
             value, *_ = m.groups()
             print(f"follow(): switch to context matching {value}")
-            contexts = driver.contexts
-            context = None
-            for c in contexts:
-                if value == 'native':
-                    if m := context_compiled_native.match(c):
-                        context = c
-                        break
-                else:
-                    if m := context_compiled_webview.match(c):
-                        context = c
-                        break
-            if context:
-                print(f"found context={context} among {pformat(contexts)}")
-            else:
-                raise RuntimeError(
-                    f'no matching context among {pformat(contexts)}')
 
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
+                contexts = driver.contexts
+                context = None
+                for c in contexts:
+                    if value == 'native':
+                        if m := context_compiled_native.match(c):
+                            context = c
+                            break
+                    else:
+                        if m := context_compiled_webview.match(c):
+                            context = c
+                            break
+                if context:
+                    print(f"found context={context} among {pformat(contexts)}")
+                else:
+                    raise RuntimeError(
+                        f'no matching context among {pformat(contexts)}')
                 # when switch to webview context, appium needs a chromedriver
                 # selenium.common.exceptions.WebDriverException: Message: An unknown
                 # server-side error occurred while processing the command.
@@ -823,17 +823,19 @@ def post_batch(all_cfg, known, **opt):
         #        if thekey in thedict: del thedict[thekey]
         del all_cfg["resources"]["appium"]["driver"]
 
-    print(f"check if chromedriver is still running")
-    my_env = tpsup.env.Env()
-    if tpsup.pstools.prog_running("chromedriver", printOutput=1):
-        print(f"seeing leftover chromedriver, kill it")
-        if my_env.isWindows:
-            cmd = f"pkill chromedriver"
-        else:
-            # -f means match the full command line. available in linux, not in windows
-            cmd = f"pkill -f chromedriver"
-        print(cmd)
-        os.system(cmd)
+    for proc in ["qemu-system-x86_64.exe", "node.exe", "adb.exe"]:
+        print(f"check if {proc} is still running")
+        my_env = tpsup.env.Env()
+        if tpsup.pstools.prog_running(f"{proc}", printOutput=1):
+            print(f"seeing leftover {proc}, kill it?")
+            # don't kill it for now as it takes time to start up
+            # if my_env.isWindows:
+            #     cmd = f"pkill chromedriver"
+            # else:
+            #     # -f means match the full command line. available in linux, not in windows
+            #     cmd = f"pkill -f chromedriver"
+            # print(cmd)
+            # os.system(cmd)
 
 
 tpbatch = {
@@ -918,6 +920,16 @@ tpbatch = {
         #     'action': 'store',
         #     'help': 'appActivity, eg. com.android.chrome.Main',
         # }
+    },
+    'resources': {
+        'appium': {
+            'method': get_driver,
+            'cfg': {
+                # 'host_port': 'auto'
+            },
+            # we delay the driver init till we really need it.
+            'init_resource': 0,
+        },
     },
 }
 
