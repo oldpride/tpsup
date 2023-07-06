@@ -2508,7 +2508,7 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
 # known is only available in post_batch, not in pre_batch.
 
 
-def pre_batch(all_cfg, **opt):
+def pre_batch(all_cfg, known, **opt):
     print("")
     print('running pre_batch()')
     if all_cfg["resources"]["selenium"].get('driver', None) is None:

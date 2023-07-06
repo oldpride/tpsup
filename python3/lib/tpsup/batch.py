@@ -477,7 +477,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
     pre_batch = all_cfg.get("pre_batch", None)
     post_batch = all_cfg.get("post_batch", None)
 
-    pre_batch_alread_done = False
+    pre_batch_already_done = False
+    # we delay pre_batch() till we really need to run the code()
 
     for input in parsed_batch:
         i = i+1
@@ -499,11 +500,10 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                     f'already seen record at "{seen_record[record_string]},{record_string}". skipped.', file=sys.stderr)
                 continue
 
-        if pre_batch and not pre_batch_alread_done:
-            pre_batch_alread_done = True
+        if pre_batch and not pre_batch_already_done:
+            pre_batch_already_done = True
 
-            # known is not available in pre_batch, therefore not passed in as a parameter
-            pre_batch(all_cfg, **opt2)
+            pre_batch(all_cfg, known, **opt2)
 
         if code_sub := all_cfg.get("code", None):
             retry = int(opt2.get("retry", 0))
@@ -533,7 +533,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                                 if post_batch:
                                     post_batch(all_cfg, known, **opt2)
                                 if pre_batch:
-                                    pre_batch(all_cfg, **opt2)
+                                    pre_batch(all_cfg, known, **opt2)
                         else:
                             raise RuntimeError(
                                 f'task failed after all retries. input={pformat(input)}')
@@ -585,12 +585,10 @@ def init_resources(all_cfg: Dict, **opt):
         if res.get('enabled', 1) == 0:
             continue
 
-        if not 'cfg' in res:
-            res['cfg'] = {}
-
         # this is the way to copy **kwargs
         kwargs = {}
-        kwargs['driver_cfg'] = res['cfg']
+        # driver_cfg, eg, chrome options, is to separate driver_cfg from other kwargs
+        kwargs['driver_cfg'] = res.get('cfg', {})
         kwargs.update(opt)  # let command line options override cfg options
 
         resources[k]['driver_call'] = {
@@ -604,7 +602,7 @@ def init_resources(all_cfg: Dict, **opt):
             continue
         if opt.get('dryrun', 0) == 1:
             continue
-        resources[k]['driver'] = res['method'](**opt, driver_cfg=res['cfg'])
+        resources[k]['driver'] = res['method'](**kwargs)
 
 
 def main():

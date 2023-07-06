@@ -111,10 +111,12 @@ def start_proc(proc: str, **opt):
             "--log", log,
             "--log-level", "debug",
 
-            # this is called only when driver.switch_to.context("webview...")
-            # it may only work when desired_capacity has "app" set
-            # https://github.com/appium/appium-inspector/issues/465
-            # otherwise, error: unrecognized chrome option: androidDeviceSerial
+            # chromedriver
+            #   1. this is called only when driver.switch_to.context("webview...")
+            #      it may only work when desired_capacity has "app" set
+            #      https://github.com/appium/appium-inspector/issues/465
+            #      otherwise, error: unrecognized chrome option: androidDeviceSerial
+            #   2. chromedriver's version must match chrome version on the device.
             "--chromedriver-executable", r"C:\Users\william\appium\bin\chromedriver108.exe",
         ]
         # f"--log={self.appium_log}"
@@ -777,7 +779,7 @@ def swipe(driver: webdriver.Remote, param: str, **opt):
                      0.5, width * factor, height * 0.5)
 
 
-def pre_batch(all_cfg, **opt):
+def pre_batch(all_cfg, known, **opt):
     print("")
     print('running pre_batch()')
     driver: webdriver = all_cfg["resources"]["appium"].get("driver", None)
