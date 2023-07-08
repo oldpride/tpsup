@@ -138,8 +138,8 @@ def get_setup_info():
     return '''
 +----------+       +----------+      +-----+    +---------+
 | appium   +------>| appium   +----->+ adb +--->+ phone / | +---->internet
-| python   |       | server   |      |     |    | emulator|
-| webdriver|       |GUI/Nodejs|      |     |    |         |
+| webdrive |       | server   |      |     |    | emulator|
+| python   |       |GUI/Nodejs|      |     |    |         |
 +----------+       +----------+      +-----+    +---------+
 
 to test with emulator, 
@@ -245,10 +245,26 @@ class AppiumEnv:
         if self.verbose:
             print(f"desire_capabilities = {pformat(self.desired_cap)}")
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
-        self.driver = webdriver.Remote(
-            f"http://{host_port}/wd/hub", self.desired_cap)
-        # appium implicit wait is default 0. there is no get implicitly_wait() method
-        # self.driver.implicitly_wait(60)
+
+        self.driver = None
+        try:
+            self.driver = webdriver.Remote(
+                f"http://{host_port}/wd/hub", self.desired_cap)
+            # appium implicit wait is default 0. there is no get implicitly_wait() method
+            # self.driver.implicitly_wait(60)
+        except Exception as e:
+            print(f"Exception: {e}")
+            print(
+                "both appium and device/emulator are running, but webdriver failed to connect")
+            print("likely device/emulator is still booting up.")
+            sleep_time = 40
+            print(f"sleep {sleep_time} seconds and try again")
+            time.sleep(sleep_time)
+
+        if not self.driver:
+            print("trying again")
+            self.driver = webdriver.Remote(
+                f"http://{host_port}/wd/hub", self.desired_cap)
 
         self.driver.driverEnv = self  # monkey patching for convenience
 
@@ -779,6 +795,23 @@ def swipe(driver: webdriver.Remote, param: str, **opt):
                      0.5, width * factor, height * 0.5)
 
 
+def check_proc(**opt):
+    for proc in ["qemu-system-x86_64.exe", "node.exe", "adb.exe"]:
+        print(f"check if {proc} is still running")
+        my_env = tpsup.env.Env()
+        if tpsup.pstools.prog_running(f"{proc}", printOutput=1):
+            print(f"seeing leftover {proc}")
+            # try not to kill it because it takes time to start up
+            if opt.get('kill', False):
+                if my_env.isWindows:
+                    cmd = f"pkill {proc}"
+                else:
+                    # -f means match the full command line. available in linux, not in windows
+                    cmd = f"pkill -f {proc}"
+                print(cmd)
+                os.system(cmd)
+
+
 def pre_batch(all_cfg, known, **opt):
     print("")
     print('running pre_batch()')
@@ -802,6 +835,7 @@ def post_batch(all_cfg, known, **opt):
     if 'driver' in all_cfg["resources"]["appium"]:
         print(f"we have driver, quit it")
         driver = all_cfg["resources"]["appium"]["driver"]
+        # this is not needed as webdriver is part of this python script, not a separate process.
         driver.quit()
         print("")
 
@@ -825,19 +859,7 @@ def post_batch(all_cfg, known, **opt):
         #        if thekey in thedict: del thedict[thekey]
         del all_cfg["resources"]["appium"]["driver"]
 
-    for proc in ["qemu-system-x86_64.exe", "node.exe", "adb.exe"]:
-        print(f"check if {proc} is still running")
-        my_env = tpsup.env.Env()
-        if tpsup.pstools.prog_running(f"{proc}", printOutput=1):
-            print(f"seeing leftover {proc}, kill it?")
-            # don't kill it for now as it takes time to start up
-            # if my_env.isWindows:
-            #     cmd = f"pkill chromedriver"
-            # else:
-            #     # -f means match the full command line. available in linux, not in windows
-            #     cmd = f"pkill -f chromedriver"
-            # print(cmd)
-            # os.system(cmd)
+    check_proc(**opt)
 
 
 tpbatch = {
@@ -906,6 +928,12 @@ tpbatch = {
             "default": False,
             "action": "store_true",
             "help": "add some random delay to make it more humanlike",
+        },
+        'kill': {
+            "switches": ["--kill"],
+            "default": False,
+            "action": "store_true",
+            "help": "kill the leftover processes in post_batch()",
         },
 
         # these two can be replaced with run=app/activity

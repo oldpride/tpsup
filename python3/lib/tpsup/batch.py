@@ -160,13 +160,11 @@ def parse_cfg(cfg_file: str = None, **opt):
 
     # values or functions from 3 places: cfg file, module, this file.
     default_by_key = {
-        'pre_checks': [],
         'parse_input_sub': parse_input_default_way,
         'parse_dict_cfg': parse_dict_cfg,  # this function is only used in this funciton
     }
 
     for f in [
-        'pre_checks',
         'pre_batch',  # can be in 2 places: cfg file, module
         'post_batch',  # can be in 2 places: cfg file, module
         'code',  # can be in 2 places: cfg file, module
@@ -452,15 +450,6 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
         print(f'all_cfg = {pformat(all_cfg)}', file=sys.stderr)
         print(f'opt2 = {pformat(opt2)}', file=sys.stderr)
 
-    pre_checks = all_cfg.get('pre_checks', [])
-    for pc in pre_checks:
-        check = pc['check']
-        if not eval(check):
-            raise RuntimeError(
-                f'pre_check="{check}" failed, suggestion="{pc.get("suggestion", None)}"')
-        elif verbose:
-            print(f'pre_check="{check}" passed')
-
     # verbose implies show_progress
     show_progress = verbose or opt.get(
         'show_progress', 0) or all_cfg.get('show_progress', 0)
@@ -585,10 +574,12 @@ def init_resources(all_cfg: Dict, **opt):
         if res.get('enabled', 1) == 0:
             continue
 
+        if not 'cfg' in res:
+            res['cfg'] = {}
+
         # this is the way to copy **kwargs
         kwargs = {}
-        # driver_cfg, eg, chrome options, is to separate driver_cfg from other kwargs
-        kwargs['driver_cfg'] = res.get('cfg', {})
+        kwargs['driver_cfg'] = res['cfg']
         kwargs.update(opt)  # let command line options override cfg options
 
         resources[k]['driver_call'] = {
@@ -602,7 +593,7 @@ def init_resources(all_cfg: Dict, **opt):
             continue
         if opt.get('dryrun', 0) == 1:
             continue
-        resources[k]['driver'] = res['method'](**kwargs)
+        resources[k]['driver'] = res['method'](**opt, driver_cfg=res['cfg'])
 
 
 def main():

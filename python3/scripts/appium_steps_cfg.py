@@ -117,6 +117,19 @@ our_cfg = {
 }
 
 
+def pre_batch(all_cfg, known, **opt):
+    steps = known['REMAININGARGS']
+    print(f'steps = {pformat(steps)}')
+
+    # check first, then run. this saves time to catch errors early.
+    print(f'---------- begin checking steps -----------')
+    tpsup.appiumtools.follow(None, steps, checkonly=1, **opt)
+    print(f'---------- end checking steps -----------')
+
+    # call the default pre_batch() from tpsup.appiumtools
+    tpsup.appiumtools.pre_batch(all_cfg, known, **opt)
+
+
 def code(all_cfg, known, **opt):
     verbose = opt.get('verbose', 0)
     if verbose:
@@ -131,11 +144,6 @@ def code(all_cfg, known, **opt):
 
     steps = known['REMAININGARGS']
     print(f'steps = {pformat(steps)}')
-
-    # check first, then run. this saves time to catch errors early.
-    print(f'---------- begin checking steps -----------')
-    tpsup.appiumtools.follow(None, steps, checkonly=1, **opt)
-    print(f'---------- end checking steps -----------')
 
     driver: webdriver = all_cfg["resources"]["appium"]["driver"]
 
