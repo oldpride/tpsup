@@ -46,7 +46,7 @@ if [[ $uname =~ Linux ]]; then
    OS=Linux
    PREFIX=Linux
    VERSION=`echo $uname|cut -d' ' -f3|cut -d. -f1-2`
-elif [[ uname =~ _NT ]]; then
+elif [[ $uname =~ _NT ]]; then
    # Git bash
    # MINGW64_NT-10.0-19045 tianpc2 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
    # cygwin
@@ -72,6 +72,7 @@ if [ $action = check ]; then
    else
       echo "OK:    SITEVENV matched expected"
    fi
+   set -x
    cd $SITEVENV
    pwd
 elif [ $action = make ]; then
