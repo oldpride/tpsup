@@ -9,6 +9,8 @@ def run_cmd(cmd: str, **opt):
     if verbose:
         print(f'cmd = {cmd}')
 
+    # on windows, default shell is batch.
+    # on linux, default shell is /bin/sh.
     is_bash = opt.get('is_bash', False)
 
     # when calling bash.exe, $ needs to be escaped.
@@ -84,7 +86,7 @@ def run_cmd(cmd: str, **opt):
     return ret
 
 
-def run_cmd2(cmd: str, **opt):
+def run_cmd_decoded(cmd: str, **opt):
     verbose = opt.get('verbose', 0)
     if verbose:
         print(f'cmd = {cmd}')
@@ -116,28 +118,15 @@ def run_cmd2(cmd: str, **opt):
     }
 
 
-def run_bash(cmd: str, **opt):
-    verbose = opt.get('verbose', 0)
-    if verbose:
-        print(f'cmd = {cmd}')
-
-    myenv = tpsup.env.Env()
-    if myenv.isWindows:
-        bash = 'C:/Windows/System32/bash.exe'
-    else:
-        bash = '/bin/bash'
-    # https://stackoverflow.com/questions/17742789/running-multiple-bash-commands-with-subprocess
-    proc = subprocess.run([bash, '-c', cmd],
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE,
-                          )
-    # stdout, stderr = proc.communicate(cmd + '\n')
-
-    return {
-        'rc': proc.returncode,
-        'stdout': proc.stdout.decode(),
-        'stderr': proc.stderr.decode(),
-    }
+def run_cmd_clean(cmd: str, **opt):
+    ret = run_cmd(cmd, **opt)
+    if ret['rc'] != 0:
+        raise RuntimeError(
+            f"cmd={cmd} failed with rc={ret['rc']}, stderr={ret['stderr']}")
+    elif ret['stderr']:
+        print(ret['stderr'])
+        raise RuntimeError(f"cmd={cmd} failed with stderr={ret['stderr']}")
+    return ret['stdout']
 
 
 def main():
@@ -155,11 +144,6 @@ def main():
     ]:
         print(
             f"run_cmd('{cmd}', is_bash=True) = {pformat(run_cmd(cmd, is_bash=True))}")
-        # print(
-        #     f"run_cmd('{cmd}', is_bash=True, return_type='combined') = {pformat(run_cmd(cmd, is_bash=True, return_type='combined'))}")
-        # # print(f"run_cmd2('{cmd}') = {run_cmd2(cmd)}")
-        # print(
-        #     f"run_bash('{cmd}', is_bash=True) = {pformat(run_bash(cmd, is_bash=True))}")
         print('')
 
 
