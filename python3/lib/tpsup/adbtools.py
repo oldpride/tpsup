@@ -1,6 +1,7 @@
+# mainly calling adb shell commands
 import os
 import tpsup.cmdtools
-import tpsup.env
+import tpsup.tptmp
 
 # steps to print android manifest file
 # to test with emulator
@@ -73,8 +74,12 @@ def adb_pull(path: str, **opt):
     path_basename = os.path.basename(path)
 
     if not (download_dir := opt.get('download_dir', None)):
-        my_env = tpsup.env.Env()
-        download_dir = f'{my_env.home_dir}/downloads'
+        download_dir = tpsup.tptmp.get_dailydir()
+
+    dest = f'{download_dir}/{path_basename}'
+    if os.path.exists(dest):
+        print(f'{dest} already exists. we use it')
+        return dest
 
     cmd = f'adb pull {path} {download_dir}'
     if verbose:
@@ -85,7 +90,6 @@ def adb_pull(path: str, **opt):
     if rc:
         raise Exception(f'failed to run {cmd}')
 
-    dest = f'{download_dir}/{path_basename}'
     cmd = f'ls -l {dest}'
     if verbose:
         print(f'cmd = {cmd}')

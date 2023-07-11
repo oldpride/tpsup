@@ -71,7 +71,7 @@ class Env:
                 self.term['ls_cmd'] = "ls"
                 self.term['/'] = subprocess.run(
                     ["cygpath", "-m", "/"], capture_output=True, text=True
-                ).stdout.strip()
+                ).stdout.strip()  # bash/perl's backtick-equivalent
             elif "MINTTY_SHORTCUT" in os.environ:
                 # Cygwin signature:
                 # MINTTY_SHORTCUT=/cygdrive/c/Users/william/AppData/Roaming/Microsoft/Internet
@@ -296,6 +296,78 @@ def get_user_firstlast(user: str = None, **opt) -> str:
         return full_name
 
 
+re_split = None
+
+
+def get_native_path(path: str, **opt) -> str:
+    global re_split
+    if re_split is None:
+        re_split = re.compile(r'\\|/')
+    components = re_split.split(path)
+    print(f"components={components}")
+
+    if path.startswith('/'):
+        new_path = os.sep + os.path.join(*components)
+    else:
+        new_path = os.path.join(*components)
+    return new_path
+
+
+def path_contains(dir: str, **opt) -> bool:
+    if not (env_string := opt.get('env_string', None)):
+        env_var = opt.get('env_var', "PATH")
+        env_string = os.environ.get(env_var)
+
+    native_dir = get_native_path(dir)
+    for p in env_string.split(os.pathsep):
+        native_p = get_native_path(p)
+        if native_p == native_dir:
+            return True
+    return False
+
+
+def add_path(dir: str, **opt) -> str:
+    verbose = opt.get('verbose', False)
+
+    env_var = opt.get('env_var', "PATH")
+    env_string = os.environ.get(env_var, '')
+    if verbose:
+        print(f"old {env_var}={env_string}")
+
+    if opt.get('place', None) == 'prepend':
+        paths = env_string.split(os.pathsep)
+        if paths.length > 0 and paths[0] == dir:
+            # already in the first place
+            if verbose:
+                print(f"dir={dir} is already in the first place of {env_var}")
+            return
+        else:
+            new_paths = [dir] + [p for p in paths if p != dir]
+            new_env_string = os.pathsep.join(new_paths)
+            os.environ[env_var] = new_env_string
+    elif opt.get('place', None) == 'append':
+        paths = env_string.split(os.pathsep)
+        if paths.length > 0 and paths[-1] == dir:
+            # already in the last place
+            if verbose:
+                print(f"dir={dir} is already in the last place of {env_var}")
+            return
+        else:
+            new_paths = [p for p in paths if p != dir] + [dir]
+            new_env_string = os.pathsep.join(new_paths)
+            os.environ[env_var] = new_env_string
+    else:
+        if path_contains(dir, **opt):
+            if verbose:
+                print(f"dir={dir} is already in {env_var}")
+            return
+        else:
+            new_env_string = env_string + os.pathsep + dir
+            os.environ[env_var] = new_env_string
+    if verbose:
+        print(f"new {env_var}={new_env_string}")
+
+
 def main():
     myenv = Env()
     print(myenv)
@@ -321,6 +393,11 @@ def main():
     # print(f"query_user_fullname = {query_user_fullname(getpass.getuser())}")
     print(f"get_user_fullname = {get_user_fullname(verbose=True)}")
     print(f"get_user_firstlast = {get_user_firstlast()}")
+
+    print(f"get_native_path('/u/b/c') = {get_native_path('/u/b/c')}")
+    print("get_native_path(r'a\\b\\c')=" + get_native_path(r'a\b\c'))
+    print("get_native_path('C:/users/william')=" +
+          get_native_path('C:/users/william'))
 
 
 if __name__ == "__main__":
