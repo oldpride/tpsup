@@ -172,22 +172,22 @@ def restore_posix_paths(paths: list, **opt) -> list:
     return new_paths
 
 
-def get_native_path(path: str, **opt) -> str:
-    my_env = Env()
-    if my_env.isCygwin or my_env.isGitBash:
-        # when we run from cygwin, env var $TPSUP is /cygdrive/c/...
-        # it is passed to windows program python.exe which doesn't
-        # what to do with this path. therefore. we need to convert
-        # from format like:
-        #     /cygdrive/c/Program Files;/cygdrive/c/Users;/cygdrive/d
-        # to
-        #     c:/Program Files;c:/Users;d:
-        # cygpath works in both cgywin and gitbash
-        #
-        new_path = cygpath(path, "cyg2win")
-    else:
-        new_path = path.replace("\\", "/")
-    return new_path
+# def get_native_path(path: str, **opt) -> str:
+#     my_env = Env()
+#     if my_env.isCygwin or my_env.isGitBash:
+#         # when we run from cygwin, env var $TPSUP is /cygdrive/c/...
+#         # it is passed to windows program python.exe which doesn't
+#         # what to do with this path. therefore. we need to convert
+#         # from format like:
+#         #     /cygdrive/c/Program Files;/cygdrive/c/Users;/cygdrive/d
+#         # to
+#         #     c:/Program Files;c:/Users;d:
+#         # cygpath works in both cgywin and gitbash
+#         #
+#         new_path = cygpath(path, "cyg2win")
+#     else:
+#         new_path = path.replace("\\", "/")
+#     return new_path
 
 
 def get_tmp_dir(**opt) -> str:
@@ -299,35 +299,52 @@ def get_user_firstlast(user: str = None, **opt) -> str:
 re_split = None
 
 
-def get_native_path(path: str, **opt) -> str:
-    global re_split
-    if re_split is None:
-        re_split = re.compile(r'\\|/')
-    components = re_split.split(path)
-    print(f"components={components}")
+# def get_native_path(path: str, **opt) -> str:
+#     global re_split
+#     if re_split is None:
+#         re_split = re.compile(r'\\|/')
+#     components = re_split.split(path)
+#     print(f"components={components}")
 
-    if path.startswith('/'):
-        new_path = os.sep + os.path.join(*components)
+#     if path.startswith('/'):
+#         new_path = os.sep + os.path.join(*components)
+#     else:
+#         new_path = os.path.join(*components)
+#     return new_path
+
+
+def path_contains(dir: str, **opt):
+    verbose = opt.get('verbose', False)
+    if regex := opt.get('regex', False):
+        pattern = re.compile(dir, re.IGNORECASE)
     else:
-        new_path = os.path.join(*components)
-    return new_path
+        native_dir = os.path.normpath(dir)
 
-
-def path_contains(dir: str, **opt) -> bool:
     if not (env_string := opt.get('env_string', None)):
         env_var = opt.get('env_var', "PATH")
         env_string = os.environ.get(env_var)
 
-    native_dir = get_native_path(dir)
-    for p in env_string.split(os.pathsep):
-        native_p = get_native_path(p)
-        if native_p == native_dir:
-            return True
-    return False
+    if verbose:
+        print(f"env_var={env_var}")
+        print(f"env_string={env_string}")
+
+    results = []
+    splitted_env_string = env_string.split(os.pathsep)
+    if verbose:
+        print(f"splitted_env_string={pformat(splitted_env_string)}")
+    for p in splitted_env_string:
+        native_p = os.path.normpath(p)
+
+        if regex:
+            if pattern.search(native_p) or pattern.search(p):
+                results.append(p)
+        elif native_p == native_dir:
+            results.append(p)
+    return results
 
 
 def add_path(dir: str, **opt) -> str:
-    verbose = opt.get('verbose', False)
+    verbose = opt.get('verbose', 0)
 
     env_var = opt.get('env_var', "PATH")
     env_string = os.environ.get(env_var, '')
@@ -340,7 +357,7 @@ def add_path(dir: str, **opt) -> str:
             # already in the first place
             if verbose:
                 print(f"dir={dir} is already in the first place of {env_var}")
-            return
+            new_env_string = env_string
         else:
             new_paths = [dir] + [p for p in paths if p != dir]
             new_env_string = os.pathsep.join(new_paths)
@@ -351,7 +368,7 @@ def add_path(dir: str, **opt) -> str:
             # already in the last place
             if verbose:
                 print(f"dir={dir} is already in the last place of {env_var}")
-            return
+            new_env_string = env_string
         else:
             new_paths = [p for p in paths if p != dir] + [dir]
             new_env_string = os.pathsep.join(new_paths)
@@ -360,12 +377,12 @@ def add_path(dir: str, **opt) -> str:
         if path_contains(dir, **opt):
             if verbose:
                 print(f"dir={dir} is already in {env_var}")
-            return
+            new_env_string = env_string
         else:
             new_env_string = env_string + os.pathsep + dir
             os.environ[env_var] = new_env_string
-    if verbose:
-        print(f"new {env_var}={new_env_string}")
+
+    return new_env_string
 
 
 def main():
@@ -375,29 +392,45 @@ def main():
     sys.stdout.flush()
     myenv.adapt()
 
-    sys.stderr.write("1\n")
-    time.sleep(2)
-    sys.stderr.write("2\n")
-    time.sleep(2)
-    sys.stderr.write("3\n")
+    # sys.stderr.write("1\n")
+    # time.sleep(2)
+    # sys.stderr.write("2\n")
+    # time.sleep(2)
+    # sys.stderr.write("3\n")
 
     for path in ("/a/b/c", r"\a\b\c"):
         print(
             f"converted path={path} to os standard path={myenv.adjpath(path)}")
+    print("")
 
-    native_test_url = f"file:///{get_native_path(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
+    native_test_url = f"file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
     print(f"native_test_url = {native_test_url}")
+    print("")
 
     print(f"tmpdir = {get_tmp_dir()}")
+    print("")
 
     # print(f"query_user_fullname = {query_user_fullname(getpass.getuser())}")
     print(f"get_user_fullname = {get_user_fullname(verbose=True)}")
     print(f"get_user_firstlast = {get_user_firstlast()}")
+    print("")
+    print(f"os.path.normpath('/u/b/c') = {os.path.normpath('/u/b/c')}")
+    print("os.path.normpath(r'a\\b\\c')=" + os.path.normpath(r'a\b\c'))
+    print("os.path.normpath('C:/users/william')=" +
+          os.path.normpath('C:/users/william'))
+    print("")
 
-    print(f"get_native_path('/u/b/c') = {get_native_path('/u/b/c')}")
-    print("get_native_path(r'a\\b\\c')=" + get_native_path(r'a\b\c'))
-    print("get_native_path('C:/users/william')=" +
-          get_native_path('C:/users/william'))
+    # homedir = myenv.home_dir
+    tpsup = os.environ.get('TPSUP')
+    tpsup_scripts = os.path.join(tpsup, 'scripts')
+    print(
+        f"path_contains({tpsup_scripts}) = {pformat(path_contains(tpsup_scripts, verbose=0))}")
+    print("")
+    print(
+        f"path_contains('python', regex=True) = {pformat(path_contains('python', regex=True, verbose=0))}")
+    print("")
+
+    add_path(tpsup_scripts, verbose=1)
 
 
 if __name__ == "__main__":
