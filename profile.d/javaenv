@@ -1,4 +1,4 @@
-local j javac_bin found BASEDIR usage prog version
+local j javac_bin found BASEDIRS b j usage prog version
 
 prog=${FUNCNAME[1]}
 
@@ -6,15 +6,15 @@ usage="
 
 usage:
 
-   $prog check     # check current settings
-   $prog list      # list installed vesions
-   $prog version   # set to a specific version
+$prog check     # check current settings
+$prog list      # list installed vesions
+$prog version   # set to a specific version
 
 example:
 
-   $prog check
-   $prog list      
-   $prog 1.8
+$prog check
+$prog list
+$prog 1.8
 
 "
 
@@ -34,18 +34,18 @@ version=$1
 # tian@linux1:/usr/lib/jvm$ ls java-11-openjdk-amd64
 # bin  conf  docs  include  jmods  legal  lib  man  release
 
-user=`id |cut -d\( -f2|cut -d\) -f1`
+user=$(id | cut -d\( -f2 | cut -d\) -f1)
 
 if [[ $UNAME =~ CYGWIN ]]; then
    # use array because we have space char in the string
    BASEDIRS=(
-      "/cygdrive/c/Users/$user"
+      "/cygdrive/c/Users/$user/java"
       "/cygdrive/c/Program Files/Java"
    )
 elif [[ $UNAME =~ MINGW64_NT ]]; then
    # can also use, [[ $UNAME =~ Msys ]]
    BASEDIRS=(
-      "/c/Users/$user"
+      "/c/Users/$user/java"
       "/c/Program Files/Java"
    )
 elif [[ $UNAME =~ Linux ]]; then
@@ -57,6 +57,8 @@ else
    echo "unsupported UNAME='$UNAME'"
    return
 fi
+
+# echo "BASEDIRS=${BASEDIRS[@]}"
 
 if [ $version = check ]; then
    if [ "X$JAVA_HOME" = "X" ]; then
@@ -72,34 +74,31 @@ if [ $version = check ]; then
 
    return
 elif [ $version = list ]; then
-   for b in "${BASEDIRS[@]}"
-   do
+   for b in "${BASEDIRS[@]}"; do
       /bin/ls -1d "$b"/* 2>/dev/null
    done
 else
    # set a version
    # favor jdk because jdk contains jre
-   for j in jdk jre
-   do
-      for b in "${BASEDIRS[@]}"
-      do
+   for j in jdk jre; do
+      for b in "${BASEDIRS[@]}"; do
          if ! [ -d "$b" ]; then
-            continue 
+            continue
          fi
 
-         for subdir in `/bin/ls -1 "$b"|egrep "${j}[^0-9]*${version}\$|${j}[^0-9]*${version}[^0-9]|[^0-9]${version}[^0-9]*${j}|^${version}[^0-9]${j}"`
-         do
+         for subdir in $(/bin/ls -1 "$b" | egrep "${j}[^0-9]*${version}$|${j}[^0-9]*${version}[^0-9]|[^0-9]${version}[^0-9]*${j}|^${version}[^0-9]${j}"); do
             full_path="$b/$subdir/bin"
             if [ -d "$full_path" ]; then
+               echo "set JAVA_HOME='$b/$subdir'"
                export JAVA_HOME="$b/$subdir"
                export PATH="$full_path:$PATH"
                reduce PATH
-               return 
+               return
             fi
          done
       done
    done
 
+   echo "cannot find java version '$version' in BASEDIRS=${BASEDIRS[@]}"
    return
 fi
-

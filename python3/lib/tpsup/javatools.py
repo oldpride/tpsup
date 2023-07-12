@@ -10,6 +10,7 @@ import tpsup.tptmp
 
 
 def set_java_env(version, **opt):
+    verbose = opt.get('verbose', 0)
     my_env = tpsup.env.Env()
     if my_env.isWindows:
         possible_places = [f"{my_env.home_dir}/java", 'C:/Program Files/Java']
@@ -20,20 +21,33 @@ def set_java_env(version, **opt):
 
     for j in ['jdk', 'jre']:
         # favor jdk over jre
-        patterns = [re.compile(f'{j}[^0-9]*{version}$|[^0-9]*{version}[^0-9]'),
-                    re.compile(f'[^0-9]+{version}[^0-9]*{j}|^{version}[^0-9]*{j}')]
+
+        # jdk11 or java-11-jdk
+        pattern = re.compile(
+            f'{j}[^0-9]*{version}$|{j}[^0-9]*{version}|[^0-9]{version}[^0-9]*{j}|^{version}[^0-9]*{j}')
         for java_base in possible_places:
-            if os.path.exists(java_base):
-                subdirs = os.listdir(java_base)
-                for subdir in subdirs:
-                    for p in patterns:
-                        if p.search(subdir):
-                            full_path = f'{java_base}/{subdir}/bin'
-                            if os.path.exists(full_path):
-                                java_home = f'{java_base}/{subdir}'
-                                os.environ['JAVA_HOME'] = java_home
-                                tpsup.env.add_path(full_path, place='prepend')
-                                return java_home
+            if not os.path.exists(java_base):
+                if verbose > 1:
+                    print(f'{java_base} not found')
+                continue
+
+            subdirs = os.listdir(java_base)
+            for subdir in subdirs:
+                if not pattern.search(subdir):
+                    if verbose > 1:
+                        print(f'{subdir} does not match {pattern.pattern}')
+                    continue
+
+                full_path = f'{java_base}/{subdir}/bin'
+                if not os.path.exists(full_path):
+                    if verbose:
+                        print(f'{full_path} not found')
+                    continue
+
+                java_home = f'{java_base}/{subdir}'
+                os.environ['JAVA_HOME'] = java_home
+                tpsup.env.add_path(full_path, place='prepend')
+                return java_home
     return None
 
 
@@ -71,7 +85,7 @@ def main():
     print(f"set_java_env('1.8')={set_java_env('1.8')}")
     check_java_env(verbose=1)
     print("")
-    print(f"set_java_env('11')={set_java_env('11')}")
+    print(f"set_java_env('11')={set_java_env('11', verbose=0)}")
     check_java_env(verbose=1)
     print("")
 
