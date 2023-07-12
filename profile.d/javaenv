@@ -41,12 +41,21 @@ END
    fi
 done
 
+# tian@linux1:/home/tian$ ls /usr/lib/jvm
+# java-1.11.0-openjdk-amd64         java-1.8.0-openjdk-amd64         openjdk-11
+# .java-1.11.0-openjdk-amd64.jinfo  .java-1.8.0-openjdk-amd64.jinfo
+# default-java  java-11-openjdk-amd64             java-8-openjdk-amd64
+# tian@linux1:/home/tian/sitebase/github$ cd /usr/lib/jvm
+# tian@linux1:/usr/lib/jvm$ ls java-11-openjdk-amd64
+# bin  conf  docs  include  jmods  legal  lib  man  release
+
+
 if [[ $UNAME =~ CYGWIN ]]; then
    BASEDIR="/cygdrive/c/Program Files/Java"
 elif [[ $UNAME =~ MINGW64_NT ]]; then
    BASEDIR="/c/Program Files/Java"
 elif [[ $UNAME =~ Linux ]]; then
-   BASEDIR=$HOME
+   BASEDIR=$HOME/java
 else
    echo "unsupported UNAME='$UNAME'"
    return

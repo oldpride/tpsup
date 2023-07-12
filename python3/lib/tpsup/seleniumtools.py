@@ -55,8 +55,8 @@ class SeleniumEnv:
         self.verbose = opt.get("verbose", 0)
         self.env = tpsup.env.Env()
         self.env.adapt()
-        home_dir = tpsup.env.get_native_path(
-            self.env.home_dir)  # get_native_path() is for cygwin
+        home_dir = os.path.normpath(
+            self.env.home_dir)  # convert to native path
         self.log_base = opt.get('log_base', home_dir)
         system = self.env.system
 
@@ -85,7 +85,7 @@ class SeleniumEnv:
         # old hard-coded implementation
         # driver_path = f"{os.environ['SITEBASE']}/{self.env.system}/
         #                   {self.env.os_major}.{self.env.os_minor}/chromedriver"
-        # driver_path = tpsup.env.get_native_path(driver_path) # mainly for cygwin
+        # driver_path = os.path.normpath(driver_path) # mainly for cygwin
         # os.environ["PATH"] = os.pathsep.join(
         #     [
         #         driver_path,
@@ -123,7 +123,7 @@ class SeleniumEnv:
         # if self.env.isWindows:
         #     static_browser_path = f"{os.environ['SITEBASE']}/{self.env.system}/'
         #       '{self.env.os_major}.{self.env.os_minor}/Chrome/Application/chrome.exe"
-        #     static_browser_path = tpsup.env.get_native_path(static_browser_path)
+        #     static_browser_path = os.path.normpath(static_browser_path)
         #     # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
         #
         #     if os.path.isfile(static_browser_path):
@@ -483,13 +483,13 @@ def get_static_setup(**opt):
     if env.isWindows:
         # as of now, only windows has static setup
         static_browser_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/Chrome/Application/chrome.exe"
-        static_browser_path = tpsup.env.get_native_path(static_browser_path)
+        static_browser_path = os.path.normpath(static_browser_path)
         # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
         static_setup['chrome'] = static_browser_path
         # print(f"static_setup['chrome']={static_setup['chrome']}")
 
         static_driver_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/chromedriver/chromedriver.exe"
-        static_driver_path = tpsup.env.get_native_path(static_driver_path)
+        static_driver_path = os.path.normpath(static_driver_path)
         # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
         static_setup['chromedriver'] = static_driver_path
 

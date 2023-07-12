@@ -8,7 +8,8 @@ import os
 path_pattern = '(css|xpath)=(.+)'
 compiled_path = re.compile(path_pattern, re.MULTILINE)
 
-def extract_from_html(html_str:str, template:dict, **opt)->dict:
+
+def extract_from_html(html_str: str, template: dict, **opt) -> dict:
     ret = {}
 
     if not html_str:
@@ -28,12 +29,15 @@ def extract_from_html(html_str:str, template:dict, **opt)->dict:
                 # use xpath is better than css selector because css selector cannot get attribute
                 v = tree.cssselect(pvalue)
             else:
-                raise RuntimeError(f"unsupported path type='{ptype}'. only xpath and css are allowed ")
+                raise RuntimeError(
+                    f"unsupported path type='{ptype}'. only xpath and css are allowed ")
             ret[k] = v
         else:
-            raise RuntimeError(f"path='{path}' doesn't match expected pattern='{path_pattern}'")
+            raise RuntimeError(
+                f"path='{path}' doesn't match expected pattern='{path_pattern}'")
 
     return ret
+
 
 def main():
     template = [
@@ -47,11 +51,11 @@ def main():
         ['user_id_label_text', 'xpath=//label[@for="user id"]/text()']
     ]
     # this doesn't work as requests.get() doesn't know how to get a local file
-    # url = f"file:///{tpsup.env.get_native_path(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
+    # url = f"file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
     # page = requests.get(url)
     # result = extract_from_html(page.content)
 
-    with open(f"{tpsup.env.get_native_path(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html") as file:
+    with open(f"{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html") as file:
         html_str = file.read()
         result = extract_from_html(html_str, template)
         print(f"result = {result}")

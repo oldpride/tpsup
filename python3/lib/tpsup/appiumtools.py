@@ -190,7 +190,7 @@ class AppiumEnv:
         self.verbose = opt.get("verbose", 0)
         self.env = tpsup.env.Env()
         self.env.adapt()
-        home_dir = tpsup.env.get_native_path(
+        home_dir = os.path.normpath(
             self.env.home_dir)  # get_native_path() is for cygwin
         self.log_base = opt.get('log_base', f"{home_dir}/appium")
 

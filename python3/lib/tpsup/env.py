@@ -56,6 +56,8 @@ class Env:
             self.ls_cmd = "dir"
             # self.tmpdir = f"C:\\Users\\{os.environ['USERNAME']}\\AppData\\Local\\Temp"
             # self.home_dir = f"C:\\Users\\{os.environ['USERNAME']}"
+
+            # C drive home, sometimes it is different from real home
             self.home_dir = f"C:\\Users\\{self.user}"
             self.tmpdir = f"{self.home_dir}\\AppData\\Local\\Temp"
 
@@ -172,40 +174,8 @@ def restore_posix_paths(paths: list, **opt) -> list:
     return new_paths
 
 
-# def get_native_path(path: str, **opt) -> str:
-#     my_env = Env()
-#     if my_env.isCygwin or my_env.isGitBash:
-#         # when we run from cygwin, env var $TPSUP is /cygdrive/c/...
-#         # it is passed to windows program python.exe which doesn't
-#         # what to do with this path. therefore. we need to convert
-#         # from format like:
-#         #     /cygdrive/c/Program Files;/cygdrive/c/Users;/cygdrive/d
-#         # to
-#         #     c:/Program Files;c:/Users;d:
-#         # cygpath works in both cgywin and gitbash
-#         #
-#         new_path = cygpath(path, "cyg2win")
-#     else:
-#         new_path = path.replace("\\", "/")
-#     return new_path
-
-
 def get_tmp_dir(**opt) -> str:
     return Env().tmpdir
-
-# this is moved to tptmp.py
-# def get_daily_tmp_dir(**opt) -> str:
-#     env = Env()
-#     tmpdir = env.tmpdir
-#     user = env.user
-#     today = datetime.datetime.now().strftime("%Y%m%d")
-#     daily_tmp_dir = f"{tmpdir}/{user}/{today}"
-#     if opt.get("create", False):
-#         print(f"will create daily tmp dir {daily_tmp_dir}")
-#         if not os.path.exists(daily_tmp_dir):
-#             print(f"create daily tmp dir {daily_tmp_dir}")
-#             os.makedirs(daily_tmp_dir)
-#     return daily_tmp_dir
 
 
 def get_user_fullname(user: str = None, **opt) -> str:
@@ -299,20 +269,6 @@ def get_user_firstlast(user: str = None, **opt) -> str:
 re_split = None
 
 
-# def get_native_path(path: str, **opt) -> str:
-#     global re_split
-#     if re_split is None:
-#         re_split = re.compile(r'\\|/')
-#     components = re_split.split(path)
-#     print(f"components={components}")
-
-#     if path.startswith('/'):
-#         new_path = os.sep + os.path.join(*components)
-#     else:
-#         new_path = os.path.join(*components)
-#     return new_path
-
-
 def path_contains(dir: str, **opt):
     verbose = opt.get('verbose', False)
     if regex := opt.get('regex', False):
@@ -348,29 +304,34 @@ def add_path(dir: str, **opt) -> str:
 
     env_var = opt.get('env_var', "PATH")
     env_string = os.environ.get(env_var, '')
-    if verbose:
+    native_dir = os.path.normpath(dir)
+
+    if verbose > 1:
         print(f"old {env_var}={env_string}")
 
+    paths = env_string.split(os.pathsep)
+    native_paths = [os.path.normpath(p) for p in paths]
     if opt.get('place', None) == 'prepend':
-        paths = env_string.split(os.pathsep)
-        if paths.length > 0 and paths[0] == dir:
+        # len(list): get length of a list
+        if len(native_paths) and native_paths[0] == native_dir:
             # already in the first place
             if verbose:
                 print(f"dir={dir} is already in the first place of {env_var}")
             new_env_string = env_string
         else:
-            new_paths = [dir] + [p for p in paths if p != dir]
+            new_paths = [native_dir] + \
+                [p for p in native_paths if p != native_dir]
             new_env_string = os.pathsep.join(new_paths)
             os.environ[env_var] = new_env_string
     elif opt.get('place', None) == 'append':
-        paths = env_string.split(os.pathsep)
-        if paths.length > 0 and paths[-1] == dir:
+        if len(native_paths) > 0 and native_paths[-1] == native_dir:
             # already in the last place
             if verbose:
                 print(f"dir={dir} is already in the last place of {env_var}")
             new_env_string = env_string
         else:
-            new_paths = [p for p in paths if p != dir] + [dir]
+            new_paths = [p for p in native_paths if p !=
+                         native_dir] + [native_dir]
             new_env_string = os.pathsep.join(new_paths)
             os.environ[env_var] = new_env_string
     else:
@@ -379,7 +340,7 @@ def add_path(dir: str, **opt) -> str:
                 print(f"dir={dir} is already in {env_var}")
             new_env_string = env_string
         else:
-            new_env_string = env_string + os.pathsep + dir
+            new_env_string = env_string + os.pathsep + native_dir
             os.environ[env_var] = new_env_string
 
     return new_env_string
@@ -430,7 +391,18 @@ def main():
         f"path_contains('python', regex=True) = {pformat(path_contains('python', regex=True, verbose=0))}")
     print("")
 
+    print("")
     add_path(tpsup_scripts, verbose=1)
+    print("")
+
+    add_path("/junk/front", place='prepend')
+    print(f"PATH={os.environ.get('PATH')}"[:100])  # substr: first 100 chars
+    print("")
+
+    add_path("/junk/rear", place='append')
+    print(f"PATH={os.environ.get('PATH')}"[-100:])  # substr: last 100 chars
+    print("try again")
+    add_path("/junk/rear", place='append', verbose=1)
 
 
 if __name__ == "__main__":

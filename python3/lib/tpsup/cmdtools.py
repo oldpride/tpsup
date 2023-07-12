@@ -1,6 +1,8 @@
+import os
 from pprint import pformat
 import re
 import subprocess
+import sys
 import tpsup.env
 
 
@@ -69,6 +71,10 @@ def run_cmd(cmd: str, **opt):
             'stdout': proc.stdout,
             'stderr': proc.stderr,
         }
+
+        if opt.get('print', 0):
+            print(ret['stdout'])
+            print(ret['stderr'], file=sys.stderr)
     elif return_type == 'combined':
         proc = subprocess.run(cmd2,
                               shell=True,  # this allows to run multiple commands
@@ -80,6 +86,8 @@ def run_cmd(cmd: str, **opt):
             'rc': proc.returncode,
             'combined': proc.stdout
         }
+        if opt.get('print', 0):
+            print(ret['combined'])
     else:
         raise RuntimeError(f"unsupported return_type={return_type}")
 
@@ -129,6 +137,51 @@ def run_cmd_clean(cmd: str, **opt):
     return ret['stdout']
 
 
+def is_exe(fpath, **opt):
+    verbose = opt.get('verbose', 0)
+    if not os.path.exists(fpath):
+        if verbose > 1:
+            print(f'fpath={fpath} does not exist', file=sys.stderr)
+        return False
+
+    if not os.access(fpath, os.X_OK):
+        if verbose > 1:
+            print(f'fpath={fpath} has no access', file=sys.stderr)
+        return False
+
+    if not os.path.isfile(fpath):
+        if verbose > 1:
+            print(f'fpath={fpath} is not a file', file=sys.stderr)
+        return False
+
+    return True
+
+# https://stackoverflow.com/questions/377017
+# search for extensions too
+
+
+def which(program, **opt):
+    verbose = opt.get('verbose', 0)
+
+    def ext_candidates(fpath):
+        yield fpath
+        for ext in os.environ.get("PATHEXT", "").split(os.pathsep):
+            yield fpath + ext
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            for candidate in ext_candidates(exe_file):
+                if is_exe(candidate, verbose=verbose):
+                    return candidate
+
+    return None
+
+
 def main():
     print("Heads up! on windows, the default shell is cmd.exe, not bash.")
     print("")
@@ -145,6 +198,19 @@ def main():
         print(
             f"run_cmd('{cmd}', is_bash=True) = {pformat(run_cmd(cmd, is_bash=True))}")
         print('')
+
+    import tpsup.androidtools
+    import shutil
+    tpsup.androidtools.set_android_env()
+    print("")
+    print(f"compare two ways of which(). shutil.which() cannot find bash in windows!!!")
+    print(
+        f"tpsup.cmdtools.which('apkanalyzer') = {which('apkanalyzer')}")
+    print(f"shutil.which('apkanalyzer') = {shutil.which('apkanalyzer')}")
+    print("")
+
+    # bash script on windows must run with bash.exe
+    run_cmd('apkanalyzer --version', is_bash=True, verbose=1, print=1)
 
 
 if __name__ == "__main__":

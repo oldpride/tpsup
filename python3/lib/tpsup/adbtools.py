@@ -2,6 +2,7 @@
 import os
 import tpsup.cmdtools
 import tpsup.tptmp
+from shutil import which
 
 # steps to print android manifest file
 # to test with emulator
@@ -99,6 +100,11 @@ def adb_pull(path: str, **opt):
 
 
 def main():
+    if adb_path := which('adb'):
+        print(f"adb_path = {adb_path}")
+    else:
+        raise Exception("adb not found. run adroidenv")
+
     print(f"adb_find_pkg('gallery') = {adb_find_pkg('gallery')}")
     print("")
     print(

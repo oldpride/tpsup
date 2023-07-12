@@ -52,7 +52,7 @@ def code(all_cfg: dict, known: dict, **opt):
         print(f'from code(), known ={pformat(known)}')
         print(f'from code(), opt = {pformat(opt)}')
 
-    url = f"file:///{tpsup.env.get_native_path(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
+    url = f"file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
 
     driver: webdriver.Chrome = all_cfg["resources"]["selenium"]['driver']
 
