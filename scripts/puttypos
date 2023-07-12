@@ -2,8 +2,7 @@
 
 
 prog=`basename $0`
-posdir=$HOME/.tpsup
-posfile=$posdir/puttypos.cache
+user=`id |cut -d\( -f2|cut -d\) -f1`
 
 min=0
 max=9
@@ -12,32 +11,18 @@ usage () {
    cat >&2 <<EOF
 usage:
 
-   $prog pos
+   $prog min max
 
-   position the current putty's window at position.
+   position a putty's window in the next available position between min and max.
 
-   pos can be
-      - min..max - default min=$min, max=$max
-      - next     - position in $posfile + 1
-      - last     - report last position. report-only, no movement.
-      - reset    - this set the cache pos to max, so that the next one restart from 0.
-                   ths doesn't move the current putty's position.
+   min starts from 0.
 
-   if $posfile has no cached position, then next will be min.
-
-   -n min    set the min, default $min
-   -x max    set the max, default $max
+   if no available position, quit.
 
 examples:
 
-   $prog 10
-
-   $prog next
-
-   $prog -n 10 -x 12 next
-   $prog -n 10 -x 12 next
-   $prog -n 10 -x 12 next
-   $prog -n 10 -x 12 next
+   $prog 0 9
+   $prog 10 12
 
 EOF
    exit 1
@@ -45,60 +30,107 @@ EOF
 
 
 verbose=N
-while getopts vn:x: o;
+while getopts v o;
 do
    case "$o" in
       v)  verbose=Y;;
-      n)  min=$OPTARG;;
-      x)  max=$OPTARG;;
+      #x)  max=$OPTARG;;
       *)   usage;;
    esac
 done
 
 shift $((OPTIND-1))
 
-if [ $# -ne 1 ]; then
+if [ $# -ne 2 ]; then
    echo "wrong number of args" >&2
    usage
 fi
 
-pos=$1
+min=$1
+max=$2
 
-[ -d $posdir ] || mkdir -p $posdir
-
-if [ $pos = reset ]; then
-   # reset doesn't change current putty's position.
-   echo $max  >$posfile
-   exit 0;
-elif [ $pos = last ]; then
-   # reporting last position doesn't change current putty's position.
-   cat $posfile
-   exit 0;
-elif [ $pos = next ]; then
-   touch $posfile
-   cachepos=`cat $posfile`;
-
-   if [[ $cachepos =~ ^[0-9]+$ ]]; then
-      if [ $cachepos -lt $min  -o $cachepos -ge $max ]; then
-         # if cache pos is at max, the next one will be $min
-         pos=$min
-      else
-         pos=`expr $cachepos + 1`
-      fi
-   else
-      # if cache file is corrupted, reset to min
-      pos=$min
-   fi
-else 
-   if ! [[ $pos =~ ^[0-9]+$ ]]; then  # bash regex
-      echo "unsupported pos='$pos'" >&2
-      usage
-   fi
+if [[ $min =~ [^0-9] ]]; then
+   echo "ERROR: min='$min' is not a number" >&2
+   usage
 fi
 
-offset=`expr 35 \* $pos`
+if [[ $max =~ [^0-9] ]]; then
+   echo "ERROR: max='$max' is not a number" >&2
+   usage
+fi
 
-# https://superuser.com/questions/1162451
-printf '\033[3;'"$offset;$offset"'t'
+if [ $min -ge $max ]; then
+   echo "ERROR: min=$min is not less than max=$max"
+   usage
+fi
 
-echo $pos >$posfile
+declare -A seen # bash seen implementation, using associate array
+
+# for loop range, works for numbers
+#    for i in {0..10} 
+# but not work for variables
+#    for i in {$min..$max}
+# for variables, use C-style instead
+for (( i = $min; i <= $max; i ++ ))
+do
+   [ $verbose = Y ] && echo ""
+   echo "checking spot $i"
+
+   padded=`printf '%03d' $i`
+   posfile=/tmp/puttypos.$user.$padded 
+
+   if [ -e $posfile ]; then
+      pid=`cat $posfile`
+
+      if ! [ "X$pid" = "X" ]; then
+         if ps -p $pid >/dev/null; then
+            [ $verbose = Y ] && echo "putty $padded is running, pid=$pid."             
+            if [ ${seen[$pid]+_} ]; then
+               if [ $verbose = Y ]; then
+                  echo "already seen pid=$pid in ${seen[$pid]}. we can use spot $i" 
+               fi
+            else
+               [ $verbose = Y ] && echo "we will check next spot"
+               seen[$pid]=$posfile
+               continue
+            fi
+         else 
+            if [ $verbose = Y ]; then
+               "pid=$pid in $posfile is not running. we can use sport $i"
+            fi
+         fi
+      else
+         if [ $verbose = Y ]; then
+            "$posfile is empty. we can use sport $i"
+         fi
+      fi
+   fi
+
+   # found a spot
+   offset=`expr 35 \* $i`
+
+   # https://superuser.com/questions/1162451
+   printf '\033[3;'"$offset;$offset"'t'
+
+   # get the pid
+   tty=`tty`
+
+   # tian@linux1:/home/tian$ ps -t /dev/pts/1 
+   #     PID TTY          TIME CMD
+   #   37801 pts/1    00:00:00 bash
+   #   38110 pts/1    00:00:00 ps
+
+   [ $verbose = Y ] && ps -t $tty -f 
+   pid=`ps -t $tty |grep bash|awk '{print $1}'`
+   
+   echo $pid > $posfile
+
+   found=$i
+   break
+done
+   
+if [ "X$found" = "X" ]; then
+   echo "no available spot found"
+else
+   echo "spot found at $found"
+fi

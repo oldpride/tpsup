@@ -20,17 +20,25 @@ do
    echo $key=$key
 done
 
+echo ""
 echo "added more data"
 b1+=([Mouse]=Logitech)
 echo "values=${b1[@]}"
 
+echo ""
+echo "check key existence"
+if [ ${b1[Monitor]+_} ]; then echo "Found"; else echo "Not found"; fi
+
+echo ""
 echo "delete data"
 unset b1[Monitor]
 echo "b1[Monitor] = ${b1[Monitor]}"
 
+echo ""
 echo "check key existence"
 if [ ${b1[Monitor]+_} ]; then echo "Found"; else echo "Not found"; fi
 
+echo ""
 echo "remove whole array"
 unset b1
 echo "b1=${b1[@]}"
