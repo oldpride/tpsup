@@ -6,12 +6,14 @@ usage="
 
 usage:
 
-   $prog check
-   $prog version
+   $prog check     # check current settings
+   $prog list      # list installed vesions
+   $prog version   # set to a specific version
 
 example:
 
    $prog check
+   $prog list      
    $prog 1.8
 
 "
@@ -24,23 +26,6 @@ fi
 
 version=$1
 
-echo "JAVA_HOME=$JAVA_HOME"
-
-for j in javac java
-do
-   echo ""
-   cmd="which $j"
-   echo $cmd
-   j_bin=`$cmd`
-   if [ $? -eq 0 ]; then
-      cat <<END
-
-$j_bin
-
-END
-   fi
-done
-
 # tian@linux1:/home/tian$ ls /usr/lib/jvm
 # java-1.11.0-openjdk-amd64         java-1.8.0-openjdk-amd64         openjdk-11
 # .java-1.11.0-openjdk-amd64.jinfo  .java-1.8.0-openjdk-amd64.jinfo
@@ -49,48 +34,72 @@ done
 # tian@linux1:/usr/lib/jvm$ ls java-11-openjdk-amd64
 # bin  conf  docs  include  jmods  legal  lib  man  release
 
+user=`id |cut -d\( -f2|cut -d\) -f1`
 
 if [[ $UNAME =~ CYGWIN ]]; then
-   BASEDIR="/cygdrive/c/Program Files/Java"
+   # use array because we have space char in the string
+   BASEDIRS=(
+      "/cygdrive/c/Users/$user"
+      "/cygdrive/c/Program Files/Java"
+   )
 elif [[ $UNAME =~ MINGW64_NT ]]; then
-   BASEDIR="/c/Program Files/Java"
+   # can also use, [[ $UNAME =~ Msys ]]
+   BASEDIRS=(
+      "/c/Users/$user"
+      "/c/Program Files/Java"
+   )
 elif [[ $UNAME =~ Linux ]]; then
-   BASEDIR=$HOME/java
+   BASEDIRS=(
+      "$HOME/java"
+      "/usr/lib/jvm"
+   )
 else
    echo "unsupported UNAME='$UNAME'"
    return
 fi
 
 if [ $version = check ]; then
+   if [ "X$JAVA_HOME" = "X" ]; then
+      echo "JAVA_HOME is not set"
+      return
+   fi
+
    echo ""
-   echo "current installations: "
-   /bin/ls -1d "$BASEDIR"/*
+   echo "verify PATH:"
+   which java
+   which javac
+   which jar
+
+   return
+elif [ $version = list ]; then
+   for b in "${BASEDIRS[@]}"
+   do
+      /bin/ls -1d "$b"/* 2>/dev/null
+   done
 else
+   # set a version
    # favor jdk because jdk contains jre
    for j in jdk jre
    do
-      found=`/bin/ls -1d "$BASEDIR"/${j}?${version}*|tail -1`
-   
-      if [ "X$found" != X ]; then
-         echo ""
-         echo "found $found"
-   
-         echo ""
-         echo "export JAVA_HOME=$found"
-         export JAVA_HOME="$found"
-   
-         echo ""
-         echo "export PATH=\"$found/bin:\$PATH\""
-         export PATH="$found/bin:$PATH"
-         reduce PATH
-   
-         echo ""
-         echo "verify PATH:"
-         which java
-         which javac
-         which jar
-         break
-      fi
+      for b in "${BASEDIRS[@]}"
+      do
+         if ! [ -d "$b" ]; then
+            continue 
+         fi
+
+         for subdir in `/bin/ls -1 "$b"|egrep "${j}[^0-9]*${version}\$|${j}[^0-9]*${version}[^0-9]|[^0-9]${version}[^0-9]*${j}|^${version}[^0-9]${j}"`
+         do
+            full_path="$b/$subdir/bin"
+            if [ -d "$full_path" ]; then
+               export JAVA_HOME="$b/$subdir"
+               export PATH="$full_path:$PATH"
+               reduce PATH
+               return 
+            fi
+         done
+      done
    done
+
+   return
 fi
 
