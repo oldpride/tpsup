@@ -98,10 +98,16 @@ def correct_indent(source: str, **opt):
     return source2
 
 
-def test_lines(f, source_globals={}, **opt):
+def test_lines(f: types.FunctionType, source_globals={}, **opt):
     import inspect
+    # we import here because this is a test function.
+
     lines = inspect.getsource(f)
+    # get the source code of the function, including comments and blank lines.
+
     skip_pattern = re.compile(r'^\s*#|^\s*$|^\s*def\s')
+    # skip blank lines, comments, and function definition
+
     for line in lines.split('\n'):
         if skip_pattern.match(line):
             continue

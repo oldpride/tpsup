@@ -235,18 +235,10 @@ def main():
         run_cmd('which java', is_bash=True, print=1, bash_exe='wsl')
 
     import tpsup.exectools
+    # we import it here because this is for test only
+
     tpsup.exectools.test_lines(test_code, source_globals=globals())
-
-    # import inspect
-    # lines = inspect.getsource(test_code)
-
-    # import tpsup.exectools
-    # skip_pattern = re.compile(r'^\s*#|^\s*$|^\s*def\s')
-    # for line in lines.split('\n'):
-    #     if skip_pattern.match(line):
-    #         continue
-    #     print(f"run: {line}")
-    #     tpsup.exectools.exec_into_globals(line, globals(), locals())
+    # we pass globals() so that test_code can see our functions, eg, run_cmd()
 
 
 if __name__ == "__main__":
