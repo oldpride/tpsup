@@ -1,3 +1,4 @@
+import types
 import re
 from tpsup.util import print_string_with_line_numer
 import pprint
@@ -97,6 +98,20 @@ def correct_indent(source: str, **opt):
     return source2
 
 
+def test_lines(f, source_globals={}, **opt):
+    import inspect
+    lines = inspect.getsource(f)
+    skip_pattern = re.compile(r'^\s*#|^\s*$|^\s*def\s')
+    for line in lines.split('\n'):
+        if skip_pattern.match(line):
+            continue
+        print(f"run: {line}")
+
+        combined_globals = {**source_globals, **globals()}
+
+        exec_into_globals(line, combined_globals, locals())
+
+
 def main():
     print("test correct_indent()")
     code = """
@@ -129,7 +144,23 @@ def main():
         if c == 2: # c was not defined
             a = c
     """
-    exec_into_globals(code, globals(), locals())
+    try:
+        exec_into_globals(code, globals(), locals())
+    except Exception as e:
+        print(f"caught exception: {e}")
+    print("--------------------")
+    print("we should see an exception above")
+
+    print("")
+
+    # keep test code in a function so that IDE can check syntax
+
+    def test_code():
+        # we can have comment and blank lines in the test code
+
+        print("hello world")
+
+    test_lines(test_code)
 
 
 if __name__ == "__main__":

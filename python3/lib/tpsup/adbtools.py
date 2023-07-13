@@ -81,6 +81,8 @@ def adb_pull(path: str, **opt):
     if os.path.exists(dest):
         print(f'{dest} already exists. we use it')
         return dest
+    else:
+        print(f'{dest} does not exist. we will download it')
 
     cmd = f'adb pull {path} {download_dir}'
     if verbose:

@@ -3,6 +3,7 @@ from pprint import pformat
 import tpsup.cmdtools
 import tpsup.adbtools
 import tpsup.env
+import tpsup.javatools
 from shutil import which
 import os
 import tpsup.tptmp
@@ -71,6 +72,10 @@ def get_apk_manifest(apk_path: str, **opt):
             raise Exception(
                 'still cannot find apkanalyzer after setting android env')
 
+    # apkanalyzer works with java 1.8, not java 11
+    tpsup.javatools.set_java_env("1.8")
+    tpsup.javatools.check_java_env(verbose=1)
+
     cmd = f'apkanalyzer manifest print "{apk_path}"'
     if verbose:
         print(f'cmd = {cmd}')
@@ -95,15 +100,24 @@ def get_app_manifest(pkg_pattern: str, **opt):
         pkg = lines[0].split(':')[1]
 
     # get package path
-    path = tpsup.adbtools.adb_get_pkg_path(pkg, **opt)
-    if not path:
+    device_path = tpsup.adbtools.adb_get_pkg_path(pkg, **opt)
+    if not device_path:
         raise Exception(f'no package path found for {pkg}')
 
-    # pull apk
-    download_path = tpsup.adbtools.adb_pull(path, **opt)
+    print(f'pkg path on devie = {device_path}')
+    print("")
+
+    # pull the file using adb
+    local_path = tpsup.adbtools.adb_pull(device_path, **opt)
+    print(f'pulled apk file from device to local path = {local_path}')
+    print("")
+
+    # check if path is a file
+    if not os.path.isfile(local_path):
+        raise Exception(f'{local_path} is not a file')
 
     # get manifest file
-    manifest = get_apk_manifest(download_path, **opt)
+    manifest = get_apk_manifest(local_path, **opt)
 
     return manifest
 
@@ -111,8 +125,9 @@ def get_app_manifest(pkg_pattern: str, **opt):
 def main():
     dailydir = tpsup.tptmp.get_dailydir()
 
-    print(f"manifest of {dailydir}/Gallery2.apk")
+    # print(f"manifest of {dailydir}/Gallery2.apk")
     print(get_apk_manifest(f'{dailydir}/Gallery2.apk'))
+    exit(0)
 
     # start emulator first
     # $ svenv

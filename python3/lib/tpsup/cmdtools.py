@@ -30,12 +30,27 @@ def run_cmd(cmd: str, **opt):
     myenv = tpsup.env.Env()
     if myenv.isWindows:
         if is_bash:
-            bash = 'C:/Windows/System32/bash.exe'
+            bash_exe = opt.get('bash_exe', 'gitbash')
+            if bash_exe == 'wsl':
+                bash = 'C:/Windows/System32/bash.exe'  # this is WSL bash
+                # wsl has its complete subsystem, for example, totally separate
+                # installations.
+                # for example, java is /usr/lib/jvm/java-11-openjdk-amd64/bin/java.
+                # $ uname -a
+                # Linux tianpc2 5.15.90.1-microsoft-standard-WSL2 ... 2023 x86_64 x86_64 x86_64 GNU/Linux
+            elif bash_exe == 'gitbash':
+                bash = 'C:/Program Files/Git/bin/bash.exe'  # this is gitbash's bash
+                # gitbash mainly uses windows native software,
+                # for example, java is /c/Program Files/Java/jdk1.8.0_202/bin/java
+            else:
+                bash = bash_exe
 
             # two possible solutions:
             # 1. tried this, but not working
-            #   extra_opt['executable'] = bash
-            #   cmd2 = cmd
+            #    extra_opt['executable'] = bash
+            #    cmd2 = cmd
+            # failed with error
+            #    RuntimeError: cmd=... failed with rc=126, stderr=/c: /c: Is a directory
 
             # 2. this works
             cmd3 = re.sub(r'\$', '\\$', cmd)  # escape $ for bash.exe
@@ -209,8 +224,29 @@ def main():
     print(f"shutil.which('apkanalyzer') = {shutil.which('apkanalyzer')}")
     print("")
 
-    # bash script on windows must run with bash.exe
-    run_cmd('apkanalyzer --version', is_bash=True, verbose=1, print=1)
+    # keep test code in a function so that IDE can check syntax
+    def test_code():
+        # from tpsup.cmdtools import run_cmd
+        # bash script on windows must run with bash.exe
+        # apkanalyzer is a bash script
+        run_cmd('apkanalyzer --version', is_bash=True, print=1)
+
+        run_cmd('which java', is_bash=True, print=1)
+        run_cmd('which java', is_bash=True, print=1, bash_exe='wsl')
+
+    import tpsup.exectools
+    tpsup.exectools.test_lines(test_code, source_globals=globals())
+
+    # import inspect
+    # lines = inspect.getsource(test_code)
+
+    # import tpsup.exectools
+    # skip_pattern = re.compile(r'^\s*#|^\s*$|^\s*def\s')
+    # for line in lines.split('\n'):
+    #     if skip_pattern.match(line):
+    #         continue
+    #     print(f"run: {line}")
+    #     tpsup.exectools.exec_into_globals(line, globals(), locals())
 
 
 if __name__ == "__main__":
