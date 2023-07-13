@@ -99,6 +99,9 @@ our_cfg = {
     },
 
     'show_progress': 1,
+    # "batch_cutoff": 'today',    # midnight
+    # "batch_cutoff": '20300101', # future
+    # 'batch_cutoff': 'today-06', # 6 am
 
     # where to put the setting?
     # - settings outside 'opt' are normally used by batch.py's general logic, eg, run_batch().

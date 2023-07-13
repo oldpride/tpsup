@@ -344,6 +344,32 @@ def parse_batch(given_cfg: Union[str, Dict], batch: Union[str, List], **opt):
         print(f"parse_batch: type(batch)={type(batch)}")
     if type(batch) == str:
         filename = batch
+
+        batch_cutoff = all_cfg.get('batch_cutoff', None)
+        if batch_cutoff:
+            # get batch file timestamp and compare with today
+            batch_mtime = os.path.getmtime(filename)
+            batch_mtime_str = datetime.fromtimestamp(
+                batch_mtime).strftime('%Y%m%d%H%M%S')
+            if batch_cutoff == 'today':
+                cutoff_str = datetime.today().strftime('%Y%m%d') + '000000'
+            elif batch_cutoff.startswith('today-'):
+                cutoff_str = datetime.today().strftime('%Y%m%d') + \
+                    batch_cutoff[6:] + '0000'
+            else:
+                cutoff_str = batch_cutoff
+
+            # string compare
+            if batch_mtime_str < cutoff_str:
+                print("")
+                print(
+                    f"{batch} timestamp={batch_mtime_str} is older than cutoff={cutoff_str}, skip !!!")
+                print("")
+                return []
+            else:
+                print(
+                    f"{batch} timestamp={batch_mtime_str} is newer than cutoff={cutoff_str}, continue")
+
         with open(filename, 'r') as fh:
             for line in fh:
                 if re.match(r'^\s*$', line):
@@ -468,6 +494,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
     pre_batch_already_done = False
     # we delay pre_batch() till we really need to run the code()
+
+    known = {}
 
     for input in parsed_batch:
         i = i+1
