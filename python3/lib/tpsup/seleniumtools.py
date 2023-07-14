@@ -936,6 +936,7 @@ def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
         print(ex.msg)
         print(f"\nseen 'TimeoutException receiving message from renderer' again? do driver.refresh()\n")
         driver.refresh()
+        # if the above doesn't work, then we need to make page_load_timeout longer.
     except WebDriverException as ex:
         # selenium.common.exceptions.WebDriverException: Message: target frame detached
         # if see the above error, try again
@@ -1980,14 +1981,18 @@ def tp_click(driver: webdriver.Chrome, element: WebElement, **opt):
         print(f"\nseen ElementNotInteractableException. clicking with javascript ...\n")
         driver.execute_script("arguments[0].click();", element)
     except TimeoutException as ex:
-        # driver.get(url) often got the following error:
-        #   selenium.common.exceptions.TimeoutException:
-        #   Message: timeout: Timed out receiving message from renderer: 10.243
+        # so far two different scenarios and requires two different solutions.
+        # 1. driver.get(url) often got the following error:
+        #    selenium.common.exceptions.TimeoutException:
+        #     Message: timeout: Timed out receiving message from renderer: 10.243
         #
-        # https://stackoverflow.com/questions/40514022/chrome-webdriver-produces-timeout-in-selenium
+        #     https://stackoverflow.com/questions/40514022/chrome-webdriver-produces-timeout-in-selenium
         print(ex.msg)
         print(f"\nseen 'TimeoutException receiving message from renderer' again? do driver.refresh()\n")
         driver.refresh()
+        # 2. if the above doesn't help, we can increase the page_load_timeout.
+        #    I defaulted it to 15 seconds, but for slow app like ServiceNow. we should set 30.
+        #    I added an extra_args key for it.
     except WebDriverException as ex:
         # selenium.common.exceptions.WebDriverException: Message: target frame detached
         print(ex.msg)
@@ -2582,6 +2587,13 @@ tpbatch = {
             "default": "auto",
             "action": "store",
             "help": "connect to a browser at host:port.  default is auto, which means to start a new browser",
+        },
+        'page_load_timeout': {
+            "switches": ["-plt", "-page_load_timeout"],
+            "default": 15,
+            "action": "store",
+            "type": int,
+            "help": "page load timeout in seconds. default to 15. For slow app like Service Now, we need set 30 or more.",
         },
     },
     "resources": {
