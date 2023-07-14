@@ -210,19 +210,26 @@ while args:
         parser = parsers[0]
     else:
         parser = parsers[1]
+
+    # all command-line switches now go from 'extra_args' to 'adict'
     adict = vars(parser.parse_args(args))
     if verbose:
         print(f'parse cmd line round {round}, adict={pformat(adict)}')
     round = round+1
     remainings = adict['remainingArgs']
     adict.pop('remainingArgs')   # delete the key from dict
+
+    # all command-line switches now go from 'adict' to 'a'
     a.update(adict)
+
     if 'verbose' in adict:
+        # verbose is additive, we treat it differently
         if verbose:
             print(
                 f"saved['verbose'] = {saved['verbose']},  adict['verbose']={adict['verbose']}")
         saved['verbose'] += adict['verbose']
     a.update(saved)
+
     if remainings:
         remainingArgs.append(remainings[0])
         args = remainings[1:]
@@ -265,7 +272,21 @@ if len(remainingArgs) < minimal_args and batch is None:
           f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
 
 a.pop('batch')  # remove batch from a
+
+# all command-line switches now go from 'a' to 'opt'
 opt.update(a)
+
+# we can use command-line switches (now in 'opt') to override default values in all_cfg.
+# we couldn't have done it in parse_args()
+#    because we need all_cfg's extra_args to parse command-line switches.
+# therefore, we do the override here.
+for k in all_cfg.keys():
+    cmdline_value = opt.get(k, None)
+    if cmdline_value is not None:
+        print("", file=sys.stderr)
+        print(
+            f"overriding {k} from '{all_cfg[k]}' to '{cmdline_value}'", file=sys.stderr)
+        all_cfg[k] = cmdline_value
 
 if verbose:
     print(f'opt={pformat(opt)}')

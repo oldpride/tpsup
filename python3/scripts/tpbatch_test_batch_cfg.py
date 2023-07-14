@@ -26,6 +26,19 @@ our_cfg = {
                    'default': 'detail',
                    'action': 'store',
                    'help': 'record keys (separated by comma) to avoid run twice. default: detail'},
+
+        # extra_args's key 'show_progress' overwrite our_cfg's 'show_progress'.
+        # we need explicity set the default to None,
+        #    so that it will default to our_cfg's 'show_progress'.
+        # (action=store_false's default is True, not None.)
+        # the complete waterfall is:
+        #    extra_args -> our_cfg -> module.py -> batch.py
+        # also the destination of the value goes the extra_args's key 'show_progress'. therefore,
+        # we can name the swiches libraly, here we used '-hide_progress'.
+        'show_progress': {'switches': ['-hide_progress'],
+                          'default': None,  # this effectively default to our_cfg's show_progress
+                          'action': 'store_false',  # overwrite our_cfg's show_progress=1
+                          'help': 'disable show_progess'},
     },
 
     'usage_example': '''
@@ -36,6 +49,10 @@ our_cfg = {
 
     - run again to test record log
     {{prog}} auto -b tpbatch_test_batch.txt
+
+    - compare show_progress value
+    {{prog}} auto -b tpbatch_test_batch.txt --record ""
+    {{prog}} auto -b tpbatch_test_batch.txt --record "" -hide_progress
     ''',
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
@@ -128,3 +145,5 @@ from code(), opt =
 {pformat(opt)}
 
 ''')
+
+    print(f"show_progress = {all_cfg['show_progress']}")
