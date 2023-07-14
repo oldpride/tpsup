@@ -866,6 +866,8 @@ if ! [ "X$SSH_CLIENT" = "X" ]; then
 
    putty_client=$(echo $SSH_CLIENT | cut -d" " -f1)
    putty_client_file="~/.tpsup/putty_client.txt"
+   echo "putty_client=$putty_client"
+   echo "putty_client_file=$putty_client_file"
 
    if [ -f "$putty_client_file" ]; then
       # putty_client_file format is
