@@ -100,9 +100,15 @@ sub swagger {
    my @base_urls = @{$cfg->{base_urls}};
 
    for my $base_url (@base_urls) {
-      $verbose && print STDERR "resolved url = $base_url/$sub_url\n";
-   
-      my $silent = $verbose ? '' : '--silent';
+      my @flags = (); 
+      if ($verbose) {
+         print STDERR "resolved url = $base_url/$sub_url\n";
+         push @flags, '-v';
+      } else {
+         push @flags,  '--silent';
+      }
+
+      my $flag_string = join(" ", @flags);
 
       my $entry_name = $cfg->{entry};
       my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
@@ -115,9 +121,9 @@ sub swagger {
    
       my $command;
       if ($entry_name) {
-         $command = "tpentry -- /usr/bin/curl -u tpentry{$entry_name}{user}:tpentry{$entry_name}{decoded} $silent -X $method --header 'Accept: $Accept'";
+         $command = "tpentry -- /usr/bin/curl -u tpentry{$entry_name}{user}:tpentry{$entry_name}{decoded} $flag_string -X $method --header 'Accept: $Accept'";
       } else {
-         $command = "/usr/bin/curl -X $method --header 'Accept: $Accept'";
+         $command = "/usr/bin/curl $flag_string -X $method --header 'Accept: $Accept'";
       }
    
       if ($method eq 'POST') {

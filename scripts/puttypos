@@ -107,7 +107,7 @@ do
    fi
 
    # found a spot
-   offset=`expr 35 \* $i`
+   offset=`expr 30 \* $i`
 
    # https://superuser.com/questions/1162451
    printf '\033[3;'"$offset;$offset"'t'
