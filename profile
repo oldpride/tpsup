@@ -818,3 +818,8 @@ mydir () {
    fi
 }
 
+clear () {
+   /usr/bin/clear
+   printf "\033[03J"
+}
+
