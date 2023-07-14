@@ -284,6 +284,8 @@ sub tpbatch_parse_hash_cfg {
 
     -nojson        don't apply json parser on output 
     -n | -dryrun   dryrun. only print out command.
+    -v             verbose mode. this will print http status code in the header, eg
+                       < HTTP/1.1 200 OK
 END
    }
 
