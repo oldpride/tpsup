@@ -865,18 +865,19 @@ if ! [ "X$SSH_CLIENT" = "X" ]; then
    # SSH_TTY=/dev/pts/4
 
    putty_client=$(echo $SSH_CLIENT | cut -d" " -f1)
-   putty_client_file="~/.tpsup/putty_client.txt"
-   echo "putty_client=$putty_client"
-   echo "putty_client_file=$putty_client_file"
+   putty_client_file=~/.tpsup/putty_client.txt
+   # echo "putty_client=$putty_client"
+   # echo "putty_client_file=$putty_client_file"
 
    if [ -f "$putty_client_file" ]; then
       # putty_client_file format is
       # ip min_pos max_pos
       # 192.168.1.62 0 2
-      line = $(egrep "$putty_client\s" $putty_client_file)
+      line=$(egrep "^$putty_client\\s" $putty_client_file)
       if ! [ "X$line" = "X" ]; then
-         min_pos=$(echo $line | cut -d" " -f2)
-         max_pos=$(echo $line | cut -d" " -f3)
+         min_pos=$(echo $line | awk '{print $2}')
+         max_pos=$(echo $line | awk '{print $3}')
+         # echo "puttypos $min_pos $max_pos"
          puttypos $min_pos $max_pos
       fi
    fi
