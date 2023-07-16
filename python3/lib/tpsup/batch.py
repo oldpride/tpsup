@@ -124,6 +124,11 @@ def parse_cfg(cfg_file: str = None, **opt):
     #     2. module - eg, seleniumtools.py - which is loaded into our_cfg['imported_tpbatch'].
     #     3. this file - batch.py - which is globals().
     # try to consolidate all the overrides logic here.
+    #
+    # there is actually a higher override precedence: command line.
+    #     - It is done in tpbatch.py.
+    #     - It is not in this file because parse_cfg() needs to be called (to
+    #       get all_cfg's extra_args) before parsing command line.
 
     # globals() vs our_cfg (later becomes all_cfg).
     #    globals() is the current module namespace.

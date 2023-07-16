@@ -856,6 +856,13 @@ clear() {
    # https://superuser.com/questions/555554
    /usr/bin/clear
    printf "\033[03J" # this is needed for putty
+
+   if [[ $UNAME =~ MINGW ]]; then
+      # this gitbash
+      if [ "X$TERM_PROGRAM" = "Xvscode" ]; then 
+         echo "click control+k to clear"
+      fi
+   fi
 }
 
 if ! [ "X$SSH_CLIENT" = "X" ]; then

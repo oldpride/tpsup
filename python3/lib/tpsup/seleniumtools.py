@@ -934,7 +934,7 @@ def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
         #
         # https://stackoverflow.com/questions/40514022/chrome-webdriver-produces-timeout-in-selenium
         print(ex.msg)
-        print(f"\nseen 'TimeoutException receiving message from renderer' again? do driver.refresh()\n")
+        print(f"\nseen 'TimeoutException receiving message from renderer' again? do driver.refresh(). If this doesn't help, then set page_load_timeout longer.\n")
         driver.refresh()
         # if the above doesn't work, then we need to make page_load_timeout longer.
     except WebDriverException as ex:
@@ -1988,7 +1988,7 @@ def tp_click(driver: webdriver.Chrome, element: WebElement, **opt):
         #
         #     https://stackoverflow.com/questions/40514022/chrome-webdriver-produces-timeout-in-selenium
         print(ex.msg)
-        print(f"\nseen 'TimeoutException receiving message from renderer' again? do driver.refresh()\n")
+        print(f"\nseen 'TimeoutException receiving message from renderer' again? do driver.refresh() now. If this doesn't help, then set page_load_timeout longer.\n")
         driver.refresh()
         # 2. if the above doesn't help, we can increase the page_load_timeout.
         #    I defaulted it to 15 seconds, but for slow app like ServiceNow. we should set 30.

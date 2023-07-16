@@ -45,6 +45,10 @@ def check_android_env(**opt):
     return True
 
 
+# get_apk_manifest() vs get_app_manifest()
+#    - get_apk_manifest() only works with apk file.
+#    - get_app_manifest() works with app name.
+#      it needs adb to be connected to the device or emulator, to download the apk file.
 def get_apk_manifest(apk_path: str, **opt):
     verbose = opt.get('verbose', 0)
     '''
@@ -99,6 +103,8 @@ def get_app_manifest(pkg_pattern: str, **opt):
     else:
         pkg = lines[0].split(':')[1]
 
+    print(f'pkg = {pkg}')
+
     # get package path
     device_path = tpsup.adbtools.adb_get_pkg_path(pkg, **opt)
     if not device_path:
@@ -125,9 +131,9 @@ def get_app_manifest(pkg_pattern: str, **opt):
 def main():
     dailydir = tpsup.tptmp.get_dailydir()
 
-    # print(f"manifest of {dailydir}/Gallery2.apk")
-    print(get_apk_manifest(f'{dailydir}/Gallery2.apk'))
-    exit(0)
+    # if os.path.exists(f'{dailydir}/Gallery2.apk'):
+    #     print(f"manifest of {dailydir}/Gallery2.apk")
+    #     print(get_apk_manifest(f'{dailydir}/Gallery2.apk'))
 
     # start emulator first
     # $ svenv

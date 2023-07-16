@@ -277,8 +277,9 @@ a.pop('batch')  # remove batch from a
 opt.update(a)
 
 # we can use command-line switches (now in 'opt') to override default values in all_cfg.
-# we couldn't have done it in parse_args()
-#    because we need all_cfg's extra_args to parse command-line switches.
+# we couldn't have done it in parse_cfg() because
+#    1. we need all_cfg's extra_args to parse command-line switches.
+#    2. all_cfg's extra_args are not available until after parse_cfg().
 # therefore, we do the override here.
 for k in all_cfg.keys():
     cmdline_value = opt.get(k, None)
@@ -287,6 +288,13 @@ for k in all_cfg.keys():
         print(
             f"overriding {k} from '{all_cfg[k]}' to '{cmdline_value}'", file=sys.stderr)
         all_cfg[k] = cmdline_value
+# the override waterfall is:
+#   1. command-line switches
+#   2. app_cfg.py
+#   3. module.py
+#   4. batch.py
+# after the above steps, all overrides are done !!! final values are in all_cfg.
+# override logic of steps 2, 3, 4 were done in parse_cfg().
 
 if verbose:
     print(f'opt={pformat(opt)}')
