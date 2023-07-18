@@ -1,4 +1,6 @@
 import re
+from pprint import pformat
+from typing import Dict, List, Union, Callable
 
 
 def parse_input(input: Union[list, str], **opt):
@@ -61,3 +63,33 @@ def check_allowed_keys(ref: dict, **opt):
             if key not in allowed_keys:
                 raise Exception(f'key {key} is not allowed')
     return
+
+
+def get_keys_in_uppercase(cfg_by_entity: dict, **opt):
+    seen = {}
+
+    for entity in cfg_by_entity.keys():
+        wc = cfg_by_entity[entity].get(
+            'method_cfg', {}).get('where_clause', {})
+        for k in wc.keys():
+            seen[k.upper()] = 1
+
+    for k in opt.get("ExtraKeys", []):
+        seen[k.upper()] = 1
+
+    for a, k in opt.get("AliasMap", {}).items():
+        uc_k = k.upper()
+        if not uc_k in seen:
+            raise RuntimeError(
+                f"{k} is used in AliasMap but {k} is not seen in original keys: {pformat(seen)}")
+
+        seen[a.upper()] = 1
+
+    for k in opt.get("key_pattern", []):
+        seen[k.upper()] = 1
+
+    return seen.keys()
+
+
+def resolve_a_clause(clause: str, dct: dict, **opt):
+    
