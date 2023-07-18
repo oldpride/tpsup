@@ -91,5 +91,5 @@ def get_keys_in_uppercase(cfg_by_entity: dict, **opt):
     return seen.keys()
 
 
-def resolve_a_clause(clause: str, dct: dict, **opt):
-    
+# convert this perl to python my
+# my $i = 1;
