@@ -33,6 +33,8 @@ from typing import Union, List, Dict
 from tpsup.exectools import exec_into_globals
 
 
+# because globals() and locals() are all relative to batch.py, therefore
+# we cannot move exec_simple() to tpsup.exectools.
 def exec_simple(source, **opt):
     return exec_into_globals(source, globals(), locals(), **opt)
 

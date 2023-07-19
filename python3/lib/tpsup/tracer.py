@@ -2,6 +2,8 @@ import re
 from pprint import pformat
 from typing import Dict, List, Union, Callable
 
+import tpsup.util
+
 
 def parse_input(input: Union[list, str], **opt):
     if isinstance(input, str):
@@ -91,5 +93,46 @@ def get_keys_in_uppercase(cfg_by_entity: dict, **opt):
     return seen.keys()
 
 
-# convert this perl to python my
-# my $i = 1;
+# convert this perl to python
+# sub resolve_a_clause {
+#    my ($clause, $Dict, $opt) = @_;
+
+#    # first substitute the scalar var in {{...}}
+#    $opt->{verbose} && print "line ", __LINE__, " before substitution, clause = $clause, Dict = ", Dumper($Dict);
+
+#    $clause = resolve_scalar_var_in_string($clause, $Dict, $opt);
+
+#    $opt->{verbose} && print "line ",__LINE__, " after substitution, clause = $clause\n";
+
+#    # we don't need this because we used 'our' to declare %known.
+#    # had we used 'my', we would have needed this.
+#    #my $touch_to_activate = \%known;
+
+#    # then eval() other vars, eg, $known{YYYYMMDD}
+#    my $clause2 = tracer_eval_code($clause, {%$opt, Dict=>$Dict});
+
+#    return $clause2;
+# }
+
+# convert above to python
+def resolve_a_clause(clause: str, Dict: dict, **opt):
+    # first substitute the scalar var in {{...}}
+    opt['verbose'] and print(
+        f"line {__line__()} before substitution, clause = {clause}, Dict = {pformat(Dict)}")
+
+    clause = tpsup.util.resolve_scalar_var_in_string(clause, Dict, **opt)
+
+    opt['verbose'] and print(
+        f"line {__line__()} after substitution, clause = {clause}")
+
+    # we don't need this because we used 'our' to declare %known.
+    # had we used 'my', we would have needed this.
+    # my $touch_to_activate = \%known;
+
+    # then eval() other vars, eg, $known{YYYYMMDD}
+    clause2 = tracer_eval_code(clause, Dict=Dict, **opt)
+
+    return clause2
+
+# convert below perl to python
+#
