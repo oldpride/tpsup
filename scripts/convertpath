@@ -1,0 +1,193 @@
+#!/bin/bash
+
+# find whether we are in a script or sourced
+# https://stackoverflow.com/questions/2683279
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+
+exit_or_return() {
+   if [ $sourced = 1 ]; then
+      return $1
+   else
+      exit $1
+   fi
+}
+
+if [ $sourced = 1 ]; then
+   local OPTIND OPTARG o verbose usage is_env_var source_type target_type \
+      old_string new_string old_delimiter new_delimiter p
+fi
+
+prog=${FUNCNAME[1]}
+
+usage="
+usage: $prog PATH
+   
+   used inside a bash-shell, convert a path variable string to be a type of windows 
+   bash-running terminal: cygwin, gitbash, batch (cmd.exe)
+
+   Note: 
+      - this script (function) is for windows only, will not be useful for Linux. 
+      - this script only runs in bash shell.
+      - the bash shell's hosting terminal may demand different format (style)
+        gitbash: /c/user/...
+        cygwin:  /cygdrive/c/user/...
+        batch:   /cygdrive/c/user/...
+      - batch doesn't run in bash but bash may call a exe which will use batch-style path.
+        for example: we can call python.exe from bash, which will use the PYTHONPATH in the
+        bash env. However, PYTHONPATH is in batch style: C:/user/...;C:/Program Files/..., 
+        even the delimiter is semi-colon.
+
+   -v               verbose
+   -e               the arguement is a env variable. default to a PATH string
+   -i               update var in place, work with -e only
+   -s source_type   eg, cygwin, gitbash, batch. default is to let the script to figure out.
+   -t target_type   eg, cygwin, gitbash, batch. default is to let the script to figure out.
+   -o old_delimiter ie, source delimiter, default to let the script to figure out.
+   -n new_delimiter ie, target delimiter, default to let the script to figure out.
+
+examples:
+
+   $prog    -t batch "$SITEVENV"
+   $prog -e -t batch   SITEVENV
+
+   $prog    "$PYTHONPATH"
+   $prog -e   PYTHONPATH
+
+   $prog -v -e -t batch PATH
+"
+
+verbose=N
+is_env_var=N
+source_type=unknown
+target_type=unknown
+old_delimiter=unknown
+new_delimiter=unknown
+inplace=N
+
+while getopts eivd:s:t: o; do
+   case "$o" in
+   v) verbose=Y ;;
+   e) is_env_var=Y ;;
+   i) inplace=Y ;;
+   o) old_delimiter=$OPTARG ;;
+   n) new_delimiter=$OPTARG ;;
+   s) source_type=$OPTARG ;;
+   t) target_type=$OPTARG ;;
+   *)
+      echo "unknow switch. $usage" >&2
+      exit_or_return 1
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args: expected 1, actual $#" >&2
+   echo "$usage" >&2
+   exit_or_return 1
+fi
+
+p=$1
+
+if [ $is_env_var = Y ]; then
+   old_string="${!p}" # indirect var name = eval var name = assign a env name to a variable.
+
+   # as PYTHONPATH is used by python.exe, not by bash, therefore, it always uses batch
+   # style, eg, C:/user/....
+   if [ "$p" = "PYTHONPATH" ]; then
+      if [ "$old_delimiter" = "unknown" ]; then
+         old_deldmiter=";"
+      fi
+      if [ "$new_delimiter" = "unknown" ]; then
+         new_delimiter=";"
+      fi
+      if [ "$target_type" = "unknown" ]; then
+         target_type=batch
+      fi
+   fi
+else
+   old_string="$p"
+fi
+
+[ $verbose = Y ] && echo "old_string=$old_string" >&2
+
+if [ $source_type = unknown ]; then
+   if [[ ${old_string,,} =~ ^/[a-z]/ ]]; then # coma,coma to convert to lowercase
+      source_type=gitbash
+   elif [[ ${old_string,,} =~ /cygdrive/ ]]; then
+      source_type=cygwin
+   elif [[ ${old_string,,} =~ ^[a-z]: ]]; then
+      source_type=batch
+      if [ "$old_delimiter" = "unknown" ]; then
+         old_delimiter=';' # semi-colon
+      fi
+   else
+      echo "cannot figure our source type from '$p'." >&2
+      echo "$usage" >&2
+      exit_or_return 1
+   fi
+fi
+
+[ $verbose = Y ] && echo "source_type=$source_type" >&2
+
+if [ $target_type = unknown ]; then
+   if [[ $UNAME =~ Cygwin ]]; then
+      target_type=cygwin
+   elif [[ $UNAME =~ Msys ]]; then
+      target_type=gitbash
+   else
+      echo "cannot figure our target type from UNAME='$UNAME'." >&2
+      echo "$usage" >&2
+      exit_or_return 1
+   fi
+fi
+
+[ $verbose = Y ] && echo "target_type=$target_type" >&2
+
+if [ "$old_delimiter" = "unknown" ]; then
+   old_delimiter=":"
+fi
+
+if [ "$new_delimiter" = "unknown" ]; then
+   new_delimiter=":"
+fi
+
+if [ $source_type = cygwin ]; then
+   if [ $target_type = gitbash ]; then
+      new_string=$(echo "$old_string" | sed -e 's:/cygdrive/:/:ig')
+   elif [ $target_type = batch ]; then
+      new_string=$(echo "$old_string" | sed -e 's%/cygdrive/\([a-z]\)/%\1:/%ig')
+   else
+      new_string="$old_string"
+   fi
+elif [ $source_type = gitbash ]; then
+   if [ $target_type = cygwin ]; then
+      new_string=$(echo "$old_string" | sed -e "s%/\([a-z]\)/%/cygdrive/\1/%ig; s%${old_delimiter}/\([a-z]\)/%${new_delimiter}/cygdrive/\1/%ig")
+   elif [ $target_type = batch ]; then
+      new_string=$(echo "$old_string" | sed -e "s%/\([a-z]\)/%\1:/%; s%${old_delimiter}/\([a-z]\)/%${new_delimiter}\1:/%ig")
+   else
+      new_string="$old_string"
+   fi
+elif [ $source_type = batch ]; then
+   if [ $target_type = cygwin ]; then
+      new_string=$(echo "$old_string" | sed -e "s%^\([a-z]\):[\/]%/cygdrive/\1/%i; s%${old_delimiter}\([a-z]\):[\/]%${new_delimiter}/cygdrive/\1/%ig; s:[\]:/:g")
+   elif [ $target_type = gitbash ]; then
+      new_string=$(echo "$old_string" | sed -e "s%^\([a-z]\):[\/]%/\1/%ig;          s%${old_delimiter}\([a-z]\):[\/]%${new_delimiter}/\1/%ig;         s:[\]:/:g")
+   else
+      new_string="$old_string"
+   fi
+else
+   echo "unknown source type '$source_type'." >&2
+   echo "$usage" >&2
+   exit_or_return 1
+fi
+
+[ $verbose = Y ] && echo "new_string=$new_string" >&2
+
+if [ $is_env_var = Y -a $inplace = Y ]; then
+   [ $verbose = Y ] && echo "updating env $p" >&2
+   export "$p=$new_string"
+else
+   echo "$new_string"
+fi

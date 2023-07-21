@@ -1,0 +1,140 @@
+#!/bin/bash
+
+prog=$(basename "$0")
+
+usage="
+
+usage:
+
+$prog check      # check current settings
+$prog list       # list available policies
+$prog backup     # backup current policy
+$prog listbackup # list backup files
+$prog policy     # set to a specific policy
+
+manage windows defender firewall. 
+
+   'home' policy has full network access.
+   'commute' policy has limited network access to save hotspot.
+
+example:
+
+$prog check
+$prog list
+$prog backup
+$prot listbackup
+$prog home        # set to home policy
+$prog commute     # set to commute policy
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "ERROR: $prog: wrong number of args"
+   echo "$usage"
+   exit 1
+fi
+
+action=$1
+
+# $ ls -1 /c/Users/william/firewall/import
+# commute.wfw
+# home.wfw
+
+user=$(id | cut -d\( -f2 | cut -d\) -f1)
+
+if [[ $UNAME =~ CYGWIN ]]; then
+   # use array because we have space char in the string
+   BASEDIR="/cygdrive/c/Users/$user/firewall"
+elif [[ $UNAME =~ MINGW64_NT ]]; then
+   # can also use, [[ $UNAME =~ Msys ]]
+   BASEDIR="/c/Users/$user/firewall"
+elif [[ $UNAME =~ Linux ]]; then
+   echo "ERROR: unsupported UNAME='$UNAME'"
+   exit 1
+fi
+
+if [ $action = check ]; then
+   # william@tianpc2:/c/Users/william$ gsudo netsh advfirewall show currentprofile
+   # Public Profile Settings:
+   # ----------------------------------------------------------------------
+   # State                                 ON
+   # Firewall Policy                       BlockInbound,AllowOutbound
+   # LocalFirewallRules                    N/A (GPO-store only)
+   # LocalConSecRules                      N/A (GPO-store only)
+   # InboundUserNotification               Enable
+   # RemoteManagement                      Disable
+   # UnicastResponseToMulticast            Enable
+
+   # Logging:
+   # LogAllowedConnections                 Disable
+   # LogDroppedConnections                 Disable
+   # FileName                              %systemroot%\system32\LogFiles\Firewall\pfirewall.log
+   # MaxFileSize                           4096
+
+   echo "gsudo netsh advfirewall show currentprofile"
+   current_profile="$(gsudo netsh advfirewall show currentprofile)"
+   echo "current_profile='$current_profile'"
+   echo ""
+
+   firewall_policy=$(echo "$current_profile" | grep "Firewall Policy")
+   echo "firewall_policy='$firewall_policy'"
+   echo ""
+
+   if [[ $firewall_policy =~ BlockInbound,AllowOutbound ]]; then
+      echo "we are using policy=home"
+   elif [[ $firewall_policy =~ BlockInbound,BlockOutbound ]]; then
+      echo "we are using policy=commute"
+   else
+      echo "ERROR: firewall_policy is unknown"
+      exit 1
+   fi
+
+   exit 0
+fi
+
+if [ $action = list ]; then
+   ls -l "$BASEDIR"/import/*
+   exit 0
+fi
+
+backup_dir="$BASEDIR/backup"
+
+if [ $action = backup ]; then
+   policy=$($prog check | grep "using policy=" | cut -d= -f2)
+   today=$(date +%Y%m%d)
+   policy_file=$(convertpath -t batch "$backup_dir/$today-$policy.wfw")
+   echo "policy='$policy'"
+   echo ""
+   if [ -z "$policy" ]; then
+      echo "ERROR: cannot get policy"
+      exit 1
+   fi
+
+   echo "gsudo netsh advfirewall export \"$policy_file\""
+   gsudo netsh advfirewall export "$policy_file"
+   echo ""
+   echo "check backup file:"
+   ls -l "$policy_file"
+   exit 0
+fi
+
+if [ $action = listbackup ]; then
+   ls -l "$backup_dir"/*.wfw
+   exit 0
+fi
+
+if [ $action = home -o $action = commute ]; then
+   policy=$action
+   policy_file=$(convertpath -t batch "$BASEDIR/import/$policy.wfw")
+   if ! [ -f "$policy_file" ]; then
+      echo "ERROR: cannot find policy_file='$policy_file'"
+      exit 1
+   fi
+   echo "gsudo netsh advfirewall import \"$policy_file\""
+   gsudo netsh advfirewall import "$policy_file"
+   exit 0
+fi
+
+echo "ERROR: unknown action='$action'"
+echo "$usage"
+exit 1

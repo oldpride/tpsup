@@ -1,0 +1,2 @@
+call addpath "C:/Program Files/gsudo/Current/"
+gsudo %* 

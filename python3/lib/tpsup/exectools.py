@@ -15,11 +15,16 @@ def _exec_filter(_dict, **opt):
         return {k: v for k, v in _dict.items() if not compiled_exclude.match(k)}
 
 
-def exec_into_globals(_source, _globals, _locals, **opt):
+def exec_into_globals(_source: str, _globals, _locals, **opt):
 
     _source2 = correct_indent(_source)
     compiled = None
     try:
+        # because the code is compiled and passed forward, therefore,
+        # there is no file name associated with the code.
+        # without a filename, error message's source will be difficult to identify.
+        # therefore, we add a filename to the code, passed from caller
+        #    opt['source_filename']
         # https://docs.python.org/3/library/functions.html#compile
         # The filename argument should give the file from which the code was read;
         #    pass some recognizable value if it wasn’t read from a file
@@ -65,7 +70,58 @@ def exec_into_globals(_source, _globals, _locals, **opt):
     #         getattr(tpsup.seleniumtools, 'we_return') to retrieve the value from caller.
 
 
+# eval() can handle a single expression
+#     >>> eval("1+2")
+#     3
+#
+# eval() cannot handle a code block
+#     >>> a='''
+#     ... b=1
+#     ... c=b+1
+#     ... c==3
+#     ... '''
+#     >>> eval(a)
+#     Traceback (most recent call last):
+#     File "<stdin>", line 1, in <module>
+#     File "<string>", line 2
+#         b=1
+#         ^
+#     SyntaxError: invalid syntax
+#
+# put code block into a function so that eval() a single expression.
+#
+#     >>> def f():
+#     ...     b=1
+#     ...     c=b+1
+#     ...     return c==3
+#     ...
+#     >>> eval("f()")
+#     False
+
+# this function should not be called. it is here to disable the warning from IDE.
+def tp_exec_func():
+    raise RuntimeError("this function should not be called")
+
+
+def eval_block(_source: str, _globals, _locals, **opt):
+    # _globals and _locals are the caller's globals() and locals()
+
+    verbose = opt.get("verbose", 0)
+
+    # wrap the code block into a function so that eval() a single expression.
+    # see above for explanation.
+    source = f'def tp_exec_func():\n' + shift_indent(correct_indent(_source),
+                                                     shift_space_count=4,
+                                                     add_return=True,
+                                                     )
+    if verbose:
+        print(f"source = \n{source}")
+    exec_into_globals(source, _globals, _locals, **opt)
+    return _globals['tp_exec_func']()
+
+
 def correct_indent(source: str, **opt):
+    # remove indent.
     # the source my not be correctly indented because it embedded in other
     # code.
     # use the first ident as reference
@@ -80,25 +136,45 @@ def correct_indent(source: str, **opt):
 
     first_indent = None
     compiled_first_indent_search = re.compile(r"^(\s*)\S")
-    compiled_first_indent_remove = None
     for i in range(len(lines)):
-        if first_indent is None:
-            if m := compiled_first_indent_search.match(lines[i]):
-                first_indent, *_ = m.groups()
-                length = len(first_indent)
-                if verbose:
-                    print(f"matched first indent {length} chars")
-                if length == 0:
-                    return source
-                compiled_first_indent_remove = re.compile(f"^{first_indent}")
-                lines[i] = compiled_first_indent_remove.sub("", lines[i])
-            continue
-        lines[i] = compiled_first_indent_remove.sub("", lines[i])
-    source2 = "\n".join(lines)
-    return source2
+        # blank lines are ignored
+        if m := compiled_first_indent_search.match(lines[i]):
+            first_indent, *_ = m.groups()
+            length = len(first_indent)
+            if verbose:
+                print(f"matched first indent {length} chars")
+            if length == 0:
+                # first line has no ident, then no need to shift left.
+                return source
+            break
+    return shift_indent(source, shift_space_count=-length, **opt)
 
 
-def test_lines(f: types.FunctionType, source_globals={}, **opt):
+def shift_indent(source: str, **opt):
+    # shift left or right
+    shift_tab_count = opt.get("shift_tab_count", 0)
+    shift_space_count = opt.get("shift_space_count", shift_tab_count * 4)
+
+    if shift_space_count == 0:
+        return source
+
+    lines = source.split("\n")
+    real_line_pattern = re.compile(r"^(\s*)[^#\s]")
+    last = None
+    for i in range(len(lines)):
+        if shift_space_count > 0:
+            lines[i] = " " * shift_space_count + lines[i]
+        else:
+            lines[i] = lines[i][-shift_space_count:]
+        if real_line_pattern.search(lines[i]):
+            last = i
+    if opt.get("add_return", False):
+        lines[last] = re.sub(r"^(\s*)", r"\1return ", lines[last])
+
+    return "\n".join(lines)
+
+
+def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, **opt):
     import inspect
     # we import here because this is a test function.
 
@@ -114,8 +190,9 @@ def test_lines(f: types.FunctionType, source_globals={}, **opt):
         print(f"run: {line}")
 
         combined_globals = {**source_globals, **globals()}
+        combined_locals = {**source_locals, **locals()}
 
-        exec_into_globals(line, combined_globals, locals())
+        exec_into_globals(line, combined_globals, combined_locals)
 
 
 def main():
@@ -127,11 +204,18 @@ def main():
     if a == 2:
         a = 3
     """
-    code2 = correct_indent(code)
+
     print("--------------------")
     print(code)
     print("--------------------")
-    print(code2)
+
+    def test_code():
+        print(correct_indent(code, verbose=1))
+        print(shift_indent(code, shift_space_count=4))
+        print(shift_indent(code, shift_space_count=-4))
+        print(shift_indent(code, shift_tab_count=-1))
+
+    test_lines(test_code, globals(), locals())
     print("--------------------")
 
     print("test _updated exec_into_globals()")
@@ -167,6 +251,15 @@ def main():
         print("hello world")
 
     test_lines(test_code)
+
+    a = 1
+    source = '''
+    print("here")
+    a+1
+'''
+
+    print(
+        (f'test eval_block(source) = {eval_block(source, globals(), locals())}'))
 
 
 if __name__ == "__main__":
