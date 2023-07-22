@@ -16,8 +16,11 @@ def _exec_filter(_dict, **opt):
 
 
 def exec_into_globals(_source: str, _globals, _locals, **opt):
+    if BeginCode := opt.get("BeginCode", None):
+        _source2 = BeginCode + "\n" + correct_indent(_source)
+    else:
+        _source2 = correct_indent(_source)
 
-    _source2 = correct_indent(_source)
     compiled = None
     try:
         # because the code is compiled and passed forward, therefore,
@@ -36,6 +39,9 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
         # this compile only catches syntax errors
         print_string_with_line_numer(_source2)
         raise e  # reraise the excecption
+
+    if opt.get("compile_only", False):
+        return compiled
 
     try:
         # by default
@@ -98,7 +104,9 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
 #     >>> eval("f()")
 #     False
 
-# this function should not be called. it is here to disable the warning from IDE.
+# this function should not be called.
+# it is to be overwritten by eval_block().
+# it is here to disable the warning from IDE.
 def tp_exec_func():
     raise RuntimeError("this function should not be called")
 

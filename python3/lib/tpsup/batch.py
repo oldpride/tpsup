@@ -77,9 +77,6 @@ extra_args = {
                     'help': 'reset driver before retry input, ie, run post_batch and pre_batch, default 1'},
 }
 
-# global vars needed for exec()
-# our_cfg = None
-
 
 def parse_cfg(cfg_file: str = None, **opt):
     verbose = opt.get('verbose', 0)
