@@ -16,12 +16,17 @@ def _exec_filter(_dict, **opt):
 
 
 def exec_into_globals(_source: str, _globals, _locals, **opt):
+    # for variables that won't be passed back to caller, we use _ prefix.
+    _verbose = opt.get("verbose", 0)
     if BeginCode := opt.get("BeginCode", None):
         _source2 = BeginCode + "\n" + correct_indent(_source)
     else:
         _source2 = correct_indent(_source)
 
-    compiled = None
+    if _verbose:
+        print(f"_source2 = \n{_source2}")
+
+    _compiled = None
     try:
         # because the code is compiled and passed forward, therefore,
         # there is no file name associated with the code.
@@ -31,8 +36,8 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
         # https://docs.python.org/3/library/functions.html#compile
         # The filename argument should give the file from which the code was read;
         #    pass some recognizable value if it wasn’t read from a file
-        source_filename = opt.get("source_filename", "")
-        compiled = compile(_source2, source_filename, "exec")
+        _source_filename = opt.get("source_filename", "")
+        _compiled = compile(_source2, _source_filename, "exec")
     except Exception as e:
         # note: some errors are run time errors and will not be caught here. for example
         #     NameError: name 'b' is not defined
@@ -41,7 +46,7 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
         raise e  # reraise the excecption
 
     if opt.get("compile_only", False):
-        return compiled
+        return _compiled
 
     try:
         # by default
@@ -49,20 +54,20 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
         # uses a copy of the caller's locals().
         # However, inside a function, the local scope passed to exec() is actually a copy of the actual
         # local variables; therefore, we force exec() to use the caller's original locals() as below.
-        exec(compiled, _globals, _locals)
+        exec(_compiled, _globals, _locals)
         # note: the above exec() will take info from _globals and _locals but will not feed back into
         #       _globals, but _locals is affected. note: this is not caller's _locals
-    except Exception as e:
+    except Exception as _e:
         # now we catch the run-time errors
         print_string_with_line_numer(_source2)
-        raise e  # reraise the excecption
+        raise _e  # reraise the excecption
 
     # move changes in _locals into _globals because caller's _locals is not modifiable - we only affected
     # the copy of caller's _locals.
     # https://www.pythonpool.com/python-locals/
     # we update _globals and use _globals to pass back the effect to caller
     _updated = _exec_filter(_locals)
-    if opt.get("verbose", 0):
+    if _verbose:
         print(f"_updated = {pprint.pformat(_updated)}")
     _globals.update(_updated)
 
@@ -126,6 +131,11 @@ def eval_block(_source: str, _globals, _locals, **opt):
         print(f"source = \n{source}")
     exec_into_globals(source, _globals, _locals, **opt)
     return _globals['tp_exec_func']()
+
+
+def test_compile(_source: str, _globals, _locals, **opt):
+    ret = exec_into_globals(_source, _globals, _locals, compile_only=1, **opt)
+    return ret
 
 
 def correct_indent(source: str, **opt):
@@ -268,6 +278,28 @@ def main():
 
     print(
         (f'test eval_block(source) = {eval_block(source, globals(), locals())}'))
+
+    test_codes = [
+        # the following will pass compile():
+        'print(f"test unknown var {unknown_var}")',  # undefined var
+        'junk',  # unknown statement
+
+        # the following will fail compile():
+        '''
+        print("hello world")
+                print("wrong indent")''',  # wrong indent
+        '"hello',     # missing quote
+        '99 === 99',    # wrong operator
+    ]
+
+    for t in test_codes:
+        print()
+        print("--------------------")
+        try:
+            print(
+                f"compile('''{t}''') = {test_compile(t, globals(), locals())}")
+        except Exception as e:
+            print(f"compile('''{t}'''): {e}")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import inspect
 import os
 import re
 from pprint import pformat
-from time import localtime, strptime
+from time import localtime, strftime, strptime
 from typing import Dict, List, Union, Callable
 
 import tpsup.util
@@ -75,7 +75,7 @@ def check_allowed_keys(ref: dict, **opt):
 
 
 def get_keys_in_uppercase(cfg_by_entity: dict, **opt):
-    print(f"opt = {pformat(opt)}")
+    # print(f"opt = {pformat(opt)}")
 
     seen = {}
 
@@ -231,6 +231,144 @@ hash1 = {}  # converted from @hashes using $entity_cfg->{output_key}
 r = {}  # only used by update_knowledge_from_row
 ###### global variables - end ######
 
+
+def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
+    if not row or not row.keys():
+        return
+
+    if not cfg:
+        return
+
+    r = row.copy()
+
+    # $key_cfg is mapping between $known's keys and $rows' keys (column names), as they may
+    # be different in spelling
+    # $key_cfg = {
+    #    known_key1 => 'row_key1',  # this converted to below after unify_hash() call.
+    #    known_key1 => { column=>row_key1 },
+    #    known_key2 => { column=>row_key2, flag2=>value },
+    #    known_key3 => { flag3=>value },    # here we default column = known_key3
+    #    known_key4 => {},                  # here we default column = known_key4
+    #    ...
+    # },
+
+    for k, kc in cfg.items():
+        kc_type = type(kc)
+        if kc_type is str:
+            kc = {'column': k}
+
+        # condition = kc.get('condition', None) or kc.get('update_knowledge', None)
+        condition = kc.get('condition', None)
+
+        if condition:
+            if not re.search(r'{{new_value}}', condition):
+                # if condition doesn't need {{new_value}}, we can evaluate it earlier
+                if not tracer_eval_code(condition, **opt):
+                    continue
+
+        # in where_clause/update_key, $known's key is mapped to row's column.
+        # in key_pattern,  $known's key is also the row's key.
+        # column key can have multiple column names. we will use the first defined column
+        # to update knowledge
+        #  {column=>'TRDQTY,ORDQTY',
+        #  clause=>'(TRDQTY={{opt_value}} or ORDQTY={{opt_value}})',
+        # }
+        kc_column = kc.get('column', k)
+        columns = kc_column.split(',')
+        code = kc.get('code', None)
+
+        new_value = None
+        for column in columns:
+            without_prefix = column
+            without_prefix = re.sub(r'^.+[.]', '', without_prefix)
+
+            new_value = tpsup.util.get_value_by_key_case_insensitive(
+                row, without_prefix, default=None)
+
+            if not new_value and not (code and re.search(r'{{new_value}}', code)):
+                # if code is not defined, or defined without using {{value}}, no need $new_value
+                print(
+                    f"selected row's '{without_prefix}' is not defined.\n")
+                continue
+            break
+
+        if condition:
+            if re.search(r'{{new_value}}', condition):
+                if not tracer_eval_code(condition, Dict={**vars, **known, 'new_value': new_value}, **opt):
+                    continue
+
+        if code:
+            v = tracer_eval_code(
+                code, Dict={**vars, **known, 'new_value': new_value}, **opt)
+            update_knowledge(k, v, KeyConfig=kc, **opt)
+        else:
+            if new_value:
+                update_knowledge(k, new_value, KeyConfig=kc, **opt)
+
+
+def update_knowledge(k: str, new_value: str, opt: dict):
+    kc = opt.get('KeyConfig', {})
+    column = kc.get('column', k)
+    known_value = known.get(k, None)
+
+    if known_value is not None:
+        mismatch = False
+
+        if kc.get('numeric', False):
+            if ',' in known_value:
+                known_value = known_value.replace(',', '')
+                known[k] = known_value
+
+            mismatch = (known_value != new_value)
+        else:
+            mismatch = (known_value != new_value)
+
+        if mismatch:
+            raise RuntimeError(
+                f"conflict at {column}: known='{known_value}', new='{new_value}'")
+
+    else:
+        known[k] = new_value
+        print(
+            f"\nadded knowledge key='{k}' from {column}={pformat(new_value)}\n")
+
+        all_cfg = get_all_cfg(**opt)
+
+        extender = all_cfg['extender_by_key'].get(k, None)
+        if extender:
+            print(f"\nextending knowledge from key='{k}'\n\n")
+
+            # extender->() is out of this scope, therefore, it  needs to take %known as a variable
+            extender(known, k)
+
+    return
+
+
+def update_error(msg: str, opt: dict):
+    known['ERROR_COUNT'] += 1
+    known['ERRORS'].append(msg)
+
+    print(f"ERROR: {msg}\n")
+
+    return
+
+
+def update_ok(msg: str, opt: dict):
+    known['OK'].append(msg)
+
+    print(f"OK: {msg}\n")
+
+    return
+
+
+def update_todo(msg: str, opt: dict):
+    known['TODO'].append(msg)
+
+    print(f"TODO: {msg}\n")
+
+    return
+
+
 cfg_by_file = {}
 
 
@@ -359,7 +497,7 @@ def parse_cfg(cfg_file: str, **opt):
     """
 
     if 'YYYYMMDD' in allowed_keys:
-        today = strptime("%Y%m%d", localtime())
+        today = get_yyyymmdd()
         usage_detail += f"\n   yyyymmdd is default to today {today}\n"
 
     extender_by_key = {}  # this provides the quick access to the extender function
@@ -405,11 +543,16 @@ def parse_cfg(cfg_file: str, **opt):
     #  '/root/[3]', 'v2']
     eval_patterns = [
         # vars are pairs. odd-numberred are values.
-        re.compile(r'\{vars\}/\[\d*[13579]\]$'),
+        # node = our_cfg/vars/[0]
+        # node = our_cfg/vars/[1]
+        # node = our_cfg/vars/[2]
+        # node = our_cfg/vars/[3]
+        re.compile(r'/vars/\[\d*[13579]\]$'),
 
         # these are all hash keys
+        # node = our_cfg/cfg_by_entity/test_code/code
         re.compile(
-            r'\{(condition|code|pre_code|post_code|test|if_fail|if_success|update_knowledge|Exps)\}$'),
+            r'(condition|code|test|if_fail|if_success|update_knowledge|Exps)$'),
     ]
 
     temporary_replacement_pattern = re.compile(r'\{\{([0-9a-zA-Z_.-]+)\}\}')
@@ -420,6 +563,8 @@ def parse_cfg(cfg_file: str, **opt):
         node = node_pairs.pop(0)
         value = node_pairs.pop(0)
 
+        verbose > 1 and print(f"node = {node}")
+
         for p in eval_patterns:
             if p.search(node):
                 verbose > 1 and print(f"matched {node}")
@@ -428,14 +573,15 @@ def parse_cfg(cfg_file: str, **opt):
                 # replace all scalar vars {{...}} with 1,
                 # but exclude {{pattern::...} and {{where::...}}
                 clause = temporary_replacement_pattern.sub(
-                    '1', clause, flags=re.MULTILINE)
+                    '1', f'{value}', re.MULTILINE)
 
                 if not tpsup.exectools.exec_into_globals(clause,
                                                          globals(), locals(),
                                                          compile_only=1,
                                                          BeginCode=BeginCode,
-                                                         verbose=(verbose > 1)):
-                    failed = 1
+                                                         verbose=(verbose > 1),
+                                                         ):
+                    failed = + 1
                     print(f"ERROR: failed to compile node: {node}\n")
                     print(
                         "In order to test compilation,"
@@ -480,6 +626,288 @@ def check_cfg_keys(cfg: dict, syntax: dict, **opt):
         return 0
 
     return 1
+
+
+def perform_tests(tests: list, **opt):
+    verbose = opt.get('verbose', 0)
+
+    if not tests:
+        return
+
+    verbose and print("\n---- testing result ----\n\n")
+
+    for item in tests:
+        test = item.get('test', None)
+        if_success = item.get('if_success', None)
+        if_failed = item.get('if_failed', None)
+        condition = item.get('condition', None)
+
+        if not test:
+            continue
+
+        if condition:
+            if not tracer_eval_code(condition, **opt):
+                print(f"OK, condition={condition} failed. skipped test\n")
+                continue
+
+        if tracer_eval_code(test, **opt):
+            verbose and print("test success\n")
+            if if_success:
+                tracer_eval_code(if_success, **opt)
+        else:
+            verbose and print("test failed\n")
+            if if_failed:
+                tracer_eval_code(if_failed, **opt)
+
+
+my_cfg = None
+
+
+def set_all_cfg(given_cfg, **opt):
+    global my_cfg
+
+    cfg_type = type(given_cfg)
+
+    if cfg_type is str:
+        cfg_file = given_cfg
+        my_cfg = parse_cfg(cfg_file, **opt)
+    elif cfg_type == dict:
+        my_cfg = given_cfg
+    else:
+        raise RuntimeError(
+            f"unknown cfg type={cfg_type}, expecting file name (string) or HASH. given_cfg = {given_cfg}")
+
+
+def get_all_cfg(**opt):
+    global my_cfg
+
+    if not my_cfg:
+        raise RuntimeError("all_cfg is not defined yet")
+
+    return my_cfg
+
+
+def reset_global_buffer(**opt):
+    global vars
+    global lines
+    global arrays
+    global headers
+    global hashes
+    global hash1
+    global r
+    global row_count
+    global rc
+    global output
+
+    # all these should be reserved words
+    all_cfg = get_all_cfg(**opt)
+
+    vars = all_cfg['global_vars']
+    lines = []
+    arrays = []
+    headers = []
+    hashes = []
+    hash1 = {}
+    r = {}
+    row_count = 0
+    rc = None
+    output = None
+
+
+def print_global_buffer(**opt):
+    # mainly for debug purpose
+    print("\nprint global buffer \n")
+    print(f"vars      = {pformat(vars)}")
+    print(f"lines     = {pformat(lines)}")
+    print(f"arrays    = {pformat(arrays)}")
+    print(f"headers   = {pformat(headers)}")
+    print(f"hashes    = {pformat(hashes)}")
+    print(f"hash1     = {pformat(hash1)}")
+    print(f"r         = {pformat(r)}")
+    print(f"row_count = {pformat(row_count)}")
+    print(f"rc        = {pformat(rc)}")
+    print(f"output    = {pformat(output)}")
+    print("\n")
+
+
+def trace(given_cfg, input, **opt):
+    verbose = opt.get('verbose', 0)
+
+    set_all_cfg(given_cfg, **opt)
+
+    all_cfg = get_all_cfg(**opt)
+
+    verbose > 1 and print(f"all_cfg = {pformat(all_cfg)}")
+
+    cfg_by_entity = all_cfg['cfg_by_entity']
+    entry_points = all_cfg.get('entry_points', [])
+    trace_route = all_cfg.get('trace_route', [])
+
+    if TraceString := opt.get('TraceString', None):
+        selected_entities = TraceString.split(',')
+
+        new_trace_route = []
+
+        for e in selected_entities:
+            # if the entity is already in the configured trace route, add it with the config.
+            for t in trace_route:
+                if e == t['entity']:
+                    new_trace_route.append(t)
+                    continue
+
+            # if the entity is not in the configured trace route, add it here.
+            new_trace_route.append({'entity': e})
+
+        trace_route = new_trace_route  # set new trace route
+        entry_points = []            # we skip all entry points too
+
+        verbose and print(f"trace_route = {pformat(trace_route)}")
+        verbose and print(f"entry_points = {pformat(entry_points)}")
+
+    parsed_input = parse_input(input,
+                               AliasMap=all_cfg['alias_map'],
+                               AllowedKeys=all_cfg['allowed_keys'],
+                               )
+
+    # these keys has precedence to populate because extender func may need this info.
+    for k in ['YYYYMMDD']:
+        if parsed_input.get(k, None):
+            update_knowledge(k, parsed_input[k])
+
+    if 'YYYYMMDD' in all_cfg['allowed_keys']:
+        today = get_yyyymmdd()
+        if not known.get('YYYYMMDD', None):
+            update_knowledge('YYYYMMDD', today)
+        update_knowledge('TODAY', today)
+
+    for k in parsed_input.keys():
+        update_knowledge(k, parsed_input[k])
+
+    verbose and print(f"knowledge from input = {pformat(known)}")
+
+    if vars := all_cfg.get('vars', None):
+        global_vars = resolve_vars_array(vars, known, **opt)
+        all_cfg['global_vars'] = global_vars
+    else:
+        all_cfg['global_vars'] = {}
+
+    verbose and print(f"global_vars = {pformat(all_cfg['global_vars'])}")
+
+    if known.get('EXAMPLE', None):
+        entity = known['EXAMPLE']
+        entity_cfg = tpsup.util.get_value_by_key_case_insensitive(
+            cfg_by_entity, entity, **opt)
+
+        opt2 = {**opt,
+                'AllowMultiple': 1,  # not abort when multiple results
+                'Top': 5,            # display upto 5 results
+                'isExample': 1,
+                }
+
+        # only reset buffer not $known neither global cfg
+        reset_global_buffer(**opt)
+        vars['entity'] = entity
+
+        process_entity(entity, entity_cfg, **opt2)
+
+        verbose and print(f"knowledge = {pformat(known)}")
+        return
+
+    SkipTrace = {}
+    if SkipTraceString := opt.get('SkipTrace', None):
+        if (re.match(r'^all$', SkipTraceString, re.IGNORECASE)):
+            trace_route = []
+        else:
+            for t in SkipTraceString.split(','):
+                SkipTrace[t] = 1
+
+            verbose and print(f"SkipTrace = {pformat(SkipTrace)}")
+
+    ForceThrough = opt.get('ForceThrough', False)
+    # todo - do we still need this in python
+
+    result = {}
+
+    if trace_route and not opt.get('SkipEntry', False) and entry_points:
+        for row in entry_points:
+            keys, entities = row
+
+            for k in keys:
+                if (k not in known) or (known[k] is None):
+                    continue
+
+            verbose and print(
+                f"matched entry point: {pformat(keys)} {pformat(entities)}")
+
+            for entity in entities:
+                if entity in SkipTrace:
+                    continue
+
+                entity_cfg = tpsup.util.get_value_by_key_case_insensitive(
+                    cfg_by_entity, entity, **opt)
+
+                try:
+                    result[entity] = process_entity(entity, entity_cfg, **opt)
+                except Exception as e:
+                    # don't print stack trace for easy understanding errors.
+                    if not re.search(r'\(no need stack trace\)', e):
+                        print(e)
+                    if not ForceThrough:
+                        raise RuntimeError(
+                            f"entity={entity} failed. aborting")
+
+            break  # only process the first match in entry point
+
+    trace_route_entities = tpsup.util.get_keys_from_array(
+        trace_route, 'entity')
+
+    if not trace_route_entities:
+        print("\n\nnothing to trace\n\n")
+        return
+
+    verbose and print(f"\n\nstart tracing: {trace_route_entities}\n\n")
+
+    for row in trace_route:
+        entity = row['entity']
+        opt2 = {**opt, **row}
+
+        if entity in SkipTrace:
+            continue
+
+        if entity in result and not row['reentry']:
+            print(f"entity={entity} had been traced before\n")
+            continue
+
+        # only reset buffer not $known neither global cfg
+        reset_global_buffer(**opt)
+        vars['entity'] = entity
+
+        if condition := row.get('condition', None):
+            if not tracer_eval_code(condition, **opt):
+                continue
+
+        entity_cfg = tpsup.util.get_value_by_key_case_insensitive(
+            cfg_by_entity, entity, **opt)
+
+        try:
+            result[entity] = process_entity(entity, entity_cfg, **opt2)
+        except Exception as e:
+            if not re.search(r'\(no need stack trace\)', e):
+                print(e)
+            if not ForceThrough:
+                raise RuntimeError(f"entity={entity} failed. aborting")
+
+
+yyyymmdd = None
+
+
+def get_yyyymmdd(**opt):
+    global yyyymmdd
+
+    if not yyyymmdd:
+        yyyymmdd = strftime("%Y%m%d", localtime())
+
+    return yyyymmdd
 
 
 def tracer_eval_code(code: str, **opt):
