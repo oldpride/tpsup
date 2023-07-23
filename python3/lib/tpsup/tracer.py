@@ -581,7 +581,7 @@ def parse_cfg(cfg_file: str, **opt):
                                                          BeginCode=BeginCode,
                                                          verbose=(verbose > 1),
                                                          ):
-                    failed = + 1
+                    failed += 1
                     print(f"ERROR: failed to compile node: {node}\n")
                     print(
                         "In order to test compilation,"
@@ -729,6 +729,425 @@ def print_global_buffer(**opt):
     print(f"output    = {pformat(output)}")
     print("\n")
 
+
+processor_by_method = {
+    'code': process_code,
+    'db': process_db,
+    'cmd': process_cmd,
+    'log': process_log,
+    'path': process_path,
+    'section': process_section,
+}
+
+'''
+sub process_entity {
+   my ($entity, $entity_cfg, $opt) = @_;
+
+   # this pushes back up the setting
+   $opt->{verbose} = $opt->{verbose} ? $opt->{verbose} : 0; 
+   my $verbose = $opt->{verbose};
+
+   $verbose > 1 && print "$entity entity_cfg = ", Dumper($entity_cfg);
+
+   my $entity_vars = $entity_cfg->{vars};
+   if ($entity_vars) {
+      $entity_vars = resolve_vars_array($entity_vars, {%vars, %known, entity=>$entity}, $opt);
+      $verbose && print "resolved entity=$entity entity_vars=", Dumper($entity_vars);
+   } else {
+      $entity_vars = {entity=>$entity};
+   }
+
+   # we check entity-level condition after resolving entity-level vars.
+   # if we need to set up a condition before resolving entity-level vars, do it in
+   # the trace_route. If trace_route cannot help, for example, when isExample is true,
+   # then convert the var section into using pre_code to update %known
+
+   %vars = (%vars, %$entity_vars);
+   $verbose && print "vars = ", Dumper(\%vars);
+
+   my $condition = $entity_cfg->{condition};
+   
+   if (     defined($condition) 
+         # && !$opt->{isExample}     # condition needs to apply to example too
+         && !tracer_eval_code($condition, $opt)
+      ) {
+      print "\nskipped entity=$entity due to failed condition: $condition\n\n";
+      return; 
+   }
+
+   print <<"EOF";
+
+-----------------------------------------------------------
+
+process $entity
+
+EOF
+
+   my $comment = get_first_by_key([$opt, $entity_cfg], 'comment', {default=>''});
+   if ($comment) {
+      $comment = resolve_scalar_var_in_string($comment, {%vars, %known}, $opt);
+      print "$comment\n\n";
+   }
+
+   my $method = $entity_cfg->{method};
+   my $processor = $processor_by_method->{$method};
+
+   croak "unsupported method=$method at entity='$entity'" if ! $processor;
+
+   tracer_eval_code($entity_cfg->{pre_code}, $opt) if defined $entity_cfg->{pre_code};
+
+   # $MaxExtracts is different from 'Top'
+   #    'Top' is only to limit display
+   #    'MaxExtracts' is only to limit memory usage
+   #my $MaxExtracts 
+   #   = get_first_by_key([$opt, $entity_cfg], 'MaxExtracts', {default=>10000});
+   #$opt->{MaxExtracts} = $MaxExtracts;
+   $opt->{MaxExtracts} = $opt->{MaxExtracts} ? $opt->{MaxExtracts} : 10000;
+
+   my $method_cfg = $entity_cfg->{method_cfg};
+
+   $processor->($entity, $method_cfg, $opt);
+
+   my $output_key = $entity_cfg->{output_key};
+   if ($output_key) {
+      # converted from hash array to a single hash
+      for my $row (@hashes) {
+         my $v = $row->{$output_key};
+
+         if (!defined $v) {
+            die "ERROR: output_key=$output_key is not defined in row=", Dumper($row);
+         }
+
+         push @{$hash1{$v}}, $row;
+      }
+   }
+
+   $verbose>1 && print_global_buffer();
+
+   tracer_eval_code($entity_cfg->{code}, $opt) if defined $entity_cfg->{code};
+
+   $verbose>1 && print_global_buffer();
+
+   # should 'example' be applyed by filter?
+   #     pro: this can help find specific example
+   #     con: without filter, it opens up more example, avoid not finding any example
+   #if (!$opt->{isExample}) {
+   #   # this affects global variables
+   #   apply_csv_filter($entity_cfg->{csv_filter});
+   #}
+   apply_csv_filter($entity_cfg->{csv_filter}, $opt);
+
+   my $Tail = get_first_by_key([$opt, $entity_cfg], 'tail', {default=>undef});
+   my $Top  = get_first_by_key([$opt, $entity_cfg], 'top', {default=>5});
+
+   # display the top results
+   if (@lines) {
+      print "----- lines begin ------\n";
+      #print @lines[0..$Top];  # array slice will insert undef element if beyond range.
+      if ($Tail) {
+         print @{tail_array(\@lines, $Top)};
+      } else {
+         print @{top_array(\@lines, $Top)};
+      }
+      print "----- lines end ------\n";
+      print "\n";
+
+      # $row_count is not reliable
+      #    - sometime the code forgot updating it
+      #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
+      my $count = scalar(@lines);
+      if ($Tail) {
+         print "(Truncated. Total $count, only displayed tail $Tail.)\n" if $count > $Tail;
+      } else {
+         print "(Truncated. Total $count, only displayed top  $Top.)\n"  if $count > $Top;
+      }
+   } 
+
+   if (@headers) {
+      my $MaxColumnWidth = $entity_cfg->{MaxColumnWidth};
+      print "MaxColumnWidth = $MaxColumnWidth\n" if defined $MaxColumnWidth;
+
+      render_csv(\@hashes, \@headers, 
+                 {%$opt, 
+                   MaxColumnWidth => $MaxColumnWidth,
+                  PrintCsvMaxRows =>$Top,
+                 });
+      print "\n";
+      my $count = scalar(@hashes);
+      print "(Truncated. Total $count, only displayed top $Top.)\n" if $count > $Top;
+   } 
+   
+   if (@hashes && ($verbose || !@headers)) {
+      # we print this only when we didn't print render_csv() or verbose mode
+      print Dumper(top_array(\@hashes, $Top));
+      print "\n";
+      my $count = scalar(@hashes);
+      print "(Truncated. Total $count, only displayed top $Top.)\n" if $count > $Top;
+   }
+
+   if (!$opt->{isExample}) {
+      my $AllowZero    
+          = get_first_by_key([$opt, $entity_cfg], 'AllowZero',    {default=>0});
+      my $AllowMultiple
+          = get_first_by_key([$opt, $entity_cfg], 'AllowMultiple',{default=>0});
+   
+      if (!$row_count) {
+         if ($AllowZero) {
+            print "WARN: matched 0 rows. but AllowZero=$AllowZero.\n\n";
+         } else {
+            print "ERROR: matched 0 rows.\n\n";
+            if (exists $entity_cfg->{method_cfg}) {
+               print "methond_cfg = ", Dumper($entity_cfg->{method_cfg});
+            }
+            die "(no need stack trace)";
+         }
+      } elsif ($row_count >1 ) {
+         if ($AllowMultiple) {
+            print "WARN:  matched multiple ($row_count) rows, but AllowMultiple=$AllowMultiple, so we will use the 1st one.\n\n";
+         } else {
+            print "ERROR: matched multiple ($row_count) rows. please narrow your search.\n\n";
+            if (exists $entity_cfg->{method_cfg}) {
+               print "methond_cfg = ", Dumper($entity_cfg->{method_cfg});
+            }
+            die "(no need stack trace)";
+         }
+      } 
+   }
+
+   if ($hashes[0]) {
+      # only return the first row
+      # %r is a global var
+      %r = %{$hashes[0]}; 
+   }
+
+   if (exists $entity_cfg->{method_cfg}->{where_clause}) {
+      my $update_key = unify_hash($entity_cfg->{method_cfg}->{where_clause}, 'column');
+      update_knowledge_from_rows(\%r, $update_key, $opt) if $update_key;
+   }
+
+   if (exists $entity_cfg->{update_key}) {
+      my $update_key = $entity_cfg->{update_key};
+      update_knowledge_from_rows(\%r, $update_key, $opt) if $update_key;
+   } 
+   
+   return if $opt->{isExample};
+
+   # update_knowledge first and then run 'tests' and 'post_code', so that they 
+   # could use new knowledge
+   perform_tests($entity_cfg->{tests}, $opt);  # tests can be undef
+
+   tracer_eval_code($entity_cfg->{post_code}, $opt)
+      if defined $entity_cfg->{post_code};
+
+   print "knowledge = ", Dumper(\%known);
+
+   return \%r;
+}
+'''
+# convert above perl code to python
+
+
+def process_entity(entity, entity_cfg, **opt):
+    verbose = opt.get('verbose', 0)
+
+    # this pushes back up the setting
+    # opt['verbose'] = verbose
+
+    verbose > 1 and print(f"{entity} entity_cfg = {pformat(entity_cfg)}")
+
+    entity_vars = entity_cfg.get('vars', None)
+    if entity_vars:
+        entity_vars = resolve_vars_array(
+            entity_vars, {**vars, **known, 'entity': entity}, **opt)
+        verbose and print(
+            f"resolved entity={entity} entity_vars={pformat(entity_vars)}")
+    else:
+        entity_vars = {'entity': entity}
+
+    # we check entity-level condition after resolving entity-level vars.
+    # if we need to set up a condition before resolving entity-level vars, do it in
+    # the trace_route. If trace_route cannot help, for example, when isExample is true,
+    # then convert the var section into using pre_code to update %known
+
+    global known, our_cfg, row_count, rc, output, lines, arrays, hashes, hash1, r
+
+    # vars are global so that eval/exec can pass data back through them.
+    # vars will be reset for each entity, therefore, we don't need to
+    # worry about pollution.
+    vars.update(entity_vars)
+    verbose and print(f"vars = {pformat(vars)}")
+
+    condition = entity_cfg.get('condition', None)
+
+    if condition:
+        if not tracer_eval_code(condition, **opt):
+            print(
+                f"\nskipped entity={entity} due to failed condition: {condition}\n\n")
+            return
+
+    print(f'''
+-----------------------------------------------------------
+          
+process {entity}
+          ''')
+
+    comment = tpsup.util.get_first_by_key(
+        [opt, entity_cfg], 'comment', {'default': ''})
+    if comment:
+        comment = tpsup.util.resolve_scalar_var_in_string(
+            comment, {**vars, **known}, **opt)
+        print(f"{comment}\n\n")
+    
+    method = entity_cfg['method']
+    processor = processor_by_method.get(method, None)
+
+    if not processor:
+        raise RuntimeError(f"unsupported method={method} at entity='{entity}'")
+    
+    if pre_code := entity_cfg.get('pre_code', None):
+        tracer_eval_code(pre_code, **opt)
+
+    # $MaxExtracts is different from 'Top'
+    #    'Top' is only to limit display
+    #    'MaxExtracts' is only to limit memory usage
+    #my $MaxExtracts
+    #   = get_first_by_key([$opt, $entity_cfg], 'MaxExtracts', {default=>10000});
+    #$opt->{MaxExtracts} = $MaxExtracts;
+    opt['MaxExtracts'] = opt.get('MaxExtracts', 10000)
+
+    method_cfg = entity_cfg.get('method_cfg', None)
+
+    processor(entity, method_cfg, **opt)
+
+    output_key = entity_cfg.get('output_key', None)
+    if output_key:
+        # converted from hash array to a single hash
+        for row in hashes:
+            v = row[output_key]
+
+            if v is None:
+                raise RuntimeError(
+                    f"output_key={output_key} is not defined in row={pformat(row)}")
+
+            hash1.setdefault(v, []).append(row)
+
+    verbose > 1 and print_global_buffer()
+
+    if code := entity_cfg.get('code', None):
+        tracer_eval_code(code, **opt)
+
+    verbose > 1 and print_global_buffer()
+
+    # should 'example' be applyed by filter?
+    #     pro: this can help find specific example
+    #     con: without filter, it opens up more example, avoid not finding any example
+    #if (!$opt->{isExample}) {
+    #   # this affects global variables
+    #   apply_csv_filter($entity_cfg->{csv_filter});
+    #}
+    apply_csv_filter(entity_cfg.get('csv_filter', None), **opt)
+
+    Tail = tpsup.util.get_first_by_key(
+        [opt, entity_cfg], 'tail', {'default': None})
+    Top = tpsup.util.get_first_by_key(
+        [opt, entity_cfg], 'top', {'default': 5})
+    
+    # display the top results
+    if lines:
+        print("----- lines begin ------\n")
+        if Tail:
+            print(lines[-Tail:])
+        else:
+            print(lines[:Top])
+        print("----- lines end ------\n")
+        print("\n")
+
+        # $row_count is not reliable
+        #    - sometime the code forgot updating it
+        #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
+        count = len(lines)
+        if Tail:
+            print(
+                f"(Truncated. Total {count}, only displayed tail {Tail}.)\n") if count > Tail
+        else:
+            print(
+                f"(Truncated. Total {count}, only displayed top  {Top}.)\n") if count > Top
+
+    if headers:
+        MaxColumnWidth = entity_cfg.get('MaxColumnWidth', None)
+        print(f"MaxColumnWidth = {MaxColumnWidth}") if MaxColumnWidth else None
+
+        tpsup.util.render_csv(hashes, headers,
+                              {**opt,
+                               'MaxColumnWidth': MaxColumnWidth,
+                               'PrintCsvMaxRows': Top,
+                               })
+        print("\n")
+        count = len(hashes)
+        if count > Top:
+            print(f"(Truncated. Total {count}, only displayed top {Top}.)\n")
+
+    if hashes and (verbose or not headers):
+        # we print this only when we didn't print render_csv() or verbose mode
+        print(hashes[:Top])
+        print("\n")
+        count = len(hashes)
+        if count > Top:
+            print(f"(Truncated. Total {count}, only displayed top {Top}.)\n")
+
+    if not opt.get('isExample', False):
+        AllowZero = tpsup.util.get_first_by_key(
+            [opt, entity_cfg], 'AllowZero', {'default': 0})
+        AllowMultiple = tpsup.util.get_first_by_key(
+            [opt, entity_cfg], 'AllowMultiple', {'default': 0})
+        
+        if not row_count:
+            if AllowZero:
+                print("WARN: matched 0 rows. but AllowZero=$AllowZero.\n\n")
+            else:
+                print("ERROR: matched 0 rows.\n\n")
+                if 'method_cfg' in entity_cfg:
+                    print(f"methond_cfg = {pformat(entity_cfg['method_cfg'])}")
+                raise RuntimeError("(no need stack trace)")
+        elif row_count > 1:
+            if AllowMultiple:
+                print(
+                    f"WARN:  matched multiple ({row_count}) rows, but AllowMultiple={AllowMultiple}, so we will use the 1st one.\n\n")
+            else:
+                print(
+                    f"ERROR: matched multiple ({row_count}) rows. please narrow your search.\n\n")
+                if 'method_cfg' in entity_cfg:
+                    print(f"methond_cfg = {pformat(entity_cfg['method_cfg'])}")
+                raise RuntimeError("(no need stack trace)")
+            
+    if hashes[0]:
+        # only return the first row
+        # %r is a global var
+        r = hashes[0]
+
+    if update_key := tpsup.util.unify_hash_hash(entity_cfg.get('method_cfg', {}).get('where_clause', {}), 'column'):
+        update_knowledge_from_rows(r, update_key, **opt)
+    if update_key := entity_cfg.get('update_key', None):
+        update_knowledge_from_rows(r, update_key, **opt)
+
+    if opt.get('isExample', False):
+        return
+    
+    # update_knowledge first and then run 'tests' and 'post_code', so that they
+    # could use new knowledge
+    perform_tests(entity_cfg.get('tests', []), **opt)  # tests can be undef
+
+    if post_code := entity_cfg.get('post_code', None):
+        tracer_eval_code(post_code, **opt)
+
+    print(f"knowledge = {pformat(known)}")
+
+    return r
+
+
+        
+
+        
 
 def trace(given_cfg, input, **opt):
     verbose = opt.get('verbose', 0)

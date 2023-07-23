@@ -1430,7 +1430,7 @@ EOF
       print "----- lines begin ------\n";
       #print @lines[0..$Top];  # array slice will insert undef element if beyond range.
       if ($Tail) {
-         print @{tail_array(\@lines, $Top)};
+         print @{tail_array(\@lines, $Tail)};
       } else {
          print @{top_array(\@lines, $Top)};
       }
