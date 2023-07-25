@@ -36,7 +36,7 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
         # https://docs.python.org/3/library/functions.html#compile
         # The filename argument should give the file from which the code was read;
         #    pass some recognizable value if it wasn’t read from a file
-        _source_filename = opt.get("source_filename", "")
+        _source_filename = opt.get("source_filename", "dynamic code")
         _compiled = compile(_source2, _source_filename, "exec")
     except Exception as e:
         # note: some errors are run time errors and will not be caught here. for example
@@ -130,7 +130,14 @@ def eval_block(_source: str, _globals, _locals, **opt):
     if verbose:
         print(f"source = \n{source}")
     exec_into_globals(source, _globals, _locals, **opt)
-    return _globals['tp_exec_func']()
+    ret = None
+    try:
+        ret = _globals['tp_exec_func']()
+    except Exception as e:
+        print()
+        print_string_with_line_numer(source)
+        print()
+        raise e
 
 
 def test_compile(_source: str, _globals, _locals, **opt):

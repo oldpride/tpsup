@@ -8,6 +8,8 @@ from typing import Dict, List, Union, Callable
 import tpsup.util
 import tpsup.cmdtools
 import tpsup.exectools
+import tpsup.csvtools
+import tpsup.print
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
 
@@ -25,7 +27,7 @@ def parse_input(input: Union[list, str], **opt):
     ref = {}
 
     for pair in input:
-        if re.match(r'any|check', re.IGNORECASE):
+        if re.match(r'any|check', pair, re.IGNORECASE):
             return
         elif pair_pattern.match(pair):
             key, value = pair_pattern.match(pair).groups()
@@ -50,27 +52,22 @@ def parse_input(input: Union[list, str], **opt):
             if uc_alias in ref:
                 ref[key] = ref[uc_alias]  # remember key is already upper case
 
-    check_allowed_keys(ref, **opt)
+    check_allowed_keys(ref, opt.get('AllowedKeys', []), **opt)
 
     return ref
 
 
-def check_allowed_keys(ref: dict, **opt):
-    if not (allowed_keys := opt.get('AllowedKeys', None)):
-        return
-
+def check_allowed_keys(href: dict, list: list, **opt):
     # check ref is empty
-    if not ref:
+    if not href:
         return
 
-    allowed = {}
-    for key in allowed_keys:
-        allowed[key.upper()] = True
+    # use upper case to avoid case-sensitive issue
+    allowed = {key.upper(): 1 for key in list}
 
-    if allowed_keys:
-        for key in ref.keys():
-            if key not in allowed_keys:
-                raise Exception(f'key {key} is not allowed')
+    for key in href.keys():
+        if key.upper() not in allowed:
+            raise Exception(f'key {key} is not allowed')
     return
 
 
@@ -103,7 +100,7 @@ def get_keys_in_uppercase(cfg_by_entity: dict, **opt):
 
 
 def __line__():
-    return __line__
+    # return __line__ # not working
     return inspect.currentframe().f_back.f_lineno
 
 
@@ -112,29 +109,43 @@ def __file__():
 
 
 def resolve_a_clause(clause: str, dict1: dict, **opt):
+    verbose = opt.get('verbose', 0)
+
+    if verbose > 1:
+        print(f"line {__line__()} opt = {pformat(opt)}")
+
     # in python, both dict and Dict are reserved words.
     # therefore, we use dict1 instead of dict or Dict.
 
     # first substitute the scalar var in {{...}}
-    opt['verbose'] and print(
+    verbose and print(
         f"line {__line__()} before substitution, clause = {clause}, dict1 = {pformat(dict1)}")
 
     clause = tpsup.util.resolve_scalar_var_in_string(clause, dict1, **opt)
 
-    opt['verbose'] and print(
+    verbose and print(
         f"line {__line__()} after substitution, clause = {clause}")
 
     # we don't need this because we used 'our' to declare %known.
-    # had we used 'my', we would have needed this.
+    # had we used 'my', we would have needed this
     # my $touch_to_activate = \%known;
 
     # then eval() other vars, eg, $known{YYYYMMDD}
-    clause2 = tracer_eval_code(clause, dict1=dict1, **opt)
+    clause2 = tracer_eval_code(clause, **{**opt, 'dict1': dict1})
 
     return clause2
 
 
 def resolve_vars_array(vars: list, dict1: dict, **opt):
+    # vars in our_cfg is a ref to array. This is for enforcing the order.
+    # vars in global is a hash (dict). this is for easy access.
+    # therefore, we need to convert array to hash.
+    verbose = opt.get('verbose', 0)
+
+    if verbose > 1:
+        print(
+            f"line {__line__()} opt = {pformat(opt)}")
+
     if not vars:
         return {}
 
@@ -152,6 +163,14 @@ def resolve_vars_array(vars: list, dict1: dict, **opt):
     while vars2:
         k = vars2.pop(0)
         v = vars2.pop(0)
+
+        if not isinstance(k, str):
+            raise Exception(
+                f"key type is not string. k = {k}, in vars = {vars}")
+
+        if not isinstance(v, str):
+            raise Exception(
+                f"value type is not string. v = {v}, in vars = {vars}")
 
         v2 = resolve_a_clause(v, dict2, **opt)
 
@@ -306,7 +325,7 @@ def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
                 update_knowledge(k, new_value, KeyConfig=kc, **opt)
 
 
-def update_knowledge(k: str, new_value: str, opt: dict):
+def update_knowledge(k: str, new_value: str, **opt):
     kc = opt.get('KeyConfig', {})
     column = kc.get('column', k)
     known_value = known.get(k, None)
@@ -401,8 +420,13 @@ def parse_cfg(cfg_file: str, **opt):
     # 'vars' is array of pairs of key=>value
     # 'value' is an expression, therefore, we need to use two different quotes.
     # unshift put the key=value to the front, therefore, allow cfg file to overwrite it.
-    our_cfg['vars'].insert(0, ('cfgdir', f"'{cfgdir}'"))
-    our_cfg['vars'].insert(0, ('cfgname', f"'{cfgname}'"))
+    our_cfg['vars'] = ['cfgdir', f"r'{cfgdir}'",
+                       'cfgname', f"r'{cfgname}'"] + our_cfg['vars']
+    # use r'' to avoid backslash issue
+    #    File "our_cfg node=our_cfg/vars/[1]", line 3
+    #       'C:\users\william\sitebase\github\tpsup\python3\lib\tpsup'
+    #       SyntaxError: (unicode error) 'unicodeescape' codec can't decode
+    #           bytes in position 2-3: truncated \uXXXX escape
 
     if 'key_pattern' in our_cfg:
         our_cfg['key_pattern'] = tpsup.util.unify_hash_hash(
@@ -575,12 +599,12 @@ def parse_cfg(cfg_file: str, **opt):
                 clause = temporary_replacement_pattern.sub(
                     '1', f'{value}', re.MULTILINE)
 
-                if not tpsup.exectools.exec_into_globals(clause,
-                                                         globals(), locals(),
-                                                         compile_only=1,
-                                                         BeginCode=BeginCode,
-                                                         verbose=(verbose > 1),
-                                                         ):
+                if not tpsup.exectools.test_compile(clause,
+                                                    globals(), locals(),
+                                                    source_filename=f'our_cfg node={node}',
+                                                    BeginCode=BeginCode,
+                                                    verbose=(verbose > 1),
+                                                    ):
                     failed += 1
                     print(f"ERROR: failed to compile node: {node}\n")
                     print(
@@ -732,233 +756,30 @@ def print_global_buffer(**opt):
 
 processor_by_method = {
     'code': process_code,
-    'db': process_db,
-    'cmd': process_cmd,
-    'log': process_log,
-    'path': process_path,
-    'section': process_section,
+    # 'db': process_db,
+    # 'cmd': process_cmd,
+    # 'log': process_log,
+    # 'path': process_path,
+    # 'section': process_section,
 }
-
-'''
-sub process_entity {
-   my ($entity, $entity_cfg, $opt) = @_;
-
-   # this pushes back up the setting
-   $opt->{verbose} = $opt->{verbose} ? $opt->{verbose} : 0; 
-   my $verbose = $opt->{verbose};
-
-   $verbose > 1 && print "$entity entity_cfg = ", Dumper($entity_cfg);
-
-   my $entity_vars = $entity_cfg->{vars};
-   if ($entity_vars) {
-      $entity_vars = resolve_vars_array($entity_vars, {%vars, %known, entity=>$entity}, $opt);
-      $verbose && print "resolved entity=$entity entity_vars=", Dumper($entity_vars);
-   } else {
-      $entity_vars = {entity=>$entity};
-   }
-
-   # we check entity-level condition after resolving entity-level vars.
-   # if we need to set up a condition before resolving entity-level vars, do it in
-   # the trace_route. If trace_route cannot help, for example, when isExample is true,
-   # then convert the var section into using pre_code to update %known
-
-   %vars = (%vars, %$entity_vars);
-   $verbose && print "vars = ", Dumper(\%vars);
-
-   my $condition = $entity_cfg->{condition};
-   
-   if (     defined($condition) 
-         # && !$opt->{isExample}     # condition needs to apply to example too
-         && !tracer_eval_code($condition, $opt)
-      ) {
-      print "\nskipped entity=$entity due to failed condition: $condition\n\n";
-      return; 
-   }
-
-   print <<"EOF";
-
------------------------------------------------------------
-
-process $entity
-
-EOF
-
-   my $comment = get_first_by_key([$opt, $entity_cfg], 'comment', {default=>''});
-   if ($comment) {
-      $comment = resolve_scalar_var_in_string($comment, {%vars, %known}, $opt);
-      print "$comment\n\n";
-   }
-
-   my $method = $entity_cfg->{method};
-   my $processor = $processor_by_method->{$method};
-
-   croak "unsupported method=$method at entity='$entity'" if ! $processor;
-
-   tracer_eval_code($entity_cfg->{pre_code}, $opt) if defined $entity_cfg->{pre_code};
-
-   # $MaxExtracts is different from 'Top'
-   #    'Top' is only to limit display
-   #    'MaxExtracts' is only to limit memory usage
-   #my $MaxExtracts 
-   #   = get_first_by_key([$opt, $entity_cfg], 'MaxExtracts', {default=>10000});
-   #$opt->{MaxExtracts} = $MaxExtracts;
-   $opt->{MaxExtracts} = $opt->{MaxExtracts} ? $opt->{MaxExtracts} : 10000;
-
-   my $method_cfg = $entity_cfg->{method_cfg};
-
-   $processor->($entity, $method_cfg, $opt);
-
-   my $output_key = $entity_cfg->{output_key};
-   if ($output_key) {
-      # converted from hash array to a single hash
-      for my $row (@hashes) {
-         my $v = $row->{$output_key};
-
-         if (!defined $v) {
-            die "ERROR: output_key=$output_key is not defined in row=", Dumper($row);
-         }
-
-         push @{$hash1{$v}}, $row;
-      }
-   }
-
-   $verbose>1 && print_global_buffer();
-
-   tracer_eval_code($entity_cfg->{code}, $opt) if defined $entity_cfg->{code};
-
-   $verbose>1 && print_global_buffer();
-
-   # should 'example' be applyed by filter?
-   #     pro: this can help find specific example
-   #     con: without filter, it opens up more example, avoid not finding any example
-   #if (!$opt->{isExample}) {
-   #   # this affects global variables
-   #   apply_csv_filter($entity_cfg->{csv_filter});
-   #}
-   apply_csv_filter($entity_cfg->{csv_filter}, $opt);
-
-   my $Tail = get_first_by_key([$opt, $entity_cfg], 'tail', {default=>undef});
-   my $Top  = get_first_by_key([$opt, $entity_cfg], 'top', {default=>5});
-
-   # display the top results
-   if (@lines) {
-      print "----- lines begin ------\n";
-      #print @lines[0..$Top];  # array slice will insert undef element if beyond range.
-      if ($Tail) {
-         print @{tail_array(\@lines, $Top)};
-      } else {
-         print @{top_array(\@lines, $Top)};
-      }
-      print "----- lines end ------\n";
-      print "\n";
-
-      # $row_count is not reliable
-      #    - sometime the code forgot updating it
-      #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
-      my $count = scalar(@lines);
-      if ($Tail) {
-         print "(Truncated. Total $count, only displayed tail $Tail.)\n" if $count > $Tail;
-      } else {
-         print "(Truncated. Total $count, only displayed top  $Top.)\n"  if $count > $Top;
-      }
-   } 
-
-   if (@headers) {
-      my $MaxColumnWidth = $entity_cfg->{MaxColumnWidth};
-      print "MaxColumnWidth = $MaxColumnWidth\n" if defined $MaxColumnWidth;
-
-      render_csv(\@hashes, \@headers, 
-                 {%$opt, 
-                   MaxColumnWidth => $MaxColumnWidth,
-                  PrintCsvMaxRows =>$Top,
-                 });
-      print "\n";
-      my $count = scalar(@hashes);
-      print "(Truncated. Total $count, only displayed top $Top.)\n" if $count > $Top;
-   } 
-   
-   if (@hashes && ($verbose || !@headers)) {
-      # we print this only when we didn't print render_csv() or verbose mode
-      print Dumper(top_array(\@hashes, $Top));
-      print "\n";
-      my $count = scalar(@hashes);
-      print "(Truncated. Total $count, only displayed top $Top.)\n" if $count > $Top;
-   }
-
-   if (!$opt->{isExample}) {
-      my $AllowZero    
-          = get_first_by_key([$opt, $entity_cfg], 'AllowZero',    {default=>0});
-      my $AllowMultiple
-          = get_first_by_key([$opt, $entity_cfg], 'AllowMultiple',{default=>0});
-   
-      if (!$row_count) {
-         if ($AllowZero) {
-            print "WARN: matched 0 rows. but AllowZero=$AllowZero.\n\n";
-         } else {
-            print "ERROR: matched 0 rows.\n\n";
-            if (exists $entity_cfg->{method_cfg}) {
-               print "methond_cfg = ", Dumper($entity_cfg->{method_cfg});
-            }
-            die "(no need stack trace)";
-         }
-      } elsif ($row_count >1 ) {
-         if ($AllowMultiple) {
-            print "WARN:  matched multiple ($row_count) rows, but AllowMultiple=$AllowMultiple, so we will use the 1st one.\n\n";
-         } else {
-            print "ERROR: matched multiple ($row_count) rows. please narrow your search.\n\n";
-            if (exists $entity_cfg->{method_cfg}) {
-               print "methond_cfg = ", Dumper($entity_cfg->{method_cfg});
-            }
-            die "(no need stack trace)";
-         }
-      } 
-   }
-
-   if ($hashes[0]) {
-      # only return the first row
-      # %r is a global var
-      %r = %{$hashes[0]}; 
-   }
-
-   if (exists $entity_cfg->{method_cfg}->{where_clause}) {
-      my $update_key = unify_hash($entity_cfg->{method_cfg}->{where_clause}, 'column');
-      update_knowledge_from_rows(\%r, $update_key, $opt) if $update_key;
-   }
-
-   if (exists $entity_cfg->{update_key}) {
-      my $update_key = $entity_cfg->{update_key};
-      update_knowledge_from_rows(\%r, $update_key, $opt) if $update_key;
-   } 
-   
-   return if $opt->{isExample};
-
-   # update_knowledge first and then run 'tests' and 'post_code', so that they 
-   # could use new knowledge
-   perform_tests($entity_cfg->{tests}, $opt);  # tests can be undef
-
-   tracer_eval_code($entity_cfg->{post_code}, $opt)
-      if defined $entity_cfg->{post_code};
-
-   print "knowledge = ", Dumper(\%known);
-
-   return \%r;
-}
-'''
-# convert above perl code to python
 
 
 def process_entity(entity, entity_cfg, **opt):
     verbose = opt.get('verbose', 0)
+
+    global known, our_cfg, row_count, rc, output, lines, arrays, hashes, hash1, r
 
     # this pushes back up the setting
     # opt['verbose'] = verbose
 
     verbose > 1 and print(f"{entity} entity_cfg = {pformat(entity_cfg)}")
 
-    entity_vars = entity_cfg.get('vars', None)
-    if entity_vars:
+    if 'vars' in entity_cfg:
+        # entity_cfg['vars'] is an array, in order to enforce the order.
+        # entity_vars is a hash (dict), for easy access.
+        # therefore, we need to convert array to hash.
         entity_vars = resolve_vars_array(
-            entity_vars, {**vars, **known, 'entity': entity}, **opt)
+            entity_cfg['vars'], {**vars, **known, 'entity': entity}, **opt)
         verbose and print(
             f"resolved entity={entity} entity_vars={pformat(entity_vars)}")
     else:
@@ -968,8 +789,6 @@ def process_entity(entity, entity_cfg, **opt):
     # if we need to set up a condition before resolving entity-level vars, do it in
     # the trace_route. If trace_route cannot help, for example, when isExample is true,
     # then convert the var section into using pre_code to update %known
-
-    global known, our_cfg, row_count, rc, output, lines, arrays, hashes, hash1, r
 
     # vars are global so that eval/exec can pass data back through them.
     # vars will be reset for each entity, therefore, we don't need to
@@ -997,22 +816,22 @@ process {entity}
         comment = tpsup.util.resolve_scalar_var_in_string(
             comment, {**vars, **known}, **opt)
         print(f"{comment}\n\n")
-    
+
     method = entity_cfg['method']
     processor = processor_by_method.get(method, None)
 
     if not processor:
         raise RuntimeError(f"unsupported method={method} at entity='{entity}'")
-    
+
     if pre_code := entity_cfg.get('pre_code', None):
         tracer_eval_code(pre_code, **opt)
 
     # $MaxExtracts is different from 'Top'
     #    'Top' is only to limit display
     #    'MaxExtracts' is only to limit memory usage
-    #my $MaxExtracts
+    # my $MaxExtracts
     #   = get_first_by_key([$opt, $entity_cfg], 'MaxExtracts', {default=>10000});
-    #$opt->{MaxExtracts} = $MaxExtracts;
+    # $opt->{MaxExtracts} = $MaxExtracts;
     opt['MaxExtracts'] = opt.get('MaxExtracts', 10000)
 
     method_cfg = entity_cfg.get('method_cfg', None)
@@ -1041,17 +860,17 @@ process {entity}
     # should 'example' be applyed by filter?
     #     pro: this can help find specific example
     #     con: without filter, it opens up more example, avoid not finding any example
-    #if (!$opt->{isExample}) {
+    # if (!$opt->{isExample}) {
     #   # this affects global variables
     #   apply_csv_filter($entity_cfg->{csv_filter});
-    #}
+    # }
     apply_csv_filter(entity_cfg.get('csv_filter', None), **opt)
 
     Tail = tpsup.util.get_first_by_key(
         [opt, entity_cfg], 'tail', {'default': None})
     Top = tpsup.util.get_first_by_key(
         [opt, entity_cfg], 'top', {'default': 5})
-    
+
     # display the top results
     if lines:
         print("----- lines begin ------\n")
@@ -1067,21 +886,23 @@ process {entity}
         #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
         count = len(lines)
         if Tail:
-            print(
-                f"(Truncated. Total {count}, only displayed tail {Tail}.)\n") if count > Tail
+            if count > Tail:
+                print(
+                    f"(Truncated. Total {count}, only displayed tail {Tail}.)\n")
         else:
-            print(
-                f"(Truncated. Total {count}, only displayed top  {Top}.)\n") if count > Top
+            if count > Top:
+                print(
+                    f"(Truncated. Total {count}, only displayed top  {Top}.)\n")
 
     if headers:
         MaxColumnWidth = entity_cfg.get('MaxColumnWidth', None)
         print(f"MaxColumnWidth = {MaxColumnWidth}") if MaxColumnWidth else None
 
-        tpsup.util.render_csv(hashes, headers,
-                              {**opt,
-                               'MaxColumnWidth': MaxColumnWidth,
-                               'PrintCsvMaxRows': Top,
-                               })
+        tpsup.print.render_arrays(hashes,
+                                  MaxColumnWidth=MaxColumnWidth,
+                                  MaxRows=Top,
+                                  RenderHeader=1
+                                  )
         print("\n")
         count = len(hashes)
         if count > Top:
@@ -1100,7 +921,7 @@ process {entity}
             [opt, entity_cfg], 'AllowZero', {'default': 0})
         AllowMultiple = tpsup.util.get_first_by_key(
             [opt, entity_cfg], 'AllowMultiple', {'default': 0})
-        
+
         if not row_count:
             if AllowZero:
                 print("WARN: matched 0 rows. but AllowZero=$AllowZero.\n\n")
@@ -1119,7 +940,7 @@ process {entity}
                 if 'method_cfg' in entity_cfg:
                     print(f"methond_cfg = {pformat(entity_cfg['method_cfg'])}")
                 raise RuntimeError("(no need stack trace)")
-            
+
     if hashes[0]:
         # only return the first row
         # %r is a global var
@@ -1132,7 +953,7 @@ process {entity}
 
     if opt.get('isExample', False):
         return
-    
+
     # update_knowledge first and then run 'tests' and 'post_code', so that they
     # could use new knowledge
     perform_tests(entity_cfg.get('tests', []), **opt)  # tests can be undef
@@ -1145,9 +966,153 @@ process {entity}
     return r
 
 
-        
+def apply_csv_filter_href(filter1: Union[dict, None], **opt):
+    if not filter1:
+        return
 
-        
+    # example of $filter1:
+    #            {
+    #             ExportExps => [
+    #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+    #                ],
+    #              SortKeys => [ 'weight' ],
+    #            },
+
+    filter2 = {}
+    changed = False
+    for k in sorted(filter1.keys()):
+        if 'Exps' in k:
+            Exps1 = filter1[k]
+
+            # Exps1 should be an array or None
+            if not Exps1:
+                continue
+
+            if not isinstance(Exps1, list):
+                raise RuntimeError(
+                    f"wrong type={type(Exps1)}. Only list is supported")
+
+            Exps2 = []
+            for e1 in Exps1:
+                e2 = tpsup.util.resolve_scalar_var_in_string(
+                    e1, {**vars, **known}, **opt)
+                e2 = apply_key_pattern(e2, **opt)
+
+                changed = (e2 != e1)
+                Exps2.append(e2)
+
+            filter2[k] = Exps2
+        else:
+            filter2[k] = filter1[k]
+
+    if changed:
+        print(f"original filter1 = {pformat(filter1)}")
+        print(f"resolved filter2 = {pformat(filter2)}")
+    else:
+        print(f"static filter2 = {pformat(filter2)}")
+
+    return filter2
+
+
+def apply_csv_filter(filters: Union[list, dict, None], **opt):
+    if not filters:
+        return
+
+    # examples:
+    # can be array, which depending knowledge keys
+    # $csv_filter => [
+    #          [
+    #            [ ], # depending keys, like entry_points
+    #            {
+    #             ExportExps => [
+    #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+    #                ],
+    #              SortKeys => [ 'weight' ],
+    #            },
+    #          ]
+    #       ],
+    # can be Hash
+    # $csv_filter =>
+    #       {
+    #          ExportExps => [
+    #             'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+    #             ],
+    #          SortKeys => [ 'weight' ],
+    #       },
+
+    global known, our_cfg, row_count, rc, output, lines, arrays, hashes, hash1, r
+
+    filter3 = {}
+    for row in filters:
+        keys, href = row
+
+        all_keys_known = True
+        for k in keys:
+            if k not in known:
+                all_keys_known = False
+                break
+        if not all_keys_known:
+            continue
+
+        filter4 = apply_csv_filter_href(href, **opt)
+        filter3 = {**filter3, **filter4}
+
+    if isinstance(filters, list):
+        # if $type was HASH, it was already printed by apply_csv_filter()
+        # if $type was ARRAY, we print the finalized filter
+        print(f"filter3 = {pformat(filter3)}")
+
+    MaxRows = opt.get('MaxExtracts', None)
+
+    hashes2 = tpsup.csvtools.filter_dicts(hashes, headers,
+                                          **filter3
+                                          )
+    # update global buffer
+    hashes = hashes2
+    if hashes:
+        headers = hashes[0].keys()
+        tpsup.print.render_arrays(hashes,
+                                  MaxRows=MaxRows,
+                                  RenderHeader=1,
+                                  )
+    else:
+        headers = []
+    arrays = tpsup.util.hashes_to_arrays(hashes, headers)
+    row_count = len(hashes)
+
+    return  # this sub affects global buffer, therefore, nothing to return
+
+
+scalar_key_pattern = None
+
+
+def apply_key_pattern(string: str, **opt):
+    # line_pattern => 'orderid=(?<ORDERID>{{pattern::ORDERID}}),.*tradeid=(?<TRADEID>{{pattern::TRADEID}}),.*sid=(?<SID>{{pattern::SID}}),.*filledqty=(?<FILLEDQTY>{{pattern::FILLEDQTY}}),',
+
+    # scalar_key_pattern = r'\{\{pattern::([0-9a-zA-Z_.-]+)\}\}'
+    # needed_keys = re.findall(scalar_key_pattern, string)
+    global scalar_key_pattern
+    if not scalar_key_pattern:
+        scalar_key_pattern = re.compile(r'\{\{pattern::([0-9a-zA-Z_.-]+)\}\}')
+
+    needed_keys = scalar_key_pattern.findall(string)
+
+    all_cfg = get_all_cfg(**opt)
+
+    key_pattern = all_cfg['key_pattern']
+
+    for k in needed_keys:
+        if k not in key_pattern:
+            raise RuntimeError(
+                f"'{{pattern::{k}}}' in '{string}' but '{k}' is not defined in key_pattern={pformat(key_pattern)}")
+
+    global known
+    for k in needed_keys:
+        substitue = known.get(k, key_pattern[k]['pattern'])
+        string = re.sub('{{pattern::'+f'{k}' + '}}', substitue, string)
+
+    return string
+
 
 def trace(given_cfg, input, **opt):
     verbose = opt.get('verbose', 0)
@@ -1204,8 +1169,11 @@ def trace(given_cfg, input, **opt):
 
     verbose and print(f"knowledge from input = {pformat(known)}")
 
-    if vars := all_cfg.get('vars', None):
-        global_vars = resolve_vars_array(vars, known, **opt)
+    if 'vars' in all_cfg:
+        # all_cfg['vars'] is from the config file, it is an array, in order to enforce the order.
+        # vars and known are global hash, for each access. so is all_cfg['global_vars'].
+        # therefore, we need to convert all_cfg['vars'] into a hash.
+        global_vars = resolve_vars_array(all_cfg['vars'], known, **opt)
         all_cfg['global_vars'] = global_vars
     else:
         all_cfg['global_vars'] = {}
@@ -1332,18 +1300,25 @@ def get_yyyymmdd(**opt):
 def tracer_eval_code(code: str, **opt):
     verbose = opt.get('verbose', 0)
 
+    if verbose > 1:
+        print(f"line={__line__()}, opt = {pformat(opt)}")
+
     global vars
     global known
 
     # this relies on global buffer that are specific to TPSUP::TRACER
-    # default dictionary is vars, known
+    # default dictionary is vars, known.
+    # if user specifies dict1, then it will be used to resolve {{key}}.
+    #     but user can still vars and known in this form: known['key'] or vars['key'].
+    # if user doesn't specify dict1, then vars and known will be used to resolve {{key}}.
     dict1 = opt.get('dict1', {**vars, **known})
 
     if verbose:
         print(f"------ begin preparing code ------")
         print(f"original code: {code}")
 
-    code = tpsup.util.resolve_scalar_var_in_string(code, dict1, **opt)
+    code = tpsup.util.resolve_scalar_var_in_string(
+        code, dict1, verbose=verbose)
 
     if verbose:
         print(f"afer substituted scalar vars in '{{...}}': {code}")
@@ -1395,7 +1370,8 @@ def main():
     import os
     TPSUP = os.environ.get('TPSUP')
     cfg_file = f'{TPSUP}/python3/lib/tpsup/tracer_test_cfg.py'
-    print(f'parse_cfg(cfg_file) = {pformat(parse_cfg(cfg_file))}')
+    # print(f'parse_cfg(cfg_file) = {pformat(parse_cfg(cfg_file))}')
+    trace(cfg_file, ['sec=IBM.N'], verbose=2)
 
 
 if __name__ == '__main__':

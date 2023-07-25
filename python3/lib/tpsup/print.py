@@ -17,22 +17,22 @@ def render_one_row(r: list, max_by_pos: list, out_fh, **opt):
 
     for i in range(max_fields):
         if (MaxColumnWidth is not None) and (max_by_pos[i] > MaxColumnWidth):
-            max = MaxColumnWidth
+            max_len = MaxColumnWidth
         else:
-            max = max_by_pos[i]
+            max_len = max_by_pos[i]
 
         if i < num_fields and r[i] is not None:
             v = f'{r[i]}'  # convert to string
         else:
             v = ""
 
-        if len(v) > max:
+        if len(v) > max_len:
             truncated.append(i)
-            v2 = v[0:max-2] + '..'
+            v2 = v[0:max_len-2] + '..'
         else:
             v2 = v
 
-        buffLen = max - len(v2)
+        buffLen = max_len - len(v2)
 
         if i == 0:
             print(f"{' ' * buffLen}{v2}", file=out_fh, end='')
@@ -43,6 +43,37 @@ def render_one_row(r: list, max_by_pos: list, out_fh, **opt):
 
     if verbose:
         print(f"(truncated at column: {','.join(truncated)})")
+
+
+def find_row_type(rows: Union[list, None], **opt):
+    if not rows:
+        return None
+
+    previous_type = None
+    max_rows_to_check = opt.get('CheckMaxRows', 100)
+    i = 0
+    for r in rows[:max_rows_to_check]:
+        i += 1
+        row_type = type(r)
+        if not previous_type:
+            previous_type = row_type
+            continue
+        if previous_type != row_type:
+            print(f"eRROR: inconsistent row type at row {i}")
+            return None
+    return previous_type
+
+
+def find_hashes_keys(rows: Union[list, None], **opt):
+    if not rows:
+        return None
+
+    seen_keys = set()
+    max_rows_to_check = opt.get('CheckMaxRows', 100)
+    for r in rows[:max_rows_to_check]:
+        for k in r.keys():
+            seen_keys.add(k)
+    return sorted(seen_keys)
 
 
 def render_arrays(rows: Union[list, None], **opt):
@@ -64,6 +95,16 @@ def render_arrays(rows: Union[list, None], **opt):
     else:
         out_fh = sys.stdout
 
+    if RowType := opt.get('RowType', find_row_type(rows, **opt)):
+        if RowType not in [list, dict]:
+            raise Exception(
+                f"unsupported RowType: {RowType}. can only be list or dict")
+    else:
+        raise Exception(
+            "RowType is not specified and cannot be determined from rows")
+
+    MaxRows = opt.get('MaxRows', len(rows))
+
     if opt.get('Vertical', False):
         # when vertically print the arrays, we need at least 2 rows, with the first
         # as the header
@@ -75,81 +116,138 @@ def render_arrays(rows: Union[list, None], **opt):
         if len(rows) < 2:
             return
 
-        headers = rows[0]
-        num_headers = len(headers)
-        # print(f"headers={headers}", file=sys.stderr)
-
-        for i in range(1, len(rows)):
-            r = rows[i]
-            for j in range(len(r)):
-                if j < num_headers:
-                    print(f"{headers[j]:25} '{r[j]}'", file=out_fh)  # padding
-                else:
-                    print(f"{' '*25} '{r[j]}'", file=out_fh)  # repeating chars
-            print(file=out_fh)  # blank line
+        if RowType == list:
+            headers = rows[0]
+            num_headers = len(headers)
+            # print(f"headers={headers}", file=sys.stderr)
+            for r in rows[1:MaxRows]:
+                for j in range(len(r)):
+                    if j < num_headers:
+                        print(f"{headers[j]:25} '{r[j]}'",
+                              file=out_fh)  # padding
+                    else:
+                        # repeating chars
+                        print(f"{' '*25} '{r[j]}'", file=out_fh)
+                print(file=out_fh)  # blank line
+        else:  # RowType == dict
+            for r in rows:
+                for k in sorted(r.keys()):
+                    print(f"{k:25} '{r[k]}'", file=out_fh)  # padding
         return
 
     max_by_pos = []
+    MaxColumnWidth = opt.get('MaxColumnWidth', None)
+    truncated = 0
 
-    for r in rows:
+    # fix headers of hash (dict), so that we can convert dict to list in a consistent way.
+    if RowType == dict:
+        headers = find_hashes_keys(rows, **opt)
+        # print(f"headers={headers}", file=sys.stderr)
+
+        # for dict, headers is not part of rows, so we handle it separately.
+        for k in headers:
+            if MaxColumnWidth and len(k) > MaxColumnWidth:
+                max_by_pos.append(MaxColumnWidth)
+                truncated = 1
+            else:
+                max_by_pos.append(len(k))
+
+    # find max width for each column
+    for r2 in rows[:MaxRows]:
+        if RowType == list:
+            r = r2
+        else:  # RowType == dict
+            r = [r2.get(k, "") for k in headers]
+
         for i in range(len(r)):
-            length = len(r[i])
+            i_length = len(r[i])
 
             # check whether an index in a list
             # if not i in max_by_pos:  # this doesn't work
             # the following works!
             if i >= len(max_by_pos):
                 # max_by_pos[i] = length # IndexError: list assignment index out of range
-                max_by_pos.append(length)
-            elif max_by_pos[i] < length:
-                max_by_pos[i] = length
+                if MaxColumnWidth and i_length > MaxColumnWidth:
+                    i_length = MaxColumnWidth
+                    truncated = 1
+                max_by_pos.append(i_length)
+            elif max_by_pos[i] < i_length:
+                if MaxColumnWidth and i_length > MaxColumnWidth:
+                    i_length = MaxColumnWidth
+                    truncated = 1
+                max_by_pos[i] = i_length
 
     if verbose:
         print(f"max_by_pos={max_by_pos}", file=sys.stderr)
 
     max_fields = len(max_by_pos)
 
-    MaxColumnWidth = opt.get('MaxColumnWidth', None)
-
     range_start = 0
     if opt.get('RenderHeader', False):
-        r = rows[0]
-        range_start = 1
+        if RowType == list:
+            headers = rows[0]
+            range_start = 1
+        else:  # RowType == dict
+            # headers = find_hashes_keys(rows) # already done above
+            range_start = 0
 
-        render_one_row(r, max_by_pos, out_fh, **opt)
+        render_one_row(headers, max_by_pos, out_fh, **opt)
 
         # print the bar right under the header.
         # length will be the bar length, total number of columns.
         # 3 is " | " between columns.
-        length = 3 * (max_fields - 1)
+        r_length = 3 * (max_fields - 1)
 
         for i in range(max_fields):
-            if MaxColumnWidth is not None and max_by_pos[i] > MaxColumnWidth:
-                max = MaxColumnWidth
-            else:
-                max = max_by_pos[i]
+            r_length += max_by_pos[i]
 
-            length += max
-
-        print('=' * length, file=out_fh)
+        print('=' * r_length, file=out_fh)
 
     for r in rows[range_start:]:
-        render_one_row(r, max_by_pos, out_fh, **opt)
+        if RowType == dict:
+            array = [r.get(k, "") for k in headers]
+        else:  # RowType == list
+            array = r
+        render_one_row(array, max_by_pos, out_fh, **opt)
 
     if out_fh != sys.stdout:
         # if out_fh is from caller, then don't close it. let caller close it.
         if not opt.get('out_fh', None):
             out_fh.close()
 
-    if MaxColumnWidth is not None:
-        truncated = 0
-        for i in range(max_fields):
-            if MaxColumnWidth > max_by_pos[i]:
-                truncated += 1
-                break
-        if truncated:
-            print(
-                f"{truncated} columns were truncated to MaxColumnWidth={MaxColumnWidth}", file=sys.stderr)
+    if truncated:
+        print(
+            f"some columns were truncated to MaxColumnWidth={MaxColumnWidth}", file=sys.stderr)
+
+
+def Print_ArrayOfHashes_Vertically(aref: Union[list, None], **opt):
+    if not aref:
+        return
+
+    headers = None
+
+    if opt.get('headers', None):
+        # user-specified headers can be a ref of array or a string
+        if isinstance(opt['headers'], list):
+            headers = opt['headers']
+        elif isinstance(opt['headers'], str):
+            headers = opt['headers'].split(',')
+        else:
+            raise Exception(
+                f"unsupported type of headers: {type(opt['headers'])}")
+
+    out_fh = opt.get('out_fh', sys.stdout)
+
+    MaxRows = opt.get('MaxRows', len(aref))
+
+    for r in aref[:MaxRows]:
+        if headers is None:
+            for k, v in r.items():
+                print(f"{k:25} '{v}'", file=out_fh)
+        else:
+            for c in headers:
+                print(f"""{c:25} '{r.get(c,"")}'""", file=out_fh)
+        print()
 
 
 def main():
@@ -167,12 +265,29 @@ def main():
     render_arrays(rows)
     print()
     print("--------------------")
-    print(f"render_arrays(rows, RenderHeader=True)")
+    print(f"self detect list or dict: render_arrays(rows, RenderHeader=True)")
     render_arrays(rows, RenderHeader=True)
     print()
     print("--------------------")
     print(f"render_arrays(rows, Vertical=True)")
     render_arrays(rows, Vertical=True)
+
+    rows = [
+        {'name': 'tian', 'age': '36'},
+        {'name': 'john', 'comment': 'friend of tian'},
+    ]
+    print()
+    print("--------------------")
+    print(f"Print_ArrayOfHashes_Vertically(rows)")
+    Print_ArrayOfHashes_Vertically(rows)
+    print()
+    print("--------------------")
+    print(f"Print_ArrayOfHashes_Vertically(rows, headers='name,age')")
+    Print_ArrayOfHashes_Vertically(rows, headers='name,age')
+    print()
+    print("--------------------")
+    print(f"self detect list or dict: render_arrays(rows, RenderHeader=True)")
+    render_arrays(rows, RenderHeader=True)
 
 
 if __name__ == '__main__':

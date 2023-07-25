@@ -4,17 +4,19 @@ default = {
     # %(msecs)03d, pad with 0
     'format': '%(asctime)s,%(msecs)03d %(levelname)-8s [%(filename)s:%(funcName)s:%(lineno)d] %(message)s',
     'datefmt': '%Y%m%d:%H:%M:%S',
-    'level':'INFO',
+    'level': 'INFO',
     'filename': None
 }
 
-def get_logger (name:str = None, **kwargs):
+
+def get_logger(name: str = None, **kwargs):
     if not name:
         name = __name__
     setting = dict(default)
     setting.update(**kwargs)
     logging.basicConfig(**setting)
-    return logging.getLogger(name) # once you get the logger, you cannot change it. but you can get a new one with new name
+    # once you get the logger, you cannot change it. but you can get a new one with new name
+    return logging.getLogger(name)
 
 
 def main():
@@ -30,6 +32,7 @@ def main():
     # logging.basicConfig(level="DEBUG")
     logger2 = get_logger('new')
     logger2.info("I should see this line")
+
 
 if __name__ == '__main__':
     main()

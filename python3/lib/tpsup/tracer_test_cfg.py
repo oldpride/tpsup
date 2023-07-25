@@ -594,7 +594,7 @@ our_cfg = {
     # use array to enforce sequencing because later var may rely on earlier var.
     'vars': [
         # resolve a variable now
-        'dummy_global_var1', tpsup.env.Env().uname,
+        'dummy_global_var1', 'tpsup.env.Env().uname',
 
         # 'value' is an expression, therefore, needs two different quotes if it is a string.
         'dummy_global_var2', '"hardcoded string"',
@@ -626,10 +626,50 @@ our_cfg = {
             'code': '''
                 update_knowledge("DUMMY", "DUM from entity={{entity}}")
                 print(f"access from entity={{ENTITY}} code, known={known}")
+                if 'SECURITY' in known:
+                    print(f"SECURITY={known['SECURITY']}")
                 ''',
             'AllowZero': 1,
         },
     },
+
+    'extra_keys': ['example', 'security', 'YYYYMMDD'],
+
+    'alias_map': {
+        'sec': 'security',
+    },
+
+    'extend_key_map': [
+        # one key's knowledge can extend to other keys.
+        #    for example, if I know SEDOL, I will know CUSIP.
+        # use a array to enforce the order.
+        # extender function, first arg is ref to $known, second arg is new value
+        # ['SECURITY', 'update_security_knowledge'],
+        # ['SEDOL', 'update_security_knowledge'],
+    ],
+
+    'entry_points': [
+        # use a array to enforce the order
+        # known keys => table list
+        # [['BOOKID'], ['booking', 'trades']],
+        # [['TRADEID'], ['trades']],
+        # [['ORDERID'], ['orders']],
+        # [['SID', 'QTY'], ['orders']],
+        # [[], ['orders']],  # this is default
+    ],
+
+    # trace entities in this order
+    'trace_route': [
+        'test_code',
+        # { entity => 'orders', condition => '$known{YYYYMMDD} == $known{TODAY}'},
+        # 'orders',
+        # {'entity': 'trades', 'AllowZero': 1},
+        # 'booking',
+        # 'actions',
+        # {'entity': 'orders',
+
+    ],
+
 }
 
 # this should be site-spec functions

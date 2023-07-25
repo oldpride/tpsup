@@ -1883,7 +1883,7 @@ sub render_arrays {
    if (defined($MaxColumnWidth)) {
       my $truncated;
       for (my $i=0; $i<$num_fields; $i++) {
-         if ($MaxColumnWidth > $max_by_pos->[$i]) {
+         if ($MaxColumnWidth < $max_by_pos->[$i]) {
             $truncated ++;
             last;
          }

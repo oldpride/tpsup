@@ -258,6 +258,9 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
     if not clause:
         return clause
 
+    if verbose > 1:
+        print(f"clause = {clause}")
+
     global compiled_scalar_var_pattern
 
     # this is an expensive operation. we only do it once.
@@ -550,6 +553,20 @@ def unify_hash_hash(old_dict: dict, default_subkey: str, **opt):
                 f"unsupported type={old_type} at key={key} old_dict={old_dict}")
 
     return new_dict
+
+
+def hashes_to_arrays(hashes, headers):
+    arrays = []
+    if not hashes or not headers:
+        return arrays
+
+    for href in hashes:
+        aref = []
+        for header in headers:
+            aref.append(href[header])
+        arrays.append(aref)
+
+    return arrays
 
 
 def main():

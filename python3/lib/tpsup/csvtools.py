@@ -10,74 +10,6 @@ from tpsup.util import silence_BrokenPipeError
 from tpsup.modtools import load_module, stringdict_to_funcdict, strings_to_compilable_func, \
     strings_to_compilable_patterns
 
-
-def main():
-    verbose = 0
-
-    # if you run this script and pipe to 'head' command, you could get BrokenPipeError. disable the error with this line
-    sys.stdout.write = silence_BrokenPipeError(sys.stdout.write)
-
-    file = 'csvtools_test.csv'
-    file_gz = 'csvtools_test.csv.gz'
-
-    print(file)
-    print(file_gz)
-    print(f'\ntest1\n')
-
-    with QueryCsv(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as qc:
-        for r in qc:
-            print(r)
-
-    print(f'\ntest2\n')
-    with QueryCsv(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as qc:
-        writer = csv.writer(sys.stdout, delimiter=',')
-        for r in qc:
-            writer.writerow(r.values())
-
-    print('\ntest3\n')
-    qc = QueryCsv(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose)
-    qc.output(filename='-')
-    qc.close()
-
-    print('\ntest4\n')
-    with QueryCsv(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose) as qc:
-        qc.output(filename='-')
-
-    print('\ntest5\n')
-    with QueryCsv(filename=file,
-                  MatchExps=["r['name'].startswith('S')"],
-                  ExcludeExps=["r['name'] == 'Stephen'"],
-                  verbose=verbose) as qc:
-        qc.output(filename='-')
-
-    print('\ntest6\n')
-    with QueryCsv(filename=file_gz,
-                  MatchExps=["r['name'].startswith('S')"],
-                  ExcludeExps=["r['name'] == 'Stephen'"],
-                  verbose=verbose) as qc:
-        qc.output(filename='-')
-
-    print(f'\ntest7\n')
-    for row in QueryCsv(filename=file, ExcludePatterns=['Smith'], verboske=verbose):
-        print(row)
-
-    print(f'\ntest8\n')
-    output_file_gz = "/tmp/junk.gz"
-    with QueryCsv(filename=file_gz,
-                  MatchExps=["r['name'].startswith('S')"],
-                  ExcludeExps=["r['name'] == 'Stephen'"],
-                  verbose=verbose) as qc:
-        write_dictlist_to_csv(qc, qc.columns, output_file_gz)
-    os.system(f"gunzip -c {output_file_gz}")
-
-    print(f'\ntest9\n')
-
-    with QueryCsv(filename=file_gz, MatchExps=["r['name'].startswith('S')"], verbose=verbose) as qc,\
-            TpOutput(output_file_gz) as ofh:
-        write_dictlist_to_csv(qc, qc.columns, ofh)
-    os.system(f"gunzip -c {output_file_gz}")
-
-
 def filter_dicts(dict_iter, columns, **opt):
     verbose = opt.get('verbose', 0)
 
@@ -359,6 +291,73 @@ def csv_to_dicts(filename:str, **opt):
     for row in QueryCsv(filename=filename,  **opt):
         dicts.append(row)
     return dicts
+
+def main():
+    verbose = 0
+
+    # if you run this script and pipe to 'head' command, you could get BrokenPipeError. disable the error with this line
+    sys.stdout.write = silence_BrokenPipeError(sys.stdout.write)
+
+    file = 'csvtools_test.csv'
+    file_gz = 'csvtools_test.csv.gz'
+
+    print(file)
+    print(file_gz)
+    print(f'\ntest1\n')
+
+    with QueryCsv(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as qc:
+        for r in qc:
+            print(r)
+
+    print(f'\ntest2\n')
+    with QueryCsv(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as qc:
+        writer = csv.writer(sys.stdout, delimiter=',')
+        for r in qc:
+            writer.writerow(r.values())
+
+    print('\ntest3\n')
+    qc = QueryCsv(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose)
+    qc.output(filename='-')
+    qc.close()
+
+    print('\ntest4\n')
+    with QueryCsv(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose) as qc:
+        qc.output(filename='-')
+
+    print('\ntest5\n')
+    with QueryCsv(filename=file,
+                  MatchExps=["r['name'].startswith('S')"],
+                  ExcludeExps=["r['name'] == 'Stephen'"],
+                  verbose=verbose) as qc:
+        qc.output(filename='-')
+
+    print('\ntest6\n')
+    with QueryCsv(filename=file_gz,
+                  MatchExps=["r['name'].startswith('S')"],
+                  ExcludeExps=["r['name'] == 'Stephen'"],
+                  verbose=verbose) as qc:
+        qc.output(filename='-')
+
+    print(f'\ntest7\n')
+    for row in QueryCsv(filename=file, ExcludePatterns=['Smith'], verboske=verbose):
+        print(row)
+
+    print(f'\ntest8\n')
+    output_file_gz = "/tmp/junk.gz"
+    with QueryCsv(filename=file_gz,
+                  MatchExps=["r['name'].startswith('S')"],
+                  ExcludeExps=["r['name'] == 'Stephen'"],
+                  verbose=verbose) as qc:
+        write_dictlist_to_csv(qc, qc.columns, output_file_gz)
+    os.system(f"gunzip -c {output_file_gz}")
+
+    print(f'\ntest9\n')
+
+    with QueryCsv(filename=file_gz, MatchExps=["r['name'].startswith('S')"], verbose=verbose) as qc,\
+            TpOutput(output_file_gz) as ofh:
+        write_dictlist_to_csv(qc, qc.columns, ofh)
+    os.system(f"gunzip -c {output_file_gz}")
+
 
 if __name__ == '__main__':
     main()
