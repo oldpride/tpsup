@@ -10,6 +10,7 @@ import tpsup.cmdtools
 import tpsup.exectools
 import tpsup.csvtools
 import tpsup.print
+import tpsup.tplog
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
 
@@ -104,8 +105,8 @@ def __line__():
     return inspect.currentframe().f_back.f_lineno
 
 
-def __file__():
-    return __file__
+# def __file__():
+#     return __file__
 
 
 def resolve_a_clause(clause: str, dict1: dict, **opt):
@@ -143,8 +144,7 @@ def resolve_vars_array(vars: list, dict1: dict, **opt):
     verbose = opt.get('verbose', 0)
 
     if verbose > 1:
-        print(
-            f"line {__line__()} opt = {pformat(opt)}")
+        tpsup.tplog.log_FileFuncLine(f'opt =\n{pformat(opt)}')
 
     if not vars:
         return {}
@@ -175,6 +175,8 @@ def resolve_vars_array(vars: list, dict1: dict, **opt):
         v2 = resolve_a_clause(v, dict2, **opt)
 
         ref[k] = v2
+        if verbose > 1:
+            print(f"added var key='{k}' from {v}={pformat(v2)}\n")
         dict2[k] = v2  # previous variables will be used to resolve later variables
 
     return ref
@@ -185,7 +187,7 @@ def cmd_output_string(cmd: str, **opt):
     return string
 
 
-def process_code(entity: str, method_cfg: dict, vars: dict, **opt):
+def process_code(entity: str, method_cfg: dict, **opt):
     # all handling have been done by caller, process_entity
     return
 
@@ -811,7 +813,7 @@ process {entity}
           ''')
 
     comment = tpsup.util.get_first_by_key(
-        [opt, entity_cfg], 'comment', {'default': ''})
+        [opt, entity_cfg], 'comment', default='')
     if comment:
         comment = tpsup.util.resolve_scalar_var_in_string(
             comment, {**vars, **known}, **opt)
@@ -867,9 +869,9 @@ process {entity}
     apply_csv_filter(entity_cfg.get('csv_filter', None), **opt)
 
     Tail = tpsup.util.get_first_by_key(
-        [opt, entity_cfg], 'tail', {'default': None})
+        [opt, entity_cfg], 'tail', default=None)
     Top = tpsup.util.get_first_by_key(
-        [opt, entity_cfg], 'top', {'default': 5})
+        [opt, entity_cfg], 'top', default=5)
 
     # display the top results
     if lines:
@@ -918,9 +920,9 @@ process {entity}
 
     if not opt.get('isExample', False):
         AllowZero = tpsup.util.get_first_by_key(
-            [opt, entity_cfg], 'AllowZero', {'default': 0})
+            [opt, entity_cfg], 'AllowZero', default=0)
         AllowMultiple = tpsup.util.get_first_by_key(
-            [opt, entity_cfg], 'AllowMultiple', {'default': 0})
+            [opt, entity_cfg], 'AllowMultiple', default=0)
 
         if not row_count:
             if AllowZero:
@@ -941,7 +943,7 @@ process {entity}
                     print(f"methond_cfg = {pformat(entity_cfg['method_cfg'])}")
                 raise RuntimeError("(no need stack trace)")
 
-    if hashes[0]:
+    if 0 < len(hashes):  # test array index existence
         # only return the first row
         # %r is a global var
         r = hashes[0]
@@ -1256,7 +1258,9 @@ def trace(given_cfg, input, **opt):
 
     for row in trace_route:
         entity = row['entity']
-        opt2 = {**opt, **row}
+
+        row2 = {k: v for k, v in row.items() if k != 'entity'}
+        opt2 = {**opt, **row2}
 
         if entity in SkipTrace:
             continue
@@ -1279,7 +1283,7 @@ def trace(given_cfg, input, **opt):
         try:
             result[entity] = process_entity(entity, entity_cfg, **opt2)
         except Exception as e:
-            if not re.search(r'\(no need stack trace\)', e):
+            if not re.search(r'\(no need stack trace\)', f'{e}'):
                 print(e)
             if not ForceThrough:
                 raise RuntimeError(f"entity={entity} failed. aborting")

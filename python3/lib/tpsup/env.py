@@ -71,9 +71,13 @@ class Env:
                 self.term['term'] = "gitbash"
                 self.term['tmpdir'] = "/tmp"
                 self.term['ls_cmd'] = "ls"
-                self.term['/'] = subprocess.run(
-                    ["cygpath", "-m", "/"], capture_output=True, text=True
-                ).stdout.strip()  # bash/perl's backtick-equivalent
+                try:
+                    self.term['/'] = subprocess.run(
+                        ["cygpath", "-m", "/"], capture_output=True, text=True
+                    ).stdout.strip()  # bash/perl's backtick-equivalent
+                except Exception as e:
+                    print(e)
+                    print('"cygpath -m /" failed.')
             elif "MINTTY_SHORTCUT" in os.environ:
                 # Cygwin signature:
                 # MINTTY_SHORTCUT=/cygdrive/c/Users/william/AppData/Roaming/Microsoft/Internet
@@ -346,6 +350,165 @@ def add_path(dir: str, **opt) -> str:
     return new_env_string
 
 
+def source_env_file_bad(file: str, clean_env=False, **opt):
+    verbose = opt.get('verbose', 0)
+
+    # if not os.path.isfile(file):
+    #     raise RuntimeError(f"file={file} does not exist")
+    file2 = file.replace('\\', '/')
+    import subprocess
+    import shlex
+    if clean_env:
+        command = shlex.split(f"env -i bash -c 'source {file2} && env'")
+    else:
+        command = shlex.split(f"bash -c 'source {file2} && env'")
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE)
+    sourced_env = {}
+    for line in proc.stdout:
+        (key, _, value) = line.partition("=")
+        sourced_env[key] = value.strip()
+        if verbose > 1:
+            if old_value := os.environ.get(key, None):
+                if old_value != value:
+                    print(f"overwrite {key}='{old_value}' with '{value}'")
+        os.environ[key] = value
+    proc.communicate()
+    return sourced_env
+
+
+def source_env_file(file: str, clean_env=False, **opt):
+    verbose = opt.get('verbose', 0)
+    # if not os.path.isfile(file):
+    #     raise RuntimeError(f"file={file} does not exist")
+    file2 = file.replace('\\', '/')
+
+    import tpsup.cmdtools
+    sourced_env = {}
+    cmd_stdout = tpsup.cmdtools.run_cmd_clean(
+        # https://unix.stackexchange.com/questions/3510/
+        # print only variables, not functions
+        f"source {file2}; set -o posix; set", is_bash=True, **opt)
+    for line in cmd_stdout.splitlines():
+        if "=" not in line:
+            continue
+
+        # python partition vs split
+        #   patition: split into 3 parts, the first part, the separator, and the rest
+        #   split: split into n parts, each part is a string
+        # (key, _, value) = line.partition("=")
+        (key, value) = line.split("=", 1)  # split only at the first occurrence
+        if not key:
+            continue
+        value2 = value.strip()
+        if verbose > 1:
+            if old_value := os.environ.get(key, None):
+                if old_value != value:
+                    print(f"overwrite {key}='{old_value}' with '{value}'")
+        try:
+            os.environ[key] = value2
+            #  ValueError: illegal environment variable name
+        except ValueError as e:
+            if verbose > 1:
+                print(e)
+                print(f"skip {key}='{value2}'")
+            pass
+
+        sourced_env[key] = value2
+    return sourced_env
+
+
+def source_siteenv(SITESPEC: str = None, **opt):
+    verbose = opt.get('verbose', 0)
+
+    if SITESPEC is None:
+        if not (SITESPEC := os.environ.get('SITESPEC', None)):
+            raise RuntimeError(f"SITESPEC is not defined in environment")
+
+    SITESPEC2 = SITESPEC.replace('\\', '/')
+
+    return source_env_file(f"{SITESPEC2}/profile", **opt)
+
+
+def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = False,
+                 source_type: Literal['cygwin', 'gitbash', 'batch'] = None,
+                 target_type: Literal['cygwin', 'gitbash', 'batch'] = None,
+                 **opt):
+    verbose = opt.get('verbose', 0)
+
+    if is_env_var:
+        env_var = source_path
+        if env_var in os.environ:
+            source_path = os.environ[env_var]
+        else:
+            print(f"{env_var} is not an environment variable")
+            return None
+
+    source_delimiter = ':'
+    if source_type is None:
+        if source_path.lower().startswith('/cygdrive/'):
+            source_type = 'cygwin'
+        elif re.search(r'^/[a-z]/', source_path, re.IGNORECASE):
+            source_type = 'gitbash'
+        elif re.search(r'^[a-z]:/', source_path, re.IGNORECASE):
+            source_type = 'batch'
+            source_delimiter = ';'
+        else:
+            raise RuntimeError(
+                f"cannot determine source_type from source_path={source_path}")
+
+        if verbose:
+            print(f"source_type={source_type}")
+
+    if target_type is None:
+        myenv = Env()
+        if term := myenv.term.get('term', None):
+            if term in ('cygwin', 'gitbash', 'batch'):
+                target_type = term
+                if verbose:
+                    print(f"target_type={target_type}")
+
+    if target_type is None:
+        raise RuntimeError(
+            f"cannot determine target_type from source_path={source_path}")
+    elif target_type == 'batch':
+        target_delimiter = ';'
+    else:
+        target_delimiter = ':'
+
+    if source_type == target_type:
+        target_path = source_path
+    elif source_type == 'cygwin':
+        if target_type == 'batch':
+            target_path = re.sub(
+                r'/cygdrive/([a-z])/', r'\1:/', source_path, re.IGNORECASE)
+        elif target_type == 'gitbash':
+            target_path = re.sub(r'/cygdrive/', r'/',
+                                 source_path, re.IGNORECASE)
+    elif source_type == 'gitbash':
+        pieces = source_path.split(source_delimiter)
+        if target_type == 'batch':
+            pieces2 = [re.sub(r'^/cygdrive/([a-z])/', r'\1:/',
+                              p, re.IGNORECASE) for p in pieces]
+        elif target_type == 'cygwin':
+            pieces2 = [re.sub(r'^/cygdrive/', r'/', p, re.IGNORECASE)
+                       for p in pieces]
+        target_path = target_delimiter.join(pieces2)
+    elif source_type == 'batch':
+        pieces = source_path.split(source_delimiter)
+        if target_type == 'cygwin':
+            pieces2 = [re.sub(r'^([a-z]):/', r'/cygdrive/\1/',
+                              p, re.IGNORECASE) for p in pieces]
+        elif target_type == 'gitbash':
+            pieces2 = [re.sub(r'^([a-z]):/', r'/\1/', p, re.IGNORECASE)
+                       for p in pieces]
+        target_path = target_delimiter.join(pieces2)
+
+    if is_env_var and change_env:
+        os.environ[env_var] = target_path
+
+    return target_path
+
+
 def main():
     myenv = Env()
     print(myenv)
@@ -403,6 +566,24 @@ def main():
     print(f"PATH={os.environ.get('PATH')}"[-100:])  # substr: last 100 chars
     print("try again")
     add_path("/junk/rear", place='append', verbose=1)
+
+    print("")
+    print("--------------------")
+    print("test source_siteenv()")
+    print(f"before TPSUP={os.environ.get('TPSUP', None)}")
+    source_siteenv("/c/users/william/sitebase/github/site-spec",
+                   clean_env=1, verbose=2)
+    print(f"after TPSUP={os.environ.get('TPSUP', None)}")
+
+    def test_code():
+        convert_path('/cygdrive/c/Program Files', target_type='batch')
+        convert_path('/cygdrive/c/Program Files', target_type='gitbash')
+        convert_path('/cygdrive/c/Program Files', verbose=2)
+        convert_path('TPSUP', is_env_var=True, change_env=True)
+
+    import tpsup.exectools
+    tpsup.exectools.test_lines(
+        test_code, source_globals=globals(), print_return=True, add_return=True)
 
 
 if __name__ == "__main__":

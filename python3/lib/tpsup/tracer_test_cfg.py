@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # #!/usr/bin/env perl
 
 # use strict;
@@ -584,6 +586,7 @@
 # }
 
 import tpsup.env
+import os
 
 # convert above to python
 our_cfg = {
@@ -594,7 +597,7 @@ our_cfg = {
     # use array to enforce sequencing because later var may rely on earlier var.
     'vars': [
         # resolve a variable now
-        'dummy_global_var1', 'tpsup.env.Env().uname',
+        'TPSUP', 'os.environ["TPSUP"]',
 
         # 'value' is an expression, therefore, needs two different quotes if it is a string.
         'dummy_global_var2', '"hardcoded string"',
@@ -630,6 +633,23 @@ our_cfg = {
                     print(f"SECURITY={known['SECURITY']}")
                 ''',
             'AllowZero': 1,
+        },
+
+        'app_cmd_pipe': {
+
+            'method': 'cmd',
+
+            'vars': [
+                'log', '"{{TPSUP}}/tptrace_test.log"',
+            ],
+
+            'method_cfg': {
+                'type': 'pipe',
+
+                'value': [
+                    # tpgrepl extended "grep -l" by allowing multiple patterns.
+                ],
+            },
         },
     },
 

@@ -8,6 +8,7 @@ from shutil import which
 import tpsup.env
 from selenium import webdriver
 from tpsup.human import human_delay
+import tpsup.tplog
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -204,6 +205,9 @@ class SeleniumEnv:
                     sys.stderr.write(
                         f"this is dryrun; we will not start chromedriver\n")
                 else:
+                    # rotate the log file if it is bigger than the size.
+                    tpsup.tplog.rotate_log(
+                        self.driverlog, size=1024 * 1024 * 10, count=1)
                     try:
                         self.driver = webdriver.Chrome(
                             self.driver_exe,
@@ -339,6 +343,9 @@ class SeleniumEnv:
                 "this is dryrun, therefore, we don't start a webdriver, nor a browser\n"
             )
         else:
+            # rotate the log file if it is bigger than the size.
+            tpsup.tplog.rotate_log(
+                self.driverlog, size=1024 * 1024 * 10, count=1)
 
             self.driver = webdriver.Chrome(
                 self.driver_exe,  # make sure chromedriver is in the PATH

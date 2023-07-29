@@ -130,9 +130,10 @@ def eval_block(_source: str, _globals, _locals, **opt):
     if verbose:
         print(f"source = \n{source}")
     exec_into_globals(source, _globals, _locals, **opt)
-    ret = None
+    _ret = None
     try:
-        ret = _globals['tp_exec_func']()
+        _ret = _globals['tp_exec_func']()
+        return _ret
     except Exception as e:
         print()
         print_string_with_line_numer(source)
@@ -141,8 +142,8 @@ def eval_block(_source: str, _globals, _locals, **opt):
 
 
 def test_compile(_source: str, _globals, _locals, **opt):
-    ret = exec_into_globals(_source, _globals, _locals, compile_only=1, **opt)
-    return ret
+    _ret = exec_into_globals(_source, _globals, _locals, compile_only=1, **opt)
+    return _ret
 
 
 def correct_indent(source: str, **opt):
@@ -199,7 +200,7 @@ def shift_indent(source: str, **opt):
     return "\n".join(lines)
 
 
-def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, **opt):
+def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print_return=False, **opt):
     import inspect
     # we import here because this is a test function.
 
@@ -212,12 +213,19 @@ def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, **opt
     for line in lines.split('\n'):
         if skip_pattern.match(line):
             continue
+        print()
         print(f"run: {line}")
 
         combined_globals = {**source_globals, **globals()}
         combined_locals = {**source_locals, **locals()}
 
-        exec_into_globals(line, combined_globals, combined_locals)
+        # exec_into_globals(line, combined_globals, combined_locals)
+        ret = eval_block(line, combined_globals, combined_locals, **opt)
+        if print_return or opt.get("add_return", False):
+            # print_return vs add_return:
+            # - print_return is for test_lines() itself.
+            # - add_return is for eval_block()
+            print(f"return: {ret}")
 
 
 def main():
@@ -289,6 +297,7 @@ def main():
     test_codes = [
         # the following will pass compile():
         'print(f"test unknown var {unknown_var}")',  # undefined var
+        '1+1',  # expression
         'junk',  # unknown statement
 
         # the following will fail compile():

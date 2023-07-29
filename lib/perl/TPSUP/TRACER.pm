@@ -285,7 +285,7 @@ sub cmd_output_string {
 
 
 sub process_code {
-   my ($entity, $method_cfg, $vars, $opt) = @_;
+   my ($entity, $method_cfg, $opt) = @_;
 
    # all handling have been done by caller, process_entity
 }

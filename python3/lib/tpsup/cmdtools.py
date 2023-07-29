@@ -197,6 +197,19 @@ def which(program, **opt):
     return None
 
 
+def ls_l(path_pattern: str, **opt):
+    import pathlib
+    verbose = opt.get('verbose', 0)
+    path_pattern2 = path_pattern.replace("\\", "/")
+
+    cmd = f'ls -l {path_pattern2}'
+
+    if verbose > 1:
+        print(f'cmd = {cmd}')
+
+    run_cmd(cmd, is_bash=True, print=1)
+
+
 def main():
     print("Heads up! on windows, the default shell is cmd.exe, not bash.")
     print("")
@@ -225,6 +238,7 @@ def main():
     print("")
 
     # keep test code in a function so that IDE can check syntax
+
     def test_code():
         # from tpsup.cmdtools import run_cmd
         # bash script on windows must run with bash.exe
@@ -233,12 +247,22 @@ def main():
 
         run_cmd('which java', is_bash=True, print=1)
         run_cmd('which java', is_bash=True, print=1, bash_exe='wsl')
-
     import tpsup.exectools
     # we import it here because this is for test only
 
     tpsup.exectools.test_lines(test_code, source_globals=globals())
     # we pass globals() so that test_code can see our functions, eg, run_cmd()
+
+    import tpsup.tptmp
+    tmpdir = tpsup.tptmp.get_dailydir()
+    tmpfile = f'{tmpdir}/test.txt'
+    with open(tmpfile, 'w') as fh:
+        fh.write("hello world\n")
+    file_pattern = f'{tmpdir}/*'
+    print(f"ls_l('{tmpdir}')")
+    ls_l(tmpdir)
+    print(f"ls_l('{file_pattern}')")
+    ls_l(file_pattern)
 
 
 if __name__ == "__main__":
