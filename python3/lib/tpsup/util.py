@@ -7,6 +7,7 @@ import re
 import sys
 import traceback
 from time import strftime, gmtime
+from tpsup.tplog import log_FileFuncLine
 
 
 def silence_BrokenPipeError(func):
@@ -195,9 +196,8 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, verbose=0):
 
 def get_value_by_key_case_insensitive(value_by_key: dict, key: str, **opt):
     verbose = opt.get("verbose", 0)
-    if verbose:
-        print(
-            f"util.py {current_line()} value_by_key = {pformat(value_by_key)}")
+    if verbose > 1:
+        log_FileFuncLine(f"value_by_key = {pformat(value_by_key)}")
 
     if not value_by_key:
         return None
@@ -259,7 +259,7 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
         return clause
 
     if verbose > 1:
-        print(f"clause = {clause}")
+        log_FileFuncLine(f"clause = {clause}")
 
     global compiled_scalar_var_pattern
 
@@ -279,9 +279,13 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
 
     vars_defaults = compiled_scalar_var_pattern.findall(clause)
 
-    if verbose:
-        print(f"vars_defaults = {vars_defaults}")
+    if verbose > 1:
+        log_FileFuncLine(f"vars_defaults = {vars_defaults}")
         # "{{v1}} and {{v2}} and {{v3=abc}}" => [('v1', ''), ('v2', ''), ('v3', '=abc')]
+
+    if not vars_defaults:
+        # return when no variable found, because nothing will change.
+        return clause
 
     defaults_by_var = {}
     scalar_vars = []
@@ -311,7 +315,7 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
             raise Exception(f"YYYYMMDD='{yyyymmdd}' is in bad format")
 
     old_clause = clause
-    idx_by_var = {}  # this is handle dup var
+    idx_by_var = {}  # this is handle dup var because dup var is allowed.
     for var in scalar_vars:
         if var in idx_by_var:
             idx_by_var[var] += 1
@@ -319,20 +323,19 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
             idx_by_var[var] = 0
         idx = idx_by_var[var]
 
-        value = None
-        try:
-            value = get_value_by_key_case_insensitive(
-                dict(dict1, **dict2, **opt), var)
-        except Exception as e:
-            if verbose:
-                print(f"cannot resolve var={var} in clause={clause}: {e}")
-                print(f"dict1 = {pformat(dict1)}")
-            default = defaults_by_var[var][idx] if defaults_by_var[var] else None
-            if default is not None:
-                verbose and print(f"var={var} default={default}")
-                value = default
+        combined_dict = {**dict1, **dict2, **opt}
+        if (value := get_value_by_key_case_insensitive(
+                combined_dict, var, default=None)) is None:
+            if verbose > 1:
+                log_FileFuncLine(
+                    f"var={var} is not in combined_dict={combined_dict}. checking default")
+            if (default := defaults_by_var[var][idx]) is None:
+                if verbose:
+                    log_FileFuncLine(
+                        f"var={var} default is undefined. not resolving {var}")
+                continue
             else:
-                verbose and print(f"var={var} default is undefined.")
+                value = default
 
         if value is None:
             continue

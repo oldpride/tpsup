@@ -2,6 +2,7 @@ import types
 import re
 from tpsup.util import print_string_with_line_numer
 import pprint
+from tpsup.tplog import log_FileFuncLine
 
 
 def _exec_filter(_dict, **opt):
@@ -23,8 +24,8 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
     else:
         _source2 = correct_indent(_source)
 
-    if _verbose:
-        print(f"_source2 = \n{_source2}")
+    if _verbose > 1:
+        log_FileFuncLine(f"after corrected indent, _source2 = \n{_source2}")
 
     _compiled = None
     try:
@@ -67,8 +68,8 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
     # https://www.pythonpool.com/python-locals/
     # we update _globals and use _globals to pass back the effect to caller
     _updated = _exec_filter(_locals)
-    if _verbose:
-        print(f"_updated = {pprint.pformat(_updated)}")
+    if _verbose > 1:
+        log_FileFuncLine(f"_updated = {pprint.pformat(_updated)}")
     _globals.update(_updated)
 
     # key point: python's globals()'s scope to 1 file.
@@ -195,7 +196,9 @@ def shift_indent(source: str, **opt):
         if real_line_pattern.search(lines[i]):
             last = i
     if opt.get("add_return", False):
-        lines[last] = re.sub(r"^(\s*)", r"\1return ", lines[last])
+        # add return to the last line if it is not there
+        if not re.search(r"^\s*return", lines[last]):
+            lines[last] = re.sub(r"^(\s*)", r"\1return ", lines[last])
 
     return "\n".join(lines)
 

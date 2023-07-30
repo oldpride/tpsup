@@ -10,7 +10,8 @@ import tpsup.cmdtools
 import tpsup.exectools
 import tpsup.csvtools
 import tpsup.print
-import tpsup.tplog
+# import tpsup.tplog
+from tpsup.tplog import log_FileFuncLine
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
 
@@ -100,32 +101,19 @@ def get_keys_in_uppercase(cfg_by_entity: dict, **opt):
     return seen.keys()
 
 
-def __line__():
-    # return __line__ # not working
-    return inspect.currentframe().f_back.f_lineno
-
-
-# def __file__():
-#     return __file__
-
-
 def resolve_a_clause(clause: str, dict1: dict, **opt):
     verbose = opt.get('verbose', 0)
-
-    if verbose > 1:
-        print(f"line {__line__()} opt = {pformat(opt)}")
 
     # in python, both dict and Dict are reserved words.
     # therefore, we use dict1 instead of dict or Dict.
 
     # first substitute the scalar var in {{...}}
-    verbose and print(
-        f"line {__line__()} before substitution, clause = {clause}, dict1 = {pformat(dict1)}")
+    verbose > 1 and log_FileFuncLine(
+        f"before substitution, clause = {clause}, dict1 = {pformat(dict1)}")
 
     clause = tpsup.util.resolve_scalar_var_in_string(clause, dict1, **opt)
 
-    verbose and print(
-        f"line {__line__()} after substitution, clause = {clause}")
+    verbose > 1 and log_FileFuncLine(f"after substitution, clause = {clause}")
 
     # we don't need this because we used 'our' to declare %known.
     # had we used 'my', we would have needed this
@@ -144,7 +132,7 @@ def resolve_vars_array(vars: list, dict1: dict, **opt):
     verbose = opt.get('verbose', 0)
 
     if verbose > 1:
-        tpsup.tplog.log_FileFuncLine(f'opt =\n{pformat(opt)}')
+        log_FileFuncLine(f'opt =\n{pformat(opt)}')
 
     if not vars:
         return {}
@@ -1305,7 +1293,7 @@ def tracer_eval_code(code: str, **opt):
     verbose = opt.get('verbose', 0)
 
     if verbose > 1:
-        print(f"line={__line__()}, opt = {pformat(opt)}")
+        log_FileFuncLine(f"opt = {pformat(opt)}")
 
     global vars
     global known
@@ -1317,14 +1305,14 @@ def tracer_eval_code(code: str, **opt):
     # if user doesn't specify dict1, then vars and known will be used to resolve {{key}}.
     dict1 = opt.get('dict1', {**vars, **known})
 
-    if verbose:
-        print(f"------ begin preparing code ------")
-        print(f"original code: {code}")
+    if verbose > 1:
+        print()
+        log_FileFuncLine(f"original code={code}")
 
     code = tpsup.util.resolve_scalar_var_in_string(
-        code, dict1, verbose=verbose)
+        code, dict1, verbose=(verbose > 1))
 
-    if verbose:
+    if verbose > 1:
         print(f"afer substituted scalar vars in '{{...}}': {code}")
 
     ret = tpsup.exectools.eval_block(code, globals(), locals(), **opt)

@@ -13,6 +13,7 @@ except ImportError:
 # mysql
 try:
     import pymysql.cursors
+    # pip install pymysql
 except ImportError:
     pass
 
@@ -45,19 +46,22 @@ class Conn:
             file_perm = st.st_mode & 0o777
 
             if file_perm != 0o600:
-                raise RuntimeError(f'{connfile} permission is {file_perm:o}; required 600')
+                raise RuntimeError(
+                    f'{connfile} permission is {file_perm:o}; required 600')
 
         self.connfile = connfile
-        self.env      = env
+        self.env = env
 
         opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
 
         dictlist = list(tpsup.csvtools.QueryCsv(connfile, **opt))
 
         if len(dictlist) == 0:
-            raise RuntimeError(f"connection file {connfile} does not contain nickname = {nickname}: {dictlist}")
+            raise RuntimeError(
+                f"connection file {connfile} does not contain nickname = {nickname}: {dictlist}")
         elif len(dictlist) > 1:
-            raise RuntimeError(f'connection file {connfile} has multiple nickname = {nickname} defined: {dictlist}')
+            raise RuntimeError(
+                f'connection file {connfile} has multiple nickname = {nickname} defined: {dictlist}')
 
         self.dbi_string = dictlist[0]['string']
         self.login = dictlist[0]['login']
@@ -98,7 +102,8 @@ class TpDbh:
         if re.match("^dbi:Oracle:.+", conn.dbi_string, re.IGNORECASE):
             if hasattr(conn, 'sid'):
                 dsn_tns = cx_Oracle.makedsn(conn.host, conn.port, conn.sid)
-                self.dbh = cx_Oracle.connect(conn.login, conn.unlocked_password, dsn_tns)
+                self.dbh = cx_Oracle.connect(
+                    conn.login, conn.unlocked_password, dsn_tns)
             elif hasattr(conn, 'service_name'):
                 # use service name
                 # https://stackoverflow.com/questions/51486739/how-to-connect-
@@ -109,7 +114,8 @@ class TpDbh:
                 string = f'{conn.login}/{conn.unlocked_password}@{conn.host}:{conn.port}/{conn.service_name}'
                 self.dbh = cx_Oracle.connect(string)
             else:
-                raise RuntimeError(f"unsupported oracle dbi_string {conn.dbi_string}")
+                raise RuntimeError(
+                    f"unsupported oracle dbi_string {conn.dbi_string}")
         elif re.match("^dbi:ODBC:.+", conn.dbi_string, re.IGNORECASE):
             conn_string = f'DRIVER={conn.driver};SERVER={conn.server};DATABASE={conn.database};UID={conn.login};' \
                           f'PWD={conn.unlocked_password}'
@@ -124,7 +130,8 @@ class TpDbh:
                                        # cursorclass=pymysql.cursors.DictCursor # don't use this as it will return dict.
                                        )
         else:
-            raise RuntimeError(f"unknown database dbi_string {conn.dbi_string}")
+            raise RuntimeError(
+                f"unknown database dbi_string {conn.dbi_string}")
 
         return self.dbh
 
@@ -188,7 +195,8 @@ class QueryResults:
             else:
                 yield from self.cursor
         else:
-            raise RuntimeError(f'unknown ReturnType={self.return_type}. opt={self.opt}')
+            raise RuntimeError(
+                f'unknown ReturnType={self.return_type}. opt={self.opt}')
 
         # parse() is not really needed if will run execute anyway. but is useful if we just want to check sql
         # syntax without running it.
@@ -218,7 +226,8 @@ def run_sql(sql_list: List[str], **opt):
             qr = QueryResults(sql, dbh=td, **opt)
             # for row in qr:
             #     print(row)
-            tpsup.csvtools.write_dictlist_to_csv(qr, qr.columns, opt.get('filename', sys.stdout), **opt)
+            tpsup.csvtools.write_dictlist_to_csv(
+                qr, qr.columns, opt.get('filename', sys.stdout), **opt)
 
 
 def test_mysql():
@@ -239,17 +248,31 @@ def test_mysql():
 
 
 def main():
+    print()
+    print('------------------------')
     print(f'\nparse conn_file for oracle\n')
     print(unlock_conn('ora_user@ora_db', connfile='sqltools_conn_example.csv'))
 
+    print()
+    print('------------------------')
     print(f'\nparse conn_file for ms sql\n')
     print(unlock_conn('sql_user@sql_db', connfile='sqltools_conn_example.csv'))
 
+    print()
+    print('------------------------')
     print(f'\ntest a mysql database\n')
     run_sql(["select * from tblMembers"], nickname='tian@tiandb')
 
+    print()
+    print('------------------------')
     print(f'\none more test mysql\n')
     test_mysql()
+
+    print()
+    print('------------------------')
+    print(f'\ntest ms sql database\n')
+    run_sql(["SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'"],
+            nickname="tptest@tpdbmssql")
 
 
 if __name__ == '__main__':
