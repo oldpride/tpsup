@@ -230,6 +230,11 @@ def run_sql(sql_list: List[str], **opt):
                 qr, qr.columns, opt.get('filename', sys.stdout), **opt)
 
 
+def get_dbh(nickname: str, **opt):
+    # to be compatible with perl SQL.pm
+    return TpDbh(nickname, **opt).get_dbh()
+
+
 def test_mysql():
     dbh = TpDbh(nickname='tian@tiandb').get_dbh()
     with dbh.cursor() as cursor:

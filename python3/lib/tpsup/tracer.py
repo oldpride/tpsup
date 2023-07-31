@@ -12,6 +12,7 @@ import tpsup.csvtools
 import tpsup.print
 # import tpsup.tplog
 from tpsup.tplog import log_FileFuncLine
+import tpsup.sqltools
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
 
@@ -178,6 +179,274 @@ def cmd_output_string(cmd: str, **opt):
 def process_code(entity: str, method_cfg: dict, **opt):
     # all handling have been done by caller, process_entity
     return
+
+
+compiled_where_by_key = {}
+decommify_pattern = re.compile(r',')
+
+
+def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
+    footer = ""
+    MaxExtracts = opt.get('MaxExtracts', None)
+    template = method_cfg.get('template', None)
+
+    if template:
+        # for example
+
+        # select  *
+        # from (
+        #   select
+        #     PosQty - LAG(PosQty, 1, 0) OVER (Order By LastUpdateTime) as TradeQty,
+        #     '{{YYYYMMDD}}' as day,
+        #     *
+        #    from
+        #     Position (nolock)
+        #   where
+        #     1 = 1
+        #     {{where::YYYYMMDD}}
+        #     {{where::ACCOUNT}}
+        #     {{where::SECURITYID}}
+        #     {{where::LE}}
+        #     and PosQty is not null
+        #   )
+        # where
+        #   1=1
+        #   {{where::QTY}}
+
+        # will be resolved to
+
+        # select  *
+        # from (
+        #   select
+        #     PosQty - LAG(PosQty, 1, 0) OVER (Order By LastUpdateTime) as TradeQty,
+        #     '20211101' as day,
+        #     *
+        #    from
+        #     Position (nolock)
+        #   where
+        #     TradeDate = '20211101'
+        #     and Account = 'BLK12345'
+        #     and SecurityId = '437855'
+        #     and LegalEntity = 'ABC'
+        #     and PosQty is not null
+        #   )
+        # where TradeQty = 2000
+
+        # note:
+        #   use where:: to difference regular var to be replaced by $dict and var to
+        #   be replaced by where_clause. YYYYMMDD above is an example
+        # default template is shown below
+        pass
+    else:
+        table = method_cfg.get('table', entity)
+
+        db_type = method_cfg.get('db_type', None)
+
+        # nolock setting is easy in MSSQL using DBD
+        #
+        # however, for mysql, i am not sure what to do yet
+        #
+        # i followed the following two links
+        #    https://stackoverflow.com/questions/917640/any-way-to-select-without-causing-locking-in-mysql
+        #    https://www.perlmonks.org/?node_id=1074673
+
+        mssql_specific1 = ""
+        mssql_specific2 = ""
+
+        mysql_specific1 = ""
+
+        is_mssql = False
+        is_mysql = False
+
+        if db_type:
+            if re.search('mssql', db_type, re.IGNORECASE):
+                is_mssql = True
+
+                mssql_specific1 = f"top {MaxExtracts}"
+                mssql_specific2 = 'with (nolock)'
+            elif re.search('mysql', db_type, re.IGNORECASE):
+                is_mysql = True
+
+                mysql_specific1 = f"LIMIT {MaxExtracts};"
+
+        header = method_cfg.get('header', '*')
+        # header's function can be replaced by template
+        # example
+        #    table  => 'mytable',
+        #    header => 'count(*) as TotalRows',
+        #    where_clause => { YYYYMMDD => 'TradeDate' },
+        # can be replaced by
+        #    template => '
+        #       select count(*) as TotalRows
+        #         from mytable
+        #         where 1=1
+        #               {{where::YYYYMMDD}}
+        #    ',
+        #    where_clause => { YYYYMMDD => 'TradeDate' },
+
+        # this is the default template
+        template = f"""
+        select {mssql_specific1} {header}
+            from {table} {mssql_specific2}
+              where 1 = 1""" + """
+        {{where_clause}}
+        """
+        footer = f"{mysql_specific1}"
+
+    wc = method_cfg.get('where_clause', None)
+
+    where_block = ""
+    if wc:
+        for key in sorted(wc.keys()):
+            opt_value = tpsup.util.get_first_by_key(
+                [opt, dict1], key, default=None)
+            if opt_value is None:
+                if compiled_where := compiled_where_by_key.get(key, None):
+                    pass
+                else:
+                    # compile the {{where::key}} pattern
+                    compiled_where = re.compile(f'{{{{where::{key}}}}}')
+                    compiled_where_by_key[key] = compiled_where
+                # erase the clause
+                template = compiled_where.sub('', template)
+                continue
+
+            info = wc[key]
+            info_type = type(info)
+
+            string = None
+
+            if info_type is dict:
+                clause, column, numeric, if_exp, else_clause = info.get(
+                    'clause', None), info.get('column', None), info.get('numeric', None), info.get('if_exp', None), info.get('else_clause', None)
+
+                if if_exp is not None:
+                    if not tracer_eval_code(if_exp, **opt):
+                        if else_clause is not None:
+                            # if 'if_exp' is defined and is false and 'else_clause' is defined,
+                            # then use else_clause as clause
+                            clause = else_clause
+                        else:
+                            continue
+
+                if clause:
+                    clause = tpsup.util.resolve_scalar_var_in_string(
+                        clause, {**dict1, 'opt_value': opt_value}, **opt)
+                    string = f"and {clause}"
+                elif column is None:
+                    column = key
+            else:
+                column = info
+
+            if not string:
+                if numeric:
+                    opt_value = decommify_pattern.sub(
+                        '', opt_value)  # decommify
+                    string = f"and {column} =  {opt_value}"
+                else:
+                    string = f"and {column} = '{opt_value}'"
+
+            where_block += f"             {string}\n"
+            template = compiled_where.sub(string, template)
+
+    template = template.replace('{{where_clause}}', where_block)
+
+    if opt.get('isExample', None):
+        ec = method_cfg.get('example_clause', None)
+        if ec:
+            template += f"             and {ec}\n"
+
+    extra_clause = method_cfg.get('extra_clause', None)
+    if extra_clause:
+        template += f"             and {extra_clause}\n"
+
+    sql = template
+
+    TrimSql = tpsup.util.get_first_by_key(
+        [opt, method_cfg], 'TrimSql', default=None)
+    if TrimSql:
+        # make Trim optional because it is actually easier to modify the sql with \
+        # the '1=1' - we only need to comment out a unneeded clause with '--'
+
+        # trim unnecessary where clause
+        if re.search(r'where 1 = 1\n$', sql, re.MULTILINE):             # multiline regex
+            # trim
+            #       select  *
+            #         from tblMembers
+            #        where 1 = 1
+            #  to
+            #
+            #       select  *
+            #         from tblMembers
+
+            sql = re.sub(r'[^\n]*where 1 = 1\n$', '', sql,
+                         flags=re.MULTILINE)        # multiline regex
+        elif re.search(r'where 1 = 1\n\s*and', sql, re.MULTILINE):   # multiline regex
+            # trim
+            #       select  *
+            #         from tblMembers
+            #        where 1 = 1
+            #              and lastname = 'Tianhua'
+            #  to
+            #
+            #       select  *
+            #         from tblMembers
+            #        where lastname = 'Tianhua'
+
+            sql = re.sub(r'where 1 = 1\n\s*and', 'where ', sql,
+                         flags=re.MULTILINE)   # multiline regex
+
+    order_clause = method_cfg.get('order_clause', None)
+    if order_clause:
+        sql += f"             {order_clause}\n"
+
+    sql += footer
+
+    # resolve the rest scalar vars at the last moment to avoid resolve where_clause vars.
+    resolved_sql = tpsup.util.resolve_scalar_var_in_string(sql, dict1, **opt)
+
+    return resolved_sql
+
+
+def process_db(entity: str, method_cfg: dict, **opt):
+    table = method_cfg.get('table', entity)
+
+    sql = craft_sql(table, method_cfg, {**vars, **known}, **opt)
+
+    db_type = method_cfg.get('db_type', None)
+    db = method_cfg.get('db', None)
+
+    is_mysql = False
+    if db_type:
+        if re.search('mysql', db_type, re.IGNORECASE):
+            is_mysql = True
+
+    if is_mysql:
+        dbh = tpsup.sqltools.get_dbh(nickname=db)
+        dbh.autocommit = False  # Disable global leverl, so we can SET FOR TRANSACTION LEVEL
+
+        setting = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;'
+        print(f"{setting}\n\n")
+        dbh.do(setting)
+
+    print(f"sql {db} \"{sql}\"\n\n")
+    result = tpsup.sqltools.run_sql(sql, nickname=db, RenderOutput=True,
+                                    ReturnDetail=True, output='-' if opt.get('verbose', None) else None)
+
+    print("\n")
+
+    if is_mysql:
+        setting = 'COMMIT ;'
+        print(f"{setting}\n\n")
+        dbh.do(setting)
+
+    if result and result['aref']:
+        # set the global buffer for post_code
+        global arrays, headers, hashes, row_count
+        arrays = result['aref']
+        headers = result['headers']
+        hashes = tpsup.util.arrays_to_hashes(arrays, headers)
+        row_count = len(arrays)
 
 
 method_syntax = {
@@ -746,7 +1015,7 @@ def print_global_buffer(**opt):
 
 processor_by_method = {
     'code': process_code,
-    # 'db': process_db,
+    'db': process_db,
     # 'cmd': process_cmd,
     # 'log': process_log,
     # 'path': process_path,

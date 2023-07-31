@@ -380,6 +380,34 @@ def print_string_with_line_numer(string: str):
         print(f"{number+1:3} {line}")
 
 
+def arrays_to_hashes(arrays, headers):
+    hashes = []
+    if not arrays or not headers:
+        return hashes
+
+    for aref in arrays:
+        href = {}
+        for i in range(len(headers)):
+            href[headers[i]] = aref[i]
+        hashes.append(href)
+
+    return hashes
+
+
+def hashes_to_arrays(hashes, headers):
+    arrays = []
+    if not hashes or not headers:
+        return arrays
+
+    for href in hashes:
+        aref = []
+        for header in headers:
+            aref.append(href[header])
+        arrays.append(aref)
+
+    return arrays
+
+
 def get_keys_from_array(rows: list, key_name: str, **opt):
     keys = []
 
