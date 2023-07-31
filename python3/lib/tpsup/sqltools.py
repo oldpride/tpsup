@@ -21,12 +21,14 @@ import itertools
 import os
 import re
 import sys
-from typing import List
+from typing import List, Union
 
 import tpsup.csvtools
 import tpsup.csvtools
 import tpsup.env
 from tpsup.lock import tpsup_unlock
+import tpsup.print
+from pprint import pformat
 
 
 class Conn:
@@ -91,12 +93,30 @@ class Conn:
 
 
 class TpDbh:
-    def __init__(self, nickname: str, **opt):
-        conn = Conn(nickname, **opt)
-        self.conn = conn
-        self.dbh = None
+    # TpDbh vs dbh
+    #    - dbh is a database handle, not from tpsup.
+    #    - TpDbh is a wrapper class of dbh.
+    def __init__(self,  **opt):
+        self.dbh = opt.get('dbh', None)
+        if self.dbh is None:
+            nickname = opt.get('nickname', None)
+            if nickname is None:
+                raise RuntimeError(
+                    f'nickname is required if dbh is not provided')
+
+            # remove nickname from opt to avoid this error:
+            # TypeError: Conn.__init__() got multiple values for argument 'nickname'
+            del opt['nickname']  # remove key from dict
+            conn = Conn(nickname, **opt)
+            self.conn = conn
+            self.close_dbh_on_exit = True
+        else:
+            self.close_dbh_on_exit = False
 
     def get_dbh(self):
+        if self.dbh:
+            return self.dbh
+
         conn = self.conn
 
         if re.match("^dbi:Oracle:.+", conn.dbi_string, re.IGNORECASE):
@@ -139,20 +159,22 @@ class TpDbh:
         return self.get_dbh()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.dbh:
+        if self.dbh and self.close_dbh_on_exit:
             self.dbh.close()
 
 
 class QueryResults:
     def __init__(self, sql, **opt):
-        self.return_type = opt.get('ReturnType', 'DictList')
+        self.ReturnType = opt.get('ReturnType', 'DictList')
         self.need_close_dbh = False
         self.maxout = opt.get('maxout', -1)
+        # statement does not return rows
+        self.is_statement = opt.get('is_statement', False)
 
         dbh = opt.get('dbh', None)
 
         if dbh is None:
-            dbh = TpDbh(**opt)
+            dbh = TpDbh(**opt).get_dbh()
             self.need_close_dbh = True
 
         self.cursor = dbh.cursor()
@@ -164,6 +186,9 @@ class QueryResults:
         except Exception as e:
             sys.stderr.write(f'failed to execute sql: {e}\n')
             # return None
+
+        if self.is_statement:
+            return
 
         self.columns = [row[0] for row in self.cursor.description]
 
@@ -178,7 +203,7 @@ class QueryResults:
             self.dbh.close()
 
     def __iter__(self):
-        if self.return_type == 'DictList':
+        if self.ReturnType == 'DictList':  # this is default
             # if the cursor returns List, use this
             gen = (dict(zip(self.columns, row)) for row in self.cursor)
 
@@ -189,14 +214,14 @@ class QueryResults:
                 yield from itertools.islice(gen, self.maxout)
             else:
                 yield from gen
-        elif self.return_type == 'ListList':
+        elif self.ReturnType == 'ListList':
             if self.maxout >= 0:
                 yield from itertools.islice(self.cursor, self.maxout)
             else:
                 yield from self.cursor
         else:
             raise RuntimeError(
-                f'unknown ReturnType={self.return_type}. opt={self.opt}')
+                f'unknown ReturnType={self.ReturnType}. opt={self.opt}')
 
         # parse() is not really needed if will run execute anyway. but is useful if we just want to check sql
         # syntax without running it.
@@ -220,19 +245,82 @@ def unlock_conn(nickname: str, **opt):
         return conn
 
 
-def run_sql(sql_list: List[str], **opt):
+def parse_sql(sql: str, **opt):
+    verbose = opt.get('verbose', 0)
+
+    # this is to handle multi-commands sql
+    # https://stackoverflow.com/questions/22709497/perl-dbi-mysql-how-to-run-multiple-queries-statements
+
+    # first remove multi-line comments /* ... */
+    sql = re.sub(r'/[*].*?[*]/', '', sql, flags=re.DOTALL)
+
+    # then remove singlem-line comments -- ...
+    sql = re.sub(r'--.*', '', sql)
+
+    # to test: test_remove_sql_comment.pl
+
+    if opt.get('NotSplitAtSemiColon', False):
+        # then we split at GO
+        sqls = re.split(r';\s*GO\s*;', sql, flags=re.IGNORECASE)
+        sqls2 = []
+
+        # add back GO statement as we use it to determine restart point
+        for s in sqls:
+            sqls2.append(s)
+            sqls2.append('GO')
+
+        sqls2.pop()  # remove the last 'GO' as it the default
+
+        return sqls2
+    else:
+        # then split into single command
+        sqls = sql.split(';')
+        sqls = [s for s in sqls if s.strip() != '']
+
+        if verbose > 1:
+            print(f'sqls = {sqls}')
+
+        return sqls
+
+
+def run_sql(sql: Union[str, list], **opt):
+    if isinstance(sql, str):
+        sqls = parse_sql(sql, **opt)
+    elif isinstance(sql, list):
+        sqls = sql
+    else:
+        raise RuntimeError(
+            f'unsupported sql type: {type(sql)}, sql = {format(sql)}')
+
+    ret = []
+
     with TpDbh(**opt) as td:
-        for sql in sql_list:
-            qr = QueryResults(sql, dbh=td, **opt)
-            # for row in qr:
-            #     print(row)
-            tpsup.csvtools.write_dictlist_to_csv(
-                qr, qr.columns, opt.get('filename', sys.stdout), **opt)
+        for sql in sqls:
+            qr = QueryResults(sql, **opt)
+            if qr.is_statement:
+                # statement does not return rows
+                continue
+
+            ret2 = []
+            if qr.ReturnType == 'DictList':
+                ret2.extend(qr)
+            else:  # qr.ReturnType == 'ListList':
+                ret2.append(qr.columns)
+                # ret2.extend(qr) # this is not working; it returns tuples
+                ret2.extend([list(row) for row in qr])  # convert tuple to list
+
+            # print(f'rows = {pformat(ret2)}')
+            tpsup.print.render_arrays(ret2, RenderHeader=True, **opt)
+
+            ret.append(ret2)
+
+    return ret
 
 
-def get_dbh(nickname: str, **opt):
+def get_dbh(**opt):
+    # reqiires dbh or nickname
     # to be compatible with perl SQL.pm
-    return TpDbh(nickname, **opt).get_dbh()
+    return TpDbh(**opt).get_dbh()
 
 
 def test_mysql():
@@ -272,6 +360,12 @@ def main():
     print('------------------------')
     print(f'\none more test mysql\n')
     test_mysql()
+
+    print()
+    print('------------------------')
+    print(f'\ntest a mysql statement\n')
+    run_sql(["SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;"],
+            nickname='tptest@tpdbmysql', is_statement=True)
 
     print()
     print('------------------------')

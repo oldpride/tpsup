@@ -421,30 +421,31 @@ def process_db(entity: str, method_cfg: dict, **opt):
         if re.search('mysql', db_type, re.IGNORECASE):
             is_mysql = True
 
+    dbh = tpsup.sqltools.get_dbh(nickname=db)
     if is_mysql:
-        dbh = tpsup.sqltools.get_dbh(nickname=db)
         dbh.autocommit = False  # Disable global leverl, so we can SET FOR TRANSACTION LEVEL
 
-        setting = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;'
-        print(f"{setting}\n\n")
-        dbh.do(setting)
+        mysql_setting = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;'
+        print(f"{mysql_setting}\n\n")
+        # if is_statement=true, no rows will be returned from run_sql()
+        tpsup.sqltools.run_sql(mysql_setting, dbh=dbh, is_statement=True)
 
     print(f"sql {db} \"{sql}\"\n\n")
-    result = tpsup.sqltools.run_sql(sql, nickname=db, RenderOutput=True,
-                                    ReturnDetail=True, output='-' if opt.get('verbose', None) else None)
-
-    print("\n")
+    result: list = tpsup.sqltools.run_sql(sql, dbh=dbh, RenderOutput=True,
+                                          ReturnType='ListList',  # array of arrays. 1st row is header
+                                          ReturnDetail=True,
+                                          output='-' if opt.get('verbose', None) else None)
 
     if is_mysql:
-        setting = 'COMMIT ;'
-        print(f"{setting}\n\n")
-        dbh.do(setting)
+        mysql_setting = 'COMMIT ;'
+        print(f"{mysql_setting}\n\n")
+        tpsup.sqltools.run_sql(mysql_setting, dbh=dbh, is_statement=True)
 
-    if result and result['aref']:
+    if result and len(result) > 0:
         # set the global buffer for post_code
         global arrays, headers, hashes, row_count
-        arrays = result['aref']
-        headers = result['headers']
+        arrays = result[1:]
+        headers = result[0]
         hashes = tpsup.util.arrays_to_hashes(arrays, headers)
         row_count = len(arrays)
 
@@ -999,6 +1000,7 @@ def reset_global_buffer(**opt):
 
 def print_global_buffer(**opt):
     # mainly for debug purpose
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
     print("\nprint global buffer \n")
     print(f"vars      = {pformat(vars)}")
     print(f"lines     = {pformat(lines)}")
@@ -1632,7 +1634,7 @@ def main():
     TPSUP = os.environ.get('TPSUP')
     cfg_file = f'{TPSUP}/python3/lib/tpsup/tracer_test_cfg.py'
     # print(f'parse_cfg(cfg_file) = {pformat(parse_cfg(cfg_file))}')
-    trace(cfg_file, ['sec=IBM.N'], verbose=2)
+    trace(cfg_file, ['sec=IBM.N', 'yyyymmdd=20211129'], verbose=2)
 
 
 if __name__ == '__main__':

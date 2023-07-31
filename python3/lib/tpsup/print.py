@@ -51,6 +51,7 @@ def find_row_type(rows: Union[list, None], **opt):
 
     previous_type = None
     max_rows_to_check = opt.get('CheckMaxRows', 100)
+
     i = 0
     for r in rows[:max_rows_to_check]:
         i += 1
@@ -59,7 +60,8 @@ def find_row_type(rows: Union[list, None], **opt):
             previous_type = row_type
             continue
         if previous_type != row_type:
-            print(f"eRROR: inconsistent row type at row {i}")
+            print(
+                f"ERROR: inconsistent row type at row {i}, {row_type} vs {previous_type}")
             return None
     return previous_type
 
@@ -160,7 +162,7 @@ def render_arrays(rows: Union[list, None], **opt):
             r = [r2.get(k, "") for k in headers]
 
         for i in range(len(r)):
-            i_length = len(r[i])
+            i_length = len(f'{r[i]}')
 
             # check whether an index in a list
             # if not i in max_by_pos:  # this doesn't work
