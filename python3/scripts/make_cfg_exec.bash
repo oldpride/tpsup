@@ -79,40 +79,43 @@ else
 fi
 
 for t in $(echo $targets); do
-   if [ $target = bash -o $target = bat ]; then
-      source_script="$TPSUP/python3/scripts/tpbatch_py_generic.$t"
-   elif [ $target = taskbash ]; then
-      source_script="$TPSUP/python3/scripts/tpbatch_py_generic_task.bash"
-   elif [ $target = taskbat ]; then
-      source_script="$TPSUP/python3/scripts/tpbatch_py_generic_task.bat"
-   else
-      echo "FATAL: unknown target '$target'"
-      exit 1
-   fi
-
-   if [ ! -e "$source_script" ]; then
-      echo "FATAL: missing source script '$source_script'"
-      exit 1
-   fi
-
-   for f in *_cfg.py; do
+   for f in *_cfg_*.py; do
       if [ "X$pattern" != "X" ]; then
          if ! echo $f | egrep -q "$pattern"; then
             continue
          fi
       fi
 
-      # bash script has no extension
-      target_script=$(echo $f | sed -e 's:_cfg.py::')
+      # https://unix.stackexchange.com/questions/145402
+      # sed -e would not work.
+      # sed -E is extended regular expression, which is similar to perl's regex.
+      target_type=$(echo $f | sed -E 's:^.*_cfg_(batch|trace).py:\1:')
+      target_prefix=$(echo $f | sed -E 's:_cfg_(batch|trace).py::')
+      [ $verbose = Y ] && echo "target_type=$target_type, target_prefix=$target_prefix"
 
       if [ $t = bat ]; then
-         target_script="$target_script.bat"
+         target_script="$target_prefix.bat"
+      elif [ $t = bash ]; then
+         target_script="$target_prefix"
       elif [ $t = taskbash ]; then
-         target_script="${target_script}_task"
+         target_script="${target_prefix}_task"
       elif [ $t = taskbat ]; then
-         target_script="${target_script}_task.bat"
+         target_script="${target_prefix}_task.bat"
       else
-         echo "FATAL: unknown target '$target'"
+         echo "FATAL: unknown target '$t'"
+         exit 1
+      fi
+
+      if [ $t = bash -o $t = bat ]; then
+         source_script="$TPSUP/python3/scripts/tp${target_type}_py_generic.$t"
+      elif [ $t = taskbash ]; then
+         source_script="$TPSUP/python3/scripts/tp${target_type}_generic_task.bash"
+      elif [ $t = taskbat ]; then
+         source_script="$TPSUP/python3/scripts/tp${target_type}_py_generic_task.bat"
+      fi
+
+      if [ ! -e "$source_script" ]; then
+         echo "FATAL: missing source script '$source_script'"
          exit 1
       fi
 
@@ -128,4 +131,5 @@ for t in $(echo $targets); do
       echo "updating $target_script ..."
       cp -f "$source_script" "$target_script"
    done
+
 done

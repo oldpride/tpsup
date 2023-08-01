@@ -171,6 +171,11 @@ def restore_posix_paths(paths: list, **opt) -> list:
 
     new_paths = []
     for old_path in paths:
+        if type(old_path) != str:
+            print(
+                f"tpsup.env: restore_posix_paths: skip non-string '{old_path}'")
+            new_paths.append(old_path)
+            continue
         new_path = old_path.replace(my_env.term['/'], '/')
         new_paths.append(new_path)
         if old_path != new_path:
