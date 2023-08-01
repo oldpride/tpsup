@@ -11,7 +11,7 @@ import tpsup.exectools
 import tpsup.csvtools
 import tpsup.print
 # import tpsup.tplog
-from tpsup.tplog import log_FileFuncLine
+from tpsup.tplog import log_FileFuncLine, get_stack
 import tpsup.sqltools
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
@@ -186,6 +186,7 @@ decommify_pattern = re.compile(r',')
 
 
 def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
     footer = ""
     MaxExtracts = opt.get('MaxExtracts', None)
     template = method_cfg.get('template', None)
@@ -409,6 +410,10 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
 
 
 def process_db(entity: str, method_cfg: dict, **opt):
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
+
+    verbose = opt.get('verbose', 0)
+
     table = method_cfg.get('table', entity)
 
     sql = craft_sql(table, method_cfg, {**vars, **known}, **opt)
@@ -431,10 +436,12 @@ def process_db(entity: str, method_cfg: dict, **opt):
         tpsup.sqltools.run_sql(mysql_setting, dbh=dbh, is_statement=True)
 
     print(f"sql {db} \"{sql}\"\n\n")
-    result: list = tpsup.sqltools.run_sql(sql, dbh=dbh, RenderOutput=True,
+    result: list = tpsup.sqltools.run_sql(sql, dbh=dbh, RenderOutput=verbose,
                                           ReturnType='ListList',  # array of arrays. 1st row is header
                                           ReturnDetail=True,
-                                          output='-' if opt.get('verbose', None) else None)
+                                          )
+
+    verbose > 1 and log_FileFuncLine(f"result = {pformat(result)}\n\n")
 
     if is_mysql:
         mysql_setting = 'COMMIT ;'
@@ -443,7 +450,6 @@ def process_db(entity: str, method_cfg: dict, **opt):
 
     if result and len(result) > 0:
         # set the global buffer for post_code
-        global arrays, headers, hashes, row_count
         arrays = result[1:]
         headers = result[0]
         hashes = tpsup.util.arrays_to_hashes(arrays, headers)
@@ -817,6 +823,10 @@ def parse_cfg(cfg_file: str, **opt):
 
     # check syntax
     BeginCode = "global known, our_cfg, row_count, rc, output, lines, arrays, hashes, hash1, r\n"
+    # 'vars' is not in above because we will replace it with '1' to test compilation.
+    # when we test compile, we will replace all {{...}} with '1' to avoid syntax error.
+    # {{...}} comes from 'vars' and 'known'. but we keep 'known' because known[key] can exist.
+
     node_pairs = tpsup.util.get_node_list(our_cfg, 'our_cfg', **opt)
     # vars is a array in pairs, therefore, we need to check odd-numberred elements
     # tvars= ['k1', 'v1', 'k2', 'v2']
@@ -972,17 +982,7 @@ def get_all_cfg(**opt):
 
 
 def reset_global_buffer(**opt):
-    global vars
-    global lines
-    global arrays
-    global headers
-    global hashes
-    global hash1
-    global r
-    global row_count
-    global rc
-    global output
-
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
     # all these should be reserved words
     all_cfg = get_all_cfg(**opt)
 
@@ -1001,7 +1001,9 @@ def reset_global_buffer(**opt):
 def print_global_buffer(**opt):
     # mainly for debug purpose
     global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
-    print("\nprint global buffer \n")
+    print()
+    print(f"{get_stack(2)}: print global buffer")
+    print("----------------------------------------")
     print(f"vars      = {pformat(vars)}")
     print(f"lines     = {pformat(lines)}")
     print(f"arrays    = {pformat(arrays)}")
@@ -1028,7 +1030,7 @@ processor_by_method = {
 def process_entity(entity, entity_cfg, **opt):
     verbose = opt.get('verbose', 0)
 
-    global known, our_cfg, row_count, rc, output, lines, arrays, hashes, hash1, r
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
 
     # this pushes back up the setting
     # opt['verbose'] = verbose
@@ -1098,6 +1100,7 @@ process {entity}
     method_cfg = entity_cfg.get('method_cfg', None)
 
     processor(entity, method_cfg, **opt)
+    # this sets all the global variables
 
     output_key = entity_cfg.get('output_key', None)
     if output_key:
@@ -1115,8 +1118,7 @@ process {entity}
 
     if code := entity_cfg.get('code', None):
         tracer_eval_code(code, **opt)
-
-    verbose > 1 and print_global_buffer()
+        verbose > 1 and print_global_buffer()
 
     # should 'example' be applyed by filter?
     #     pro: this can help find specific example
@@ -1301,7 +1303,7 @@ def apply_csv_filter(filters: Union[list, dict, None], **opt):
     #          SortKeys => [ 'weight' ],
     #       },
 
-    global known, our_cfg, row_count, rc, output, lines, arrays, hashes, hash1, r
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
 
     filter3 = {}
     for row in filters:
@@ -1539,13 +1541,18 @@ def trace(given_cfg, input, **opt):
         entity_cfg = tpsup.util.get_value_by_key_case_insensitive(
             cfg_by_entity, entity, **opt)
 
+        success = 0
         try:
             result[entity] = process_entity(entity, entity_cfg, **opt2)
+            success = 1
         except Exception as e:
-            if not re.search(r'\(no need stack trace\)', f'{e}'):
-                print(e)
+            if not re.search(r'no need stack trace', f'{e}', re.MULTILINE):
+                print(f"exception detail={e}")
+
+        if not success:
             if not ForceThrough:
-                raise RuntimeError(f"entity={entity} failed. aborting")
+                # raise RuntimeError(f"entity={entity} failed. aborting")
+                exit(1)
 
 
 yyyymmdd = None
@@ -1634,7 +1641,7 @@ def main():
     TPSUP = os.environ.get('TPSUP')
     cfg_file = f'{TPSUP}/python3/lib/tpsup/tracer_test_cfg.py'
     # print(f'parse_cfg(cfg_file) = {pformat(parse_cfg(cfg_file))}')
-    trace(cfg_file, ['sec=IBM.N', 'yyyymmdd=20211129'], verbose=2)
+    trace(cfg_file, ['sec=IBM.N', 'yyyymmdd=20211129'], verbose=0)
 
 
 if __name__ == '__main__':

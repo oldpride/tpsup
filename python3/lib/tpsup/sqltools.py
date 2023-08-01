@@ -309,10 +309,10 @@ def run_sql(sql: Union[str, list], **opt):
                 # ret2.extend(qr) # this is not working; it returns tuples
                 ret2.extend([list(row) for row in qr])  # convert tuple to list
 
-            # print(f'rows = {pformat(ret2)}')
-            tpsup.print.render_arrays(ret2, RenderHeader=True, **opt)
+            if opt.get("RenderOutput", False):
+                tpsup.print.render_arrays(ret2, **opt)
 
-            ret.append(ret2)
+            ret.extend(ret2)
 
     return ret
 

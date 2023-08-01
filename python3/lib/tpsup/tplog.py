@@ -24,7 +24,7 @@ def get_logger(name: str = None, **kwargs):
 
 def get_FileFuncLine():
     frame = inspect.stack()[2]
-    return f"{frame.filename}:{frame.function}:{frame.lineno}"
+    return f"{os.path.basename(frame.filename)}:{frame.function}:{frame.lineno}"
 
 
 def log_FileFuncLine(msg: str, **opt):
@@ -38,6 +38,11 @@ def log_FileFuncLineObj(obj_name, obj, **opt):
         print(f'{get_FileFuncLine()}: {obj_name}=\n{msg}')
     else:
         print(f'{get_FileFuncLine()}: {obj_name}= {msg}')
+
+
+def get_stack(level: int = 2):
+    caller = inspect.stack()[level]
+    return f"{os.path.basename(caller.filename)},{caller.lineno},{caller.function}()"
 
 
 def rotate_log(file: str, size: int = 1024*1024, count: int = 1, **opt):

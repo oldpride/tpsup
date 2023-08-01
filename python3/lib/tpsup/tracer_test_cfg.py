@@ -123,10 +123,12 @@ our_cfg = {
 
     # trace entities in this order
     'trace_route': [
-        'test_code',
+        # 'test_code',
+        {'entity': 'orders', 'condition': '"YYYYMMDD" in known'},
+
+
+        # below are untested
         # 'app_cmd_pipe',
-        # { entity => 'orders', condition => '$known{YYYYMMDD} == $known{TODAY}'},
-        'orders',
         # {'entity': 'trades', 'AllowZero': 1},
         # 'booking',
         # 'actions',
