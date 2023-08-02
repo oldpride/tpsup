@@ -107,7 +107,7 @@ for t in $(echo $targets); do
       fi
 
       if [ $t = bash -o $t = bat ]; then
-         source_script="$TPSUP/python3/scripts/tp${target_type}_py_generic.$t"
+         source_script="$TPSUP/python3/scripts/tpgeneric_py.$t"
       elif [ $t = taskbash ]; then
          source_script="$TPSUP/python3/scripts/tp${target_type}_generic_task.bash"
       elif [ $t = taskbat ]; then

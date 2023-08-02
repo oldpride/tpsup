@@ -31,7 +31,7 @@ def parse_input(input: Union[list, str], **opt):
 
     for pair in input:
         if re.match(r'any|check', pair, re.IGNORECASE):
-            return
+            return ref
         elif pair_pattern.match(pair):
             key, value = pair_pattern.match(pair).groups()
             # convert key to upper case so that user can use both upper case and lower case
@@ -1415,6 +1415,7 @@ def trace(given_cfg, input, **opt):
                                AliasMap=all_cfg['alias_map'],
                                AllowedKeys=all_cfg['allowed_keys'],
                                )
+    print(f"parsed_input = {pformat(parsed_input)}")
 
     # these keys has precedence to populate because extender func may need this info.
     for k in ['YYYYMMDD']:

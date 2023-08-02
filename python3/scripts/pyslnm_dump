@@ -18,12 +18,26 @@ dir=$(dirname "$0")
 
 UNAME=$(uname -a)
 
+types="batch trace"
+for type in $types; do
+   if [ -f "$dir/${prog}_cfg_${type}.py" ]; then
+      if [ "X$seen_type" != "X" ]; then
+         echo "ERROR: found multiple cfg files for $prog: $seen_type and $type"
+         exit 1
+      else
+         seen_type=$type
+      fi
+   fi
+done
+
+type=$seen_type
+
 if [[ "$UNAME" =~ Cygwin ]]; then
-   cfg=$(cygpath --windows "$dir/${prog}_cfg_batch.py")
-   cmd=$(which tpbatch.py)
+   cfg=$(cygpath --windows "$dir/${prog}_cfg_${type}.py")
+   cmd=$(which tp${type}.py)
    cmd=$(cygpath --windows "$cmd")
    python "$cmd" "$cfg" -c $prog "$@"
 else
-   cfg="$dir/${prog}_cfg_batch.py"
-   tpbatch.py "$cfg" -c $prog "$@"
+   cfg="$dir/${prog}_cfg_${type}.py"
+   tp${type}.py "$cfg" -c $prog "$@"
 fi

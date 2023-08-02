@@ -93,6 +93,23 @@ example:
 args = restore_posix_paths(args)
 # print(f'args = {args}')
 
+if len(args) == 0:
+    usage("missing args")
+
+verbose = 0
+
+if args[0] == '-v':
+    verbose = verbose + 1
+    args = args[1:]  # shift away -v
+    if len(args) == 0:
+        usage("missing args", caller=f'{prog} config.py')
+
+config_file = args.pop(0)
+all_cfg = parse_cfg(config_file)
+
+if verbose:
+    print(f'all_cfg = {pformat(all_cfg)}')
+
 parser = argparse.ArgumentParser(
     prog=sys.argv[0],
     # epilog=examples,
@@ -102,7 +119,7 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
-    '-v', '--verbose', default=0, action="count",
+    '-v', '--verbose', default=verbose, action="count",
     help='verbose level: -v, -vv, -vvv')
 
 parser.add_argument(
@@ -126,10 +143,13 @@ parser.add_argument(
     help='set the caller name')
 
 parser.add_argument(
-    # args=argparse.REMAINDER indicates optional remaining args and stored in a List
+    # https://stackoverflow.com/questions/15583870
+    # "argparse.REMAINDER" tells the argparse module to take the rest of the arguments in args,
+    # when it finds the first argument it cannot match to the rest.
     'remainingArgs', nargs=argparse.REMAINDER,
+    # this may not be desirable.
+    # but the parser cannot handle intermixed options and positional args.
     help='app_cfg_trace.py and key=value pairs')
-
 
 a = vars(parser.parse_args(args))
 
@@ -138,10 +158,8 @@ if verbose:
     print(f'a = {pformat(a)}')
 
 if len(a['remainingArgs']) == 0:
-    usage("missing args")
-
-config_file = a['remainingArgs'].pop(0)
-all_cfg = parse_cfg(config_file)
-
+    usage("missing positional args",
+          caller=a.get('caller', None),
+          all_cfg=all_cfg)
 
 trace(all_cfg, a['remainingArgs'], **a)
