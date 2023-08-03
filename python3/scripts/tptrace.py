@@ -107,8 +107,10 @@ if args[0] == '-v':
 config_file = args.pop(0)
 all_cfg = parse_cfg(config_file)
 
+printed_cfg = False
 if verbose:
     print(f'all_cfg = {pformat(all_cfg)}')
+    printed_cfg = True
 
 parser = argparse.ArgumentParser(
     prog=sys.argv[0],
@@ -155,6 +157,8 @@ a = vars(parser.parse_args(args))
 
 verbose = a.get('verbose', 0)
 if verbose:
+    if not printed_cfg:
+        print(f'all_cfg = {pformat(all_cfg)}')
     print(f'a = {pformat(a)}')
 
 if len(a['remainingArgs']) == 0:

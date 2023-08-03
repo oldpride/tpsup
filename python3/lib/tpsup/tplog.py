@@ -1,7 +1,11 @@
 import inspect
+import io
 import logging
 import os
 import pprint
+import sys
+from time import strftime, gmtime
+import traceback
 
 default = {
     # %(msecs)03d, pad with 0
@@ -43,6 +47,64 @@ def log_FileFuncLineObj(obj_name, obj, **opt):
 def get_stack(level: int = 2):
     caller = inspect.stack()[level]
     return f"{os.path.basename(caller.filename)},{caller.lineno},{caller.function}()"
+
+
+def print_exception(e: Exception, stacktrace=True, **opt):
+    file = opt.get("file", sys.stderr)
+
+    sio = None
+    if file == str:
+        # print to string
+        sio = io.StringIO()
+        file = sio
+    if stacktrace:
+        print(traceback.format_exc(), file=file)
+    else:
+        # print("{0}: {1!r}".format(type(e).__name__, e.args), file=file, **opt)
+        print("{0}: {1}".format(type(e).__name__,
+              ";".join(e.args)), file=file, **opt)
+
+    if sio:
+        string = sio.getvalue()
+        sio.close()
+        return string
+
+
+def get_exception_string(e: Exception, **opt):
+    return print_exception(e, file=str)
+
+
+def tplog_exception(e: Exception, **opt):
+    tplog(print_exception(e, file=str), **opt)
+
+
+def tplog(message: str = None, file=sys.stderr, prefix: str = "time,caller"):
+    if message is None:
+        message = ""
+
+    need_prefix = set(prefix.split(","))
+
+    if "time" in need_prefix:
+        timestamp_part = f'{strftime("%Y-%m-%d %H:%M:%S", gmtime())} '
+    else:
+        timestamp_part = ""
+
+    if "caller" in need_prefix:
+        # print(pformat(caller)) *o
+        # FrameInfo(frame=<frame object at 0x7f0ce4e87af8>, filename='util.py', lineno=176, function='tplog',
+        # code_context=['    caller = inspect.stack()\n'], index=0),
+        # FrameInfo(frame=<frame object at 0x7f0ce4a84048>, filename='util.py', lineno=182, function='main',
+        # code_context=["    tplog('test')\n"], index=0),
+        # FrameInfo(frame=<frame object at 0x12e3428>, filename='util.py', lineno=185, function='<module>',
+        # code_context=['    main()\n'], index=0)]
+        caller = inspect.stack()[1]
+        caller_part = (
+            f"{os.path.basename(caller.filename)},{caller.lineno},{caller.function} "
+        )
+    else:
+        caller_part = ""
+
+    print(f"{timestamp_part}{caller_part}{message}", file=file)
 
 
 def rotate_log(file: str, size: int = 1024*1024, count: int = 1, **opt):
@@ -109,6 +171,20 @@ def main():
     # logging.basicConfig(level="DEBUG")
     logger2 = get_logger('new')
     logger2.info("I should see this line")
+
+    print()
+    print("\n------ test tplog")
+    tplog("hello world")
+
+    print("\n------ test a short version of tplog")
+    tplog("hello world", prefix="time")
+
+    print("\n------ test print_exception")
+    try:
+        raise RuntimeError("test exception")
+    except Exception as e:
+        print_exception(e)
+        tplog(print_exception(e, file=str))
 
     print()
     print("-----------------------------------------")

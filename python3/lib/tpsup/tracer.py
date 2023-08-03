@@ -11,7 +11,7 @@ import tpsup.exectools
 import tpsup.csvtools
 import tpsup.print
 # import tpsup.tplog
-from tpsup.tplog import log_FileFuncLine, get_stack
+from tpsup.tplog import get_exception_string, log_FileFuncLine, get_stack, print_exception
 import tpsup.sqltools
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
@@ -49,7 +49,7 @@ def parse_input(input: Union[list, str], **opt):
 
     if AliasMap := opt.get('AliasMap', None):
         for alias in AliasMap.keys():
-            key = AliasMap[alias]
+            key = AliasMap[alias].upper()
 
             uc_alias = alias.upper()
             if uc_alias in ref:
@@ -99,7 +99,7 @@ def get_keys_in_uppercase(cfg_by_entity: dict, **opt):
     for k in opt.get("key_pattern", {}).keys():
         seen[k.upper()] = 1
 
-    return seen.keys()
+    return sorted(seen.keys())
 
 
 def resolve_a_clause(clause: str, dict1: dict, **opt):
@@ -517,6 +517,11 @@ r = {}  # only used by update_knowledge_from_row
 ###### global variables - end ######
 
 
+def dump_knowledge(**opt):
+    global known
+    print(f"known = {pformat(known)}\n")
+
+
 def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
     if not row or not row.keys():
         return
@@ -542,13 +547,16 @@ def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
         if kc_type is str:
             kc = {'column': k}
 
-        # condition = kc.get('condition', None) or kc.get('update_knowledge', None)
-        condition = kc.get('condition', None)
+        condition = kc.get('condition', kc.get('update_knowledge', None))
+        # condition = kc.get('condition', None)
 
-        if condition:
-            if not re.search(r'{{new_value}}', condition):
+        if condition is not None:
+            condition_needs_new_value = re.search(
+                r'{{new_value}}', f'{condition}')
+            if not condition_needs_new_value:
                 # if condition doesn't need {{new_value}}, we can evaluate it earlier
-                if not tracer_eval_code(condition, **opt):
+                # note: convert condition to string, in case, for example, condition is 0, a number.
+                if not tracer_eval_code(f'{condition}', **opt):
                     continue
 
         # in where_clause/update_key, $known's key is mapped to row's column.
@@ -577,14 +585,14 @@ def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
                 continue
             break
 
-        if condition:
-            if re.search(r'{{new_value}}', condition):
-                if not tracer_eval_code(condition, Dict={**vars, **known, 'new_value': new_value}, **opt):
+        if condition is not None:
+            if condition_needs_new_value:
+                if not tracer_eval_code(f'{condition}', Dict={**vars, **known, 'new_value': new_value}, **opt):
                     continue
 
-        if code:
+        if code is not None:
             v = tracer_eval_code(
-                code, Dict={**vars, **known, 'new_value': new_value}, **opt)
+                f'{code}', Dict={**vars, **known, 'new_value': new_value}, **opt)
             update_knowledge(k, v, KeyConfig=kc, **opt)
         else:
             if new_value:
@@ -604,9 +612,7 @@ def update_knowledge(k: str, new_value: str, **opt):
                 known_value = known_value.replace(',', '')
                 known[k] = known_value
 
-            mismatch = (known_value != new_value)
-        else:
-            mismatch = (known_value != new_value)
+        mismatch = (f"{known_value}" != f"{new_value}")
 
         if mismatch:
             raise RuntimeError(
@@ -1224,7 +1230,7 @@ process {entity}
     if post_code := entity_cfg.get('post_code', None):
         tracer_eval_code(post_code, **opt)
 
-    print(f"knowledge = {pformat(known)}")
+    dump_knowledge()
 
     return r
 
@@ -1461,7 +1467,7 @@ def trace(given_cfg, input, **opt):
 
         process_entity(entity, entity_cfg, **opt2)
 
-        verbose and print(f"knowledge = {pformat(known)}")
+        dump_knowledge()
         return
 
     SkipTrace = {}
@@ -1548,7 +1554,7 @@ def trace(given_cfg, input, **opt):
             success = 1
         except Exception as e:
             if not re.search(r'no need stack trace', f'{e}', re.MULTILINE):
-                print(f"exception detail={e}")
+                print(get_exception_string(e))
 
         if not success:
             if not ForceThrough:
@@ -1640,7 +1646,7 @@ def main():
     print('----------------------------------------')
     import os
     TPSUP = os.environ.get('TPSUP')
-    cfg_file = f'{TPSUP}/python3/lib/tpsup/tracer_test_cfg.py'
+    cfg_file = f'{TPSUP}/python3/scripts/tptrace_test_cfg_trace.py'
     # print(f'parse_cfg(cfg_file) = {pformat(parse_cfg(cfg_file))}')
     trace(cfg_file, ['sec=IBM.N', 'yyyymmdd=20211129'], verbose=0)
 

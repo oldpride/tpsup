@@ -7,7 +7,7 @@ import sys
 import time
 import selectors
 from pprint import pformat
-from tpsup.util import tplog
+from tpsup.tplog import tplog
 import tpsup.env
 from typing import Union
 
@@ -35,7 +35,8 @@ def wait_tcps_open(host_port_list: list, timeout: int = 60):
         elif hp_type is str:
             host, port = host_port.split(':', 1)
         else:
-            raise RuntimeError(f"unsupported type of host_port={pformat(host_port)}")
+            raise RuntimeError(
+                f"unsupported type of host_port={pformat(host_port)}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(interval)
         item = {
@@ -120,7 +121,8 @@ class encryptedsocket:
         elif host_port:
             host, port = host_port.split(':')
             if not port:
-                raise RuntimeError(f"bad format at host_port='{host_port}'; expected host:port")
+                raise RuntimeError(
+                    f"bad format at host_port='{host_port}'; expected host:port")
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if sock:
                 for i in range(0, maxtry):
@@ -131,21 +133,27 @@ class encryptedsocket:
                         # type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 36690), raddr=('127.0.0.1', 29999)>
                         laddr = sock.getsockname()
                         raddr = sock.getpeername()
-                        tplog(f"connected: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
-                        tplog(f"connected: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
+                        tplog(
+                            f"connected: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
+                        tplog(
+                            f"connected: local {laddr[0]}:{laddr[1]}, remote {raddr[0]}:{raddr[1]}")
                         self.socket = sock
                         break
                     except Exception as e:
-                        tplog(f'{i + 1} try out of {maxtry} failed to connect: {e}', file=sys.stderr)
+                        tplog(
+                            f'{i + 1} try out of {maxtry} failed to connect: {e}', file=sys.stderr)
                         if i + 1 < maxtry:
-                            tplog(f'will retry after {try_interval}', file=sys.stderr)
+                            tplog(
+                                f'will retry after {try_interval}', file=sys.stderr)
                             time.sleep(try_interval)
                         else:
-                            raise RuntimeError(f"failed to connect to {host}:{port} in {maxtry} tries")
+                            raise RuntimeError(
+                                f"failed to connect to {host}:{port} in {maxtry} tries")
             else:
                 raise RuntimeError(socket.error)
         else:
-            raise RuntimeError("neither established_socket nor host_port specified")
+            raise RuntimeError(
+                "neither established_socket nor host_port specified")
 
         if key is None or key == '':
             key = None
@@ -177,7 +185,7 @@ class encryptedsocket:
     #     https: // stackoverflow.com / questions / 4407835 / python - socket - flush
 
     def recv_and_decode(self, timeout: int = 6, maxsize=1024 * 1024 * 1024, file: str = None, **opt) -> Union[
-        bytes, int]:
+            bytes, int]:
         """ this is actually use unblocked recv() to re-implement a blocked recv().
         The possible benefits:
         - sock.recv(buffer_size)'s buffer_size is limited, we can use a loop to recv() bigger file. In this
@@ -199,14 +207,16 @@ class encryptedsocket:
         # saved_blocking = self.socket.getblocking() this only available when version >= 3.7
 
         # unblock
-        self.socket.setblocking(0)  # None: blocking mode; 0: non-blocking mode; positive floating: timeout mode.
+        # None: blocking mode; 0: non-blocking mode; positive floating: timeout mode.
+        self.socket.setblocking(0)
 
         polling_interval = 1
         wait_so_far = 0
         total_size = 0
         received_bytearray = bytearray()
         while wait_so_far < timeout:
-            ready = select.select([self.socket], [], [], polling_interval)  # last arg is timeout in seconds
+            # last arg is timeout in seconds
+            ready = select.select([self.socket], [], [], polling_interval)
             if ready[0]:
                 data = self.socket.recv(4096)
                 # there may be exceptions here
@@ -221,7 +231,8 @@ class encryptedsocket:
 
                 total_size += len(data)
                 if total_size > maxsize:
-                    tplog(f"Received {total_size} bytes already exceeded maxsize {maxsize}. Stopped receiving.")
+                    tplog(
+                        f"Received {total_size} bytes already exceeded maxsize {maxsize}. Stopped receiving.")
                     break
             else:
                 # time.sleep(polling_interval)  # no need sleep here if we already blocked at select()
@@ -273,7 +284,8 @@ class encryptedsocket:
         # saved_blocking = self.socket.getblocking() this only available when version >= 3.7
 
         # unblock
-        self.socket.setblocking(0)  # None: blocking mode; 0: non-blocking mode; positive floating: timeout mode.
+        # None: blocking mode; 0: non-blocking mode; positive floating: timeout mode.
+        self.socket.setblocking(0)
         # this is the same as self.socket.settimeout(0)
 
         polling_interval = 1
@@ -318,7 +330,8 @@ class encryptedsocket:
 
         missing = data_length - total_sent
         if missing > 0:
-            tplog(f"Sent total {total_sent} bytes. failed to send {missing} bytes")
+            tplog(
+                f"Sent total {total_sent} bytes. failed to send {missing} bytes")
         else:
             tplog(f"Sent all {total_sent} bytes")
 
@@ -373,10 +386,12 @@ use two terminals: one run client and one run server
     elif sys.argv[1] == 'server':
         data = "hello client"
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        serversocket.bind(('0.0.0.0', int(port)))  # 0.0.0.0 means all interfaces
+        # 0.0.0.0 means all interfaces
+        serversocket.bind(('0.0.0.0', int(port)))
         serversocket.listen(5)
         while True:
-            print(f"waiting for client at port {port}. Control-C won't work on Windows until client connects")
+            print(
+                f"waiting for client at port {port}. Control-C won't work on Windows until client connects")
             (clientsocket, address) = serversocket.accept()
             print(f"accepted client socket {clientsocket}")
             ensock = encryptedsocket(key, established_socket=clientsocket)
@@ -391,28 +406,34 @@ use two terminals: one run client and one run server
             ensock = encryptedsocket(key, host_port=f"{host}:{port}")
             recv_file = f"{env.tmpdir}/test_client.txt"
             send_file = "runtest.bash"
-            print(f"sent send_file={send_file}, file_size={os.path.getsize(send_file)}")
+            print(
+                f"sent send_file={send_file}, file_size={os.path.getsize(send_file)}")
             size = ensock.send_and_encode(send_file, data_is_file=True)
             ensock.send_shutdown()
             print(f"sent size={size}")
             print(f"receiving")
             size = ensock.recv_and_decode(file=recv_file)
-            print(f"received recv_file={recv_file}, size={size}, file_size={os.path.getsize(recv_file)}")
+            print(
+                f"received recv_file={recv_file}, size={size}, file_size={os.path.getsize(recv_file)}")
             ensock.close()
     elif sys.argv[1] == 'serverfile':
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        serversocket.bind(('0.0.0.0', int(port)))  # 0.0.0.0 means all interfaces
+        # 0.0.0.0 means all interfaces
+        serversocket.bind(('0.0.0.0', int(port)))
         serversocket.listen(5)
         while True:
-            print(f"waiting for client at port {port}. Control-C won't work on Windows until client connects")
+            print(
+                f"waiting for client at port {port}. Control-C won't work on Windows until client connects")
             (clientsocket, address) = serversocket.accept()
             print(f"accepted client socket {clientsocket}")
             ensock = encryptedsocket(key, established_socket=clientsocket)
             recv_file = f"{env.tmpdir}/test_server.txt"
             send_file = "csvtools_test.csv"
             size = ensock.recv_and_decode(file=recv_file)
-            print(f"received recv_file={recv_file}, size={size}, file_size={os.path.getsize(recv_file)}")
-            print(f"sent send_file={send_file}, file_size={os.path.getsize(send_file)}")
+            print(
+                f"received recv_file={recv_file}, size={size}, file_size={os.path.getsize(recv_file)}")
+            print(
+                f"sent send_file={send_file}, file_size={os.path.getsize(send_file)}")
             size = ensock.send_and_encode(send_file, data_is_file=True)
             print(f"sent size={size}")
             ensock.close()

@@ -35,7 +35,7 @@ import tpsup.pstools
 import tpsup.tptmp
 import os.path
 
-from tpsup.util import tplog, hit_enter_to_continue
+from tpsup.util import hit_enter_to_continue
 from tpsup.exectools import exec_into_globals
 
 from typing import List, Union
@@ -402,7 +402,7 @@ class SeleniumEnv:
         if method == "bs4":
             html: str = element.get_attribute("outerHTML")
             if verbose:
-                tplog(f"outerHTML={html}")
+                tpsup.tplog.tplog(f"outerHTML={html}")
             if html:
                 from bs4 import BeautifulSoup
 
@@ -1159,7 +1159,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 # except UnexpectedAlertPresentException as ex:
                 #     # selenium.common.exceptions.UnexpectedAlertPresentException: Alert Text: {Alert text :
                 #     # Message: unexpected alert open: {Alert text : }
-                #     tpsup.util.print_exception(ex)
+                #     tpsup.tplog.print_exception(ex)
                 #     alert = driver.switch_to.alert
                 #     alert.accept()
                 #     print("alert accepted")

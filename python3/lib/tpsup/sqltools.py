@@ -21,7 +21,7 @@ import itertools
 import os
 import re
 import sys
-from typing import List, Union
+from typing import List, Literal, Union
 
 import tpsup.csvtools
 import tpsup.csvtools
@@ -164,8 +164,8 @@ class TpDbh:
 
 
 class QueryResults:
-    def __init__(self, sql, **opt):
-        self.ReturnType = opt.get('ReturnType', 'DictList')
+    def __init__(self, sql, ReturnType: Literal['DictList', 'ListList'] = 'DictList', **opt):
+        self.ReturnType = ReturnType
         self.need_close_dbh = False
         self.maxout = opt.get('maxout', -1)
         # statement does not return rows
@@ -302,7 +302,7 @@ def run_sql(sql: Union[str, list], **opt):
                 continue
 
             ret2 = []
-            if qr.ReturnType == 'DictList':
+            if qr.ReturnType == 'DictList':  # this is default
                 ret2.extend(qr)
             else:  # qr.ReturnType == 'ListList':
                 ret2.append(qr.columns)

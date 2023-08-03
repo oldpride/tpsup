@@ -10,9 +10,10 @@ from typing import Union, Callable
 import types
 
 
-from tpsup.util import print_exception, tplog, tplog_exception
+from tpsup.tplog import print_exception, tplog, tplog_exception
 
 # multiprocessing.set_start_method('spawn')
+
 
 class TimeoutException(Exception):
     """
@@ -20,10 +21,11 @@ class TimeoutException(Exception):
     https://stackoverflow.com/questions/16466406/passing-an-object-with-an-exception
     """
 
-    def __init__(self, timeout: Union[int, float] = None, child_pid = None, *args):
+    def __init__(self, timeout: Union[int, float] = None, child_pid=None, *args):
         super().__init__(timeout, *args)
         self.timeout = timeout  # used to save partial result
         self.child_pid = child_pid  # pid of the child process
+
 
 def timeout_func_on_unix(timeout: int, func, *args, **kwargs):
     """
@@ -71,7 +73,8 @@ def timeout_child(conn: multiprocessing.connection.Connection, func: types.Funct
         # therefore anything defined inside the if __name__ == '__main__' is not defined in the child process
         # namespace. Hence, the AttributeError
         message = f"both func={func} is not initialized. note: func cannot be defined in __main__"
-        tb = pformat(traceback.format_stack()) # outside exception use format_stack()
+        # outside exception use format_stack()
+        tb = pformat(traceback.format_stack())
         conn.send(RuntimeError(f"{message}\n{tb}"))
     else:
         result = None
@@ -79,8 +82,10 @@ def timeout_child(conn: multiprocessing.connection.Connection, func: types.Funct
             result = func(*args, **kwargs)
             conn.send(result)
         except Exception as e:
-            tb = pformat(traceback.format_exc()) # within exception use format_exc()
-            conn.send(RuntimeError(f"child process exception, pid={os.getpid()}\n{tb}"))
+            # within exception use format_exc()
+            tb = pformat(traceback.format_exc())
+            conn.send(RuntimeError(
+                f"child process exception, pid={os.getpid()}\n{tb}"))
     conn.close()
 
 # typing.Callable vs types.FunctionType
@@ -96,6 +101,8 @@ def timeout_child(conn: multiprocessing.connection.Connection, func: types.Funct
 #
 # type hint use typing.Callable is better then types.FunctionType
 # def timeout_func(timeout: int, func: types.FunctionType, *args, **kwargs):
+
+
 def timeout_func(timeout: int, func: Callable, *args, **kwargs):
     """
     time out a func. signal.ALRM not working on Windows. therefore this
@@ -133,7 +140,8 @@ def timeout_func(timeout: int, func: Callable, *args, **kwargs):
     # how to pass args and kwargs
     #   https://stackoverflow.com/questions/38908663/python-multiprocessing-how-to-pass-kwargs-to-function
     # p = multiprocessing.Process(target=timeout_child, args=(child_conn, func, *args), kwargs=kwargs)
-    p = multiprocessing.Process(target=timeout_child, args=(child_conn, func, *args), kwargs=kwargs)
+    p = multiprocessing.Process(target=timeout_child, args=(
+        child_conn, func, *args), kwargs=kwargs)
 
     # kill child after parent exits
     # https://stackoverflow.com/questions/25542110/kill-child-process-if-parent-is-killed-in-python
@@ -170,6 +178,7 @@ def timeout_func(timeout: int, func: Callable, *args, **kwargs):
             # child finished but didn't return anything
             parent_conn.close()
 
+
 def module_sleep_and_tick(duration: int, *args, **opt) -> str:
     """
     this is local function:
@@ -186,9 +195,11 @@ def module_sleep_and_tick(duration: int, *args, **opt) -> str:
     print(message)
     return message
 
+
 def test_child_exception():
     time.sleep(1)
     raise RuntimeError("test exception")
+
 
 def main():
     print('------- test timeout_func_unix(). should work on Unix and fail on windows')
@@ -220,7 +231,8 @@ def main():
     print(f"type={type(module_sleep_and_tick)}")
     print('------- test timeout_func(). with function defined in module, should work but will time out')
     try:
-        result = timeout_func(2, module_sleep_and_tick, 10, message="should timeout")
+        result = timeout_func(2, module_sleep_and_tick,
+                              10, message="should timeout")
         tplog(f"result={pformat(result)}")
     except TimeoutException as e:
         tplog_exception(e)
@@ -229,7 +241,8 @@ def main():
     print('------- test timeout_func(). with function defined in main, may work on unix but should fail on windows '
           'with pickle error')
     try:
-        result = timeout_func(2, main_sleep_and_tick, 10, message="should timeout")
+        result = timeout_func(2, main_sleep_and_tick, 10,
+                              message="should timeout")
         tplog(f"result={pformat(result)}")
     except AttributeError as e:
         # AttributeError: Can't pickle local object 'main.<locals>.main_sleep_and_tick'
@@ -243,6 +256,7 @@ def main():
     except TimeoutException as e:
         tplog_exception(e)
         tplog("got expected exception\n\n")
+
 
 if __name__ == '__main__':
     main()

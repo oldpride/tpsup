@@ -94,12 +94,48 @@ our_cfg = {
             },
             'comment': "comment from entity={{entity}}.\n",
         },
+
+        'trades': {
+            'method': 'db',
+            'method_cfg': {
+                'db': 'tptest@tpdbmssql',
+                'db_type': 'mssql',
+                'where_clause': {
+                    # one order can have multiple trades
+                    'TRADEID': 'tradeid',
+                    'ORDERID': 'orderid',
+                    'SID': 'sid',
+                    'ORDERQTY': {'column': 'qty',
+                                 'numeric': 1,
+                                 'clause': "qty <= {{opt_value}}",
+                                 'update_knowledge': 0,
+                                 },
+                    'FILLEDQTY': {'column': 'qty',
+                                  'numeric': 1,
+                                  'clause': "qty <= {{opt_value}}",
+                                  'update_knowledge': 0,
+                                  },
+                    'TRADEQTY': {'column': 'qty', 'numeric': 1, },
+                    'TRADEPRICE':  {'column': 'Price', 'numeric': 1},
+                    'TARGETCOMP': 'TargetComp',
+                    'YYYYMMDD': {'clause': "CAST(TradeDate as DATE) = '{{opt_value}}'",
+                                 'update_knowledge': 0,
+                                 }
+                },
+                'order_clause': 'order by LastUpdateTime',
+                'example_clause': "TradeDate >= '{{yyyy}}{{mm}}{{dd}}'",
+            },
+            'comment': "comment from entity={{entity}}.\n",
+        },
     },
+
 
     'extra_keys': ['example', 'security', 'YYYYMMDD'],
 
     'alias_map': {
         'sec': 'security',
+        'oid': 'orderid',
+        'tid': 'tradeid',
     },
 
     'extend_key_map': [
@@ -115,8 +151,8 @@ our_cfg = {
         # use a array to enforce the order
         # known keys => table list
         # [['BOOKID'], ['booking', 'trades']],
-        # [['TRADEID'], ['trades']],
-        # [['ORDERID'], ['orders']],
+        [['TRADEID'], ['trades']],
+        [['ORDERID'], ['orders']],
         # [['SID', 'QTY'], ['orders']],
         # [[], ['orders']],  # this is default
     ],
@@ -125,6 +161,7 @@ our_cfg = {
     'trace_route': [
         # 'test_code',
         {'entity': 'orders', 'condition': '"YYYYMMDD" in known'},
+        {'entity': 'trades', 'AllowZero': 1},
 
 
         # below are untested
