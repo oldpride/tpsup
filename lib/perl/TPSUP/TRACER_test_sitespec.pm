@@ -114,6 +114,7 @@ my $has_updated_security_knowledge;
 sub update_security_knowledge {
    my ($known, $key, $opt) = @_;
 
+   # because we only concern 1 security, therefore, we only need to update once.
    return if $has_updated_security_knowledge;
 
    $has_updated_security_knowledge++;

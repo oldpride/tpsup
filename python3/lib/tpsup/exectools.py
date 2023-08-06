@@ -203,32 +203,69 @@ def shift_indent(source: str, **opt):
     return "\n".join(lines)
 
 
-def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print_return=False, **opt):
+def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print_return=True, **opt):
+    verbose = opt.get("verbose", 0)
     import inspect
     # we import here because this is a test function.
 
-    lines = inspect.getsource(f)
+    source = inspect.getsource(f)
     # get the source code of the function, including comments and blank lines.
+
+    print(f"source = \n{source}")
+
+    lines = source.split('\n')
 
     skip_pattern = re.compile(r'^\s*#|^\s*$|^\s*def\s')
     # skip blank lines, comments, and function definition
 
-    for line in lines.split('\n'):
-        if skip_pattern.match(line):
+    lines2 = [l for l in lines if not skip_pattern.match(l)]
+    source2 = '\n'.join(lines2)
+
+    print(f"source2 = \n{source2}")
+
+    # align code to the left. this way, we can tell line continuation by checking indent.
+    sources3 = correct_indent(source2, **opt)
+
+    print(f"sources3 = \n{sources3}")
+
+    last_line = None
+    for line in sources3.split('\n'):
+        if line.startswith('\s'):
+            # this is a continuation of last line
+            if last_line is None:
+                raise RuntimeError(
+                    f"line continuation at the beginning of the code")
+            last_line = last_line + '\n' + line
             continue
-        print()
-        print(f"run: {line}")
 
-        combined_globals = {**source_globals, **globals()}
-        combined_locals = {**source_locals, **locals()}
+        # now that this line has no indent, therefore, last line is complete.
+        if last_line is None:
+            # this is the first line
+            last_line = line
+            continue
 
-        # exec_into_globals(line, combined_globals, combined_locals)
-        ret = eval_block(line, combined_globals, combined_locals, **opt)
-        if print_return or opt.get("add_return", False):
-            # print_return vs add_return:
-            # - print_return is for test_lines() itself.
-            # - add_return is for eval_block()
-            print(f"return: {ret}")
+        test_1_line(last_line, source_globals, source_locals, **opt)
+
+        last_line = line
+
+    test_1_line(last_line, source_globals, source_locals, **opt)
+
+
+def test_1_line(line: str, source_globals={}, source_locals={}, print_return=True, **opt):
+    print()
+    print("--------------------")
+    print(f"run: {line}")
+
+    combined_globals = {**source_globals, **globals()}
+    combined_locals = {**source_locals, **locals()}
+
+    # exec_into_globals(line, combined_globals, combined_locals)
+    ret = eval_block(line, combined_globals, combined_locals, **opt)
+    if print_return or opt.get("add_return", False):
+        # print_return vs add_return:
+        # - print_return is for test_lines() itself.
+        # - add_return is for eval_block()
+        print(f"return: {ret}")
 
 
 def main():
@@ -246,10 +283,12 @@ def main():
     print("--------------------")
 
     def test_code():
-        print(correct_indent(code, verbose=1))
-        print(shift_indent(code, shift_space_count=4))
-        print(shift_indent(code, shift_space_count=-4))
-        print(shift_indent(code, shift_tab_count=-1))
+        correct_indent(code, verbose=1)
+        shift_indent(code, shift_space_count=4)
+        shift_indent(code, shift_space_count=-4)
+        shift_indent(code, shift_tab_count=-1)
+        print('multiline test', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, {
+              'a': 1, 'b': 2}, [1, 2, 3], {'hello': 'world'})
 
     test_lines(test_code, globals(), locals())
     print("--------------------")

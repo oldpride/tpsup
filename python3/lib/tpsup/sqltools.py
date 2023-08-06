@@ -24,11 +24,11 @@ import sys
 from typing import List, Literal, Union
 
 import tpsup.csvtools
-import tpsup.csvtools
 import tpsup.env
 from tpsup.lock import tpsup_unlock
 import tpsup.print
 from pprint import pformat
+from tpsup.tplog import log_FileFuncLine, log_FileFuncLineObj
 
 
 class Conn:
@@ -139,7 +139,9 @@ class TpDbh:
         elif re.match("^dbi:ODBC:.+", conn.dbi_string, re.IGNORECASE):
             conn_string = f'DRIVER={conn.driver};SERVER={conn.server};DATABASE={conn.database};UID={conn.login};' \
                           f'PWD={conn.unlocked_password}'
-            self.dbh = pyodbc.connect(conn_string)
+            # https://stackoverflow.com/questions/7744742
+            # pyodc default not to auto commit.
+            self.dbh = pyodbc.connect(conn_string, autocommit=True)
         elif re.match("^dbi:mysql:.+", conn.dbi_string, re.IGNORECASE):
             # https://github.com/PyMySQL/PyMySQL
             self.dbh = pymysql.connect(host=conn.host,
@@ -168,8 +170,7 @@ class QueryResults:
         self.ReturnType = ReturnType
         self.need_close_dbh = False
         self.maxout = opt.get('maxout', -1)
-        # statement does not return rows
-        self.is_statement = opt.get('is_statement', False)
+        self.verbose = opt.get('verbose', 0)
 
         dbh = opt.get('dbh', None)
 
@@ -180,14 +181,37 @@ class QueryResults:
         self.cursor = dbh.cursor()
         self.dbh = dbh
         self.opt = opt
+        self.no_column = False
 
         try:
             self.cursor.execute(sql)
+
+            # dbh.commit()
+            # this was needed by pyodbc, but was replaced by autocommit=true
+
         except Exception as e:
             sys.stderr.write(f'failed to execute sql: {e}\n')
+            self.no_column = True
+            return
             # return None
 
-        if self.is_statement:
+        if self.cursor.rowcount != -1:
+            # insert/update/delete will set rowcount; but
+            # returns nothing else, ie, no column returned.
+            print(f'affected rows = {self.cursor.rowcount}')
+            self.no_column = True
+            return
+            # select/set/create/alter/drop will set rowcount to -1.
+
+        if self.verbose:
+            log_FileFuncLineObj('cursor.description', self.cursor.description)
+            print()
+
+        if self.cursor.description is None:
+            self.no_column = True
+            if self.cursor.rowcount == -1:
+                log_FileFuncLine(
+                    f"neither column returned nor rows affected: sql={sql}")
             return
 
         self.columns = [row[0] for row in self.cursor.description]
@@ -278,27 +302,65 @@ def parse_sql(sql: str, **opt):
         sqls = [s for s in sqls if s.strip() != '']
 
         if verbose > 1:
-            print(f'sqls = {sqls}')
+            log_FileFuncLine(f'sqls = \n{sqls}')
 
         return sqls
 
 
 def run_sql(sql: Union[str, list], **opt):
+    verbose = opt.get('verbose', 0)
+    sqls = []
+    is_single_sql = opt.get('is_single_sql', False)
     if isinstance(sql, str):
-        sqls = parse_sql(sql, **opt)
+        if is_single_sql:
+            sqls.append(sql)
+        else:
+            sqls.extend(parse_sql(sql, **opt))
     elif isinstance(sql, list):
-        sqls = sql
+        for s in sql:
+            if is_single_sql:
+                sqls.append(s)
+            else:
+                sqls.extend(parse_sql(s, **opt))
     else:
         raise RuntimeError(
             f'unsupported sql type: {type(sql)}, sql = {format(sql)}')
 
+    # 'GO' vs ';'
+    # https://stackoverflow.com/questions/1517527/what-is-the-difference-between-
+    # and-go-in-t-sql
+    # "
+    #    GO is not actually a T-SQL command. The GO command was introduced by Microsoft
+    #    tools as a way to separate batch statements such as the end of a stored
+    #    procedure. GO is supported by the Microsoft SQL stack tools but is not
+    #    formally part of other tools.
+    #    "GO" is similar to ; in many cases, but does in fact signify the end of a batch.
+    #    Each batch is committed when the "GO" statement is called, so if you have:
+    #       SELECT * FROM table-that-does-not-exist;
+    #       SELECT * FROM good-table;
+    #    in your batch, then the good-table select will never get called because the
+    #    first select will cause an error.
+    #
+    #    If you instead had:
+    #       SELECT * FROM table-that-does-not-exist
+    #       GO
+    #       SELECT * FROM good-table
+    #       GO
+    #    The first select statement still causes an error, but since the second statement
+    #    is in its own batch, it will still execute.
+    #    GO has nothing to do with committing a transaction.
+    # "
     ret = []
 
-    with TpDbh(**opt) as td:
+    with TpDbh(**opt) as dbh:
+        # 'with' calls __enter__()
+        # TpDBh.__enter__() returns a dbh
         for sql in sqls:
-            qr = QueryResults(sql, **opt)
-            if qr.is_statement:
-                # statement does not return rows
+            if verbose:
+                print(f'running single sql: {sql}', file=sys.stderr)
+            qr = QueryResults(sql, dbh=dbh,  **opt)
+
+            if qr.no_column:
                 continue
 
             ret2 = []
@@ -311,6 +373,16 @@ def run_sql(sql: Union[str, list], **opt):
 
             if opt.get("RenderOutput", False):
                 tpsup.print.render_arrays(ret2, **opt)
+            elif outfile := opt.get("SqlOutput", None):
+                if qr.ReturnType == 'DictList':
+                    ret3 = ret2
+                else:
+                    # convert ListList to DictList
+                    ret3 = []
+                    for row in ret2:
+                        ret3.append(dict(zip(qr.columns, row)))
+                tpsup.csvtools.write_dictlist_to_csv(
+                    ret3, qr.columns, outfile, **opt)
 
             ret.extend(ret2)
 
@@ -365,7 +437,7 @@ def main():
     print('------------------------')
     print(f'\ntest a mysql statement\n')
     run_sql(["SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;"],
-            nickname='tptest@tpdbmysql', is_statement=True)
+            nickname='tptest@tpdbmysql')
 
     print()
     print('------------------------')

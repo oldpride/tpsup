@@ -9,6 +9,8 @@ usage:
    $prog commit path
    $prog last   path
 
+   check out file from local depo; not from remote depo; 
+      very useful when need to restore when there is no internet.
    check out file with a different name: 'path' will be checked out as a new 'path'.old3
 
    'last' points to the last commit

@@ -25,6 +25,17 @@ examples = textwrap.dedent(f"""
     {prog} tian@tiandb "SHOW TABLES"
 
     {prog} -f ORACLE_USER@ORACLE_DB tpsql_test.sql
+
+    # prepare ms sql database for testing
+    {prog} -f tptest@tpdbmssql tptrace_test_db.sql
+
+    # run ms sql sql
+    {prog} tptest@tpdbmssql 'select name from sys.tables'
+    {prog} tptest@tpdbmssql 'select @@version'
+    {prog} tptest@tpdbmssql 'exec sp_who' # shows which user/database
+    {prog} -render tptest@tpdbmssql 'select * from orders' # print grid
+    {prog} -PrintNoHeader tptest@tpdbmssql 'select * from orders' # print no header
+    {prog} -maxout 2 tptest@tpdbmssql 'select * from orders' # print 2 rows
     """)
 
 parser = argparse.ArgumentParser(
@@ -37,8 +48,8 @@ parser.add_argument(
     'nickname', default=None, action='store', help='db nickname is defined in config file')
 
 parser.add_argument(
-    'statement', default=None, action='store',
-    help='sql statement')
+    'sql', default=None, action='store',
+    help='sql or sql file')
 
 parser.add_argument(
     '-c', '--connfile', dest="connfile", action='store', type=str,
@@ -51,12 +62,16 @@ parser.add_argument(
     '-d', '--delimiter', dest="SqlDelimiter", default=",", action='store', type=str, help="output delimiter")
 
 parser.add_argument(
-    '-f', '--sqlfile', action="store_true",
-    help="sql file instead of sql statement")
+    '-f', dest='is_sqlfile', action="store_true",
+    default=False, help='sql is a file')
 
 parser.add_argument(
     '-noheader', dest='PrintNoHeader', action="store_true",
     help="not to print header line")
+
+parser.add_argument(
+    '-render', dest='render', action="store_true",
+    help="render output in grid")
 
 parser.add_argument(
     '-maxout', dest='maxout', default=-1, type=int, action="store",
@@ -68,16 +83,27 @@ parser.add_argument(
 
 args = vars(parser.parse_args())
 
-if args['sqlfile']:
-    with open(args['statement'], 'r') as sqlfile:
-        statement = sqlfile.read()
+
+if args['is_sqlfile']:
+    with open(args['sql'], 'r') as sqlfile:
+        sql = sqlfile.read()
 else:
-    statement = args['statement']
+    sql = args['sql']
+
+# remove sql from args to avoid this error:
+# TypeError: run_sql() got multiple values for argument 'sql'
+args.pop('sql')
+
+if args['render']:
+    args['RenderOutput'] = 1
+    if args['PrintNoHeader']:
+        args['RenderHeader'] = 0
+    else:
+        args['RenderHeader'] = 1
 
 if args['verbose'] > 0:
     print(f'args =\n{pformat(args)}')
+    print(f'sql =\n{sql}')
 
-sys.exit(run_sql([statement], **args))
-
-
-
+run_sql(sql, **args)
+# sys.exit(run_sql(sql, **args))

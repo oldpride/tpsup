@@ -31,8 +31,12 @@ def get_FileFuncLine():
     return f"{os.path.basename(frame.filename)}:{frame.function}:{frame.lineno}"
 
 
-def log_FileFuncLine(msg: str, **opt):
-    print(f'{get_FileFuncLine()}: {msg}', **opt)
+def log_FileFuncLine(msg: str = None, **opt):
+    if msg is None:
+        string = ""
+    else:
+        string = f": {msg}"
+    print(f'{get_FileFuncLine()}{string}', **opt)
 
 
 def log_FileFuncLineObj(obj_name, obj, **opt):
