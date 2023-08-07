@@ -54,9 +54,10 @@ class Conn:
         self.connfile = connfile
         self.env = env
 
-        opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
+        # opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
 
-        dictlist = list(tpsup.csvtools.QueryCsv(connfile, **opt))
+        dictlist = list(tpsup.csvtools.QueryCsv(connfile, MatchExps=[
+                        f'r["nickname"] == "{nickname}"'], **opt))
 
         if len(dictlist) == 0:
             raise RuntimeError(
@@ -141,7 +142,9 @@ class TpDbh:
                           f'PWD={conn.unlocked_password}'
             # https://stackoverflow.com/questions/7744742
             # pyodc default not to auto commit.
-            self.dbh = pyodbc.connect(conn_string, autocommit=True)
+            self.dbh = pyodbc.connect(conn_string,
+                                      autocommit=True,
+                                      )
         elif re.match("^dbi:mysql:.+", conn.dbi_string, re.IGNORECASE):
             # https://github.com/PyMySQL/PyMySQL
             self.dbh = pymysql.connect(host=conn.host,
@@ -195,23 +198,23 @@ class QueryResults:
             return
             # return None
 
-        if self.cursor.rowcount != -1:
-            # insert/update/delete will set rowcount; but
-            # returns nothing else, ie, no column returned.
-            print(f'affected rows = {self.cursor.rowcount}')
-            self.no_column = True
-            return
-            # select/set/create/alter/drop will set rowcount to -1.
-
         if self.verbose:
-            log_FileFuncLineObj('cursor.description', self.cursor.description)
+            log_FileFuncLineObj('cursor.description=\n',
+                                self.cursor.description)
             print()
 
         if self.cursor.description is None:
             self.no_column = True
-            if self.cursor.rowcount == -1:
-                log_FileFuncLine(
-                    f"neither column returned nor rows affected: sql={sql}")
+
+            if self.cursor.rowcount != -1:
+                # insert/update/delete will set rowcount; but
+                # returns nothing else, ie, no column returned.
+                print(f'affected rows = {self.cursor.rowcount}')
+                # select/set/create/alter/drop will set rowcount to -1.
+            else:
+                if self.verbose:
+                    log_FileFuncLine(
+                        f"neither column returned nor rows affected: sql={sql}")
             return
 
         self.columns = [row[0] for row in self.cursor.description]
@@ -355,10 +358,15 @@ def run_sql(sql: Union[str, list], **opt):
     with TpDbh(**opt) as dbh:
         # 'with' calls __enter__()
         # TpDBh.__enter__() returns a dbh
+
+        opt2 = {}
+        if 'dbh' not in opt:
+            opt2['dbh'] = dbh
+
         for sql in sqls:
             if verbose:
                 print(f'running single sql: {sql}', file=sys.stderr)
-            qr = QueryResults(sql, dbh=dbh,  **opt)
+            qr = QueryResults(sql, **opt, **opt2)
 
             if qr.no_column:
                 continue

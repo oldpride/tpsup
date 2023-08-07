@@ -42,7 +42,7 @@ def get_sids_by_security(security: str, **opt):
             # MaxColumnWidth => $entity_cfg->{MaxColumnWidth},
         }
 
-        print(f'sql {db} "{sql}"')
+        print(f'sql.py {db} "{sql}"')
 
     result = run_sql(sql, nickname=db, ReturnType="ListList")
 
@@ -142,9 +142,9 @@ def update_security_knowledge(known: dict, key: str, **opt):
 def main():
     def test_codes():
         get_sids_by_security('IBM')
-        get_security_by_sid('40000', verbose=1)
+        get_security_by_sid('400001', verbose=1)
         update_security_knowledge(
-            {'BOOKID': '3000001', 'SID': '40000'}, 'SID', verbose=1)
+            {'BOOKID': '3000001', 'SID': '400001'}, 'SID', verbose=1)
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals())

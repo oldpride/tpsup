@@ -8,6 +8,8 @@ import types
 from pprint import pformat
 from typing import Dict, List, Union, Callable
 
+from tpsup.tplog import log_FileFuncLine
+
 
 # https://docs.python.org/3/library/typing.html
 # https://stackoverflow.com/questions/38727520/adding-default-parameter-value-with-type-hint-in-python
@@ -66,7 +68,7 @@ def stringdict_to_funcdict(stringdict: Dict[str, str], funcdict_name: str, is_ex
     """ convert dictionary of strings into a dictionary of functions"""
 
     if opt.get('verbose'):
-        print(f'stringdict = {pformat(stringdict)}')
+        log_FileFuncLine(f'stringdict = {pformat(stringdict)}')
 
     # escape in f string, use double curlies
     # https://stackoverflow.com/questions/42521230/how-to-escape-f-strings-in-python-3-6
@@ -98,7 +100,8 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
 
     if logic == 'and':
         if strings is not None:
-            statements.extend([f'    if not ({s}): return False' for s in strings])
+            statements.extend(
+                [f'    if not ({s}): return False' for s in strings])
         statements.append(f'    return True')
     elif logic == 'or':
         if strings is not None:
@@ -110,11 +113,10 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
     return '\n'.join(statements)
 
 
-
 def load_module(source: Union[str, types.CodeType, types.FunctionType],
                 new_module_name=None,
-                function_name:str = "default_function", imp:Dict={}
-    ) -> types.ModuleType:
+                function_name: str = "default_function", imp: Dict = {}
+                ) -> types.ModuleType:
     """
     compile the source code into executable using an external module
         str:  source code
@@ -125,7 +127,8 @@ def load_module(source: Union[str, types.CodeType, types.FunctionType],
         new_module_name = inspect.stack()[1][3]
     # https://stackoverflow.com/questions/32175693/python-importlibs-analogue-for-imp-new-module
     # mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
-    mod = sys.modules.setdefault(new_module_name, types.ModuleType(new_module_name))
+    mod = sys.modules.setdefault(
+        new_module_name, types.ModuleType(new_module_name))
 
     source_type = type(source)
 
@@ -141,24 +144,24 @@ def load_module(source: Union[str, types.CodeType, types.FunctionType],
     mod.__file__ = new_module_name
     mod.__package__ = ''
     mod.__dict__.update(imp)
-    #print(f'mod.__dict__ = {pformat(mod.__dict__)}')
+    # print(f'mod.__dict__ = {pformat(mod.__dict__)}')
     exec(code, mod.__dict__)
     if source_type == types.FunctionType:
         setattr(mod, function_name, source)
     elif source_type == types.CodeType:
-        f = types.FunctionType(source, {}, function_name, None, None )
+        f = types.FunctionType(source, {}, function_name, None, None)
         f.__qualname__ = function_name
     return mod
 
 
-def run_module(mod: str, mod_type: str = 'string', imp:Dict={}, **opt):
+def run_module(mod: str, mod_type: str = 'string', imp: Dict = {}, **opt):
     verbose = opt.get('verbose', 0)
 
     if mod is None:
         if verbose:
             print('mod_file is None. skipped', file=sys.stderr)
             if verbose > 1:
-                traceback.print_stack() # default to stderr, set file=sys.stdout for stdout
+                traceback.print_stack()  # default to stderr, set file=sys.stdout for stdout
         return
 
     if mod_type == 'file':
@@ -175,17 +178,20 @@ def run_module(mod: str, mod_type: str = 'string', imp:Dict={}, **opt):
         sys.stderr.write(f"dryrun mode: {mod} compiled successfully\n")
     else:
         sys.stderr.write(f"running: {mod}\n")
-        return module.run(mod_file=mod, **opt)  # pycharm had a warning here. I set to ignore
+        # pycharm had a warning here. I set to ignore
+        return module.run(mod_file=mod, **opt)
 
-def get_non_buildins(dict:Dict):
+
+def get_non_buildins(dict: Dict):
     ret = {}
     compiled_pattern = re.compile(r'__')
-    for k,v in dict.items():
+    for k, v in dict.items():
         m = compiled_pattern.match(k)
         if m:
             continue
-        ret.update({k:v})
+        ret.update({k: v})
     return ret
+
 
 def main():
     print('------ test load_module() by source code (str)')
@@ -215,7 +221,6 @@ test_dict = {'a': {'b': 1}, 'c': 'hello'}
     mod.f_in_module(2)
 
     pprint.pprint(mod.test_dict)
-
 
 
 if __name__ == '__main__':

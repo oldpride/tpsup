@@ -6,18 +6,21 @@ import pkgutil
 import sys
 from pprint import pformat
 from tpsup.tpfile import TpInput, TpOutput
+from tpsup.tplog import log_FileFuncLine
 from tpsup.util import silence_BrokenPipeError
 from tpsup.modtools import load_module, stringdict_to_funcdict, strings_to_compilable_func, \
     strings_to_compilable_patterns
+
 
 def filter_dicts(dict_iter, columns, **opt):
     verbose = opt.get('verbose', 0)
 
     if verbose:
-        sys.stderr.write(f'opt =\n{pformat(opt)}\n')
+        log_FileFuncLine(f'opt =\n{pformat(opt)}\n', file=sys.stderr)
 
     if columns is not None:
-        out_fields = list(columns)  # make a copy to avoid changing original parameter
+        # make a copy to avoid changing original parameter
+        out_fields = list(columns)
     else:
         out_fields = []
 
@@ -39,7 +42,8 @@ def filter_dicts(dict_iter, columns, **opt):
         # this file is imported as module
         helper_data = pkgutil.get_data(__package__, helper_file)
         if helper_data is None:
-            raise RuntimeError(f"missing {helper_file} or __init__.py in the same folder of csvtools.py")
+            raise RuntimeError(
+                f"missing {helper_file} or __init__.py in the same folder of csvtools.py")
         helper_source = helper_data.decode('utf-8')
         source_list.append(helper_source)
     else:
@@ -55,7 +59,8 @@ def filter_dicts(dict_iter, columns, **opt):
 
     for attr, logic in [('MatchExps', 'and'), ('ExcludeExps', 'or')]:
         _list = opt.get(attr, [])
-        source_list.append(strings_to_compilable_func(_list, attr, logic=logic, verbose=verbose))
+        source_list.append(strings_to_compilable_func(
+            _list, attr, logic=logic, verbose=verbose))
 
     for attr in ['TempExps', 'ExportExps']:
         _dict = {}
@@ -71,12 +76,13 @@ def filter_dicts(dict_iter, columns, **opt):
                     (key, value) = pair.split("=", 1)
                     _dict[key] = value
 
-        source_list.append(stringdict_to_funcdict(_dict, attr, is_exp=1, verbose=verbose))
+        source_list.append(stringdict_to_funcdict(
+            _dict, attr, is_exp=1, verbose=verbose))
 
     source = '\n\n'.join(source_list)
 
     if verbose >= 2:
-        print(f'source =\n{source}\n')
+        log_FileFuncLine(f'source =\n{source}\n')
 
     if opt.get('SaveSource'):
         with open(opt['SaveSource'], 'wt') as f:
@@ -250,7 +256,8 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
         # >>> isinstance(sys.stdout, io.TextIOBase)
         # True
 
-        writer = csv.DictWriter(ofh, fieldnames=columns, delimiter=delimiter, lineterminator=os.linesep)
+        writer = csv.DictWriter(ofh, fieldnames=columns,
+                                delimiter=delimiter, lineterminator=os.linesep)
         if ofh is sys.stdout:
             writer.writeheader = silence_BrokenPipeError(writer.writeheader)
             writer.writerow = silence_BrokenPipeError(writer.writerow)
@@ -276,7 +283,8 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
             with io.TextIOWrapper(filename, encoding='utf-8', newline='') as ofh:
                 output_rows_to_ofh()
         else:
-            raise RuntimeError(f"io type = {type(filename)}\nclass tree = {inspect.getmro(type(filename))}")
+            raise RuntimeError(
+                f"io type = {type(filename)}\nclass tree = {inspect.getmro(type(filename))}")
     else:
         with TpOutput(filename, **opt) as unknown:
             if isinstance(unknown, io.TextIOBase):
@@ -286,11 +294,13 @@ def write_dictlist_to_csv(dict_iter, columns, filename, **opt):
                 with io.TextIOWrapper(unknown, encoding='utf-8', newline='') as ofh:
                     output_rows_to_ofh()
 
-def csv_to_dicts(filename:str, **opt):
+
+def csv_to_dicts(filename: str, **opt):
     dicts = []
     for row in QueryCsv(filename=filename,  **opt):
         dicts.append(row)
     return dicts
+
 
 def main():
     verbose = 0
@@ -316,7 +326,8 @@ def main():
             writer.writerow(r.values())
 
     print('\ntest3\n')
-    qc = QueryCsv(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose)
+    qc = QueryCsv(filename=file, MatchPatterns=[
+                  ',S'], ExcludePatterns=['Stephen'], verbose=verbose)
     qc.output(filename='-')
     qc.close()
 

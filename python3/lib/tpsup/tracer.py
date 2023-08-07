@@ -435,7 +435,7 @@ def process_db(entity: str, method_cfg: dict, **opt):
         # if is_statement=true, no rows will be returned from run_sql()
         tpsup.sqltools.run_sql(mysql_setting, dbh=dbh, is_statement=True)
 
-    print(f"sql {db} \"{sql}\"\n\n")
+    print(f"sql.py {db} \"{sql}\"\n\n")
     result: list = tpsup.sqltools.run_sql(sql, dbh=dbh, RenderOutput=verbose,
                                           ReturnType='ListList',  # array of arrays. 1st row is header
                                           ReturnDetail=True,
@@ -1507,11 +1507,11 @@ def trace(given_cfg, input, **opt):
                     result[entity] = process_entity(entity, entity_cfg, **opt)
                 except Exception as e:
                     # don't print stack trace for easy understanding errors.
-                    if not re.search(r'\(no need stack trace\)', e):
+                    if not re.search(r'\(no need stack trace\)', f'{e}', re.MULTILINE):
                         print(e)
                     if not ForceThrough:
-                        raise RuntimeError(
-                            f"entity={entity} failed. aborting")
+                        print(f"entity={entity} failed. aborting")
+                        exit(1)
 
             break  # only process the first match in entry point
 

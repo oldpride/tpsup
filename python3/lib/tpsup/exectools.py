@@ -316,7 +316,7 @@ def test_1_line(line: str, source_globals={}, source_locals={}, print_return=Tru
         # print_return vs add_return:
         # - print_return is for test_lines() itself.
         # - add_return is for eval_block()
-        print(f"return: {ret}")
+        print(f"return: \n{pprint.pformat(ret)}")
 
 
 def main():
