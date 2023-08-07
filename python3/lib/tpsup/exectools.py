@@ -1,5 +1,6 @@
 import types
 import re
+from typing import Literal, Union
 from tpsup.util import print_string_with_line_numer
 import pprint
 from tpsup.tplog import log_FileFuncLine
@@ -124,20 +125,18 @@ def eval_block(_source: str, _globals, _locals, **opt):
 
     # wrap the code block into a function so that eval() a single expression.
     # see above for explanation.
-    source = f'def tp_exec_func():\n' + shift_indent(correct_indent(_source),
-                                                     shift_space_count=4,
-                                                     add_return=True,
-                                                     )
+    _source2 = f'def tp_exec_func():\n' + \
+        add_return(shift_indent(correct_indent(_source), shift_space_count=4,))
     if verbose:
-        print(f"source = \n{source}")
-    exec_into_globals(source, _globals, _locals, **opt)
+        print(f"_source = \n{_source2}")
+    exec_into_globals(_source2, _globals, _locals, **opt)
     _ret = None
     try:
         _ret = _globals['tp_exec_func']()
         return _ret
     except Exception as e:
         print()
-        print_string_with_line_numer(source)
+        print_string_with_line_numer(_source2)
         print()
         raise e
 
@@ -186,21 +185,73 @@ def shift_indent(source: str, **opt):
         return source
 
     lines = source.split("\n")
-    real_line_pattern = re.compile(r"^(\s*)[^#\s]")
-    last = None
+
     for i in range(len(lines)):
         if shift_space_count > 0:
             lines[i] = " " * shift_space_count + lines[i]
         else:
             lines[i] = lines[i][-shift_space_count:]
-        if real_line_pattern.search(lines[i]):
-            last = i
-    if opt.get("add_return", False):
-        # add return to the last line if it is not there
-        if not re.search(r"^\s*return", lines[last]):
-            lines[last] = re.sub(r"^(\s*)", r"\1return ", lines[last])
 
     return "\n".join(lines)
+
+
+real_line_pattern = None
+
+
+def add_return(source: Union[str, list], ReturnLocation: Literal['LastLine', 'LastFront'] = 'LastFront', **opt):
+    # this function add a return to the last line of the source code.
+    # example, change from
+    #     a=1
+    #     a+3
+    # to
+    #     a=1
+    #     return a+3
+    #
+    # LastLine vs LastFront
+    # example:
+    #     print("hello",      # LastFront
+    #          "world")       # LastLine
+
+    source_type = type(source)
+
+    if source_type is list:
+        lines = source
+    elif source_type is str:
+        lines = source.split("\n")
+    else:
+        raise RuntimeError(f"source type {source_type} not supported")
+
+    global real_line_pattern
+    if real_line_pattern is None:
+        # non-blank, non-comment line
+        real_line_pattern = re.compile(r"^(\s*)([^#\s].*)")
+
+    lastLine = None
+    lastFront = None
+    minimal_indent = None
+
+    for i in range(len(lines)):
+        if m := real_line_pattern.search(lines[i]):
+            indent, real_stuff = m.groups()
+            if minimal_indent is None:
+                minimal_indent = len(indent)
+                lastFront = i
+            elif len(indent) <= minimal_indent:
+                minimal_indent = len(indent)
+                lastFront = i
+            lastLine = i
+    if ReturnLocation == 'LastFront':
+        last = lastFront
+    else:
+        last = lastLine
+    if not re.search(r"^\s*return", lines[last]):
+        lines[last] = re.sub(r"^(\s*)", r"\1return ", lines[last])
+
+    # return type keep the same as source type.
+    if source_type is list:
+        return lines
+    else:
+        return "\n".join(lines)
 
 
 def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print_return=True, **opt):
@@ -230,7 +281,7 @@ def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print
 
     last_line = None
     for line in sources3.split('\n'):
-        if line.startswith('\s'):
+        if line.startswith(' '):  # line.startswith('\s') does not work
             # this is a continuation of last line
             if last_line is None:
                 raise RuntimeError(
