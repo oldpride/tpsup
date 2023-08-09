@@ -1311,6 +1311,8 @@ def apply_csv_filter_href(filter1: Union[dict, None], **opt):
 
 
 def apply_csv_filter(filters: Union[list, dict, None], **opt):
+    verbose = opt.get('verbose', 0)
+
     if not filters:
         return
 
@@ -1368,8 +1370,8 @@ def apply_csv_filter(filters: Union[list, dict, None], **opt):
     # convert generator to list
     hashes = list(hashes_gen)
 
-    log_FileFuncLine(f"hashes = {pformat(hashes)}")
-    exit(0)
+    if verbose:
+        log_FileFuncLine(f"hashes = {pformat(hashes)}")
     if hashes:
         headers = hashes[0].keys()
         tpsup.print.render_arrays(hashes,
