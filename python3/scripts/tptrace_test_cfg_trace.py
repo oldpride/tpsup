@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+from pprint import pformat
 import tpsup.env
 import os
+from tpsup.tracer_test_sitespec import update_security_knowledge
 
 # convert above to python
 our_cfg = {
@@ -70,12 +72,14 @@ our_cfg = {
         'orders': {
             'method': 'db',
             'method_cfg': {
-                'db': 'tptest@tpdbmysql',
-                'db_type': 'mysql',
+                'db': 'tptest@tpdbmssql',
+                'db_type': 'mssql',
+                # 'db': 'tptest@tpdbmysql',
+                # 'db_type': 'mysql',
                 'where_clause': {
                     'ORDERID': 'orderid',
                     'SID': 'sid',
-                    'ORDERQTY': {'column': 'orderqty', 'numeric': 1},
+                    'ORDERQTY': {'numeric': 1, 'clause': "orderqty <= {{opt_value}}"},
                     'LASTQTY': {'column': 'lastqty', 'numeric': 1},
                     'FILLEDQTY': {'column': 'filledqty', 'numeric': 1},
                     'SENDERCOMP': 'SenderComp',
@@ -127,6 +131,92 @@ our_cfg = {
             },
             'comment': "comment from entity={{entity}}.\n",
         },
+        #     'a': '''
+        #   actions => {
+        #      method => 'db',
+        #      method_cfg =>{
+        #         db => 'tptest@tpdbmssql',
+        #         db_type => 'mssql',
+        #         where_clause => {
+        #            # one order can have multiple trades
+        #            ORDERID => 'msgid',
+        #            FILLEDQTY => { column=>'filledqty', numeric=>1},
+        #         },
+        #         #order_clause => 'order by LastUpdateTime',
+        #         #example_clause => "TradeDate >= '{{yyyy}}{{mm}}{{dd}}'",
+        #         # Id,MsgId,STATUS,FilledQty
+        #         # 1,ORD-0001,,
+        #         # 2,ORD-0001,SENT,
+        #         # 3,ORD-0001,PARTIAL,600
+        #         # 4,ORD-0001,COMPLETED,1000
+        #      },
+        #      csv_filter => [
+        #         [
+        #           [ ], # depending keys, like entry_points
+        #           {
+        #            ExportExps => [
+        #               'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+        #               ],
+        #             SortKeys => [ 'weight' ],
+        #           },
+        #         ]
+        #      ],
+        #      # csv_filter => {
+        #      #   ExportExps => [
+        #      #      'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+        #      #      ],
+        #      #   SortKeys => [ 'weight' ],
+        #      # },
+        #      comment => 'trace in trades table',
+        #      AllowMultiple=>1,
+        #      top=>1,
+        #      # to test:
+        #      #     tptrace_test -t actions orderid=ORD-0001
+        #   },''',
+        # convert
+        'actions': {
+            'method': 'db',
+            'method_cfg': {
+                'db': 'tptest@tpdbmssql',
+                'db_type': 'mssql',
+                'where_clause': {
+                    # one order can have multiple trades
+                    'ORDERID': 'msgid',
+                    'FILLEDQTY': {'column': 'filledqty', 'numeric': 1},
+                },
+                # order_clause => 'order by LastUpdateTime',
+                # example_clause => "TradeDate >= '{{yyyy}}{{mm}}{{dd}}'",
+                # Id,MsgId,STATUS,FilledQty
+                # 1,ORD-0001,,
+                # 2,ORD-0001,SENT,
+                # 3,ORD-0001,PARTIAL,600
+                # 4,ORD-0001,COMPLETED,1000
+            },
+            'csv_filter': [
+                [
+                    [],  # depending keys, like entry_points
+                    {
+                        'ExportExps': [
+                            # use ternary operator to make kv pair.
+                            'weight=0 if r["STATUS"] == "COMPLETED" else 1 if r["STATUS"] == "PARTIAL" else 2',
+                        ],
+                        'SortKeys': ['weight'],
+                    },
+                ]
+            ],
+            # csv_filter => {
+            #   ExportExps => [
+            #      'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+            #      ],
+            #   SortKeys => [ 'weight' ],
+            # },
+            'comment': 'trace in trades table',
+            'AllowMultiple': 1,
+            'top': 1,
+            # to test:
+            #     tptrace_test -t actions orderid=ORD-0001
+        },
+
     },
 
 
@@ -143,8 +233,8 @@ our_cfg = {
         #    for example, if I know SEDOL, I will know CUSIP.
         # use a array to enforce the order.
         # extender function, first arg is ref to $known, second arg is new value
-        # ['SECURITY', 'update_security_knowledge'],
-        # ['SEDOL', 'update_security_knowledge'],
+        ['SECURITY', update_security_knowledge],
+        ['SEDOL', update_security_knowledge],
     ],
 
     'entry_points': [
@@ -162,16 +252,24 @@ our_cfg = {
         # 'test_code',
         {'entity': 'orders', 'condition': '"YYYYMMDD" in known'},
         {'entity': 'trades', 'AllowZero': 1},
-
+        'actions',
 
         # below are untested
         # 'app_cmd_pipe',
         # {'entity': 'trades', 'AllowZero': 1},
         # 'booking',
-        # 'actions',
         # {'entity': 'orders',
 
     ],
+
+    'usage_example':  '''
+    {{prog}} example=orders
+    
+    {{prog}} tid=123
+    {{prog}} sec=IBM orderqty=26,700 yyyymmdd=20211129
+    {{prog}} sec=IBM filledqty=400 client=xyz
+    {{prog}} sec=IBM client=xyz orderqty=1,500 # test the customized clause
+    ''',
 
 }
 
@@ -179,7 +277,7 @@ our_cfg = {
 
 
 def get_log_example(arg1, known):
-    print(f'get_log_example() get knowledge={known}')
+    print(f'get_log_example() get knowledge={pformat(known)}')
     print(f'get_log_example() arg1={arg1}')
 
     import os

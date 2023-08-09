@@ -3,11 +3,12 @@ import inspect
 import io
 import os
 import pkgutil
+import re
 import sys
 from pprint import pformat
 from tpsup.tpfile import TpInput, TpOutput
 from tpsup.tplog import log_FileFuncLine
-from tpsup.util import silence_BrokenPipeError
+from tpsup.util import convert_kvlist_to_dict, silence_BrokenPipeError
 from tpsup.modtools import load_module, stringdict_to_funcdict, strings_to_compilable_func, \
     strings_to_compilable_patterns
 
@@ -24,9 +25,21 @@ def filter_dicts(dict_iter, columns, **opt):
     else:
         out_fields = []
 
-    ExportExps = opt.get('ExportExps', {})
+    ExportExps = opt.get('ExportExps', None)
+
     if ExportExps is not None:
-        out_fields.extend(dict(ExportExps).keys())
+        # ExportExps could be a dict or a list of key=value strings
+
+        if isinstance(ExportExps, list):
+            # format is kvlist: key=expression.
+            # we need to convert it to dict
+            ExportExps = convert_kvlist_to_dict(ExportExps)
+
+        if isinstance(ExportExps, dict):
+            out_fields.extend(ExportExps.keys())
+        else:
+            raise RuntimeError(
+                f'ExportExps must be a dict or a list of key=value strings, actual type={type(ExportExps)}, value={pformat(ExportExps)}')
 
     # import pdb; pdb.set_trace();
 
@@ -143,9 +156,20 @@ class QueryCsv:
                 #   File "/usr/lib/python3.6/csv.py", line 143, in writeheader
                 #     header = dict(zip(self.fieldnames, self.fieldnames))
                 # TypeError: zip argument #1 must support iteration
-        ExportExps = self.opt.get('ExportExps', {})
+        ExportExps = self.opt.get('ExportExps', None)
         if ExportExps is not None:
-            self.columns.extend(dict(ExportExps).keys())
+            # ExportExps could be a dict or a list of key=value strings
+
+            if isinstance(ExportExps, list):
+                # format is kvlist: key=expression.
+                # we need to convert it to dict
+                ExportExps = convert_kvlist_to_dict(ExportExps)
+
+            if isinstance(ExportExps, dict):
+                self.columns.extend(dict(ExportExps).keys())
+            else:
+                raise RuntimeError(
+                    f'ExportExps must be a dict or a list of key=value strings. actual type={type(ExportExps)}, value={pformat(ExportExps)}')
 
         return self
 

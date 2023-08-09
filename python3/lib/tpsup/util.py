@@ -545,6 +545,55 @@ def hashes_to_arrays(hashes, headers):
     return arrays
 
 
+def convert_kvlist_to_dict(kvlist: list, **opt):
+    # kvlist is a list of key=value
+    # example:
+    #   kvlist = [
+    #       'k1=v1',
+    #       'k2=v2',
+    #   ]
+    #   convert_kvlist_to_dict(kvlist)
+    #   => {'k1': 'v1', 'k2': 'v2'}
+
+    dict1 = {}
+
+    if not kvlist:
+        return dict1
+
+    for kv in kvlist:
+        if m := re.match(r"(\w+)=(.*)", kv):
+            k, v = m.groups()
+            dict1[k] = v
+        else:
+            raise Exception(f"bad kv='{kv}'")
+
+    return dict1
+
+
+def convert_dict_to_kvlist(dict1: dict, **opt):
+    # kvlist is a list of key=value
+    # example:
+    #   dict1 = {
+    #       'k1': 'v1',
+    #       'k2': 'v2',
+    #   }
+    #   convert_dict_to_kvlist(dict1)
+    #   => [
+    #       'k1=v1',
+    #       'k2=v2',
+    #   ]
+
+    kvlist = []
+
+    if not dict1:
+        return kvlist
+
+    for k, v in dict1.items():
+        kvlist.append(f"{k}={v}")
+
+    return kvlist
+
+
 def main():
     # def test_code():
     #     print(__file__)

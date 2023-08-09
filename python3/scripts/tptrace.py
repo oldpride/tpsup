@@ -49,18 +49,19 @@ def usage(message: str = None, **opt):
     if detail:
         detail = resolve_scalar_var_in_string(detail, {'prog': usage_caller})
 
-    if example:
-        example = resolve_scalar_var_in_string(
-            example, {'prog': example_caller})
-    else:
-        example = f'''
-    {example_caller} example=orders
+    if example is None:
+
+        example = '''
+    {{prog}} example=orders
     
-    {example_caller} tid=123
-    {example_caller} sec=ABC orderqty=26,700 yyyymmdd=20211129
-    {example_caller} sec=ABC filledqty=400 client=xyz
-    {example_caller} sec=ABC client=xyz orderqty=1,500 # test the customized clause
+    {{prog}} tid=123
+    {{prog}} sec=IBM orderqty=26,700 yyyymmdd=20211129
+    {{prog}} sec=IBM filledqty=400 client=xyz
+    {{prog}} sec=IBM client=xyz orderqty=1,500 # test the customized clause
 '''
+
+    example = resolve_scalar_var_in_string(
+        example, {'prog': example_caller})
 
     usage_top = all_cfg.get('usage_top', None)
     if not usage_top:

@@ -181,12 +181,21 @@ def process_code(entity: str, method_cfg: dict, **opt):
     return
 
 
-compiled_where_by_key = {}
 decommify_pattern = re.compile(r',')
 
 
 def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
+    verbose = opt.get('verbose', 0)
     global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
+
+    # this cannot be global because key can dup between entities.
+    compiled_where_by_key = {}
+
+    def get_compiled_where(key: str):
+        if key not in compiled_where_by_key:
+            compiled_where_by_key[key] = re.compile(f'{{{{where::{key}}}}}')
+        return compiled_where_by_key[key]
+
     footer = ""
     MaxExtracts = opt.get('MaxExtracts', None)
     template = method_cfg.get('template', None)
@@ -301,13 +310,12 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
         for key in sorted(wc.keys()):
             opt_value = tpsup.util.get_first_by_key(
                 [opt, dict1], key, default=None)
+            if verbose > 1:
+                log_FileFuncLine(f"key={key}, opt_value={pformat(opt_value)}")
+
             if opt_value is None:
-                if compiled_where := compiled_where_by_key.get(key, None):
-                    pass
-                else:
-                    # compile the {{where::key}} pattern
-                    compiled_where = re.compile(f'{{{{where::{key}}}}}')
-                    compiled_where_by_key[key] = compiled_where
+                compiled_where = get_compiled_where(key)
+
                 # erase the clause
                 template = compiled_where.sub('', template)
                 continue
@@ -316,6 +324,7 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
             info_type = type(info)
 
             string = None
+            numeric = 0
 
             if info_type is dict:
                 clause, column, numeric, if_exp, else_clause = info.get(
@@ -323,16 +332,30 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
 
                 if if_exp is not None:
                     if not tracer_eval_code(if_exp, **opt):
+                        if verbose > 1:
+                            log_FileFuncLine(
+                                f"key={key}, if_exp='{if_exp}' failed")
+
                         if else_clause is not None:
                             # if 'if_exp' is defined and is false and 'else_clause' is defined,
                             # then use else_clause as clause
                             clause = else_clause
+                            if verbose > 1:
+                                log_FileFuncLine(
+                                    f"key={key}, will use else_clause={else_clause}")
                         else:
                             continue
+                    if verbose > 1:
+                        log_FileFuncLine(
+                            f"key={key}, if_exp='{if_exp}' passed")
 
                 if clause:
                     clause = tpsup.util.resolve_scalar_var_in_string(
-                        clause, {**dict1, 'opt_value': opt_value}, **opt)
+                        clause, {**dict1,
+                                 # cast opt_value to string.
+                                 'opt_value': f"{opt_value}",
+                                 },
+                        **opt)
                     string = f"and {clause}"
                 elif column is None:
                     column = key
@@ -341,13 +364,16 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
 
             if not string:
                 if numeric:
+                    # decommify.
+                    # cast opt_value to string in order to apply string operation
                     opt_value = decommify_pattern.sub(
-                        '', opt_value)  # decommify
+                        '', f"{opt_value}")
                     string = f"and {column} =  {opt_value}"
                 else:
                     string = f"and {column} = '{opt_value}'"
 
             where_block += f"             {string}\n"
+            compiled_where = get_compiled_where(key)
             template = compiled_where.sub(string, template)
 
     template = template.replace('{{where_clause}}', where_block)
@@ -603,6 +629,7 @@ def update_knowledge(k: str, new_value: str, **opt):
     kc = opt.get('KeyConfig', {})
     column = kc.get('column', k)
     known_value = known.get(k, None)
+    verbose = opt.get('verbose', 0)
 
     if known_value is not None:
         mismatch = False
@@ -630,7 +657,7 @@ def update_knowledge(k: str, new_value: str, **opt):
             print(f"\nextending knowledge from key='{k}'\n\n")
 
             # extender->() is out of this scope, therefore, it  needs to take %known as a variable
-            extender(known, k)
+            extender(known, k, verbose=verbose)
 
     return
 
@@ -1333,11 +1360,16 @@ def apply_csv_filter(filters: Union[list, dict, None], **opt):
 
     MaxRows = opt.get('MaxExtracts', None)
 
-    hashes2 = tpsup.csvtools.filter_dicts(hashes, headers,
-                                          **filter3
-                                          )
+    # hashes_gen is a generator
+    hashes_gen = tpsup.csvtools.filter_dicts(hashes, headers,
+                                             **filter3
+                                             )
     # update global buffer
-    hashes = hashes2
+    # convert generator to list
+    hashes = list(hashes_gen)
+
+    log_FileFuncLine(f"hashes = {pformat(hashes)}")
+    exit(0)
     if hashes:
         headers = hashes[0].keys()
         tpsup.print.render_arrays(hashes,
@@ -1435,9 +1467,9 @@ def trace(given_cfg, input, **opt):
         update_knowledge('TODAY', today)
 
     for k in parsed_input.keys():
-        update_knowledge(k, parsed_input[k])
+        update_knowledge(k, parsed_input[k], verbose=verbose)
 
-    verbose and print(f"knowledge from input = {pformat(known)}")
+    dump_knowledge()
 
     if 'vars' in all_cfg:
         # all_cfg['vars'] is from the config file, it is an array, in order to enforce the order.
@@ -1507,8 +1539,8 @@ def trace(given_cfg, input, **opt):
                     result[entity] = process_entity(entity, entity_cfg, **opt)
                 except Exception as e:
                     # don't print stack trace for easy understanding errors.
-                    if not re.search(r'\(no need stack trace\)', f'{e}', re.MULTILINE):
-                        print(e)
+                    if verbose or not re.search(r'\(no need stack trace\)', f'{e}', re.MULTILINE):
+                        print_exception(e)
                     if not ForceThrough:
                         print(f"entity={entity} failed. aborting")
                         exit(1)
