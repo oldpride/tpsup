@@ -1034,7 +1034,7 @@ def reset_global_buffer(**opt):
 def print_global_buffer(**opt):
     # mainly for debug purpose
     global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
-    print()
+    log_FileFuncLine()
     print(f"{get_stack(2)}: print global buffer")
     print("----------------------------------------")
     print(f"vars      = {pformat(vars)}")
@@ -1167,6 +1167,7 @@ process {entity}
     Top = tpsup.util.get_first_by_key(
         [opt, entity_cfg], 'top', default=5)
 
+    log_FileFuncLine(f"\nprint global buffer")
     # display the top results
     if lines:
         print("----- lines begin ------\n")
@@ -1194,6 +1195,7 @@ process {entity}
         MaxColumnWidth = entity_cfg.get('MaxColumnWidth', None)
         print(f"MaxColumnWidth = {MaxColumnWidth}") if MaxColumnWidth else None
 
+        print(f"top {Top} of hashes")
         tpsup.print.render_arrays(hashes,
                                   MaxColumnWidth=MaxColumnWidth,
                                   MaxRows=Top,
@@ -1263,6 +1265,7 @@ process {entity}
 
 
 def apply_csv_filter_href(filter1: Union[dict, None], **opt):
+    verbose = opt.get('verbose', 0)
     if not filter1:
         return
 
@@ -1301,23 +1304,24 @@ def apply_csv_filter_href(filter1: Union[dict, None], **opt):
         else:
             filter2[k] = filter1[k]
 
-    if changed:
-        print(f"original filter1 = {pformat(filter1)}")
-        print(f"resolved filter2 = {pformat(filter2)}")
-    else:
-        print(f"static filter2 = {pformat(filter2)}")
+    if verbose:
+        if changed:
+            log_FileFuncLine(f"original filter1 = {pformat(filter1)}")
+            log_FileFuncLine(f"resolved filter2 = {pformat(filter2)}")
+        else:
+            log_FileFuncLine(f"static filter2 = {pformat(filter2)}")
 
     return filter2
 
 
-def apply_csv_filter(filters: Union[list, dict, None], **opt):
+def apply_csv_filter(filters: list, **opt):
     verbose = opt.get('verbose', 0)
 
     if not filters:
         return
 
     # examples:
-    # can be array, which depending knowledge keys
+    # each row can be array, which can specify depending knowledge keys
     # $csv_filter => [
     #          [
     #            [ ], # depending keys, like entry_points
@@ -1329,7 +1333,7 @@ def apply_csv_filter(filters: Union[list, dict, None], **opt):
     #            },
     #          ]
     #       ],
-    # can be Hash
+    # can be Hash, with just one filter dict
     # $csv_filter =>
     #       {
     #          ExportExps => [
@@ -1340,25 +1344,33 @@ def apply_csv_filter(filters: Union[list, dict, None], **opt):
 
     global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
 
-    filter3 = {}
+    filter3 = {}  # this is the final filter, accumulated from all filters
     for row in filters:
-        keys, href = row
+        href = None
+        if isinstance(row, list):
+            keys, href = row
 
-        all_keys_known = True
-        for k in keys:
-            if k not in known:
-                all_keys_known = False
-                break
-        if not all_keys_known:
-            continue
+            all_keys_known = True
+            for k in keys:
+                if k not in known:
+                    all_keys_known = False
+                    break
+            if not all_keys_known:
+                continue
+        elif isinstance(row, dict):
+            href = row
+        else:
+            raise RuntimeError(
+                f"wrong type={type(row)}. Only list or dict is supported. row={pformat(row)}")
 
         filter4 = apply_csv_filter_href(href, **opt)
         filter3 = {**filter3, **filter4}
 
     if isinstance(filters, list):
+        # todo: this part is not reviewed yet
         # if $type was HASH, it was already printed by apply_csv_filter()
         # if $type was ARRAY, we print the finalized filter
-        print(f"filter3 = {pformat(filter3)}")
+        log_FileFuncLine(f"filter3 = {pformat(filter3)}")
 
     MaxRows = opt.get('MaxExtracts', None)
 
@@ -1371,7 +1383,7 @@ def apply_csv_filter(filters: Union[list, dict, None], **opt):
     hashes = list(hashes_gen)
 
     if verbose:
-        log_FileFuncLine(f"hashes = {pformat(hashes)}")
+        log_FileFuncLine(f"after filter_dicts(): hashes = {pformat(hashes)}")
     if hashes:
         headers = hashes[0].keys()
         tpsup.print.render_arrays(hashes,
@@ -1556,7 +1568,7 @@ def trace(given_cfg, input, **opt):
         print("\n\nnothing to trace\n\n")
         return
 
-    verbose and print(f"\n\nstart tracing: {trace_route_entities}\n\n")
+    print(f"\n\nstart tracing: {trace_route_entities}\n\n")
 
     for row in trace_route:
         entity = row['entity']
@@ -1567,7 +1579,7 @@ def trace(given_cfg, input, **opt):
         if entity in SkipTrace:
             continue
 
-        if entity in result and not row['reentry']:
+        if entity in result and not row.get('reentry', None):
             print(f"entity={entity} had been traced before\n")
             continue
 

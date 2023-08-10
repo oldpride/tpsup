@@ -1,6 +1,9 @@
+from pprint import pformat
 from typing import Union
 import os
 import sys
+
+from tpsup.tplog import log_FileFuncLine
 
 # from perl tpsup/lib/perl/TPSUP/UTIL.pm
 
@@ -105,6 +108,7 @@ def render_arrays(rows: Union[list, None], **opt):
         raise Exception(
             "RowType is not specified and cannot be determined from rows")
 
+    # log_FileFuncLine(f"opt={pformat(opt)}")
     MaxRows = opt.get('MaxRows', len(rows))
 
     if opt.get('Vertical', False):
@@ -132,7 +136,7 @@ def render_arrays(rows: Union[list, None], **opt):
                         print(f"{' '*25} '{r[j]}'", file=out_fh)
                 print(file=out_fh)  # blank line
         else:  # RowType == dict
-            for r in rows:
+            for r in rows[:MaxRows-1]:
                 for k in sorted(r.keys()):
                     print(f"{k:25} '{r[k]}'", file=out_fh)  # padding
         return
@@ -185,13 +189,17 @@ def render_arrays(rows: Union[list, None], **opt):
     max_fields = len(max_by_pos)
 
     range_start = 0
+    range_end = MaxRows
+    # exclusive, >>> 'abc'[0:1]
+    # 'a'
+
     if opt.get('RenderHeader', False):
         if RowType == list:
             headers = rows[0]
             range_start = 1
-        else:  # RowType == dict
+            rang_end = MaxRows + 1
+        # else:  # RowType == dict
             # headers = find_hashes_keys(rows) # already done above
-            range_start = 0
 
         render_one_row(headers, max_by_pos, out_fh, **opt)
 
@@ -205,7 +213,7 @@ def render_arrays(rows: Union[list, None], **opt):
 
         print('=' * r_length, file=out_fh)
 
-    for r in rows[range_start:]:
+    for r in rows[range_start:range_end]:
         if RowType == dict:
             array = [r.get(k, "") for k in headers]
         else:  # RowType == list
