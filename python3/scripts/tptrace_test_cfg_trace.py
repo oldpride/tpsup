@@ -192,24 +192,16 @@ our_cfg = {
                 # 3,ORD-0001,PARTIAL,600
                 # 4,ORD-0001,COMPLETED,1000
             },
-            'csv_filter': [
-                [
-                    [],  # depending keys, like entry_points
-                    {
-                        'ExportExps': [
-                            # use ternary operator to make kv pair.
-                            'weight=0 if r["STATUS"] == "COMPLETED" else 1 if r["STATUS"] == "PARTIAL" else 2',
-                        ],
-                        'SortKeys': ['weight'],
-                    },
-                ]
+            'csv_filters': [
+                {
+                    'condition': '2==1+1',
+                    'ExportExps': [
+                        # use ternary operator to make kv pair.
+                        'weight=0 if r["STATUS"] == "COMPLETED" else 1 if r["STATUS"] == "PARTIAL" else 2',
+                    ],
+                    'SortKeys': ['weight'],
+                },
             ],
-            # csv_filter => {
-            #   ExportExps => [
-            #      'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-            #      ],
-            #   SortKeys => [ 'weight' ],
-            # },
             'comment': 'trace in trades table',
             'AllowMultiple': 1,
             'top': 1,
@@ -269,6 +261,8 @@ our_cfg = {
     {{prog}} sec=IBM orderqty=26,700 yyyymmdd=20211129
     {{prog}} sec=IBM filledqty=400 client=xyz
     {{prog}} sec=IBM client=xyz orderqty=1,500 # test the customized clause
+
+    {{prog}} -t actions orderid=ORD-0001
     ''',
 
 }

@@ -521,7 +521,7 @@ attr_syntax = {
 entity_syntax = {
     'required': ['method'],
     'optional': ['method_cfg', 'AllowZero', 'AllowMultiple', 'comment', 'top', 'tail', 'update_key',
-                 'code', 'pre_code', 'post_code', 'vars', 'condition', 'tests', 'csv_filter',
+                 'code', 'pre_code', 'post_code', 'vars', 'condition', 'tests', 'csv_filters',
 
                  'MaxColumnWidth', 'output_key'],
 }
@@ -1158,9 +1158,9 @@ process {entity}
     #     con: without filter, it opens up more example, avoid not finding any example
     # if (!$opt->{isExample}) {
     #   # this affects global variables
-    #   apply_csv_filter($entity_cfg->{csv_filter});
+    #   apply_csv_filters($entity_cfg->{csv_filters});
     # }
-    apply_csv_filter(entity_cfg.get('csv_filter', None), **opt)
+    apply_csv_filters(entity_cfg.get('csv_filters', None), **opt)
 
     Tail = tpsup.util.get_first_by_key(
         [opt, entity_cfg], 'tail', default=None)
@@ -1264,136 +1264,115 @@ process {entity}
     return r
 
 
-def apply_csv_filter_href(filter1: Union[dict, None], **opt):
-    verbose = opt.get('verbose', 0)
-    if not filter1:
-        return
-
-    # example of $filter1:
-    #            {
-    #             ExportExps => [
-    #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-    #                ],
-    #              SortKeys => [ 'weight' ],
-    #            },
-
-    filter2 = {}
-    changed = False
-    for k in sorted(filter1.keys()):
-        if 'Exps' in k:
-            Exps1 = filter1[k]
-
-            # Exps1 should be an array or None
-            if not Exps1:
-                continue
-
-            if not isinstance(Exps1, list):
-                raise RuntimeError(
-                    f"wrong type={type(Exps1)}. Only list is supported")
-
-            Exps2 = []
-            for e1 in Exps1:
-                e2 = tpsup.util.resolve_scalar_var_in_string(
-                    e1, {**vars, **known}, **opt)
-                e2 = apply_key_pattern(e2, **opt)
-
-                changed = (e2 != e1)
-                Exps2.append(e2)
-
-            filter2[k] = Exps2
-        else:
-            filter2[k] = filter1[k]
-
-    if verbose:
-        if changed:
-            log_FileFuncLine(f"original filter1 = {pformat(filter1)}")
-            log_FileFuncLine(f"resolved filter2 = {pformat(filter2)}")
-        else:
-            log_FileFuncLine(f"static filter2 = {pformat(filter2)}")
-
-    return filter2
-
-
-def apply_csv_filter(filters: list, **opt):
+def apply_csv_filters(filters: list, **opt):
     verbose = opt.get('verbose', 0)
 
     if not filters:
         return
 
+    if not isinstance(filters, list):
+        raise RuntimeError(
+            f"wrong type={type(filters)}. Only list is supported. filters={pformat(filters)}")
+
     # examples:
-    # each row can be array, which can specify depending knowledge keys
-    # $csv_filter => [
-    #          [
-    #            [ ], # depending keys, like entry_points
-    #            {
-    #             ExportExps => [
-    #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-    #                ],
-    #              SortKeys => [ 'weight' ],
-    #            },
-    #          ]
-    #       ],
-    # can be Hash, with just one filter dict
-    # $csv_filter =>
-    #       {
-    #          ExportExps => [
-    #             'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-    #             ],
-    #          SortKeys => [ 'weight' ],
-    #       },
+    # each row is a hash (dict)
+    # 'csv_filters' : [
+    #     {
+    #         condition => '2 == 1+1',
+    #         ExportExps => [
+    #             # use python-style ternary to make kay-value pair compact
+    #             'weight=r["STATUS"] == "COMPLETED" if 0 else 1 if r["STATUS"] == "PARTIAL" else 2',
+    #             '... another column=expression pair ...',
+    #         ],
+    #         SortKeys => [ 'weight' ],
+    #     },
+    #     {
+    #         # another filter
+    #      ...
+    #     },
+    # ],
 
     global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
 
-    filter3 = {}  # this is the final filter, accumulated from all filters
-    for row in filters:
-        href = None
-        if isinstance(row, list):
-            keys, href = row
-
-            all_keys_known = True
-            for k in keys:
-                if k not in known:
-                    all_keys_known = False
-                    break
-            if not all_keys_known:
-                continue
-        elif isinstance(row, dict):
-            href = row
-        else:
+    for old_filter in filters:
+        new_filter = {}
+        if not isinstance(old_filter, dict):
             raise RuntimeError(
-                f"wrong type={type(row)}. Only list or dict is supported. row={pformat(row)}")
+                f"wrong type={type(old_filter)}. Only dict is supported. row={pformat(old_filter)}")
 
-        filter4 = apply_csv_filter_href(href, **opt)
-        filter3 = {**filter3, **filter4}
+        condition = old_filter.get('condition', None)
+        if condition:
+            if tracer_eval_code(condition, **opt):
+                if verbose:
+                    print(
+                        f"passed filter condition: {condition}\n\n")
+            else:
+                if verbose:
+                    print(
+                        f"skipped filter due to failed condition: {condition}\n\n")
+                continue
 
-    if isinstance(filters, list):
-        # todo: this part is not reviewed yet
-        # if $type was HASH, it was already printed by apply_csv_filter()
-        # if $type was ARRAY, we print the finalized filter
-        log_FileFuncLine(f"filter3 = {pformat(filter3)}")
+        changed = 0
+        for k in sorted(old_filter.keys()):
+            if 'Exps' in k:
+                old_key_exps = old_filter[k]
 
-    MaxRows = opt.get('MaxExtracts', None)
+                # Exps should be an array or None
+                if not old_key_exps:
+                    continue
 
-    # hashes_gen is a generator
-    hashes_gen = tpsup.csvtools.filter_dicts(hashes, headers,
-                                             **filter3
-                                             )
-    # update global buffer
-    # convert generator to list
-    hashes = list(hashes_gen)
+                if not isinstance(old_key_exps, list):
+                    raise RuntimeError(
+                        f"wrong type={type(old_key_exps)}. Only list is supported. {k}= {pformat(old_key_exps)}")
 
-    if verbose:
-        log_FileFuncLine(f"after filter_dicts(): hashes = {pformat(hashes)}")
-    if hashes:
-        headers = hashes[0].keys()
-        tpsup.print.render_arrays(hashes,
-                                  MaxRows=MaxRows,
-                                  RenderHeader=1,
-                                  )
-    else:
-        headers = []
-    arrays = tpsup.util.hashes_to_arrays(hashes, headers)
-    row_count = len(hashes)
+                new_key_exps = []
+
+                for ke1 in old_key_exps:
+                    # old_key_exps is list of strings
+                    # each string is a key=value pair (ke)
+                    ke2 = tpsup.util.resolve_scalar_var_in_string(
+                        ke1, {**vars, **known}, **opt)
+                    ke2 = apply_key_pattern(ke2, **opt)
+
+                    if ke2 != ke1:
+                        changed += 1
+                    new_key_exps.append(ke2)
+
+                new_filter[k] = new_key_exps
+            else:
+                new_filter[k] = old_filter[k]
+
+        if changed:
+            log_FileFuncLine(
+                f"original old_filter = {pformat(old_filter)}")
+            log_FileFuncLine(
+                f"resolved new_filter = {pformat(new_filter)}")
+        else:
+            log_FileFuncLine(f"apply filter = {pformat(new_filter)}")
+
+        MaxRows = opt.get('MaxExtracts', None)
+
+        # hashes_gen is a generator
+        hashes_gen = tpsup.csvtools.filter_dicts(hashes, headers,
+                                                 **new_filter
+                                                 )
+        # update global buffer
+        # convert generator to list
+        hashes = list(hashes_gen)
+
+        if verbose:
+            log_FileFuncLine(
+                f"after filter_dicts(): hashes = {pformat(hashes)}")
+        if hashes:
+            headers = hashes[0].keys()
+            tpsup.print.render_arrays(hashes,
+                                      MaxRows=MaxRows,
+                                      RenderHeader=1,
+                                      )
+        else:
+            headers = []
+        arrays = tpsup.util.hashes_to_arrays(hashes, headers)
+        row_count = len(hashes)
 
     return  # this sub affects global buffer, therefore, nothing to return
 
@@ -1449,18 +1428,21 @@ def trace(given_cfg, input, **opt):
 
         for e in selected_entities:
             # if the entity is already in the configured trace route, add it with the config.
+            added = {}
             for t in trace_route:
                 if e == t['entity']:
                     new_trace_route.append(t)
+                    added[e] = 1
                     continue
 
             # if the entity is not in the configured trace route, add it here.
-            new_trace_route.append({'entity': e})
+            if e not in added:
+                new_trace_route.append({'entity': e})
 
         trace_route = new_trace_route  # set new trace route
         entry_points = []            # we skip all entry points too
 
-        verbose and print(f"trace_route = {pformat(trace_route)}")
+        log_FileFuncLine(f"trace_route = {pformat(trace_route)}")
         verbose and print(f"entry_points = {pformat(entry_points)}")
 
     parsed_input = parse_input(input,
@@ -1636,17 +1618,17 @@ def tracer_eval_code(code: str, **opt):
     # if user doesn't specify dict1, then vars and known will be used to resolve {{key}}.
     dict1 = opt.get('dict1', {**vars, **known})
 
-    if verbose > 1:
+    if verbose:
         print()
         log_FileFuncLine(f"original code={code}")
 
-    code = tpsup.util.resolve_scalar_var_in_string(
+    code2 = tpsup.util.resolve_scalar_var_in_string(
         code, dict1, verbose=(verbose > 1))
 
-    if verbose > 1:
-        print(f"afer substituted scalar vars in '{{...}}': {code}")
+    if verbose:
+        log_FileFuncLine(f"resolved code={code2}")
 
-    ret = tpsup.exectools.eval_block(code, globals(), locals(), **opt)
+    ret = tpsup.exectools.eval_block(code2, globals(), locals(), **opt)
 
     return ret
 

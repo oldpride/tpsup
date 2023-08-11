@@ -58,6 +58,8 @@ def usage(message: str = None, **opt):
     {{prog}} sec=IBM orderqty=26,700 yyyymmdd=20211129
     {{prog}} sec=IBM filledqty=400 client=xyz
     {{prog}} sec=IBM client=xyz orderqty=1,500 # test the customized clause
+
+    {{prog}} -t actions orderid=ORD-0001
 '''
 
     example = resolve_scalar_var_in_string(
