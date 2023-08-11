@@ -635,7 +635,7 @@ def update_knowledge(k: str, new_value: str, **opt):
         mismatch = False
 
         if kc.get('numeric', False):
-            if ',' in known_value:
+            if ',' in f'{known_value}':
                 known_value = known_value.replace(',', '')
                 known[k] = known_value
 

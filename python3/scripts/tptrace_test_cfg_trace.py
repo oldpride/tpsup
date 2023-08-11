@@ -131,49 +131,7 @@ our_cfg = {
             },
             'comment': "comment from entity={{entity}}.\n",
         },
-        #     'a': '''
-        #   actions => {
-        #      method => 'db',
-        #      method_cfg =>{
-        #         db => 'tptest@tpdbmssql',
-        #         db_type => 'mssql',
-        #         where_clause => {
-        #            # one order can have multiple trades
-        #            ORDERID => 'msgid',
-        #            FILLEDQTY => { column=>'filledqty', numeric=>1},
-        #         },
-        #         #order_clause => 'order by LastUpdateTime',
-        #         #example_clause => "TradeDate >= '{{yyyy}}{{mm}}{{dd}}'",
-        #         # Id,MsgId,STATUS,FilledQty
-        #         # 1,ORD-0001,,
-        #         # 2,ORD-0001,SENT,
-        #         # 3,ORD-0001,PARTIAL,600
-        #         # 4,ORD-0001,COMPLETED,1000
-        #      },
-        #      csv_filter => [
-        #         [
-        #           [ ], # depending keys, like entry_points
-        #           {
-        #            ExportExps => [
-        #               'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-        #               ],
-        #             SortKeys => [ 'weight' ],
-        #           },
-        #         ]
-        #      ],
-        #      # csv_filter => {
-        #      #   ExportExps => [
-        #      #      'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-        #      #      ],
-        #      #   SortKeys => [ 'weight' ],
-        #      # },
-        #      comment => 'trace in trades table',
-        #      AllowMultiple=>1,
-        #      top=>1,
-        #      # to test:
-        #      #     tptrace_test -t actions orderid=ORD-0001
-        #   },''',
-        # convert
+
         'actions': {
             'method': 'db',
             'method_cfg': {
@@ -209,8 +167,93 @@ our_cfg = {
             #     tptrace_test -t actions orderid=ORD-0001
         },
 
-    },
+        #   booking => {
+        #      method => 'db',
+        #      method_cfg=>{
+        #         db => 'tptest@tpdbmssql',
+        #         db_type => 'mssql',
+        #         template => "
+        #            -- this is on purpose convoluted to show how template is used in complex query
+        #            select * from (
+        #               select * from booking (nolock) bk
+        #               where  1=1
+        #                      {{where::YYYYMMDD}}
+        #                      {{where::SID}}
+        #            ) as BookingByTradeDateSid
+        #            where 1=1
+        #                  {{where::BOOKID}}
+        #                  {{where::TRADEID}}
+        #                  {{where::ORDERID}}
+        #                  {{where::TRADEPRICE}}
+        #                  {{where::ORDERQTY}}
+        #                  {{where::TRADEQTY}}
+        #                  {{where::TARGETCOMP}}
+        #         ",
+        #         where_clause => {
+        #            # one order can have multiple trades
+        #            TRADEID => 'tradeid',
+        #            ORDERID => 'orderid',
+        #            BOOKID => 'bookid',
+        #            ORDERQTY => {numeric=>1, clause=>"qty <= {{opt_value}}", update_knowledge=>0},
+        #            TRADEQTY => {column=>'qty', numeric=>1,},
+        #          TRADEPRICE =>  {column=>'Price', numeric=>1},
+        #          TARGETCOMP => 'TargetComp',
 
+        #                # these two has table prefix
+        #                SID  => 'bk.sid',
+        #            YYYYMMDD => { clause=>"CAST(bk.TradeDate as DATE) = '{{opt_value}}'",
+        #                           update_knowledge=>0,
+        #                        },
+        #         },
+        #         order_clause => 'order by LastUpdateTime',
+        #         example_clause => "TradeDate = '{{yyyymmdd}}'",
+        #      },
+        #   },
+        # convert above to python
+
+        'booking': {
+            'method': 'db',
+            'method_cfg': {
+                'db': 'tptest@tpdbmssql',
+                'db_type': 'mssql',
+                'template': """
+                    -- this is on purpose convoluted to show how template is used in complex query
+                    select * from (
+                          select * from booking (nolock) bk
+                            where  1=1
+                                      {{where::YYYYMMDD}}
+                                        {{where::SID}}
+                    ) as BookingByTradeDateSid
+                    where 1=1
+                        {{where::BOOKID}}
+                        {{where::TRADEID}}
+                        {{where::ORDERID}}
+                        {{where::TRADEPRICE}}
+                        {{where::ORDERQTY}}
+                        {{where::TRADEQTY}}
+                        {{where::TARGETCOMP}}
+                    """,
+                'where_clause': {
+                    # one order can have multiple trades
+                    'TRADEID': 'tradeid',
+                    'BOOKID': 'bookid',
+                    'ORDERID': 'orderid',
+                    'ORDERQTY': {'numeric': 1, 'clause': "OrderQty = {{opt_value}}"},
+                    'TRADEQTY': {'column': 'qty', 'numeric': 1, },
+                    'TRADEPRICE':  {'column': 'Price', 'numeric': 1},
+                    'TARGETCOMP': 'TargetComp',
+
+                    # these two has table prefix
+                    'SID': 'bk.sid',
+                    'YYYYMMDD': {'clause': "CAST(bk.TradeDate as DATE) = '{{opt_value}}'",
+                                 'update_knowledge': 0,
+                                 },
+                },
+                'order_clause': 'order by LastUpdateTime',
+                'example_clause': "TradeDate = '{{yyyymmdd}}'",
+            },
+        },
+    },
 
     'extra_keys': ['example', 'security', 'YYYYMMDD'],
 
@@ -232,7 +275,7 @@ our_cfg = {
     'entry_points': [
         # use a array to enforce the order
         # known keys => table list
-        # [['BOOKID'], ['booking', 'trades']],
+        [['BOOKID'], ['booking', 'trades']],
         [['TRADEID'], ['trades']],
         [['ORDERID'], ['orders']],
         # [['SID', 'QTY'], ['orders']],
@@ -241,30 +284,25 @@ our_cfg = {
 
     # trace entities in this order
     'trace_route': [
-        # 'test_code',
+        'test_code',
         {'entity': 'orders', 'condition': '"YYYYMMDD" in known'},
         {'entity': 'trades', 'AllowZero': 1},
         'actions',
+        'booking',
 
         # below are untested
         # 'app_cmd_pipe',
-        # {'entity': 'trades', 'AllowZero': 1},
-        # 'booking',
-        # {'entity': 'orders',
+
 
     ],
 
     'usage_example':  '''
-    {{prog}} example=orders
+    {{prog}} example=orders yyyymmdd=20211129
     
-    {{prog}} tid=123
-    {{prog}} sec=IBM orderqty=26,700 yyyymmdd=20211129
-    {{prog}} sec=IBM filledqty=400 client=xyz
-    {{prog}} sec=IBM client=xyz orderqty=1,500 # test the customized clause
+    {{prog}} sec=IBM orderqty=4,500 tradeqty=400 yyyymmdd=20211129
 
     {{prog}} -t actions orderid=ORD-0001
     ''',
-
 }
 
 # this should be site-spec functions
