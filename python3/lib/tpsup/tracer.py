@@ -1166,8 +1166,10 @@ process {entity}
     #   # this affects global variables
     #   apply_csv_filters($entity_cfg->{csv_filters});
     # }
-    apply_csv_filters(entity_cfg.get('csv_filters', None), **opt)
-    verbose > 1 and print_global_buffer(f'after apply_csv_filters')
+    if csv_filters := entity_cfg.get('csv_filters', None):
+        print(f"csv_filters = {pformat(csv_filters)}")
+        apply_csv_filters(entity_cfg.get('csv_filters', None), **opt)
+        verbose > 1 and print_global_buffer(f'after apply_csv_filters')
 
     Tail = tpsup.util.get_first_by_key(
         [opt, entity_cfg], 'tail', default=None)
