@@ -167,50 +167,6 @@ our_cfg = {
             #     tptrace_test -t actions orderid=ORD-0001
         },
 
-        #   booking => {
-        #      method => 'db',
-        #      method_cfg=>{
-        #         db => 'tptest@tpdbmssql',
-        #         db_type => 'mssql',
-        #         template => "
-        #            -- this is on purpose convoluted to show how template is used in complex query
-        #            select * from (
-        #               select * from booking (nolock) bk
-        #               where  1=1
-        #                      {{where::YYYYMMDD}}
-        #                      {{where::SID}}
-        #            ) as BookingByTradeDateSid
-        #            where 1=1
-        #                  {{where::BOOKID}}
-        #                  {{where::TRADEID}}
-        #                  {{where::ORDERID}}
-        #                  {{where::TRADEPRICE}}
-        #                  {{where::ORDERQTY}}
-        #                  {{where::TRADEQTY}}
-        #                  {{where::TARGETCOMP}}
-        #         ",
-        #         where_clause => {
-        #            # one order can have multiple trades
-        #            TRADEID => 'tradeid',
-        #            ORDERID => 'orderid',
-        #            BOOKID => 'bookid',
-        #            ORDERQTY => {numeric=>1, clause=>"qty <= {{opt_value}}", update_knowledge=>0},
-        #            TRADEQTY => {column=>'qty', numeric=>1,},
-        #          TRADEPRICE =>  {column=>'Price', numeric=>1},
-        #          TARGETCOMP => 'TargetComp',
-
-        #                # these two has table prefix
-        #                SID  => 'bk.sid',
-        #            YYYYMMDD => { clause=>"CAST(bk.TradeDate as DATE) = '{{opt_value}}'",
-        #                           update_knowledge=>0,
-        #                        },
-        #         },
-        #         order_clause => 'order by LastUpdateTime',
-        #         example_clause => "TradeDate = '{{yyyymmdd}}'",
-        #      },
-        #   },
-        # convert above to python
-
         'booking': {
             'method': 'db',
             'method_cfg': {

@@ -166,7 +166,8 @@ def restore_posix_paths(paths: list, **opt) -> list:
     # this function converts C:/Program Files/Git/html back to /html
     # so that we can use xpath=/html in our code
     my_env = Env()
-    if not my_env.term.get('term', None) == 'gitbash':
+    if (not 'term' in my_env.__dict__) or (not my_env.term.get('term', None) == 'gitbash'):
+        # linux (ubuntu, WSL) and gitbash don't need to change PATH
         return paths
 
     new_paths = []

@@ -321,9 +321,9 @@ def test_1_line(line: str, source_globals={}, source_locals={}, print_return=Tru
                      **{**opt, 'EvalAddReturn': True})
     if print_return:
         if pformat:
-            print(f"return: \n{pprint.pformat(ret)}")
+            print(f"return with pformat: \n{pprint.pformat(ret)}")
         else:
-            print(f"return: \n{ret}")
+            print(f"return without pformat: \n{ret}")
 
 
 def main():
@@ -348,7 +348,7 @@ def main():
         print('multiline test', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, {
               'a': 1, 'b': 2}, [1, 2, 3], {'hello': 'world'})
 
-    test_lines(test_code, globals(), locals(), pfomrat=0)
+    test_lines(test_code, globals(), locals(), pformat=0)
     print("--------------------")
 
     print("test _updated exec_into_globals()")
@@ -387,7 +387,7 @@ def main():
 
     a = 1
     source = '''
-    print("here")
+    print("a test line")
     a+1
 '''
 

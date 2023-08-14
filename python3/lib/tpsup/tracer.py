@@ -9,7 +9,7 @@ import tpsup.util
 import tpsup.cmdtools
 import tpsup.exectools
 import tpsup.csvtools
-import tpsup.print
+from tpsup.print import render_arrays, string_short
 # import tpsup.tplog
 from tpsup.tplog import get_exception_string, log_FileFuncLine, get_stack, print_exception
 import tpsup.sqltools
@@ -1031,22 +1031,25 @@ def reset_global_buffer(**opt):
     output = None
 
 
-def print_global_buffer(**opt):
+def print_global_buffer(msg: str = None, **opt):
     # mainly for debug purpose
     global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
+    print()
     log_FileFuncLine()
-    print(f"{get_stack(2)}: print global buffer")
-    print("----------------------------------------")
+    if msg:
+        print(f"{get_stack(2)}: {msg}, print global buffer")
+    else:
+        print(f"{get_stack(2)}: print global buffer")
     print(f"vars      = {pformat(vars)}")
-    print(f"lines     = {pformat(lines)}")
-    print(f"arrays    = {pformat(arrays)}")
+    print(f"lines     = {string_short(lines)}")
+    print(f"arrays    = {string_short(arrays)}")
     print(f"headers   = {pformat(headers)}")
-    print(f"hashes    = {pformat(hashes)}")
+    print(f"hashes    = {string_short(hashes)}")
     print(f"hash1     = {pformat(hash1)}")
     print(f"r         = {pformat(r)}")
     print(f"row_count = {pformat(row_count)}")
     print(f"rc        = {pformat(rc)}")
-    print(f"output    = {pformat(output)}")
+    print(f"output    = {string_short(output)}")
     print("\n")
 
 
@@ -1135,6 +1138,8 @@ process {entity}
     processor(entity, method_cfg, **opt)
     # this sets all the global variables
 
+    verbose > 1 and print_global_buffer(f'after {processor.__name__} {entity}')
+
     output_key = entity_cfg.get('output_key', None)
     if output_key:
         # converted from hash array to a single hash
@@ -1147,11 +1152,12 @@ process {entity}
 
             hash1.setdefault(v, []).append(row)
 
-    verbose > 1 and print_global_buffer()
+        verbose > 1 and print_global_buffer(
+            f'after applied output_key={output_key}')
 
     if code := entity_cfg.get('code', None):
         tracer_eval_code(code, **opt)
-        verbose > 1 and print_global_buffer()
+        verbose > 1 and print_global_buffer(f'after eval code')
 
     # should 'example' be applyed by filter?
     #     pro: this can help find specific example
@@ -1161,13 +1167,14 @@ process {entity}
     #   apply_csv_filters($entity_cfg->{csv_filters});
     # }
     apply_csv_filters(entity_cfg.get('csv_filters', None), **opt)
+    verbose > 1 and print_global_buffer(f'after apply_csv_filters')
 
     Tail = tpsup.util.get_first_by_key(
         [opt, entity_cfg], 'tail', default=None)
     Top = tpsup.util.get_first_by_key(
         [opt, entity_cfg], 'top', default=5)
 
-    log_FileFuncLine(f"\nprint global buffer")
+    log_FileFuncLine(f"\nprint result")
     # display the top results
     if lines:
         print("----- lines begin ------\n")
@@ -1196,11 +1203,11 @@ process {entity}
         print(f"MaxColumnWidth = {MaxColumnWidth}") if MaxColumnWidth else None
 
         print(f"top {Top} of hashes")
-        tpsup.print.render_arrays(hashes,
-                                  MaxColumnWidth=MaxColumnWidth,
-                                  MaxRows=Top,
-                                  RenderHeader=1
-                                  )
+        render_arrays(hashes,
+                      MaxColumnWidth=MaxColumnWidth,
+                      MaxRows=Top,
+                      RenderHeader=1
+                      )
         print("\n")
         count = len(hashes)
         if count > Top:
@@ -1222,7 +1229,7 @@ process {entity}
 
         if not row_count:
             if AllowZero:
-                print("WARN: matched 0 rows. but AllowZero=$AllowZero.\n\n")
+                print(f"WARN: matched 0 rows. but AllowZero={AllowZero}.\n\n")
             else:
                 print("ERROR: matched 0 rows.\n\n")
                 if 'method_cfg' in entity_cfg:
@@ -1365,10 +1372,10 @@ def apply_csv_filters(filters: list, **opt):
                 f"after filter_dicts(): hashes = {pformat(hashes)}")
         if hashes:
             headers = hashes[0].keys()
-            tpsup.print.render_arrays(hashes,
-                                      MaxRows=MaxRows,
-                                      RenderHeader=1,
-                                      )
+            render_arrays(hashes,
+                          MaxRows=MaxRows,
+                          RenderHeader=1,
+                          )
         else:
             headers = []
         arrays = tpsup.util.hashes_to_arrays(hashes, headers)
@@ -1623,7 +1630,7 @@ def tracer_eval_code(code: str, **opt):
         log_FileFuncLine(f"original code={code}")
 
     code2 = tpsup.util.resolve_scalar_var_in_string(
-        code, dict1, verbose=(verbose > 1))
+        code, dict1, verbose=verbose)
 
     if verbose:
         log_FileFuncLine(f"resolved code={code2}")

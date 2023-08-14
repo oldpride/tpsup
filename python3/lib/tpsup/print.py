@@ -260,6 +260,35 @@ def Print_ArrayOfHashes_Vertically(aref: Union[list, None], **opt):
         print()
 
 
+def string_short(obj, top: int = 5, maxlen: int = 200, **opt):
+    # print the first top rows of obj
+    if isinstance(obj, list):
+        rows = obj
+    elif isinstance(obj, str):
+        rows = obj.splitlines()
+    else:
+        return pformat(obj)
+
+    rows2 = []
+    for r in rows[:top]:
+        if isinstance(r, str):
+            if len(r) > maxlen:
+                r = r[0:maxlen] + f'..(truncated at {maxlen}'
+            rows2.append(r)
+        else:
+            rows2.append(pformat(r))
+
+    if len(rows) > top:
+        rows2.append(
+            f"(total {len(rows)} lines, only show the first {top} lines)")
+
+    return '\n'.join(rows2)
+
+
+def print_short(obj, desc: str = '', **opt):
+    print(f"{desc}={string_short(obj, **opt)}")
+
+
 def main():
     print()
     print("--------------------")
