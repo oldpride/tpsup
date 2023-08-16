@@ -52,22 +52,33 @@ our_cfg = {
             'AllowZero': 1,
         },
 
-        'app_cmd_pipe': {
-
+        'applog_cmd_grep_keys': {
             'method': 'cmd',
-
             'vars': [
-                'log', '"{{TPSUP}}/tptrace_test.log"',
+                'log', '"{{cfgdir}}/tptrace_test.log"',
             ],
 
             'method_cfg': {
-                'type': 'pipe',
-
+                'type': 'grep_keys',
                 'value': [
-                    # tpgrepl extended "grep -l" by allowing multiple patterns.
+                    'TRADEID',
+                    {'key': 'ORDERID', 'pattern': 'orderid={{opt_value}}'},
+                    'BOOKID',
                 ],
+                'file': '"{{log}}"',
+                'logic': 'AND',
             },
+            'tail': 5,
+            'tests': [
+                {
+                    'test': '$row_count > 0',
+                    'if_success': 'update_ok(   "seen TRANSACTION in {{log}}");',
+                    'if_failed': 'update_error(  "no TRANSACTION in {{log}}");',
+                },
+            ],
+            'comment': 'test using grep_keys to generate command',
         },
+
 
         'orders': {
             'method': 'db',
