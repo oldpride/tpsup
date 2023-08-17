@@ -109,38 +109,6 @@ def run_cmd(cmd: str, **opt):
     return ret
 
 
-def run_cmd_decoded(cmd: str, **opt):
-    verbose = opt.get('verbose', 0)
-    if verbose:
-        print(f'cmd = {cmd}')
-
-    # extra_opt = {}
-    # myenv = tpsup.env.Env()
-    # if myenv.isWindows:
-    #     bash = 'C:/Windows/System32/bash.exe'
-    # else:
-    #     bash = '/bin/bash'
-    # extra_opt['executable'] = bash
-    # print(f'extra_opt = {extra_opt}')
-
-    # https://code-maven.com/qx-in-python
-    proc = subprocess.Popen(cmd,
-                            shell=True,  # this allows to run multiple commands
-                            # executable='/bin/bash',
-                            # executable='C:/Windows/System32/bash.exe',
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            # **extra_opt,
-                            )
-    stdout, stderr = proc.communicate()
-
-    return {
-        'rc': proc.returncode,
-        'stdout': stdout.decode(),
-        'stderr': stderr.decode(),
-    }
-
-
 def run_cmd_clean(cmd: str, **opt):
     ret = run_cmd(cmd, **opt)
     if ret['rc'] != 0:

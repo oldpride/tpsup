@@ -180,6 +180,546 @@ def process_code(entity: str, method_cfg: dict, **opt):
     # all handling have been done by caller, process_entity
     return
 
+'''
+sub process_cmd {
+   my ($entity, $method_cfg, $opt) = @_;
+
+   my $verbose = $opt->{verbose};
+
+   my $cmd;
+   if ($opt->{isExample}) {
+      $cmd = $method_cfg->{example};
+      if (!defined($cmd)) {
+         print "ERROR: entity='$entity' attr='example' is not defined in method_cfg = ",
+               Dumper($method_cfg);
+         exit 1;
+      }
+   } elsif ($method_cfg->{type} eq 'cmd') {
+      $cmd = $method_cfg->{value};
+   } elsif ($method_cfg->{type} eq 'grep_keys') {
+      my $file = get_value_by_key_case_insensitive($method_cfg, 'file');
+      croak "attr='file' is not defined at method_cfg=" . Dumper($method_cfg) 
+         if ! defined $file;
+      $file = resolve_scalar_var_in_string($file, {%known, %vars});
+     
+      my $grep_keys = get_value_by_key_case_insensitive($method_cfg, 'value');
+      croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg) 
+         if ! defined $grep_keys;
+
+      my @patterns;
+      for my $row (@$grep_keys) {
+         my $type = ref $row;
+         if (!$type) {
+            my $key = $row;
+            my $value = get_first_by_key([\%vars, \%known], $key);
+            if (defined $value) {
+               push @patterns, $value;
+               print "$method_cfg->{type} using $key=$value\n";
+            }
+         } elsif ($type eq 'HASH') {
+            my $key = $row->{key};
+            confess "attr='key' is not defined at row=" . Dumper($row) if ! defined $key;
+
+            my $value = get_first_by_key([\%vars, \%known], $key);
+            if (defined $value) {
+               my $pattern = $row->{pattern};
+               croak "attr='pattern' is not defined at row=" . Dumper($row)
+                  if ! defined $pattern;;
+            
+               my $resolved_pattern 
+                  = resolve_scalar_var_in_string($pattern, {%known, %vars, opt_value=>$value});
+
+               push @patterns, $resolved_pattern;
+               print "$method_cfg->{type} using $key=$resolved_pattern\n";
+            }
+         } else {
+            confess "unsupported type='$type' at row=" . Dumper($row);
+         }
+      }
+
+      if (!@patterns) {
+         print "none of the keys is defined in cmd = " . Dumper($method_cfg); 
+         return;
+      }
+
+      my $logic=get_value_by_key_case_insensitive($method_cfg, 'logic',{default=>'OR'});
+      my $grep =get_value_by_key_case_insensitive($method_cfg, 'grep', {default=>'zgrep -E'});
+
+      print "$method_cfg->{type} using logic = $logic\n";
+
+      # zgrep can handle both compressed and uncompressed files, but cannot recursive
+      # zgrep -E is like egrep
+
+      if ($logic eq 'OR') {
+         $cmd = "$grep '" . join('|', @patterns) . "' $file";
+      } elsif ($logic =~ /AND/i) {
+         $patterns[0] = "$grep '$patterns[0]' $file";
+         $cmd = join(" | egrep ", @patterns);
+      } else {
+         croak "unsupported logic='$logic' at cmd = " . Dumper($method_cfg);
+      }
+   } elsif ($method_cfg->{type} eq 'pipe') {
+      # 2D array,
+      #    outer loop is connected by pipe
+      #    inner loop is for OR logic for grep command.
+      #
+      # method_cfg => {
+      #    type  => 'pipe',
+      #    value => [
+      #       ['grep=grep -E', 'OR11', 'OR12'],
+      #       ['grep=grep -v -E', 'OR21', 'OR22'],
+      #       ['grep=grep -E ',   'OR31', 'OR32'],
+      #       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
+      #       ['cmd=tail -10'],
+      #    ],
+      #    file => 'app.log',
+      # },
+      #
+      #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate 
+      #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
+      #
+      #  other value:
+      #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+
+      my $file = get_value_by_key_case_insensitive($method_cfg, 'file');
+      if (! defined $file) {
+         print "attr='file' is not defined at method_cfg=" . Dumper($method_cfg) 
+      } else {
+         $file = resolve_scalar_var_in_string($file, {%known, %vars});
+      }
+     
+      my $rows = get_value_by_key_case_insensitive($method_cfg, 'value');
+      croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg) 
+         if ! defined $rows;
+
+      my @commands;
+      for my $r (@$rows) {
+         my $cmd2;
+         if ($r->[0] =~ /^grep=(.+)/) {
+            $cmd2 = $1;
+
+            my $r_length = scalar(@$r);
+            if ($r_length == 1) {
+               croak "'grep' expects more elements, at " . Dumper($r);
+            }
+
+            my @values;
+            for (my $i=1; $i<$r_length; $i++) {
+                my $k = $r->[$i];
+                my $v = get_first_by_key([\%vars, \%known], $k);
+                if (defined $v) {
+                   push @values, $v;
+                }
+            }
+
+            next if !@values;
+
+            $cmd2 .= " '" . join('|', @values) . "'";
+         } elsif ($r->[0] =~ /^tpgrepl=(.+)/) {
+            $cmd2 = $1;
+
+            # example:
+            #    ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+
+            my $r_length = scalar(@$r);
+            if ($r_length == 1) {
+               croak "'tpgrepl' expects more elements, at " . Dumper($r);
+            }
+
+            my $some_key_defined;
+            for (my $i=1; $i<$r_length; $i++) {
+               my $s = $r->[$i];
+               # example: 'TRADEID|ORDERID'
+
+               my $keys;
+               my $is_exclude;
+               if ($s =~ /^x=(.+)/) {
+                  # this is exclude
+                  $keys = $1;
+                  $is_exclude = 1;
+               } else {
+                  # this is match
+                  $keys = $s;
+                  $keys =~ s/^m=//;
+               }
+
+               my @values;
+               for my $k (split(/[|]/, $keys)) {
+                  # split 'TRADEID|ORDERID' into two
+                  my $v = get_first_by_key([\%vars, \%known], $k);
+
+                  if (defined $v) {
+                     push @values, $v;
+                  }
+               }
+               next if !@values;
+
+               $some_key_defined = 1;
+               my $pattern = join("|", @values);
+               $pattern = tp_quote_wrap($pattern, {ShellArg=>1});
+
+               if ($is_exclude) {
+                  $cmd2 .= " -x $pattern";
+               } else {
+                  $cmd2 .= " -m $pattern";
+               }
+            }
+
+            next if !$some_key_defined;
+         } elsif ($r->[0] =~ /^cmd=(.+)/) {
+            $cmd2 = resolve_scalar_var_in_string($1, {%known, %vars});
+         } else {
+            croak "unsupported row at " . Dumper($r);
+         }
+
+         if (!@commands) {
+            # for first command 
+            $cmd2 .= " $file" if defined $file;
+         }
+         push @commands, $cmd2;
+      }
+
+      if (!@commands) {
+         print "'method_cfg didn't resolve to any command. " . Dumper($method_cfg);
+         return;
+      } else {
+         $cmd = join("|", @commands);
+      }
+   } else {
+      croak "unsupported type='$method_cfg->{type}' in cmd = ", Dumper($method_cfg);
+   } 
+
+   # when combining hashes, make sure not poluting $known and $Dict
+   $cmd = resolve_scalar_var_in_string($cmd, {%known, %vars}, $opt); 
+      
+   print "running cmd=$cmd\n";
+
+   open my $fh, "$cmd|" or croak "couldn't run cmd=$cmd: $!";
+
+   my $extract_pattern = $method_cfg->{extract};
+   my $MaxExtracts = $opt->{MaxExtracts};
+
+   if ($extract_pattern) {
+      print "extract info from output\n";
+      my ($h, $extracts) = extract_from_fh($fh,  $extract_pattern, 
+                                           {%$opt,
+                                              MatchPattern=>$method_cfg->{MatchPattern},
+                                            ExcludePattern=>$method_cfg->{ExcludePattern},
+                                           },
+                                          );
+
+      # update global buffer 
+      @hashes  = @{$extracts};
+      @headers = @$h;
+      $row_count = scalar(@hashes);
+      @arrays = @{hashes_to_arrays(\@hashes, \@headers)};
+   } else {
+      my $CompiledMatch;
+      my $CompiledExclude;
+      if (defined($method_cfg->{MatchPattern}))   
+         { $CompiledMatch   = qr/$method_cfg->{MatchPattern}/   }
+      if (defined($method_cfg->{ExcludePattern})) 
+         { $CompiledExclude = qr/$method_cfg->{ExcludePattern}/ }
+
+      $verbose && print "\n---- output begin ----\n";
+      my $count = 0;
+      while (my $line = <$fh>) {
+         next if defined($CompiledMatch)   && $line !~ /$CompiledMatch/;
+         next if defined($CompiledExclude) && $line =~ /$CompiledExclude/;
+
+         $verbose && print $line;
+         push @lines, $line;
+
+         $count ++;
+         if ($count >= $MaxExtracts) {
+            print "(stopped extraction as we hit MaxExtracts=$MaxExtracts)";
+            last; 
+         } 
+      }
+      $verbose && print "---- output end ----\n\n";
+   }
+
+   close($fh);
+   $rc = $?;
+
+   $row_count = $extract_pattern ? scalar(@hashes) : scalar(@lines);
+   $output = '' . join('', @lines);
+}
+'''
+# convert above to python
+def process_cmd(entity: str, method_cfg: dict, **opt):
+    verbose = opt.get('verbose', 0)
+
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
+
+    cmd = None
+    method_type = method_cfg.get('type', None)
+    if opt.get('isExample', False):
+        cmd = method_cfg.get('example', None)
+        if cmd is None:
+            print(
+                f"entity='{entity}' attr='example' is not defined in method_cfg = {pformat(method_cfg)}")
+            exit(1)
+    elif method_type == 'cmd':
+        cmd = method_cfg.get('value', None)
+    elif method_type == 'grep_keys':
+        file = tpsup.util.get_value_by_key_case_insensitive(
+            method_cfg, 'file', default=None)
+        if file is None:
+            raise Exception(
+                f"attr='file' is not defined at method_cfg={pformat(method_cfg)}")
+        file = tpsup.util.resolve_scalar_var_in_string(file, {**opt, **known, **vars})
+
+        grep_keys = tpsup.util.get_value_by_key_case_insensitive(
+            method_cfg, 'value', default=None)
+        if grep_keys is None:
+            raise Exception(
+                f"attr='value' is not defined at method_cfg={pformat(method_cfg)}")
+        
+        patterns = []
+        for row in grep_keys:
+            if isinstance(row, str):
+                key = row
+                value = tpsup.util.get_first_by_key(
+                    [vars, known], key, default=None)
+                if value is not None:
+                    patterns.append(value)
+                    if verbose:
+                        print(f"grep_keys using {key}={value}\n")
+            elif isinstance(row, dict):
+                key = row.get('key', None)
+                if key is None:
+                    raise Exception(
+                        f"attr='key' is not defined at row={pformat(row)}")
+
+                value = tpsup.util.get_first_by_key(
+                    [vars, known], key, default=None)
+                if value is not None:
+                    pattern = row.get('pattern', None)
+                    if pattern is None:
+                        raise Exception(
+                            f"attr='pattern' is not defined at row={pformat(row)}")
+
+                    resolved_pattern = tpsup.util.resolve_scalar_var_in_string(
+                        pattern, {**known, **vars, 'opt_value': value})
+
+                    patterns.append(resolved_pattern)
+                    if verbose:
+                        print(f"grep_keys using {key}={resolved_pattern}\n")
+            else:
+                raise Exception(
+                    f"unsupported type='{type}' at row={pformat(row)}")
+            
+        if not patterns:
+            print(f"none of the keys is defined in cmd = {pformat(method_cfg)}")
+            return None
+
+        logic = tpsup.util.get_value_by_key_case_insensitive(
+            method_cfg, 'logic', default='OR')
+        grep = tpsup.util.get_value_by_key_case_insensitive(
+            method_cfg, 'grep', default='grep -E')
+        
+        if verbose:
+            print(f"grep_keys using logic = {logic}\n")
+
+        # zgrep can handle both compressed and uncompressed files, but cannot recursive
+        # zgrep -E is like egrep
+
+        if f"{logic}".upper() == 'OR':
+            cmd = f"{grep} '" + '|'.join(patterns) + f"' {file}"
+        elif f"{logic}".upper() == 'AND':
+            patterns[0] = f"{grep} '{patterns[0]}' {file}"
+            cmd = f" | {grep} ".join(patterns)
+        else:
+            raise Exception(
+                f"unsupported logic='{logic}' at cmd = {pformat(method_cfg)}")
+    elif method_type == 'pipe':
+        # 2D array,
+        #    outer loop is connected by pipe
+        #    inner loop is for OR logic for grep command.
+        #
+        # method_cfg => {
+        #    type  => 'pipe',
+        #    value => [
+        #       ['grep=grep -E', 'OR11', 'OR12'],
+        #       ['grep=grep -v -E', 'OR21', 'OR22'],
+        #       ['grep=grep -E ',   'OR31', 'OR32'],
+        #       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
+        #       ['cmd=tail -10'],
+        #    ],
+        #    file => 'app.log',
+        # },
+        #
+        #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate
+        #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
+        #
+        #  other value:
+        #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+
+        file = tpsup.util.get_value_by_key_case_insensitive(
+            method_cfg, 'file', default=None)
+        if file is None:
+            raise Exception(
+                f"attr='file' is not defined at method_cfg={pformat(method_cfg)}")
+        file = tpsup.util.resolve_scalar_var_in_string(file, {**opt, **known, **vars})
+
+        rows = tpsup.util.get_value_by_key_case_insensitive(
+            method_cfg, 'value', default=None)
+        if rows is None:
+            raise Exception(
+                f"attr='value' is not defined at method_cfg={pformat(method_cfg)}")
+        
+        commands = []
+        for r in rows:
+            cmd2 = None
+            if m := re.search(r'^grep=(.+)', r[0]):
+                cmd2 = m.group(1)
+
+                r_length = len(r)
+                if r_length == 1:
+                    raise Exception(
+                        f"'grep' expects more elements, at {pformat(r)}")
+                
+                values = []
+                for i in range(1, r_length):
+                    k = r[i]
+                    v = tpsup.util.get_first_by_key(
+                        [vars, known], k, default=None)
+                    if v is not None:
+                        values.append(v)
+
+                if not values:
+                    continue
+
+                cmd2 += " '" + '|'.join(values) + "'"
+            elif m := re.search(r'^tpgrepl=(.+)', r[0]):
+                cmd2 = m.group(1)
+
+                # example:
+                #    ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+
+                r_length = len(r)
+                if r_length == 1:
+                    raise Exception(
+                        f"'tpgrepl' expects more elements, at {pformat(r)}")
+                
+                some_key_defined = False
+                for i in range(1, r_length):
+                    s = r[i]
+                    # example: 'TRADEID|ORDERID'
+
+                    keys = None
+                    is_exclude = False
+                    if m := re.search(r'^x=(.+)', s):
+                        # this is exclude
+                        keys = m.group(1)
+                        is_exclude = True
+                    else:
+                        # this is match
+                        keys = s
+                        keys = re.sub(r'^m=', '', keys)
+
+                    values = []
+                    for k in re.split(r'[|]', keys):
+                        # split 'TRADEID|ORDERID' into two
+                        v = tpsup.util.get_first_by_key(
+                            [vars, known], k, default=None)
+
+                        if v is not None:
+                            values.append(v)
+                    
+                    if not values:
+                        continue
+
+                    some_key_defined = True
+                    pattern = '|'.join(values)
+                    pattern = tpsup.util.tp_quote_wrap(pattern, {'ShellArg': True})
+
+                    if is_exclude:
+                        cmd2 += f" -x {pattern}"
+                    else:
+                        cmd2 += f" -m {pattern}"
+
+                if not some_key_defined:
+                    continue
+            elif m := re.search(r'^cmd=(.+)', r[0]):
+                cmd2 = tpsup.util.resolve_scalar_var_in_string(m.group(1), {**known, **vars})
+            else:
+                raise Exception(
+                    f"unsupported row at {pformat(r)}")
+            
+            if not commands:
+                # for first command 
+                cmd2 += f" {file}" if file is not None
+            commands.append(cmd2)
+
+        if not commands:
+            print(f"'method_cfg didn't resolve to any command. {pformat(method_cfg)}")
+            return None
+        else:
+            cmd = '|'.join(commands)
+    else:
+        raise Exception(
+            f"unsupported type='{method_type}' in cmd = {pformat(method_cfg)}")
+    
+    # when combining hashes, make sure not poluting $known and $Dict
+    cmd = tpsup.util.resolve_scalar_var_in_string(cmd, {**known, **vars}, opt)
+
+    print(f"running cmd={cmd}\n")
+
+    fh = tpsup.cmdtools.run_cmd(cmd, **opt)
+
+    extract_pattern = method_cfg.get('extract', None)
+    MaxExtracts = opt.get('MaxExtracts', None)
+
+    if extract_pattern:
+        print("extract info from output\n")
+        h, extracts = tpsup.util.extract_from_fh(fh, extract_pattern, {
+            **opt,
+            'MatchPattern': method_cfg.get('MatchPattern', None),
+            'ExcludePattern': method_cfg.get('ExcludePattern', None),
+        })
+
+        # update global buffer
+        hashes = extracts
+        headers = h
+        row_count = len(hashes)
+        arrays = tpsup.util.hashes_to_arrays(hashes, headers)
+    else:
+        CompiledMatch = None
+        CompiledExclude = None
+        if method_cfg.get('MatchPattern', None):
+            CompiledMatch = re.compile(method_cfg.get('MatchPattern', None))
+        if method_cfg.get('ExcludePattern', None):
+            CompiledExclude = re.compile(method_cfg.get('ExcludePattern', None))
+
+        if verbose:
+            print("\n---- output begin ----\n")
+        count = 0
+        while line := fh.readline():
+            if CompiledMatch and not CompiledMatch.search(line):
+                continue
+            if CompiledExclude and CompiledExclude.search(line):
+                continue
+
+            if verbose:
+                print(line)
+            lines.append(line)
+
+            count += 1
+            if count >= MaxExtracts:
+                print(
+                    f"(stopped extraction as we hit MaxExtracts={MaxExtracts})")
+                break
+
+        if verbose:
+            print("---- output end ----\n\n")
+
+    fh.close()
+    rc = tpsup.cmdtools.get_rc_from_fh(fh)
+
+    row_count = len(hashes) if extract_pattern else len(lines)
+    output = ''.join(lines)
 
 decommify_pattern = re.compile(r',')
 
@@ -1056,7 +1596,7 @@ def print_global_buffer(msg: str = None, **opt):
 processor_by_method = {
     'code': process_code,
     'db': process_db,
-    # 'cmd': process_cmd,
+    'cmd': process_cmd,
     # 'log': process_log,
     # 'path': process_path,
     # 'section': process_section,
