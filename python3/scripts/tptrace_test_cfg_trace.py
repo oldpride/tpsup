@@ -71,7 +71,7 @@ our_cfg = {
             'tail': 5,
             'tests': [
                 {
-                    'test': '$row_count > 0',
+                    'test': 'row_count > 0',
                     'if_success': 'update_ok(   "seen TRANSACTION in {{log}}");',
                     'if_failed': 'update_error(  "no TRANSACTION in {{log}}");',
                 },
@@ -245,6 +245,7 @@ our_cfg = {
         [['BOOKID'], ['booking', 'trades']],
         [['TRADEID'], ['trades']],
         [['ORDERID'], ['orders']],
+
         # [['SID', 'QTY'], ['orders']],
         # [[], ['orders']],  # this is default
     ],
@@ -256,6 +257,7 @@ our_cfg = {
         {'entity': 'trades', 'AllowZero': 1},
         'actions',
         'booking',
+        'applog_cmd_grep_keys',
 
         # below are untested
         # 'app_cmd_pipe',
@@ -266,9 +268,14 @@ our_cfg = {
     'usage_example':  '''
     {{prog}} example=orders yyyymmdd=20211129
     
+    # test all entitiesclear
     {{prog}} sec=IBM orderqty=4,500 tradeqty=400 yyyymmdd=20211129
 
+    # test actions
     {{prog}} -t actions orderid=ORD-0001
+
+    # test applog_cmd_grep_keys
+    {{prog}} -t applog_cmd_grep_keys orderid=ORD-0001 tradeid=TRD-0002 bookid=BKG-0002
     ''',
 }
 

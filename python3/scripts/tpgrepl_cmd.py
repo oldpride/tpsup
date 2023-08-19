@@ -6,13 +6,13 @@ import sys
 import argparse
 import textwrap
 from pprint import pprint, pformat
-from tpsup.greptools import grep
+from tpsup.greptools import grepl
 
 prog = os.path.basename(sys.argv[0]).replace('_cmd.py', '')
 
 usage = textwrap.dedent("""
     usage:
-        {prog} pattern file1 file2 ...
+        {prog} -m pattern1 -m pattern2 file1 file2 ...
                             
         'grep' command implemented in python, so that we can run it on windows.
     """)
@@ -20,10 +20,7 @@ usage = textwrap.dedent("""
 examples = textwrap.dedent(f"""
     examples:
                            
-        {prog}      mypattern grep_test*
-        {prog}   -v mypattern grep_test*
-        {prog}    "abc1|def2" grep_test*
-        {prog} "^(abc1|def2)" grep_test*
+        {prog} -m abc1 -m def1 grep_test*
 
     """)
 
@@ -32,9 +29,6 @@ parser = argparse.ArgumentParser(
     description=usage,
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
-
-parser.add_argument(
-    'pattern', default=None, action='store', help='regex pattern')
 
 # parser.add_argument(
 #     'file', default='-', action='store',
@@ -49,21 +43,13 @@ parser.add_argument(
     # but the parser cannot handle intermixed options and positional args.
     help='optionally additonal files')
 
-parser.add_argument(
-    '-v', dest='exclusive', action="store_true",
-    default=False, help='exclusive pattern')
 
 parser.add_argument(
-    '-E', dest='regex', action="store_true",
-    default=False, help='currently not used. for compatibility only')
+    '-d', dest='verbose', action="store_true",
+    default=False, help='verbose mode.')
 
 parser.add_argument(
-    '-i', dest='CaseInsensitive', action="store_true",
-    default=False, help='case-insensitive')
-
-parser.add_argument(
-    '-d', dest='verbose', default=0, action="count",
-    help='verbose mode. -d, -dd, -ddd, ...')
+    '-m', dest='MatchPatterns', action="append", help='MatchPatterns')
 
 args = vars(parser.parse_args())
 
@@ -73,10 +59,8 @@ if verbose:
     print(f'args={pformat(args)}', file=sys.stderr)
 
 opt = {}
-if args['exclusive']:
-    opt['ExcludePattern'] = args['pattern']
-else:
-    opt['MatchPattern'] = args['pattern']
+
+opt['MatchPatterns'] = args['MatchPatterns']
 
 # files = glob(args['file'])
 files = []
@@ -87,6 +71,5 @@ else:
 
 opt['print'] = True
 opt['verbose'] = args['verbose']
-opt['CaseInsensitive'] = args['CaseInsensitive']
 
-grep(files, **opt)
+grepl(files, **opt)

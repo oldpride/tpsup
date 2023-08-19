@@ -5,7 +5,8 @@ import os
 import re
 import sys
 from typing import Union
-from tpsup.tpfile import TpInput
+from tpsup.tpfile import TpInput, tpglob
+from tpsup.tplog import log_FileFuncLine
 
 
 def grep(files: Union[list, str], MatchPattern: str = None,
@@ -17,33 +18,57 @@ def grep(files: Union[list, str], MatchPattern: str = None,
     """
     grep a file, return a list of matched lines
     """
+
     verbose = opt.get('verbose', 0)
-    files2 = []
+
     if isinstance(files, str):
         # split string by space or newline
-        for f in re.split('\s+', files, re.MULTILINE):
-            files2.extend(glob(f))
+        files2 = re.split('\s+', files, re.MULTILINE)
     else:
-        for f in files:
-            files2.extend(glob(f))
+        files2 = files
 
-    opt2 = {}
+    files3 = tpglob(files)
+
+    if verbose:
+        print(f'files2={files3}', file=sys.stderr)
+
     if MatchPatterns:
-        opt2['MatchPatterns'] = MatchPatterns
+        MatchPatterns2 = MatchPatterns
     elif MatchPattern:
-        opt2['MatchPatterns'] = [MatchPattern]
+        MatchPatterns2 = [MatchPattern]
+    else:
+        MatchPatterns2 = []
 
     if ExcludePatterns:
-        opt2['ExcludePatterns'] = ExcludePatterns
+        ExcludePatterns2 = ExcludePatterns
     elif ExcludePattern:
-        opt2['ExcludePatterns'] = [ExcludePattern]
+        ExcludePattern2 = [ExcludePattern]
+    else:
+        ExcludePatterns2 = []
+
+    MatchCompiled = []
+    if MatchPatterns2:
+        for p in MatchPatterns2:
+            if opt.get('CaseInsensitive', False):
+                MatchCompiled.append(re.compile(p, re.IGNORECASE))
+            else:
+                MatchCompiled.append(re.compile(p))
+    ExcludeCompiled = []
+    if ExcludePatterns2:
+        for p in ExcludePatterns2:
+            if opt.get('CaseInsensitive', False):
+                ExcludeCompiled.append(re.compile(p, re.IGNORECASE))
+            else:
+                ExcludeCompiled.append(re.compile(p))
 
     lines = []
     seen_file = {}
 
     print_filename = len(files2) > 1
-    for file in files2:
-        if seen_file.get('file', False):
+    for file in files3:
+        if file in seen_file:
+            if verbose:
+                log_FileFuncLine(f'{file} already seen, skip', file=sys.stderr)
             continue
         else:
             seen_file[file] = True
@@ -56,11 +81,31 @@ def grep(files: Union[list, str], MatchPattern: str = None,
         if verbose:
             print(f'grep {file}', file=sys.stderr)
 
-        with TpInput(filename=file, **opt2, **opt) as tf:
+        with TpInput(filename=file, **opt) as tf:
             # Regex is built inside TpInput
 
             try:
                 for line in tf:  # this line may raise exception for binary file. so use try/except
+                    if verbose > 2:
+                        print(f'line={line}', file=sys.stderr)
+
+                    if MatchCompiled:
+                        for p in MatchCompiled:
+                            if p.search(line):
+                                break
+                        else:
+                            # no match
+                            continue
+
+                    to_exclude = False
+                    if ExcludeCompiled:
+                        for p in ExcludeCompiled:
+                            if p.search(line):
+                                to_exclude = True
+                                break
+                    if to_exclude:
+                        continue
+
                     if FileNameOnly:
                         lines.append(file)
                         if opt.get('print', False):

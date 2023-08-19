@@ -1,8 +1,12 @@
+from glob import glob
 import gzip
 import os
+import re
 import sys
-from pprint import pprint
+from pprint import pformat, pprint
+from typing import Union
 from tpsup.modtools import strings_to_compilable_patterns, load_module
+from tpsup.tplog import log_FileFuncLine
 from tpsup.util import silence_BrokenPipeError
 
 
@@ -52,9 +56,11 @@ class TpInput:
                 #     if newline is not None:
                 #         raise ValueError("Argument 'newline' not supported in binary mode")
 
-                self.fh = gzip.open(self.filename, 'rt', encoding='utf-8', newline='')
+                self.fh = gzip.open(self.filename, 'rt',
+                                    encoding='utf-8', newline='')
             else:
-                self.fh = open(self.filename, 'r', encoding='utf-8', newline='')
+                self.fh = open(self.filename, 'r',
+                               encoding='utf-8', newline='')
 
         for count in range(0, self.skip):
             try:
@@ -93,7 +99,7 @@ class TpInput:
             if excluded:
                 continue
 
-            #print(f'iamhere {line}')
+            # print(f'iamhere {line}')
             yield line
         return
 
@@ -148,6 +154,26 @@ class TpOutput:
 
     def __exit__(self, exec_type, exc_value, traceback):
         self.close()
+
+
+def tpglob(files: list, **opt):
+    if not isinstance(files, list):
+        raise RuntimeError(
+            f'unsupported type of files={pformat(files)}\nIt must be a list')
+
+    files2 = []
+    for f in files:
+        if f == '-':
+            # this is stdin
+            files2.append(f)
+        else:
+            globbed = glob(f)
+            if not globbed:
+                log_FileFuncLine(f'{f} not found', file=sys.stderr)
+                continue
+            files2.extend(globbed)
+
+    return files2
 
 
 def main():

@@ -2,7 +2,7 @@ import types
 import re
 from typing import Literal, Union
 from tpsup.util import print_string_with_line_numer
-import pprint
+from pprint import pformat
 from tpsup.tplog import log_FileFuncLine
 
 
@@ -70,7 +70,7 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
     # we update _globals and use _globals to pass back the effect to caller
     _updated = _exec_filter(_locals)
     if _verbose > 1:
-        log_FileFuncLine(f"_updated = {pprint.pformat(_updated)}")
+        log_FileFuncLine(f"_updated = {pformat(_updated)}")
     _globals.update(_updated)
 
     # key point: python's globals()'s scope to 1 file.
@@ -118,20 +118,28 @@ def tp_exec_func():
     raise RuntimeError("this function should not be called")
 
 
-def eval_block(_source: str, _globals, _locals, EvalAddReturn: bool = False, **opt):
+def eval_block(_source: str, _globals, _locals, **opt):
     # _globals and _locals are the caller's globals() and locals()
 
     verbose = opt.get("verbose", 0)
+
+    if verbose > 1:
+        log_FileFuncLine(f"opt = {pformat(opt)}")
+
+    if "\\" in _source:
+        _source = _source.replace("\\", "\\\\")
+        log_FileFuncLine(
+            f"escaped \\ with \\\\, results in:k _source = \n{_source}")
 
     # wrap the code block into a function so that eval() a single expression.
     # see above for explanation.
     # add indent
     func_code = shift_indent(correct_indent(_source), shift_space_count=4,)
-    if EvalAddReturn:
+    if EvalAddReturn := opt.get("EvalAddReturn", False):
         func_code = add_return(func_code, **opt)
     _source2 = f'def tp_exec_func():\n{func_code}'
     if verbose:
-        print(f"_source = \n{_source2}")
+        print(f"_source2 = \n{_source2}")
     exec_into_globals(_source2, _globals, _locals, **opt)
     _ret = None
     try:
@@ -308,7 +316,7 @@ def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print
     test_1_line(last_line, source_globals, source_locals, **opt)
 
 
-def test_1_line(line: str, source_globals={}, source_locals={}, print_return=True, pformat=True, **opt):
+def test_1_line(line: str, source_globals={}, source_locals={}, print_return=True, print_pformat=True, **opt):
     print()
     print("--------------------")
     print(f"run: {line}")
@@ -320,8 +328,8 @@ def test_1_line(line: str, source_globals={}, source_locals={}, print_return=Tru
     ret = eval_block(line, combined_globals, combined_locals,
                      **{**opt, 'EvalAddReturn': True})
     if print_return:
-        if pformat:
-            print(f"return with pformat: \n{pprint.pformat(ret)}")
+        if print_pformat:
+            print(f"return with pformat: \n{pformat(ret)}")
         else:
             print(f"return without pformat: \n{ret}")
 

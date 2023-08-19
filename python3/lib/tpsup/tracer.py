@@ -4,17 +4,18 @@ import re
 from pprint import pformat
 from time import localtime, strftime, strptime
 from typing import Dict, List, Union, Callable
+from tpsup.cmdtools import run_cmd, run_cmd_clean
+from tpsup.csvtools import filter_dicts
+from tpsup.exectools import eval_block, exec_into_globals, test_compile
 
-import tpsup.util
-import tpsup.cmdtools
-import tpsup.exectools
-import tpsup.csvtools
 from tpsup.print import render_arrays, string_short
-# import tpsup.tplog
+from tpsup.sqltools import get_dbh, run_sql
 from tpsup.tplog import get_exception_string, log_FileFuncLine, get_stack, print_exception
-import tpsup.sqltools
+from tpsup.util import arrays_to_hashes, get_first_by_key, get_keys_from_array, get_node_list, get_value_by_key_case_insensitive, hashes_to_arrays, resolve_scalar_var_in_string, unify_array_hash, unify_hash_hash
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
+
+TPSUP = os.environ['TPSUP']
 
 
 def parse_input(input: Union[list, str], **opt):
@@ -112,7 +113,7 @@ def resolve_a_clause(clause: str, dict1: dict, **opt):
     verbose > 1 and log_FileFuncLine(
         f"before substitution, clause = {clause}, dict1 = {pformat(dict1)}")
 
-    clause = tpsup.util.resolve_scalar_var_in_string(clause, dict1, **opt)
+    clause = resolve_scalar_var_in_string(clause, dict1, **opt)
 
     verbose > 1 and log_FileFuncLine(f"after substitution, clause = {clause}")
 
@@ -121,7 +122,7 @@ def resolve_a_clause(clause: str, dict1: dict, **opt):
     # my $touch_to_activate = \%known;
 
     # then eval() other vars, eg, $known{YYYYMMDD}
-    clause2 = tracer_eval_code(clause, **{**opt, 'dict1': dict1})
+    clause2 = tracer_eval_code(clause, EvalAddReturn=1, **{**opt, **dict1})
 
     return clause2
 
@@ -165,14 +166,14 @@ def resolve_vars_array(vars: list, dict1: dict, **opt):
 
         ref[k] = v2
         if verbose > 1:
-            print(f"added var key='{k}' from {v}={pformat(v2)}\n")
+            log_FileFuncLine(f"added var key='{k}' from {v}={pformat(v2)}\n")
         dict2[k] = v2  # previous variables will be used to resolve later variables
 
     return ref
 
 
 def cmd_output_string(cmd: str, **opt):
-    string = tpsup.cmdtools.run_cmd_clean(cmd, **opt)
+    string = run_cmd_clean(cmd, **opt)
     return string
 
 
@@ -180,273 +181,7 @@ def process_code(entity: str, method_cfg: dict, **opt):
     # all handling have been done by caller, process_entity
     return
 
-'''
-sub process_cmd {
-   my ($entity, $method_cfg, $opt) = @_;
 
-   my $verbose = $opt->{verbose};
-
-   my $cmd;
-   if ($opt->{isExample}) {
-      $cmd = $method_cfg->{example};
-      if (!defined($cmd)) {
-         print "ERROR: entity='$entity' attr='example' is not defined in method_cfg = ",
-               Dumper($method_cfg);
-         exit 1;
-      }
-   } elsif ($method_cfg->{type} eq 'cmd') {
-      $cmd = $method_cfg->{value};
-   } elsif ($method_cfg->{type} eq 'grep_keys') {
-      my $file = get_value_by_key_case_insensitive($method_cfg, 'file');
-      croak "attr='file' is not defined at method_cfg=" . Dumper($method_cfg) 
-         if ! defined $file;
-      $file = resolve_scalar_var_in_string($file, {%known, %vars});
-     
-      my $grep_keys = get_value_by_key_case_insensitive($method_cfg, 'value');
-      croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg) 
-         if ! defined $grep_keys;
-
-      my @patterns;
-      for my $row (@$grep_keys) {
-         my $type = ref $row;
-         if (!$type) {
-            my $key = $row;
-            my $value = get_first_by_key([\%vars, \%known], $key);
-            if (defined $value) {
-               push @patterns, $value;
-               print "$method_cfg->{type} using $key=$value\n";
-            }
-         } elsif ($type eq 'HASH') {
-            my $key = $row->{key};
-            confess "attr='key' is not defined at row=" . Dumper($row) if ! defined $key;
-
-            my $value = get_first_by_key([\%vars, \%known], $key);
-            if (defined $value) {
-               my $pattern = $row->{pattern};
-               croak "attr='pattern' is not defined at row=" . Dumper($row)
-                  if ! defined $pattern;;
-            
-               my $resolved_pattern 
-                  = resolve_scalar_var_in_string($pattern, {%known, %vars, opt_value=>$value});
-
-               push @patterns, $resolved_pattern;
-               print "$method_cfg->{type} using $key=$resolved_pattern\n";
-            }
-         } else {
-            confess "unsupported type='$type' at row=" . Dumper($row);
-         }
-      }
-
-      if (!@patterns) {
-         print "none of the keys is defined in cmd = " . Dumper($method_cfg); 
-         return;
-      }
-
-      my $logic=get_value_by_key_case_insensitive($method_cfg, 'logic',{default=>'OR'});
-      my $grep =get_value_by_key_case_insensitive($method_cfg, 'grep', {default=>'zgrep -E'});
-
-      print "$method_cfg->{type} using logic = $logic\n";
-
-      # zgrep can handle both compressed and uncompressed files, but cannot recursive
-      # zgrep -E is like egrep
-
-      if ($logic eq 'OR') {
-         $cmd = "$grep '" . join('|', @patterns) . "' $file";
-      } elsif ($logic =~ /AND/i) {
-         $patterns[0] = "$grep '$patterns[0]' $file";
-         $cmd = join(" | egrep ", @patterns);
-      } else {
-         croak "unsupported logic='$logic' at cmd = " . Dumper($method_cfg);
-      }
-   } elsif ($method_cfg->{type} eq 'pipe') {
-      # 2D array,
-      #    outer loop is connected by pipe
-      #    inner loop is for OR logic for grep command.
-      #
-      # method_cfg => {
-      #    type  => 'pipe',
-      #    value => [
-      #       ['grep=grep -E', 'OR11', 'OR12'],
-      #       ['grep=grep -v -E', 'OR21', 'OR22'],
-      #       ['grep=grep -E ',   'OR31', 'OR32'],
-      #       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
-      #       ['cmd=tail -10'],
-      #    ],
-      #    file => 'app.log',
-      # },
-      #
-      #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate 
-      #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
-      #
-      #  other value:
-      #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
-
-      my $file = get_value_by_key_case_insensitive($method_cfg, 'file');
-      if (! defined $file) {
-         print "attr='file' is not defined at method_cfg=" . Dumper($method_cfg) 
-      } else {
-         $file = resolve_scalar_var_in_string($file, {%known, %vars});
-      }
-     
-      my $rows = get_value_by_key_case_insensitive($method_cfg, 'value');
-      croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg) 
-         if ! defined $rows;
-
-      my @commands;
-      for my $r (@$rows) {
-         my $cmd2;
-         if ($r->[0] =~ /^grep=(.+)/) {
-            $cmd2 = $1;
-
-            my $r_length = scalar(@$r);
-            if ($r_length == 1) {
-               croak "'grep' expects more elements, at " . Dumper($r);
-            }
-
-            my @values;
-            for (my $i=1; $i<$r_length; $i++) {
-                my $k = $r->[$i];
-                my $v = get_first_by_key([\%vars, \%known], $k);
-                if (defined $v) {
-                   push @values, $v;
-                }
-            }
-
-            next if !@values;
-
-            $cmd2 .= " '" . join('|', @values) . "'";
-         } elsif ($r->[0] =~ /^tpgrepl=(.+)/) {
-            $cmd2 = $1;
-
-            # example:
-            #    ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
-
-            my $r_length = scalar(@$r);
-            if ($r_length == 1) {
-               croak "'tpgrepl' expects more elements, at " . Dumper($r);
-            }
-
-            my $some_key_defined;
-            for (my $i=1; $i<$r_length; $i++) {
-               my $s = $r->[$i];
-               # example: 'TRADEID|ORDERID'
-
-               my $keys;
-               my $is_exclude;
-               if ($s =~ /^x=(.+)/) {
-                  # this is exclude
-                  $keys = $1;
-                  $is_exclude = 1;
-               } else {
-                  # this is match
-                  $keys = $s;
-                  $keys =~ s/^m=//;
-               }
-
-               my @values;
-               for my $k (split(/[|]/, $keys)) {
-                  # split 'TRADEID|ORDERID' into two
-                  my $v = get_first_by_key([\%vars, \%known], $k);
-
-                  if (defined $v) {
-                     push @values, $v;
-                  }
-               }
-               next if !@values;
-
-               $some_key_defined = 1;
-               my $pattern = join("|", @values);
-               $pattern = tp_quote_wrap($pattern, {ShellArg=>1});
-
-               if ($is_exclude) {
-                  $cmd2 .= " -x $pattern";
-               } else {
-                  $cmd2 .= " -m $pattern";
-               }
-            }
-
-            next if !$some_key_defined;
-         } elsif ($r->[0] =~ /^cmd=(.+)/) {
-            $cmd2 = resolve_scalar_var_in_string($1, {%known, %vars});
-         } else {
-            croak "unsupported row at " . Dumper($r);
-         }
-
-         if (!@commands) {
-            # for first command 
-            $cmd2 .= " $file" if defined $file;
-         }
-         push @commands, $cmd2;
-      }
-
-      if (!@commands) {
-         print "'method_cfg didn't resolve to any command. " . Dumper($method_cfg);
-         return;
-      } else {
-         $cmd = join("|", @commands);
-      }
-   } else {
-      croak "unsupported type='$method_cfg->{type}' in cmd = ", Dumper($method_cfg);
-   } 
-
-   # when combining hashes, make sure not poluting $known and $Dict
-   $cmd = resolve_scalar_var_in_string($cmd, {%known, %vars}, $opt); 
-      
-   print "running cmd=$cmd\n";
-
-   open my $fh, "$cmd|" or croak "couldn't run cmd=$cmd: $!";
-
-   my $extract_pattern = $method_cfg->{extract};
-   my $MaxExtracts = $opt->{MaxExtracts};
-
-   if ($extract_pattern) {
-      print "extract info from output\n";
-      my ($h, $extracts) = extract_from_fh($fh,  $extract_pattern, 
-                                           {%$opt,
-                                              MatchPattern=>$method_cfg->{MatchPattern},
-                                            ExcludePattern=>$method_cfg->{ExcludePattern},
-                                           },
-                                          );
-
-      # update global buffer 
-      @hashes  = @{$extracts};
-      @headers = @$h;
-      $row_count = scalar(@hashes);
-      @arrays = @{hashes_to_arrays(\@hashes, \@headers)};
-   } else {
-      my $CompiledMatch;
-      my $CompiledExclude;
-      if (defined($method_cfg->{MatchPattern}))   
-         { $CompiledMatch   = qr/$method_cfg->{MatchPattern}/   }
-      if (defined($method_cfg->{ExcludePattern})) 
-         { $CompiledExclude = qr/$method_cfg->{ExcludePattern}/ }
-
-      $verbose && print "\n---- output begin ----\n";
-      my $count = 0;
-      while (my $line = <$fh>) {
-         next if defined($CompiledMatch)   && $line !~ /$CompiledMatch/;
-         next if defined($CompiledExclude) && $line =~ /$CompiledExclude/;
-
-         $verbose && print $line;
-         push @lines, $line;
-
-         $count ++;
-         if ($count >= $MaxExtracts) {
-            print "(stopped extraction as we hit MaxExtracts=$MaxExtracts)";
-            last; 
-         } 
-      }
-      $verbose && print "---- output end ----\n\n";
-   }
-
-   close($fh);
-   $rc = $?;
-
-   $row_count = $extract_pattern ? scalar(@hashes) : scalar(@lines);
-   $output = '' . join('', @lines);
-}
-'''
-# convert above to python
 def process_cmd(entity: str, method_cfg: dict, **opt):
     verbose = opt.get('verbose', 0)
 
@@ -463,36 +198,36 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
     elif method_type == 'cmd':
         cmd = method_cfg.get('value', None)
     elif method_type == 'grep_keys':
-        file = tpsup.util.get_value_by_key_case_insensitive(
+        file = get_value_by_key_case_insensitive(
             method_cfg, 'file', default=None)
         if file is None:
             raise Exception(
                 f"attr='file' is not defined at method_cfg={pformat(method_cfg)}")
-        file = tpsup.util.resolve_scalar_var_in_string(file, {**opt, **known, **vars})
+        file = resolve_scalar_var_in_string(file, {**opt, **known, **vars})
 
-        grep_keys = tpsup.util.get_value_by_key_case_insensitive(
+        grep_keys = get_value_by_key_case_insensitive(
             method_cfg, 'value', default=None)
         if grep_keys is None:
             raise Exception(
                 f"attr='value' is not defined at method_cfg={pformat(method_cfg)}")
-        
+
         patterns = []
         for row in grep_keys:
             if isinstance(row, str):
                 key = row
-                value = tpsup.util.get_first_by_key(
+                value = get_first_by_key(
                     [vars, known], key, default=None)
                 if value is not None:
                     patterns.append(value)
                     if verbose:
-                        print(f"grep_keys using {key}={value}\n")
+                        log_FileFuncLine(f"grep_keys using {key}={value}\n")
             elif isinstance(row, dict):
                 key = row.get('key', None)
                 if key is None:
                     raise Exception(
                         f"attr='key' is not defined at row={pformat(row)}")
 
-                value = tpsup.util.get_first_by_key(
+                value = get_first_by_key(
                     [vars, known], key, default=None)
                 if value is not None:
                     pattern = row.get('pattern', None)
@@ -500,36 +235,43 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                         raise Exception(
                             f"attr='pattern' is not defined at row={pformat(row)}")
 
-                    resolved_pattern = tpsup.util.resolve_scalar_var_in_string(
+                    resolved_pattern = resolve_scalar_var_in_string(
                         pattern, {**known, **vars, 'opt_value': value})
 
                     patterns.append(resolved_pattern)
                     if verbose:
-                        print(f"grep_keys using {key}={resolved_pattern}\n")
+                        log_FileFuncLine(
+                            f"grep_keys using {key}={resolved_pattern}\n")
             else:
                 raise Exception(
                     f"unsupported type='{type}' at row={pformat(row)}")
-            
+
         if not patterns:
-            print(f"none of the keys is defined in cmd = {pformat(method_cfg)}")
+            print(
+                f"none of the keys is defined in cmd = {pformat(method_cfg)}")
             return None
 
-        logic = tpsup.util.get_value_by_key_case_insensitive(
+        logic = get_value_by_key_case_insensitive(
             method_cfg, 'logic', default='OR')
-        grep = tpsup.util.get_value_by_key_case_insensitive(
-            method_cfg, 'grep', default='grep -E')
-        
+
+        # 'grep -E' will be good for linux but not for windows
+        default_grep = f'"{TPSUP}/python3/scripts/grep"'
+        grep = get_value_by_key_case_insensitive(
+            method_cfg, 'grep', default=default_grep)
+
         if verbose:
-            print(f"grep_keys using logic = {logic}\n")
+            log_FileFuncLine(f"grep_keys using logic = {logic}\n")
 
         # zgrep can handle both compressed and uncompressed files, but cannot recursive
         # zgrep -E is like egrep
 
+        # use double-quotes "" to wrap pattern and file name because
+        # in windows, only double quotes does grouping on command line (cmd.exe)
         if f"{logic}".upper() == 'OR':
-            cmd = f"{grep} '" + '|'.join(patterns) + f"' {file}"
+            cmd = f'{grep} "' + '|'.join(patterns) + f'" {file}'
         elif f"{logic}".upper() == 'AND':
-            patterns[0] = f"{grep} '{patterns[0]}' {file}"
-            cmd = f" | {grep} ".join(patterns)
+            cmd = f'{grep} "{patterns[0]}" {file} | {grep} ' + \
+                '"' + f'" | {grep} "'.join(patterns[1:]) + '"'
         else:
             raise Exception(
                 f"unsupported logic='{logic}' at cmd = {pformat(method_cfg)}")
@@ -556,19 +298,19 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
         #  other value:
         #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
 
-        file = tpsup.util.get_value_by_key_case_insensitive(
+        file = get_value_by_key_case_insensitive(
             method_cfg, 'file', default=None)
         if file is None:
             raise Exception(
                 f"attr='file' is not defined at method_cfg={pformat(method_cfg)}")
-        file = tpsup.util.resolve_scalar_var_in_string(file, {**opt, **known, **vars})
+        file = resolve_scalar_var_in_string(file, {**opt, **known, **vars})
 
-        rows = tpsup.util.get_value_by_key_case_insensitive(
+        rows = get_value_by_key_case_insensitive(
             method_cfg, 'value', default=None)
         if rows is None:
             raise Exception(
                 f"attr='value' is not defined at method_cfg={pformat(method_cfg)}")
-        
+
         commands = []
         for r in rows:
             cmd2 = None
@@ -579,11 +321,11 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                 if r_length == 1:
                     raise Exception(
                         f"'grep' expects more elements, at {pformat(r)}")
-                
+
                 values = []
                 for i in range(1, r_length):
                     k = r[i]
-                    v = tpsup.util.get_first_by_key(
+                    v = get_first_by_key(
                         [vars, known], k, default=None)
                     if v is not None:
                         values.append(v)
@@ -602,7 +344,7 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                 if r_length == 1:
                     raise Exception(
                         f"'tpgrepl' expects more elements, at {pformat(r)}")
-                
+
                 some_key_defined = False
                 for i in range(1, r_length):
                     s = r[i]
@@ -622,18 +364,19 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                     values = []
                     for k in re.split(r'[|]', keys):
                         # split 'TRADEID|ORDERID' into two
-                        v = tpsup.util.get_first_by_key(
+                        v = get_first_by_key(
                             [vars, known], k, default=None)
 
                         if v is not None:
                             values.append(v)
-                    
+
                     if not values:
                         continue
 
                     some_key_defined = True
                     pattern = '|'.join(values)
-                    pattern = tpsup.util.tp_quote_wrap(pattern, {'ShellArg': True})
+                    pattern = tpsup.util.tp_quote_wrap(
+                        pattern, {'ShellArg': True})
 
                     if is_exclude:
                         cmd2 += f" -x {pattern}"
@@ -643,31 +386,37 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                 if not some_key_defined:
                     continue
             elif m := re.search(r'^cmd=(.+)', r[0]):
-                cmd2 = tpsup.util.resolve_scalar_var_in_string(m.group(1), {**known, **vars})
+                cmd2 = resolve_scalar_var_in_string(
+                    m.group(1), {**known, **vars})
             else:
                 raise Exception(
                     f"unsupported row at {pformat(r)}")
-            
+
             if not commands:
-                # for first command 
-                cmd2 += f" {file}" if file is not None
+                # for first command
+                if file is not None:
+                    cmd2 += f" {file}"
             commands.append(cmd2)
 
         if not commands:
-            print(f"'method_cfg didn't resolve to any command. {pformat(method_cfg)}")
+            print(
+                f"'method_cfg didn't resolve to any command. {pformat(method_cfg)}")
             return None
         else:
             cmd = '|'.join(commands)
     else:
         raise Exception(
             f"unsupported type='{method_type}' in cmd = {pformat(method_cfg)}")
-    
+
     # when combining hashes, make sure not poluting $known and $Dict
-    cmd = tpsup.util.resolve_scalar_var_in_string(cmd, {**known, **vars}, opt)
+    cmd = resolve_scalar_var_in_string(cmd, {**known, **vars}, **opt)
 
     print(f"running cmd={cmd}\n")
 
-    fh = tpsup.cmdtools.run_cmd(cmd, **opt)
+    ret = run_cmd(cmd, print=verbose, **opt)
+
+    if verbose > 1:
+        log_FileFuncLine(f"ret = {pformat(ret)}")
 
     extract_pattern = method_cfg.get('extract', None)
     MaxExtracts = opt.get('MaxExtracts', None)
@@ -684,26 +433,26 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
         hashes = extracts
         headers = h
         row_count = len(hashes)
-        arrays = tpsup.util.hashes_to_arrays(hashes, headers)
+        arrays = hashes_to_arrays(hashes, headers)
     else:
         CompiledMatch = None
         CompiledExclude = None
-        if method_cfg.get('MatchPattern', None):
-            CompiledMatch = re.compile(method_cfg.get('MatchPattern', None))
-        if method_cfg.get('ExcludePattern', None):
-            CompiledExclude = re.compile(method_cfg.get('ExcludePattern', None))
+        if MatchPattern := method_cfg.get('MatchPattern', None):
+            CompiledMatch = re.compile(MatchPattern)
+        if ExcludePattern := method_cfg.get('ExcludePattern', None):
+            CompiledExclude = re.compile(ExcludePattern)
 
         if verbose:
-            print("\n---- output begin ----\n")
+            log_FileFuncLine("\n---- output begin ----\n")
         count = 0
-        while line := fh.readline():
+        for line in ret['stdout'].splitlines():
             if CompiledMatch and not CompiledMatch.search(line):
                 continue
             if CompiledExclude and CompiledExclude.search(line):
                 continue
 
             if verbose:
-                print(line)
+                log_FileFuncLine(line)
             lines.append(line)
 
             count += 1
@@ -713,13 +462,13 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                 break
 
         if verbose:
-            print("---- output end ----\n\n")
+            log_FileFuncLine("---- output end ----\n\n")
 
-    fh.close()
-    rc = tpsup.cmdtools.get_rc_from_fh(fh)
+    rc = ret['rc']
 
     row_count = len(hashes) if extract_pattern else len(lines)
     output = ''.join(lines)
+
 
 decommify_pattern = re.compile(r',')
 
@@ -848,7 +597,7 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
     where_block = ""
     if wc:
         for key in sorted(wc.keys()):
-            opt_value = tpsup.util.get_first_by_key(
+            opt_value = get_first_by_key(
                 [opt, dict1], key, default=None)
             if verbose > 1:
                 log_FileFuncLine(f"key={key}, opt_value={pformat(opt_value)}")
@@ -871,7 +620,7 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
                     'clause', None), info.get('column', None), info.get('numeric', None), info.get('if_exp', None), info.get('else_clause', None)
 
                 if if_exp is not None:
-                    if not tracer_eval_code(if_exp, **opt):
+                    if not tracer_eval_code(if_exp, EvalAddReturn=1, **opt):
                         if verbose > 1:
                             log_FileFuncLine(
                                 f"key={key}, if_exp='{if_exp}' failed")
@@ -890,7 +639,7 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
                             f"key={key}, if_exp='{if_exp}' passed")
 
                 if clause:
-                    clause = tpsup.util.resolve_scalar_var_in_string(
+                    clause = resolve_scalar_var_in_string(
                         clause, {**dict1,
                                  # cast opt_value to string.
                                  'opt_value': f"{opt_value}",
@@ -929,7 +678,7 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
 
     sql = template
 
-    TrimSql = tpsup.util.get_first_by_key(
+    TrimSql = get_first_by_key(
         [opt, method_cfg], 'TrimSql', default=None)
     if TrimSql:
         # make Trim optional because it is actually easier to modify the sql with \
@@ -970,7 +719,7 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
     sql += footer
 
     # resolve the rest scalar vars at the last moment to avoid resolve where_clause vars.
-    resolved_sql = tpsup.util.resolve_scalar_var_in_string(sql, dict1, **opt)
+    resolved_sql = resolve_scalar_var_in_string(sql, dict1, **opt)
 
     return resolved_sql
 
@@ -992,33 +741,33 @@ def process_db(entity: str, method_cfg: dict, **opt):
         if re.search('mysql', db_type, re.IGNORECASE):
             is_mysql = True
 
-    dbh = tpsup.sqltools.get_dbh(nickname=db)
+    dbh = get_dbh(nickname=db)
     if is_mysql:
         dbh.autocommit = False  # Disable global leverl, so we can SET FOR TRANSACTION LEVEL
 
         mysql_setting = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;'
         print(f"{mysql_setting}\n\n")
         # if is_statement=true, no rows will be returned from run_sql()
-        tpsup.sqltools.run_sql(mysql_setting, dbh=dbh, is_statement=True)
+        run_sql(mysql_setting, dbh=dbh, is_statement=True)
 
     print(f"sql.py {db} \"{sql}\"\n\n")
-    result: list = tpsup.sqltools.run_sql(sql, dbh=dbh, RenderOutput=verbose,
-                                          ReturnType='ListList',  # array of arrays. 1st row is header
-                                          ReturnDetail=True,
-                                          )
+    result: list = run_sql(sql, dbh=dbh, RenderOutput=verbose,
+                           ReturnType='ListList',  # array of arrays. 1st row is header
+                           ReturnDetail=True,
+                           )
 
     verbose > 1 and log_FileFuncLine(f"result = {pformat(result)}\n\n")
 
     if is_mysql:
         mysql_setting = 'COMMIT ;'
         print(f"{mysql_setting}\n\n")
-        tpsup.sqltools.run_sql(mysql_setting, dbh=dbh, is_statement=True)
+        run_sql(mysql_setting, dbh=dbh, is_statement=True)
 
     if result and len(result) > 0:
         # set the global buffer for post_code
         arrays = result[1:]
         headers = result[0]
-        hashes = tpsup.util.arrays_to_hashes(arrays, headers)
+        hashes = arrays_to_hashes(arrays, headers)
         row_count = len(arrays)
 
 
@@ -1122,7 +871,7 @@ def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
             if not condition_needs_new_value:
                 # if condition doesn't need {{new_value}}, we can evaluate it earlier
                 # note: convert condition to string, in case, for example, condition is 0, a number.
-                if not tracer_eval_code(f'{condition}', **opt):
+                if not tracer_eval_code(f'{condition}', EvalAddReturn=1, **opt):
                     continue
 
         # in where_clause/update_key, $known's key is mapped to row's column.
@@ -1141,7 +890,7 @@ def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
             without_prefix = column
             without_prefix = re.sub(r'^.+[.]', '', without_prefix)
 
-            new_value = tpsup.util.get_value_by_key_case_insensitive(
+            new_value = get_value_by_key_case_insensitive(
                 row, without_prefix, default=None)
 
             if not new_value and not (code and re.search(r'{{new_value}}', code)):
@@ -1153,7 +902,7 @@ def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
 
         if condition is not None:
             if condition_needs_new_value:
-                if not tracer_eval_code(f'{condition}', Dict={**vars, **known, 'new_value': new_value}, **opt):
+                if not tracer_eval_code(f'{condition}', Dict={**vars, **known, 'new_value': new_value}, EvalAddReturn=1, **opt):
                     continue
 
         if code is not None:
@@ -1202,25 +951,31 @@ def update_knowledge(k: str, new_value: str, **opt):
     return
 
 
-def update_error(msg: str, opt: dict):
+def update_error(msg: str, **opt):
+    global known
+
+    known.setdefault('ERROR_COUNT', 0)
     known['ERROR_COUNT'] += 1
-    known['ERRORS'].append(msg)
+
+    known.setdefault('ERRORS', []).append(msg)
 
     print(f"ERROR: {msg}\n")
 
     return
 
 
-def update_ok(msg: str, opt: dict):
-    known['OK'].append(msg)
+def update_ok(msg: str, **opt):
+    global known
+    known.setdefault('OK', []).append(msg)
 
     print(f"OK: {msg}\n")
 
     return
 
 
-def update_todo(msg: str, opt: dict):
-    known['TODO'].append(msg)
+def update_todo(msg: str, **opt):
+    global known
+    known.setdefault('TODO', []).append(msg)
 
     print(f"TODO: {msg}\n")
 
@@ -1244,6 +999,9 @@ def parse_cfg(cfg_file: str, **opt):
     cfg_abs_path = os.path.abspath(cfg_file)
     cfgdir, cfgname = os.path.split(cfg_abs_path)  # dirname and basename
 
+    # convert to POSIX path
+    cfgdir = cfgdir.replace('\\', '/')
+
     with open(cfg_file) as fh:
         cfg_string = fh.read()
 
@@ -1254,7 +1012,7 @@ def parse_cfg(cfg_file: str, **opt):
     # make data structure consistent
     for k in ['trace_route']:
         if k in our_cfg:
-            our_cfg[k] = tpsup.util.unify_array_hash(our_cfg[k], 'entity')
+            our_cfg[k] = unify_array_hash(our_cfg[k], 'entity')
 
     # 'vars' is array of pairs of key=>value
     # 'value' is an expression, therefore, we need to use two different quotes.
@@ -1268,7 +1026,7 @@ def parse_cfg(cfg_file: str, **opt):
     #           bytes in position 2-3: truncated \uXXXX escape
 
     if 'key_pattern' in our_cfg:
-        our_cfg['key_pattern'] = tpsup.util.unify_hash_hash(
+        our_cfg['key_pattern'] = unify_hash_hash(
             our_cfg['key_pattern'], 'pattern')
     else:
         our_cfg['key_pattern'] = {}
@@ -1341,7 +1099,7 @@ def parse_cfg(cfg_file: str, **opt):
                                          key_pattern=our_cfg['key_pattern'],
                                          )
 
-    trace_route_entities = tpsup.util.get_keys_from_array(
+    trace_route_entities = get_keys_from_array(
         trace_route, 'entity')
 
     for e in trace_route_entities:
@@ -1400,7 +1158,7 @@ def parse_cfg(cfg_file: str, **opt):
     # when we test compile, we will replace all {{...}} with '1' to avoid syntax error.
     # {{...}} comes from 'vars' and 'known'. but we keep 'known' because known[key] can exist.
 
-    node_pairs = tpsup.util.get_node_list(our_cfg, 'our_cfg', **opt)
+    node_pairs = get_node_list(our_cfg, 'our_cfg', **opt)
     # vars is a array in pairs, therefore, we need to check odd-numberred elements
     # tvars= ['k1', 'v1', 'k2', 'v2']
     # get_node_list(test_object, '/root') =
@@ -1442,12 +1200,12 @@ def parse_cfg(cfg_file: str, **opt):
                 clause = temporary_replacement_pattern.sub(
                     '1', f'{value}', re.MULTILINE)
 
-                if not tpsup.exectools.test_compile(clause,
-                                                    globals(), locals(),
-                                                    source_filename=f'our_cfg node={node}',
-                                                    BeginCode=BeginCode,
-                                                    verbose=(verbose > 1),
-                                                    ):
+                if not test_compile(clause,
+                                    globals(), locals(),
+                                    source_filename=f'our_cfg node={node}',
+                                    BeginCode=BeginCode,
+                                    verbose=(verbose > 1),
+                                    ):
                     failed += 1
                     print(f"ERROR: failed to compile node: {node}\n")
                     print(
@@ -1461,7 +1219,7 @@ def parse_cfg(cfg_file: str, **opt):
 
 
 def exec_simple(source: str, **opt):
-    tpsup.exectools.exec_into_globals(source, globals(), locals(), **opt)
+    exec_into_globals(source, globals(), locals(), **opt)
 
 
 def check_cfg_keys(cfg: dict, syntax: dict, **opt):
@@ -1513,11 +1271,11 @@ def perform_tests(tests: list, **opt):
             continue
 
         if condition:
-            if not tracer_eval_code(condition, **opt):
+            if not tracer_eval_code(condition, EvalAddReturn=1, **opt):
                 print(f"OK, condition={condition} failed. skipped test\n")
                 continue
 
-        if tracer_eval_code(test, **opt):
+        if tracer_eval_code(test, EvalAddReturn=1, **opt):
             verbose and print("test success\n")
             if if_success:
                 tracer_eval_code(if_success, **opt)
@@ -1611,7 +1369,8 @@ def process_entity(entity, entity_cfg, **opt):
     # this pushes back up the setting
     # opt['verbose'] = verbose
 
-    verbose > 1 and print(f"{entity} entity_cfg = {pformat(entity_cfg)}")
+    verbose > 1 and log_FileFuncLine(
+        f"{entity} entity_cfg = {pformat(entity_cfg)}")
 
     if 'vars' in entity_cfg:
         # entity_cfg['vars'] is an array, in order to enforce the order.
@@ -1619,7 +1378,7 @@ def process_entity(entity, entity_cfg, **opt):
         # therefore, we need to convert array to hash.
         entity_vars = resolve_vars_array(
             entity_cfg['vars'], {**vars, **known, 'entity': entity}, **opt)
-        verbose and print(
+        verbose and log_FileFuncLine(
             f"resolved entity={entity} entity_vars={pformat(entity_vars)}")
     else:
         entity_vars = {'entity': entity}
@@ -1633,12 +1392,12 @@ def process_entity(entity, entity_cfg, **opt):
     # vars will be reset for each entity, therefore, we don't need to
     # worry about pollution.
     vars.update(entity_vars)
-    verbose and print(f"vars = {pformat(vars)}")
+    verbose and log_FileFuncLine(f"vars = {pformat(vars)}")
 
     condition = entity_cfg.get('condition', None)
 
     if condition:
-        if not tracer_eval_code(condition, **opt):
+        if not tracer_eval_code(condition, EvalAddReturn=1, **opt):
             print(
                 f"\nskipped entity={entity} due to failed condition: {condition}\n\n")
             return
@@ -1649,10 +1408,10 @@ def process_entity(entity, entity_cfg, **opt):
 process {entity}
           ''')
 
-    comment = tpsup.util.get_first_by_key(
+    comment = get_first_by_key(
         [opt, entity_cfg], 'comment', default='')
     if comment:
-        comment = tpsup.util.resolve_scalar_var_in_string(
+        comment = resolve_scalar_var_in_string(
             comment, {**vars, **known}, **opt)
         print(f"{comment}\n\n")
 
@@ -1711,9 +1470,9 @@ process {entity}
         apply_csv_filters(entity_cfg.get('csv_filters', None), **opt)
         verbose > 1 and print_global_buffer(f'after apply_csv_filters')
 
-    Tail = tpsup.util.get_first_by_key(
+    Tail = get_first_by_key(
         [opt, entity_cfg], 'tail', default=None)
-    Top = tpsup.util.get_first_by_key(
+    Top = get_first_by_key(
         [opt, entity_cfg], 'top', default=5)
 
     log_FileFuncLine(f"\nprint result")
@@ -1721,9 +1480,11 @@ process {entity}
     if lines:
         print("----- lines begin ------\n")
         if Tail:
-            print(lines[-Tail:])
+            for l in lines[-Tail:]:
+                print(l)
         else:
-            print(lines[:Top])
+            for l in lines[:Top]:
+                print(l)
         print("----- lines end ------\n")
         print("\n")
 
@@ -1764,9 +1525,9 @@ process {entity}
             print(f"(Truncated. Total {count}, only displayed top {Top}.)\n")
 
     if not opt.get('isExample', False):
-        AllowZero = tpsup.util.get_first_by_key(
+        AllowZero = get_first_by_key(
             [opt, entity_cfg], 'AllowZero', default=0)
-        AllowMultiple = tpsup.util.get_first_by_key(
+        AllowMultiple = get_first_by_key(
             [opt, entity_cfg], 'AllowMultiple', default=0)
 
         if not row_count:
@@ -1793,7 +1554,7 @@ process {entity}
         # %r is a global var
         r = hashes[0]
 
-    if update_key := tpsup.util.unify_hash_hash(entity_cfg.get('method_cfg', {}).get('where_clause', {}), 'column'):
+    if update_key := unify_hash_hash(entity_cfg.get('method_cfg', {}).get('where_clause', {}), 'column'):
         update_knowledge_from_rows(r, update_key, **opt)
     if update_key := entity_cfg.get('update_key', None):
         update_knowledge_from_rows(r, update_key, **opt)
@@ -1851,7 +1612,8 @@ def apply_csv_filters(filters: list, **opt):
 
         condition = old_filter.get('condition', None)
         if condition:
-            if tracer_eval_code(condition, **opt):
+            if tracer_eval_code(condition, EvalAddReturn=1, **opt):
+                # eval expression need to add EvalAddReturn=1
                 if verbose:
                     print(
                         f"passed filter condition: {condition}\n\n")
@@ -1879,7 +1641,7 @@ def apply_csv_filters(filters: list, **opt):
                 for ke1 in old_key_exps:
                     # old_key_exps is list of strings
                     # each string is a key=value pair (ke)
-                    ke2 = tpsup.util.resolve_scalar_var_in_string(
+                    ke2 = resolve_scalar_var_in_string(
                         ke1, {**vars, **known}, **opt)
                     ke2 = apply_key_pattern(ke2, **opt)
 
@@ -1902,9 +1664,7 @@ def apply_csv_filters(filters: list, **opt):
         MaxRows = opt.get('MaxExtracts', None)
 
         # hashes_gen is a generator
-        hashes_gen = tpsup.csvtools.filter_dicts(hashes, headers,
-                                                 **new_filter
-                                                 )
+        hashes_gen = filter_dicts(hashes, headers, **new_filter)
         # update global buffer
         # convert generator to list
         hashes = list(hashes_gen)
@@ -1920,7 +1680,7 @@ def apply_csv_filters(filters: list, **opt):
                           )
         else:
             headers = []
-        arrays = tpsup.util.hashes_to_arrays(hashes, headers)
+        arrays = hashes_to_arrays(hashes, headers)
         row_count = len(hashes)
 
     return  # this sub affects global buffer, therefore, nothing to return
@@ -2021,15 +1781,18 @@ def trace(given_cfg, input, **opt):
         # vars and known are global hash, for each access. so is all_cfg['global_vars'].
         # therefore, we need to convert all_cfg['vars'] into a hash.
         global_vars = resolve_vars_array(all_cfg['vars'], known, **opt)
+        verbose and log_FileFuncLine(
+            f"resolved global_vars={pformat(global_vars)}")
         all_cfg['global_vars'] = global_vars
     else:
         all_cfg['global_vars'] = {}
 
-    verbose and print(f"global_vars = {pformat(all_cfg['global_vars'])}")
+    verbose and log_FileFuncLine(
+        f"global_vars = {pformat(all_cfg['global_vars'])}")
 
     if known.get('EXAMPLE', None):
         entity = known['EXAMPLE']
-        entity_cfg = tpsup.util.get_value_by_key_case_insensitive(
+        entity_cfg = get_value_by_key_case_insensitive(
             cfg_by_entity, entity, **opt)
 
         opt2 = {**opt,
@@ -2055,7 +1818,7 @@ def trace(given_cfg, input, **opt):
             for t in SkipTraceString.split(','):
                 SkipTrace[t] = 1
 
-            verbose and print(f"SkipTrace = {pformat(SkipTrace)}")
+            verbose and log_FileFuncLine(f"SkipTrace = {pformat(SkipTrace)}")
 
     ForceThrough = opt.get('ForceThrough', False)
     # todo - do we still need this in python
@@ -2070,14 +1833,14 @@ def trace(given_cfg, input, **opt):
                 if (k not in known) or (known[k] is None):
                     continue
 
-            verbose and print(
+            print(
                 f"matched entry point: {pformat(keys)} {pformat(entities)}")
 
             for entity in entities:
                 if entity in SkipTrace:
                     continue
 
-                entity_cfg = tpsup.util.get_value_by_key_case_insensitive(
+                entity_cfg = get_value_by_key_case_insensitive(
                     cfg_by_entity, entity, **opt)
 
                 try:
@@ -2092,7 +1855,7 @@ def trace(given_cfg, input, **opt):
 
             break  # only process the first match in entry point
 
-    trace_route_entities = tpsup.util.get_keys_from_array(
+    trace_route_entities = get_keys_from_array(
         trace_route, 'entity')
 
     if not trace_route_entities:
@@ -2108,6 +1871,8 @@ def trace(given_cfg, input, **opt):
         opt2 = {**opt, **row2}
 
         if entity in SkipTrace:
+            print(
+                f"skipped entity={entity} because it is in SkipTrace={SkipTrace}\n")
             continue
 
         if entity in result and not row.get('reentry', None):
@@ -2119,10 +1884,13 @@ def trace(given_cfg, input, **opt):
         vars['entity'] = entity
 
         if condition := row.get('condition', None):
-            if not tracer_eval_code(condition, **opt):
+            if not tracer_eval_code(condition, EvalAddReturn=1, **opt):
+                # eval expression need to add EvalAddReturn=1
+                print(
+                    f"\nskipped entity={entity} due to failed condition: {condition}\n\n")
                 continue
 
-        entity_cfg = tpsup.util.get_value_by_key_case_insensitive(
+        entity_cfg = get_value_by_key_case_insensitive(
             cfg_by_entity, entity, **opt)
 
         success = 0
@@ -2168,16 +1936,17 @@ def tracer_eval_code(code: str, **opt):
     dict1 = opt.get('dict1', {**vars, **known})
 
     if verbose:
-        print()
+        log_FileFuncLine()
         log_FileFuncLine(f"original code={code}")
+        log_FileFuncLine(f"opt = {pformat(opt)}")
 
-    code2 = tpsup.util.resolve_scalar_var_in_string(
+    code2 = resolve_scalar_var_in_string(
         code, dict1, verbose=verbose)
 
     if verbose:
         log_FileFuncLine(f"resolved code={code2}")
 
-    ret = tpsup.exectools.eval_block(code2, globals(), locals(), **opt)
+    ret = eval_block(code2, globals(), locals(), **opt)
 
     return ret
 

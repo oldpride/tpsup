@@ -160,7 +160,7 @@ def get_value_by_key_case_insensitive(value_by_key: dict, key: str, **opt):
         return opt["default"]
     else:
         raise Exception(
-            f"key={key} has no match even if case-insensitive in {value_by_key}")
+            f"key={key} has no match even if case-insensitive in {pformat(value_by_key)}")
 
 
 def get_first_by_key(array_of_hash: list, key: str, **opt):
@@ -234,12 +234,15 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
 
     defaults_by_var = {}
     scalar_vars = []
-    while vars_defaults:
-        var, default = vars_defaults.pop(0)
+    for vd in vars_defaults:
+        var, default = vd
         if default:
             default = default[1:]  # remove the leading '='
         scalar_vars.append(var)
-        defaults_by_var.setdefault(var, []).append(default)
+        if var in defaults_by_var:
+            defaults_by_var[var].append(default)
+        else:
+            defaults_by_var[var] = [default]
 
     if not scalar_vars:
         return clause  # return when no variable found
@@ -289,8 +292,16 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
         # replacement must be a string. use f'{var}' to convert to string.
         # count=0 means replace all matches. default is 0.
         # count=1 means only replace the 1st match
+        verbose > 1 and log_FileFuncLine(f"var={var} value={value}")
+
+        # convert value to string
+        # escape \ to \\, otherwise re.sub() will complain. eg
+        #    change C:\Users\william to C:\\Users\\william
+        if "\\" in f'{value}':
+            value = f'{value}'.replace("\\", "\\\\")
+            log_FileFuncLine(f"escaped \\ to \\\\ result in: {value}")
         clause = re.sub(r"\{\{" + var + r"(=.{0,200}?)?\}\}",
-                        f'{value}',  # convert value to string
+                        value,
                         clause,
                         count=1,  # only replace the 1st match
                         flags=re.IGNORECASE | re.MULTILINE)
