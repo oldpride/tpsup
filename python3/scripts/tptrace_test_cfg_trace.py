@@ -60,6 +60,7 @@ our_cfg = {
 
             'method_cfg': {
                 'type': 'grep_keys',
+                # if key is in known, use its value to grep.
                 'value': [
                     'TRADEID',
                     {'key': 'ORDERID', 'pattern': 'orderid={{opt_value}}'},
@@ -78,6 +79,58 @@ our_cfg = {
             ],
             'comment': 'test using grep_keys to generate command',
         },
+
+        'applog_cmd_pipe': {
+            'method': 'cmd',
+            'vars': [
+                'log', '"{{cfgdir}}/tptrace_test.log"',
+            ],
+
+            'method_cfg': {
+                'type': 'pipe',
+                # 2D array,
+                #    outer loop is connected by pipe
+                #    inner loop is for OR logic for grep command.
+                #
+                # method_cfg => {
+                #    type  => 'pipe',
+                #    value => [
+                #       ['grep=grep -E', 'OR11', 'OR12'],
+                #       ['grep=grep -v -E', 'OR21', 'OR22'],
+                #       ['grep=grep -E ',   'OR31', 'OR32'],
+                #       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
+                #       ['cmd=tail -10'],
+                #    ],
+                #    file => 'app.log',
+                # },
+                #
+                #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate
+                #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
+                #
+                #  other value:
+                #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+
+                'value': [
+                    ['grep=tpgrep', 'TRADEID', 'ORDERID'],
+                    ['grep=tpgrep -v', 'BOOKID'],
+                    ['cmd=tpgrep -v "{{JUNK=junk1}}|{{JUNK=junk2}}"'],
+                ],
+                'file': '{{log}}',
+            },
+            'top': 5,
+            # 'AllowZero': 0,
+            'AllowMultiple': 1,
+            'tests': [
+                {
+                    'test': 'row_count > 0',
+                    'if_success':   'update_ok("pipe: seen TRANSACTION in {{log}}");',
+                    'if_failed': 'update_error("pipe:   no TRANSACTION in {{log}}");',
+                },
+            ],
+
+            'comment': 'test using pipe to generate command',
+        },
+
 
 
         'orders': {
@@ -258,9 +311,10 @@ our_cfg = {
         'actions',
         'booking',
         'applog_cmd_grep_keys',
+        'applog_cmd_pipe',
 
         # below are untested
-        # 'app_cmd_pipe',
+        # ,
 
 
     ],
@@ -276,6 +330,9 @@ our_cfg = {
 
     # test applog_cmd_grep_keys
     {{prog}} -t applog_cmd_grep_keys orderid=ORD-0001 tradeid=TRD-0002 bookid=BKG-0002
+
+    # test applog_cmd_grep_keys
+    {{prog}} -t applog_cmd_pipe orderid=ORD-0001 tradeid=TRD-0002 bookid=BKG-0002
     ''',
 }
 

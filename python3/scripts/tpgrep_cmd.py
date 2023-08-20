@@ -20,10 +20,16 @@ usage = textwrap.dedent("""
 examples = textwrap.dedent(f"""
     examples:
                            
-        {prog}      mypattern grep_test*
-        {prog}   -v mypattern grep_test*
-        {prog}    "abc1|def2" grep_test*
-        {prog} "^(abc1|def2)" grep_test*
+        {prog}      mypattern tpgrep_test*
+        {prog}   -v mypattern tpgrep_test*
+        {prog}    "abc1|def2" tpgrep_test*
+        {prog} "^(abc1|def2)" tpgrep_test*
+
+        # match multiple patterns in any order. use -m to specify extra patterns
+        {prog} -m ab c1 tpgrep_test*
+        # if we used normal egrep, we would have to do
+        egrep (ab.*c1|c1.*ab) tpgrep_test*
+        # it would be a nightmare to use egrep if we have more than 2 patterns.
 
     """)
 
@@ -34,7 +40,12 @@ parser = argparse.ArgumentParser(
     epilog=examples)
 
 parser.add_argument(
-    'pattern', default=None, action='store', help='regex pattern')
+    # 'pattern', default=None, action='store', help='regex pattern')
+    'MatchPatterns', action="append", help='MatchPatterns')
+
+parser.add_argument(
+    # 'pattern', default=None, action='store', help='regex pattern')
+    '-m', dest='MatchPatterns', action="append", help='extra MatchPatterns')
 
 # parser.add_argument(
 #     'file', default='-', action='store',
@@ -74,9 +85,9 @@ if verbose:
 
 opt = {}
 if args['exclusive']:
-    opt['ExcludePattern'] = args['pattern']
+    opt['ExcludePatterns'] = args['MatchPatterns']
 else:
-    opt['MatchPattern'] = args['pattern']
+    opt['MatchPatterns'] = args['MatchPatterns']
 
 # files = glob(args['file'])
 files = []

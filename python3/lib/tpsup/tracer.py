@@ -255,7 +255,7 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
             method_cfg, 'logic', default='OR')
 
         # 'grep -E' will be good for linux but not for windows
-        default_grep = f'"{TPSUP}/python3/scripts/grep"'
+        default_grep = f'"{TPSUP}/python3/scripts/tpgrep"'
         grep = get_value_by_key_case_insensitive(
             method_cfg, 'grep', default=default_grep)
 
@@ -311,6 +311,11 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
             raise Exception(
                 f"attr='value' is not defined at method_cfg={pformat(method_cfg)}")
 
+        # 'grep -E' will be good for linux but not for windows
+        default_grep = f'"{TPSUP}/python3/scripts/tpgrep"'
+        grep = get_value_by_key_case_insensitive(
+            method_cfg, 'grep', default=default_grep)
+
         commands = []
         for r in rows:
             cmd2 = None
@@ -333,7 +338,8 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                 if not values:
                     continue
 
-                cmd2 += " '" + '|'.join(values) + "'"
+                # jin windows cmd.exe, only double quotes does grouping.
+                cmd2 += ' "' + '|'.join(values) + '"'
             elif m := re.search(r'^tpgrepl=(.+)', r[0]):
                 cmd2 = m.group(1)
 
@@ -395,7 +401,7 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
             if not commands:
                 # for first command
                 if file is not None:
-                    cmd2 += f" {file}"
+                    cmd2 += f' "{file}"'
             commands.append(cmd2)
 
         if not commands:
@@ -414,6 +420,8 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
     print(f"running cmd={cmd}\n")
 
     ret = run_cmd(cmd, print=verbose, **opt)
+    if 'stderr' in ret and ret['stderr']:
+        print(f"stderr = {ret['stderr']}\n")
 
     if verbose > 1:
         log_FileFuncLine(f"ret = {pformat(ret)}")

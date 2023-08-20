@@ -42,7 +42,7 @@ def grep(files: Union[list, str], MatchPattern: str = None,
     if ExcludePatterns:
         ExcludePatterns2 = ExcludePatterns
     elif ExcludePattern:
-        ExcludePattern2 = [ExcludePattern]
+        ExcludePatterns2 = [ExcludePattern]
     else:
         ExcludePatterns2 = []
 
@@ -90,11 +90,12 @@ def grep(files: Union[list, str], MatchPattern: str = None,
                         print(f'line={line}', file=sys.stderr)
 
                     if MatchCompiled:
+                        all_matched = True
                         for p in MatchCompiled:
-                            if p.search(line):
+                            if not p.search(line):
+                                all_matched = False
                                 break
-                        else:
-                            # no match
+                        if not all_matched:
                             continue
 
                     to_exclude = False
