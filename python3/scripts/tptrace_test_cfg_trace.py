@@ -131,7 +131,25 @@ our_cfg = {
             'comment': 'test using pipe to generate command',
         },
 
+        'applog_cmd_post_code': {
+            'method': 'cmd',
+            'vars': [
+                'log', '"{{cfgdir}}/tptrace_test.log"',
+            ],
 
+            'method_cfg': {
+                'type': 'cmd',
+                'value': 'tpgrep -E " (ERROR|FAIL)[ :]" {{log}}',
+            },
+
+            'top': 5,
+
+            'post_code': '''
+                if row_count > 0:
+                    update_error("seen ERROR in {{log}}")
+                    print(f"access from entity={{ENTITY}}")
+            ''',
+        },
 
         'orders': {
             'method': 'db',
@@ -273,6 +291,20 @@ our_cfg = {
                 'example_clause': "TradeDate = '{{yyyymmdd}}'",
             },
         },
+
+    'applog_log': {
+        'method_cfg': {
+            'method': 'log',
+            'log': '"{{cfgdir}}/tptrace_test.log"',
+            # named groups
+            'extract': 'tradeid=(?P<TRADEID>{{pattern::TRADEID}}),.*?sid=(?P<SID>{{pattern::SID}}),.*?bookid=(?P<BOOKID>{{pattern::BOOKID}}),.*?qty=(?P<TRADEQTY>{{pattern::TRADEQTY}}),',
+        },
+        'update_key': {
+            'BOOKID': 'BOOKID',
+            'TRADEID': 'TRADEID',
+            'SID': 'SID',
+            'TRADEQTY': {'column': 'TRADEQTY', 'numeric': 1},
+        },
     },
 
     'extra_keys': ['example', 'security', 'YYYYMMDD'],
@@ -312,6 +344,8 @@ our_cfg = {
         'booking',
         'applog_cmd_grep_keys',
         'applog_cmd_pipe',
+        'applog_cmd_post_code',
+        'applog_log',
 
         # below are untested
         # ,
@@ -333,6 +367,9 @@ our_cfg = {
 
     # test applog_cmd_grep_keys
     {{prog}} -t applog_cmd_pipe orderid=ORD-0001 tradeid=TRD-0002 bookid=BKG-0002
+
+    # test applog_cmd_post_code
+    {{prog}} -t applog_cmd_post_code orderid=ORD-0001 
     ''',
 }
 
