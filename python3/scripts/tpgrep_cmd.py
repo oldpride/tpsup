@@ -31,6 +31,12 @@ examples = textwrap.dedent(f"""
         egrep (ab.*c1|c1.*ab) tpgrep_test*
         # it would be a nightmare to use egrep if we have more than 2 patterns.
 
+        # recursive
+        {prog} -r selenium .
+
+        # file name only
+        {prog} -l -r selenium .
+
     """)
 
 parser = argparse.ArgumentParser(
@@ -63,6 +69,14 @@ parser.add_argument(
 parser.add_argument(
     '-v', dest='exclusive', action="store_true",
     default=False, help='exclusive pattern')
+
+parser.add_argument(
+    '-r', dest='Recursive', action="store_true",
+    default=False, help='recursive')
+
+parser.add_argument(
+    '-l', dest='FileNameOnly', action="store_true",
+    default=False, help='print file name only')
 
 parser.add_argument(
     '-E', dest='regex', action="store_true",
@@ -99,5 +113,7 @@ else:
 opt['print'] = True
 opt['verbose'] = args['verbose']
 opt['CaseInsensitive'] = args['CaseInsensitive']
+opt['Recursive'] = args['Recursive']
+opt['FileNameOnly'] = args['FileNameOnly']
 
 grep(files, **opt)
