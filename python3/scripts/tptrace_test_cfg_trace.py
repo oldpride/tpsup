@@ -308,6 +308,69 @@ our_cfg = {
                 'TRADEQTY': {'column': 'TRADEQTY', 'numeric': 1},
             },
         },
+
+        'applog_section': {
+            'method': 'section',
+            'method_cfg': {
+                'log': '"{{cfgdir}}/tptrace_test_section*.log"',
+
+                # PreMatch/PreExclude are tried before BeginPattern/EndPattern are tried
+                # they are for speedup, it covers every line, therefore, be careful to
+                # avoid filtering out BeginPattern/EndPattern.
+                'PreMatch': '^2021',
+                # PreExclude => '^2022',
+
+                # this cfg will transferred to TPSUP::LOG::get_log_sections() sub
+                'BeginPattern': 'section id .*? started',
+                'EndPattern': 'section completed',
+
+                # PostPattern/PostPattern are tried after BeginPattern/EndPattern are tried
+                # they are also for speed-up
+                'PostMatch': 'order id|trade id',
+                # PostExclude => 'no content',
+
+                'ExtractPatterns': [
+                    '^(?<BeginTime>.{23}) section id (?<SectionId>.*?) started',
+                    '^(?<EndTime>.{23}) section completed',
+                    'order id (?<OrderId>\S+)',
+                    'trade id (?<TradeId>\S+)',
+                ],
+                'KeyAttr': {'OrderId': 'Array', 'TradeId': 'Hash'},
+                'KeyDefault': {'OrderId': [], 'TradeId': {}},
+                # KeyDefault is to simplify MatchExp, allowing us to use
+                #     MatchExp =>'grep {/^ORD-0001$/}  @{$r{OrderId}}'
+                # without worrying about whether $r{OrderId} is defined.
+
+                # use csv_filter below for consistency
+                # MatchExp can use {{...}} vars. this is applied after a whole section is
+                # completed.
+                # MatchExp =>'grep(/^{{pattern::ORDERID}}$/, @{$r{OrderId}})',
+                # ExcludeExp =>'...',
+
+            },
+
+            'csv_filters': [
+                [
+                    [],  # dependending keys, like entry points
+                    {'MatchExps': [
+                        'defined($OrderId) && grep(/{{pattern::ORDERID}}/, @$OrderId)'], }
+                ],
+            ],
+
+            'update_key': {
+                # the key is $known key. The column is the the key of a section
+                'SECTION_BEGINTIME': {'column': 'BeginTime'},
+                'SECTION_ENDTIME': {'column': 'EndTime'},
+                'SECTIONID': {'column': 'SectionId'},
+                'ORDERIDS': {'column': 'OrderId'},
+                'ORDERID2': {'code': '$r{OrderId}->[0]', 'condition': '$r{OrderId}'},
+            },
+
+            'comment': 'test entity={{entity}}',
+        },
+
+
+
     },
 
     'extra_keys': ['example', 'security', 'YYYYMMDD'],
@@ -349,6 +412,7 @@ our_cfg = {
         'applog_cmd_pipe',
         'applog_cmd_post_code',
         'applog_log',
+        'applog_section',
     ],
 
     'usage_example':  '''
@@ -368,6 +432,10 @@ our_cfg = {
 
     # test applog_cmd_post_code
     {{prog}} -t applog_cmd_post_code orderid=ORD-0001 
+
+     test applog_log
+    {{prog}} -t applog_log bookid=BKG-0002 sid=400001 TRADEID=TRD-0002 TRADEQTY=400
+    {{prog}} -t applog_log any
     ''',
 }
 

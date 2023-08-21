@@ -507,7 +507,14 @@ def process_log(entity: str,
     for l in resolved_logs:
         with open(l, 'r') as fh:
             print(f"extract info from {l}\n")
-            h, extracts = extract_from_fh(fh, extract_pattern, **opt)
+            h, extracts = extract_from_fh(
+                fh,
+                extract_pattern,
+                # MatchPattern and ExcludePattern are from method_cfg
+                # not from opt.
+                MatchPattern=method_cfg.get('MatchPattern', None),
+                ExcludePattern=method_cfg.get('ExcludePattern', None),
+                **opt)
 
             # update global buffer
             hashes = extracts
@@ -540,10 +547,12 @@ def extract_from_fh(fh, extract_pattern: str, **opt):
     headers = list(set(capture_keys))
 
     print(f"origial extract_pattern = {extract_pattern}")
-    extract_pattern = apply_key_pattern(extract_pattern, opt)
+    extract_pattern = apply_key_pattern(extract_pattern, **opt)
     extract_pattern = resolve_scalar_var_in_string(
         extract_pattern, {**vars, **known}, **opt)
+    print()
     print(f"resolved extract_pattern = {extract_pattern}")
+    print()
 
     CompiledExtract = re.compile(extract_pattern)
     CompiledMatch = None
@@ -598,6 +607,155 @@ def extract_from_fh(fh, extract_pattern: str, **opt):
         log_FileFuncLine("---- match end -----\n")
 
     return (headers, tally)
+
+
+'''
+sub process_section {
+   my ($entity, $method_cfg, $opt) = @_;
+
+   my $verbose = $opt->{verbose};
+
+   my $log = $method_cfg->{log};
+
+   my $resolved_log = resolve_a_clause($log, {%vars, %known}, $opt);
+
+   print "resolved log = $resolved_log\n\n";
+
+   my @logs;
+   my $log_type = ref $resolved_log;
+   if (!$log_type) {
+      @logs = ($resolved_log);
+   } elsif ($log_type eq 'ARRAY') {
+      @logs = @$resolved_log;
+   } else {
+      croak "unsuppported resolved log type=$log_type, resolved log=" . Dumper($resolved_log);
+   }
+
+   my $MaxExtracts = $opt->{MaxExtracts};
+   my $count = 0;
+   for my $l (@logs) {
+      my $sections = get_log_sections($l, $method_cfg, {%$opt,MaxSections=>$MaxExtracts});
+
+      if ($sections) {
+         push @hashes, @$sections;
+
+         for my $section (@hashes) {
+            if ($section->{lines}) {
+               $verbose>1 && print @{$section->{lines}};
+               push @lines, @{$section->{lines}};
+            }
+         }
+
+         $count += scalar(@$sections);
+         last if $count >= $MaxExtracts;
+      }
+   }
+
+   @headers = @{get_log_section_headers($method_cfg->{ExtractPatterns}, $opt)};
+   @arrays  = @{hashes_to_arrays(\@hashes, \@headers)};
+   $row_count = scalar(@hashes);
+}
+
+sub apply_csv_filter_href {
+   my ($filter1, $opt) = @_;
+
+   return if ! defined $filter1;   # do nothing if no filter
+   my $type = ref($filter1);
+   $type = "" if !$type;
+
+   if ($type ne 'HASH') {
+      croak "wrong type='$type'. Only HASH is supported";
+   }
+
+   # example of $filter1:
+   #            {
+   #             ExportExps => [
+   #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+   #                ],
+   #              SortKeys => [ 'weight' ],
+   #            },
+
+   my $filter2;
+   my $changed;
+   for my $k (sort (keys %$filter1)) {
+      if ($k =~ /Exps/) {
+         my $Exps1 = $filter1->{$k};
+         next if ! $Exps1 || !@$Exps1;
+
+         my $Exps2 = [];
+         for my $e1 (@$Exps1) {
+            my $e2 = resolve_scalar_var_in_string($e1, {%vars, %known}, $opt);
+            $e2 = apply_key_pattern($e2, $opt);
+
+            $changed++ if $e2 ne $e1;
+            push @$Exps2, $e2;
+         }
+
+         $filter2->{$k} = $Exps2;
+      } else {
+         $filter2->{$k} = $filter1->{$k};
+      }
+   }
+
+   if ($changed) {
+      print "original filter1 = ", Dumper($filter1);
+      print "resolved filter2 = ", Dumper($filter2);
+   } else {
+      print "static filter2 = ", Dumper($filter2);
+   }
+
+   return $filter2;
+}
+'''
+# convert above to python
+
+
+def process_section(entity: str, method_cfg: dict, **opt):
+    verbose = opt.get('verbose', 0)
+
+    log = method_cfg['log']
+    if isinstance(log, str):
+        logs = [log]
+    elif isinstance(log, list):
+        logs = log
+    else:
+        raise Exception(
+            f"unsupported log type={type(log)}, log={log}. must be str or list")
+
+    resolved_logs = []
+    for l in logs:
+        resolved_logs.append(resolve_a_clause(l, {**vars, **known}, **opt))
+
+    if verbose:
+        log_FileFuncLine(f"resolved_logs = {resolved_logs}\n")
+
+    MaxExtracts = opt.get('MaxExtracts', None)
+
+    for l in resolved_logs:
+        sections = get_log_sections(l, method_cfg, {
+            **opt,
+            'MaxSections': MaxExtracts,
+        })
+
+        if sections:
+            hashes.extend(sections)
+
+            for section in hashes:
+                if section['lines']:
+                    if verbose > 1:
+                        print(section['lines'])
+                    lines.extend(section['lines'])
+
+            count = len(sections)
+            if count >= MaxExtracts:
+                print(
+                    f"(stopped extraction as count={count} >= MaxExtracts={MaxExtracts})")
+                break
+
+    headers = get_log_section_headers(
+        method_cfg['ExtractPatterns'], **opt)
+    arrays = hashes_to_arrays(hashes, headers)
+    row_count = len(hashes)
 
 
 decommify_pattern = re.compile(r',')
@@ -1842,7 +2000,7 @@ def apply_key_pattern(string: str, **opt):
     global known
     for k in needed_keys:
         substitue = known.get(k, key_pattern[k]['pattern'])
-        string = re.sub('{{pattern::'+f'{k}' + '}}', substitue, string)
+        string = re.sub('{{pattern::'+f'{k}' + '}}', f'{substitue}', string)
 
     return string
 

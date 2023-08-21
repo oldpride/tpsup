@@ -156,10 +156,14 @@ class TpOutput:
         self.close()
 
 
-def tpglob(files: list, **opt):
-    if not isinstance(files, list):
+def tpglob(file: Union[list, str],  **opt):
+    if isinstance(file, str):
+        files = file.split()
+    elif isinstance(file, list):
+        files = file
+    else:
         raise RuntimeError(
-            f'unsupported type of files={pformat(files)}\nIt must be a list')
+            f'unsupported type of file={pformat(file)}\nIt must be a list or a string')
 
     files2 = []
     for f in files:
@@ -174,6 +178,19 @@ def tpglob(files: list, **opt):
             files2.extend(globbed)
 
     return files2
+
+
+def sorted_files(files: Union[list, str], sort_func, globbed: bool = False, **opt):
+    if not globbed:
+        files2 = tpglob(files, **opt)
+    else:
+        files2 = files
+
+    return list(sorted(files2, key=sort_func))
+
+
+def sorted_files_by_mtime(files: list, **opt):
+    return sorted_files(files, os.path.getmtime, **opt)
 
 
 def main():
@@ -205,6 +222,15 @@ def main():
             to.write(line.encode('utf-8'))
 
     os.system(f'ls -l {file_gz}; zcat {file_gz}; /bin/rm -fr {testdir}')
+
+    from tpsup.exectools import test_lines
+    TPSUP = os.environ.get('TPSUP')
+    libfiles = f'{TPSUP}/python3/lib/tpsup/*.py'
+
+    def test_codes():
+        sorted_files_by_mtime([libfiles], verbose=verbose)
+
+    test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
 
 if __name__ == '__main__':
