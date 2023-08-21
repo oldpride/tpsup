@@ -292,18 +292,21 @@ our_cfg = {
             },
         },
 
-    'applog_log': {
-        'method_cfg': {
+        'applog_log': {
             'method': 'log',
-            'log': '"{{cfgdir}}/tptrace_test.log"',
-            # named groups
-            'extract': 'tradeid=(?P<TRADEID>{{pattern::TRADEID}}),.*?sid=(?P<SID>{{pattern::SID}}),.*?bookid=(?P<BOOKID>{{pattern::BOOKID}}),.*?qty=(?P<TRADEQTY>{{pattern::TRADEQTY}}),',
-        },
-        'update_key': {
-            'BOOKID': 'BOOKID',
-            'TRADEID': 'TRADEID',
-            'SID': 'SID',
-            'TRADEQTY': {'column': 'TRADEQTY', 'numeric': 1},
+            'method_cfg': {
+                'log': '"{{cfgdir}}/tptrace_test.log"',
+                # named groups
+                # https://docs.python.org/3/library/re.html#regular-expression-syntax
+                # https://stackoverflow.com/questions/10059673
+                'extract': 'tradeid=(?P<TRADEID>{{pattern::TRADEID}}),.*?sid=(?P<SID>{{pattern::SID}}),.*?bookid=(?P<BOOKID>{{pattern::BOOKID}}),.*?qty=(?P<TRADEQTY>{{pattern::TRADEQTY}}),',
+            },
+            'update_key': {
+                'BOOKID': 'BOOKID',
+                'TRADEID': 'TRADEID',
+                'SID': 'SID',
+                'TRADEQTY': {'column': 'TRADEQTY', 'numeric': 1},
+            },
         },
     },
 
@@ -346,11 +349,6 @@ our_cfg = {
         'applog_cmd_pipe',
         'applog_cmd_post_code',
         'applog_log',
-
-        # below are untested
-        # ,
-
-
     ],
 
     'usage_example':  '''

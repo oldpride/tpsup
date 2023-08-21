@@ -478,6 +478,128 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
     output = ''.join(lines)
 
 
+def process_log(entity: str,
+                method_cfg: dict,
+                **opt):
+    verbose = opt.get('verbose', 0)
+
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
+
+    log = method_cfg['log']
+    if isinstance(log, str):
+        logs = [log]
+    elif isinstance(log, list):
+        logs = log
+    else:
+        raise Exception(
+            f"unsupported log type={type(log)}, log={log}. must be str or list")
+
+    resolved_logs = []
+    for l in logs:
+        resolved_logs.append(resolve_a_clause(l, {**vars, **known}, **opt))
+
+    if verbose:
+        log_FileFuncLine(f"resolved_logs = {resolved_logs}\n")
+
+    extract_pattern = method_cfg['extract']
+    MaxExtracts = opt.get('MaxExtracts', None)
+
+    for l in resolved_logs:
+        with open(l, 'r') as fh:
+            print(f"extract info from {l}\n")
+            h, extracts = extract_from_fh(fh, extract_pattern, **opt)
+
+            # update global buffer
+            hashes = extracts
+            headers = h
+
+            count = len(hashes)
+            if count >= MaxExtracts:
+                print(
+                    f"(stopped extraction as count={count} >= MaxExtracts={MaxExtracts})")
+                break
+
+    # update global buffer
+    row_count = len(hashes)
+    arrays = hashes_to_arrays(hashes, headers)
+
+
+def extract_from_fh(fh, extract_pattern: str, **opt):
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
+
+    verbose = opt.get('verbose', 0)
+    MaxExtracts = opt.get('MaxExtracts', None)
+
+    # # named groups
+    # https://docs.python.org/3/library/re.html#regular-expression-syntax
+    # https://stackoverflow.com/questions/10059673
+    # 'orderid=(?P<ORDERID>{{pattern::ORDERID}}),.*tradeid=(?P<TRADEID>{{pattern::TRADEID}}),.*sid=(?P<SID>{{pattern::SID}}),.*filledqty=(?P<FILLEDQTY>{{pattern::FILLEDQTY}}),',
+
+    capture_keys = re.findall(r'\?P<([a-zA-Z0-9_]+?)>', extract_pattern)
+    # get unique keys from capture_keys
+    headers = list(set(capture_keys))
+
+    print(f"origial extract_pattern = {extract_pattern}")
+    extract_pattern = apply_key_pattern(extract_pattern, opt)
+    extract_pattern = resolve_scalar_var_in_string(
+        extract_pattern, {**vars, **known}, **opt)
+    print(f"resolved extract_pattern = {extract_pattern}")
+
+    CompiledExtract = re.compile(extract_pattern)
+    CompiledMatch = None
+    CompiledExclude = None
+    if MatchPattern := opt.get('MatchPattern', None):
+        CompiledMatch = re.compile(MatchPattern)
+    if ExcludePattern := opt.get('ExcludePattern', None):
+        CompiledExclude = re.compile(ExcludePattern)
+
+    match_count = 0
+    tally = []
+
+    if verbose:
+        log_FileFuncLine("\n---- match begin -----\n")
+
+    while True:
+        line = fh.readline()
+        if not line:
+            break
+
+        if CompiledMatch and not CompiledMatch.search(line):
+            continue
+        if CompiledExclude and CompiledExclude.search(line):
+            continue
+
+        if m := CompiledExtract.search(line):
+            if verbose:
+                log_FileFuncLine(f"matched: {line}")
+
+            # if not m.groupdict():
+            #     continue
+
+            match = m.groupdict()
+
+            if verbose:
+                log_FileFuncLine(f"matched = {pformat(match)}")
+
+            lines.append(line)
+            tally.append(match)
+
+            match_count += 1
+
+            if match_count >= MaxExtracts:
+                print(
+                    f"(stopped extraction as we hit MaxExtracts={MaxExtracts})")
+                break
+        else:
+            if verbose > 1:
+                log_FileFuncLine(f"unmatched: {line}")
+
+    if verbose:
+        log_FileFuncLine("---- match end -----\n")
+
+    return (headers, tally)
+
+
 decommify_pattern = re.compile(r',')
 
 
@@ -1363,7 +1485,7 @@ processor_by_method = {
     'code': process_code,
     'db': process_db,
     'cmd': process_cmd,
-    # 'log': process_log,
+    'log': process_log,
     # 'path': process_path,
     # 'section': process_section,
 }
