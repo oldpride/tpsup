@@ -55,6 +55,10 @@ def get_logs(log, LogLastCount: int = 0, **opt):
 
 
 def get_log_section_gen(log, section_cfg, **opt):
+    # perl generator vs python generator
+    #    perl generator depends on global variables and returns a sub.
+    #    python generator depends on yield command.
+
     verbose = opt.get('verbose', 0)
 
     # - both BeginPattern/EndPattern can be undefined at the same time; in this
@@ -191,15 +195,96 @@ def get_log_section_gen(log, section_cfg, **opt):
                 continue
 
 
+'''
+sub get_log_section_headers {
+   my ($ExtractPatterns, $opt) = @_;
+
+   my @headers;
+   
+   if ($ExtractPatterns) {
+      my $seen;
+      for my $line (@$ExtractPatterns) {
+         my @keys = ($line =~ /[?]<([a-zA-Z0-9_]+)>/g);
+         for my $k (@keys) {
+            $seen->{$k} ++;
+         }
+      }
+      @headers = sort(keys %$seen);
+   }
+
+   return \@headers;
+}
+'''
+# convert above to python
+
+
+def get_log_section_headers(ExtractPatterns, **opt):
+    headers = []
+
+    if ExtractPatterns:
+        seen = {}
+        for line in ExtractPatterns:
+            keys = re.findall(r'\(\?P<([a-zA-Z0-9_]+)>', line)
+            for k in keys:
+                seen[k] = 1
+
+        headers = sorted(seen.keys())
+
+    return headers
+
+
 def main():
     import os
     TPSUP = os.environ.get('TPSUP')
+    log = f'"{TPSUP}/python3/scripts/tptrace_test_section*.log"',
+
+    section_cfg = {
+
+
+        # PreMatch/PreExclude are tried before BeginPattern/EndPattern are tried
+        # they are for speedup, it covers every line, therefore, be careful to
+        # avoid filtering out BeginPattern/EndPattern.
+        'PreMatch': '^2021',
+        # PreExclude => '^2022',
+
+        # this cfg will transferred to TPSUP::LOG::get_log_sections() sub
+        'BeginPattern': 'section id .*? started',
+        'EndPattern': 'section completed',
+
+        # PostPattern/PostPattern are tried after BeginPattern/EndPattern are tried
+        # they are also for speed-up
+        'PostMatch': 'order id|trade id',
+        # PostExclude => 'no content',
+
+        'ExtractPatterns': [
+            # named groups
+            '^(?P<BeginTime>.{23}) section id (?P<SectionId>.*?) started',
+            '^(?P<EndTime>.{23}) section completed',
+            'order id (?P<OrderId>\S+)',
+            'trade id (?P<TradeId>\S+)',
+        ],
+        'KeyAttr': {'OrderId': 'Array', 'TradeId': 'Hash'},
+        'KeyDefault': {'OrderId': [], 'TradeId': {}},
+        # KeyDefault is to simplify MatchExp, allowing us to use
+        #     MatchExp =>'grep {/^ORD-0001$/}  @{$r{OrderId}}'
+        # without worrying about whether $r{OrderId} is defined.
+
+        # use csv_filter below for consistency
+        # MatchExp can use {{...}} vars. this is applied after a whole section is
+        # completed.
+        # MatchExp =>'grep(/^{{pattern::ORDERID}}$/, @{$r{OrderId}})',
+        # ExcludeExp =>'...',
+    },
 
     def test_codes():
         get_logs(f'{TPSUP}/python3/lib/tpsup/*py', LogLastCount=5)
+        get_log_section_headers(section_cfg['ExtractPatterns'])
 
     from tpsup.exectools import test_lines
-    test_lines(test_codes, source_globals=globals(), source_locals=locals())
+    test_lines(test_codes, source_globals=globals(),
+               source_locals=locals(), verbose=2)
+
+    sect_gen = get_log_section_gen(log, section_cfg, verbose=2)
 
 
 if __name__ == '__main__':

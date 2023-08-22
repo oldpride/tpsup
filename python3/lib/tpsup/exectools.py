@@ -124,6 +124,8 @@ def eval_block(_source: str, _globals, _locals, **opt):
     verbose = opt.get("verbose", 0)
 
     if verbose > 1:
+        log_FileFuncLine(f"_globals = {pformat(_globals)}")
+        log_FileFuncLine(f"_locals = {pformat(_locals)}")
         log_FileFuncLine(f"opt = {pformat(opt)}")
 
     if "\\" in _source:
@@ -275,6 +277,10 @@ def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print
 
     if verbose:
         log_FileFuncLine(f"source = \n{source}")
+
+    if verbose > 1:
+        log_FileFuncLine(f"source_globals = \n{pformat(source_globals)}")
+        log_FileFuncLine(f"source_locals = \n{pformat(source_locals)}")
 
     lines = source.split('\n')
 
