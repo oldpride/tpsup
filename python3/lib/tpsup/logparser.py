@@ -2,6 +2,7 @@ import re
 import sys
 
 from tpsup.tpfile import TpInput, sorted_files_by_mtime, tpglob
+from tpsup.modtools import load_module
 
 
 def get_logs(log, LogLastCount: int = 0, **opt):
@@ -53,6 +54,19 @@ def get_log_section_gen(log, section_cfg, **opt):
         CompiledPostMatch = re.compile(PostMatch)
     if PostExclude := section_cfg.get('PostExclude', None):
         CompiledPostExclude = re.compile(PostExclude)
+
+    mod_source = ''
+    for exp in ['ItemMatchExp', 'ItemExcludeExp']:
+        # item level match, using Exp,
+        if exp in section_cfg:
+            mod_source += f'def {exp}(r):\n'
+            mod_source += f'    return {section_cfg[exp]}\n'
+            mod_source += f''
+    
+    if mod_source != '':
+        exp_module = load_module(mod_source)
+    else:
+        exp_module = None
 
     KeyType = section_cfg.get('KeyType', {})
     # key value default to scalar.
@@ -127,26 +141,49 @@ def get_log_section_gen(log, section_cfg, **opt):
                     if CompiledBegin and CompiledBegin.search(line):
                         # this is a starting line.
                         if started:
-                            # if we already started, we have an $item, we return the $item.
-                            yield item
-                            # note: we didn't consume $line and it is left for the next call.
-                            item_count += 1
-                            if maxcount and item_count >= maxcount:
-                                return
-                            reset_item
-                        else:
+                            # if we already started, we have an $item, we can return the $item.
+                            # we check the item level match exp
+                            yield_this_item = True
+                            if 'ItemMatchExp' in section_cfg:
+                                if not exp_module.ItemMatchExp(item):
+                                    yield_this_item = False
+                            if 'ItemExcludeExp' in section_cfg:
+                                if exp_module.ItemExcludeExp(item):
+                                    yield_this_item = False                                   
+                            if yield_this_item:
+                                yield item
+                                # note: we didn't consume $line and it is left for the next call.
+                                item_count += 1
+                                if maxcount and item_count >= maxcount:
+                                    return
+                            reset_item()
                             consume_line_update_item()
-                        started = 1
+                        else:
+                            # if we haven't started, we need to consume this line
+                            consume_line_update_item()
+                            started = 1
                     elif CompiledEnd and CompiledEnd.search(line):
                         # we matched the end pattern. this will be a clean finish
                         if started:
                             # consume this only if the section already started
                             consume_line_update_item()
-                            yield item
-                            item_count += 1
-                            if maxcount and item_count >= maxcount:
-                                return
+
+                            # we check the item level match exp
+                            yield_this_item = True
+                            if 'ItemMatchExp' in section_cfg:
+                                if not exp_module.ItemMatchExp(item):
+                                    yield_this_item = False
+                            if 'ItemExcludeExp' in section_cfg:
+                                if exp_module.ItemExcludeExp(item):
+                                    yield_this_item = False                                   
+                            if yield_this_item:
+                                yield item
+                                # note: we didn't consume $line and it is left for the next call.
+                                item_count += 1
+                                if maxcount and item_count >= maxcount:
+                                    return
                             reset_item()
+                            started = 0
                         # unwanted line is thrown away
                         # we don't need to do any of below as they will be taken care of by loop
                         # line = None
@@ -233,7 +270,10 @@ def main():
     def test_codes():
         get_logs(f'{TPSUP}/python3/lib/tpsup/*py', LogLastCount=5)
         get_log_section_headers(section_cfg['ExtractPatterns'])
+        get_log_sections(log, section_cfg, MaxCount=5)
+        section_cfg.update({'ItemMatchExp' : '"TRD-0002" in r["TradeId"]'})
         get_log_sections(log, section_cfg)
+        
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(),
