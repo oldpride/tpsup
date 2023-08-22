@@ -163,7 +163,7 @@ def tpglob(file: Union[list, str],  **opt):
         files = file
     else:
         raise RuntimeError(
-            f'unsupported type of file={pformat(file)}\nIt must be a list or a string')
+            f'unsupported type {type(file)} of file={pformat(file)}\nIt must be a list or a string')
 
     files2 = []
     for f in files:

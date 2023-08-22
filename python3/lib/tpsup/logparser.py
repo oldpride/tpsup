@@ -4,48 +4,6 @@ import sys
 from tpsup.tpfile import TpInput, sorted_files_by_mtime, tpglob
 
 
-'''
-sub get_logs {
-   my ($log, $opt) = @_;
-
-   my @log_patterns;
-   my $type = ref($log);
-   if (!$type) {
-      # a scalar
-      @log_patterns = ($log);
-   } elsif ($type eq 'ARRAY') {
-      @log_patterns = @$log;
-   } else {
-      confess "type='$type' for log=", Dumper($log);
-   }
-
-   my @logs;
-   for my $lp (@log_patterns) {
-      my $cmd = "/bin/ls -1dtr $lp";
-      $opt->{verbose} && print STDERR "cmd=$cmd\n";
-      my @lines = `$cmd`;
-      chomp @lines;
-      push @logs, @lines;
-   }
-
-   #print "logs = ", Dumper(\@logs);
-
-   my $LogLastCount = $opt->{LogLastCount};
-   if ($LogLastCount) {
-      if ($LogLastCount >= @logs) {
-         return \@logs;
-      } else {
-         my @logs2 = @logs[$#logs-$LogLastCount+1..$#logs];
-         return \@logs2;
-      }
-   } else {
-      return \@logs;
-   }
-}
-'''
-# convert above to python
-
-
 def get_logs(log, LogLastCount: int = 0, **opt):
     verbose = opt.get('verbose', 0)
 
@@ -96,7 +54,7 @@ def get_log_section_gen(log, section_cfg, **opt):
     if PostExclude := section_cfg.get('PostExclude', None):
         CompiledPostExclude = re.compile(PostExclude)
 
-    KeyAttr = section_cfg.get('KeyAttr', {})
+    KeyType = section_cfg.get('KeyType', {})
     # key value default to scalar.
     # if need to be array or hash, specify in KeyAttr.
 
@@ -106,12 +64,22 @@ def get_log_section_gen(log, section_cfg, **opt):
 
     maxcount = opt['MaxCount'] if opt and 'MaxCount' in opt else None
 
-    item = {}
+    item = None
     item_count = 0
     line = None
+    started = 0
+
+    def reset_item():
+        nonlocal item, KeyType
+        item = {}
+        for k, kt in KeyType.items():
+            if kt == "Array":
+                item[k] = []
+            elif kt == "Hash":
+                item[k] = {}
 
     def consume_line_update_item():
-        # nonlocal line, item, CompiledExtracts
+        nonlocal line, CompiledExtracts, item, verbose
 
         for p in CompiledExtracts:
             m = p.search(line)
@@ -129,21 +97,23 @@ def get_log_section_gen(log, section_cfg, **opt):
 
                 for k in match:
                     v = match[k]
-                    if k not in KeyAttr:
+                    if k not in KeyType:
                         item[k] = v
-                    elif KeyAttr[k] == 'Array':
+                    elif KeyType[k] == 'Array':
                         item[k].append(v)
-                    elif KeyAttr[k] == 'Hash':
+                    elif KeyType[k] == 'Hash':
+                        item[k].setdefault(v, 0)
                         item[k][v] += 1
                     else:
                         raise Exception(
                             "unsupported KeyAttr at '$k=$KeyAttr->{$k}'")
         line = None
 
-    logs = get_logs(log, opt)
+    logs = get_logs(log, **opt)
+    reset_item()
 
     for lg in logs:
-        with TpInput(filename=log, **opt) as tf:
+        with TpInput(filename=lg, **opt) as tf:
             try:
                 for line in tf:  # this line may raise exception for binary file. so use try/except
                     if verbose > 2:
@@ -163,6 +133,7 @@ def get_log_section_gen(log, section_cfg, **opt):
                             item_count += 1
                             if maxcount and item_count >= maxcount:
                                 return
+                            reset_item
                         else:
                             consume_line_update_item()
                         started = 1
@@ -175,6 +146,7 @@ def get_log_section_gen(log, section_cfg, **opt):
                             item_count += 1
                             if maxcount and item_count >= maxcount:
                                 return
+                            reset_item()
                         # unwanted line is thrown away
                         # we don't need to do any of below as they will be taken care of by loop
                         # line = None
@@ -195,29 +167,6 @@ def get_log_section_gen(log, section_cfg, **opt):
                 continue
 
 
-'''
-sub get_log_section_headers {
-   my ($ExtractPatterns, $opt) = @_;
-
-   my @headers;
-   
-   if ($ExtractPatterns) {
-      my $seen;
-      for my $line (@$ExtractPatterns) {
-         my @keys = ($line =~ /[?]<([a-zA-Z0-9_]+)>/g);
-         for my $k (@keys) {
-            $seen->{$k} ++;
-         }
-      }
-      @headers = sort(keys %$seen);
-   }
-
-   return \@headers;
-}
-'''
-# convert above to python
-
-
 def get_log_section_headers(ExtractPatterns, **opt):
     headers = []
 
@@ -233,14 +182,23 @@ def get_log_section_headers(ExtractPatterns, **opt):
     return headers
 
 
+def get_log_sections(log, cfg, **opt):
+    section_gen = get_log_section_gen(log, cfg, **opt)
+
+    sections = []
+
+    for r in section_gen:
+        sections.append(r)
+
+    return sections
+
+
 def main():
     import os
     TPSUP = os.environ.get('TPSUP')
-    log = f'"{TPSUP}/python3/scripts/tptrace_test_section*.log"',
+    log = f'{TPSUP}/python3/scripts/tptrace_test_section*.log'
 
     section_cfg = {
-
-
         # PreMatch/PreExclude are tried before BeginPattern/EndPattern are tried
         # they are for speedup, it covers every line, therefore, be careful to
         # avoid filtering out BeginPattern/EndPattern.
@@ -263,28 +221,25 @@ def main():
             'order id (?P<OrderId>\S+)',
             'trade id (?P<TradeId>\S+)',
         ],
-        'KeyAttr': {'OrderId': 'Array', 'TradeId': 'Hash'},
-        'KeyDefault': {'OrderId': [], 'TradeId': {}},
-        # KeyDefault is to simplify MatchExp, allowing us to use
-        #     MatchExp =>'grep {/^ORD-0001$/}  @{$r{OrderId}}'
-        # without worrying about whether $r{OrderId} is defined.
+        'KeyType': {'OrderId': 'Array', 'TradeId': 'Hash'},
 
         # use csv_filter below for consistency
         # MatchExp can use {{...}} vars. this is applied after a whole section is
         # completed.
         # MatchExp =>'grep(/^{{pattern::ORDERID}}$/, @{$r{OrderId}})',
         # ExcludeExp =>'...',
-    },
+    }
 
     def test_codes():
         get_logs(f'{TPSUP}/python3/lib/tpsup/*py', LogLastCount=5)
         get_log_section_headers(section_cfg['ExtractPatterns'])
+        get_log_sections(log, section_cfg)
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(),
-               source_locals=locals(), verbose=2)
+               source_locals=locals())
 
-    sect_gen = get_log_section_gen(log, section_cfg, verbose=2)
+    # get_log_sections(log, section_cfg, verbose=2)
 
 
 if __name__ == '__main__':
