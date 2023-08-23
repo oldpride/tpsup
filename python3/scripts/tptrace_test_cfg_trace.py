@@ -330,31 +330,27 @@ our_cfg = {
                 # PostExclude => 'no content',
 
                 'ExtractPatterns': [
-                    '^(?<BeginTime>.{23}) section id (?<SectionId>.*?) started',
-                    '^(?<EndTime>.{23}) section completed',
-                    'order id (?<OrderId>\S+)',
-                    'trade id (?<TradeId>\S+)',
+                    '^(?P<BeginTime>.{23}) section id (?P<SectionId>.*?) started',
+                    '^(?P<EndTime>.{23}) section completed',
+                    'order id (?P<OrderId>\S+)',
+                    'trade id (?P<TradeId>\S+)',
                 ],
-                'KeyAttr': {'OrderId': 'Array', 'TradeId': 'Hash'},
-                'KeyDefault': {'OrderId': [], 'TradeId': {}},
-                # KeyDefault is to simplify MatchExp, allowing us to use
-                #     MatchExp =>'grep {/^ORD-0001$/}  @{$r{OrderId}}'
-                # without worrying about whether $r{OrderId} is defined.
+                'KeyType': {'OrderId': 'Array', 'TradeId': 'Hash'},
 
                 # use csv_filter below for consistency
-                # MatchExp can use {{...}} vars. this is applied after a whole section is
+                # ItemMatchExp can use {{...}} vars. this is applied after a whole section is
                 # completed.
-                # MatchExp =>'grep(/^{{pattern::ORDERID}}$/, @{$r{OrderId}})',
+                # 'ItemMatchExp': '"TRD-0002" in r["TradeId"]'
                 # ExcludeExp =>'...',
 
             },
 
             'csv_filters': [
-                [
-                    [],  # dependending keys, like entry points
-                    {'MatchExps': [
-                        'defined($OrderId) && grep(/{{pattern::ORDERID}}/, @$OrderId)'], }
-                ],
+                {
+                    'condition': '1',
+                    'MatchExps': ['"TRD-0002" in r["TradeId"]'],
+                    'ExcludeExps': ['"ORD-0001" in r["OrderId"]'],
+                },
             ],
 
             'update_key': {
@@ -363,14 +359,11 @@ our_cfg = {
                 'SECTION_ENDTIME': {'column': 'EndTime'},
                 'SECTIONID': {'column': 'SectionId'},
                 'ORDERIDS': {'column': 'OrderId'},
-                'ORDERID2': {'code': '$r{OrderId}->[0]', 'condition': '$r{OrderId}'},
+                'ORDERID2': {'code': 'r["OrderId"][0]', 'condition': 'r["OrderId"]'},
             },
 
             'comment': 'test entity={{entity}}',
         },
-
-
-
     },
 
     'extra_keys': ['example', 'security', 'YYYYMMDD'],
@@ -433,9 +426,12 @@ our_cfg = {
     # test applog_cmd_post_code
     {{prog}} -t applog_cmd_post_code orderid=ORD-0001 
 
-     test applog_log
+    # test applog_log
     {{prog}} -t applog_log bookid=BKG-0002 sid=400001 TRADEID=TRD-0002 TRADEQTY=400
     {{prog}} -t applog_log any
+
+    # test applog_section
+    {{prog}} -t applog_section bookid=BKG-0002 sid=400001 TRADEID=TRD-0002 TRADEQTY=400
     ''',
 }
 

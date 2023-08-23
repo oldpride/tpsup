@@ -62,7 +62,7 @@ def get_log_section_gen(log, section_cfg, **opt):
             mod_source += f'def {exp}(r):\n'
             mod_source += f'    return {section_cfg[exp]}\n'
             mod_source += f''
-    
+
     if mod_source != '':
         exp_module = load_module(mod_source)
     else:
@@ -86,13 +86,14 @@ def get_log_section_gen(log, section_cfg, **opt):
     def reset_item():
         nonlocal item, KeyType
         item = {}
+        item['lines'] = []
         for k, kt in KeyType.items():
             if kt == "Array":
                 item[k] = []
             elif kt == "Hash":
                 item[k] = {}
 
-    def consume_line_update_item():
+    def consume_line_update_item(file=None):
         nonlocal line, CompiledExtracts, item, verbose
 
         for p in CompiledExtracts:
@@ -105,9 +106,8 @@ def get_log_section_gen(log, section_cfg, **opt):
                 if verbose:
                     print("matched = ", match)
 
-                if line is None:
-                    line = line
-                    item['lines'].append(line)
+                item['lines'].append(line)
+                item['file'] = file
 
                 for k in match:
                     v = match[k]
@@ -149,7 +149,7 @@ def get_log_section_gen(log, section_cfg, **opt):
                                     yield_this_item = False
                             if 'ItemExcludeExp' in section_cfg:
                                 if exp_module.ItemExcludeExp(item):
-                                    yield_this_item = False                                   
+                                    yield_this_item = False
                             if yield_this_item:
                                 yield item
                                 # note: we didn't consume $line and it is left for the next call.
@@ -157,16 +157,16 @@ def get_log_section_gen(log, section_cfg, **opt):
                                 if maxcount and item_count >= maxcount:
                                     return
                             reset_item()
-                            consume_line_update_item()
+                            consume_line_update_item(file=lg)
                         else:
                             # if we haven't started, we need to consume this line
-                            consume_line_update_item()
+                            consume_line_update_item(file=lg)
                             started = 1
                     elif CompiledEnd and CompiledEnd.search(line):
                         # we matched the end pattern. this will be a clean finish
                         if started:
                             # consume this only if the section already started
-                            consume_line_update_item()
+                            consume_line_update_item(file=lg)
 
                             # we check the item level match exp
                             yield_this_item = True
@@ -175,7 +175,7 @@ def get_log_section_gen(log, section_cfg, **opt):
                                     yield_this_item = False
                             if 'ItemExcludeExp' in section_cfg:
                                 if exp_module.ItemExcludeExp(item):
-                                    yield_this_item = False                                   
+                                    yield_this_item = False
                             if yield_this_item:
                                 yield item
                                 # note: we didn't consume $line and it is left for the next call.
@@ -270,10 +270,9 @@ def main():
     def test_codes():
         get_logs(f'{TPSUP}/python3/lib/tpsup/*py', LogLastCount=5)
         get_log_section_headers(section_cfg['ExtractPatterns'])
-        get_log_sections(log, section_cfg, MaxCount=5)
-        section_cfg.update({'ItemMatchExp' : '"TRD-0002" in r["TradeId"]'})
+        get_log_sections(log, section_cfg, MaxCount=7)
+        section_cfg.update({'ItemMatchExp': '"TRD-0002" in r["TradeId"]'})
         get_log_sections(log, section_cfg)
-        
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(),

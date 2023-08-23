@@ -7,6 +7,7 @@ from typing import Dict, List, Union, Callable
 from tpsup.cmdtools import run_cmd, run_cmd_clean
 from tpsup.csvtools import filter_dicts
 from tpsup.exectools import eval_block, exec_into_globals, test_compile
+from tpsup.logparser import get_log_section_headers, get_log_sections
 
 from tpsup.print import render_arrays, string_short
 from tpsup.sqltools import get_dbh, run_sql
@@ -610,6 +611,7 @@ def extract_from_fh(fh, extract_pattern: str, **opt):
 
 
 def process_section(entity: str, method_cfg: dict, **opt):
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
     verbose = opt.get('verbose', 0)
 
     log = method_cfg['log']
@@ -629,30 +631,25 @@ def process_section(entity: str, method_cfg: dict, **opt):
         log_FileFuncLine(f"resolved_logs = {resolved_logs}\n")
 
     MaxExtracts = opt.get('MaxExtracts', None)
+    count = 0
 
     for l in resolved_logs:
-        sections = get_log_sections(l, method_cfg, {
-            **opt,
-            'MaxSections': MaxExtracts,
-        })
+        sections = get_log_sections(l, method_cfg, MaxCount=MaxExtracts, **opt)
 
-        if sections:
-            hashes.extend(sections)
+        hashes.extend(sections)
 
-            for section in hashes:
-                if section['lines']:
-                    if verbose > 1:
-                        print(section['lines'])
-                    lines.extend(section['lines'])
+        for section in sections:
+            if verbose > 1:
+                log_FileFuncLine(section['lines'])
+            lines.extend(section['lines'])
 
-            count = len(sections)
-            if count >= MaxExtracts:
-                print(
-                    f"(stopped extraction as count={count} >= MaxExtracts={MaxExtracts})")
-                break
+        count += len(sections)
+        if count >= MaxExtracts:
+            print(
+                f"(stopped extraction as count={count} >= MaxExtracts={MaxExtracts})")
+            break
 
-    headers = get_log_section_headers(
-        method_cfg['ExtractPatterns'], **opt)
+    headers = get_log_section_headers(method_cfg['ExtractPatterns'], **opt)
     arrays = hashes_to_arrays(hashes, headers)
     row_count = len(hashes)
 
@@ -977,7 +974,7 @@ method_syntax = {
     },
     'section': {
         'required': ['log', 'ExtractPatterns'],
-        'optional': ['PreMatch', 'PreExclude', 'PostMatch', 'PostExclude', 'BeginPattern', 'EndPattern', 'KeyAttr', 'KeyDefault'],
+        'optional': ['PreMatch', 'PreExclude', 'PostMatch', 'PostExclude', 'BeginPattern', 'EndPattern', 'KeyType', 'KeyDefault'],
     },
     'path': {
         'required': ['paths'],
@@ -1544,7 +1541,7 @@ processor_by_method = {
     'cmd': process_cmd,
     'log': process_log,
     # 'path': process_path,
-    # 'section': process_section,
+    'section': process_section,
 }
 
 
@@ -1653,6 +1650,7 @@ process {entity}
     #   apply_csv_filters($entity_cfg->{csv_filters});
     # }
     if csv_filters := entity_cfg.get('csv_filters', None):
+        # print_global_buffer(f'after eval code')
         print(f"csv_filters = {pformat(csv_filters)}")
         apply_csv_filters(entity_cfg.get('csv_filters', None), **opt)
         verbose > 1 and print_global_buffer(f'after apply_csv_filters')

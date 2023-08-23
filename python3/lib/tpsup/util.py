@@ -550,7 +550,7 @@ def hashes_to_arrays(hashes, headers):
     for href in hashes:
         aref = []
         for header in headers:
-            aref.append(href[header])
+            aref.append(href.get('header', None))
         arrays.append(aref)
 
     return arrays

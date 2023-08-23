@@ -119,8 +119,12 @@ def filter_dicts(dict_iter, columns, **opt):
         if verbose > 1:
             sys.stderr.write(f'r = {pformat(r)}\n')
 
-        if match_exps(r) and not exclude_exps(r):
-            yield r
+        try:
+            if match_exps(r) and not exclude_exps(r):
+                yield r
+        except Exception as e:
+            sys.stderr.write(f'r = {pformat(r)}\n')
+            raise e
 
 
 class QueryCsv:
