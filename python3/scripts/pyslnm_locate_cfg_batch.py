@@ -62,8 +62,14 @@ our_cfg = {
     {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
     
     - this will dump out dynamically generated html too
+      note:
+        - add sleep time to let the page fully loaded.
+               for local test page, this is not needed;
+               but for remote page, this is needed. otherwise, you get error: 
+               stale element reference: element is not attached to the page document
+        - once entered shadow, xpath is not working anymore., use css selector instead.
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 'code=time.sleep(2)' xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
     
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
     
     # iframe001: id("backgroundImage")
     # shadow001: /html[@class="focus-outline-visible"]/body[1]/ntp-app[1]

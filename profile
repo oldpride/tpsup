@@ -788,7 +788,7 @@ tp() { cd "$TPSUP/scripts"; }
 tpcmd() { cd "$TPSUP/cmd_exe"; }
 tpps1() { cd "$TPSUP/ps1"; }
 tplib() { cd "$TPSUP/lib/perl/TPSUP"; }
-tpp3() { cd "$TPSUP/python3"; }
+tpp3() { cd "$TPSUP/python3/scripts"; }
 tpp3lib() { cd "$TPSUP/python3/lib/tpsup"; }
 
 site() { cd "$SITESPEC/scripts"; }

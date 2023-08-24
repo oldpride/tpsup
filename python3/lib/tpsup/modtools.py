@@ -193,6 +193,29 @@ def get_non_buildins(dict: Dict):
     return ret
 
 
+def compile_expdict(expdict: dict, **opt):
+    '''
+    compile a dict of exps (exp strings) into a module,
+    using the dict key as function name
+    '''
+    mod_source = ''
+    for k, exp in dict.items():
+        mod_source += f'def {k}(r):\n'
+        mod_source += f'    return {exp}\n'
+        mod_source += f''
+
+    if mod_source != '':
+        exp_module = load_module(mod_source)
+    else:
+        exp_module = None
+
+    retdict = {}
+    for k in expdict.keys():
+        retdict[k] = exp_module.__getattr__(k)
+
+    return retdict
+
+
 def main():
     print('------ test load_module() by source code (str)')
     source = """

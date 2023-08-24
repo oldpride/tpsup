@@ -189,6 +189,36 @@ def sorted_files(files: Union[list, str], sort_func, globbed: bool = False, **op
     return list(sorted(files2, key=sort_func))
 
 
+exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
+
+
+def tpfind(path: Union[list, str], **opt):
+    verbose = opt.get('verbose', 0)
+
+    if isinstance(path, str):
+        # split string by space or newline
+        paths = re.split('\s+', path, re.MULTILINE)
+    else:
+        paths = path
+
+    paths2 = tpglob(paths)
+
+    for p in paths2:
+        for root, dirs, fnames in os.walk(p, topdown=True):
+            # https://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
+            # key point: use [:] to modify dirs in place
+            # dirs[:] = [d for d in dirs if d not in exclude_dirs]
+            dirs2 = []
+            for d in dirs:
+                if d not in exclude_dirs:
+                    dirs2.append(d)
+            dirs[:] = dirs2
+
+            for f in fnames:
+                full_path = os.path.join(root, f)
+                print(full_path)
+
+
 def sorted_files_by_mtime(files: list, **opt):
     return sorted_files(files, os.path.getmtime, **opt)
 
@@ -226,9 +256,11 @@ def main():
     from tpsup.exectools import test_lines
     TPSUP = os.environ.get('TPSUP')
     libfiles = f'{TPSUP}/python3/lib/tpsup/*.py'
+    scripts = f'{TPSUP}/python3/scripts'
 
     def test_codes():
         sorted_files_by_mtime([libfiles], verbose=verbose)
+        tpfind(scripts)
 
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 

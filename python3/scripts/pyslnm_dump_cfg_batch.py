@@ -28,29 +28,31 @@ our_cfg = {
         },
     },
 
-    'usage_example': '''
+    'usage_example': f'''
     - this will dump out dynamically generated html too
     
     note: 
         as of 2022/09/04
         https://www.google.com and https://google.com are the same in the Chrome browser: no iframe nor shadow.
         however, Chrome's new tab default to a search page lookalike: has both iframes and shadow.
-    {{prog}} https://www.google.com ~/dumpdir -np
-    {{prog}} https://www.google.com %USERPROFILE%/dumpdir -np kqq
-    {{prog}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir -np # this is the new tab url
+    {{{{prog}}}} https://www.google.com ~/dumpdir -np
+    {{{{prog}}}} https://www.google.com %USERPROFILE%/dumpdir -np kqq
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir -np # this is the new tab url
     
     - has shadows, no iframes, simple pages to test shadows
-    {{prog}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np
-    {{prog}} http://watir.com/examples/shadow_dom.html %USERPROFILE%/dumpdir -np
+    {{{{prog}}}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np
+    {{{{prog}}}} http://watir.com/examples/shadow_dom.html %USERPROFILE%/dumpdir -np
     
     - has both iframes and shadows
-    {{prog}} https://www.dice.com %USERPROFILE%/dumpdir -np
+    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir -np
     
     - xpath, from cmd.exe
-    {{prog}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np -xpath //div[@class=\\"expofp-floorplan\\"]
+    {{{{prog}}}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np -xpath //div[@class=\\"expofp-floorplan\\"]
     
     - to test deep-nested shadow
-    {{prog}} chrome://settings %USERPROFILE%/dumpdir -np
+    {{{{prog}}}} chrome://settings %USERPROFILE%/dumpdir -np
+
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/shadow.html" %USERPROFILE%/dumpdir2
     
     ''',
 
