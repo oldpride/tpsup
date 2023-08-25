@@ -35,6 +35,7 @@ examples = textwrap.dedent(f"""
         {prog} -fe 'not r["short"].endswith("profile.d")' -fa prune $TPSUP
         {prog} -fe 'r["size"] > 5000'                        -fd exit $TPSUP
         {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP
+        {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP  -ls
 
     """)
 

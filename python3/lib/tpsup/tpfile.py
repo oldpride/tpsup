@@ -204,6 +204,15 @@ def tpfind(paths: Union[list, str],
            find_dump=0,
            **opt):
     verbose = opt.get('verbose', 0)
+
+    import platform
+    if platform.system().lower().startswith("lin"):
+        import pwd
+        import grp
+        is_linux = True
+    else:
+        is_linux = False
+
     if len(FlowExps) != len(FlowDirs):
         raise RuntimeError(
             f'number of FlowExps {len(FlowExps)} not match number of FlowDirs {len(FlowDirs)}')
@@ -266,6 +275,20 @@ def tpfind(paths: Union[list, str],
                 r['mtimel'] = time.strftime(
                     '%Y%m%d-%H:%M:%S', time.localtime(r['mtime']))
 
+                if is_linux:
+                    # https://stackoverflow.com/questions/7770034/in-python-and-linux
+                    # -how-to-get-given-users-id
+                    # https://docs.python.org/2/1ibrary/pwd.html
+                    _pwd = pwd.getpwuid(r['uid'])
+                    r['owner'] = _pwd.pw_name
+
+                    # https://docs.python.org/2/library/grp.html#module-grp
+                    _grp = grp.getgrgid(r['gid'])
+                    r['group'] = _grp.gr_name
+                else:
+                    r['owner'] = r['uid']
+                    r['group'] = r['gid']
+
                 print_p = True
                 for i in range(0, len(FlowExps)):
                     compiled = CompiledFlowExps[i]
@@ -308,7 +331,7 @@ def tpfind(paths: Union[list, str],
                         print(pformat(r))
                     elif find_ls:
                         print(
-                            f'{r["fmode"]} {r["uid"]:7} {r["gid"]:7} {r["size"]:7} {r["mtimel"]} {r["path"]}')
+                            f'{r["fmode"]} {r["owner"]:7} {r["group"]:7} {r["size"]:7} {r["mtimel"]} {r["path"]}')
                     elif find_print:
                         print(f'{r["path"]}')
 
