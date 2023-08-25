@@ -5,7 +5,7 @@ import re
 import sys
 from pprint import pformat, pprint
 from typing import Union
-from tpsup.modtools import strings_to_compilable_patterns, load_module
+from tpsup.modtools import compile_codelist, strings_to_compilable_patterns, load_module
 from tpsup.tplog import log_FileFuncLine
 from tpsup.util import silence_BrokenPipeError
 
@@ -192,31 +192,105 @@ def sorted_files(files: Union[list, str], sort_func, globbed: bool = False, **op
 exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
 
 
-def tpfind(path: Union[list, str], **opt):
+def tpfind(path: Union[list, str],
+           FlowExps: list = [],
+           FlowDirs: list = [],
+           HandleExps: list = [],
+           HandleActs: list = [],
+           **opt):
     verbose = opt.get('verbose', 0)
+    if len(FlowExps) != len(FlowDirs):
+        raise RuntimeError(
+            f'number of FlowExps {len(FlowExps)} must match number of FlowDirs {len(FlowDirs)}')
 
-    if isinstance(path, str):
-        # split string by space or newline
-        paths = re.split('\s+', path, re.MULTILINE)
-    else:
-        paths = path
+    CompiledFlowExps = compile_codelist(FlowExps, is_exp=True)
+    CompiledHandleExps = compile_codelist(HandleExps, is_exp=True)
+    CompiledHandleActs = compile_codelist(HandleActs)
 
-    paths2 = tpglob(paths)
+    paths = tpglob(path, **opt)
 
-    for p in paths2:
+    ret = {}
+    ret['error'] = 0
+
+    for p in paths:
         for root, dirs, fnames in os.walk(p, topdown=True):
             # https://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
             # key point: use [:] to modify dirs in place
             # dirs[:] = [d for d in dirs if d not in exclude_dirs]
             dirs2 = []
             for d in dirs:
-                if d not in exclude_dirs:
+                if d in exclude_dirs:
+                    continue
+                full_path = os.path.join(root, d)
+                info = os.lstat(f'{root}/{d}')
+                r = {}
+                r['full'] = full_path
+                r['dir'] = root
+                r['short'] = d
+
+                r['dev'] = info.st_dev
+                r['ino'] = info.st_ino
+                r['mode'] = info.st_mode
+                r['nlink'] = info.st_nlink
+                r['uid'] = info.st_uid
+                r['gid'] = info.st_gid
+                r['size'] = info.st_size
+                r['atime'] = info.st_atime
+                r['mtime'] = info.st_mtime
+                r['ctime'] = info.st_ctime
+
+                for i in range(0, len(FlowExps)):
+                    compiled = CompiledFlowExps[i]
+                    exp = FlowExps[i]
+                    direction = FlowDirs[i]
+                    if compiled(r):
+                        if verbose:
+                            log_FileFuncLine(f'exp {exp} matched {r}')
+                        if direction == 'prune':
+                            print(f'pruning {root}')
+                            continue
+                        elif direction == 'exit':
+                            print(f'r={pformat(r)}')
+                            return ret
                     dirs2.append(d)
             dirs[:] = dirs2
 
             for f in fnames:
                 full_path = os.path.join(root, f)
                 print(full_path)
+
+                r = {}
+                r['full'] = full_path
+                r['dir'] = root
+                r['short'] = f
+
+                info = os.lstat(full_path)
+                r['dev'] = info.st_dev
+                r['ino'] = info.st_ino
+                r['mode'] = info.st_mode
+                r['nlink'] = info.st_nlink
+                r['uid'] = info.st_uid
+                r['gid'] = info.st_gid
+                r['size'] = info.st_size
+                r['atime'] = info.st_atime
+                r['mtime'] = info.st_mtime
+                r['ctime'] = info.st_ctime
+
+                if verbose >= 2:
+                    print(pformat(r))
+
+                for i in range(0, len(FlowExps)):
+                    compiled = CompiledFlowExps[i]
+                    exp = FlowExps[i]
+                    direction = FlowDirs[i]
+
+                    if compiled(r):
+                        log_FileFuncLine(f'exp {exp} matched {r}')
+                        if direction == 'exit':
+                            print(f'r={pformat(r)}')
+                            return ret
+
+    return ret
 
 
 def sorted_files_by_mtime(files: list, **opt):
@@ -256,11 +330,14 @@ def main():
     from tpsup.exectools import test_lines
     TPSUP = os.environ.get('TPSUP')
     libfiles = f'{TPSUP}/python3/lib/tpsup/*.py'
-    scripts = f'{TPSUP}/python3/scripts'
+    p3scripts = f'{TPSUP}/python3/scripts'
 
     def test_codes():
         sorted_files_by_mtime([libfiles], verbose=verbose)
-        tpfind(scripts)
+        tpfind(TPSUP, FlowExps=['not r["full"].endswith("profile.d")'],
+               FlowDirs=['prune'], verbose=verbose)
+        tpfind(p3scripts, FlowExps=['r["size"] > 2000'],
+               FlowDirs=['exit'], verbose=verbose)
 
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 

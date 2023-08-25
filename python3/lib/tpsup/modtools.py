@@ -193,15 +193,19 @@ def get_non_buildins(dict: Dict):
     return ret
 
 
-def compile_expdict(expdict: dict, **opt):
+def compile_codedict(expdict: dict, is_exp=False, **opt):
     '''
     compile a dict of exps (exp strings) into a module,
     using the dict key as function name
     '''
     mod_source = ''
-    for k, exp in dict.items():
+    for k, exp in expdict.items():
         mod_source += f'def {k}(r):\n'
-        mod_source += f'    return {exp}\n'
+        if is_exp:
+            mod_source += f'    return {exp}\n'
+        else:
+            mod_source += f'    {exp}\n'
+            # mod_source += f'    return True\n'
         mod_source += f''
 
     if mod_source != '':
@@ -211,9 +215,37 @@ def compile_expdict(expdict: dict, **opt):
 
     retdict = {}
     for k in expdict.keys():
-        retdict[k] = exp_module.__getattr__(k)
+        retdict[k] = getattr(exp_module, k)
 
     return retdict
+
+
+def compile_codelist(explist: list, is_exp=False, **opt):
+    '''
+    compile a list of exps (exp strings) into a module,
+    '''
+    mod_source = ''
+    for i in range(0, len(explist)):
+        mod_source += f'def _exp{i}(r):\n'
+
+        if is_exp:
+            mod_source += f'    return {explist[i]}\n'
+        else:
+            mod_source += f'    {explist[i]}\n'
+            # mod_source += f'    return True\n'
+        mod_source += f''
+
+    if mod_source != '':
+        exp_module = load_module(mod_source)
+    else:
+        exp_module = None
+
+    compiledlist = []
+    for i in range(0, len(explist)):
+        compiled_func = getattr(exp_module, f'_exp{i}')
+        compiledlist.append(compiled_func)
+
+    return compiledlist
 
 
 def main():
@@ -244,6 +276,28 @@ test_dict = {'a': {'b': 1}, 'c': 'hello'}
     mod.f_in_module(2)
 
     pprint.pprint(mod.test_dict)
+
+    print()
+    print("------------------------------------------------")
+    explist = ['r["a"] == 1', 'r["b"] == 2']
+    compiledlist = compile_codelist(explist, is_exp=True)
+    print(f'explist = {pformat(explist)}')
+    r2 = {'a': 1, 'b': 2}
+    r3 = {'a': 1, 'b': 3}
+    for exp in compiledlist:
+        print(f'exp({r2}) = {exp(r2)}')
+        print(f'exp({r3}) = {exp(r3)}')
+
+    print()
+    print("------------------------------------------------")
+    expdict = {'exp1': 'r["a"] == 1', 'exp2': 'r["b"] == 2'}
+    compiledlist = compile_codedict(expdict, is_exp=True)
+    print(f'expdict = {pformat(expdict)}')
+    r2 = {'a': 1, 'b': 2}
+    r3 = {'a': 1, 'b': 3}
+    for k, exp in compiledlist.items():
+        print(f'{k}({r2}) = {exp(r2)}')
+        print(f'{k}({r3}) = {exp(r3)}')
 
 
 if __name__ == '__main__':

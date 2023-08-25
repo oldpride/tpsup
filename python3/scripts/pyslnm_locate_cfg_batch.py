@@ -88,7 +88,7 @@ our_cfg = {
     
     # from bash
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html ~/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
-    
+
     # use -js
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
     
@@ -103,6 +103,8 @@ our_cfg = {
     
     # dump whole page, print full xpath
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
+
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/shadow.html" %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
     ''',
 
     # use -js

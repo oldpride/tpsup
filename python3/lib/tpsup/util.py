@@ -1,6 +1,7 @@
 import functools
 import inspect
 import io
+import itertools
 import os
 from pprint import pformat
 import re
@@ -301,7 +302,7 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
             value = f'{value}'.replace("\\", "\\\\")
             log_FileFuncLine(f"escaped \\ to \\\\ result in: {value}")
         clause = re.sub(r"\{\{" + var + r"(=.{0,200}?)?\}\}",
-                        value,
+                        f'{value}',
                         clause,
                         count=1,  # only replace the 1st match
                         flags=re.IGNORECASE | re.MULTILINE)
@@ -605,6 +606,18 @@ def convert_dict_to_kvlist(dict1: dict, **opt):
     return kvlist
 
 
+def transpose_lists(lists: list, **opt):
+    '''
+    https://stackoverflow.com/questions/6473679/transpose-list-of-lists
+    '''
+    if opt.get("shortest", False):
+        # short circuits at shortest nested list if table is jagged:
+        return list(map(list, zip(*lists)))
+    else:
+        # discards no data if jagged and fills short nested lists with None
+        return list(map(list, itertools.zip_longest(*lists, fillvalue=None)))
+
+
 def main():
     # def test_code():
     #     print(__file__)
@@ -680,6 +693,12 @@ def main():
     print(f"test_object = {pformat(test_object)}")
     print(
         f"get_keys_from_array(test_object, 'table') = {get_keys_from_array(test_object, 'table')}")
+
+    def test_codes():
+        transpose_lists([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+    import tpsup.exectools
+    tpsup.exectools.test_lines(test_codes, globals(), locals())
 
 
 if __name__ == "__main__":
