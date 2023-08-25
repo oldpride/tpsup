@@ -29,10 +29,12 @@ def tpfind(**opt):
     opt.setdefault('maxdepth', 100)
 
     if len(opt['HandleExps']) != len(opt['HandleActs']):
-        raise Exception(f"size mismatch: len(HandleExps)={len(opt['HandleExps'])}, len(HandleActs)={len(opt['HandleActs'])}")
+        raise Exception(
+            f"size mismatch: len(HandleExps)={len(opt['HandleExps'])}, len(HandleActs)={len(opt['HandleActs'])}")
 
     if len(opt['FlowExps']) != len(opt['FlowDirs']):
-        raise Exception(f"size mismatch: len(FlowExps)={len(opt['FlowExps'])}, len(FlowDirs)={len(opt['FlowDirs'])}")
+        raise Exception(
+            f"size mismatch: len(FlowExps)={len(opt['FlowExps'])}, len(FlowDirs)={len(opt['FlowDirs'])}")
 
     # https://stackoverflow.com/questions/23749750/reading-a-csv-text-file-with-pkgutil-get-data
     # but this only works with in a package, not from a script
@@ -49,7 +51,8 @@ def tpfind(**opt):
         source_array = [f.read()]
 
     for name, is_exp in [('HandleExps', 1), ('HandleActs', 0), ('FlowExps', 1)]:
-        source_array.append(strings_to_funcs(opt[name], name, is_exp=is_exp, verbose=opt['verbose']))
+        source_array.append(strings_to_funcs(
+            opt[name], name, is_exp=is_exp, verbose=opt['verbose']))
     source = '\n\n'.join(source_array)
 
     if opt.get('verbose'):
@@ -123,9 +126,9 @@ def recursive_path(_path, _maxdepth, **opt):
         _grp = grp.getgrgid(r['gid'])
         r['group'] = _grp.gr_name
 
-    r['atime_local'] = time.strftime('%Y%m%d-%H:%M:%S', time.localtime(r['atime']))
-    r['ctime_local'] = time.strftime('%Y%m%d-%H:%M:%S', time.localtime(r['ctime']))
-    r['mtime_local'] = time.strftime('%Y%m%d-%H:%M:%S', time.localtime(r['mtime']))
+    r['atimel'] = time.strftime('%Y%m%d-%H:%M:%S', time.localtime(r['atime']))
+    r['ctimel'] = time.strftime('%Y%m%d-%H:%M:%S', time.localtime(r['ctime']))
+    r['mtimel'] = time.strftime('%Y%m%d-%H:%M:%S', time.localtime(r['mtime']))
 
     if opt['verbose'] != 0:
         sys.stderr.write(pformat(r))
@@ -153,7 +156,8 @@ def recursive_path(_path, _maxdepth, **opt):
 
     if _type == 'dir':
         for new_path in sorted(os.listdir(_path)):
-            recursive_path('{_path}/{new_path}'.format(_path=_path, new_path=new_path), _maxdepth - 1, **opt)
+            recursive_path('{_path}/{new_path}'.format(_path=_path,
+                           new_path=new_path), _maxdepth - 1, **opt)
 
 
 def main():
@@ -254,7 +258,7 @@ def main():
     if args['verbose']:
         sys.stderr.write(f"args =\n{pformat(args)}\n")
 
-    if len(args['paths']) == 0 :
+    if len(args['paths']) == 0:
         parser.print_help(file=sys.stderr)
         sys.exit(1)
 

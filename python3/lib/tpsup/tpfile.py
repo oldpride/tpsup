@@ -5,6 +5,7 @@ import re
 import stat
 import sys
 from pprint import pformat, pprint
+import time
 from typing import Union
 from tpsup.modtools import compile_codelist, strings_to_compilable_patterns, load_module
 from tpsup.tplog import log_FileFuncLine
@@ -237,7 +238,7 @@ def tpfind(paths: Union[list, str],
                     print(f'checking "{full_path}"')
 
                 r = {}
-                r['full'] = full_path
+                r['path'] = full_path
                 r['dir'] = root
                 r['short'] = p
 
@@ -258,6 +259,13 @@ def tpfind(paths: Union[list, str],
                     r['type'] = 'file'
                 r['fmode'] = stat.filemode(info.st_mode)
 
+                r['atimel'] = time.strftime(
+                    '%Y%m%d-%H:%M:%S', time.localtime(r['atime']))
+                r['ctimel'] = time.strftime(
+                    '%Y%m%d-%H:%M:%S', time.localtime(r['ctime']))
+                r['mtimel'] = time.strftime(
+                    '%Y%m%d-%H:%M:%S', time.localtime(r['mtime']))
+
                 print_p = True
                 for i in range(0, len(FlowExps)):
                     compiled = CompiledFlowExps[i]
@@ -270,7 +278,7 @@ def tpfind(paths: Union[list, str],
                         if direction == 'prune':
                             if r['type'] == 'dir':
                                 if verbose:
-                                    print(f'pruning {r["full"]}')
+                                    print(f'pruning {r["path"]}')
                                 dirs.remove(p)
                                 print_p = False
                             # try:
@@ -300,9 +308,9 @@ def tpfind(paths: Union[list, str],
                         print(pformat(r))
                     elif find_ls:
                         print(
-                            f'{r["fmode"]} {r["uid"]} {r["gid"]} {r["size"]} {r["mtime"]} {r["full"]}')
+                            f'{r["fmode"]} {r["uid"]:7} {r["gid"]:7} {r["size"]:7} {r["mtimel"]} {r["path"]}')
                     elif find_print:
-                        print(f'{r["full"]}')
+                        print(f'{r["path"]}')
 
     return ret
 
@@ -366,7 +374,7 @@ def main():
 
     def test_codes():
         sorted_files_by_mtime([libfiles])
-        tpfind(TPSUP, FlowExps=['not(r["full"].endswith("profile.d"))'],
+        tpfind(TPSUP, FlowExps=['not(r["path"].endswith("profile.d"))'],
                FlowDirs=['prune'], )
         tpfind(p3scripts, FlowExps=['r["size"] > 2000'],
                FlowDirs=['exit'])
