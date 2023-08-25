@@ -224,6 +224,13 @@ def compile_codelist(explist: list, is_exp=False, **opt):
     '''
     compile a list of exps (exp strings) into a module,
     '''
+    verbose = opt.get('verbose', 0)
+
+    compiledlist = []
+
+    if len(explist) == 0:
+        return compiledlist
+
     mod_source = ''
     for i in range(0, len(explist)):
         mod_source += f'def _exp{i}(r):\n'
@@ -235,12 +242,11 @@ def compile_codelist(explist: list, is_exp=False, **opt):
             # mod_source += f'    return True\n'
         mod_source += f''
 
-    if mod_source != '':
-        exp_module = load_module(mod_source)
-    else:
-        exp_module = None
+    if verbose:
+        log_FileFuncLine(f'mod_source = \n{mod_source}')
 
-    compiledlist = []
+    exp_module = load_module(mod_source)
+
     for i in range(0, len(explist)):
         compiled_func = getattr(exp_module, f'_exp{i}')
         compiledlist.append(compiled_func)
