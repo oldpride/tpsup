@@ -22,15 +22,23 @@ examples = textwrap.dedent(f"""
                            
         {prog}  [options]    path
 
-        -he -HandleExp   Handle expression, can specify multiple times
-        -ha -HanderAct   Handle action, can specify multiple times
-        -fe -FlowExp     flow expression, can specify multiple times
-        -fa -FlowAct     flow action, can specify multiple times
-        -print           print path
-        -ls              print like 'ls -l'
-        -dump            print out detail of the path
+        pyfind vs tpfind.py
+            tpfind.py is mainly tested on linux.
+            pyfind tested on both linux and windows, and is module based.
+            pyfind is the future.
+
+        -m exp                 Match expression, can specify multiple times.  
+        -he -HandleExp exp     Handle expression, can specify multiple times
+        -ha -HanderAct code    Handle action, can specify multiple times
+        -fe -FlowExp exp       flow expression, can specify multiple times
+        -fa -FlowDir dir       flow directive, can specify multiple times
+        -print                 print path
+        -ls                    print like 'ls -l'
+        -dump                  print out detail of the path
 
         {prog} .
+
+        {prog} -m 'r["path"].endswith(".py")' .
 
         {prog} -fe 'not r["short"].endswith("profile.d")' -fa prune $TPSUP
         {prog} -fe 'r["size"] > 5000'                        -fd exit $TPSUP
@@ -47,6 +55,10 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument(
     'paths', action="append", help='paths')
+
+parser.add_argument(
+    '-m', dest='MatchExps', action="append", default=[],
+    help='Match Expression - Python expression')
 
 parser.add_argument(
     '-he', '-HandleExp', dest='HandleExps', action="append", default=[],

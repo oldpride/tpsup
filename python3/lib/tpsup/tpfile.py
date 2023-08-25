@@ -195,6 +195,7 @@ exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
 
 
 def tpfind(paths: Union[list, str],
+           MatchExps: list = [],
            FlowExps: list = [],
            FlowDirs: list = [],
            HandleExps: list = [],
@@ -221,6 +222,7 @@ def tpfind(paths: Union[list, str],
         raise RuntimeError(
             f'number of HandleExps {len(HandleExps)} not match number of HandleActs {len(HandleActs)}')
 
+    CompiledMatchExps = compile_codelist(MatchExps, is_exp=True)
     CompiledFlowExps = compile_codelist(FlowExps, is_exp=True, verbose=verbose)
     CompiledHandleExps = compile_codelist(HandleExps, is_exp=True)
     CompiledHandleActs = compile_codelist(HandleActs)
@@ -325,6 +327,18 @@ def tpfind(paths: Union[list, str],
                             log_FileFuncLine(
                                 f'Handle exp={exp} matched r={pformat(r)}, act={act}')
                         compiled_act(r)
+
+                if MatchExps:
+                    Matched = True
+                    for compiled in CompiledMatchExps:
+                        if not compiled(r):
+                            if verbose >= 2:
+                                log_FileFuncLine(
+                                    f'Match exp={exp} failed r={pformat(r)}')
+                            Matched = False
+                            break
+                    if not Matched:
+                        continue
 
                 if print_p:
                     if find_dump:

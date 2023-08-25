@@ -166,6 +166,12 @@ def main():
         """)
 
     examples = textwrap.dedent(""" 
+                               
+        pyfind vs tpfind.py
+            tpfind.py is mainly tested on linux.
+            pyfind tested on both linux and windows, and is module based.
+            pyfind is the future.
+
     examples:
         # print the dir tree
         tpfind.py -maxdepth 2 -trace ~/github/tpsup
