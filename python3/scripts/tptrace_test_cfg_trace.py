@@ -383,7 +383,7 @@ our_cfg = {
                     if re.search(r'{{YYYY}}{{MM}}{{DD}}', mtime_local):
                         update_error(f"{short} is updated today {mtime_local}")
                     else:
-                        update_ok(f"{short} is not updated today {mtime_local}. last update: {hash1[short][0]['mt_string']}")
+                        update_ok(f"{short} is not updated today {mtime_local}. last update: {hash1[short][0]['mtimel']}")
                 else:
                     update_error(f"{short} is not found")
             ''',
