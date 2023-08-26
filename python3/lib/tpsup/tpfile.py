@@ -229,8 +229,10 @@ def tpfind(paths: Union[list, str],
 
     paths2 = tpglob(paths, **opt)
 
-    ret = {}
-    ret['error'] = 0
+    ret = {
+        'error': 0,
+        'hashes': [],
+    }
 
     for p in paths2:
         for root, dirs, fnames in os.walk(p, topdown=True):
@@ -330,7 +332,9 @@ def tpfind(paths: Union[list, str],
 
                 if MatchExps:
                     Matched = True
-                    for compiled in CompiledMatchExps:
+                    for i in range(0, len(MatchExps)):
+                        exp = MatchExps[i]
+                        compiled = CompiledMatchExps[i]
                         if not compiled(r):
                             if verbose >= 2:
                                 log_FileFuncLine(
@@ -339,6 +343,8 @@ def tpfind(paths: Union[list, str],
                             break
                     if not Matched:
                         continue
+
+                ret['hashes'].append(r)
 
                 if print_p:
                     if find_dump:

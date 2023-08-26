@@ -11,6 +11,7 @@ from tpsup.logparser import get_log_section_headers, get_log_sections
 
 from tpsup.print import render_arrays, string_short
 from tpsup.sqltools import get_dbh, run_sql
+from tpsup.tpfile import tpfind, tpglob
 from tpsup.tplog import get_exception_string, log_FileFuncLine, get_stack, print_exception
 from tpsup.util import arrays_to_hashes, get_first_by_key, get_keys_from_array, get_node_list, get_value_by_key_case_insensitive, hashes_to_arrays, resolve_scalar_var_in_string, unify_array_hash, unify_hash_hash
 
@@ -955,6 +956,50 @@ def process_db(entity: str, method_cfg: dict, **opt):
         row_count = len(arrays)
 
 
+def process_path(entity: str, method_cfg: dict, **opt):
+    global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
+
+    verbose = opt.get('verbose', 0)
+
+    paths = method_cfg.get('paths', None)
+    if not paths:
+        raise Exception(
+            f"paths is not defined at method_cfg={pformat(method_cfg)}")
+
+    resolved_paths = []
+    for p in paths:
+        resolved = resolve_scalar_var_in_string(p, {**known, **vars})
+        globbed = tpglob(resolved)
+        resolved_paths.extend(globbed)
+
+    resolvedExps_by_attr = {}
+    for a in ['HandleExps', 'HandleActs', 'MatchExps', 'FlowExps', 'FlowActs']:
+        if attr := method_cfg.get(a, None):
+            resolvedExps_by_attr[a] = []
+            for exp in method_cfg[a]:
+                resolved = resolve_scalar_var_in_string(
+                    exp, {**known, **vars})
+                resolvedExps_by_attr[a].append(resolved)
+
+    opt2 = {
+        # carry over method_cfg
+        **method_cfg,
+        **opt,
+
+        # plus override (eg, resolved)
+        'paths': resolved_paths,
+        **resolvedExps_by_attr,
+    }
+
+    verbose and print(f"opt2 = {pformat(opt2)}")
+
+    result = tpfind(**opt2)
+
+    rc = result['error']
+    hashes = result['hashes']
+    row_count = len(hashes)
+
+
 method_syntax = {
     'code': {
         'required': [],
@@ -978,9 +1023,9 @@ method_syntax = {
     },
     'path': {
         'required': ['paths'],
-        'optional': ['RecursiveMax', 'HandleExp'],
+        'optional': ['RecursiveMax', 'MatchExps', 'HandleExps', 'HandleActs',
+                     'FlowExps', 'FlowActs', 'find_dump', 'find_ls'],
     },
-
 }
 
 
@@ -1011,7 +1056,7 @@ rc = None  # from cmd output
 arrays = []  # from db  output, array of arrays
 headers = []  # from db  output, array
 hashes = []  # from db/log extraction and section, array of hashes
-hash1 = {}  # converted from @hashes using $entity_cfg->{output_key}
+hash1 = {}  # converted from @hashes to single hash using $entity_cfg->{output_key}
 r = {}  # only used by update_knowledge_from_row
 ###### global variables - end ######
 
@@ -1540,7 +1585,7 @@ processor_by_method = {
     'db': process_db,
     'cmd': process_cmd,
     'log': process_log,
-    # 'path': process_path,
+    'path': process_path,
     'section': process_section,
 }
 
@@ -1621,7 +1666,7 @@ process {entity}
     processor(entity, method_cfg, **opt)
     # this sets all the global variables
 
-    verbose > 1 and print_global_buffer(f'after {processor.__name__} {entity}')
+    verbose and print_global_buffer(f'after {processor.__name__} {entity}')
 
     output_key = entity_cfg.get('output_key', None)
     if output_key:
@@ -1635,7 +1680,7 @@ process {entity}
 
             hash1.setdefault(v, []).append(row)
 
-        verbose > 1 and print_global_buffer(
+        verbose and print_global_buffer(
             f'after applied output_key={output_key}')
 
     if code := entity_cfg.get('code', None):
@@ -1703,7 +1748,7 @@ process {entity}
 
     if hashes and (verbose or not headers):
         # we print this only when we didn't print render_csv() or verbose mode
-        print(hashes[:Top])
+        log_FileFuncLine("hashes = \n" + pformat(hashes[:Top]))
         print("\n")
         count = len(hashes)
         if count > Top:

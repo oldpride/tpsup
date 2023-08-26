@@ -364,6 +364,33 @@ our_cfg = {
 
             'comment': 'test entity={{entity}}',
         },
+
+
+        'applog_path': {
+            'method': 'path',
+            'method_cfg': {
+                'paths': ['{{cfgdir}}'],
+                'MatchExps': ['"tptrace_test" in r["short"]'],
+                # 'HandleExps': ['$short =~ /tptrace_test/'],    # default to 1
+                # 'RecursiveMax': 2,                         # depth. default to 100
+                'find_ls': 1,
+            },
+            'output_key': 'short',      # use short file name to convert @hashes to %hash1
+            'code': '''
+                short = "tptrace_test_cfg_trace.py"
+                if short in hash1:
+                    mtime_local = hash1[short][0]['mtimel']
+                    if re.search(r'{{YYYY}}{{MM}}{{DD}}', mtime_local):
+                        update_error(f"{short} is updated today {mtime_local}")
+                    else:
+                        update_ok(f"{short} is not updated today {mtime_local}. last update: {hash1[short][0]['mt_string']}")
+                else:
+                    update_error(f"{short} is not found")
+            ''',
+
+            'comment': 'test method=path',
+            'AllowMultiple': 1,
+        },
     },
 
     'extra_keys': ['example', 'security', 'YYYYMMDD'],
@@ -406,6 +433,7 @@ our_cfg = {
         'applog_cmd_post_code',
         'applog_log',
         'applog_section',
+        'applog_path',
     ],
 
     'usage_example':  '''
@@ -432,6 +460,9 @@ our_cfg = {
 
     # test applog_section
     {{prog}} -t applog_section bookid=BKG-0002 sid=400001 TRADEID=TRD-0002 TRADEQTY=400
+
+    # test applog_path
+    {{prog}} -t applog_path any
     ''',
 }
 
