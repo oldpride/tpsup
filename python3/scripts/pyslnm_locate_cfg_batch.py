@@ -105,6 +105,11 @@ our_cfg = {
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
 
     {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/shadow.html" %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
+    
+    # dump nested shadow
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/../js/examples/test_shadow_dom_3_nested.html" %USERPROFILE%/dumpdir2 "xpath=//*[@id='div1']" shadow css=#div2 shadow css=#div3 shadow
+    
+    
     ''',
 
     # use -js

@@ -1777,7 +1777,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     dump_state['map']['xpath_chain'].write(line + "\n")
     dump_state['list']['xpath_chain'].write(xpath_chain + "\n")
 
-    locator_chain = "'" + "', '".join(dump_state['locator_chain']) + "'"
+    locator_chain = '"' + '" "'.join(dump_state['locator_chain']) + '"'
     line = f'{typekey_chain}: {locator_chain}'
     dump_state['map']['locator_chain'].write(line + "\n")
     dump_state['list']['locator_chain'].write(locator_chain + "\n")
@@ -2032,7 +2032,7 @@ js_by_key = {
                             if (documentUnique > 1) break; 
                         }; 
                         if ( documentUnique == 1) { 
-                            segs.unshift(`id("${elm.id}")`);  // backtick for interpolation
+                            segs.unshift(`id('${elm.id}')`);  // backtick for interpolation
                             return segs.join('/'); 
                         } 
                     }
@@ -2050,7 +2050,7 @@ js_by_key = {
                             if (documentUnique > 1) break; 
                         }; 
                         if ( documentUnique == 1) { 
-                            segs.unshift(`class("${elm.className}")`); 
+                            segs.unshift(`class('${elm.className}')`); 
                             return segs.join('/'); 
                         } 
                     }
@@ -2080,7 +2080,7 @@ js_by_key = {
                             // in the qualified name ecomm:partners, 
                             //    partners is the local name 
                             //    ecomm is the prefix
-                            segs.unshift(`${elm.localName.toLowerCase()}[@id="${elm.id}"]`);  
+                            segs.unshift(`${elm.localName.toLowerCase()}[@id='${elm.id}']`);  
                             continue;
                         } 
                         
@@ -2093,7 +2093,7 @@ js_by_key = {
                             if (siblingUnique > 1) break; 
                         }; 
                         if (siblingUnique == 1) { 
-                            segs.unshift(`${elm.localName.toLowerCase()}[@class="${elm.className}"]`);  
+                            segs.unshift(`${elm.localName.toLowerCase()}[@class='${elm.className}']`);  
                             continue;
                         } 
                     }

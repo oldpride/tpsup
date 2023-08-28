@@ -7,6 +7,7 @@ from pprint import pformat
 import re
 import sys
 from time import strftime, gmtime
+from typing import Literal
 from tpsup.tplog import log_FileFuncLine
 
 
@@ -616,6 +617,36 @@ def transpose_lists(lists: list, **opt):
     else:
         # discards no data if jagged and fills short nested lists with None
         return list(map(list, itertools.zip_longest(*lists, fillvalue=None)))
+
+
+def switch_quotes(string1: str, outer: Literal['switch', 'double', 'single']):
+    '''
+    example
+    because in windows cmd.exe, only double quotes can group.
+    therefore, we need to change a command arg from
+        'xpath=//*[@id="prime"]' 
+    to
+        "xpath=//*[@id='prime']"
+    '''
+
+    need_switch = False
+    if outer == 'switch':
+        need_switch = True
+    else:
+        if m := re.search(r"^.*?(['\"])", string1, re.MULTILINE):
+            quote = m.group(1)
+            if (quote == "'" and outer == 'single') or (quote == '"' and outer == 'double'):
+                log_FileFuncLine(
+                    f'current outer quote={quote} matches expected outer quote={outer}')
+                need_switch = False
+        else:
+            log_FileFuncLine(f"no quote found in string1={string1}")
+            need_switch = False
+    if need_switch:
+        pass
+    else:
+        string2 = string1
+    return string2
 
 
 def main():
