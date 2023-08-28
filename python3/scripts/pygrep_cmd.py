@@ -20,15 +20,15 @@ usage = textwrap.dedent("""
 examples = textwrap.dedent(f"""
     examples:
                            
-        {prog}      mypattern tpgrep_test*
-        {prog}   -v mypattern tpgrep_test*
-        {prog}    "abc1|def2" tpgrep_test*
-        {prog} "^(abc1|def2)" tpgrep_test*
+        {prog}      mypattern pygrep_test*
+        {prog}   -v mypattern pygrep_test*
+        {prog}    "abc1|def2" pygrep_test*
+        {prog} "^(abc1|def2)" pygrep_test*
 
         # match multiple patterns in any order. use -m to specify extra patterns
-        {prog} -m ab c1 tpgrep_test*
+        {prog} -m ab c1 pygrep_test*
         # if we used normal egrep, we would have to do
-        egrep (ab.*c1|c1.*ab) tpgrep_test*
+        egrep (ab.*c1|c1.*ab) pygrep_test*
         # it would be a nightmare to use egrep if we have more than 2 patterns.
 
         # recursive
@@ -45,26 +45,13 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
 
-parser.add_argument(
-    # 'pattern', default=None, action='store', help='regex pattern')
-    'MatchPatterns', action="append", help='MatchPatterns')
-
-parser.add_argument(
-    # 'pattern', default=None, action='store', help='regex pattern')
-    '-m', dest='MatchPatterns', action="append", help='extra MatchPatterns')
-
 # parser.add_argument(
-#     'file', default='-', action='store',
-#     help='file to grep')
+#     # 'pattern', default=None, action='store', help='regex pattern')
+#     'MatchPatterns', action="append", help='MatchPatterns')
 
 parser.add_argument(
-    # https://stackoverflow.com/questions/15583870
-    # "argparse.REMAINDER" tells the argparse module to take the rest of the arguments in args,
-    # when it finds the first argument it cannot match to the rest.
-    'remainingArgs', nargs=argparse.REMAINDER,
-    # this may not be desirable.
-    # but the parser cannot handle intermixed options and positional args.
-    help='optionally additonal files')
+    # 'pattern', default=None, action='store', help='regex pattern')
+    '-m', dest='MatchPatterns', default=[], action="append", help='extra MatchPatterns')
 
 parser.add_argument(
     '-v', dest='exclusive', action="store_true",
@@ -90,6 +77,12 @@ parser.add_argument(
     '-d', dest='verbose', default=0, action="count",
     help='verbose mode. -d, -dd, -ddd, ...')
 
+parser.add_argument(
+    'pattern_and_files',
+    # 0 or more positional arguments. can handle intermixed options and positional args.
+    nargs='*',
+    help='optionally additonal files')
+
 args = vars(parser.parse_args())
 
 verbose = args['verbose']
@@ -97,23 +90,48 @@ verbose = args['verbose']
 if verbose:
     print(f'args={pformat(args)}', file=sys.stderr)
 
+if not args['pattern_and_files']:
+    print(usage)
+    print
+    print(examples)
+    sys.exit(1)
+    # usage("missing positional args",
+    #       caller=a.get('caller', None),
+    #       all_cfg=all_cfg)
+
+
 opt = {}
+
+# pop out the first positional arg, which is the pattern
+first_pattern = args['pattern_and_files'].pop(0)
+
+if verbose:
+    print(f'first_pattern={first_pattern}', file=sys.stderr)
+
+patterns = [first_pattern]
+if args['MatchPatterns']:
+    patterns.extend(args['MatchPatterns'])
+
 if args['exclusive']:
-    opt['ExcludePatterns'] = args['MatchPatterns']
+    opt['ExcludePatterns'] = patterns
 else:
-    opt['MatchPatterns'] = args['MatchPatterns']
+    opt['MatchPatterns'] = patterns
 
 # files = glob(args['file'])
 files = []
-if args['remainingArgs']:
-    files.extend(args['remainingArgs'])
+if args['pattern_and_files']:
+    files.extend(args['pattern_and_files'])
 else:
     files.append('-')
 
-opt['print'] = True
+opt['print_output'] = True
 opt['verbose'] = args['verbose']
 opt['CaseInsensitive'] = args['CaseInsensitive']
 opt['Recursive'] = args['Recursive']
 opt['FileNameOnly'] = args['FileNameOnly']
+
+if verbose:
+    print(f'opt={pformat(opt)}', file=sys.stderr)
+    print(f'files={pformat(files)}', file=sys.stderr)
 
 grep(files, **opt)

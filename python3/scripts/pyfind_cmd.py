@@ -31,7 +31,7 @@ examples = textwrap.dedent(f"""
         -he -HandleExp exp     Handle expression, can specify multiple times
         -ha -HanderAct code    Handle action, can specify multiple times
         -fe -FlowExp exp       flow expression, can specify multiple times
-        -fa -FlowDir dir       flow directive, can specify multiple times
+        -fd -FlowDir dir       flow directive, can specify multiple times
         -print                 print path
         -ls                    print like 'ls -l'
         -dump                  print out detail of the path
@@ -40,7 +40,7 @@ examples = textwrap.dedent(f"""
 
         {prog} -m 'r["path"].endswith(".py")' .
 
-        {prog} -fe 'not r["short"].endswith("profile.d")' -fa prune $TPSUP
+        {prog} -fe 'not r["short"].endswith("profile.d")' -fd prune $TPSUP
         {prog} -fe 'r["size"] > 5000'                        -fd exit $TPSUP
         {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP
         {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP  -ls
@@ -53,8 +53,8 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
 
-parser.add_argument(
-    'paths', action="append", help='paths')
+# parser.add_argument(
+#     'paths', action="append", help='paths')
 
 parser.add_argument(
     '-m', dest='MatchExps', action="append", default=[],
@@ -89,12 +89,8 @@ parser.add_argument(
     help='print out detail of the path')
 
 parser.add_argument(
-    # https://stackoverflow.com/questions/15583870
-    # "argparse.REMAINDER" tells the argparse module to take the rest of the arguments in args,
-    # when it finds the first argument it cannot match to the rest.
-    'remainingArgs', nargs=argparse.REMAINDER,
-    # this may not be desirable.
-    # but the parser cannot handle intermixed options and positional args.
+    'paths',  # this is the remaining args
+    nargs='*',  # 0 or more positional arguments.
     help='optionally additonal paths')
 
 parser.add_argument(
@@ -109,7 +105,10 @@ if verbose:
     print(f'args={pformat(args)}', file=sys.stderr)
 
 
-if args['remainingArgs']:
-    args['paths'].extend(args['remainingArgs'])
+if not args['paths']:
+    print('missing path', file=sys.stderr)
+    print(usage)
+    print(examples)
+    sys.exit(1)
 
 tpfind(**args)

@@ -155,17 +155,17 @@ def grep_1_file(file: str,
 
                 if FileNameOnly:
                     lines.append(file)
-                    if opt.get('print', False):
+                    if opt.get('print_output', False):
                         print(file)
                     break
 
                 if print_filename:
                     lines.append(f'{file}:{line}')
-                    if opt.get('print', False):
+                    if opt.get('print_output', False):
                         print(f'{file}:{line}', end='')
                 else:
                     lines.append(line)
-                    if opt.get('print', False):
+                    if opt.get('print_output', False):
                         print(line, end='')
         except UnicodeDecodeError as e:
             # UnicodeDecodeError: 'utf-8' codec can't decode byte 0x9b in position 147:

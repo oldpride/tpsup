@@ -108,12 +108,12 @@ our_cfg = {
                 #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
                 #
                 #  other value:
-                #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+                #      ['pygrepl=pygrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
 
                 'value': [
-                    ['grep=tpgrep', 'TRADEID', 'ORDERID'],
-                    ['grep=tpgrep -v', 'BOOKID'],
-                    ['cmd=tpgrep -v "{{JUNK=junk1}}|{{JUNK=junk2}}"'],
+                    ['grep=pygrep', 'TRADEID', 'ORDERID'],
+                    ['grep=pygrep -v', 'BOOKID'],
+                    ['cmd=pygrep -v "{{JUNK=junk1}}|{{JUNK=junk2}}"'],
                 ],
                 'file': '{{log}}',
             },
@@ -139,7 +139,7 @@ our_cfg = {
 
             'method_cfg': {
                 'type': 'cmd',
-                'value': 'tpgrep -E " (ERROR|FAIL)[ :]" {{log}}',
+                'value': 'pygrep -E " (ERROR|FAIL)[ :]" {{log}}',
             },
 
             'top': 5,

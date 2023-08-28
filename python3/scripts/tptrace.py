@@ -148,12 +148,18 @@ parser.add_argument(
     help='set the caller name')
 
 parser.add_argument(
+    'remainingArgs',
+
     # https://stackoverflow.com/questions/15583870
     # "argparse.REMAINDER" tells the argparse module to take the rest of the arguments in args,
     # when it finds the first argument it cannot match to the rest.
-    'remainingArgs', nargs=argparse.REMAINDER,
-    # this may not be desirable.
-    # but the parser cannot handle intermixed options and positional args.
+    # therefore, it cannot handle intermixed options and positional args.
+    # nargs=argparse.REMAINDER,
+
+    # '*' or '+' can handle intermixed options and positional args.
+    nargs="*",  # 0 or more positional arguments.
+    # nargs="+",  # 1 or more positional arguments.
+
     help='app_cfg_trace.py and key=value pairs')
 
 a = vars(parser.parse_args(args))
