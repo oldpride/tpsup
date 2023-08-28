@@ -1684,6 +1684,8 @@ process {entity}
             f'after applied output_key={output_key}')
 
     if code := entity_cfg.get('code', None):
+        print(f"eval code = {code}")
+        print()
         tracer_eval_code(code, **opt)
         verbose > 1 and print_global_buffer(f'after eval code')
 
@@ -1697,6 +1699,7 @@ process {entity}
     if csv_filters := entity_cfg.get('csv_filters', None):
         # print_global_buffer(f'after eval code')
         print(f"csv_filters = {pformat(csv_filters)}")
+        print()
         apply_csv_filters(entity_cfg.get('csv_filters', None), **opt)
         verbose > 1 and print_global_buffer(f'after apply_csv_filters')
 
