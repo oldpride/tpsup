@@ -631,19 +631,28 @@ def switch_quotes(string1: str, outer: Literal['switch', 'double', 'single']):
 
     need_switch = False
     if outer == 'switch':
+        # toggle between single and double quotes
         need_switch = True
-    else:
+    elif outer == 'double' or outer == 'single':
         if m := re.search(r"^.*?(['\"])", string1, re.MULTILINE):
             quote = m.group(1)
             if (quote == "'" and outer == 'single') or (quote == '"' and outer == 'double'):
                 log_FileFuncLine(
                     f'current outer quote={quote} matches expected outer quote={outer}')
-                need_switch = False
+            else:
+                need_switch = True
         else:
             log_FileFuncLine(f"no quote found in string1={string1}")
             need_switch = False
+    else:
+        raise Exception(
+            f"unsupported outer={outer}. must be 'switch', 'double' or 'single'")
+
     if need_switch:
         pass
+        # switch between tow chars: ' and "
+        string2 = string1.translate(str.maketrans({"'": '"', '"': "'"}))
+
     else:
         string2 = string1
     return string2
@@ -727,6 +736,18 @@ def main():
 
     def test_codes():
         transpose_lists([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        switch_quotes('''
+                      'xpath=//*[@id="prime1"]' 'xpath=//*[@id="prime2"]'
+                      ''', 'switch')
+        switch_quotes('''
+                        "xpath=//*[@id='prime1']" "xpath=//*[@id='prime2']"
+                        ''', 'switch')
+        switch_quotes('''
+                        'xpath=//*[@id="prime1"]' 'xpath=//*[@id="prime2"]'
+                        ''', 'double')
+        switch_quotes('''
+                        'xpath=//*[@id="prime1"]' 'xpath=//*[@id="prime2"]'
+                        ''', 'single')
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())
