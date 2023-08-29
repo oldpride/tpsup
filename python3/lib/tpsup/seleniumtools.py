@@ -2619,7 +2619,8 @@ tpbatch = {
             "help": "page load timeout in seconds. default to 15. "
             "For slow app like Service Now, we need set 30 or more. "
             "Even after page is loaded, it took more time for page to render fully; "
-            "therefore, we need to add extra sleep time after page is loaded. ",
+            "therefore, we need to add extra sleep time after page is loaded. "
+            "implicitly_wait is set in 'wait=int' keyvaule",
         },
         'log_base': {
             "switches": ["-log_base"],
