@@ -45,10 +45,6 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
 
-# parser.add_argument(
-#     # 'pattern', default=None, action='store', help='regex pattern')
-#     'MatchPatterns', action="append", help='MatchPatterns')
-
 parser.add_argument(
     # 'pattern', default=None, action='store', help='regex pattern')
     '-m', dest='MatchPatterns', default=[], action="append", help='extra MatchPatterns')

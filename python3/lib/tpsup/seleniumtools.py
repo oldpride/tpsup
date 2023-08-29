@@ -58,7 +58,12 @@ class SeleniumEnv:
         self.env.adapt()
         home_dir = os.path.normpath(
             self.env.home_dir)  # convert to native path
-        self.log_base = opt.get('log_base', home_dir)
+
+        # self.log_base = opt.get('log_base', home_dir)
+        # because None could be passed down by __init__, we use two steps below
+        self.log_base = opt.get('log_base', None)
+        if self.log_base is None:
+            self.log_base = home_dir
         system = self.env.system
 
         self.page_load_timeout = page_load_timeout
@@ -363,6 +368,17 @@ class SeleniumEnv:
                 self.page_load_timeout
             )  # for chromedriver.
             # other driver use implicitly_wait()
+            # The default value for implicitly_waits is 0, which means
+            # (and always has meant) "fail findElement immediately if
+            # the element can't be found."
+            # You shouldn't be receiving a TimeoutException directly
+            #  from findElement.
+            # You'll likely only be receiving that when using a
+            #  so-called "explicit wait", using the WebDriverWait construct.
+            # the code is at
+            # lib\webdriver line 1353:
+            # webdriver.Command(webdriver.CommandName.IMPLICITLY_WAIT).
+            #      setParameter('ms', ms < 0 ? 0 : ms)
 
             self.driver.driverEnv = self  # monkey patching for convenience
 
@@ -2311,7 +2327,7 @@ step_compiled_dump = re.compile(r"dump_(page|element)=(.+)")
 step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
 step_compiled_key = re.compile(r"key=(.+?),(\d+)", re.IGNORECASE)
 # step_compiled_swipe = re.compile(r"swipe=(.+)")
-step_compiled_wait = re.compile(r"wait=(\d+)")
+step_compiled_wait = re.compile(r"wait=(\d+)")  # implicitly_wait
 
 
 def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
@@ -2600,7 +2616,16 @@ tpbatch = {
             "default": 15,
             "action": "store",
             "type": int,
-            "help": "page load timeout in seconds. default to 15. For slow app like Service Now, we need set 30 or more.",
+            "help": "page load timeout in seconds. default to 15. "
+            "For slow app like Service Now, we need set 30 or more. "
+            "Even after page is loaded, it took more time for page to render fully; "
+            "therefore, we need to add extra sleep time after page is loaded. ",
+        },
+        'log_base': {
+            "switches": ["-log_base"],
+            "default": None,
+            "action": "store",
+            "help": "base dir for selenium_browser log files, default to home_dir",
         },
     },
     "resources": {

@@ -53,9 +53,6 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
 
-# parser.add_argument(
-#     'paths', action="append", help='paths')
-
 parser.add_argument(
     '-m', dest='MatchExps', action="append", default=[],
     help='Match Expression - Python expression')
