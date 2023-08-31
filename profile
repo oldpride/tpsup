@@ -356,7 +356,7 @@ elif [[ $UNAME =~ Cygwin ]]; then
    export OS_MINOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f2)
 
    export PATH="$PATH:$TPSUP/cmd_exe"
-elif [[ $UNAME =~ Linux ]]; then
+elif [[ $UNAME =~ Linux|Darwin  ]]; then
    export Linux=$(uname -a | cut -d" " -f3 | cut -d. -f1,2)
    # Linux linux1 4.15.0-112-generic #113-Ubuntu SMP Thu Jul 9 23:41:39 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
    # Linux should be set to 4.15
