@@ -72,6 +72,8 @@ description:
 
    -list               list current config
 
+   -quiet              quiet mode. not printing return code, duration, ...
+
    args from tpssh()
       -copy path          copy this path from local host to remove temp folder.
                           The path can be a file or directory.
@@ -102,6 +104,9 @@ examples:
    - use default hostfile
    mssh  -- ls -d /etc /usr
    mscp  -- /etc/hosts \%{host}:/tmp
+
+   # quiet mode + prefix = easy parsing
+   mssh -q -prefix -- ls -d /etc /usr
 
    - use host switch
    mssh -hl localhost,tian\@linux1 -- ls -d /etc /usr
@@ -149,9 +154,11 @@ my $cpRun;
 my $ExecArgType = "String";
 my $GlobArray   = 0;
 my $list;
+my $quiet;
 
 GetOptions(
    'v|verbose'     => \$verbose,
+   'q|quiet'       => \$quiet,
    'dryrun'        => \$dryrun,
    'l=s'           => \$remote_login,
    'a|action=s'    => \$action,
@@ -402,7 +409,7 @@ while (1) {
                ",begin=$info_by_pid->{$kid}->{begin}",
                ",end=$info_by_pid->{$kid}->{end}",
                ",duration=$info_by_pid->{$kid}->{duration}",
-               "\n";
+               "\n" if ! $quiet;
 
          my $row_count = 0;
    
