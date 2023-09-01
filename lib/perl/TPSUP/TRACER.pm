@@ -2198,7 +2198,7 @@ EOF
          print "$@" if $@ !~ /\(no need stack trace\)/;
          exit 1 if !$opt->{ForceThrough};
       }
-   }
+   }tracer_eval_codeextract_from_fh
 }
 
 
