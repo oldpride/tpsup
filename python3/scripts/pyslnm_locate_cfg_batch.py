@@ -104,17 +104,15 @@ our_cfg = {
     # dump whole page, print full xpath
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
 
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/shadow.html" %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
-    
     # dump whole page to find target locator chain and then dump nested shadow
     1. dump the whole page
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/../js/examples/test_shadow_dom_3_nested.html" %USERPROFILE%/dumpdir2
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/yslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2
     
     2. in dumpdir2/locator_chain_map.txt, find the locator chain for the target element
     shadow001.shadow002.shadow003: "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     3. use the locator chain to dump the target element
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/../js/examples/test_shadow_dom_3_nested.html" %USERPROFILE%/dumpdir2 "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/pyslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2 "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     
     ''',

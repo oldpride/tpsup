@@ -1,0 +1,50 @@
+<!--
+    attach a shadow DOM to a div (non-custom element)
+-->
+<div id="div0">div0 in body</div>
+<script>
+    (function () {
+        // create a new div element, will be the shadow host
+        const div1 = document.createElement("div");
+        div1.setAttribute("id", "div1");
+        div1.textContent = 'this div1 text will be hiden by shadow-root-1';
+
+        // add jsDiv to the DOM
+        const div0 = document.getElementById("div0");
+        document.body.insertBefore(div1, div0);
+        // there is no insertAfter() function
+
+        // add a shadow DOM to the div
+        const shadowRoot1 = div1.attachShadow({
+            mode: 'open'
+        });
+
+        const para1 = document.createElement('p');
+        para1.textContent = 'this paragraph text is outside shadow-root-1, will show up';
+        shadowRoot1.appendChild(para1);
+
+        const div2 = document.createElement("div");
+        div2.setAttribute("id", "div2");
+        div2.textContent = 'this div2 text will be hiden by shadow-root-2';
+        shadowRoot1.appendChild(div2);
+        const shadowRoot2 = div2.attachShadow({
+            mode: 'open'
+        });
+        const para2 = document.createElement('p');
+        para2.textContent = 'this paragraph text is outside shadow-root-2, will show up';
+        shadowRoot2.appendChild(para2);
+
+        const div3 = document.createElement("div");
+        div3.setAttribute("id", "div3");
+        div3.textContent = 'this div3 text will be hiden by shadow-root-3';
+        shadowRoot2.appendChild(div3);
+        const shadowRoot3 = div3.attachShadow({
+            mode: 'open'
+        });
+        const para3 = document.createElement('p');
+        para3.textContent = 'this paragraph text is outside shadow-root-3, will show up';
+        shadowRoot3.appendChild(para3);
+    }
+    )();
+
+</script>
