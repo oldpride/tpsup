@@ -136,7 +136,7 @@ svenv () {
       # MINGW64_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
       # MSYS_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
       . "$SITEVENV/Scripts/activate"
-   elif [[ $UNAME =~ Linux ]]; then
+   elif [[ $UNAME =~ ^(Linux|Darwin) ]]; then
       # linux or WSL
       . "$SITEVENV/bin/activate"
    else
