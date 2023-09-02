@@ -41,11 +41,11 @@ action=$1
 #p3env
 
 uname=`uname -a`
-if [[ $uname =~ Linux ]]; then
+if [[ $uname =~ ^(Linux|Darwin) ]]; then
    # Linux linux1 5.15.0-76-generic #83-Ubuntu SMP Thu Jun 15 19:16:32 UTC 
    # 2023 x86_64 x86_64 x86_64 GNU/Linux
-   OS=Linux
-   PREFIX=Linux
+   OS=${BASH_REMATCH[1]}
+   PREFIX=${BASH_REMATCH[1]}
    VERSION=`echo $uname|cut -d' ' -f3|cut -d. -f1-2`
 elif [[ $uname =~ _NT ]]; then
    # Git bash
