@@ -1,0 +1,47 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog path
+
+   this does
+      git reset --soft HEAD~1
+   this deletes the most recent commit, keeping the work you've done:
+
+   it is useful when
+      if I mistakenly added/committed unneeded files, .pyc for example, 
+      before 'git push', i can run this command to back out them.
+      
+examples:
+
+   mytp
+   touch junk2
+   gitpush all # answer N
+   $prog .
+   git status
+   ls -l junk2 # file stayed
+
+
+EOF
+
+   exit 1
+}
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+path=$1
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+cd $path || exit 1
+set -x
+git reset --soft HEAD~1
+
