@@ -12,9 +12,17 @@ usage:
       git reset --soft HEAD~1
    this deletes the most recent commit, keeping the work you've done:
 
+   note: hard reset (below) would remove unsaved files in working directory too.
+      git reset --hard HEAD~1
+
    it is useful when
       if I mistakenly added/committed unneeded files, .pyc for example, 
       before 'git push', i can run this command to back out them.
+
+   if this command caused this error:
+      Your branch and 'origin/master' have diverged,
+   fix it with
+      git pull --rebase
       
 examples:
 
