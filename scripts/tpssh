@@ -1,5 +1,6 @@
 SCRIPT_DIR=$(dirname $0)
+SCRIPT_NAME=$(basename $0)
 
 # echo SCRIPT_DIR=$SCRIPT_DIR
 
-${SCRIPT_DIR}/../lib/perl/TPSUP/SSH.pm
+"$SCRIPT_DIR"/../lib/perl/TPSUP/SSH.pm "$SCRIPT_NAME" "$@"

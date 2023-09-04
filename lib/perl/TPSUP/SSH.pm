@@ -423,7 +423,8 @@ EOF
 sub main {
    use Getopt::Long;
 
-   my $prog = $0; $prog =~ s:.*/::;  
+   # my $prog = $0; $prog =~ s:.*/::;  
+   my $prog = shift @ARGV;
    
    sub usage {
       my ($message) = @_; 
