@@ -16,6 +16,7 @@ from selenium.common.exceptions import \
     StaleElementReferenceException, WebDriverException, UnexpectedAlertPresentException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.chrome.service import Service
 
 # find_element_by_name('q') is replaced with find_element(By.NAME, 'q')
 from selenium.webdriver.common.by import By
@@ -352,8 +353,16 @@ class SeleniumEnv:
             tpsup.tplog.rotate_log(
                 self.driverlog, size=1024 * 1024 * 10, count=1)
 
+            # make sure chromedriver is in the PATH
+            # selenium 4.10+ need to wrap executable_path into Service
+            # https://stackoverflow.com/questions/76428561
+            service = Service(
+                executable_path=self.driver_exe,
+                service_args=self.driver_args,  # for chromedriver
+                )
+
             self.driver = webdriver.Chrome(
-                self.driver_exe,  # make sure chromedriver is in the PATH
+                service=service,
                 options=self.browser_options,  # for chrome browser
                 service_args=self.driver_args,  # for chromedriver
                 desired_capabilities=self.desiredCapbilities,  # to get js console log
