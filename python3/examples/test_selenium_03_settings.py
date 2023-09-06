@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from pprint import pformat
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -47,7 +48,7 @@ SITEBASE = os.environ['SITEBASE']
 if not env.isLinux:
     options.binary_location = f"{SITEBASE}/Windows/10.0/Chrome/Application/chrome.exe"
 
-print(f"options = {options.arguments}")
+print(f"options.arguments = \n{pformat(options.arguments)}")
 
 driver_args = [
     "--verbose",
