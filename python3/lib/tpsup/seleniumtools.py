@@ -469,7 +469,8 @@ def get_browser_path_decoed() -> str:
 
     browser_path = None
     if env.isLinux:
-        browser_path = which('google-chrome')
+        # browser_path = which('google-chrome')
+        browser_path = which('chrome')
         # /usr/bin/google-chrome is preferred on linux.
         # It is a wrapper to /opt/google/chrome/chrome
     if not browser_path:
