@@ -50,7 +50,8 @@ if env.isLinux:
         "--no-sandbox")  # allow to run without root
     options.add_argument(
         "--disable-dev_shm-usage")  # allow to run without root
-    options.binary_location = f"/google/chrome/google-chrome"
+    # options.binary_location = f"/google/chrome/google-chrome"
+    options.binary_location = f"/google/chrome/chrome"
 else:
     options.binary_location = f"{SITEBASE}/Windows/10.0/Chrome/Application/chrome.exe"
 
