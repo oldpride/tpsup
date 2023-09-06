@@ -463,26 +463,6 @@ class SeleniumEnv:
                 f"unsupported method={method}. accepted: bs4 or js")
 
 
-def get_browser_path_decoed() -> str:
-    env = tpsup.env
-    env.adapth()
-
-    browser_path = None
-    if env.isLinux:
-        # browser_path = which('google-chrome')
-        browser_path = which('chrome')
-        # /usr/bin/google-chrome is preferred on linux.
-        # It is a wrapper to /opt/google/chrome/chrome
-    if not browser_path:
-        browser_path = which('chrome')
-    if browser_path:
-        print(f"chrome is at {browser_path}")
-    else:
-        raise RuntimeError(f"cannot find chrome in PATH={os.environ['PATH']}")
-
-    return browser_path
-
-
 def get_browser_path() -> str:
     path = check_setup().get('chrome')
     if not path:
@@ -579,7 +559,8 @@ def check_setup(**opt):
         if not static_path:
             print(f"static setup didn't configure {exec}.")
         if exec == 'chrome':
-            execList = ['google-chrome', 'chrome']
+            # execList = ['google-chrome', 'chrome']
+            execList = ['chrome']
         else:
             execList = [exec]
 
