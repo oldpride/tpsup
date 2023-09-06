@@ -2,7 +2,7 @@
 from pprint import pformat
 import time
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.env
 import os
@@ -72,8 +72,8 @@ from code(), opt =
     driver = all_cfg["resources"]["selenium"]["driver"]
 
     print(
-        f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools, 'we_return')}")
-    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools.we_return}")
+        f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools_old, 'we_return')}")
+    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools_old.we_return}")
 
     actions = [
         [f"url={url}"],
@@ -110,13 +110,13 @@ from code(), opt =
     ]
     print(f"test actions = {pformat(actions)}")
 
-    result = tpsup.seleniumtools.run_actions(driver, actions)
+    result = tpsup.seleniumtools_old.run_actions(driver, actions)
 
     # we can access we_return from result
     print(f"result['we_return'] = {result['we_return']}")
     print(
-        f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools, 'we_return')}")
-    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools.we_return}")
+        f"getattr(tpsup.seleniumtools, 'we_return')={getattr(tpsup.seleniumtools_old, 'we_return')}")
+    print(f"tpsup.seleniumtools.we_return={tpsup.seleniumtools_old.we_return}")
 
     interval = 2
     print(f"sleep {interval} seconds so that you can see")

@@ -8,7 +8,7 @@ import tpsup.env
 import json
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
@@ -18,7 +18,7 @@ our_cfg = {
 
     'resources': {
         'selenium': {
-            'method': tpsup.seleniumtools.get_driver,
+            'method': tpsup.seleniumtools_old.get_driver,
             'cfg': {
                 # 'host_port': 'auto'
             },
@@ -160,9 +160,10 @@ def code(all_cfg, known, **opt):
 
     locator_chain = known['REMAININGARGS']
     if run_js:
-        js_list = tpsup.seleniumtools.locator_chain_to_js_list(
+        js_list = tpsup.seleniumtools_old.locator_chain_to_js_list(
             locator_chain, trap=trap)
-        locator_chain2 = tpsup.seleniumtools.js_list_to_locator_chain(js_list)
+        locator_chain2 = tpsup.seleniumtools_old.js_list_to_locator_chain(
+            js_list)
         actions.append(
             [locator_chain2, f'dump_element={output_dir}', f'dump element to {output_dir}'])
     else:
@@ -170,7 +171,7 @@ def code(all_cfg, known, **opt):
             [locator_chain, f'dump_element={output_dir}', f'dump element to {output_dir}'])
 
     print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.follow(driver, actions, **opt)
+    result = tpsup.seleniumtools_old.follow(driver, actions, **opt)
 
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):

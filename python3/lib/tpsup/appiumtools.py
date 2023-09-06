@@ -26,8 +26,8 @@ import tpsup.pstools
 import tpsup.tptmp
 from tpsup.human import human_delay
 import os.path
-
-from tpsup.util import tplog, hit_enter_to_continue
+from tpsup.tplog import tplog
+from tpsup.util import hit_enter_to_continue
 from tpsup.exectools import exec_into_globals
 
 from typing import List, Union

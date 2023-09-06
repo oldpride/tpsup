@@ -9,14 +9,15 @@ import tpsup.env
 from selenium import webdriver
 from tpsup.human import human_delay
 import tpsup.tplog
+from tpsup.tplog import log_FileFuncLine
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
     TimeoutException, NoSuchShadowRootException, \
     StaleElementReferenceException, WebDriverException, UnexpectedAlertPresentException
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.service import Service as ChromeDriverService
 
 # find_element_by_name('q') is replaced with find_element(By.NAME, 'q')
 from selenium.webdriver.common.by import By
@@ -80,7 +81,7 @@ class SeleniumEnv:
         ).get_nowdir(suffix="selenium")
 
         self.headless = opt.get("headless", False)
-        self.driver_exe = opt.get("driver", "chromedriver")
+        self.driver_exe = opt.get("driver", None)
         if self.driver_exe:
             if not which(self.driver_exe):
                 raise RuntimeError(f"cannot find {self.driver_exe} in $PATH")
@@ -141,7 +142,6 @@ class SeleniumEnv:
 
         self.driver_args = [
             "--verbose",
-            f"--log-path={self.driverlog}",
         ]  # for chromedriver
 
         if self.verbose:
@@ -181,22 +181,19 @@ class SeleniumEnv:
                     #   { get-content C:/users/william/selenium_chromedriver.log -wait -tail 1 }
                     pass
 
-        # to get js console log
-        # https://stackoverflow.com/questions/20907180
-        self.desiredCapbilities = webdriver.DesiredCapabilities.CHROME.copy()
-        self.desiredCapbilities['goog:loggingPrefs'] = {'browser': 'ALL'}
-
         self.driver: webdriver.Chrome = None
+
+        # https://www.selenium.dev/documentation/webdriver/drivers/options/
+        # chrome_options will be used on chrome browser's command line not chromedriver's commandline
+        self.browser_options = ChromeOptions()
+
+        # https://stackoverflow.com/questions/65080685
+        # disables USB: usb_device_handle_win.cc:
+        #     1048 Failed to read descriptor from node connection
+        self.browser_options.add_experimental_option(
+            'excludeSwitches', ['enable-logging'])
+
         if host_port != "auto":
-            # chrome_options will be used on chrome browser's command line not chromedriver's commandline
-            self.browser_options = Options()
-
-            # https://stackoverflow.com/questions/65080685
-            # disables USB: usb_device_handle_win.cc:
-            #     1048 Failed to read descriptor from node connection
-            self.browser_options.add_experimental_option(
-                'excludeSwitches', ['enable-logging'])
-
             # try to connect the browser in case already exists.
             # by setting this, we tell chromedriver not to start a browser
             self.browser_options.debugger_address = f"{host_port}"
@@ -231,8 +228,6 @@ class SeleniumEnv:
 
         if self.driver:
             return
-
-        self.browser_options = Options()  # reset the browser options
 
         # by doing one of the following, we tell chromedriver to start a browser
         # self.browser_options.debugger_address = None
@@ -356,16 +351,27 @@ class SeleniumEnv:
             # make sure chromedriver is in the PATH
             # selenium 4.10+ need to wrap executable_path into Service
             # https://stackoverflow.com/questions/76428561
-            service = Service(
+            driver_service = ChromeDriverService(
+                # Service decides how driver starts and stops
                 executable_path=self.driver_exe,
+                log_path=self.driverlog,
                 service_args=self.driver_args,  # for chromedriver
-                )
+            )
+
+            # to get js console log
+            # https://stackoverflow.com/questions/20907180
+            # self.desiredCapbilities = webdriver.DesiredCapabilities.CHROME.copy()
+            # self.desiredCapbilities['goog:loggingPrefs'] = {'browser': 'ALL'}
+            # above code is deprecated by selenium 4.10
+            # https://www.selenium.dev/documentation/webdriver/getting_started/upgrade_to_selenium_4/#capabilities
+            # self.browser_options.set_capability(
+            #     'goog:loggingPrefs', {'browser': 'ALL'})
+
+            log_FileFuncLine()
 
             self.driver = webdriver.Chrome(
-                service=service,
-                options=self.browser_options,  # for chrome browser
-                service_args=self.driver_args,  # for chromedriver
-                desired_capabilities=self.desiredCapbilities,  # to get js console log
+                service=driver_service,
+                options=self.browser_options,
             )
             sys.stderr.write("started\n")
             # if self.headless:
