@@ -45,7 +45,13 @@ options.add_experimental_option(
 
 SITEBASE = os.environ['SITEBASE']
 
-if not env.isLinux:
+if env.isLinux:
+    options.add_argument(
+        "--no-sandbox")  # allow to run without root
+    options.add_argument(
+        "--disable-dev_shm-usage")  # allow to run without root
+    options.binary_location = f"/google/chrome/google-chrome"
+else:
     options.binary_location = f"{SITEBASE}/Windows/10.0/Chrome/Application/chrome.exe"
 
 print(f"options.arguments = \n{pformat(options.arguments)}")
@@ -58,15 +64,16 @@ driver_args = [
 # default is to use chromedriver on command line
 # service=ChromeService(ChromeDriverManager().install()) # this is not default service.
 
-if not env.isLinux:
+if env.isLinux:
     service = ChromeService(
-        # he Service classes are for managing the starting and stopping of local drivers.
-        executable_path=f"{SITEBASE}/Windows/10.0/chromedriver/chromedriver.exe",
+        executable_path=f"/usr/bin/chromedriver",
         log_path=f"{home_dir}/selenium_driver.log",
         driver_args=driver_args,
     )
 else:
     service = ChromeService(
+        # he Service classes are for managing the starting and stopping of local drivers.
+        executable_path=f"{SITEBASE}/Windows/10.0/chromedriver/chromedriver.exe",
         log_path=f"{home_dir}/selenium_driver.log",
         driver_args=driver_args,
     )
