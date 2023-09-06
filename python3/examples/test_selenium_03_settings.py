@@ -43,9 +43,11 @@ options.add_experimental_option(
 )
 
 SITEBASE = os.environ['SITEBASE']
-options.binary_location = f"{SITEBASE}/Windows/10.0/Chrome/Application/chrome.exe"
 
-print(f"options = {options}")
+if not env.isLinux:
+    options.binary_location = f"{SITEBASE}/Windows/10.0/Chrome/Application/chrome.exe"
+
+print(f"options = {options.arguments}")
 
 driver_args = [
     "--verbose",
@@ -54,12 +56,19 @@ driver_args = [
 # https://www.selenium.dev/documentation/webdriver/drivers/service/
 # default is to use chromedriver on command line
 # service=ChromeService(ChromeDriverManager().install()) # this is not default service.
-service = ChromeService(
-    # he Service classes are for managing the starting and stopping of local drivers.
-    executable_path=f"{SITEBASE}/Windows/10.0/chromedriver/chromedriver.exe",
-    log_path=f"{home_dir}/selenium_driver.log",
-    driver_args=driver_args,
-)
+
+if not env.isLinux:
+    service = ChromeService(
+        # he Service classes are for managing the starting and stopping of local drivers.
+        executable_path=f"{SITEBASE}/Windows/10.0/chromedriver/chromedriver.exe",
+        log_path=f"{home_dir}/selenium_driver.log",
+        driver_args=driver_args,
+    )
+else:
+    service = ChromeService(
+        log_path=f"{home_dir}/selenium_driver.log",
+        driver_args=driver_args,
+    )
 
 
 driver = webdriver.Chrome(
