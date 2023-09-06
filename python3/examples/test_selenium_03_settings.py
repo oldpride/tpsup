@@ -4,7 +4,7 @@ from pprint import pformat
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-# from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
 import tpsup.env
 import os
@@ -18,12 +18,11 @@ options.add_argument(f"--user-data-dir={home_dir}/selenium_browser")
 options.add_argument("--window-size=1260,720")
 options.add_argument("--disable-gpu")
 options.add_argument("--enable-javascript")
-options.add_argument("disable-infobars")
 options.add_argument("--disable-infobars")
 options.add_argument("--disable-extensions")
 options.add_argument("--disable-dev-shm-usage")
 # self.browser_options.add_argument("--headless");
-options.add_argument("enable-automation")
+options.add_argument("--enable-automation")
 options.add_argument("--disable-browser-side-navigation")
 # options.set_capability("browserVersion", "104")
 
@@ -51,7 +50,7 @@ if env.isLinux:
     options.add_argument(
         "--disable-dev_shm-usage")  # allow to run without root
     # options.binary_location = f"/google/chrome/google-chrome"
-    options.binary_location = f"/google/chrome/chrome"
+    options.binary_location = f"/opt/google/chrome/google-chrome"
 else:
     options.binary_location = f"{SITEBASE}/Windows/10.0/Chrome/Application/chrome.exe"
 
@@ -84,6 +83,7 @@ driver = webdriver.Chrome(
     service=service,
     options=options
 )
+#driver = webdriver.Chrome()
 driver.get("http://www.google.com")
 print(f'Page title was {driver.title}')
 
