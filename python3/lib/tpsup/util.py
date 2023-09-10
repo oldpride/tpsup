@@ -8,7 +8,7 @@ import re
 import sys
 from time import strftime, gmtime
 from typing import Literal
-from tpsup.tplog import log_FileFuncLine
+from tpsup.logtools import log_FileFuncLine
 
 
 def silence_BrokenPipeError(func):

@@ -1,7 +1,7 @@
 import re
 import sys
 
-from tpsup.tpfile import TpInput, sorted_files_by_mtime, tpglob
+from tpsup.filetools import TpInput, sorted_files_by_mtime, tpglob
 from tpsup.modtools import load_module
 
 

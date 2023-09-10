@@ -10,7 +10,7 @@ from typing import Union, Callable
 import types
 
 
-from tpsup.tplog import print_exception, tplog, tplog_exception
+from tpsup.logtools import print_exception, tplog, tplog_exception
 
 # multiprocessing.set_start_method('spawn')
 

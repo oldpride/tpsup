@@ -12,7 +12,7 @@ from typing import List
 
 import tpsup.pidfile
 # from tpsup.util import tplog
-from tpsup.tplog import get_logger
+from tpsup.logtools import get_logger
 
 logger = get_logger()
 prog = os.path.basename(sys.argv[0])
@@ -20,10 +20,14 @@ prog = os.path.basename(sys.argv[0])
 imported = None
 
 # https://stackoverflow.com/questions/61324536/python-argparse-with-argumentdefaultshelpformatter-and-rawtexthelpformatter
+
+
 class RawTextArgumentDefaultsHelpFormatter(argparse.RawTextHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
     pass
 
 # https://docs.python.o
+
+
 def main():
     usage = textwrap.dedent(f"""
         keep screen alive on windows
@@ -50,7 +54,7 @@ def main():
         description=usage,
         # formatter_class=argparse.RawDescriptionHelpFormatter, # this keeps the format but doesn't print default value
         # formatter_class=argparse.ArgumentDefaultsHelpFormatter, # this disregard format but prints default value
-        formatter_class=RawTextArgumentDefaultsHelpFormatter, # this does both
+        formatter_class=RawTextArgumentDefaultsHelpFormatter,  # this does both
         epilog=examples)
 
     parser.add_argument(
@@ -124,7 +128,8 @@ def main():
                 old_mX, old_mY = mX, mY
                 X0, Y0 = mX, mY
 
-def take_actions (actions: List[str], **opt):
+
+def take_actions(actions: List[str], **opt):
     old_mX = opt.get('X')
     old_mY = opt.get('Y')
 
@@ -144,7 +149,8 @@ def take_actions (actions: List[str], **opt):
                 mY += move
 
             logger.debug(f"mv mouse to ({mX}, {mY})")
-            imported.moveTo(mX, mY, 1)  # (X, Y, Duration) Duration minimum 0.1 second
+            # (X, Y, Duration) Duration minimum 0.1 second
+            imported.moveTo(mX, mY, 1)
             time.sleep(1)
             logger.debug(f"mv mouse back to ({old_mX}, {old_mY})")
             imported.moveTo(old_mX, old_mY, 1)  # move back
@@ -163,7 +169,8 @@ def take_actions (actions: List[str], **opt):
             # ES_DISPLAY_REQUIRED 0x00000002
             #    Forces the display to be on by resetting the display idle timer.
             logger.debug(f"SetThreadExecutionState(0x80000002)")
-            ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)  # 0x80000000 + 0x00000002
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                0x80000002)  # 0x80000000 + 0x00000002
             time.sleep(1)
             logger.debug(f"SetThreadExecutionState(0x80000000)")
             ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)

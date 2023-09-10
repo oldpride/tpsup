@@ -8,8 +8,8 @@ from shutil import which
 import tpsup.env
 from selenium import webdriver
 from tpsup.human import human_delay
-import tpsup.tplog
-from tpsup.tplog import log_FileFuncLine
+import tpsup.logtools
+from tpsup.logtools import log_FileFuncLine
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -210,7 +210,7 @@ class SeleniumEnv:
                         f"this is dryrun; we will not start chromedriver\n")
                 else:
                     # rotate the log file if it is bigger than the size.
-                    tpsup.tplog.rotate_log(
+                    tpsup.logtools.rotate_log(
                         self.driverlog, size=1024 * 1024 * 10, count=1)
                     try:
                         self.driver = webdriver.Chrome(
@@ -242,13 +242,13 @@ class SeleniumEnv:
                 "chromedriver will auto start a browser and pick a port\n")
 
             if self.env.isLinux:
-                # 2023/09/09, 
-                # 1. Linux chromedriver (116) had a bug with binary_location for Linux, 
+                # 2023/09/09,
+                # 1. Linux chromedriver (116) had a bug with binary_location for Linux,
                 #     default works.
                 # 2. had to use "xhost +"
                 # see tpsup/python3/examples/test_selenium_03_settings.py
                 log_FileFuncLine(f"xhost +")
-                run_cmd_clean("xhost +")    
+                run_cmd_clean("xhost +")
             else:
                 self.browser_options.binary_location = get_browser_path()
 
@@ -355,7 +355,7 @@ class SeleniumEnv:
             )
         else:
             # rotate the log file if it is bigger than the size.
-            tpsup.tplog.rotate_log(
+            tpsup.logtools.rotate_log(
                 self.driverlog, size=1024 * 1024 * 10, count=1)
 
             # make sure chromedriver is in the PATH
@@ -443,7 +443,7 @@ class SeleniumEnv:
         if method == "bs4":
             html: str = element.get_attribute("outerHTML")
             if verbose:
-                tpsup.tplog.tplog(f"outerHTML={html}")
+                tpsup.logtools.tplog(f"outerHTML={html}")
             if html:
                 from bs4 import BeautifulSoup
 

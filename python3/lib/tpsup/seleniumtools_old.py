@@ -8,7 +8,7 @@ from shutil import which
 import tpsup.env
 from selenium import webdriver
 from tpsup.human import human_delay
-import tpsup.tplog
+import tpsup.logtools
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -212,7 +212,7 @@ class SeleniumEnv:
                         f"this is dryrun; we will not start chromedriver\n")
                 else:
                     # rotate the log file if it is bigger than the size.
-                    tpsup.tplog.rotate_log(
+                    tpsup.logtools.rotate_log(
                         self.driverlog, size=1024 * 1024 * 10, count=1)
                     try:
                         self.driver = webdriver.Chrome(
@@ -350,7 +350,7 @@ class SeleniumEnv:
             )
         else:
             # rotate the log file if it is bigger than the size.
-            tpsup.tplog.rotate_log(
+            tpsup.logtools.rotate_log(
                 self.driverlog, size=1024 * 1024 * 10, count=1)
 
             # make sure chromedriver is in the PATH
@@ -359,7 +359,7 @@ class SeleniumEnv:
             service = Service(
                 executable_path=self.driver_exe,
                 service_args=self.driver_args,  # for chromedriver
-                )
+            )
 
             self.driver = webdriver.Chrome(
                 service=service,
@@ -427,7 +427,7 @@ class SeleniumEnv:
         if method == "bs4":
             html: str = element.get_attribute("outerHTML")
             if verbose:
-                tpsup.tplog.tplog(f"outerHTML={html}")
+                tpsup.logtools.tplog(f"outerHTML={html}")
             if html:
                 from bs4 import BeautifulSoup
 

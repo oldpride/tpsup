@@ -7,7 +7,7 @@ import sys
 import time
 import selectors
 from pprint import pformat
-from tpsup.tplog import tplog
+from tpsup.logtools import tplog
 import tpsup.env
 from typing import Union
 

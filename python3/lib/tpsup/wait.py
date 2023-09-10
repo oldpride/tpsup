@@ -1,6 +1,6 @@
 import time
 from pprint import pformat
-from tpsup.tplog import print_exception
+from tpsup.logtools import print_exception
 
 
 def wait_for_max_try(maxTry, runFunction, *param):

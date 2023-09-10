@@ -5,8 +5,8 @@ import os
 import re
 import sys
 from typing import Union
-from tpsup.tpfile import TpInput, tpglob
-from tpsup.tplog import log_FileFuncLine
+from tpsup.filetools import TpInput, tpglob
+from tpsup.logtools import log_FileFuncLine
 
 
 def grep(files: Union[list, str], MatchPattern: str = None,

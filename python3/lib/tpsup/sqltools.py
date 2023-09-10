@@ -26,9 +26,9 @@ from typing import List, Literal, Union
 import tpsup.csvtools
 import tpsup.env
 from tpsup.lock import tpsup_unlock
-import tpsup.print
+import tpsup.printtools
 from pprint import pformat
-from tpsup.tplog import log_FileFuncLine, log_FileFuncLineObj
+from tpsup.logtools import log_FileFuncLine, log_FileFuncLineObj
 
 
 class Conn:
@@ -380,7 +380,7 @@ def run_sql(sql: Union[str, list], **opt):
                 ret2.extend([list(row) for row in qr])  # convert tuple to list
 
             if opt.get("RenderOutput", False):
-                tpsup.print.render_arrays(ret2, **opt)
+                tpsup.printtools.render_arrays(ret2, **opt)
             elif outfile := opt.get("SqlOutput", None):
                 if qr.ReturnType == 'DictList':
                     ret3 = ret2

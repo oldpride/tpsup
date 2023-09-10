@@ -3,7 +3,7 @@ import re
 from typing import Literal, Union
 from tpsup.util import print_string_with_line_numer
 from pprint import pformat
-from tpsup.tplog import log_FileFuncLine
+from tpsup.logtools import log_FileFuncLine
 
 
 def _exec_filter(_dict, **opt):

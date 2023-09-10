@@ -19,14 +19,14 @@ from appium.webdriver.common.touch_action import TouchAction
 # from selenium.webdriver import ActionChains
 
 import tpsup.env
-import tpsup.tpfile
+import tpsup.filetools
 
 from tpsup.nettools import is_tcp_open, wait_tcps_open
 import tpsup.pstools
 import tpsup.tptmp
 from tpsup.human import human_delay
 import os.path
-from tpsup.tplog import tplog
+from tpsup.logtools import tplog
 from tpsup.util import hit_enter_to_continue
 from tpsup.exectools import exec_into_globals
 
@@ -621,7 +621,7 @@ def dump(driver: webdriver.Remote, element: WebElement, scope: str, path: str, *
         else:
             output_filename = f"{path}/element.txt"
 
-        with tpsup.tpfile.TpOutput(output_filename) as fh:
+        with tpsup.filetools.TpOutput(output_filename) as fh:
             if context_compiled_webview.match(driver.current_context):
                 html = element.get_attribute('outerHTML')
                 fh.write(html)
@@ -644,16 +644,16 @@ def dump(driver: webdriver.Remote, element: WebElement, scope: str, path: str, *
         else:
             output_filename = f"{path}/page.txt"
 
-        with tpsup.tpfile.TpOutput(output_filename) as fh:
+        with tpsup.filetools.TpOutput(output_filename) as fh:
             fh.write(driver.page_source)
             fh.write('\n')
 
     if path != 'stdout':
-        with tpsup.tpfile.TpOutput(f"{path}/contexts.txt") as fh:
+        with tpsup.filetools.TpOutput(f"{path}/contexts.txt") as fh:
             fh.write(f"{driver.contexts}")
             fh.write('\n')
             fh.close()
-        with tpsup.tpfile.TpOutput(f"{path}/current_context.txt") as fh:
+        with tpsup.filetools.TpOutput(f"{path}/current_context.txt") as fh:
             fh.write(f"{driver.current_context}")
             fh.write('\n')
             fh.close()

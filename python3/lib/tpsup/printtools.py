@@ -3,7 +3,7 @@ from typing import Union
 import os
 import sys
 
-from tpsup.tplog import log_FileFuncLine
+from tpsup.logtools import log_FileFuncLine
 
 # from perl tpsup/lib/perl/TPSUP/UTIL.pm
 

@@ -6,7 +6,7 @@ import sys
 import argparse
 import textwrap
 from pprint import pprint, pformat
-from tpsup.tpfile import tpfind
+from tpsup.filetools import tpfind
 
 prog = os.path.basename(sys.argv[0]).replace('_cmd.py', '')
 

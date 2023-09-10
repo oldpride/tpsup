@@ -8,7 +8,7 @@ from pprint import pformat, pprint
 import time
 from typing import Union
 from tpsup.modtools import compile_codelist, strings_to_compilable_patterns, load_module
-from tpsup.tplog import log_FileFuncLine
+from tpsup.logtools import log_FileFuncLine
 from tpsup.util import silence_BrokenPipeError
 
 

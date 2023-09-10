@@ -6,8 +6,8 @@ import pkgutil
 import re
 import sys
 from pprint import pformat
-from tpsup.tpfile import TpInput, TpOutput
-from tpsup.tplog import log_FileFuncLine
+from tpsup.filetools import TpInput, TpOutput
+from tpsup.logtools import log_FileFuncLine
 from tpsup.util import convert_kvlist_to_dict, silence_BrokenPipeError
 from tpsup.modtools import load_module, stringdict_to_funcdict, strings_to_compilable_func, \
     strings_to_compilable_patterns
