@@ -25,8 +25,10 @@ if [[ $UNAME =~ CYGWIN ]]; then
    DIR="/cygdrive/c/Program Files/Microsoft VS Code/bin"
 elif [[ $UNAME =~ MINGW64_NT ]]; then
    DIR="/c/Program Files/Microsoft VS Code/bin"
-#elif [[ $UNAME =~ Linux ]]; then
-#   DIR=$HOME
+elif [[ $UNAME =~ Linux ]]; then
+   DIR=/snap/bin
+elif [[ $UNAME =~ Darwin ]]; then
+   DIR="/Applications/Visual Studio Code.app/Contents/Resources/app/bin"   
 else
    echo "unsupported UNAME='$UNAME'"
    return
@@ -37,12 +39,22 @@ if [ $action = check ]; then
    echo "current installations: "
    /bin/ls -1d "$DIR"/code
 
-   echo ""
-   echo "check PATH"
-   which code
+   if [[ $UNAME =~ Darwin ]]; then
+      echo "Mac uses function code ()"
+   else
+      echo ""
+      echo "check PATH"
+      which code
+   fi
 elif [ $action = set ]; then
-   export PATH="$DIR:$PATH"
-   reduce PATH
+   if [[ $UNAME =~ Darwin ]]; then
+      # https://stackoverflow.com/questions/30065227/
+      echo "defined function code ()"
+      code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $* ;}
+   else
+      export PATH="$DIR:$PATH"
+      reduce PATH
+   fi
 else
    echo "unknown action='$action'"
    usage
