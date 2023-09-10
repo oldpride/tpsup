@@ -116,7 +116,7 @@ def run_cmd_clean(cmd: str, **opt):
             f"cmd={cmd} failed with rc={ret['rc']}, stderr={ret['stderr']}")
     elif ret['stderr']:
         print(ret['stderr'])
-        raise RuntimeError(f"cmd={cmd} failed with stderr={ret['stderr']}")
+        # raise RuntimeError(f"cmd={cmd} failed with stderr={ret['stderr']}")
     return ret['stdout']
 
 

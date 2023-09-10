@@ -42,6 +42,7 @@ from tpsup.exectools import exec_into_globals
 
 from typing import List, Union
 from pprint import pformat
+from tpsup.cmdtools import run_cmd_clean
 
 
 # +----------+      +--------------+     +----------------+
@@ -240,7 +241,16 @@ class SeleniumEnv:
             sys.stderr.write(
                 "chromedriver will auto start a browser and pick a port\n")
 
-            self.browser_options.binary_location = get_browser_path()
+            if self.env.isLinux:
+                # 2023/09/09, 
+                # 1. Linux chromedriver (116) had a bug with binary_location for Linux, 
+                #     default works.
+                # 2. had to use "xhost +"
+                # see tpsup/python3/examples/test_selenium_03_settings.py
+                log_FileFuncLine(f"xhost +")
+                run_cmd_clean("xhost +")    
+            else:
+                self.browser_options.binary_location = get_browser_path()
 
             if self.headless:
                 self.browser_options.add_argument("--headless")

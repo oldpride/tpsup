@@ -72,11 +72,16 @@ if env.isLinux:
     #     DISPLAY=os.environ["DISPLAY"]
     #     options.add_argument(
     #         f"--display={DISPLAY}")
+    # looks like a bug in chromebrowser
+    #
     # tried this worked:
     #     $ xhost +
-    # looks like a bug in chromebrowser
+    # 'xhost +' on my home linux1 is not a problem because it has '-nolisten tcp' switch.
+    #     /usr/lib/xorg/Xorg :10 -auth .Xauthority -config xrdp/xorg.conf -noreset 
+    #          -nolisten tcp -logfile .xorgxrdp.%s.log
+    # 
        
-    # 2023/09/09
+    # 2023/09/09, another bug
     # somehow setting binary_location in Linux causing command not found error:
     #    [1694125037.822][INFO]: [7f9fb18d349c810acc38a2794429ccfa] RESPONSE InitSession 
     #    ERROR unknown error: no chrome binary at /opt/google/chrome/google-chrome
