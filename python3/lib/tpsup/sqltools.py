@@ -24,7 +24,7 @@ import sys
 from typing import List, Literal, Union
 
 import tpsup.csvtools
-import tpsup.env
+import tpsup.envtools
 from tpsup.lock import tpsup_unlock
 import tpsup.printtools
 from pprint import pformat
@@ -33,7 +33,7 @@ from tpsup.logtools import log_FileFuncLine, log_FileFuncLineObj
 
 class Conn:
     def __init__(self, nickname: str, **opt):
-        env = tpsup.env.Env()
+        env = tpsup.envtools.Env()
         connfile = opt.get('connfile', None)
         if connfile is None:
             # connfile = expanduser("~") + "/.tpsup/conn.csv"

@@ -6,11 +6,11 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
-import tpsup.env
+import tpsup.envtools
 import os
 
 
-env = tpsup.env.Env()
+env = tpsup.envtools.Env()
 home_dir = env.home_dir
 
 

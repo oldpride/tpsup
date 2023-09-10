@@ -9,19 +9,19 @@ import textwrap
 import time
 from pprint import pformat
 
-import tpsup.env
+import tpsup.envtools
 import tpsup.nettools
 import tpsup.seleniumtools_old
 import tpsup.tpsocketserver
 from tpsup.modtools import run_module
 from tpsup.util import tplog, tplog_exception
-import tpsup.tptmp
+import tpsup.tmptools
 import tpsup.tartools
 
 prog = os.path.basename(sys.argv[0])
 script_dir = os.path.dirname(sys.argv[0])
 
-my_env = tpsup.env.Env()
+my_env = tpsup.envtools.Env()
 my_env.adapt()
 home_dir = my_env.home_dir
 system = my_env.system
@@ -200,7 +200,7 @@ if serverHostPort:
         sys.stderr.write("ERROR: wrong number of args. expecting mod_file")
         sys.exit(1)
 
-    tmpdir = tpsup.tptmp.tptmp().get_nowdir()
+    tmpdir = tpsup.tmptools.tptmp().get_nowdir()
 
     # this is client mode if serverHostPort is defined
     ensock = tpsup.nettools.encryptedsocket(key, host_port=serverHostPort)
@@ -295,7 +295,7 @@ if (listenerPort):
         tplog(f"accepted client socket {ensock}")
 
         # one tmpdir for each client
-        tmpdir = tpsup.tptmp.tptmp().get_nowdir()
+        tmpdir = tpsup.tmptools.tptmp().get_nowdir()
 
         decoded_bytes = ensock.recv_and_decode()
         tplog(f"received {len(decoded_bytes)} bytes")

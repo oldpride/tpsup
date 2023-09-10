@@ -5,7 +5,7 @@ import sys
 from pprint import pformat
 from typing import List, Dict
 import tpsup.csvtools
-import tpsup.env
+import tpsup.envtools
 
 
 def tpsup_lock(plain: str, *, salt=None):
@@ -116,7 +116,7 @@ class EntryBook:
 
     def __init__(self, **opt):
         self.verbose = opt.get('verbose', 0)
-        self.env = tpsup.env.Env()
+        self.env = tpsup.envtools.Env()
         file = opt.get('book', None)
         if file is None:
             file = self.env.home_dir + "/.tpsup/book.csv"
@@ -270,7 +270,7 @@ def main():
     print(f"string={string}")
     print(f"tokens =\n{pformat(tokenize_command_string(string))}")
 
-    env = tpsup.env.Env()
+    env = tpsup.envtools.Env()
 
     if env.isWindows:
         string = '"C:\Program Files\Python37\python.exe" --version'

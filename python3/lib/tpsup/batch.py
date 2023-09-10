@@ -26,7 +26,7 @@ import time
 from pprint import pformat, pprint
 import importlib
 from tpsup.util import convert_to_uppercase
-import tpsup.tptmp
+import tpsup.tmptools
 from datetime import datetime
 from shlex import split
 from typing import Union, List, Dict
@@ -68,7 +68,7 @@ extra_args = {
     'record_file': {'switches': ['--record_file'],
                     'default': None,
                     'action': 'store',
-                    'help': f'record to this file, default to under {tpsup.tptmp.get_dailydir()}'},
+                    'help': f'record to this file, default to under {tpsup.tmptools.get_dailydir()}'},
 
     'retry': {'switches': ['--retry'], 'action': 'store', 'default': 0, 'type': int, 'help': "retry times"},
 
@@ -457,7 +457,7 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
             # dailydir = tpsup.tptmp.tptmp().get_dailydir()
             # record_file = f'{dailydir}/{script_name.replace(".py", ".log")}'
-            record_file = tpsup.tptmp.tptmp().get_dailylog(prefix=script_name)
+            record_file = tpsup.tmptools.tptmp().get_dailylog(prefix=script_name)
         print("record_file = ", record_file, file=sys.stderr)
         # check whether record_file exists
         if os.path.exists(record_file):

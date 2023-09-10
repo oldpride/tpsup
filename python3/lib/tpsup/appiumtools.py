@@ -18,12 +18,12 @@ import appium.webdriver.extensions.android.nativekey as nativekey
 from appium.webdriver.common.touch_action import TouchAction
 # from selenium.webdriver import ActionChains
 
-import tpsup.env
+import tpsup.envtools
 import tpsup.filetools
 
 from tpsup.nettools import is_tcp_open, wait_tcps_open
 import tpsup.pstools
-import tpsup.tptmp
+import tpsup.tmptools
 from tpsup.human import human_delay
 import os.path
 from tpsup.logtools import tplog
@@ -188,7 +188,7 @@ class AppiumEnv:
 
         self.host_port = host_port
         self.verbose = opt.get("verbose", 0)
-        self.env = tpsup.env.Env()
+        self.env = tpsup.envtools.Env()
         self.env.adapt()
         home_dir = os.path.normpath(
             self.env.home_dir)  # get_native_path() is for cygwin
@@ -798,7 +798,7 @@ def swipe(driver: webdriver.Remote, param: str, **opt):
 def check_proc(**opt):
     for proc in ["qemu-system-x86_64.exe", "node.exe", "adb.exe"]:
         print(f"check if {proc} is still running")
-        my_env = tpsup.env.Env()
+        my_env = tpsup.envtools.Env()
         if tpsup.pstools.prog_running(f"{proc}", printOutput=1):
             print(f"seeing leftover {proc}")
             # try not to kill it because it takes time to start up
@@ -975,7 +975,7 @@ def main():
     print(f"sleep 15 seconds")
     time.sleep(15)
 
-    myenv = tpsup.env.Env()
+    myenv = tpsup.envtools.Env()
     home_dir = myenv.home_dir
     with open(f"{home_dir}/page_source.hml", 'w') as fh:
         fh.write(driver.page_source)

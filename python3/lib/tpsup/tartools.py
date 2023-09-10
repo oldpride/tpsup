@@ -1,8 +1,8 @@
 import sys
 import tarfile
 import os
-import tpsup.tptmp
-import tpsup.env
+import tpsup.tmptools
+import tpsup.envtools
 from typing import List
 
 def create_tar_from_dir_root(tar_name:str, dir:str):
@@ -50,7 +50,7 @@ def create_tar_from_string(tar_name: str, short_name:str, string: str):
     :param string:
     :return:
     """
-    dir = tpsup.tptmp.tptmp().get_nowdir()
+    dir = tpsup.tmptools.tptmp().get_nowdir()
     saved_pwd = os.getcwd()
     try:
         os.chdir(dir)
@@ -73,7 +73,7 @@ def extract_tar_to_string(tar_name:str, file_name:str, encoding:str = 'utf-8') -
 def main():
     verbose = 1
 
-    env = tpsup.env.Env()
+    env = tpsup.envtools.Env()
 
     dir = os.path.join(env.home_dir, "testdir")
     tar_name = os.path.join(env.home_dir, "junk.tar")

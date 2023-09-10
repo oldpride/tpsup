@@ -2,11 +2,11 @@
 from pprint import pformat
 import tpsup.cmdtools
 import tpsup.adbtools
-import tpsup.env
+import tpsup.envtools
 import tpsup.javatools
 from shutil import which
 import os
-import tpsup.tptmp
+import tpsup.tmptools
 
 # "%ANDROID_HOME%\tools\bin;
 # %ANDROID_HOME%\platform-tools;
@@ -27,7 +27,7 @@ def set_android_env(**opt):
     else:
         print(f'ANDROID_HOME = {android_home}')
     for subdir in sdk_subdirs:
-        tpsup.env.add_path(f'{android_home}/{subdir}', **opt)
+        tpsup.envtools.add_path(f'{android_home}/{subdir}', **opt)
 
 
 def check_android_env(**opt):
@@ -39,7 +39,7 @@ def check_android_env(**opt):
         if not os.path.exists(f'{full_path}'):
             print(f'{full_path} not found')
             return False
-        if not tpsup.env.path_contains(f'{full_path}', **opt):
+        if not tpsup.envtools.path_contains(f'{full_path}', **opt):
             print(f'{full_path} not in PATH')
             return False
     return True
@@ -129,7 +129,7 @@ def get_app_manifest(pkg_pattern: str, **opt):
 
 
 def main():
-    dailydir = tpsup.tptmp.get_dailydir()
+    dailydir = tpsup.tmptools.get_dailydir()
 
     # if os.path.exists(f'{dailydir}/Gallery2.apk'):
     #     print(f"manifest of {dailydir}/Gallery2.apk")

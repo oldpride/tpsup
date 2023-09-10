@@ -10,8 +10,11 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 
 
 def test_eight_components():
+    driver_path = ChromeDriverManager().install()
+    # driver_path = /Users/tian/.wdm/drivers/chromedriver/mac64/116.0.5845.179/chromedriver-mac-arm64/chromedriver
+    print(f'driver_path = {driver_path}')
     driver = webdriver.Chrome(
-        service=ChromeService(ChromeDriverManager().install()))
+        service=ChromeService(executable_path=driver_path))
 
     driver.get("https://www.selenium.dev/selenium/web/web-form.html")
 

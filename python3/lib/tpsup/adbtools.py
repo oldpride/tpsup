@@ -1,7 +1,7 @@
 # mainly calling adb shell commands
 import os
 import tpsup.cmdtools
-import tpsup.tptmp
+import tpsup.tmptools
 from shutil import which
 
 # steps to print android manifest file
@@ -75,7 +75,7 @@ def adb_pull(path: str, **opt):
     path_basename = os.path.basename(path)
 
     if not (download_dir := opt.get('download_dir', None)):
-        download_dir = tpsup.tptmp.get_dailydir()
+        download_dir = tpsup.tmptools.get_dailydir()
 
     dest = f'{download_dir}/{path_basename}'
     if os.path.exists(dest):

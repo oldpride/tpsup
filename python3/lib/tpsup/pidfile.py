@@ -54,8 +54,8 @@ class pidfile:
 
 
 def main():
-    import tpsup.env
-    myenv = tpsup.env.Env()
+    import tpsup.envtools
+    myenv = tpsup.envtools.Env()
 
     print(f"\n---------- this should work -------------")
     test_pid = 12345

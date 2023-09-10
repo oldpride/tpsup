@@ -8,7 +8,7 @@ import time
 import selectors
 from pprint import pformat
 from tpsup.logtools import tplog
-import tpsup.env
+import tpsup.envtools
 from typing import Union
 
 import tpsup.coder
@@ -369,7 +369,7 @@ use two terminals: one run client and one run server
     host = "localhost"
     port = '3333'
 
-    env = tpsup.env.Env()
+    env = tpsup.envtools.Env()
     tmpdir = env.tmpdir
 
     # https://docs.python.org/3/howto/sockets.html

@@ -8,7 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from pprint import pformat
 import tpsup.seleniumtools_old
 import tpsup.pstools
-import tpsup.env
+import tpsup.envtools
 
 our_cfg = {
 

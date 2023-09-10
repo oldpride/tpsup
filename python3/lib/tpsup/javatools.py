@@ -3,15 +3,15 @@ from pprint import pformat
 import re
 import tpsup.cmdtools
 import tpsup.adbtools
-import tpsup.env
+import tpsup.envtools
 from shutil import which
 import os
-import tpsup.tptmp
+import tpsup.tmptools
 
 
 def set_java_env(version, **opt):
     verbose = opt.get('verbose', 0)
-    my_env = tpsup.env.Env()
+    my_env = tpsup.envtools.Env()
     if my_env.isWindows:
         possible_places = [f"{my_env.home_dir}/java", 'C:/Program Files/Java']
     elif my_env.isLinux:
@@ -46,7 +46,7 @@ def set_java_env(version, **opt):
 
                 java_home = f'{java_base}/{subdir}'
                 os.environ['JAVA_HOME'] = java_home
-                tpsup.env.add_path(full_path, place='prepend')
+                tpsup.envtools.add_path(full_path, place='prepend')
                 return java_home
     return None
 

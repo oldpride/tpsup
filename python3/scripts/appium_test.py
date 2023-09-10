@@ -14,7 +14,7 @@ import re
 
 from appium.webdriver.common.appiumby import AppiumBy
 
-import tpsup.env
+import tpsup.envtools
 
 prog = os.path.basename(sys.argv[0])
 
@@ -101,7 +101,7 @@ driver.press_keycode(3)
 print(f"sleep 15 seconds")
 time.sleep(15)
 
-myenv = tpsup.env.Env()
+myenv = tpsup.envtools.Env()
 home_dir = myenv.home_dir
 with open(f"{home_dir}/page_source.hml", 'w') as fh:
     fh.write(driver.page_source)

@@ -33,6 +33,8 @@ class Env:
         self.isCygwin = False
         self.isLinux = False
         self.isWindows = False
+        self.isMac = False
+        self.isDarwin = False
         self.environ = os.environ
         # self.user = os.getlogin()
         # the above os.getlogin() stops working:
@@ -93,6 +95,13 @@ class Env:
                 # self.home_dir = f'C:/Users/{os.environ["USERNAME"]}'
         elif re.search("Linux", self.system, re.IGNORECASE):
             self.isLinux = True
+            self.tmpdir = "/tmp"
+            # >>> platform.uname()
+            # uname_result(system='Linux', node='linux1', release='4.15.0-112-generic', version='#113-Ubuntu SMP Thu Jul 9 23:41:39 UTC 2020', machine='x86_64', processor='x86_64')
+            self.os_major, self.os_minor, *_ = self.uname.release.split('.')
+        elif re.search("^Darwin", self.system, re.IGNORECASE):
+            self.isDarwin = True
+            self.isMac = True
             self.tmpdir = "/tmp"
             # >>> platform.uname()
             # uname_result(system='Linux', node='linux1', release='4.15.0-112-generic', version='#113-Ubuntu SMP Thu Jul 9 23:41:39 UTC 2020', machine='x86_64', processor='x86_64')
@@ -254,7 +263,7 @@ def query_user_fullname(user: str, **opt) -> str:
 
         # Extract the full name from the output
         full_name = output.strip()
-    elif env.isLinux:
+    elif env.isLinux or env.isMac:
         # only available in linux, not windows. therefore, we need to put it here.
         import pwd
         full_name = pwd.getpwnam(getpass.getuser()).pw_gecos.split(',')[0]
@@ -577,19 +586,20 @@ def main():
     print("--------------------")
     print("test source_siteenv()")
     print(f"before TPSUP={os.environ.get('TPSUP', None)}")
-    source_siteenv("/c/users/william/sitebase/github/site-spec",
+    source_siteenv(f"{myenv.home_dir}/sitebase/github/site-spec",
                    clean_env=1, verbose=2)
     print(f"after TPSUP={os.environ.get('TPSUP', None)}")
 
-    def test_code():
-        convert_path('/cygdrive/c/Program Files', target_type='batch')
-        convert_path('/cygdrive/c/Program Files', target_type='gitbash')
-        convert_path('/cygdrive/c/Program Files', verbose=2)
-        convert_path('TPSUP', is_env_var=True, change_env=True)
+    if myenv.isWindows:
+        def test_code():
+            convert_path('/cygdrive/c/Program Files', target_type='batch')
+            convert_path('/cygdrive/c/Program Files', target_type='gitbash')
+            convert_path('/cygdrive/c/Program Files', verbose=2)
+            convert_path('TPSUP', is_env_var=True, change_env=True)
 
-    import tpsup.exectools
-    tpsup.exectools.test_lines(
-        test_code, source_globals=globals(), print_return=True, add_return=True)
+        import tpsup.exectools
+        tpsup.exectools.test_lines(
+            test_code, source_globals=globals(), print_return=True, add_return=True)
 
 
 if __name__ == "__main__":

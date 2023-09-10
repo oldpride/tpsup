@@ -194,8 +194,8 @@ def main():
     print("-----------------------------------------")
     print("test rotate_log")
     # create a file with 100 bytes
-    import tpsup.tptmp
-    tmpdir = tpsup.tptmp.get_dailydir()
+    import tpsup.tmptools
+    tmpdir = tpsup.tmptools.get_dailydir()
     testfile = f"{tmpdir}/test.log"
     size = 100
 

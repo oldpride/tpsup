@@ -3,7 +3,7 @@ from pprint import pformat
 import re
 import subprocess
 import sys
-import tpsup.env
+import tpsup.envtools
 
 
 def run_cmd(cmd: str, **opt):
@@ -27,7 +27,7 @@ def run_cmd(cmd: str, **opt):
     # 1
 
     extra_opt = {}
-    myenv = tpsup.env.Env()
+    myenv = tpsup.envtools.Env()
     if myenv.isWindows:
         if is_bash:
             bash_exe = opt.get('bash_exe', 'gitbash')
@@ -221,8 +221,8 @@ def main():
     tpsup.exectools.test_lines(test_code, source_globals=globals())
     # we pass globals() so that test_code can see our functions, eg, run_cmd()
 
-    import tpsup.tptmp
-    tmpdir = tpsup.tptmp.get_dailydir()
+    import tpsup.tmptools
+    tmpdir = tpsup.tmptools.get_dailydir()
     tmpfile = f'{tmpdir}/test.txt'
     with open(tmpfile, 'w') as fh:
         fh.write("hello world\n")

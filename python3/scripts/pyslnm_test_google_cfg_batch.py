@@ -9,7 +9,7 @@ import time
 
 import tpsup.seleniumtools_old
 import tpsup.pstools
-import tpsup.env
+import tpsup.envtools
 
 our_cfg = {
     'module': 'tpsup.seleniumtools',

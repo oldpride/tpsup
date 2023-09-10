@@ -4,7 +4,7 @@ import time
 
 import tpsup.seleniumtools_old
 import tpsup.pstools
-import tpsup.env
+import tpsup.envtools
 import os
 
 our_cfg = {
@@ -52,7 +52,7 @@ from code(), opt =
 """
         )
 
-    my_env = tpsup.env.Env()
+    my_env = tpsup.envtools.Env()
     url = None
     if my_env.isCygwin:
         # when we run from cygwin, env var $TPSUP is /cygdrive/c/...

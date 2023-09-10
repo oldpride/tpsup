@@ -1,4 +1,4 @@
-import tpsup.env
+import tpsup.envtools
 import sys
 import os
 import subprocess
@@ -9,7 +9,7 @@ def prog_running(basename, printOutput=0,  verbose=0):
     if verbose:
         sys.stderr.write(f'Find any running {basename}\n')
 
-    env = tpsup.env.Env()
+    env = tpsup.envtools.Env()
 
     # "ps -ef" in GitBash and Cygwin can only see its own processes
     # if env.isLinux or env.isGitBash or env.isCygwin:
@@ -75,7 +75,7 @@ def ps_grep_basename(basename: str, **opt):
     env = opt.get('env', None)
 
     if env is None:
-        env = tpsup.env.Env()
+        env = tpsup.envtools.Env()
 
     # "ps -ef" in GitBash and Cygwin can only see its own processes
     # if env.isLinux or env.isGitBash or env.isCygwin:

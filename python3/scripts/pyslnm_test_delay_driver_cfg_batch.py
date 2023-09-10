@@ -4,7 +4,7 @@ from pprint import pformat
 import time
 import tpsup.seleniumtools_old
 import tpsup.pstools
-import tpsup.env
+import tpsup.envtools
 import os
 
 our_cfg = {

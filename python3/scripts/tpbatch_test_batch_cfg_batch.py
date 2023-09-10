@@ -8,7 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from pprint import pformat
 import tpsup.dummytools
 import tpsup.pstools
-import tpsup.env
+import tpsup.envtools
 
 our_cfg = {
     'module': 'tpsup.dummytools',
@@ -58,7 +58,7 @@ our_cfg = {
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
     # this way so that user can use case-insensitive keys on command line
     'keys': {
-        'MYNAME': tpsup.env.get_user_firstlast(),
+        'MYNAME': tpsup.envtools.get_user_firstlast(),
         'CATEGORY': 'Technology Processing',
         'SUBCATEGORY': 'User Complaint',
         'SERVICE': 'Trade Plant',

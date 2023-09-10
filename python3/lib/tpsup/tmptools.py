@@ -3,7 +3,7 @@ import shutil
 import sys
 import time
 
-import tpsup.env
+import tpsup.envtools
 from time import strftime, localtime
 
 
@@ -27,7 +27,7 @@ class tptmp:
 
         self.base = base
         if not self.base:
-            env = tpsup.env.Env()
+            env = tpsup.envtools.Env()
             if env.isLinux:
                 # self.base = os.path.join(env.tmpdir, f"{env.user}")
                 self.base = f"{env.tmpdir}/{env.user}"
@@ -111,7 +111,7 @@ def main():
 
     print("")
     print(f"ls {mytmp.base}")
-    tpsup.env.Env().ls(mytmp.base)
+    tpsup.envtools.Env().ls(mytmp.base)
 
     mytmp.clean_old_tmpdir(retention_sec=1,
                            #    dryrun=True,
@@ -120,7 +120,7 @@ def main():
     time.sleep(2)
     print("")
     print(f"ls {mytmp.base}")
-    tpsup.env.Env().ls(mytmp.base)
+    tpsup.envtools.Env().ls(mytmp.base)
 
 
 if __name__ == '__main__':

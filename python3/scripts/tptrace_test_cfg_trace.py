@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from pprint import pformat
-import tpsup.env
+import tpsup.envtools
 import os
 from tpsup.tracer_test_sitespec import update_security_knowledge
 

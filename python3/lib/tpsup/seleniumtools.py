@@ -5,7 +5,7 @@ import time
 import subprocess
 from urllib.parse import urlparse
 from shutil import which
-import tpsup.env
+import tpsup.envtools
 from selenium import webdriver
 from tpsup.human import human_delay
 import tpsup.logtools
@@ -34,7 +34,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 from tpsup.nettools import is_tcp_open
 import tpsup.pstools
-import tpsup.tptmp
+import tpsup.tmptools
 import os.path
 
 from tpsup.util import hit_enter_to_continue
@@ -57,7 +57,7 @@ class SeleniumEnv:
         global cmd
         self.host_port = host_port
         self.verbose = opt.get("verbose", 0)
-        self.env = tpsup.env.Env()
+        self.env = tpsup.envtools.Env()
         self.env.adapt()
         home_dir = os.path.normpath(
             self.env.home_dir)  # convert to native path
@@ -77,7 +77,7 @@ class SeleniumEnv:
         # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
         # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
-        self.download_dir = tpsup.tptmp.tptmp(
+        self.download_dir = tpsup.tmptools.tptmp(
             base=os.path.join(self.log_base, "Downloads", "selenium")
         ).get_nowdir(suffix="selenium")
 
@@ -506,7 +506,7 @@ def get_driver(**args) -> webdriver.Chrome:
 
 
 def get_static_setup(**opt):
-    env = tpsup.env.Env()
+    env = tpsup.envtools.Env()
     env.adapt()
     static_setup = {}
     if env.isWindows:
@@ -527,7 +527,7 @@ def get_static_setup(**opt):
 
 def search_exec_in_path(execList: list, **opt) -> str:
     # search executable in PATH
-    env = tpsup.env.Env()
+    env = tpsup.envtools.Env()
     env.adapt()
     for exec in execList:
         exec_path = which(exec)
@@ -1019,7 +1019,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
         helper = {
             'd': ['dump page', dump,
                   {'driver': driver,
-                      'output_dir': tpsup.tptmp.tptmp().get_nowdir(mkdir_now=0)}
+                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
                   # we delay mkdir, till we really need it
                   ],
         }
@@ -1418,7 +1418,7 @@ def send_input(
         helper = {
             'd': ['dump page', dump,
                   {'driver': driver,
-                      'output_dir': tpsup.tptmp.tptmp().get_nowdir(mkdir_now=0)}
+                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
                   # we delay mkdir, till we really need it
                   ],
         }
@@ -2257,7 +2257,7 @@ def test_basic():
     driver.quit()
     # driver.dispose()    # this will call driver.close()
 
-    my_env = tpsup.env.Env()
+    my_env = tpsup.envtools.Env()
     # list all the log files for debug purpose
     # use double quotes to close "C:/Users/.../selenium*" because bare / is a switch in cmd.exe.
     cmd = f"{my_env.ls_cmd} -ld \"{driverEnv.log_base}/\"seleninum*"
@@ -2266,7 +2266,7 @@ def test_basic():
 
 
 def test_actions():
-    my_env = tpsup.env.Env()
+    my_env = tpsup.envtools.Env()
     url = None
     if my_env.isLinux:
         url = f'file:///{os.environ["TPSUP"]}/scripts/tpslnm_test_input.html'
@@ -2584,7 +2584,7 @@ def post_batch(all_cfg, known, **opt):
         del all_cfg["resources"]["selenium"]["driver"]
 
     print(f"check if chromedriver is still running")
-    my_env = tpsup.env.Env()
+    my_env = tpsup.envtools.Env()
     if tpsup.pstools.prog_running("chromedriver", printOutput=1):
         print(f"seeing leftover chromedriver, kill it")
         if my_env.isWindows:
