@@ -55,9 +55,36 @@ if env.isLinux:
     options.add_argument(
         "--no-sandbox")  # allow to run without root
     options.add_argument(
-        "--disable-dev_shm-usage")  # allow to run without root
+        "--disable-dev-shm-usage")  # allow to run without root
+    
+    # 2023/09/09
+    # error:   File "/.../lib/python3.10/site-packages/selenium/webdriver/remote/errorhandler.py", 
+    #     line 229, in check_response
+    #     raise exception_class(message, screen, stacktrace)
+    #     selenium.common.exceptions.WebDriverException: Message: 
+    #         unknown error: Chrome failed to start: exited abnormally.
+    #     (unknown error: DevToolsActivePort file doesn't exist)
+    #     (The process started from chrome location /snap/chromium/2614/usr/lib/chromium-browser/chrome is no longer running, so ChromeDriver is assuming that Chrome has crashed.)
+    # in chromedriver log, i saw
+    #     Authorization required, but no authorization protocol specified       
+    #     [172505:172505:0909/202135.380158:ERROR:ozone_platform_x11.cc(240)] Missing X server or $DISPLAY
+    # tried the following, didn't help
+    #     DISPLAY=os.environ["DISPLAY"]
+    #     options.add_argument(
+    #         f"--display={DISPLAY}")
+    # tried this worked:
+    #     $ xhost +
+    # looks like a bug in chromebrowser
+       
+    # 2023/09/09
+    # somehow setting binary_location in Linux causing command not found error:
+    #    [1694125037.822][INFO]: [7f9fb18d349c810acc38a2794429ccfa] RESPONSE InitSession 
+    #    ERROR unknown error: no chrome binary at /opt/google/chrome/google-chrome
+    # as binary_location is buggy, i commented out it. the default worked. 2023/09/09
     # options.binary_location = f"/google/chrome/google-chrome"
-    options.binary_location = f"/opt/google/chrome/google-chrome"
+    # options.binary_location = f"/opt/google/chrome/google-chrome-stable"
+    # options.binary_location = f"/usr/bin/google-chrome-stable"
+    # options.binary_location = f"google-chrome"
 else:
     options.binary_location = f"{SITEBASE}/Windows/10.0/Chrome/Application/chrome.exe"
 
@@ -82,7 +109,8 @@ driver_args = [
 # The Service classes are for managing the starting and stopping of local drivers.
 if env.isLinux:
     service = ChromeService(
-        executable_path=f"/usr/bin/chromedriver",
+        # executable_path=f"/usr/bin/chromedriver",
+        executable_path=f"/snap/bin/chromium.chromedriver",
         service_args=driver_args,
 
         # log_path will be deprecated in the future, use log_output instead

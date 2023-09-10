@@ -3,6 +3,7 @@
 import re
 from pprint import pformat
 
+
 string = '''xpath=//input[@id="user id"],
             css=#user\ id,
             xpath=//tr[class="non exist"]
