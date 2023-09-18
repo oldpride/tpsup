@@ -48,6 +48,9 @@ class Env:
         self.hostname = platform.node()
         # self.hostname = platform.node().split('.')[0]  # short name
 
+        # this will be used by cygwin and gitbash terminals
+        self.term = {}
+
         if re.search("Windows", self.system, re.IGNORECASE):
             self.isWindows = True
             # >>> platform.uname()
@@ -63,10 +66,18 @@ class Env:
             self.home_dir = f"C:\\Users\\{self.user}"
             self.tmpdir = f"{self.home_dir}\\AppData\\Local\\Temp"
 
-            # this will be used by cygwin and gitbash terminals
-            self.term = {}
+            # default term setting is batch
+            self.term['term'] = "batch"
+            self.term['tmpdir'] = self.tmpdir
+            self.term['ls_cmd'] = "dir"
+            self.term['/'] = "/"
 
-            if os.environ.get("MSYSTEM", "") == "MINGW64":
+            CMDCMDLINE = os.environ.get("CMDCMDLINE", None)
+            # batch signature
+            # CMDCMDLINE=C:\Windows\system32\cmd.exe
+            if CMDCMDLINE:
+                print(f"CMDCMDLINE={CMDCMDLINE}")
+            elif os.environ.get("MSYSTEM", "") == "MINGW64":
                 # GitBash signature
                 # MSYSTEM=MINGW64
                 self.isGitBash = True
@@ -450,6 +461,7 @@ def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = 
                  **opt):
     verbose = opt.get('verbose', 0)
 
+    source_path = source_path.replace('\\', '/')  # posix style
     if is_env_var:
         env_var = source_path
         if env_var in os.environ:
