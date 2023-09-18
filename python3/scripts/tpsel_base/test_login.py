@@ -5,14 +5,14 @@ import sys
 from pprint import pformat
 from inspect import currentframe, getframeinfo
 
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 from selenium.common.exceptions import NoSuchElementException
 from urllib.parse import urlparse
 from tpsup.lock import EntryBook
 from tpsup.util import print_exception, tplog
 
 
-def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
+def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')

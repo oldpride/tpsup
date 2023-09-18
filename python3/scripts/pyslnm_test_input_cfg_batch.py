@@ -2,12 +2,13 @@
 from pprint import pformat
 import time
 
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.envtools
 import os
 
 from selenium import webdriver
+import tpsup.envtools
 
 our_cfg = {
 
@@ -56,7 +57,7 @@ def code(all_cfg: dict, known: dict, **opt):
         print(f'from code(), known ={pformat(known)}')
         print(f'from code(), opt = {pformat(opt)}')
 
-    url = f"file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
+    url = f"file:///{tpsup.envtools.get_native_path(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
 
     driver: webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
 
@@ -79,16 +80,16 @@ def code(all_cfg: dict, known: dict, **opt):
     print(f"test actions = {pformat(actions)}")
 
     # '-interactive' is passed through **opt
-    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
 
     print(f'active element in current context')
     element = driver.switch_to.active_element
-    tpsup.seleniumtools_old.js_print_debug(driver, element)
+    tpsup.seleniumtools.js_print_debug(driver, element)
 
     print('')
     print(f'active element in run_actions()')
     element = result['element']
-    tpsup.seleniumtools_old.js_print_debug(driver, element)
+    tpsup.seleniumtools.js_print_debug(driver, element)
 
     actions2 = [
         [
@@ -133,7 +134,7 @@ def code(all_cfg: dict, known: dict, **opt):
         ],
     ]
     print(f"test actions2 = {pformat(actions2)}")
-    result = tpsup.seleniumtools_old.run_actions(driver, actions2, **opt)
+    result = tpsup.seleniumtools.run_actions(driver, actions2, **opt)
 
     # print(f"test result = {pformat(result)}")
     print(f"test result['we_return'] = {result['we_return']}")

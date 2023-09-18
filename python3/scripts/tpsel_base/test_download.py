@@ -6,11 +6,11 @@ import time
 from pprint import pformat
 from typing import List
 
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 from tpsup.util import tplog
 
 
-def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
+def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
 

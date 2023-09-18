@@ -2,7 +2,7 @@
 from pprint import pformat
 import time
 
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.envtools
 import os
@@ -78,7 +78,7 @@ def code(all_cfg: dict, known: dict, **opt):
     print(f"test actions = {pformat(actions)}")
 
     # '-interactive' is passed through **opt
-    result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
 
     # interval = 2
     # print(f"sleep {interval} seconds so that you can see")

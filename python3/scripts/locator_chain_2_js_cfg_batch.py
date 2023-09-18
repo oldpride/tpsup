@@ -7,7 +7,7 @@ import tpsup.envtools
 
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 from pprint import pformat
 
@@ -73,7 +73,7 @@ def code(all_cfg, known, **opt):
         prefix = os.path.basename(oprefix)
 
     locator_chain = known['REMAININGARGS']
-    js_list = tpsup.seleniumtools_old.locator_chain_to_js_list(locator_chain)
+    js_list = tpsup.seleniumtools.locator_chain_to_js_list(locator_chain)
 
     # print(f'js_list = {pformat(js_list)}')\
     i = 0

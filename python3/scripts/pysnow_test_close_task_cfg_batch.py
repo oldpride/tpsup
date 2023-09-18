@@ -6,7 +6,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from pprint import pformat
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.envtools
 
@@ -14,7 +14,7 @@ our_cfg = {
 
     'resources': {
         'selenium': {
-            'method': tpsup.seleniumtools_old.get_driver,
+            'method': tpsup.seleniumtools.get_driver,
             'cfg': {}
         },
     },
@@ -106,7 +106,7 @@ from code(), opt =
     print(f'actions = {pformat(actions)}')
 
     # make sure pass along **opt, which has flogs: -interactive, -show_progress, ...
-    tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+    tpsup.seleniumtools.run_actions(driver, actions, **opt)
 
     i = 0
     while True:
@@ -148,7 +148,7 @@ from code(), opt =
             ],
         ]
 
-        result = tpsup.seleniumtools_old.run_actions(driver, actions, **opt)
+        result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
         print(f"result['we_return'] = {result['we_return']}")
 
         if result['we_return']:
@@ -179,7 +179,7 @@ from code(), opt =
                 'click', 'Click Update button'],
         ]
 
-        result = tpsup.seleniumtools_old.run_actions(driver, actions3, **opt)
+        result = tpsup.seleniumtools.run_actions(driver, actions3, **opt)
 
         if opt.get('dryrun', 0) or result['we_return']:
             break

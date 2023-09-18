@@ -2,12 +2,12 @@ import argparse
 import re
 import sys
 from pprint import pformat
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 from tpsup.lock import EntryBook
 from tpsup.util import tplog
 
 
-def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
+def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
     username = "lca_editor"  # change this to the username associated with your account
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')

@@ -6,7 +6,7 @@ import tpsup.envtools
 import json
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
@@ -94,5 +94,5 @@ def code(all_cfg, known, **opt):
         actions.append([None, f'dump_all={dir}', f'dump all to {dir}'])
 
     print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools_old.run_actions(
+    result = tpsup.seleniumtools.run_actions(
         driver, actions, **opt)

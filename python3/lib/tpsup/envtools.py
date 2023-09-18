@@ -524,6 +524,15 @@ def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = 
     return target_path
 
 
+def get_native_path(path: str, **opt):
+    myEnv = Env()
+    if myEnv.isWindows:
+        native_path = convert_path(path, target_type='batch')
+    else:
+        native_path = path
+    return native_path
+
+
 def main():
     myenv = Env()
     print(myenv)
