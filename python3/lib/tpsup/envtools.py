@@ -75,6 +75,8 @@ class Env:
             CMDCMDLINE = os.environ.get("CMDCMDLINE", None)
             # batch signature
             # CMDCMDLINE=C:\Windows\system32\cmd.exe
+            # but since we check this env from python, CMDCMDLINE is set.
+            # therefore, we put batch term as default on above.
             if CMDCMDLINE:
                 print(f"CMDCMDLINE={CMDCMDLINE}")
             elif os.environ.get("MSYSTEM", "") == "MINGW64":

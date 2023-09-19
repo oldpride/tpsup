@@ -969,7 +969,7 @@ def process_path(entity: str, method_cfg: dict, **opt):
     resolved_paths = []
     for p in paths:
         resolved = resolve_scalar_var_in_string(p, {**known, **vars})
-        globbed = tpglob(resolved)
+        globbed = tpglob([resolved])
         resolved_paths.extend(globbed)
 
     resolvedExps_by_attr = {}
