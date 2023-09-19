@@ -439,7 +439,7 @@ our_cfg = {
     'usage_example':  '''
     {{prog}} example=orders yyyymmdd=20211129
     
-    # test all entitiesclear
+    # test all entities
     {{prog}} sec=IBM orderqty=4,500 tradeqty=400 yyyymmdd=20211129
 
     # test actions

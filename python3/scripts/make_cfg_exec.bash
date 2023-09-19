@@ -41,7 +41,7 @@ usage:
 examples:
 
    $prog -m test_input taskbat
-   C:\Users\william>sitebase\github\tpsup\python3\scripts\pyslnm_test_input_task.bat  s=henry
+   C:\Users\william>sitebase\github\tpsup\python3\scripts\ptslnm_test_input_task.bat  s=henry
 
    $prog -m test_input taskbash
 
@@ -107,11 +107,11 @@ for t in $(echo $targets); do
       fi
 
       if [ $t = bash -o $t = bat ]; then
-         source_script="$TPSUP/python3/scripts/tpgeneric_py.$t"
+         source_script="$TPSUP/python3/scripts/ptgeneric_py.$t"
       elif [ $t = taskbash ]; then
-         source_script="$TPSUP/python3/scripts/tp${target_type}_generic_task.bash"
+         source_script="$TPSUP/python3/scripts/pt${target_type}_generic_task.bash"
       elif [ $t = taskbat ]; then
-         source_script="$TPSUP/python3/scripts/tp${target_type}_py_generic_task.bat"
+         source_script="$TPSUP/python3/scripts/pt${target_type}_py_generic_task.bat"
       fi
 
       if [ ! -e "$source_script" ]; then

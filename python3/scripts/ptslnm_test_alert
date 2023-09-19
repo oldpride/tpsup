@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # this wrapper is to shorten command line, so that instead of
-#    tpbatch.py pyslnm_test_cfg_batch.py ...
+#    ptbatch.py pyslnm_test_cfg_batch.py ...
 # we can type
 #    pyslnm_test ...
 # to archive this
-#    ln -s tpbatch_py_generic.bash pyslnm_test
+#    ln -s ptbatch_py_generic.bash pyslnm_test
 
 # however: symbolic link doesn't work well on windows, cygwin or gitbash.
 #          therefore, we had to use hard copy. see Makefile in this folder.
@@ -34,10 +34,10 @@ type=$seen_type
 
 if [[ "$UNAME" =~ Cygwin ]]; then
    cfg=$(cygpath --windows "$dir/${prog}_cfg_${type}.py")
-   cmd=$(which tp${type}.py)
+   cmd=$(which pt${type}.py)
    cmd=$(cygpath --windows "$cmd")
    python "$cmd" "$cfg" -c $prog "$@"
 else
    cfg="$dir/${prog}_cfg_${type}.py"
-   tp${type}.py "$cfg" -c $prog "$@"
+   pt${type}.py "$cfg" -c $prog "$@"
 fi
