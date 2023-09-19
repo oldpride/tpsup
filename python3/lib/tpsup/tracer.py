@@ -635,7 +635,14 @@ def process_section(entity: str, method_cfg: dict, **opt):
     count = 0
 
     for l in resolved_logs:
-        sections = get_log_sections(l, method_cfg, MaxCount=MaxExtracts, **opt)
+        # feed in get_log_sections() with a list (array) because string can be
+        # split into multiple pieces by tpglob() later.
+        # for example, get_log_sections("C:/Program Files/tpsup/logtools.py") will
+        # be split into
+        #    ['C:/Programs', 'Files/tpsup/logtools.py']
+        # which is not what we want.
+        sections = get_log_sections(
+            [l], method_cfg, MaxCount=MaxExtracts, **opt)
 
         hashes.extend(sections)
 
@@ -969,6 +976,10 @@ def process_path(entity: str, method_cfg: dict, **opt):
     resolved_paths = []
     for p in paths:
         resolved = resolve_scalar_var_in_string(p, {**known, **vars})
+
+        # feed in with list (array) so that tpglob() won't break into array further.
+        # for example, tpglob("C:/Program Files") will break into
+        #    ['C:', 'Program', 'Files']
         globbed = tpglob([resolved])
         resolved_paths.extend(globbed)
 
