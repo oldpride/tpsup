@@ -41,7 +41,7 @@ def usage(message: str = None, **opt):
         example_caller = caller
     else:
         usage_caller = f'{prog} cfg.py'
-        example_caller = f'{prog} tptrace_test_cfg_trace.py'
+        example_caller = f'{prog} pttrace_test_cfg_trace.py'
 
     detail = all_cfg.get('usage_detail', "")
     example = all_cfg.get('usage_example', None)
@@ -76,9 +76,9 @@ def usage(message: str = None, **opt):
 
 
    the code flow is:
-      xxx_script.py   -> tptrace.py -> tpsup.tracer ->    xxx_script_cfg_trace.py
+      xxx_script.py   -> pttrace.py -> tpsup.tracer ->    xxx_script_cfg_trace.py
    eg.
-      tptrace_test.py -> tptrace.py -> tpsup.tracer ->  tptrace_test_cfg_trace.py 
+      pttrace_test.py -> pttrace.py -> tpsup.tracer ->  pttrace_test_cfg_trace.py 
 '''
     print(f'''
     usage:

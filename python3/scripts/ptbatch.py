@@ -56,13 +56,13 @@ def usage(message: str = None, **opt):
         example = f'''
     on linux:
     linux$ {example_caller} q=python
-    linux$ {example_caller} -batch pyslnm_test_batch.txt
+    linux$ {example_caller} -batch ptslnm_test_batch.txt
     
     on windows, in gitbash an cygwin, the same as linux
     gitbash$ {example_caller} q=python
     gitbash$ {example_caller} q=python
     
-    in cygwin is more complicated, needs to convert to cygpath. see pyslnm_test.py as example
+    in cygwin is more complicated, needs to convert to cygpath. see ptslnm_test.py as example
     
 '''
 
@@ -103,9 +103,9 @@ def usage(message: str = None, **opt):
    'suit' is a set of pre-defined keys; can be overwritten by command-line key=value.
 
    the code flow is:
-      linked_script.py -> tpbatch.py -> tpsup.batch ->    xxx_cfg.py file   -> module
+      linked_script.py -> ptbatch.py -> tpsup.batch ->    xxx_cfg.py file   -> module
    eg.
-      pyslnm_test.py   -> tpbatch.py -> tpsup.batch ->   pyslnm_test_cfg.py -> tpsup.seleniumtools
+      ptslnm_test.py   -> ptbatch.py -> tpsup.batch ->   ptslnm_test_cfg.py -> tpsup.seleniumtools
 '''
     print(f'''
     usage:

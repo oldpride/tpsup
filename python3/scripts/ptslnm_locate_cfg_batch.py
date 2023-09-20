@@ -112,7 +112,7 @@ our_cfg = {
     shadow001.shadow002.shadow003: "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     3. use the locator chain to dump the target element
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/pyslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2 "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2 "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     
     ''',

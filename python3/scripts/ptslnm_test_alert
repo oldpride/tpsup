@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # this wrapper is to shorten command line, so that instead of
-#    ptbatch.py pyslnm_test_cfg_batch.py ...
+#    ptbatch.py ptslnm_test_cfg_batch.py ...
 # we can type
-#    pyslnm_test ...
+#    ptslnm_test ...
 # to archive this
-#    ln -s ptbatch_py_generic.bash pyslnm_test
+#    ln -s ptbatch_py_generic.bash ptslnm_test
 
 # however: symbolic link doesn't work well on windows, cygwin or gitbash.
 #          therefore, we had to use hard copy. see Makefile in this folder.
