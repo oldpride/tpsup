@@ -15,6 +15,8 @@ our_cfg = {
     "usage_example": """
     
     {{prog}} any
+
+    this test requires internet access also at leniency of chrome not changing the page layout.
     
     """,
 

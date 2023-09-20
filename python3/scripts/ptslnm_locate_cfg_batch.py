@@ -82,7 +82,7 @@ our_cfg = {
     
     # from cmd.exe, 
     #   double quotes cannot be escaped, 
-    #   single quote is just a letter, cannot do grkouping. 
+    #   single quote is just a letter, cannot do grouping. 
     # therefore, xpath=//div[@class="gb_Id"] will not work on cmd.exe
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
     
@@ -106,7 +106,7 @@ our_cfg = {
 
     # dump whole page to find target locator chain and then dump nested shadow
     1. dump the whole page
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/yslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2
     
     2. in dumpdir2/locator_chain_map.txt, find the locator chain for the target element
     shadow001.shadow002.shadow003: "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
