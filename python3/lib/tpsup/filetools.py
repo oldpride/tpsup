@@ -182,13 +182,22 @@ def tpglob(file: Union[list, str],  **opt):
     return files2
 
 
-def sorted_files(files: Union[list, str], sort_func, globbed: bool = False, **opt):
+def sorted_files(files: Union[list, str], sort_func, globbed: bool = False, reverse=False, **opt):
     if not globbed:
         files2 = tpglob(files, **opt)
     else:
         files2 = files
 
-    return list(sorted(files2, key=sort_func))
+    # sort descending
+    return list(sorted(files2, key=sort_func, reverse=reverse))
+
+
+def sorted_files_by_mtime(files: list, **opt):
+    return sorted_files(files, os.path.getmtime, **opt)
+
+
+def latest_files(files: list, count=1, **opt):
+    return sorted_files_by_mtime(files, reverse=True, **opt)[0:count]
 
 
 exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
@@ -358,10 +367,6 @@ def tpfind(paths: Union[list, str],
     return ret
 
 
-def sorted_files_by_mtime(files: list, **opt):
-    return sorted_files(files, os.path.getmtime, **opt)
-
-
 def un_filemode(mode_str):
     '''
     this is the inverse function of stat.filemode().
@@ -412,11 +417,12 @@ def main():
 
     from tpsup.exectools import test_lines
     TPSUP = os.environ.get('TPSUP')
-    libfiles = f'{TPSUP}/python3/lib/tpsup/*.py'
+    libfiles = f'{TPSUP}/python3/lib/tpsup/*tools.py'
     p3scripts = f'{TPSUP}/python3/scripts'
 
     def test_codes():
         sorted_files_by_mtime([libfiles])
+        latest_files([libfiles], count=2)
         tpfind(TPSUP, FlowExps=['not(r["path"].endswith("profile.d"))'],
                FlowDirs=['prune'], )
         tpfind(p3scripts, FlowExps=['r["size"] > 2000'],
