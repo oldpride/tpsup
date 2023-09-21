@@ -196,8 +196,8 @@ def sorted_files_by_mtime(files: list, **opt):
     return sorted_files(files, os.path.getmtime, **opt)
 
 
-def latest_files(files: list, count=1, **opt):
-    return sorted_files_by_mtime(files, reverse=True, **opt)[0:count]
+def latest_files(files: list, **opt):
+    return sorted_files_by_mtime(files, reverse=True, **opt)
 
 
 exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
@@ -422,7 +422,7 @@ def main():
 
     def test_codes():
         sorted_files_by_mtime([libfiles])
-        latest_files([libfiles], count=2)
+        latest_files([libfiles])[:2]  # get the latest 2 files
         tpfind(TPSUP, FlowExps=['not(r["path"].endswith("profile.d"))'],
                FlowDirs=['prune'], )
         tpfind(p3scripts, FlowExps=['r["size"] > 2000'],

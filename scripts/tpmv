@@ -43,7 +43,10 @@ usage:
 
    -n              dry run. just list the changes without making the changes
 
-   -s              the next arg is a sed/perl substitution, eg s/old_pattern/new_pattern/ig
+   -s              the next arg is a sed/perl substitution, eg s/old_pattern/new_pattern/ig.
+                   the default is a global replacement, ie, 'g' is added to the end of the pattern.
+                   if just want to change 1 place, use this option without 'g', eg, 
+                     $prog -s 's/old_pattern/new_pattern/' path1 path2 ...
 
    -y              when prompt, simple return means 'Y'. default to 'N';
 
