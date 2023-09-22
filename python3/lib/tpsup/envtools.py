@@ -20,9 +20,25 @@ def flush_rightaway(func):
     return flushed
 
 
+cached_env = None
+
+
 class Env:
     def __init__(self, **opt):
+        global cached_env
+
         self.verbose = opt.get("verbose", 0)
+
+        if cached_env is not None:
+            if self.verbose:
+                print(f"cached_env = {cached_env}")
+
+            # self = cached_env # this does not work, so use below
+
+            for attr in cached_env.__dict__:
+                self.__dict__[attr] = cached_env.__dict__[attr]
+            return
+
         self.uname = platform.uname()
         # pprint(self.uname)
         # system='Windows', node='tianpc', release='10', version='10.0.19044', machine='AMD64')
@@ -122,6 +138,10 @@ class Env:
         else:
             raise RuntimeError(f"unsupported OS = {pformat(self.uname)}")
 
+        if self.verbose:
+            print(f"saving env to cache")
+        cached_env = self
+
     def __str__(self):
         strings = []
         for attr in sorted(self.__dict__):
@@ -207,7 +227,11 @@ def restore_posix_paths(paths: list, **opt) -> list:
 
 
 def get_tmp_dir(**opt) -> str:
-    return Env().tmpdir
+    return Env(**opt).tmpdir
+
+
+def get_home_dir(**opt) -> str:
+    return Env(**opt).home_dir
 
 
 def get_user_fullname(user: str = None, **opt) -> str:
@@ -549,7 +573,8 @@ def get_native_path(path: str, **opt):
 
 def main():
     myenv = Env()
-    print(myenv)
+    # print(f'myenv = {myenv}')
+    print(f'myenv = {pformat(myenv.__dict__)}')
 
     sys.stdout.flush()
     myenv.adapt()
@@ -560,16 +585,20 @@ def main():
     # time.sleep(2)
     # sys.stderr.write("3\n")
 
+    print()
     for path in ("/a/b/c", r"\a\b\c"):
         print(
             f"converted path={path} to os standard path={myenv.adjpath(path)}")
-    print("")
+    print()
 
     native_test_url = f"file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
     print(f"native_test_url = {native_test_url}")
     print("")
 
-    print(f"tmpdir = {get_tmp_dir()}")
+    print(f"tmpdir = {get_tmp_dir(verbose=0)}")
+    print("")
+
+    print(f"homedir = {get_home_dir(verbose=0)}")
     print("")
 
     # print(f"query_user_fullname = {query_user_fullname(getpass.getuser())}")
@@ -610,7 +639,9 @@ def main():
     print("test source_siteenv()")
     print(f"before TPSUP={os.environ.get('TPSUP', None)}")
     source_siteenv(f"{myenv.home_dir}/sitebase/github/site-spec",
-                   clean_env=1, verbose=2)
+                   clean_env=1,
+                   # verbose=2,
+                   )
     print(f"after TPSUP={os.environ.get('TPSUP', None)}")
 
     if myenv.isWindows:

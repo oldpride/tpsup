@@ -55,6 +55,17 @@ elif [ $action = set ]; then
       export PATH="$DIR:$PATH"
       reduce PATH
    fi
+
+   codecfgdir () { 
+      if [[ $UNAME =~ Darwin|Linux ]]; then
+         cd $HOME/.config/Code/User/globalStorage/
+      else
+         myappdata
+         cd Code/User/globalStorage
+      fi
+
+      ls -l state.vscdb 
+   }
 else
    echo "unknown action='$action'"
    usage
