@@ -79,6 +79,8 @@ Note: perl system() return 0 when successful, but in perl expression, 0 means fa
 
    $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("chmod 755 \$path")' \$TPSUP 
 
+  # or all-in-1 command
+   $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("ls -l \$path;chmod 755 \$path;ls -l \$path")' \$TPSUP
 
 END
 
