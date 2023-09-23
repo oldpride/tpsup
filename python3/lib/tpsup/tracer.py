@@ -1157,6 +1157,7 @@ def update_knowledge_from_rows(row: dict, cfg: dict, **opt):
 def update_knowledge(k: str, new_value: str, **opt):
     kc = opt.get('KeyConfig', {})
     column = kc.get('column', k)
+    k = k.upper()
     known_value = known.get(k, None)
     verbose = opt.get('verbose', 0)
 
