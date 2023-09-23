@@ -316,7 +316,7 @@ test_dict = {'a': {'b': 1}, 'c': 'hello'}
     print()
     print("------------------------------------------------")
     explist = ['r["a"] == 1', 'r["b"] == 2']
-    compiledlist = compile_codelist(explist, is_exp=True)
+    compiledlist = compile_codelist(explist, is_exp=True, signature="r")
     print(f'explist = {pformat(explist)}')
     r2 = {'a': 1, 'b': 2}
     r3 = {'a': 1, 'b': 3}
@@ -327,7 +327,7 @@ test_dict = {'a': {'b': 1}, 'c': 'hello'}
     print()
     print("------------------------------------------------")
     expdict = {'exp1': 'r["a"] == 1', 'exp2': 'r["b"] == 2'}
-    compileddict = compile_codedict(expdict, is_exp=True)
+    compileddict = compile_codedict(expdict, is_exp=True, signature="r")
     print(f'expdict = {pformat(expdict)}')
     r2 = {'a': 1, 'b': 2}
     r3 = {'a': 1, 'b': 3}
