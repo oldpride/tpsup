@@ -45,8 +45,9 @@ examples = textwrap.dedent(f"""
         {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP
         {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP  -ls
 
+        # find script that doesn't have 755 mode
         cd $TPSUP/python3/scripts
-        {prog} -he "r['type'] == 'file' and (r['mode']&0o755) !=0o755" \\
+        {prog} -he "r['type'] == 'file' and (r['mode']&0o755) !=0o755 and r['size']>0 and readline().startswith('#!')" \\
                -ha "print(oct(r['mode']&0o755)); os.system(f'''ls -l {{r['path']}}''')" .
                 
     """)

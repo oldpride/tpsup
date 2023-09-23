@@ -75,35 +75,41 @@ class TpInput:
     def readline(self):
         line_number = 0
 
-        for line in self.fh:
-            line_number += 1
+        # UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc1 in position 24:
+        #     invalid start byte
+        try: 
+            for line in self.fh:
+                line_number += 1
 
-            if line_number == 1 and self.need_header:
-                # csv module needs the header line
+                if line_number == 1 and self.need_header:
+                    # csv module needs the header line
+                    yield line
+                    continue
+
+                matched = 1
+                for compiled in self.match_patterns:
+                    # if not compiled.match(line):
+                    if not compiled.search(line):
+                        matched = 0
+                        break
+
+                if not matched:
+                    continue
+
+                excluded = 0
+
+                for compiled in self.exclude_patterns:
+                    if compiled.search(line):
+                        excluded = 1
+                        break
+                if excluded:
+                    continue
+
+                # print(f'iamhere {line}')
                 yield line
-                continue
-
-            matched = 1
-            for compiled in self.match_patterns:
-                # if not compiled.match(line):
-                if not compiled.search(line):
-                    matched = 0
-                    break
-
-            if not matched:
-                continue
-
-            excluded = 0
-
-            for compiled in self.exclude_patterns:
-                if compiled.search(line):
-                    excluded = 1
-                    break
-            if excluded:
-                continue
-
-            # print(f'iamhere {line}')
-            yield line
+        except UnicodeDecodeError as e:
+            print(e)
+            return
         return
 
     def close(self):
@@ -258,9 +264,13 @@ def readline(**opt):
         readline_gen = gen(**opt) 
         # mention gen() with '()' to call it - init it.
 
-    return next(readline_gen) 
-    # mention readline_gen without "()" because we don't call the generator here.
-    # the generator is already running.
+    try:
+        return next(readline_gen) 
+        # mention readline_gen without "()" because we don't call the generator here.
+        # the generator is already running.
+    except StopIteration as e:
+        print(e)
+        return ""
 
 '''
     mod = sys.modules.setdefault(mod_name, types.ModuleType(mod_name))
