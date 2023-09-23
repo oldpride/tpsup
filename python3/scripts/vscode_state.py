@@ -25,7 +25,7 @@ connection = sqlite3.connect(file)
 cursor = connection.cursor()
 
 result_list = cursor.execute("SELECT * FROM ItemTable;").fetchall()
-# list of key-value tuples
+# list of key
 print(pformat(result_list))
 
 # python vscode_state.py

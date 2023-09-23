@@ -6,6 +6,7 @@ import stat
 import sys
 from pprint import pformat, pprint
 import time
+import types
 from typing import Union
 from tpsup.modtools import compile_codelist, strings_to_compilable_patterns, load_module
 from tpsup.logtools import log_FileFuncLine
@@ -212,6 +213,7 @@ def tpfind(paths: Union[list, str],
            find_print=1,
            find_ls=0,
            find_dump=0,
+           MaxCount: int = None,
            **opt):
     verbose = opt.get('verbose', 0)
 
@@ -231,19 +233,206 @@ def tpfind(paths: Union[list, str],
         raise RuntimeError(
             f'number of HandleExps {len(HandleExps)} not match number of HandleActs {len(HandleActs)}')
 
-    CompiledMatchExps = compile_codelist(MatchExps, is_exp=True)
-    CompiledFlowExps = compile_codelist(FlowExps, is_exp=True, verbose=verbose)
-    CompiledHandleExps = compile_codelist(HandleExps, is_exp=True)
-    CompiledHandleActs = compile_codelist(HandleActs)
+    mod_name = 'tmp_mod'
+    mod_source = '''
+import os
+import re
+import tpsup.filetools
+
+
+r = None
+readline_gen = None
+
+def export_r(r2):
+    global r, readline_gen
+    r = r2
+    readline_gen = None
+
+def readline(**opt):
+    global r, readline_gen
+    if not readline_gen:
+        def gen(**opt):
+            with tpsup.filetools.TpInput(filename=r['path'], **opt) as tf:
+                for line in tf:
+                    yield line
+        readline_gen = gen(**opt) 
+        # mention gen() with '()' to call it - init it.
+
+    return next(readline_gen) 
+    # mention readline_gen without "()" because we don't call the generator here.
+    # the generator is already running.
+
+'''
+    mod = sys.modules.setdefault(mod_name, types.ModuleType(mod_name))
+    mod_code = compile(mod_source, mod_name, 'exec')
+    exec(mod_code, mod.__dict__)
+
+    # keep all functions in 1 module so that we only need to export 'r' once
+    CompiledMatchExps = compile_codelist(
+        MatchExps, existing_module=mod, is_exp=True)
+    CompiledFlowExps = compile_codelist(
+        FlowExps, existing_module=mod, is_exp=True, verbose=verbose)
+    CompiledHandleExps = compile_codelist(
+        HandleExps, existing_module=mod, is_exp=True)
+    CompiledHandleActs = compile_codelist(HandleActs, existing_module=mod,)
+
+    export_r = mod.export_r
+    export_r = getattr(mod, 'export_r')
 
     paths2 = tpglob(paths, **opt)
 
     ret = {
         'error': 0,
         'hashes': [],
+        'count': 0,
     }
+    count = 0
+
+    #############################################################
+    # begin - function inside function
+    # we use function inside function to avoid passing too many parameters.
+    def process_node(full_path: str = None, dir: str = None, short: str = None, isDir: bool = None, **opt):
+        # 'r' is the node info, for expression matching.
+        # 'result' is the return value of this function, mainly for flow control.
+        r = {}
+        result = {}
+
+        if full_path:
+            r['path'] = full_path
+            r['dir'] = os.path.dirname(full_path)
+            r['short'] = os.path.basename(full_path)
+            # isDir = os.path.isdir(full_path)
+        elif dir and short:
+            r['path'] = os.path.join(dir, short)
+            r['dir'] = dir
+            r['short'] = short
+            # isDir = os.path.isdir(r['path'])
+        else:
+            raise RuntimeError(
+                'either full_path or dir+short must be provided')
+
+        info = os.lstat(r['path'])
+        r['dev'] = info.st_dev
+        r['ino'] = info.st_ino
+        r['mode'] = info.st_mode
+        r['nlink'] = info.st_nlink
+        r['uid'] = info.st_uid
+        r['gid'] = info.st_gid
+        r['size'] = info.st_size
+        r['atime'] = info.st_atime
+        r['mtime'] = info.st_mtime
+        r['ctime'] = info.st_ctime
+        if isDir:
+            r['type'] = 'dir'
+        else:
+            r['type'] = 'file'
+        r['fmode'] = stat.filemode(info.st_mode)
+
+        r['atimel'] = time.strftime(
+            '%Y%m%d-%H:%M:%S', time.localtime(r['atime']))
+        r['ctimel'] = time.strftime(
+            '%Y%m%d-%H:%M:%S', time.localtime(r['ctime']))
+        r['mtimel'] = time.strftime(
+            '%Y%m%d-%H:%M:%S', time.localtime(r['mtime']))
+
+        if is_linux:
+            # https://stackoverflow.com/questions/7770034/in-python-and-linux
+            # -how-to-get-given-users-id
+            # https://docs.python.org/2/1ibrary/pwd.html
+            _pwd = pwd.getpwuid(r['uid'])
+            r['owner'] = _pwd.pw_name
+
+            # https://docs.python.org/2/library/grp.html#module-grp
+            _grp = grp.getgrgid(r['gid'])
+            r['group'] = _grp.gr_name
+        else:
+            r['owner'] = r['uid']
+            r['group'] = r['gid']
+
+        export_r(r)
+
+        print_p = True
+        for i in range(0, len(FlowExps)):
+            compiled = CompiledFlowExps[i]
+            exp = FlowExps[i]
+            direction = FlowDirs[i]
+            if compiled():
+                if verbose:
+                    log_FileFuncLine(
+                        f'Flow exp={exp} matched r={pformat(r)}, direction={direction}')
+                if direction == 'prune':
+                    if r['type'] == 'dir':
+                        if verbose:
+                            print(f'pruning {r["path"]}')
+                        result['direction'] = 'prune'
+
+                        print_p = False
+                    # try:
+                    #     dirs.remove(p)
+                    # except ValueError as e:
+                    #     # ValueError: list.remove(x): x not in list
+                    #     if verbose:
+                    #         log_FileFuncLine(
+                    #             f'{e}', file=sys.stderr)
+                    continue
+                elif direction == 'exit':
+                    result['direction'] = 'exit'
+                    return result
+
+        for i in range(0, len(HandleExps)):
+            exp = HandleExps[i]
+            act = HandleActs[i]
+            compiled = CompiledHandleExps[i]
+            compiled_act = CompiledHandleActs[i]
+            if compiled():
+                if verbose:
+                    log_FileFuncLine(
+                        f'Handle exp={exp} matched r={pformat(r)}, act={act}')
+                compiled_act()
+
+        if MatchExps:
+            Matched = True
+            for i in range(0, len(MatchExps)):
+                exp = MatchExps[i]
+                compiled = CompiledMatchExps[i]
+                if not compiled():
+                    if verbose >= 2:
+                        log_FileFuncLine(
+                            f'Match exp={exp} failed r={pformat(r)}')
+                    Matched = False
+                    break
+            if not Matched:
+                return result
+
+        ret['hashes'].append(r)
+        ret['count'] += 1
+        # log_FileFuncLine(f'count={ret["count"]},path={r["path"]}')
+
+        if print_p:
+            if find_dump:
+                print(pformat(r))
+            elif find_ls:
+                print(
+                    f'{r["fmode"]} {r["owner"]:7} {r["group"]:7} {r["size"]:7} {r["mtimel"]} {r["path"]}')
+            elif find_print:
+                print(f'{r["path"]}')
+        return result
+
+    # end - function inside function
+    #############################################################
 
     for p in paths2:
+        if MaxCount and ret['count'] >= MaxCount:
+            return ret
+
+        if not os.path.isdir(p):
+            full_path = os.path.abspath(p)
+            result = process_node(full_path=full_path, isDir=False, **opt)
+
+            if result.get('direction', None) == 'exit':
+                return ret
+            continue
+
         for root, dirs, fnames in os.walk(p, topdown=True):
             # https://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
             # key point: use [:] to modify dirs in place
@@ -251,118 +440,19 @@ def tpfind(paths: Union[list, str],
 
             isDir = True
             for p in dirs + ['EndOfDirs']+fnames:
+                if MaxCount and ret['count'] >= MaxCount:
+                    return ret
+
                 if p == 'EndOfDirs':
                     isDir = False
                     continue
 
-                full_path = os.path.join(root, p)
-                if verbose >= 2:
-                    print(f'checking "{full_path}"')
-
-                r = {}
-                r['path'] = full_path
-                r['dir'] = root
-                r['short'] = p
-
-                info = os.lstat(full_path)
-                r['dev'] = info.st_dev
-                r['ino'] = info.st_ino
-                r['mode'] = info.st_mode
-                r['nlink'] = info.st_nlink
-                r['uid'] = info.st_uid
-                r['gid'] = info.st_gid
-                r['size'] = info.st_size
-                r['atime'] = info.st_atime
-                r['mtime'] = info.st_mtime
-                r['ctime'] = info.st_ctime
-                if isDir:
-                    r['type'] = 'dir'
-                else:
-                    r['type'] = 'file'
-                r['fmode'] = stat.filemode(info.st_mode)
-
-                r['atimel'] = time.strftime(
-                    '%Y%m%d-%H:%M:%S', time.localtime(r['atime']))
-                r['ctimel'] = time.strftime(
-                    '%Y%m%d-%H:%M:%S', time.localtime(r['ctime']))
-                r['mtimel'] = time.strftime(
-                    '%Y%m%d-%H:%M:%S', time.localtime(r['mtime']))
-
-                if is_linux:
-                    # https://stackoverflow.com/questions/7770034/in-python-and-linux
-                    # -how-to-get-given-users-id
-                    # https://docs.python.org/2/1ibrary/pwd.html
-                    _pwd = pwd.getpwuid(r['uid'])
-                    r['owner'] = _pwd.pw_name
-
-                    # https://docs.python.org/2/library/grp.html#module-grp
-                    _grp = grp.getgrgid(r['gid'])
-                    r['group'] = _grp.gr_name
-                else:
-                    r['owner'] = r['uid']
-                    r['group'] = r['gid']
-
-                print_p = True
-                for i in range(0, len(FlowExps)):
-                    compiled = CompiledFlowExps[i]
-                    exp = FlowExps[i]
-                    direction = FlowDirs[i]
-                    if compiled(r):
-                        if verbose:
-                            log_FileFuncLine(
-                                f'Flow exp={exp} matched r={pformat(r)}, direction={direction}')
-                        if direction == 'prune':
-                            if r['type'] == 'dir':
-                                if verbose:
-                                    print(f'pruning {r["path"]}')
-                                dirs.remove(p)
-                                print_p = False
-                            # try:
-                            #     dirs.remove(p)
-                            # except ValueError as e:
-                            #     # ValueError: list.remove(x): x not in list
-                            #     if verbose:
-                            #         log_FileFuncLine(
-                            #             f'{e}', file=sys.stderr)
-                            continue
-                        elif direction == 'exit':
-                            return ret
-
-                for i in range(0, len(HandleExps)):
-                    exp = HandleExps[i]
-                    act = HandleActs[i]
-                    compiled = CompiledHandleExps[i]
-                    compiled_act = CompiledHandleActs[i]
-                    if compiled(r):
-                        if verbose:
-                            log_FileFuncLine(
-                                f'Handle exp={exp} matched r={pformat(r)}, act={act}')
-                        compiled_act(r)
-
-                if MatchExps:
-                    Matched = True
-                    for i in range(0, len(MatchExps)):
-                        exp = MatchExps[i]
-                        compiled = CompiledMatchExps[i]
-                        if not compiled(r):
-                            if verbose >= 2:
-                                log_FileFuncLine(
-                                    f'Match exp={exp} failed r={pformat(r)}')
-                            Matched = False
-                            break
-                    if not Matched:
-                        continue
-
-                ret['hashes'].append(r)
-
-                if print_p:
-                    if find_dump:
-                        print(pformat(r))
-                    elif find_ls:
-                        print(
-                            f'{r["fmode"]} {r["owner"]:7} {r["group"]:7} {r["size"]:7} {r["mtimel"]} {r["path"]}')
-                    elif find_print:
-                        print(f'{r["path"]}')
+                result = process_node(dir=root, short=p, isDir=isDir, **opt)
+                if result.get('direction', None) == 'prune':
+                    dirs.remove(p)
+                    continue
+                elif result.get('direction', None) == 'exit':
+                    return ret
 
     return ret
 
@@ -424,9 +514,22 @@ def main():
         sorted_files_by_mtime([libfiles])
         get_latest_files([libfiles])[:2]  # get the latest 2 files
         tpfind(TPSUP, FlowExps=['not(r["path"].endswith("profile.d"))'],
-               FlowDirs=['prune'], )
+               FlowDirs=['prune'],
+               MaxCount=5)
+
         tpfind(p3scripts, FlowExps=['r["size"] > 2000'],
-               FlowDirs=['exit'])
+               FlowDirs=['exit'],
+               MaxCount=5)
+        tpfind(p3scripts,
+               HandleExps=[
+                   # file mode in cygwin and git bash is not handled correctly in python.
+                   'r["type"] == "file" and r["size"] > 0 and readline().startswith("#!") and (r["mode"] & 0o755) != 0o755'
+                   #    'r["type"] == "file" and r["size"] > 0',
+               ],
+               HandleActs=[
+                   '''print('------');print(len(list(readline_gen)));os.system(f"ls -l {r['path']}")'''],
+               MaxCount=5,
+               )
 
         stat.filemode(0o100644)
         un_filemode('-rw-r--r--')

@@ -45,6 +45,10 @@ examples = textwrap.dedent(f"""
         {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP
         {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP  -ls
 
+        cd $TPSUP/python3/scripts
+        {prog} -he "r['type'] == 'file' and (r['mode']&0o755) !=0o755" \\
+               -ha "print(oct(r['mode']&0o755)); os.system(f'''ls -l {{r['path']}}''')" .
+                
     """)
 
 parser = argparse.ArgumentParser(

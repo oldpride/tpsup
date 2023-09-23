@@ -72,14 +72,16 @@ examples:
 
 Note: perl system() return 0 when successful, but in perl expression, 0 means false, failure.
    # the following command find scripts (starting with #!), with mode not equal to 0755 
-   # note the ! before the system() call
-   # also note the use plenty of () to clarify the logic
+   # note: 
+   #     - the ! before the system() call
+   #     - use plenty of () to clarify the logic
+   #     - neither cygwin nor gitbash handle the mode well. don't use below command there.
    
    $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("ls -l \$path")' \$TPSUP
 
    $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("chmod 755 \$path")' \$TPSUP 
 
-  # or all-in-1 command
+   # or all-in-1 command
    $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("ls -l \$path;chmod 755 \$path;ls -l \$path")' \$TPSUP
 
 END

@@ -114,8 +114,11 @@ def strings_to_compilable_func(strings: List, func_name: str, logic: str = 'and'
 
 
 def load_module(source: Union[str, types.CodeType, types.FunctionType],
-                new_module_name=None,
-                function_name: str = "default_function", imp: Dict = {}
+                new_module_name: str = None,
+                function_name: str = "default_function",
+                imp: dict = None,  # import attr
+                existing_module: types.ModuleType = None,  # add code to an existing module
+                **opt
                 ) -> types.ModuleType:
     """
     compile the source code into executable using an external module
@@ -123,12 +126,23 @@ def load_module(source: Union[str, types.CodeType, types.FunctionType],
         types.FunctionType: defined function
         types.CodeType: func.__code__
     """
-    if new_module_name is None:
-        new_module_name = inspect.stack()[1][3]
-    # https://stackoverflow.com/questions/32175693/python-importlibs-analogue-for-imp-new-module
-    # mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
-    mod = sys.modules.setdefault(
-        new_module_name, types.ModuleType(new_module_name))
+    verbose = opt.get('verbose', 0)
+    if existing_module:
+        mod = existing_module
+
+        if verbose:
+            log_FileFuncLine(f'mod = {pformat(dir(mod))}')
+        # new_module_name = mod.__spec__.origin
+        new_module_name = mod.__name__
+        if verbose:
+            log_FileFuncLine(f'new_module_name = {new_module_name}')
+    else:
+        if new_module_name is None:
+            new_module_name = inspect.stack()[1][3]
+        # https://stackoverflow.com/questions/32175693/python-importlibs-analogue-for-imp-new-module
+        # mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
+        mod = sys.modules.setdefault(
+            new_module_name, types.ModuleType(new_module_name))
 
     source_type = type(source)
 
@@ -143,7 +157,8 @@ def load_module(source: Union[str, types.CodeType, types.FunctionType],
 
     mod.__file__ = new_module_name
     mod.__package__ = ''
-    mod.__dict__.update(imp)
+    if imp is not None:
+        mod.__dict__.update(imp)
     # print(f'mod.__dict__ = {pformat(mod.__dict__)}')
     exec(code, mod.__dict__)
     if source_type == types.FunctionType:
@@ -151,6 +166,7 @@ def load_module(source: Union[str, types.CodeType, types.FunctionType],
     elif source_type == types.CodeType:
         f = types.FunctionType(source, {}, function_name, None, None)
         f.__qualname__ = function_name
+
     return mod
 
 
@@ -220,9 +236,19 @@ def compile_codedict(expdict: dict, is_exp=False, **opt):
     return retdict
 
 
-def compile_codelist(explist: list, is_exp=False, **opt):
+def compile_codelist(explist: list,
+                     is_exp=False,
+                     code_header: str = None,
+                     signature: str = "",
+                     **opt):
     '''
     compile a list of exps (exp strings) into a module,
+    code header can be some import or other pre-defined code
+    example:
+        code_header = 'import re'
+
+    signature is the function signature, example:
+        signature = "r, verbose=0"
     '''
     verbose = opt.get('verbose', 0)
 
@@ -231,9 +257,13 @@ def compile_codelist(explist: list, is_exp=False, **opt):
     if len(explist) == 0:
         return compiledlist
 
-    mod_source = ''
+    if code_header is not None:
+        mod_source = code_header
+    else:
+        mod_source = ''
+
     for i in range(0, len(explist)):
-        mod_source += f'def _exp{i}(r):\n'
+        mod_source += f'def _exp{i}({signature}):\n'
 
         if is_exp:
             mod_source += f'    return {explist[i]}\n'
@@ -245,7 +275,7 @@ def compile_codelist(explist: list, is_exp=False, **opt):
     if verbose:
         log_FileFuncLine(f'mod_source = \n{mod_source}')
 
-    exp_module = load_module(mod_source)
+    exp_module = load_module(mod_source, **opt)
 
     for i in range(0, len(explist)):
         compiled_func = getattr(exp_module, f'_exp{i}')
@@ -297,13 +327,55 @@ test_dict = {'a': {'b': 1}, 'c': 'hello'}
     print()
     print("------------------------------------------------")
     expdict = {'exp1': 'r["a"] == 1', 'exp2': 'r["b"] == 2'}
-    compiledlist = compile_codedict(expdict, is_exp=True)
+    compileddict = compile_codedict(expdict, is_exp=True)
     print(f'expdict = {pformat(expdict)}')
     r2 = {'a': 1, 'b': 2}
     r3 = {'a': 1, 'b': 3}
-    for k, exp in compiledlist.items():
+    for k, exp in compileddict.items():
         print(f'{k}({r2}) = {exp(r2)}')
         print(f'{k}({r3}) = {exp(r3)}')
+
+    print()
+    print("------------------------------------------------")
+    mod_source = """
+from pprint import pformat
+r = {}
+
+def export_r(r2):
+    global r
+    r = r2
+
+def dump_r():
+    global r
+    print(f'inside dump_r(), r = {pformat(r)}')
+"""
+
+    mod = load_module(mod_source)
+
+    mod_source2 = """
+def new_func():
+    dump_r()
+"""
+
+    load_module(mod_source2, existing_module=mod)
+    print(f"export works")
+    export_r = getattr(mod, 'export_r')
+    export_r({'a': 1, 'b': 2})
+    dump_r = getattr(mod, 'dump_r')
+    dump_r()
+    new_func = getattr(mod, 'new_func')
+    new_func()
+    r = getattr(mod, 'r')
+    r2 = {'c': 3, 'd': 4}
+    print(f"directly assign doesn't work")
+    r = r2
+    new_func()
+    print(f"clear+update works")
+    r = getattr(mod, 'r')
+    r.clear()
+    new_func()
+    r.update(r2)
+    new_func()
 
 
 if __name__ == '__main__':
