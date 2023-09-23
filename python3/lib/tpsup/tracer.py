@@ -1258,7 +1258,7 @@ def parse_cfg(cfg_file: str, **opt):
     # 'value' is an expression, therefore, we need to use two different quotes.
     # unshift put the key=value to the front, therefore, allow cfg file to overwrite it.
     our_cfg['vars'] = ['cfgdir', f"r'{cfgdir}'",
-                       'cfgname', f"r'{cfgname}'"] + our_cfg['vars']
+                       'cfgname', f"r'{cfgname}'"] + our_cfg.get('vars', [])
     # use r'' to avoid backslash issue
     #    File "our_cfg node=our_cfg/vars/[1]", line 3
     #       'C:\users\william\sitebase\github\tpsup\python3\lib\tpsup'
