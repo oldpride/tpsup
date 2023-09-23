@@ -1999,7 +1999,7 @@ def trace(given_cfg, input, **opt):
         verbose and print(f"entry_points = {pformat(entry_points)}")
 
     parsed_input = parse_input(input,
-                               AliasMap=all_cfg['alias_map'],
+                               AliasMap=all_cfg.get('alias_map', {}),
                                AllowedKeys=all_cfg['allowed_keys'],
                                )
     print(f"parsed_input = {pformat(parsed_input)}")
