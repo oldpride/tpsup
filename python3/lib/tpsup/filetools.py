@@ -77,7 +77,7 @@ class TpInput:
 
         # UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc1 in position 24:
         #     invalid start byte
-        try: 
+        try:
             for line in self.fh:
                 line_number += 1
 
@@ -252,6 +252,8 @@ readline_gen = None
 def export_r(r2):
     global r, readline_gen
     r = r2
+    
+    # reset readline_gen so that we can start a new generator
     readline_gen = None
 
 def readline(**opt):
@@ -283,7 +285,10 @@ def readline(**opt):
         HandleExps, existing_module=mod, is_exp=True)
     CompiledHandleActs = compile_codelist(HandleActs, existing_module=mod,)
 
-    export_r = mod.export_r
+    # either of the following 2 lines works.
+    # the 2nd line will not trigger pylint warning.
+
+    # export_r = mod.export_r
     export_r = getattr(mod, 'export_r')
 
     paths2 = tpglob(paths, **opt)
@@ -293,7 +298,6 @@ def readline(**opt):
         'hashes': [],
         'count': 0,
     }
-    count = 0
 
     #############################################################
     # begin - function inside function
@@ -356,6 +360,7 @@ def readline(**opt):
             r['owner'] = r['uid']
             r['group'] = r['gid']
 
+        # export r into the module, so that functions in the module can access it.
         export_r(r)
 
         print_p = True
@@ -363,7 +368,7 @@ def readline(**opt):
             compiled = CompiledFlowExps[i]
             exp = FlowExps[i]
             direction = FlowDirs[i]
-            
+
             try:
                 passed = compiled()
             except Exception as e:
@@ -411,13 +416,13 @@ def readline(**opt):
             for i in range(0, len(MatchExps)):
                 exp = MatchExps[i]
                 compiled = CompiledMatchExps[i]
-                
+
                 try:
                     passed = compiled()
                 except Exception as e:
                     print(e)
                     passed = False
-                
+
                 if not compiled():
                     if verbose >= 2:
                         log_FileFuncLine(

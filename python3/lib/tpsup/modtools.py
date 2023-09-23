@@ -337,6 +337,7 @@ test_dict = {'a': {'b': 1}, 'c': 'hello'}
 
     print()
     print("------------------------------------------------")
+    print("test injecting code into existing module")
     mod_source = """
 from pprint import pformat
 r = {}
