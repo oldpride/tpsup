@@ -264,13 +264,10 @@ def readline(**opt):
         readline_gen = gen(**opt) 
         # mention gen() with '()' to call it - init it.
 
-    try:
-        return next(readline_gen) 
-        # mention readline_gen without "()" because we don't call the generator here.
-        # the generator is already running.
-    except StopIteration as e:
-        print(e)
-        return ""
+
+    return next(readline_gen) 
+    # mention readline_gen without "()" because we don't call the generator here.
+    # the generator is already running.
 
 '''
     mod = sys.modules.setdefault(mod_name, types.ModuleType(mod_name))
@@ -366,7 +363,13 @@ def readline(**opt):
             compiled = CompiledFlowExps[i]
             exp = FlowExps[i]
             direction = FlowDirs[i]
-            if compiled():
+            
+            try:
+                passed = compiled()
+            except Exception as e:
+                print(e)
+                passed = False
+            if passed:
                 if verbose:
                     log_FileFuncLine(
                         f'Flow exp={exp} matched r={pformat(r)}, direction={direction}')
@@ -394,17 +397,27 @@ def readline(**opt):
             act = HandleActs[i]
             compiled = CompiledHandleExps[i]
             compiled_act = CompiledHandleActs[i]
-            if compiled():
-                if verbose:
-                    log_FileFuncLine(
-                        f'Handle exp={exp} matched r={pformat(r)}, act={act}')
-                compiled_act()
+            try:
+                if compiled():
+                    if verbose:
+                        log_FileFuncLine(
+                            f'Handle exp={exp} matched r={pformat(r)}, act={act}')
+                    compiled_act()
+            except Exception as e:
+                print(e)
 
         if MatchExps:
             Matched = True
             for i in range(0, len(MatchExps)):
                 exp = MatchExps[i]
                 compiled = CompiledMatchExps[i]
+                
+                try:
+                    passed = compiled()
+                except Exception as e:
+                    print(e)
+                    passed = False
+                
                 if not compiled():
                     if verbose >= 2:
                         log_FileFuncLine(
