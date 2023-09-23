@@ -184,7 +184,8 @@ def tpglob(file: Union[list, str],  **opt):
             if not globbed:
                 log_FileFuncLine(f'{f} not found', file=sys.stderr)
                 continue
-            files2.extend(globbed)
+            posixed = [x.replace('\\', '/') for x in globbed]
+            files2.extend(posixed)
 
     return files2
 
@@ -314,7 +315,7 @@ def readline(**opt):
             r['short'] = os.path.basename(full_path)
             # isDir = os.path.isdir(full_path)
         elif dir and short:
-            r['path'] = os.path.join(dir, short)
+            r['path'] = f'{dir}/{short}'
             r['dir'] = dir
             r['short'] = short
             # isDir = os.path.isdir(r['path'])
