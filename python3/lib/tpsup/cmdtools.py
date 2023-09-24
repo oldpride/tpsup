@@ -165,19 +165,6 @@ def which(program, **opt):
     return None
 
 
-def ls_l(path_pattern: str, **opt):
-    import pathlib
-    verbose = opt.get('verbose', 0)
-    path_pattern2 = path_pattern.replace("\\", "/")
-
-    cmd = f'ls -l {path_pattern2}'
-
-    if verbose > 1:
-        print(f'cmd = {cmd}')
-
-    run_cmd(cmd, is_bash=True, print=1)
-
-
 def main():
     print("Heads up! on windows, the default shell is cmd.exe, not bash.")
     print("")

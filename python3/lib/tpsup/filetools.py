@@ -8,6 +8,7 @@ from pprint import pformat, pprint
 import time
 import types
 from typing import Union
+from tpsup.cmdtools import run_cmd
 from tpsup.modtools import compile_codelist, strings_to_compilable_patterns, load_module
 from tpsup.logtools import log_FileFuncLine
 from tpsup.util import silence_BrokenPipeError
@@ -504,6 +505,25 @@ def un_filemode(mode_str):
     return mode
 
 
+def ls_l(files: Union[list, str], **opt):
+    verbose = opt.get('verbose', 0)
+    files2 = tpglob(files, **opt)
+
+    if not files2:
+        print(f'no file found for {files}')
+        return
+
+    # wrap each file with double quotes so that we can handle file names with spaces
+    files_string = '"' + '" "'.join(files2) + '"'
+
+    cmd = f'ls -l {files_string}'
+
+    if verbose > 1:
+        print(f'cmd = {cmd}')
+
+    run_cmd(cmd, is_bash=True, print=1)
+
+
 def main():
     verbose = 1
 
@@ -566,6 +586,7 @@ def main():
         oct(un_filemode('-rw-r--r--') & 0o777)
         0o100644
         oct(33188)
+        ls_l([f'{p3scripts}/ptgrep*'])
 
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
