@@ -150,8 +150,8 @@ def rotate_log(file: str, size: int = 1024*1024, count: int = 1, **opt):
 
     if verbose > 1:
         print('after rotating')
-        import tpsup.cmdtools
-        tpsup.cmdtools.ls_l(f'{file}*')
+        import tpsup.filetools
+        tpsup.filetools.ls_l(f'{file}*')
 
 
 def main():
@@ -201,14 +201,14 @@ def main():
 
     for i in range(3):
         print(f'round {i}')
-        import tpsup.cmdtools
+        import tpsup.filetools
         print('starting point')
-        tpsup.cmdtools.ls_l(f'{testfile}*')
+        tpsup.filetools.ls_l(f'{testfile}*')
         with open(testfile, "wb") as fh:
             fh.seek(size-1)
             fh.write(b'\0')
         print('after creating the file')
-        tpsup.cmdtools.ls_l(f'{testfile}*')
+        tpsup.filetools.ls_l(f'{testfile}*')
         print('rotating...')
         rotate_log(testfile, count=i, size=99, verbose=2)
 

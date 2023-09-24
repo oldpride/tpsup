@@ -213,11 +213,6 @@ def main():
     tmpfile = f'{tmpdir}/test.txt'
     with open(tmpfile, 'w') as fh:
         fh.write("hello world\n")
-    file_pattern = f'{tmpdir}/*'
-    print(f"ls_l('{tmpdir}')")
-    ls_l(tmpdir)
-    print(f"ls_l('{file_pattern}')")
-    ls_l(file_pattern)
 
 
 if __name__ == "__main__":
