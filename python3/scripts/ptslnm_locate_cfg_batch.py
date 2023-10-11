@@ -13,6 +13,7 @@ import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
 
+HOME = os.environ['HOME'].replace('\\', '/')
 
 our_cfg = {
     'module': 'tpsup.seleniumtools',
@@ -54,12 +55,12 @@ our_cfg = {
 
     'usage_example': f'''
     - test a static page with nested iframes, same origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
     
     - test a static page with nested iframes, cross origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
     
     - this will dump out dynamically generated html too
       note:
@@ -68,7 +69,7 @@ our_cfg = {
                but for remote page, this is needed. otherwise, you get error: 
                stale element reference: element is not attached to the page document
         - once entered shadow, xpath is not working anymore., use css selector instead.
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 'code=time.sleep(2)' xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html "{HOME}/dumpdir2" "code=time.sleep(2)" xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
     
     
     # iframe001: id("backgroundImage")
@@ -84,35 +85,35 @@ our_cfg = {
     #   double quotes cannot be escaped, 
     #   single quote is just a letter, cannot do grouping. 
     # therefore, xpath=//div[@class="gb_Id"] will not work on cmd.exe
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html "{HOME}/dumpdir2" xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
     
     # from bash
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html ~/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
 
     # use -js
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html "{HOME}/dumpdir2" xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
     
-    {{{{prog}}}} chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= %USERPROFILE%/dumpdir2 xpath=//div[3] -js
+    {{{{prog}}}} chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= "{HOME}/dumpdir2" xpath=//div[3] -js
     
     # test a cross domain iframe
-    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1]
-    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1] -js
+    {{{{prog}}}} https://www.dice.com "{HOME}/dumpdir2" xpath=//iframe[4] iframe xpath=//script[1]
+    {{{{prog}}}} https://www.dice.com "{HOME}/dumpdir2" xpath=//iframe[4] iframe xpath=//script[1] -js
     
     # dump whole page, print xpath shortcut, eg id("mycontainer")
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html "{HOME}/dumpdir2" xpath=/html
     
     # dump whole page, print full xpath
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html "{HOME}/dumpdir2" xpath=/html -full
 
     # dump whole page to find target locator chain and then dump nested shadow
     1. dump the whole page
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" "{HOME}/dumpdir2"
     
     2. in dumpdir2/locator_chain_map.txt, find the locator chain for the target element
     shadow001.shadow002.shadow003: "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     3. use the locator chain to dump the target element
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" %USERPROFILE%/dumpdir2 "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" "{HOME}/dumpdir2" "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     
     ''',

@@ -14,6 +14,10 @@ endlocal & (
 
 echo TPSUP=%TPSUP%
 
+REM change backslash to forward slash
+REM set "HOME=%USERPROFILE:\=/%"
+set "HOME=%USERPROFILE%%"
+
 rem use 'call' to invoke external script; otherwise, the current script will exit after the external script
 call "%CMD_DIR%\addpath.cmd" -q PATH "%CMD_DIR%"
 
