@@ -33,6 +33,7 @@ usage:
    -n|-dryrun        dryrun
 
    -c  cfg_file      default to \$SITESPEC/cfg/tpdist_deploy.cfg
+
    -a  app_name      app_name is defined in config file
 
    -lb local_base    default to \$SITEBASE
@@ -50,6 +51,8 @@ usage:
    -ex id1,id2,...   only excludes with these ids
 
    -nx id1,id2,...   skip excludes with these ids
+
+   -ncu              not check user (owner)
 
 examples:
 
@@ -72,6 +75,7 @@ my $user_remote_dirs;
 my $dryrun;
 my $only_exclude_ids;
 my $skip_exclude_ids;
+my $not_check_user;
 
 GetOptions(
    'verbose'     => \$verbose,
@@ -84,6 +88,7 @@ GetOptions(
    'rd=s'        => \$user_remote_dirs,
    'ex=s'        => \$only_exclude_ids,
    'nx=s'        => \$skip_exclude_ids,
+   'ncu'         => \$not_check_user,
 ) || usage ("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -221,28 +226,30 @@ if ( -e $real_local_base ) {
    $target = $real_parent_base;
 }
 
-CHECK_USER:
-{
-   
-   if ($owner eq $me) {
-      $verbose && print "target $target is owned by $owner, same as me ($me)\n";
-      last CHECK_USER;
-   }
-
-   # i noticed sometimes cygwin uses file acl, so that the owner is 'Administrator',
-   # but user can still access it through acl's user role.
-       
-   my $acl_users = get_acl_users($real_parent_base, {verbose=>$verbose});
-   $verbose && print "acl users: @$acl_users\n";
-
-   for my $au (@$acl_users) {
-      if ($au eq $me) {
-         $verbose && print "me ($me) is in acl users: @$acl_users\n";
+if (!$not_check_user) {
+   CHECK_USER:
+   {
+      
+      if ($owner eq $me) {
+         $verbose && print "target $target is owned by $owner, same as me ($me)\n";
          last CHECK_USER;
       }
+   
+      # i noticed sometimes cygwin uses file acl, so that the owner is 'Administrator',
+      # but user can still access it through acl's user role.
+          
+      my $acl_users = get_acl_users($real_parent_base, {verbose=>$verbose});
+      $verbose && print "acl users: @$acl_users\n";
+   
+      for my $au (@$acl_users) {
+         if ($au eq $me) {
+            $verbose && print "me ($me) is in acl users: @$acl_users\n";
+            last CHECK_USER;
+         }
+      }
+   
+      die "target $target is owned by $owner with acl users: (@$acl_users), none is me ($me)\n";
    }
-
-   die "target $target is owned by $owner with acl users: (@$acl_users), none is me ($me)\n";
 }
 
 my $exclude_pattern = "[.]git/|[.]sw[op]|[.]nfs|[.]idea|[.]github|__pycache__";
