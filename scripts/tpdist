@@ -158,6 +158,8 @@ Passive-side Switches: (To-be Pulled, normal Server state)
    -idle seconds
                       max idle time before close server socket, default to $idle
 
+   -stop              stop at seeing first change. for testing purpose only.
+
 Active-Side Switches: (To Pull, normal Client State)
 
    -n                 dryrun mode, list the filenames only
@@ -233,6 +235,7 @@ my $reverse;
 my $print_version;
 my $PreserveFullPath;
 my $strict_tar;
+my $stop_at_change;
 
 GetOptions(
    'v|verbose'       => \$verbose,
@@ -258,6 +261,7 @@ GetOptions(
    'enc|encrypt=s'   => \$encrypt_key,
    'p|PreserveFullPath'=> \$PreserveFullPath,
    'strict_tar'      => \$strict_tar,
+   'stop'            => \$stop_at_change,
 ) || usage ("cannot parse command line: $!");
 
 if ($print_version) {
@@ -1266,9 +1270,17 @@ sub to_be_pulled {
          if (exists $remote_tree->{$k}) {
             # if remote file exists, it must be of a different type, remove it first and then add
             $change_by_file->{$k} = "newType";
+            if ($stop_at_change) {
+               print "$k: $change_by_file->{$k}\n";
+               exit(1);
+            }
             push @deletes, $k;
          } else {
             $change_by_file->{$k} = "add";
+            if ($stop_at_change) {
+               print "$k: $change_by_file->{$k}\n";
+               exit(1);
+            }
          } 
 
          if ($local_type eq 'dir') {
@@ -1308,6 +1320,10 @@ sub to_be_pulled {
          }
 
          $change_by_file->{$k} = "update";
+         if ($stop_at_change) {
+            print "$k: $change_by_file->{$k}\n";
+            exit(1);
+         }
          $diff_by_file->{$k} ++; # files are diff'able
 
          next;
@@ -1334,11 +1350,19 @@ sub to_be_pulled {
          # not sure what situation will lead us here yet
        
          $change_by_file->{$k} = "update";
+         if ($stop_at_change) {
+            print "$k: $change_by_file->{$k}\n";
+            exit(1);
+         }
       } elsif ($local_test ne $remote_test) {
          # now both tests exist, we can safely compare
          # not sure what situation will lead us here yet
 
          $change_by_file->{$k} = "update";
+         if ($stop_at_change) {
+            print "$k: $change_by_file->{$k}\n";
+            exit(1);
+         }
       } else {
          # $local_test eq $remote_test
          if ($remote_mtime != $local_mtime) {
