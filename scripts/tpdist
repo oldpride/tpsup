@@ -750,7 +750,7 @@ sub build_dir_tree {
 
       my @globs = `/bin/ls -1d '$path'`;
       if ($? || !@globs) {
-         print get_timestamp(), "/bin/ls -1d $path failed, skipped $path\n";
+         print get_timestamp(), "/bin/ls -1d '$path' failed, skipped $path\n";
          $tree->{$path}->{skip} = "$path not found";
          next;
       }
@@ -1657,7 +1657,7 @@ sub to_pull {
       #       $0 client host port /a/b/c/*.csv d
       #    we need to check whether we have d/*.csv
     
-      my @globs = `/bin/ls -1d $local_path 2>/dev/null`;
+      my @globs = `/bin/ls -1d '$local_path' 2>/dev/null`;
       next if !@globs;
 
       chomp @globs;
