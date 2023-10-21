@@ -10,6 +10,8 @@ Function usage(msg)
     WScript.Echo "Usage:"
     WScript.Echo "       cscript screenalive.vbs  alltime"
     WScript.Echo "       cscript screenalive.vbs worktime"
+    WScript.Echo "       cscript screenalive.vbs 30"
+    WScript.Echo "               integer is the number of minutes to live"
     WScript.Echo ""
     WScript.Quit(1) 
     'If calling a VBScript from a batch file, catch the Errorlevel with an IF statement
@@ -24,6 +26,9 @@ end if
 mode = WScript.Arguments.Item(0)
 WScript.Echo "mode='" & mode & "'"
 
+'whether to run forever
+forever = false
+
 'https://stackoverflow.com/questions/28765980/vb-script-date-formats-yyyymmddhhmmss
 Dim g_oSB : Set g_oSB = CreateObject("System.Text.StringBuilder")
 
@@ -33,35 +38,54 @@ Function sprintf(sFmt, aData)
    g_oSB.Length = 0
 End Function
 
+if mode = "worktime" then
+    HHMM1 = TimeValue("6:20am")
+    HHMM2 = TimeValue("3:00pm")
+    forever = true
+elseif mode = "alltime" then
+    HHMM1 = TimeValue("00:01am")
+    HHMM2 = TimeValue("11:59pm")
+    forever = true
+elseif isNumeric(mode) then
+    'if mode is an integer, then it is the number of minutes
+    'add the number of minutes to the current time
+    HHMM1 = TimeValue(now())
+    HHMM2 = TimeValue(now() + mode/24/60)
+else
+    usage("unsupported mode='" & mode & "'")
+end if
+
+if HHMM1 > HHMM2 then
+    'time wrapped around, likely over midnight. set HHMM2 to midnight
+    HHMM2 = TimeValue("11:59pm")
+    WScript.Echo "HHMM1 > HHMM2, set HHMM2 to midnight"
+end if
+
+WScript.Echo "HHMM1='" & HHMM1 & "'"
+WScript.Echo "HHMM2='" & HHMM2 & "'"
 
 set wsc = CreateObject("WScript.Shell")
 Do
     Dim dt : dt = now()
+    HHMM_now = TimeValue(dt)
 
-    willdo = False
+    if HHMM1 <= HHMM_now AND HHMM_now <= HHMM2 then 
+        WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "within (" & HHMM1 & "," & HHMM2 & ") click F13 key"
 
-    if mode = "worktime" then
-       'if (TimeValue("6:20am") <= Time() AND Time() <= TimeValue("3:00pm")) then 
-       if (TimeValue("6:20:00") <= Time() AND Time() <= TimeValue("15:00:00")) then 
-           'People might forget to switch it off ;)
-           WScript.Echo "within worktime"
-           willdo = True
-       end if 
-    elseif mode = "alltime" THEn
-       willdo = True
-    else
-       usage("unsupported mode='" & mode & "'")
-    end if
-
-    if willdo Then
-        WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss}", Array(dt)) + " click F13 key"
-
-       'F13 key is normally used. therefore, clicking it won't cause side effect
+       'F13 key is normally not used. therefore, clicking it won't cause side effect
        wsc.SendKeys("{F13}")
+    else
+        if forever = false then
+            WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "outside (" & HHMM1 & "," & HHMM2 + ") exit"
+            exit do
+        else
+            WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "outside (" & HHMM1 & "," & HHMM2 + ") do nothing"
+        end if
     end if
 
-    WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss}", Array(dt)) + " sleep 5 minutes"
+    WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss}", Array(dt)) & " sleep 5 minutes"
     'fIVE MINUTES
     WScript.Sleep(5*60*1000)
+
 
 Loop

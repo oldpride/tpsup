@@ -10,7 +10,7 @@ for %%x in (%*) do Set /A argC+=1
 rem echo %argC%
 
 if NOT %argC% == 2 (
-   echo ERROR:   wrong number of args. got %argC%, expected 1. args=%*
+   echo ERROR:   wrong number of args. got %argC%, expected 2. args=%*
    echo usage:   %prog% var_name file
    echo.
    echo example: %prog% PATH python 
