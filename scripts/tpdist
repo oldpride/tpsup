@@ -748,7 +748,7 @@ sub build_dir_tree {
 
       $path =~ s/(\s)/\\$1/g;   # escape the space
 
-      my @globs = `/bin/ls -1d $path`;
+      my @globs = `/bin/ls -1d '$path'`;
       if ($? || !@globs) {
          print get_timestamp(), "/bin/ls -1d $path failed, skipped $path\n";
          $tree->{$path}->{skip} = "$path not found";
