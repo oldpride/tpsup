@@ -382,7 +382,7 @@ sub get_acl_users {
    $verbose = $opt->{verbose};
 
    if ($uname =~ /cygwin/i) {
-      my $cmd = "getfacl $path";
+      my $cmd = "getfacl '$path'";
       $verbose && print "cmd = $cmd\n";
       my @lines = `$cmd`;
       if ($? != 0) {
