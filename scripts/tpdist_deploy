@@ -330,7 +330,7 @@ for my $sub_dir (@$remote_dirs) {
 
    my $cmd = qq(tpdist -q -timeout 3600 client $remote_host $remote_port $flag)
            . qq( --exclude '$exclude_pattern')
-           . qq( $remote_dir $local_base/$sub_base );
+           . qq( $remote_dir $local_dir );
 
    if ($dryrun) {
       print "\nDRYRUN: $cmd\n";
