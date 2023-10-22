@@ -538,7 +538,7 @@ winhome() {
    cd "$HOMEDRIVE/$HOMEPATH"
 }
 
-chome() {
+chome () {
    # this works in cygwin and gitbash
    #
    # "C:/USERS/$USERNAME" is $USERPROFILE not always windows' home dir, but is the most active folder

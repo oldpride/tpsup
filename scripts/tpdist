@@ -158,7 +158,10 @@ Passive-side Switches: (To-be Pulled, normal Server state)
    -idle seconds
                       max idle time before close server socket, default to $idle
 
-   -stop              stop at seeing first change. for testing purpose only.
+   -stop              stop at seeing first change. for testing purpose only, to
+                      reduce output.
+                      note: this option is only on Passive side, where the change
+                            is recorded.
 
 Active-Side Switches: (To Pull, normal Client State)
 
@@ -740,15 +743,19 @@ sub build_dir_tree {
          }
       }
 
-      # resolve * when filename has space
+      # resolve * when filename has space. 
+      # note: if we wrapped * in quotes, it would not be a wildcard anymore.
       # example:
       #    ls -1d  /cygdrive/c/users/william/My\ Documents/*txt     # works
       #    ls -1d  /cygdrive/c/users/william/'My Documents'/*txt    # works 
+      #    ls -1d  /cygdrive/c/users/william/My' 'Documents/*txt    # works 
       #    ls -1d '/cygdrive/c/users/william/My Documents/*txt'     # doesn't work
 
-      $path =~ s/(\s)/\\$1/g;   # escape the space
+      # either escape space or wrap space
+      # $path =~ s/(\s)/\\$1/g;   # escape the space
+      $path =~ s/(\s)/'$1'/g;     # wrap space
 
-      my @globs = `/bin/ls -1d '$path'`;
+      my @globs = `/bin/ls -1d $path`;
       if ($? || !@globs) {
          print get_timestamp(), "/bin/ls -1d '$path' failed, skipped $path\n";
          $tree->{$path}->{skip} = "$path not found";
@@ -1652,20 +1659,34 @@ sub to_pull {
 
       my $local_path = "$local_dir/$back";
 
+      # wrap space with quotes.
+      # from:
+      #    /cygdrive/c/Program Files/cygwin64/home/tian
+      # to
+      #    /cygdrive/c/Program' 'Files/cygwin64/home/tian
+      $local_path =~ s:(\s+):'$1':g;
+
       # resolve dir/*csv to dir/a.csv, a/b.csv, ...
       #    example:
       #       $0 client host port /a/b/c/*.csv d
       #    we need to check whether we have d/*.csv
     
-      my @globs = `/bin/ls -1d '$local_path' 2>/dev/null`;
-      next if !@globs;
+      my $cmd = "/bin/ls -1d $local_path 2>/dev/null";
+      my @globs = `/bin/ls -1d $local_path 2>/dev/null`;
+      if (!@globs) {
+         print "'$local_path' couldn't be resolved by cmd=$cmd. skipped\n";
+         next;
+      }
 
       chomp @globs;
 
       for my $path (@globs) {
          my $local_abs = get_abs_path("$path");
 
-         next if !$local_abs;
+         if (!$local_abs) {
+            print "'$path' couldn't be resolved by get_abs_path(). skipped\n";
+            next;
+         }
 
          $verbose && print get_timestamp(), "remote ($remote_path) -> local ($local_path) -> local abs ($local_abs)\n";
 
