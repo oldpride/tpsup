@@ -325,8 +325,8 @@ for my $sub_dir (@$remote_dirs) {
    # note:
    #     don't wrap the whole thing. that would disable the wildcard *
    #     ie. not like this  '/cygdrive/c/Program Files/cygwin/home/tian/tp*'
-   $remote_dir =~ s:(\s+):'$1':g;     # this is likely useful
-   $local_dir  =~ s:(\s+):'$1':g;     # this is likely not used. 
+   $remote_dir =~ s:(\s+):'$1':g; 
+   $local_dir  =~ s:(\s+):'$1':g;    
 
    my $cmd = qq(tpdist -q -timeout 3600 client $remote_host $remote_port $flag)
            . qq( --exclude '$exclude_pattern')
