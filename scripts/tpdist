@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '7.3';
+my $version = '7.4';
 my ($expected_peer_protocol) = ($version =~ /^(\d+)/);
 
 use warnings;
