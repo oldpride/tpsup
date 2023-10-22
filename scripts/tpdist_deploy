@@ -313,9 +313,24 @@ if (defined $exclude) {
 for my $sub_dir (@$remote_dirs) {
    $sub_dir = resolve_scalar_var_in_string($sub_dir, $dict);
    my $sub_base = dirname($sub_dir);
+
+   my $remote_dir = "$remote_base/$sub_dir";
+   my $local_dir =  "$local_base/$sub_base";
+
+   # wrap space with quotes
+   # from
+   #     /cygdrive/c/Program Files/cygwin/home/tian/tp*
+   # to
+   #     /cygdrive/c/Program' 'Files/cygwin/home/tian/tp*
+   # note:
+   #     don't wrap the whole thing. that would disable the wildcard *
+   #     ie. not like this  '/cygdrive/c/Program Files/cygwin/home/tian/tp*'
+   $remote_dir =~ s:(\s+):'$1':g;     # this is likely useful
+   $local_dir  =~ s:(\s+):'$1':g;     # this is likely not used. 
+
    my $cmd = qq(tpdist -q -timeout 3600 client $remote_host $remote_port $flag)
            . qq( --exclude '$exclude_pattern')
-           . qq( "$remote_base/$sub_dir" "$local_base/$sub_base");
+           . qq( $remote_dir $local_base/$sub_base );
 
    if ($dryrun) {
       print "\nDRYRUN: $cmd\n";
