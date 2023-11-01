@@ -7,6 +7,7 @@ import sys
 from typing import Union
 from tpsup.filetools import TpInput, tpglob
 from tpsup.logtools import log_FileFuncLine
+from tpsup.searchtools import binary_search_first
 
 
 def grep(files: Union[list, str], MatchPattern: str = None,
@@ -15,6 +16,7 @@ def grep(files: Union[list, str], MatchPattern: str = None,
          ExcludePatterns: list = None,
          FileNameOnly: bool = False,
          Recursive: bool = False,
+         FindFirstFile=False,
          **opt):
     """
     grep a file, return a list of matched lines
@@ -28,7 +30,7 @@ def grep(files: Union[list, str], MatchPattern: str = None,
     else:
         files2 = files
 
-    files3 = tpglob(files)
+    files3 = tpglob(files, **opt)
 
     if verbose:
         print(f'files3={files3}', file=sys.stderr)
@@ -67,55 +69,69 @@ def grep(files: Union[list, str], MatchPattern: str = None,
 
     print_filename = len(files2) > 1 or Recursive
     exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
-    for file in files3:
-        if file in seen_file:
-            if verbose:
-                log_FileFuncLine(f'{file} already seen, skip', file=sys.stderr)
-            continue
-        else:
-            seen_file[file] = True
 
-        # skip directories
-        if os.path.isdir(file):
-            if Recursive:
-                if file in exclude_dirs:
-                    if verbose:
-                        log_FileFuncLine(
-                            f'{file} is in exclude_dirs, skip', file=sys.stderr)
-                    continue
-
-                for root, dirs, fnames in os.walk(file, topdown=True):
-                    # https://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
-                    # key point: use [:] to modify dirs in place
-                    dirs[:] = [d for d in dirs if d not in exclude_dirs]
-                    for f in fnames:
-                        full_path = os.path.join(root, f)
-                        if verbose:
-                            print(f'grep {full_path}', file=sys.stderr)
-                        matches = grep_1_file(full_path,
-                                              MatchCompiled=MatchCompiled,
-                                              ExcludeCompiled=ExcludeCompiled,
-                                              FileNameOnly=FileNameOnly,
-                                              print_filename=print_filename,
-                                              **opt)
-                        lines.extend(matches)
-            else:
+    if FindFirstFile:
+        # use binary search to find the first file has the match
+        def grep2(f):
+            return grep_1_file(f,
+                               MatchCompiled=MatchCompiled,
+                               ExcludeCompiled=ExcludeCompiled,
+                               FileNameOnly=FileNameOnly,
+                               print_filename=print_filename,
+                               **opt)
+        index = binary_search_first(files3, grep2)
+        return files3[index] if index >= 0 else None
+    else:
+        for file in files3:
+            if file in seen_file:
                 if verbose:
-                    print(f'{file} is a directory, skip', file=sys.stderr)
-            continue
+                    log_FileFuncLine(
+                        f'{file} already seen, skip', file=sys.stderr)
+                continue
+            else:
+                seen_file[file] = True
 
-        if verbose:
-            print(f'grep {file}', file=sys.stderr)
+            # skip directories
+            if os.path.isdir(file):
+                if Recursive:
+                    if file in exclude_dirs:
+                        if verbose:
+                            log_FileFuncLine(
+                                f'{file} is in exclude_dirs, skip', file=sys.stderr)
+                        continue
 
-        match = grep_1_file(file,
-                            MatchCompiled=MatchCompiled,
-                            ExcludeCompiled=ExcludeCompiled,
-                            FileNameOnly=FileNameOnly,
-                            print_filename=print_filename,
-                            **opt)
-        lines.extend(match)
+                    for root, dirs, fnames in os.walk(file, topdown=True):
+                        # https://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
+                        # key point: use [:] to modify dirs in place
+                        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+                        for f in fnames:
+                            full_path = os.path.join(root, f)
+                            if verbose:
+                                print(f'grep {full_path}', file=sys.stderr)
+                            matches = grep_1_file(full_path,
+                                                  MatchCompiled=MatchCompiled,
+                                                  ExcludeCompiled=ExcludeCompiled,
+                                                  FileNameOnly=FileNameOnly,
+                                                  print_filename=print_filename,
+                                                  **opt)
+                            lines.extend(matches)
+                else:
+                    if verbose:
+                        print(f'{file} is a directory, skip', file=sys.stderr)
+                continue
 
-    return lines
+            if verbose:
+                print(f'grep {file}', file=sys.stderr)
+
+            match = grep_1_file(file,
+                                MatchCompiled=MatchCompiled,
+                                ExcludeCompiled=ExcludeCompiled,
+                                FileNameOnly=FileNameOnly,
+                                print_filename=print_filename,
+                                **opt)
+            lines.extend(match)
+
+        return lines
 
 
 def grep_1_file(file: str,
@@ -181,12 +197,15 @@ def grep_1_file(file: str,
 def main():
     import os
     TPSUP = os.environ.get('TPSUP')
-    files = f'{TPSUP}/python3/scripts/grep_test*'
+    files1 = f'{TPSUP}/python3/scripts/ptgrep_test*'
+    files2 = f'{TPSUP}/python3/lib/tpsup/searchtools_test*'
 
     def test_codes():
-        grep(files, 'mypattern')
-        grep(files, ExcludePattern='abc|def')
-        grep(files, 'mypattern', FileNameOnly=True)
+        grep(files1, 'mypattern')
+        grep(files1, ExcludePattern='abc|def')
+        grep(files1, 'mypattern', FileNameOnly=True)
+        grep(files2, 'bc', FindFirstFile=True)
+        grep(files2, 'bc', FindFirstFile=True, sort='time')
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())

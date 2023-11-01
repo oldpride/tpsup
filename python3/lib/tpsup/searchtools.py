@@ -68,7 +68,9 @@ def main():
         return grep(file, x, print_output=False)
 
     result = binary_search_first(arr, grep2)
+    result_file = arr[result] if result >= 0 else None
     print(f"arr={arr}, target={x}, result={result}, expect=3")
+    print(f"result_file = {result_file}")
 
 
 if __name__ == '__main__':

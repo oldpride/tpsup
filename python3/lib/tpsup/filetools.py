@@ -166,7 +166,7 @@ class TpOutput:
         self.close()
 
 
-def tpglob(file: Union[list, str],  **opt):
+def tpglob(file: Union[list, str],  sort=None, **opt):
     if isinstance(file, str):
         files = file.split()
     elif isinstance(file, list):
@@ -188,7 +188,14 @@ def tpglob(file: Union[list, str],  **opt):
             posixed = [x.replace('\\', '/') for x in globbed]
             files2.extend(posixed)
 
-    return files2
+    if not sort:
+        return files2
+    elif sort == 'time':
+        return sorted_files_by_mtime(files2, **opt)
+    elif sort == 'name':
+        return sorted(files2, **opt)
+    else:
+        raise RuntimeError(f'unsupported sort={sort}')
 
 
 def sorted_files(files: Union[list, str], sort_func, globbed: bool = False, reverse=False, **opt):
@@ -558,9 +565,12 @@ def main():
     TPSUP = os.environ.get('TPSUP')
     libfiles = f'{TPSUP}/python3/lib/tpsup/*tools.py'
     p3scripts = f'{TPSUP}/python3/scripts'
+    searchfiles = f'{TPSUP}/python3/lib/tpsup/searchtools_test*.txt'
 
     def test_codes():
         sorted_files_by_mtime([libfiles])
+        tpglob(searchfiles)
+        tpglob(searchfiles, sort='time')
         get_latest_files([libfiles])[:2]  # get the latest 2 files
         tpfind(TPSUP, FlowExps=['not(r["path"].endswith("profile.d"))'],
                FlowDirs=['prune'],
