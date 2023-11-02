@@ -2,6 +2,8 @@ package TPSUP::TEST;
 
 use strict;
 use warnings;
+use Carp;
+use Data::Dumper;
 
 use base qw( Exporter );
 our @EXPORT_OK = qw(
@@ -9,19 +11,54 @@ our @EXPORT_OK = qw(
 );
 
 
-sub get_function_source {
-    my ($function) = @_;
-    no strict 'refs';
-    my $code_ref = \&{$function};
-    use strict 'refs';
-    my $filename = $INC{(caller)[1]};
-    open my $fh, '<', $filename or die "Could not open $filename: $!";
-    my @lines = <$fh>;
-    close $fh;
-    my ($start, $end) = ($code_ref =~ m/\{(.*)\}/s);
-    my $line_number = (caller($code_ref))[2];
-    my $source = join '', @lines[$line_number + $start - 1 .. $line_number + $end - 1];
-    return $source;
+sub test_lines {
+    my ($block, $opt) = @_;
+
+    my $pre_code = $opt->{pre_code};
+    if ($pre_code) {
+        my @lines = split /\n/, $pre_code;
+        for my $line (@lines) {
+            next if $line =~ /^\s*$/;
+            next if $line =~ /^\s*#/;
+            my $code = "package TPSUP::DUMMY; $line";
+            print "eval $code\n";
+            eval $code;
+        }
+    }
+
+    my @lines = split /\n/, $block;
+
+    for my $line (@lines) {
+        next if $line =~ /^\s*$/;
+        next if $line =~ /^\s*#/;
+
+        
+        my $code = "package TPSUP::DUMMY; $line";
+        print "eval $code\n";
+        my $result = eval $code;
+        if ($@) {
+            print "eval error: $@\n";;
+        }
+        print "result=$result\n";
+    }
 }
 
+sub main {
 
+    my $pre_code = <<'END';
+        our $a = 1;
+END
+
+    my $test_code = <<'END';
+        
+        # $a = 100;
+        $a+1;
+        $a+2;
+END
+
+    test_lines($test_code, {pre_code=>$pre_code});
+}
+
+main() unless caller;
+
+1
