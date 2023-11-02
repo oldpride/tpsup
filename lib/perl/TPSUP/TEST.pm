@@ -7,56 +7,60 @@ use Data::Dumper;
 
 use base qw( Exporter );
 our @EXPORT_OK = qw(
-    test_lines
+  test_lines
 );
 
-
-sub test_lines {
-    my ($block, $opt) = @_;
-
-    my $pre_code = $opt->{pre_code};
-    if ($pre_code) {
-        my @lines = split /\n/, $pre_code;
-        for my $line (@lines) {
-            next if $line =~ /^\s*$/;
-            next if $line =~ /^\s*#/;
-            my $code = "package TPSUP::DUMMY; $line";
-            print "eval $code\n";
-            eval $code;
-        }
-    }
+sub process_block {
+    my ( $block, $opt ) = @_;
+    my $verbose = $opt->{verbose};
 
     my @lines = split /\n/, $block;
-
     for my $line (@lines) {
         next if $line =~ /^\s*$/;
         next if $line =~ /^\s*#/;
 
-        
-        my $code = "package TPSUP::DUMMY; $line";
-        print "eval $code\n";
+        $line =~ s/^\s+//;   # remove leading spaces
+        print "eval: $line\n";
+        my $code = "package DUMMY; no strict; $line";
+        print "eval $code\n" if $verbose;
         my $result = eval $code;
         if ($@) {
-            print "eval error: $@\n";;
+            print "eval error: $@\n";
         }
-        print "result=$result\n";
+
+        if (!$opt->{not_show_result}) {
+            print "result: $result\n";
+        }
     }
+}
+
+sub test_lines {
+    my ( $block, $opt ) = @_;
+
+    $opt = {} unless $opt;
+
+    my $pre_code = $opt->{pre_code};
+    if ($pre_code) {
+        process_block($pre_code, {%$opt, not_show_result=>1});
+    }
+
+    process_block($block, $opt);
 }
 
 sub main {
 
-    my $pre_code = <<'END';
-        our $a = 1;
+  # var declared using "our" which is global to the package. "my" will not work.
+    my $pre_code = <<END;
+        our \$a = 1;
+        our \$b = "hello";
 END
 
     my $test_code = <<'END';
-        
-        # $a = 100;
         $a+1;
-        $a+2;
+        $b;
 END
 
-    test_lines($test_code, {pre_code=>$pre_code});
+    test_lines( $test_code, { pre_code => $pre_code } );
 }
 
 main() unless caller;
