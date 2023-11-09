@@ -21,7 +21,7 @@ do
    case "$o" in
       q) quiet=Y;; 
       r) rear=Y; flag="-q";;
-      e) 
+      e) var = 
       *) echo "unknow switch. $usage">&2; return 1;; 
    esac
 done

@@ -41,15 +41,18 @@ sub grep {
         push @CompiledExclude, qr/$p/;
     }
 
-    my $Recursive     = $opt->{Recursive};
-    my $verbose       = $opt->{verbose};
-    my $FindFirstFile = $opt->{FindFirstFile};
-    my $PrintCount    = $opt->{PrintCount};
+    my $FileNameOnly   = $opt->{FileNameOnly};
+    my $Recursive      = $opt->{Recursive};
+    my $verbose        = $opt->{verbose};
+    my $FindFirstFile  = $opt->{FindFirstFile};
+    my $PrintCount     = $opt->{PrintCount};
+    my $print_filename = $opt->{print_filename};
 
     usage("at least one of -m and -x must be specified")
       if !@CompiledMatch && !@CompiledExclude;
 
-    sub grep_1_file {
+    # https://stackoverflow.com/questions/25399728
+    my $grep_1_file = sub {
         my ($file) = @_;
         my @lines;
 
@@ -60,9 +63,9 @@ sub grep {
                 print STDERR "line=$line\n";
             }
 
-            if ($MatchCompiled) {
+            if (@CompiledMatch) {
                 my $all_matched = 1;
-                for my $p (@$MatchCompiled) {
+                for my $p (@CompiledMatch) {
                     if ( $line !~ /$p/ ) {
                         $all_matched = 0;
                         last;
@@ -73,9 +76,9 @@ sub grep {
                 }
             }
 
-            if ($ExcludeCompiled) {
+            if (@CompiledExclude) {
                 my $to_exclude = 0;
-                for my $p (@$ExcludeCompiled) {
+                for my $p (@CompiledExclude) {
                     if ( $line =~ /$p/ ) {
                         $to_exclude = 1;
                         last;
@@ -109,7 +112,8 @@ sub grep {
         }
 
         return \@lines;
-    }
+    };
+
     for my $path (@$files) {
         my @files;
         if ($Recursive) {
@@ -122,13 +126,20 @@ sub grep {
 
         for my $f (@files) {
             $verbose && print STDERR "scanning file=$f\n";
-            my $matched = grep_1_file($f);
+            my $matched = $grep_1_file->($f);
         }
     }
 }
 
 sub main {
     use TPSUP::TEST qw(test_lines);
+
+    # TPSUP = os.environ.get('TPSUP')
+    # files1 = f'{TPSUP}/python3/scripts/ptgrep_test*'
+    # files2 = f'{TPSUP}/python3/lib/tpsup/searchtools_test*'
+    my $TPSUP  = $ENV{TPSUP};
+    my $files1 = "$TPSUP/python3/scripts/ptgrep_test*";
+    my $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
 
     my $test_code = <<'END';
         our @arr = (1, 2,  4,  10, 12); # use "our" to make it global. "my" will not work.
