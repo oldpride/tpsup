@@ -5,21 +5,26 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(tpfind);
 
-my $prog = $0; $prog =~ s:.*/::;
+# use TPSUP::UTIL qw(tpfind);
+use TPSUP::FILE qw(tpfind);
+
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
-   my ($message) = @_;
+    my ($message) = @_;
 
-   print "$message\n" if $message;
+    print "$message\n" if $message;
 
-   print STDERR << "END";
+    print STDERR << "END";
 usage:
 
    find path1 path2 ...
 
    This script is to mimic find(1) command but enhanced with more expresssions in Perl style.
+
+   -m       match_exp       filter files: eg '\$path =~ /cmd-exe\$/'
 
    -he      handle_exp      eg '\$path =~ /suppress-(in|out)'
 
@@ -30,23 +35,34 @@ usage:
    -fd      flow_dir        flow control direction, eg, 'prune', 'exit'
 
    -print                   print the paths that the script has browsed
+   -ls                      print the paths that the script has browsed, 
+                            with ls -l
+   -dump                    print the paths that the script has browsed, 
+                            with Data::Dumper
 
    -maxdepth number         max depth
+   -maxcount number         max count
 
    variables: path type mode uid gid size mtime owner group now
 
 examples:
 
    # print the dir tree
-   $prog -maxdepth 2 -print \$TPSUP
+   $prog -maxdepth 0 \$TPSUP
+   $prog -maxdepth 1 \$TPSUP
+   $prog -maxdepth 1 \$TPSUP -ls
+   $prog -maxdepth 1 \$TPSUP -dump
 
-   # use handlers
-   $prog -maxdepth 1 -print -he '\$path =~ /tpstamp/' -ha 'system("ls -l \$path")' \$TPSUP
+   # filter files
+   $prog -maxdepth 1 -m '\$path =~ /python3\$/' \$TPSUP
 
+   # use handlers, note: use '!' before system() call which returns 0 when successful.
+   $prog -maxdepth 1 -he '\$path =~ /python/' -ha '!system("ls -l \$path")' \$TPSUP
+   
    # flow control
-   $prog -print -fe '\$path =~ /autopath|scripts|proj|lib|i86pc/' -fd 'prune' \$TPSUP
+   $prog -fe '\$path =~ /autopath|python|scripts|proj|lib|i86pc/' -fd 'prune' \$TPSUP
 
-   $prog -print -fe '\$path =~ m:/scripts/:' -fd 'exit' \$TPSUP
+   $prog -fe '\$path =~ m:/scripts/:' -fd 'exit' \$TPSUP
 
    # use handlers as a filter
    $prog -he '\$path =~ /scripts/' -ha 'print "\$path\\n"' \$TPSUP
@@ -86,45 +102,56 @@ Note: perl system() return 0 when successful, but in perl expression, 0 means fa
 
 END
 
-   exit 1;
+    exit 1;
 }
 
 my $verbose;
 
 my @paths;
+my @MatchExps;
 my @HandleExps;
 my @HandleActs;
 my @FlowExps;
 my @FlowDirs;
 my $print;
+my $find_ls;
+my $find_dump;
 my $maxdepth;
 
 GetOptions(
-   'v|verbose'  =>      \$verbose,
-   'print'      =>      \$print,
-   'he=s'       =>      \@HandleExps,
-   'ha=s'       =>      \@HandleActs,
-   'fe=s'       =>      \@FlowExps,
-   'fd=s'       =>      \@FlowDirs,
-   'maxdepth=s' =>      \$maxdepth,
-) || usage ("cannot parse command line: $!");
+    'v+'         => \$verbose,      # increment $verbose by 1 for each -v
+    'print'      => \$print,
+    'ls'         => \$find_ls,
+    'dump'       => \$find_dump,
+    'm=s'        => \@MatchExps,
+    'he=s'       => \@HandleExps,
+    'ha=s'       => \@HandleActs,
+    'fe=s'       => \@FlowExps,
+    'fd=s'       => \@FlowDirs,
+    'maxdepth=s' => \$maxdepth,
+) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
 
-my $ret = tpfind(\@ARGV, {
-                     verbose=>$verbose,
-                     paths=>\@paths,
-                     gandleExps => \@HandleExps,
-                     HandleExps => \@HandleExps,
-                     HandleActs => \@HandleActs,
-                     FlowExps => \@FlowExps,
-                     FlowDirs => \@FlowDirs,
-                     RecursivePrint => $print,
-                     RecursiveMax => $maxdepth,
-                   }
-                 );
+my $ret = tpfind(
+    \@ARGV,
+    {
+        verbose        => $verbose,
+        paths          => \@paths,
+        MatchExps      => \@MatchExps,
+        HandleExps     => \@HandleExps,
+        HandleExps     => \@HandleExps,
+        HandleActs     => \@HandleActs,
+        FlowExps       => \@FlowExps,
+        FlowDirs       => \@FlowDirs,
+        RecursivePrint => $print,
+        find_ls        => $find_ls,
+        find_dump      => $find_dump,
+        MaxDepth       => $maxdepth,
+    }
+);
 
-my $error = $ret->{error};
+my $error = $ret->{error} || 0;
 
 print STDERR "Total $error ERRORS\n" if $verbose || $error;
 

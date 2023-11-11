@@ -51,6 +51,8 @@ sub grep {
     usage("at least one of -m and -x must be specified")
       if !@CompiledMatch && !@CompiledExclude;
 
+    my @lines2;
+
     # https://stackoverflow.com/questions/25399728
     my $grep_1_file = sub {
         my ($file) = @_;
@@ -112,7 +114,7 @@ sub grep {
         }
 
         return \@lines;
-    };
+    };    # end of $grep_1_file->()
 
     for my $path (@$files) {
         my @files;
@@ -127,8 +129,11 @@ sub grep {
         for my $f (@files) {
             $verbose && print STDERR "scanning file=$f\n";
             my $matched = $grep_1_file->($f);
+            push @lines2, @$matched;
         }
     }
+
+    return \@lines2;
 }
 
 sub main {
@@ -142,9 +147,11 @@ sub main {
     my $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
 
     my $test_code = <<'END';
-        our @arr = (1, 2,  4,  10, 12); # use "our" to make it global. "my" will not work.
-        TPSUP::SEARCH::binary_search_match(\@arr, 10, sub { $_[0] <=> $_[1] });
-        TPSUP::SEARCH::binary_search_first(\@arr, sub { $_[0] >= 4 });
+        our $TPSUP  = $ENV{TPSUP};
+        our $files1 = "$TPSUP/python3/scripts/ptgrep_test*";
+        our  $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
+        grep($files1, { MatchPattern => 'mypattern' });
+        grep($files1, { ExcludePattern => 'abc|def' });
 END
 
     test_lines($test_code);

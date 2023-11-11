@@ -23,6 +23,7 @@ def grep(files: Union[list, str], MatchPattern: str = None,
     """
 
     verbose = opt.get('verbose', 0)
+    print_output = opt.get('print_output', False)
 
     if isinstance(files, str):
         # split string by space or newline
@@ -64,21 +65,69 @@ def grep(files: Union[list, str], MatchPattern: str = None,
             else:
                 ExcludeCompiled.append(re.compile(p))
 
-    lines = []
+    lines2 = []
     seen_file = {}
 
     print_filename = len(files2) > 1 or Recursive
     exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
 
+    # define a function inside a function to save from passing parameters
+    def grep_1_file(f: str):
+        lines = []
+        with TpInput(filename=f, **opt) as tf:
+            # Regex is built inside TpInput
+
+            try:
+                for line in tf:  # this line may raise exception for binary file. so use try/except
+                    if verbose > 2:
+                        print(f'line={line}', file=sys.stderr)
+
+                    if MatchCompiled:
+                        all_matched = True
+                        for p in MatchCompiled:
+                            if not p.search(line):
+                                all_matched = False
+                                break
+                        if not all_matched:
+                            continue
+
+                    to_exclude = False
+                    if ExcludeCompiled:
+                        for p in ExcludeCompiled:
+                            if p.search(line):
+                                to_exclude = True
+                                break
+                    if to_exclude:
+                        continue
+
+                    if FileNameOnly:
+                        lines.append(f)
+                        if opt.get('print_output', False):
+                            print(f)
+                        break
+
+                    if print_filename:
+                        lines.append(f'{f}:{line}')
+                        if print_output:
+                            print(f'{f}:{line}', end='')
+                    else:
+                        lines.append(line)
+                        if print_output:
+                            print(line, end='')
+            except UnicodeDecodeError as e:
+                # UnicodeDecodeError: 'utf-8' codec can't decode byte 0x9b in position 147:
+                #     invalid start byte
+                print(
+                    f'grep {f} failed with decode error. skipped.', file=sys.stderr)
+                if verbose:
+                    print(e, file=sys.stderr)
+
+        return lines
+
     if FindFirstFile:
         # use binary search to find the first file has the match
         def grep2(f):
-            return grep_1_file(f,
-                               MatchCompiled=MatchCompiled,
-                               ExcludeCompiled=ExcludeCompiled,
-                               FileNameOnly=FileNameOnly,
-                               print_filename=print_filename,
-                               **opt)
+            return grep_1_file(f)
         index = binary_search_first(files3, grep2)
         return files3[index] if index >= 0 else None
     else:
@@ -108,13 +157,8 @@ def grep(files: Union[list, str], MatchPattern: str = None,
                             full_path = os.path.join(root, f)
                             if verbose:
                                 print(f'grep {full_path}', file=sys.stderr)
-                            matches = grep_1_file(full_path,
-                                                  MatchCompiled=MatchCompiled,
-                                                  ExcludeCompiled=ExcludeCompiled,
-                                                  FileNameOnly=FileNameOnly,
-                                                  print_filename=print_filename,
-                                                  **opt)
-                            lines.extend(matches)
+                            matches = grep_1_file(full_path)
+                            lines2.extend(matches)
                 else:
                     if verbose:
                         print(f'{file} is a directory, skip', file=sys.stderr)
@@ -123,75 +167,10 @@ def grep(files: Union[list, str], MatchPattern: str = None,
             if verbose:
                 print(f'grep {file}', file=sys.stderr)
 
-            match = grep_1_file(file,
-                                MatchCompiled=MatchCompiled,
-                                ExcludeCompiled=ExcludeCompiled,
-                                FileNameOnly=FileNameOnly,
-                                print_filename=print_filename,
-                                **opt)
-            lines.extend(match)
+            match = grep_1_file(file)
+            lines2.extend(match)
 
-        return lines
-
-
-def grep_1_file(file: str,
-                MatchCompiled: list = None,
-                ExcludeCompiled: list = None,
-                FileNameOnly: bool = False,
-                print_filename: bool = False,
-                **opt):
-    verbose = opt.get('verbose', 0)
-
-    lines = []
-    with TpInput(filename=file, **opt) as tf:
-        # Regex is built inside TpInput
-
-        try:
-            for line in tf:  # this line may raise exception for binary file. so use try/except
-                if verbose > 2:
-                    print(f'line={line}', file=sys.stderr)
-
-                if MatchCompiled:
-                    all_matched = True
-                    for p in MatchCompiled:
-                        if not p.search(line):
-                            all_matched = False
-                            break
-                    if not all_matched:
-                        continue
-
-                to_exclude = False
-                if ExcludeCompiled:
-                    for p in ExcludeCompiled:
-                        if p.search(line):
-                            to_exclude = True
-                            break
-                if to_exclude:
-                    continue
-
-                if FileNameOnly:
-                    lines.append(file)
-                    if opt.get('print_output', False):
-                        print(file)
-                    break
-
-                if print_filename:
-                    lines.append(f'{file}:{line}')
-                    if opt.get('print_output', False):
-                        print(f'{file}:{line}', end='')
-                else:
-                    lines.append(line)
-                    if opt.get('print_output', False):
-                        print(line, end='')
-        except UnicodeDecodeError as e:
-            # UnicodeDecodeError: 'utf-8' codec can't decode byte 0x9b in position 147:
-            #     invalid start byte
-            print(
-                f'grep {file} failed with decode error. skipped.', file=sys.stderr)
-            if verbose:
-                print(e, file=sys.stderr)
-
-    return lines
+        return lines2
 
 
 def main():

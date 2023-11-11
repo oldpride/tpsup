@@ -20,15 +20,15 @@ usage = textwrap.dedent("""
 examples = textwrap.dedent(f"""
     examples:
                            
-        {prog}      mypattern pygrep_test*
-        {prog}   -v mypattern pygrep_test*
-        {prog}    "abc1|def2" pygrep_test*
-        {prog} "^(abc1|def2)" pygrep_test*
+        {prog}      mypattern ptgrep_test*
+        {prog}   -v mypattern ptgrep_test*
+        {prog}    "abc1|def2" ptgrep_test*
+        {prog} "^(abc1|def2)" ptgrep_test*
 
         # match multiple patterns in any order. use -m to specify extra patterns
-        {prog} -m ab c1 pygrep_test*
+        {prog} -m ab c1 ptgrep_test*
         # if we used normal egrep, we would have to do
-        egrep (ab.*c1|c1.*ab) pygrep_test*
+        egrep (ab.*c1|c1.*ab) ptgrep_test*
         # it would be a nightmare to use egrep if we have more than 2 patterns.
 
         # recursive
