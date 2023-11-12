@@ -5,15 +5,15 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(
-   get_in_fh
-   close_in_fh
+use TPSUP::FILE qw(
+  get_in_fh
+  close_in_fh
 );
-
 
 my $method = 'GET';
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($message) = @_;
@@ -62,16 +62,17 @@ my $verbose;
 my $print_count;
 
 GetOptions(
-   'm=s'          =>      \@match_exps,
-   'x=s'          =>      \@exclude_exps,
-   'r'            =>      \$recursive,
-   'v'            =>      \$verbose,
-    'c'            =>      \$print_count,
-) || usage ("cannot parse command line: $!");
+   'm=s' => \@match_exps,
+   'x=s' => \@exclude_exps,
+   'r'   => \$recursive,
+   'v'   => \$verbose,
+   'c'   => \$print_count,
+) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
 
-usage("at least one of -m and -x must be specified") if !@match_exps && !@exclude_exps;
+usage("at least one of -m and -x must be specified")
+  if !@match_exps && !@exclude_exps;
 
 my @match_compiled;
 my @exclude_compiled;
@@ -89,7 +90,7 @@ for my $path (@ARGV) {
    if ($recursive) {
       @files = `find $path -type f|sort`;
       chomp @files;
-   } else{
+   } else {
       @files = ($path);
    }
 
@@ -99,37 +100,37 @@ for my $path (@ARGV) {
 
       my $count = 0;
 
-      LINE:
-      while(my $line = <$fh>) {
+    LINE:
+      while ( my $line = <$fh> ) {
          if (@match_compiled) {
             for my $p (@match_compiled) {
-               if ($line !~ /$p/) {
-                  next LINE;        
+               if ( $line !~ /$p/ ) {
+                  next LINE;
                }
             }
          }
          if (@exclude_compiled) {
             for my $p (@exclude_compiled) {
-               if ($line =~ /$p/) {
-                  next LINE;        
+               if ( $line =~ /$p/ ) {
+                  next LINE;
                }
             }
          }
 
          $verbose && print STDERR "found $f: $line";
-         $count++;        
-         if (!$print_count) {
+         $count++;
+         if ( !$print_count ) {
             last;
-         }        
+         }
       }
 
       close_in_fh($fh);
       if ($count) {
-        if ($print_count) {
-           print "$count $f\n";
-        } else {
-           print "$f\n";
-        }
+         if ($print_count) {
+            print "$count $f\n";
+         } else {
+            print "$f\n";
+         }
       }
 
    }

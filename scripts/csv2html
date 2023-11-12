@@ -6,9 +6,10 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 use TPSUP::CSV  qw(csv_to_html);
-use TPSUP::UTIL qw(get_out_fh);
+use TPSUP::FILE qw(get_out_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($message) = @_;
@@ -72,7 +73,7 @@ examples:
          tpcsv2_test.csv
 
 END
-   
+
    exit 1;
 }
 
@@ -106,7 +107,7 @@ GetOptions(
    'RowExp=s'      => \@RowExps,
    'RowAct=s'      => \@RowActs,
    'ColAttrVal=s'  => \@ColAttrVals,
-) || usage ("cannot parse command line: $!");
+) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
 
@@ -128,9 +129,9 @@ my $opt = {
 };
 
 for my $op (@other_options) {
-   if ($op =~ /^(TrimFloats)=(.+)/) {
-      @{$opt->{$1}} = split /,/, $2;
-   } elsif ($op =~ /^(.+?)=(.+)/) {
+   if ( $op =~ /^(TrimFloats)=(.+)/ ) {
+      @{ $opt->{$1} } = split /,/, $2;
+   } elsif ( $op =~ /^(.+?)=(.+)/ ) {
       $opt->{$1} = $2;
    } else {
       $opt->{$op} = 1;
@@ -139,7 +140,7 @@ for my $op (@other_options) {
 
 my $error = 0;
 
-my $html_string = csv_to_html($csv, $opt);
+my $html_string = csv_to_html( $csv, $opt );
 
 my $out_fh = get_out_fh($output);
 

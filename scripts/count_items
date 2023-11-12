@@ -4,10 +4,12 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Getopt::Long;
-use TPSUP::UTIL qw(get_in_fh get_items);
+use TPSUP::FILE qw(get_in_fh);
+use TPSUP::UTIL qw( get_items);
 use Carp;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 my $count = 0;
 
@@ -55,16 +57,17 @@ my $pattern = shift @ARGV;
 my $seen = {};
 
 for my $file (@ARGV) {
-   my $seen2 = get_items($file, {InlineDelimiter=>$pattern, ReturnHashCount=>1});
+   my $seen2 =
+     get_items( $file, { InlineDelimiter => $pattern, ReturnHashCount => 1 } );
 
    # merge count
-   for my $k (keys %$seen2) {
+   for my $k ( keys %$seen2 ) {
       $seen->{$k} += $seen2->{$k};
    }
 }
-   
-for my $k (keys %$seen) {
-   if ($seen->{$k} > $count) {
+
+for my $k ( keys %$seen ) {
+   if ( $seen->{$k} > $count ) {
       print "$k,$seen->{$k}\n";
    }
 }

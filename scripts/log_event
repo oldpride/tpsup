@@ -4,23 +4,27 @@ use strict;
 use Data::Dumper;
 use Carp;
 use Getopt::Long;
+
 #use File::ReadBackwards;
 use TPSUP::DATE qw(get_interval_seconds);
-use TPSUP::FIX qw(parse_fix_message);
-use TPSUP::UTIL qw(get_out_fh get_in_fh close_in_fh);
+use TPSUP::FIX  qw(parse_fix_message);
+use TPSUP::FILE qw(get_out_fh get_in_fh close_in_fh);
 use TPSUP::DATE qw(get_Mon_by_number yyyymmddHHMMSS_to_epoc);
-use TPSUP::LOG qw(
-   get_PatternCfg_by_app
-   get_log_time
-   get_log_fh
+use TPSUP::LOG  qw(
+  get_PatternCfg_by_app
+  get_log_time
+  get_log_fh
 );
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir  = $0; $dir  =~ s:[^/]+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
 my $min_idle = 60;
-my $grepmax = 200;
-my $yyyy = `date +%Y`; chomp $yyyy;
+my $grepmax  = 200;
+my $yyyy     = `date +%Y`;
+chomp $yyyy;
 
 sub usage {
    my ($msg) = @_;
@@ -199,11 +203,11 @@ examples:
    $prog -app syslog -k HH,MM,SS -anchor starttime="Sep 18 13:02:33" -endtime "Sep 18 13:02:34" -print log_event_test.log
    
 EOF
-   
+
    exit 1;
 }
-   
-our ($exclude_pattern, $match_pattern, $App, $pattern_file);
+
+our ( $exclude_pattern, $match_pattern, $App, $pattern_file );
 
 my $verbose = 0;
 my @events;
@@ -226,93 +230,97 @@ my $fake_now;
 my $plan;
 my $sortkeys;
 my $skip;
-   
+
 GetOptions(
-   "x=s" => \$exclude_pattern,
-   "m=s" => \$match_pattern,
-   "i=s" => \$min_idle,
-   "v+"  => \$verbose,  # accumulative   
-   "pf=s" => \$pattern_file,
-   "k=s" => \$sortkeys,
-   "app=s" => \$App,
-   "event=s"=> \@events,
-   "test=s" => \@tests,
-   "reset=s"=> \@resets,
-   "exit=s" => \@exits,
-   "halt=s" => \@halts,
-   "g|geneos" => \$geneos,
+   "x=s"        => \$exclude_pattern,
+   "m=s"        => \$match_pattern,
+   "i=s"        => \$min_idle,
+   "v+"         => \$verbose,           # accumulative
+   "pf=s"       => \$pattern_file,
+   "k=s"        => \$sortkeys,
+   "app=s"      => \$App,
+   "event=s"    => \@events,
+   "test=s"     => \@tests,
+   "reset=s"    => \@resets,
+   "exit=s"     => \@exits,
+   "halt=s"     => \@halts,
+   "g|geneos"   => \$geneos,
    "progress=s" => \$progress,
-   "tail=s" => \$tail,
-   "grep=s" => \$grep,
-   "grepv=s" => \$grepv,
-   "grepmax=s" => \$grepmax,
-   "anchor=s" => \$anchor,
-   "endtime=s" => \$endtime,
-   "print" => \$print,
-   "front=s" => \$front,
-   "skip=s" => \$skip,
-   "oid=s"=> \@oids,
-   "output=s"=> \$output,
-   "now=s"=> \$fake_now,
-   "plan=s"=> \$plan,
+   "tail=s"     => \$tail,
+   "grep=s"     => \$grep,
+   "grepv=s"    => \$grepv,
+   "grepmax=s"  => \$grepmax,
+   "anchor=s"   => \$anchor,
+   "endtime=s"  => \$endtime,
+   "print"      => \$print,
+   "front=s"    => \$front,
+   "skip=s"     => \$skip,
+   "oid=s"      => \@oids,
+   "output=s"   => \$output,
+   "now=s"      => \$fake_now,
+   "plan=s"     => \$plan,
 ) or usage("Could not parse command line: $!");
-   
+
 usage("wrong number of args") if !@ARGV;
-   
+
 usage("-progress must be followed by a positive integer")
-   if $progress && "$progress" !~ /^[1-9][0-9]*/;
-   
-my @oid_tags = qw(11 41 17 37);
-my $oid_tags_piped = join("|", @oid_tags);   # qw(11 41) -> "11|41"
+  if $progress && "$progress" !~ /^[1-9][0-9]*/;
+
+my @oid_tags       = qw(11 41 17 37);
+my $oid_tags_piped = join( "|", @oid_tags );    # qw(11 41) -> "11|41"
 
 my $seen_oid;
 my $oid_pattern;
 my $oid_pattern_compiled;
 my $oid_pattern_with_tags;
 my $oid_pattern_with_tags_compiled;
-      
+
 sub update_oid_pattern {
-   $oid_pattern          = join("|", keys(%$seen_oid));
+   $oid_pattern          = join( "|", keys(%$seen_oid) );
    $oid_pattern_compiled = qr/\b($oid_pattern)\b/;
 
    $oid_pattern_with_tags          = "($oid_tags_piped)=($oid_pattern)";
    $oid_pattern_with_tags_compiled = qr/\b$oid_pattern_with_tags\b/;
 
    $verbose && print STDERR "updated oid_pattern=\\b($oid_pattern)\\b\n";
-   $verbose && print STDERR "updated oid_pattern_with_tags=\\b$oid_pattern_with_tags\\b\n";
+   $verbose
+     && print STDERR
+     "updated oid_pattern_with_tags=\\b$oid_pattern_with_tags\\b\n";
 }
 
 if (@oids) {
-   # this pre-filter will speed up but will also filter out none fix-message lines
-   # therefore, i took it out from default
-   # if (!$match_pattern) {
-   #   $match_pattern = '35=';
-   #}
+
+ # this pre-filter will speed up but will also filter out none fix-message lines
+ # therefore, i took it out from default
+ # if (!$match_pattern) {
+ #   $match_pattern = '35=';
+ #}
 
    for my $oid (@oids) {
-      $seen_oid->{$oid}->{cmdline} ++;
+      $seen_oid->{$oid}->{cmdline}++;
    }
 
    update_oid_pattern();
 }
-   
-my $out_fh = get_out_fh($output);
-   
-die "no events defined" if !@events && !$print && !$grep && !$grepv && !@oids && !$plan;
 
-my  $grep_compiled = qr/$grep/;
+my $out_fh = get_out_fh($output);
+
+die "no events defined"
+  if !@events && !$print && !$grep && !$grepv && !@oids && !$plan;
+
+my $grep_compiled  = qr/$grep/;
 my $grepv_compiled = qr/$grepv/;
-         
+
 my $exclude_pattern_compiled;
-if (defined $exclude_pattern) {
+if ( defined $exclude_pattern ) {
    $exclude_pattern_compiled = qr/$exclude_pattern/;
 }
-         
+
 my $match_pattern_compiled;
-if (defined $match_pattern) {
+if ( defined $match_pattern ) {
    $match_pattern_compiled = qr/$match_pattern/;
-};
-         
+}
+
 my $cfg;
 
 my $array_by_directive;
@@ -320,60 +328,73 @@ if ($plan) {
    my $fh = get_in_fh($plan);
 
    my $to_be_continued;
-   while (my $line = <$fh>) {
-       chomp $line;
-       if ($to_be_continued) {
-          if ($line =~ /^(.*)\\$/) {
-             # \ at the end of line means to continue to the next line
-             $array_by_directive->{$to_be_continued}->[-1] .= "$1\n";
-          } else {
-             $array_by_directive->{$to_be_continued}->[-1] .= $line;
-             $to_be_continued = undef;
-          }
-       } elsif ($line =~ /^\s*(app|event|test|reset|halt|exit)\s+(\S+.*)/) {
-          my ($directive, $detail) = ($1, $2);
+   while ( my $line = <$fh> ) {
+      chomp $line;
+      if ($to_be_continued) {
+         if ( $line =~ /^(.*)\\$/ ) {
 
-          if ($detail =~ /^(.*)\\$/) {
-             # \ at the end of line means to continue to the next line
-             push @{$array_by_directive->{$directive}}, "$1\n";
-             $to_be_continued = $directive;
-          } else {
-             push @{$array_by_directive->{$directive}}, $detail;
-          }
-       } elsif ($line =~ /^\s*#|^\s*$/) {
-          # skip comment and blank lines
-          next;
-       } else {
-          die "failed to parse plan $plan at: $line\n";
-       }
+            # \ at the end of line means to continue to the next line
+            $array_by_directive->{$to_be_continued}->[-1] .= "$1\n";
+         } else {
+            $array_by_directive->{$to_be_continued}->[-1] .= $line;
+            $to_be_continued = undef;
+         }
+      } elsif ( $line =~ /^\s*(app|event|test|reset|halt|exit)\s+(\S+.*)/ ) {
+         my ( $directive, $detail ) = ( $1, $2 );
+
+         if ( $detail =~ /^(.*)\\$/ ) {
+
+            # \ at the end of line means to continue to the next line
+            push @{ $array_by_directive->{$directive} }, "$1\n";
+            $to_be_continued = $directive;
+         } else {
+            push @{ $array_by_directive->{$directive} }, $detail;
+         }
+      } elsif ( $line =~ /^\s*#|^\s*$/ ) {
+
+         # skip comment and blank lines
+         next;
+      } else {
+         die "failed to parse plan $plan at: $line\n";
+      }
    }
    close_in_fh($fh);
 
    $verbose && print "array_by_directive = \n", Dumper($array_by_directive);
 
-   push @events, exists $array_by_directive->{event} ? @{$array_by_directive->{event}} : ();
-   push @tests,  exists $array_by_directive->{test}  ? @{$array_by_directive->{test}}  : ();
-   push @resets, exists $array_by_directive->{reset} ? @{$array_by_directive->{reset}} : ();
-   push @halts,  exists $array_by_directive->{halt}  ? @{$array_by_directive->{halt}}  : ();
-   push @exits,  exists $array_by_directive->{exit}  ? @{$array_by_directive->{exit}}  : ();
+   push @events,
+     exists $array_by_directive->{event}
+     ? @{ $array_by_directive->{event} }
+     : ();
+   push @tests,
+     exists $array_by_directive->{test} ? @{ $array_by_directive->{test} } : ();
+   push @resets,
+     exists $array_by_directive->{reset}
+     ? @{ $array_by_directive->{reset} }
+     : ();
+   push @halts,
+     exists $array_by_directive->{halt} ? @{ $array_by_directive->{halt} } : ();
+   push @exits,
+     exists $array_by_directive->{exit} ? @{ $array_by_directive->{exit} } : ();
 
-   if (!$App) {
+   if ( !$App ) {
+
       # command line '-app App' has higer precedence to set $App
-      if (exists $array_by_directive->{app}) {
+      if ( exists $array_by_directive->{app} ) {
          $App = $array_by_directive->{app}->[0];
       }
    }
 }
-         
+
 if ($App) {
    $cfg = get_PatternCfg_by_app(
-             $App, 
-             {
-                LogFile     => $ARGV[0],   # needed when $App eq 'auto'
-                PatternFile => $pattern_file,
-                sortkeys    => $sortkeys,  # overwrite default in cfg file
-                verbose     => $verbose,
-              }
+      $App,
+      {
+         LogFile     => $ARGV[0],        # needed when $App eq 'auto'
+         PatternFile => $pattern_file,
+         sortkeys    => $sortkeys,       # overwrite default in cfg file
+         verbose     => $verbose,
+      }
    );
 
    die "cannot find matching App in pattern cfg file\n" if !$cfg;
@@ -381,69 +402,72 @@ if ($App) {
    $verbose && print "cfg = ", Dumper($cfg);
 }
 
-my          $pattern_by_tag;
+my $pattern_by_tag;
 my $compiled_pattern_by_tag;
 for my $e (@events) {
-   if ($e =~ /^(.+?)=(.+)/s ) {
+   if ( $e =~ /^(.+?)=(.+)/s ) {
+
       # multiline regex match
-      my ($tag, $pattern) = ($1, $2);
-         
-      croak "tag='$tag' shows up multiple times in -event" if exists $pattern_by_tag->{$tag};
-         
-               $pattern_by_tag->{$tag} =    $pattern;
+      my ( $tag, $pattern ) = ( $1, $2 );
+
+      croak "tag='$tag' shows up multiple times in -event"
+        if exists $pattern_by_tag->{$tag};
+
+      $pattern_by_tag->{$tag}          = $pattern;
       $compiled_pattern_by_tag->{$tag} = qr/$pattern/;
    } else {
       croak "event='$e' bad format";
    }
 }
-         
-my @tags = sort(keys(%$pattern_by_tag));
-         
+
+my @tags = sort( keys(%$pattern_by_tag) );
+
 my $is_reset_tag;
 for my $t (@resets) {
    croak "'$t' in -reset '$t' is not defined in -event"
-       if ! exists $pattern_by_tag->{$t};
-   $is_reset_tag->{$t} ++;
+     if !exists $pattern_by_tag->{$t};
+   $is_reset_tag->{$t}++;
 }
 $verbose && print "is_reset_tag = ", Dumper($is_reset_tag);
-         
+
 my $is_exit_tag;
 for my $t (@exits) {
    croak "'$t' in -exit '$t' is not defined in -event"
-      if ! exists $pattern_by_tag->{$t};
-   $is_exit_tag->{$t} ++;
+     if !exists $pattern_by_tag->{$t};
+   $is_exit_tag->{$t}++;
 }
 $verbose && print "is_exit_tag = ", Dumper($is_exit_tag);
 
 my $is_halt_tag;
 for my $t (@halts) {
    croak "'$t' in -halt '$t' is not defined in -event"
-      if ! exists $pattern_by_tag->{$t};
-   $is_halt_tag->{$t} ++;
+     if !exists $pattern_by_tag->{$t};
+   $is_halt_tag->{$t}++;
 }
 $verbose && print "is_halt_tag = ", Dumper($is_halt_tag);
 
 my $check_tag_during_on_halt = {};
-for my $t ((@resets,@exits)) {
-   $check_tag_during_on_halt->{$t} ++;
+for my $t ( ( @resets, @exits ) ) {
+   $check_tag_during_on_halt->{$t}++;
 }
-my @on_halts = sort(keys %$check_tag_during_on_halt);
-$verbose && print "\@on_halts = ", Dumper(\@on_halts);
-      
+my @on_halts = sort( keys %$check_tag_during_on_halt );
+$verbose && print "\@on_halts = ", Dumper( \@on_halts );
+
 my $tag_will_capture;
 my @test_tag_expressions;
-      
+
 for my $test (@tests) {
-   my ($front, $expression);
-      
-   if ($test =~ /^(.+?)=(.+)/s ) {
+   my ( $front, $expression );
+
+   if ( $test =~ /^(.+?)=(.+)/s ) {
+
       # multiline regex match
-      ($front, $expression) = ($1, $2);
+      ( $front, $expression ) = ( $1, $2 );
    } else {
       croak "test='$test' bad format";
    }
 
-   my ($test_tag, $attrString) = split /:/, $front;
+   my ( $test_tag, $attrString ) = split /:/, $front;
 
    my $has_attr = {};
    if ($attrString) {
@@ -452,261 +476,280 @@ for my $test (@tests) {
          $has_attr->{$e} = 1;
       }
    }
-      
-   while ($expression =~ /\$value\{(.+?)\}/g) {
+
+   while ( $expression =~ /\$value\{(.+?)\}/g ) {
       my $event_tag = $1;
-      
-      croak "event_tag='$event_tag' in test='$test' is not defined." if ! exists $pattern_by_tag->{$event_tag};
-      croak "event_tag='$event_tag' in test='$test' is defined, but not capturing anything." if $pattern_by_tag->{$event_tag} !~ /\(.*\)/;
-      $tag_will_capture->{$event_tag} ++;
+
+      croak "event_tag='$event_tag' in test='$test' is not defined."
+        if !exists $pattern_by_tag->{$event_tag};
+      croak
+"event_tag='$event_tag' in test='$test' is defined, but not capturing anything."
+        if $pattern_by_tag->{$event_tag} !~ /\(.*\)/;
+      $tag_will_capture->{$event_tag}++;
    }
-      
+
    push @test_tag_expressions, [ $test_tag, $expression, $has_attr ];
 }
-      
-$verbose && print "tag_will_capture ", Dumper($tag_will_capture);
-$verbose && print "test_tag_expressions ", Dumper(\@test_tag_expressions);
-      
+
+$verbose && print "tag_will_capture ",     Dumper($tag_will_capture);
+$verbose && print "test_tag_expressions ", Dumper( \@test_tag_expressions );
+
 my $error = 0;
 
 for my $f (@ARGV) {
    my $prefix = @ARGV > 1 ? "$f:" : "";
 
-   my   $tried_timestamp_pattern = 0;
+   my $tried_timestamp_pattern   = 0;
    my $matched_timestamp_pattern = 0;
-      
-   my $fh = get_log_fh($f, {
-                             Head          => $front,
-                             Tail          => $tail,
-                             SkipHead      => $skip,
-                             TimePatternCfg=> $cfg,
-                             Anchor        => $anchor,
-                             FakeNow       => $fake_now,
-                             ShowProgress  => $progress,
-                             MatchPattern  => $match_pattern,
-                             ExcludePattern=> $exclude_pattern,
-                             verbose       => $verbose,
-                           }
-                      );
-                  
+
+   my $fh = get_log_fh(
+      $f,
+      {
+         Head           => $front,
+         Tail           => $tail,
+         SkipHead       => $skip,
+         TimePatternCfg => $cfg,
+         Anchor         => $anchor,
+         FakeNow        => $fake_now,
+         ShowProgress   => $progress,
+         MatchPattern   => $match_pattern,
+         ExcludePattern => $exclude_pattern,
+         verbose        => $verbose,
+      }
+   );
+
    my $endstring;
    my $endstring_criteria;
-      
+
    if ($endtime) {
       die "must specify -app AppName to parse timestamp" if !$App;
 
-      my $t = get_log_time(\$endtime, $cfg);
+      my $t = get_log_time( \$endtime, $cfg );
       die "endtime='$endtime' not matching: $cfg->{pattern}" if !$t;
       $endstring = $t->{key};
    }
-      
+
    my %time;
    my %value;
    my %row;
    my $halted;
    my $line_count;
-   my $last_time = time();
+   my $last_time  = time();
    my $start_time = $last_time;
    my @grepped;
    my $grepcount = 0;
-      
-   LINE:
-   while (my $line = <$fh>) {
+
+ LINE:
+   while ( my $line = <$fh> ) {
       chomp $line;
-      $line_count ++;
-      
-      if ($front && $line_count >= $front) {
-         $verbose && print STDERR "total front=$front lines parsed. stop\n"; last;
+      $line_count++;
+
+      if ( $front && $line_count >= $front ) {
+         $verbose && print STDERR "total front=$front lines parsed. stop\n";
+         last;
       }
-         
+
       if ($progress) {
-         if ($line_count % $progress == 0 ) {
+         if ( $line_count % $progress == 0 ) {
             my $now = time();
-         
+
             my $seconds = $now - $last_time;
-            
+
             $last_time = $now;
-            
-            print STDERR "$line_count lines are processed forwards, $progress lines in $seconds seconds\n";
+
+            print STDERR
+"$line_count lines are processed forwards, $progress lines in $seconds seconds\n";
          }
       }
-         
+
       next if defined $exclude_pattern && $line =~ /$exclude_pattern_compiled/;
-         
-      next if defined   $match_pattern && $line !~   /$match_pattern_compiled/;
-          
+
+      next if defined $match_pattern && $line !~ /$match_pattern_compiled/;
+
       #my $r; # ref
       my $log_time;
       if ($App) {
-         # we need to parse timestamp
-         $tried_timestamp_pattern ++;
 
-         $log_time = get_log_time(\$line, $cfg);
+         # we need to parse timestamp
+         $tried_timestamp_pattern++;
+
+         $log_time = get_log_time( \$line, $cfg );
          next if !$log_time;
-         
-         $matched_timestamp_pattern ++;
+
+         $matched_timestamp_pattern++;
 
          if ($endtime) {
             my $timestring = $log_time->{key};
-            $verbose>=2 && print STDERR "check end: $timestring gt $endstring ?\n";
-            if ("$timestring" gt "$endstring") {
-               $verbose && print STDERR "\nmatched endtime line: $timestring gt $endstring\n$line\n";
+            $verbose >= 2
+              && print STDERR "check end: $timestring gt $endstring ?\n";
+            if ( "$timestring" gt "$endstring" ) {
+               $verbose
+                 && print STDERR
+                 "\nmatched endtime line: $timestring gt $endstring\n$line\n";
                last;
             }
          }
       }
-         
-      if ($grep && $grepcount < $grepmax && $line =~ /$grep_compiled/ ) {
+
+      if ( $grep && $grepcount < $grepmax && $line =~ /$grep_compiled/ ) {
          if ( !defined($grepv) || $line !~ /$grepv_compiled/ ) {
-            $grepcount ++;
+            $grepcount++;
             push @grepped, $line;
          }
       }
-         
-      if (! $seen_oid) {
-         # when tracing order, $seen_oid is defined, we will decide whether to print later
+
+      if ( !$seen_oid ) {
+
+# when tracing order, $seen_oid is defined, we will decide whether to print later
          $print && print {$out_fh} "$line\n";
       }
-         
+
       if ($seen_oid) {
-         if ($line =~ /$oid_pattern_with_tags_compiled/) {
+         if ( $line =~ /$oid_pattern_with_tags_compiled/ ) {
             my $tag = $1;
             my $val = $2;
-         
+
             $verbose && print STDERR "matched $tag=$val: $line\n";
-         
+
             my $v_by_k = parse_fix_message($line);
             my $need_update_pattern;
             for my $k (@oid_tags) {
                my $v = $v_by_k->{$k};
-         
+
                next if !defined $v || !"$v";
-         
-               if (!$seen_oid->{$v}->{$k}) {
+
+               if ( !$seen_oid->{$v}->{$k} ) {
                   $verbose && print STDERR "new link: $tag=$val => $k=$v\n";
-                  $need_update_pattern ++; 
+                  $need_update_pattern++;
                }
                $seen_oid->{$v}->{$k}++;
             }
 
             if ($need_update_pattern) {
-               $verbose && print STDERR "updated seen_oid = ", Dumper($seen_oid);
+               $verbose && print STDERR "updated seen_oid = ",
+                 Dumper($seen_oid);
                update_oid_pattern();
             }
 
             # we haven't printed this line. print now
             $print && print {$out_fh} "$line\n";
-         } elsif ($line =~ /$oid_pattern_compiled/) {
+         } elsif ( $line =~ /$oid_pattern_compiled/ ) {
             $verbose && print STDERR "matched pattern=$1: $line\n";
-            $print && print {$out_fh} "$line\n";
+            $print   && print {$out_fh} "$line\n";
          }
       }
-         
+
       my @check_tags;
-         
+
       if ($halted) {
          @check_tags = @on_halts;
       } else {
          @check_tags = @tags;
       }
-         
+
       for my $t (@check_tags) {
          my @captures;
          my $matched;
-         
-         if ($tag_will_capture->{$t}) {
-            @captures = ($line =~ /$compiled_pattern_by_tag->{$t}/);
-         } elsif ($line =~ /$compiled_pattern_by_tag->{$t}/) {
-            $matched ++;
+
+         if ( $tag_will_capture->{$t} ) {
+            @captures = ( $line =~ /$compiled_pattern_by_tag->{$t}/ );
+         } elsif ( $line =~ /$compiled_pattern_by_tag->{$t}/ ) {
+            $matched++;
          }
-         
-         if ($matched || @captures) {
-            $verbose && print STDERR "event='$t' pattern='$pattern_by_tag->{$t}' matched: $line\n";
+
+         if ( $matched || @captures ) {
+            $verbose
+              && print STDERR
+              "event='$t' pattern='$pattern_by_tag->{$t}' matched: $line\n";
 
             my $timestring;
             if ($App) {
                $timestring = $log_time->{key};
             }
 
-            if ($is_reset_tag->{$t}) {
+            if ( $is_reset_tag->{$t} ) {
                $verbose && print STDERR "event='$t' reset processing\n";
                undef %time;
                undef %value;
-               push @{$time{$t}}, $timestring if $App;
-               push @{$value{$t}}, \@captures if @captures;
-               push @{$row{$t}}, $line_count;
-               $halted = 0;
+               push @{ $time{$t} },  $timestring if $App;
+               push @{ $value{$t} }, \@captures  if @captures;
+               push @{ $row{$t} },   $line_count;
+               $halted  = 0;
                @grepped = ();
                next LINE;
-            } elsif ($is_exit_tag->{$t}) {
+            } elsif ( $is_exit_tag->{$t} ) {
                $verbose && print STDERR "event='$t' exits processing\n";
-               push @{$time{$t}}, $timestring if $App;
-               push @{$value{$t}}, \@captures if @captures;
-               push @{$row{$t}}, $line_count;
+               push @{ $time{$t} },  $timestring if $App;
+               push @{ $value{$t} }, \@captures  if @captures;
+               push @{ $row{$t} },   $line_count;
                last LINE;
             } elsif ($halted) {
-               $verbose >=2 && print STDERR "event='$t' is skipped while in halted state\n";
+               $verbose >= 2
+                 && print STDERR
+                 "event='$t' is skipped while in halted state\n";
                next LINE;
-            } elsif ($is_halt_tag->{$t}) {
+            } elsif ( $is_halt_tag->{$t} ) {
                $verbose && print STDERR "event='$t' halted processing\n";
-               push @{$time{$t}}, $timestring if $App;
-               push @{$value{$t}}, \@captures if @captures;
-               push @{$row{$t}}, $line_count;
-               $halted ++;
+               push @{ $time{$t} },  $timestring if $App;
+               push @{ $value{$t} }, \@captures  if @captures;
+               push @{ $row{$t} },   $line_count;
+               $halted++;
                next LINE;
             } else {
                $verbose && print STDERR "event='$t' is saved\n";
-               push @{$time{$t}}, $timestring if $App;
-               push @{$value{$t}}, \@captures if @captures;
-               push @{$row{$t}}, $line_count;
+               push @{ $time{$t} },  $timestring if $App;
+               push @{ $value{$t} }, \@captures  if @captures;
+               push @{ $row{$t} },   $line_count;
                next LINE;
             }
          }
       }
    }
-         
+
    close_in_fh($fh);
-         
+
    {
       my $now = time();
-         
+
       my $seconds = $now - $start_time;
-         
-      $verbose && print STDERR "total $line_count lines are processed forwards in $seconds seconds\n";
+
+      $verbose
+        && print STDERR
+        "total $line_count lines are processed forwards in $seconds seconds\n";
    }
-         
-   $verbose && print "\%time = ", Dumper(\%time);
-   $verbose && print "\%value = ", Dumper(\%value);
-         
+
+   $verbose && print "\%time = ",  Dumper( \%time );
+   $verbose && print "\%value = ", Dumper( \%value );
+
    my $warn = $verbose ? 'use' : 'no';
-         
+
    if ($verbose) {
       $Data::Dumper::Deparse = 1;
    }
-         
+
    my $index = 0;
    if ($geneos) {
       print "index,status,check,expression,detail\n";
    }
-   
+
    for my $r (@test_tag_expressions) {
-      my ($test_tag, $expression, $attr) = @$r;
-   
+      my ( $test_tag, $expression, $attr ) = @$r;
+
       my $compiled = eval "$warn warnings; no strict; sub { $expression } ";
-      if ($@) { 
+      if ($@) {
          if ($geneos) {
-            $index ++;
+            $index++;
             print "$index,FAIL,$test_tag,$expression,Bad expression";
          } else {
             print "${prefix}ERROR: $test_tag, $expression,Bad expression: $@\n";
-            $error ++;
+            $error++;
          }
          last if !$attr->{continue};
       }
-   
-      if ($compiled->()) {
+
+      if ( $compiled->() ) {
          if ($geneos) {
-            $index ++;
+            $index++;
             print "$index,OK,$test_tag,$expression,";
          } else {
             print "${prefix}OK: PASSED: $test_tag $expression => ";
@@ -714,38 +757,40 @@ for my $f (@ARGV) {
          eval "no warnings; print qq($expression), \"\\n\"";
       } else {
          if ($geneos) {
-            $index ++;
+            $index++;
             print "$index,FAIL,$test_tag,$expression,";
          } else {
             print "${prefix}ERROR: FAILED: $test_tag $expression => ";
-            $error ++;
+            $error++;
          }
          eval "no warnings; print qq($expression), \"\\n\"";
          last if !$attr->{continue};
       }
    }
-      
+
    if ($grep) {
       $verbose && print STDERR "$grepcount lines matching pattern='$grep'. ",
-            $grepcount>$grepmax ? "truncated to $grepmax lines" : "",
-            ";\n";
-      
+        $grepcount > $grepmax ? "truncated to $grepmax lines" : "",
+        ";\n";
+
       for my $line (@grepped) {
          print "$line\n";
       }
    }
 
    if ($tried_timestamp_pattern) {
-      my $matched_percentage = $matched_timestamp_pattern*100/$tried_timestamp_pattern;
+      my $matched_percentage =
+        $matched_timestamp_pattern * 100 / $tried_timestamp_pattern;
 
-      if ($matched_percentage < 5) {
-         print STDERR "timestamp pattern='$cfg->{pattern}' is likely wrong, because only $matched_percentage% ($matched_timestamp_pattern/$tried_timestamp_pattern) matched.\n";
+      if ( $matched_percentage < 5 ) {
+         print STDERR
+"timestamp pattern='$cfg->{pattern}' is likely wrong, because only $matched_percentage% ($matched_timestamp_pattern/$tried_timestamp_pattern) matched.\n";
       }
    }
 }
-      
+
 exit 0 if $geneos;
-      
+
 if ($error) {
    $verbose && print STDERR "ERROR: Total $error ERRORS.\n";
 } else {

@@ -6,17 +6,19 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 use TPSUP::AUTOSYS qw( query_jobs_superset print_autorep_J_header
-                      get_autorep_J_format autorep_J print_autorep_J_job
-                      parse_cmdline_jobs);
-use TPSUP::UTIL    qw(get_in_fh);
+  get_autorep_J_format autorep_J print_autorep_J_job
+  parse_cmdline_jobs);
+use TPSUP::FILE qw(get_in_fh);
+
 # use Carp::Always;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
-my $DetailExpire = 24*3600;
-my $interval = 10;
+my $DetailExpire   = 24 * 3600;
+my $interval       = 10;
 my $interval_limit = 60;
-my $StatusExpire = $interval-1 ;  
+my $StatusExpire   = $interval - 1;
 
 sub usage {
    my ($message) = @_;
@@ -74,58 +76,61 @@ my $reset;
 my $arg_is_job;
 
 GetOptions(
-   'v|verbose'     => \$verbose,
-   'J'             => \$arg_is_job,
-   'm=s'           => \$MatchPattern,
-   'x=s'           => \$ExcludePattern,
-   'df=s'          => \$DetailFiles,
-   'sf=s'          => \$StatusFiles,
+   'v|verbose' => \$verbose,
+   'J'         => \$arg_is_job,
+   'm=s'       => \$MatchPattern,
+   'x=s'       => \$ExcludePattern,
+   'df=s'      => \$DetailFiles,
+   'sf=s'      => \$StatusFiles,
 ) || usage("cannot parse command line: $!");
 
-usage("wrong number of args") if ! @ARGV;
+usage("wrong number of args") if !@ARGV;
 
-my ($jobs, $seen, $jobFlags)
-   = parse_cmdline_jobs(\@ARGV, {          JFlag=>$arg_is_job,
-                                    MatchPattern=>$MatchPattern,
-                                  ExcludePattern=>$ExcludePattern,
-                                });
+my ( $jobs, $seen, $jobFlags ) = parse_cmdline_jobs(
+   \@ARGV,
+   {
+      JFlag          => $arg_is_job,
+      MatchPattern   => $MatchPattern,
+      ExcludePattern => $ExcludePattern,
+   }
+);
 
 $verbose && print "jobs = ", Dumper($jobs);
 
 my $opt = {
-   StatusExpire => $StatusExpire,  # always need the latest info
+   StatusExpire => $StatusExpire,    # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
    Jobs         => $jobs,
-   StatusOnly   => 1,  # only need to query status, ie, autorep -J
+   StatusOnly   => 1,                # only need to query status, ie, autorep -J
    verbose      => $verbose,
 };
 
-my $info = query_jobs_superset($jobs, $opt);
+my $info = query_jobs_superset( $jobs, $opt );
 
 my $error = 0;
 my $bad_by_job;
 my @jobs_to_watch;
 
 for my $job (@$jobs) {
-   if (!exists $info->{$job}) {
+   if ( !exists $info->{$job} ) {
       $bad_by_job->{$job} = "not found";
       print "ERROR: $job $bad_by_job->{$job}.\n";
-      $error ++;
+      $error++;
       next;
    }
 
-   if (!exists $info->{$job}->{Status}) {
+   if ( !exists $info->{$job}->{Status} ) {
       $bad_by_job->{$job} = "status not found. just deleted?";
       print "ERROR: $job $bad_by_job->{$job}.\n";
-      $error ++;
+      $error++;
       next;
    }
 
-   if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+   if ( $info->{$job}->{Status} =~ /^(OH|OI)$/ ) {
       $bad_by_job->{$job} = "bad status: $info->{$job}->{Status}";
       print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
-      $error ++;
+      $error++;
       next;
    }
 
@@ -140,32 +145,33 @@ while (1) {
 
    print_autorep_J_header();
 
-   my $info = query_jobs_superset(\@jobs_to_watch, $opt);
+   my $info = query_jobs_superset( \@jobs_to_watch, $opt );
    $failed = 0;
 
    for my $job (@$jobs) {
-      if ($bad_by_job->{$job}) {
-         printf get_autorep_J_format(), $job,  $bad_by_job->{$job}, "", "";
+      if ( $bad_by_job->{$job} ) {
+         printf get_autorep_J_format(), $job, $bad_by_job->{$job}, "", "";
       } else {
-         print_autorep_J_job($info, $job, "", $opt);
-	 if ($info ->{$job}->{Status} =~ /^(RU|ST|AC)$/) {  
-            $need_next_round ++;
+         print_autorep_J_job( $info, $job, "", $opt );
+         if ( $info->{$job}->{Status} =~ /^(RU|ST|AC)$/ ) {
+            $need_next_round++;
          }
 
-	 if ($info ->{$job}->{Status} =~ /^(TE|FA)$/) {  
-            $failed ++;
+         if ( $info->{$job}->{Status} =~ /^(TE|FA)$/ ) {
+            $failed++;
          }
       }
    }
 
-   last if ! $need_next_round;
-   print "$need_next_round jobs not completed. $failed failed so far. sleep for $sub_interval\n";
+   last if !$need_next_round;
+   print
+"$need_next_round jobs not completed. $failed failed so far. sleep for $sub_interval\n";
    sleep $sub_interval;
    $sub_interval += 10;
    $sub_interval = $interval_limit if $sub_interval > $interval_limit;
-   $info = query_jobs_superset(\@jobs_to_watch, $opt);
+   $info         = query_jobs_superset( \@jobs_to_watch, $opt );
 }
-   
+
 print "ERROR: total $failed failed, $error errors\n";
 
 exit $error;

@@ -4,24 +4,28 @@ use strict;
 use Data::Dumper;
 use Carp;
 use Getopt::Long;
+
 #use File::ReadBackwards;
 use TPSUP::DATE qw(get_interval_seconds);
-use TPSUP::FIX qw(parse_fix_message);
-use TPSUP::UTIL qw(get_out_fh close_out_fh get_in_fh close_in_fh);
+use TPSUP::FIX  qw(parse_fix_message);
+use TPSUP::FILE qw(get_out_fh close_out_fh get_in_fh close_in_fh);
 use TPSUP::DATE qw(get_Mon_by_number yyyymmddHHMMSS_to_epoc);
-use TPSUP::LOG qw(
-   get_PatternCfg_by_app
-   get_log_time
-   get_log_fh
-   get_log_latency
-   yyyymmddHHMMSS_to_log_time
+use TPSUP::LOG  qw(
+  get_PatternCfg_by_app
+  get_log_time
+  get_log_fh
+  get_log_latency
+  yyyymmddHHMMSS_to_log_time
 );
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir  = $0; $dir  =~ s:[^/]+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
 my $grepmax = 200;
-my $yyyy = `date +%Y`; chomp $yyyy;
+my $yyyy    = `date +%Y`;
+chomp $yyyy;
 
 sub usage {
    my ($msg) = @_;
@@ -155,14 +159,14 @@ examples:
    log_latency_test_ms.log
 
 EOF
-   
+
    exit 1;
 }
-   
-our ($exclude_pattern, $match_pattern, $pattern_file);
+
+our ( $exclude_pattern, $match_pattern, $pattern_file );
 
 my $verbose = 0;
-my $App = 'auto';
+my $App     = 'auto';
 my @events;
 my $progress;
 my $endtime;
@@ -178,104 +182,112 @@ my $skip;
 my $tail;
 my $threshold;
 my $csv;
-   
+
 GetOptions(
-   "x=s" => \$exclude_pattern,
-   "m=s" => \$match_pattern,
-   "v+"  => \$verbose,  # accumulative   
-   "pf=s" => \$pattern_file,
-   "k=s" => \$sortkeys,
-   "app=s" => \$App,
-   "event=s"=> \@events,
-   "progress=s" => \$progress,
-   "tail=s" => \$tail,
-   "anchor=s" => \$anchor,
-   "endtime=s" => \$endtime,
+   "x=s"                => \$exclude_pattern,
+   "m=s"                => \$match_pattern,
+   "v+"                 => \$verbose,              # accumulative
+   "pf=s"               => \$pattern_file,
+   "k=s"                => \$sortkeys,
+   "app=s"              => \$App,
+   "event=s"            => \@events,
+   "progress=s"         => \$progress,
+   "tail=s"             => \$tail,
+   "anchor=s"           => \$anchor,
+   "endtime=s"          => \$endtime,
    "ignoreMissingBegin" => \$ignoreMissingBegin,
-   "print" => \$print,
-   "front=s" => \$front,
-   "skip=s" => \$skip,
-   "output=s"=> \$output,
-   "now=s"=> \$fake_now,
-   "plan=s"=> \$plan,
-   "csv"=> \$csv,
-   "threshold=s"=> \$threshold,
+   "print"              => \$print,
+   "front=s"            => \$front,
+   "skip=s"             => \$skip,
+   "output=s"           => \$output,
+   "now=s"              => \$fake_now,
+   "plan=s"             => \$plan,
+   "csv"                => \$csv,
+   "threshold=s"        => \$threshold,
 ) or usage("Could not parse command line: $!");
-   
+
 usage("wrong number of args") if !@ARGV;
-   
+
 usage("-progress must be followed by a positive integer")
-   if $progress && "$progress" !~ /^[1-9][0-9]*/;
-   
+  if $progress && "$progress" !~ /^[1-9][0-9]*/;
+
 my $out_fh = get_out_fh($output);
-   
+
 die "no events defined" if !@events && !$print && !$plan;
 
 my $exclude_pattern_compiled;
-if (defined $exclude_pattern) {
+if ( defined $exclude_pattern ) {
    $exclude_pattern_compiled = qr/$exclude_pattern/;
 }
-         
+
 my $match_pattern_compiled;
-if (defined $match_pattern) {
+if ( defined $match_pattern ) {
    $match_pattern_compiled = qr/$match_pattern/;
-};
+}
 
 my $array_by_directive;
 if ($plan) {
    my $fh = get_in_fh($plan);
 
    my $to_be_continued;
-   while (my $line = <$fh>) {
-       chomp $line;
-       if ($to_be_continued) {
-          if ($line =~ /^(.*)\\$/) {
-             # \ at the end of line means to continue to the next line
-             $array_by_directive->{$to_be_continued}->[-1] .= "$1\n";
-          } else {
-             $array_by_directive->{$to_be_continued}->[-1] .= $line;
-             $to_be_continued = undef;
-          }
-       } elsif ($line =~ /^\s*(app|event)\s+(\S+.*)/) {
-          my ($directive, $detail) = ($1, $2);
+   while ( my $line = <$fh> ) {
+      chomp $line;
+      if ($to_be_continued) {
+         if ( $line =~ /^(.*)\\$/ ) {
 
-          if ($detail =~ /^(.*)\\$/) {
-             # \ at the end of line means to continue to the next line
-             push @{$array_by_directive->{$directive}}, "$1\n";
-             $to_be_continued = $directive;
-          } else {
-             push @{$array_by_directive->{$directive}}, $detail;
-          }
-       } elsif ($line =~ /^\s*#|^\s*$/) {
-          # skip comment and blank lines
-          next;
-       } else {
-          die "failed to parse plan $plan at: $line\n";
-       }
+            # \ at the end of line means to continue to the next line
+            $array_by_directive->{$to_be_continued}->[-1] .= "$1\n";
+         } else {
+            $array_by_directive->{$to_be_continued}->[-1] .= $line;
+            $to_be_continued = undef;
+         }
+      } elsif ( $line =~ /^\s*(app|event)\s+(\S+.*)/ ) {
+         my ( $directive, $detail ) = ( $1, $2 );
+
+         if ( $detail =~ /^(.*)\\$/ ) {
+
+            # \ at the end of line means to continue to the next line
+            push @{ $array_by_directive->{$directive} }, "$1\n";
+            $to_be_continued = $directive;
+         } else {
+            push @{ $array_by_directive->{$directive} }, $detail;
+         }
+      } elsif ( $line =~ /^\s*#|^\s*$/ ) {
+
+         # skip comment and blank lines
+         next;
+      } else {
+         die "failed to parse plan $plan at: $line\n";
+      }
    }
    close_in_fh($fh);
 
-   $verbose && print STDERR "array_by_directive = \n", Dumper($array_by_directive);
+   $verbose && print STDERR "array_by_directive = \n",
+     Dumper($array_by_directive);
 
-   push @events, exists $array_by_directive->{event} ? @{$array_by_directive->{event}} : ();
+   push @events,
+     exists $array_by_directive->{event}
+     ? @{ $array_by_directive->{event} }
+     : ();
 
-   if (!$App) {
+   if ( !$App ) {
+
       # command line '-app App' has higer precedence to set $App
-      if (exists $array_by_directive->{app}) {
+      if ( exists $array_by_directive->{app} ) {
          $App = $array_by_directive->{app}->[0];
       }
    }
 }
-         
+
 my $cfg = get_PatternCfg_by_app(
-             $App, 
-             {
-                LogFile     => $ARGV[0],   # needed when $App eq 'auto'
-                PatternFile => $pattern_file,  
-                sortkeys    => $sortkeys,  # overwrite default in cfg file
-                verbose     => $verbose,
-              }     
-);             
+   $App,
+   {
+      LogFile     => $ARGV[0],        # needed when $App eq 'auto'
+      PatternFile => $pattern_file,
+      sortkeys    => $sortkeys,       # overwrite default in cfg file
+      verbose     => $verbose,
+   }
+);
 
 die "cannot find matching App in pattern cfg file\n" if !$cfg;
 
@@ -283,36 +295,39 @@ $verbose && print STDERR "cfg = ", Dumper($cfg);
 
 my $now_t;
 if ($fake_now) {
-   if ($fake_now eq 'now') {
+   if ( $fake_now eq 'now' ) {
       $fake_now = $TPSUP::LOG::yyyymmdd . $TPSUP::LOG::HHMMSS;
    }
-   $now_t = yyyymmddHHMMSS_to_log_time($fake_now, $cfg); 
+   $now_t = yyyymmddHHMMSS_to_log_time( $fake_now, $cfg );
 }
 
-my @peList;   # parsed events
+my @peList;    # parsed events
 
 for my $e (@events) {
+
    # begin:order,keep=new oid=(.+?),
-   if ($e =~ /^(.+?)=(.+)/s ) {
-      my ($left, $pattern) = ($1, $2);
+   if ( $e =~ /^(.+?)=(.+)/s ) {
+      my ( $left, $pattern ) = ( $1, $2 );
 
       my $pe;
 
-      $pe->{pattern}  =    $pattern;
+      $pe->{pattern}  = $pattern;
       $pe->{compiled} = qr/$pattern/;
 
-      for my $pair (split /,/, $left) {
+      for my $pair ( split /,/, $left ) {
+
          # begin:order,keep
          next if !$pair;
 
-         if ($pair =~ /^(.+?):(.+)$/) {
+         if ( $pair =~ /^(.+?):(.+)$/ ) {
+
             # begin:order
             my $state = $1;
             my $tag   = $2;
 
-            push @{$pe->{assign}}, {state=>$state, tag=>$tag};
+            push @{ $pe->{assign} }, { state => $state, tag => $tag };
          } else {
-            $pe->{flag}->{$pair} ++;
+            $pe->{flag}->{$pair}++;
          }
       }
 
@@ -321,8 +336,8 @@ for my $e (@events) {
       croak "event='$e' bad format";
    }
 }
-         
-$verbose && print STDERR "parsed events = ", Dumper(\@peList);
+
+$verbose && print STDERR "parsed events = ", Dumper( \@peList );
 
 if ($csv) {
    print {$out_fh} "key,latency,begin,end\n";
@@ -330,81 +345,88 @@ if ($csv) {
 
 my $error = 0;
 
-my $l;   #this is the record
+my $l;    #this is the record
 
 for my $f (@ARGV) {
    my $prefix = @ARGV > 1 ? "$f:" : "";
 
-   my   $tried_timestamp_pattern = 0;
+   my $tried_timestamp_pattern   = 0;
    my $matched_timestamp_pattern = 0;
-      
-   my $fh = get_log_fh($f, {
-                             Head          => $front,
-                             Tail          => $tail,
-                             SkipHead      => $skip,
-                             TimePatternCfg=> $cfg,
-                             Anchor        => $anchor,
-                             FakeNow       => $fake_now,
-                             ShowProgress  => $progress,
-                             MatchPattern  => $match_pattern,
-                             ExcludePattern=> $exclude_pattern,
-                             verbose       => $verbose,
-                           }
-                      );
-                  
+
+   my $fh = get_log_fh(
+      $f,
+      {
+         Head           => $front,
+         Tail           => $tail,
+         SkipHead       => $skip,
+         TimePatternCfg => $cfg,
+         Anchor         => $anchor,
+         FakeNow        => $fake_now,
+         ShowProgress   => $progress,
+         MatchPattern   => $match_pattern,
+         ExcludePattern => $exclude_pattern,
+         verbose        => $verbose,
+      }
+   );
+
    my $endstring;
    my $endstring_criteria;
-      
+
    if ($endtime) {
       die "must specify -app AppName to parse timestamp" if !$App;
 
-      my $t = get_log_time(\$endtime, $cfg);
+      my $t = get_log_time( \$endtime, $cfg );
       die "endtime='$endtime' not matching: $cfg->{pattern}" if !$t;
       $endstring = $t->{key};
    }
-      
+
    my $line_count;
-   my $last_time = time();
+   my $last_time  = time();
    my $start_time = $last_time;
-      
-   LINE:
-   while (my $line = <$fh>) {
+
+ LINE:
+   while ( my $line = <$fh> ) {
       chomp $line;
-      $line_count ++;
-      
-      if ($front && $line_count >= $front) {
-         $verbose && print STDERR "total front=$front lines parsed. stop\n"; last;
+      $line_count++;
+
+      if ( $front && $line_count >= $front ) {
+         $verbose && print STDERR "total front=$front lines parsed. stop\n";
+         last;
       }
-         
+
       if ($progress) {
-         if ($line_count % $progress == 0 ) {
+         if ( $line_count % $progress == 0 ) {
             my $now = time();
-         
+
             my $seconds = $now - $last_time;
-            
+
             $last_time = $now;
-            
-            print STDERR "$line_count lines are processed forwards, $progress lines in $seconds seconds\n";
+
+            print STDERR
+"$line_count lines are processed forwards, $progress lines in $seconds seconds\n";
          }
       }
-         
-      next if defined $exclude_pattern && $line =~ /$exclude_pattern_compiled/;
-         
-      next if defined   $match_pattern && $line !~   /$match_pattern_compiled/;
-          
-      # we need to parse timestamp
-      $tried_timestamp_pattern ++;
 
-      my $t = get_log_time(\$line, $cfg);
+      next if defined $exclude_pattern && $line =~ /$exclude_pattern_compiled/;
+
+      next if defined $match_pattern && $line !~ /$match_pattern_compiled/;
+
+      # we need to parse timestamp
+      $tried_timestamp_pattern++;
+
+      my $t = get_log_time( \$line, $cfg );
       next if !$t;
 
-      $matched_timestamp_pattern ++;
+      $matched_timestamp_pattern++;
 
       if ($endtime) {
          my $timestring = $t->{key};
-         $verbose>=2 && print STDERR "check end: $timestring gt $endstring ?\n";
-         if ("$timestring" gt "$endstring") {
-            $verbose && print STDERR "\nmatched endtime line: $timestring gt $endstring\n$line\n";
+         $verbose >= 2
+           && print STDERR "check end: $timestring gt $endstring ?\n";
+         if ( "$timestring" gt "$endstring" ) {
+            $verbose
+              && print STDERR
+              "\nmatched endtime line: $timestring gt $endstring\n$line\n";
             last;
          }
       }
@@ -412,44 +434,49 @@ for my $f (@ARGV) {
       $verbose && print STDERR "$line\n";
 
       for my $pe (@peList) {
-         my @matched = ($line =~ /$pe->{compiled}/);
+         my @matched = ( $line =~ /$pe->{compiled}/ );
 
          if (@matched) {
-            $verbose && print STDERR "matched pattern=$pe->{pattern} ", Dumper(\@matched);
+            $verbose && print STDERR "matched pattern=$pe->{pattern} ",
+              Dumper( \@matched );
 
-            my $i=0;
+            my $i = 0;
 
-            for my $a (@{$pe->{assign}}) {
+            for my $a ( @{ $pe->{assign} } ) {
                my $key = $matched[$i];
                $i++;
 
                my $tag   = $a->{tag};
                my $state = $a->{state};
 
-               if ($state eq 'begin') {
+               if ( $state eq 'begin' ) {
 
-                  if ($l->{$tag}->{$key}) {
+                  if ( $l->{$tag}->{$key} ) {
                      print STDERR "ERROR: $tag=$key duplicate\n";
-                     $error ++;
+                     $error++;
                   }
 
                   $l->{$tag}->{$key} = $t;
-               } elsif ($state eq 'end') {
-                  if (!$l->{$tag}->{$key}) {
-                     if (!$ignoreMissingBegin) {
+               } elsif ( $state eq 'end' ) {
+                  if ( !$l->{$tag}->{$key} ) {
+                     if ( !$ignoreMissingBegin ) {
                         print STDERR "ERROR: $tag=$key missing begin time\n";
-                        $error ++;
+                        $error++;
                      }
                   } else {
-                     my $latency = get_log_latency($l->{$tag}->{$key}, $t, 
-                                                   #{verbose=>$verbose}
-                                                  );
+                     my $latency = get_log_latency(
+                        $l->{$tag}->{$key}, $t,
 
-                     if (!$threshold || $latency >= $threshold) {
+                        #{verbose=>$verbose}
+                     );
+
+                     if ( !$threshold || $latency >= $threshold ) {
                         if ($csv) {
-                           print {$out_fh} "$key,$latency,$l->{$tag}->{$key}->{HHMMSS},$t->{HHMMSS}\n";
+                           print {$out_fh}
+"$key,$latency,$l->{$tag}->{$key}->{HHMMSS},$t->{HHMMSS}\n";
                         } else {
-                           print {$out_fh} "$tag=$key, latency=$latency, begin=$l->{$tag}->{$key}->{HHMMSS}, end=$t->{HHMMSS}\n";
+                           print {$out_fh}
+"$tag=$key, latency=$latency, begin=$l->{$tag}->{$key}->{HHMMSS}, end=$t->{HHMMSS}\n";
                         }
                      }
 
@@ -461,50 +488,59 @@ for my $f (@ARGV) {
          }
       }
    }
-         
+
    close_in_fh($fh);
-         
+
    {
       my $now = time();
-         
+
       my $seconds = $now - $start_time;
-         
-      $verbose && print STDERR "total $line_count lines are processed forwards in $seconds seconds\n";
+
+      $verbose
+        && print STDERR
+        "total $line_count lines are processed forwards in $seconds seconds\n";
    }
-         
+
    my $warn = $verbose ? 'use' : 'no';
-         
+
    if ($verbose) {
       $Data::Dumper::Deparse = 1;
    }
-         
-   if ($tried_timestamp_pattern) {
-      my $matched_percentage = $matched_timestamp_pattern*100/$tried_timestamp_pattern;
 
-      if ($matched_percentage < 5) {
-         print STDERR "timestamp pattern='$cfg->{pattern}' is likely wrong, because only $matched_percentage% ($matched_timestamp_pattern/$tried_timestamp_pattern) matched.\n";
+   if ($tried_timestamp_pattern) {
+      my $matched_percentage =
+        $matched_timestamp_pattern * 100 / $tried_timestamp_pattern;
+
+      if ( $matched_percentage < 5 ) {
+         print STDERR
+"timestamp pattern='$cfg->{pattern}' is likely wrong, because only $matched_percentage% ($matched_timestamp_pattern/$tried_timestamp_pattern) matched.\n";
       }
    }
 }
 
 # use current time to handle missing end times
-for my $tag (sort (keys %$l)) {
+for my $tag ( sort ( keys %$l ) ) {
    my $begin_by_key = $l->{$tag};
 
-   for my $key (sort (keys %$begin_by_key)) {
+   for my $key ( sort ( keys %$begin_by_key ) ) {
       my $begin_t = $begin_by_key->{$key};
       if ($now_t) {
+
          #print "begin_t = ", Dumper($begin_t);
          #print "now_t   = ", Dumper(  $now_t);
 
-         my $latency = get_log_latency($begin_t, $now_t, 
-                                      #{verbose=>$verbose}
-                                      );
-         if (!$threshold || $latency >= $threshold) {
+         my $latency = get_log_latency(
+            $begin_t, $now_t,
+
+            #{verbose=>$verbose}
+         );
+         if ( !$threshold || $latency >= $threshold ) {
             if ($csv) {
-               print {$out_fh} "$key,$latency,$begin_t->{HHMMSS},$now_t->{HHMMSS}\n";
+               print {$out_fh}
+                 "$key,$latency,$begin_t->{HHMMSS},$now_t->{HHMMSS}\n";
             } else {
-               print {$out_fh} "$tag=$key, latency=$latency, begin=$begin_t->{HHMMSS}, end=$now_t->{HHMMSS}\n";
+               print {$out_fh}
+"$tag=$key, latency=$latency, begin=$begin_t->{HHMMSS}, end=$now_t->{HHMMSS}\n";
             }
          }
       } else {
@@ -515,7 +551,6 @@ for my $tag (sort (keys %$l)) {
 
 close_out_fh($out_fh);
 
-      
 if ($error) {
    $verbose && print STDERR "ERROR: Total $error ERRORS.\n";
 } else {
@@ -523,5 +558,4 @@ if ($error) {
 }
 
 exit 0;
-
 

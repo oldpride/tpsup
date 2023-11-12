@@ -4,13 +4,15 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::DATE qw(get_interval_seconds);
-use TPSUP::LOG qw(find_log_PatternCfg get_log_time);
-use TPSUP::UTIL qw(get_in_fh);
+use TPSUP::DATE   qw(get_interval_seconds);
+use TPSUP::LOG    qw(find_log_PatternCfg get_log_time);
+use TPSUP::FILE   qw(get_in_fh);
 use TPSUP::READER qw(spot);
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir = $0; $dir =~ s:[^/]+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
 my $last_seconds = 3600;
 
@@ -74,19 +76,19 @@ EOF
    exit 1;
 }
 
-my ($verbose, $case_sensitive, $print_summary, $LogPatternCfg, $old, 
-    $YYYYmmddHHMMSS, $no_time_pattern);
+my ( $verbose, $case_sensitive, $print_summary, $LogPatternCfg, $old,
+   $YYYYmmddHHMMSS, $no_time_pattern );
 
- GetOptions(
-   "x=s"            => \$exclude_pattern,
-   "v"              => \$verbose,
-   "s"              => \$print_summary,
-   "old"            => \$old,
-   "case"           => \$case_sensitive,
-   "t=s"            => \$last_seconds,
-   "pf=s"           => \$LogPatternCfg,
-   "now=s"          => \$YYYYmmddHHMMSS,
-   "nt"             => \$no_time_pattern,
+GetOptions(
+   "x=s"   => \$exclude_pattern,
+   "v"     => \$verbose,
+   "s"     => \$print_summary,
+   "old"   => \$old,
+   "case"  => \$case_sensitive,
+   "t=s"   => \$last_seconds,
+   "pf=s"  => \$LogPatternCfg,
+   "now=s" => \$YYYYmmddHHMMSS,
+   "nt"    => \$no_time_pattern,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -96,7 +98,10 @@ my $current_yyyy;
 my $current_HHMMSS;
 
 if ($YYYYmmddHHMMSS) {
-   if ("$YYYYmmddHHMMSS" =~ /^(\d{4})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})$/) {
+   if ( "$YYYYmmddHHMMSS" =~
+/^(\d{4})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})[^\d]?(\d{2})$/
+     )
+   {
       $current_yyyymmdd = "$1$2$3";
       $current_yyyy     = "$1";
       $current_HHMMSS   = "$4$5$6";
@@ -107,16 +112,17 @@ if ($YYYYmmddHHMMSS) {
    $current_yyyymmdd = $TPSUP::LOG::yyyymmdd;
    $current_yyyy     = $TPSUP::LOG::yyyy;
    $current_HHMMSS   = $TPSUP::LOG::HHMMSS;
-} 
+}
 
 if ($verbose) {
    print "current_yyyymmdd = $current_yyyymmdd\n";
    print "current_HHMMSS   = $current_HHMMSS\n";
-}   
+}
 
-my $compiled_exclude = $exclude_pattern ?
-                             ($case_sensitive ?  qr/$exclude_pattern/ : qr/$exclude_pattern/i)
-                             : undef;
+my $compiled_exclude =
+  $exclude_pattern
+  ? ( $case_sensitive ? qr/$exclude_pattern/ : qr/$exclude_pattern/i )
+  : undef;
 
 for my $f (@ARGV) {
    print "\nfile=$f\n" if $verbose;
@@ -127,12 +133,14 @@ for my $f (@ARGV) {
    if ($no_time_pattern) {
       $ignore_time_pattern = 1;
    } else {
-      $cfg = find_log_PatternCfg($f, {LogPatternCfg=>$LogPatternCfg});
+      $cfg = find_log_PatternCfg( $f, { LogPatternCfg => $LogPatternCfg } );
 
       if ($cfg) {
-         print STDERR "file=$f, matched time pattern =", Dumper($cfg), "\n" if $verbose;
+         print STDERR "file=$f, matched time pattern =", Dumper($cfg), "\n"
+           if $verbose;
       } else {
-         print STDERR "file=$f, cannot match any time pattern. will ignore time_pattern\n";
+         print STDERR
+           "file=$f, cannot match any time pattern. will ignore time_pattern\n";
          $ignore_time_pattern = 1;
       }
    }
@@ -145,53 +153,56 @@ for my $f (@ARGV) {
 
    # my $ifh = get_in_fh($f);
    # while(my $line = <$ifh>) {
-   my $lines = TPSUP::READER::spot($f, 'error', {input_type=>'file', verbose=>0});
+   my $lines =
+     TPSUP::READER::spot( $f, 'error', { input_type => 'file', verbose => 0 } );
    for my $line (@$lines) {
-      $summary->{total_rows} ++ if $print_summary;
+      $summary->{total_rows}++ if $print_summary;
 
-      if (!$ignore_time_pattern) {
-         if (!$last_part_started) {
-            my $t = get_log_time(\$line, $cfg);
-   
+      if ( !$ignore_time_pattern ) {
+         if ( !$last_part_started ) {
+            my $t = get_log_time( \$line, $cfg );
+
             if ($verbose) {
-               print "spot line = $line\n"; 
+               print "spot line = $line\n";
                print "t = ", Dumper($t);
             }
-   
-            next if !$t;
-            $summary->{dated_rows} ++ if $print_summary;
-   
-            if (!$old) {
-               next if $t->{yyyymmdd} ne $current_yyyymmdd;
-               $summary->{today_rows} ++ if $print_summary;
+
+            next                     if !$t;
+            $summary->{dated_rows}++ if $print_summary;
+
+            if ( !$old ) {
+               next                     if $t->{yyyymmdd} ne $current_yyyymmdd;
+               $summary->{today_rows}++ if $print_summary;
             }
-   
+
             if ($last_part_started) {
-               my $backwardness = get_interval_seconds($t->{yyyymmdd}, $t->{HHMMSS}, $current_yyyymmdd, $current_HHMMSS);
-               if ($backwardness > $last_seconds) {
+               my $backwardness = get_interval_seconds(
+                  $t->{yyyymmdd},    $t->{HHMMSS},
+                  $current_yyyymmdd, $current_HHMMSS
+               );
+               if ( $backwardness > $last_seconds ) {
                   next;
                }
-            } 
-   
-            $last_part_started ++;
-   
+            }
+
+            $last_part_started++;
+
             print "parse log from $t->{yyyymmdd} $t->{HHMMSS}\n" if $verbose;
          }
-   
-         $summary->{last_rows} ++ if $print_summary;
+
+         $summary->{last_rows}++ if $print_summary;
       }
 
       if ($compiled_exclude) {
-         next if $line =~ /$compiled_exclude/;
-         $summary->{excluded_rows} ++ if $print_summary;
+         next                        if $line =~ /$compiled_exclude/;
+         $summary->{excluded_rows}++ if $print_summary;
       }
 
-      print $line, "\n"; #see some errors
+      print $line, "\n";    #see some errors
 
-;
    }
 
-   print "summary = ", Dumper($summary), "\n" if $print_summary; 
+   print "summary = ", Dumper($summary), "\n" if $print_summary;
 }
 
 exit 0;

@@ -60,46 +60,37 @@ examples:
    $prog -maxdepth 1 -he '\$path =~ /python/' -ha '!system("ls -l \$path")' \$TPSUP
    
    # flow control
-   $prog -fe '\$path =~ /autopath|python|scripts|proj|lib|i86pc/' -fd 'prune' \$TPSUP
+   $prog -fe '\$path =~ /autopath|python|scripts|proj|lib|i86pc/' -fd 'prune' -print \$TPSUP
+   $prog -fe '\$path =~ /autopath|python|scripts|proj|lib|i86pc/' -fd 'exit'  -pring \$TPSUP
 
-   $prog -fe '\$path =~ m:/scripts/:' -fd 'exit' \$TPSUP
+   # use handlers as a filter. "nop' is a do-nothing funciton.
+   $prog -he '\$path =~ /scripts/' -ha '!system("ls -ld \$path")' -maxcount 5 \$TPSUP
+   $prog -he '\$path =~ /scripts/' -ha 'nop' -maxcount 5 \$TPSUP
 
-   # use handlers as a filter
-   $prog -he '\$path =~ /scripts/' -ha 'print "\$path\\n"' \$TPSUP
-
-   # owner
-   $prog -he '\$owner ne "gpt"' -ha 'print "\$path\\n"' \$TPSUP
+   # owner, the following are the same
+   $prog -maxcount 5 -he '\$owner ne "gpt"' -ha 'print "\$path\\n"' \$TPSUP
+   $prog -maxcount 5 -m '\$owner ne "gpt"' \$TPSUP
 
    #  mtime/now. eg, file changed yesterday, one day is 86400 seconds
-   $prog -he '\$mtime<\$now-86400 && \$mtime>\$now-(2*86400)' -ha 'my \$str=localtime(\$mtime); print "\$str \$path\\n"' \$TPSUP
+   $prog -maxcount 5 -he '\$mtime<\$now-86400 && \$mtime>\$now-(2*86400)' -ha 'my \$str=localtime(\$mtime); print "\$str \$path\\n"' \$TPSUP
 
    # mode, eg, file is writable
-   $prog -he '\$mode & 0222' -ha 'printf("0\%o \%s\\n", \$mode, \$path)' \$TPSUP
+   $prog -maxcount 5 -he '\$mode & 0222' -ha 'printf("0\%o \%s\\n", \$mode, \$path)' \$TPSUP
 
    # mode, eg, file not executable
-   $prog -he '!(\$mode & 0111)' -ha 'printf("0\%o \%s\\n", \$mode, \$path)' \$TPSUP
+   $prog -maxcount 5 -he '!(\$mode & 0111)' -ha 'printf("0\%o \%s\\n", \$mode, \$path)' \$TPSUP
 
    # size, eg, file is bigger than 100K
-   $prog -he '\$size >100000' -ha 'printf("\%d \%s\\n", \$size, \$path)' \$TPSUP
+   $prog -maxcount 5 -he '\$size >100000' -ha 'printf("\%d \%s\\n", \$size, \$path)' \$TPSUP
 
-   # ifh(), ofh(): open file handler for input and output, the following find all bash scripts
-   # notes:close \$fh failed on solaris on an .gz file, if close is the last command, append 'nop'
-   $prog -he '\$type eq "file"' -ha '\$fh=ifh(\$path); \$line=<\$fh>; print "\$path,\$line" if \$line =~ m:^#!.#/bash\$:; close \$fh; nop' \$TPSUP
+   # getline() return scalar
+   # getline({count=>1}) return array
+   $prog -maxcount 5 -m '\$type eq "file" && getline() =~ /#!.*bash/' \$TPSUP
 
-Note: perl system() return 0 when successful, but in perl expression, 0 means false, failure.
    # the following command find scripts (starting with #!), with mode not equal to 0755 
-   # note: 
-   #     - the ! before the system() call
-   #     - use plenty of () to clarify the logic
-   #     - neither cygwin nor gitbash handle the mode well. don't use below command there.
+   # note: neither cygwin nor gitbash handle the mode well. don't use below command there.
+   $prog -maxcount 5 -m '(\$type eq "file") && ((\$mode & 0755) != 0755) && getline() =~ /#!.*bash/' -ls \$TPSUP
    
-   $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("ls -l \$path")' \$TPSUP
-
-   $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("chmod 755 \$path")' \$TPSUP 
-
-   # or all-in-1 command
-   $prog -he '(\$type eq "file") && ((\$mode & 0755) != 0755) && (\$fh=ifh(\$path)) && (\$line=<\$fh>) && (\$line=~/^#!/)' -ha '!system("ls -l \$path;chmod 755 \$path;ls -l \$path")' \$TPSUP
-
 END
 
     exit 1;
@@ -116,19 +107,23 @@ my @FlowDirs;
 my $print;
 my $find_ls;
 my $find_dump;
+my $find_print;
 my $maxdepth;
+my $maxcount;
 
 GetOptions(
     'v+'         => \$verbose,      # increment $verbose by 1 for each -v
     'print'      => \$print,
     'ls'         => \$find_ls,
     'dump'       => \$find_dump,
+    'print'      => \$find_print,
     'm=s'        => \@MatchExps,
     'he=s'       => \@HandleExps,
     'ha=s'       => \@HandleActs,
     'fe=s'       => \@FlowExps,
     'fd=s'       => \@FlowDirs,
     'maxdepth=s' => \$maxdepth,
+    'maxcount=s' => \$maxcount,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -147,7 +142,9 @@ my $ret = tpfind(
         RecursivePrint => $print,
         find_ls        => $find_ls,
         find_dump      => $find_dump,
+        find_print     => $find_print,
         MaxDepth       => $maxdepth,
+        MaxCount       => $maxcount,
     }
 );
 

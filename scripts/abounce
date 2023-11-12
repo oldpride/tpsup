@@ -5,20 +5,22 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw(get_dependency 
-                      query_jobs_superset
-                      autorep_J
-                      get_autorep_J_format
-                      print_autorep_J_header
-                      print_autorep_J_job
-                      print_autorep_q_J_job
-                      resolve_jobs
-                      parse_cmdline_jobs
-                     );
-use TPSUP::UTIL    qw(get_in_fh close_in_fh);
+use TPSUP::AUTOSYS qw(get_dependency
+  query_jobs_superset
+  autorep_J
+  get_autorep_J_format
+  print_autorep_J_header
+  print_autorep_J_job
+  print_autorep_q_J_job
+  resolve_jobs
+  parse_cmdline_jobs
+);
+use TPSUP::FILE qw(get_in_fh close_in_fh);
+
 # use Carp::Always;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 my $StatusExpire = 3600;
 
@@ -72,7 +74,6 @@ examples:
 
 END
 
-
    exit 1;
 }
 
@@ -88,61 +89,68 @@ my $dryrun;
 my $force;
 
 GetOptions(
-   'v|verbose'     => \$verbose,
-   'r|reset'       => \$reset,
-   'n|dryrun'      => \$dryrun,
-   'f|force'       => \$force,
-   'noExpire'      => \$noExpire,
-   'mp=s'          => \$MatchPattern,
-   'xp=s'          => \$ExcludePattern,
-   'sf=s'          => \$StatusFiles,
-   'se=s'          => \$StatusExpire,
-   'stop'          => \$stop_only,
-   'start'         => \$start_only,
+   'v|verbose' => \$verbose,
+   'r|reset'   => \$reset,
+   'n|dryrun'  => \$dryrun,
+   'f|force'   => \$force,
+   'noExpire'  => \$noExpire,
+   'mp=s'      => \$MatchPattern,
+   'xp=s'      => \$ExcludePattern,
+   'sf=s'      => \$StatusFiles,
+   'se=s'      => \$StatusExpire,
+   'stop'      => \$stop_only,
+   'start'     => \$start_only,
 ) || usage("cannot parse command line: $!");
 
-usage("wrong number of args") if ! @ARGV;
+usage("wrong number of args") if !@ARGV;
 
-my ($jobs, $seen, $jobFlags) 
-   = parse_cmdline_jobs(\@ARGV, {          JFlag=>1,  # default to -J style
-                                    MatchPattern=>$MatchPattern,
-                                  ExcludePattern=>$ExcludePattern,
-                                });
-                                                
+my ( $jobs, $seen, $jobFlags ) = parse_cmdline_jobs(
+   \@ARGV,
+   {
+      JFlag          => 1,                 # default to -J style
+      MatchPattern   => $MatchPattern,
+      ExcludePattern => $ExcludePattern,
+   }
+);
+
 $verbose && print "jobs = ", Dumper($jobs);
 
 my $opt = {
    StatusExpire => $StatusExpire,
    StatusFiles  => $StatusFiles,
    verbose      => $verbose,
-   StatusOnly   => 1,     # we only need job names, therefore, Job Status will be enough
+   StatusOnly   =>
+     1,    # we only need job names, therefore, Job Status will be enough
 };
 
 my $info;
 if ($reset) {
    my $opt2 = {%$opt};
    $opt2->{StatusExpire} = 0;
-   $info = query_jobs_superset($seen, $opt2);
+   $info = query_jobs_superset( $seen, $opt2 );
 } elsif ($noExpire) {
    my $opt2 = {%$opt};
-   $opt2->{StatusExpire} = 3600*24*365;
-   $info = query_jobs_superset($seen, $opt2);
+   $opt2->{StatusExpire} = 3600 * 24 * 365;
+   $info = query_jobs_superset( $seen, $opt2 );
 } else {
-   $info = query_jobs_superset($seen, $opt);
+   $info = query_jobs_superset( $seen, $opt );
 }
 
 $verbose && print "info = ", Dumper($info);
 
-my @superset = sort(keys(%$info));
+my @superset = sort( keys(%$info) );
 
-$verbose && print "superset = ", Dumper(\@superset);
+$verbose && print "superset = ", Dumper( \@superset );
 
-my $resolved_jobs = resolve_jobs($jobs, \@superset, {
-                                                       MatchPattern=>$MatchPattern,
-                                                     ExcludePattern=>$ExcludePattern,
-                                                     WithinSuperset=>1,
-                                                    }
-                                );
+my $resolved_jobs = resolve_jobs(
+   $jobs,
+   \@superset,
+   {
+      MatchPattern   => $MatchPattern,
+      ExcludePattern => $ExcludePattern,
+      WithinSuperset => 1,
+   }
+);
 
 $verbose && print "resolved_jobs = ", Dumper($resolved_jobs);
 
@@ -153,14 +161,14 @@ my @to_pair;
 print "potential stop/start jobs:\n";
 
 for my $job (@$resolved_jobs) {
-   if ($job =~ /RESTART|BOUNCE/i) {
-      print_autorep_J_job($info, $job, "", $opt);
+   if ( $job =~ /RESTART|BOUNCE/i ) {
+      print_autorep_J_job( $info, $job, "", $opt );
       push @start_jobs, $job;
-   } elsif ($job =~ /STOP|END/i) {
-      print_autorep_J_job($info, $job, "", $opt);
+   } elsif ( $job =~ /STOP|END/i ) {
+      print_autorep_J_job( $info, $job, "", $opt );
       push @to_pair, $job;
-   } elsif ($job =~ /START|BEGIN/i) {
-      print_autorep_J_job($info, $job, "", $opt);
+   } elsif ( $job =~ /START|BEGIN/i ) {
+      print_autorep_J_job( $info, $job, "", $opt );
       push @to_pair, $job;
    }
 }
@@ -168,33 +176,34 @@ for my $job (@$resolved_jobs) {
 print "\n";
 
 while (@to_pair) {
-   $verbose && print "to_pair = ", Dumper(\@to_pair);
+   $verbose && print "to_pair = ", Dumper( \@to_pair );
 
    my $job = $to_pair[0];
-   if ($job =~ /(STOP|END|START|BEGIN)/i) {
-      my $action = $1; 
-      my $start_pattern = $job; 
-      my  $stop_pattern = $job;
+   if ( $job =~ /(STOP|END|START|BEGIN)/i ) {
+      my $action        = $1;
+      my $start_pattern = $job;
+      my $stop_pattern  = $job;
       $start_pattern =~ s:$action:(START|BEGIN):;
-       $stop_pattern =~ s:$action:(STOP|END):;
+      $stop_pattern  =~ s:$action:(STOP|END):;
       $verbose && print "start_pattern = $start_pattern\n";
-      $verbose && print  "stop_pattern =  $stop_pattern\n";
+      $verbose && print "stop_pattern =  $stop_pattern\n";
 
       my @starts = grep { $_ =~ /^$start_pattern$/i } @to_pair;
-      my  @stops = grep { $_ =~  /^$stop_pattern$/i } @to_pair;
+      my @stops  = grep { $_ =~ /^$stop_pattern$/i } @to_pair;
 
-      $verbose && print "starts = ", Dumper(\@starts);
-      $verbose && print "stops = ",  Dumper(\@stops);
+      $verbose && print "starts = ", Dumper( \@starts );
+      $verbose && print "stops = ",  Dumper( \@stops );
 
-      if (@starts && @stops) { 
+      if ( @starts && @stops ) {
+
          # add to the list only if we have both start and stop jobs
          push @start_jobs, @starts;
-         push  @stop_jobs, @stops;
+         push @stop_jobs,  @stops;
 
          # remove them from candidates
-         @to_pair = grep {$_ !~ /^($start_pattern|$stop_pattern)$/i} @to_pair;
+         @to_pair = grep { $_ !~ /^($start_pattern|$stop_pattern)$/i } @to_pair;
       } else {
-         shift @to_pair;  # remove this job from the candidates
+         shift @to_pair;    # remove this job from the candidates
       }
    }
 }
@@ -203,60 +212,59 @@ print "matched stop/start jobs:\n";
 
 my $matched;
 
-if (!$start_only) {
+if ( !$start_only ) {
    for my $job (@stop_jobs) {
-      print_autorep_J_job($info, $job, "", $opt);
-      $matched ++;
+      print_autorep_J_job( $info, $job, "", $opt );
+      $matched++;
    }
 }
 
-if (!$stop_only) {
+if ( !$stop_only ) {
    for my $job (@start_jobs) {
-      print_autorep_J_job($info, $job, "", $opt);
-      $matched ++;
+      print_autorep_J_job( $info, $job, "", $opt );
+      $matched++;
    }
 }
 
-if (!$matched) {
+if ( !$matched ) {
    print "\nno matched jobs. quit.\n\n";
    exit 0;
 }
 
-if (!$force) {
+if ( !$force ) {
    my $run = $dryrun ? "dryrun" : "run";
    print "Do you want to proceed to $run the matched jobs? Y/N\n";
    my $answer = readline(*STDIN);
 
-   if ($answer !~ /^\s*[yY]/) {
+   if ( $answer !~ /^\s*[yY]/ ) {
       print "your answer is not yes. quit\n";
       exit 0;
    }
 }
 
-if (!$start_only) {
-   run_jobs(\@stop_jobs, $dryrun);
+if ( !$start_only ) {
+   run_jobs( \@stop_jobs, $dryrun );
 }
 
-if (!$stop_only && !$start_only) {
+if ( !$stop_only && !$start_only ) {
    print "sleep 10 seconds\n";
    system("sleep 10") if !$dryrun;
 
-   run_jobs(\@start_jobs, $dryrun);
+   run_jobs( \@start_jobs, $dryrun );
 }
 
 exit 0;
-
 
 ###############################################################################
 # subs
 ###############################################################################
 
 sub run_jobs {
-   my ($jobs, $dryrun) = @_;
+   my ( $jobs, $dryrun ) = @_;
 
    for my $job (@$jobs) {
       my $cmd = "sendevent -E FORCE_STARTJOB -J $job";
-   
+
       if ($dryrun) {
          print "dryrun = $cmd\n";
       } else {

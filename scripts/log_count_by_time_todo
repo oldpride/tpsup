@@ -4,12 +4,15 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(get_in_fh);
-use TPSUP::LOG qw(get_PatternCfg parse_PatternFile);
-use TPSUP::CSV qw(render_csv);
+use TPSUP::FILE qw(get_in_fh);
+use TPSUP::LOG  qw(parse_PatternCfg);
+use TPSUP::CSV  qw(render_csv);
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir = $0; $dir =~ s:[^/]+$::; $dir =~ s:/+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
+$dir =~ s:/+$::;
 
 sub usage {
    my ($msg) = @_;
@@ -56,15 +59,11 @@ EOF
    exit 1;
 }
 
-
-
-
-
-
-
-
-   
-our ($exclude_pattern, $match_pattern, $verbose, $App, $pattern_file, $TimePattern, $TimeKey, $Assignment, $ExpressionKey);
+our (
+   $exclude_pattern, $match_pattern, $verbose,
+   $App,             $pattern_file,  $TimePattern,
+   $TimeKey,         $Assignment,    $ExpressionKey
+);
 
 GetOptions(
    "x=s"            => \$exclude_pattern,
@@ -80,38 +79,45 @@ GetOptions(
 
 usage("wrong number of args") if !@ARGV;
 
-if ($ExpressionKey && $TimeKey) {
-   print STDERR "WARN: both TimeKey and Expression Key are specified. TimeKey will be ignored.\n";
+if ( $ExpressionKey && $TimeKey ) {
+   print STDERR
+"WARN: both TimeKey and Expression Key are specified. TimeKey will be ignored.\n";
 }
 
-if ($ARGV[0] eq '_list_pattern') {
-   my $cfg = parse_PatternFile({
-      PatternFile => $pattern_file,
-      RemoveInputQuotes => 1,
-      CheckSettings => [],
-   });
+if ( $ARGV[0] eq '_list_pattern' ) {
+   my $cfg = parse_PatternCfg(
+      {
+         PatternFile       => $pattern_file,
+         RemoveInputQuotes => 1,
+         CheckSettings     => [],
+      }
+   );
+
    #print Dumper($cfg);
-   
+
    my @rows;
-   for my $App (sort (keys %$cfg)) {
-      for my $r (@{$cfg->{$App}}) {
+   for my $App ( sort ( keys %$cfg ) ) {
+      for my $r ( @{ $cfg->{$App} } ) {
          push @rows, $r;
       }
    }
-   
-   render_csv(\@rows,['App','Example','TimePattern','Assignment','TimeKey','Comment']);
+
+   render_csv( \@rows,
+      [ 'App', 'Example', 'TimePattern', 'Assignment', 'TimeKey', 'Comment' ] );
    exit 0;
 }
 
-my $cfg = get_PatternCfg({
-   PatternFile       => $pattern_file,
-   RemoveInputQuotes => 1,
-   App               => $App,
-   TimePattern       => $TimePattern,
-   Assignment        => $Assignment,
-   TimeKey           => $TimeKey,
-   CheckSettings     => [ qw(TimePattern TimeKey Assignment) ],
-});
+my $cfg = parse_PatternCfg(
+   {
+      PatternFile       => $pattern_file,
+      RemoveInputQuotes => 1,
+      App               => $App,
+      TimePattern       => $TimePattern,
+      Assignment        => $Assignment,
+      TimeKey           => $TimeKey,
+      CheckSettings     => [qw(TimePattern TimeKey Assignment)],
+   }
+);
 
 my @assignments = split /,/, $cfg->{Assignment};
 
@@ -123,7 +129,8 @@ my $compiledKey;
 my $warn = $verbose ? 'use' : 'no';
 
 if ($ExpressionKey) {
-   $compiledKey = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $ExpressionKey }";
+   $compiledKey = eval
+"$warn warnings; no strict; package TPSUP::Expression; sub { $ExpressionKey }";
    $@ && die "Bad expression '$ExpressionKey' : $@";
 }
 
@@ -134,9 +141,9 @@ for my $f (@ARGV) {
 
    my $fh = get_in_fh($f);
 
-   if (!$fh) {
+   if ( !$fh ) {
       print STDERR "ERROR: cannot read $f\n";
-      $error ++;
+      $error++;
       next;
    }
 
@@ -148,16 +155,13 @@ for my $f (@ARGV) {
       chomp $line;
 
       next if defined $exclude_pattern && $line =~ /$exclude_pattern/;
-      next if defined   $match_pattern && $line !~   /$match_pattern/;
-      
-      
+      next if defined $match_pattern   && $line !~ /$match_pattern/;
 
+      my @a = ( $line =~ /$TimePattern/ );
 
-      my @a = ($line =~ /$TimePattern/);
-      
-      next if ! @a;
+      next if !@a;
 
-      my $r; # ref
+      my $r;    # ref
       @{$r}{@assignments} = @a;
 
       my $key;
@@ -166,7 +170,7 @@ for my $f (@ARGV) {
          TPSUP::Expression::export(%$r);
          $key = $compiledKey->();
       } else {
-         $key = join("-", @{$r}{@keys});
+         $key = join( "-", @{$r}{@keys} );
       }
 
       $count_by_key->{$key}++;
@@ -174,15 +178,15 @@ for my $f (@ARGV) {
 
    close $fh if $fh != \*STDIN;
 
-   if (@ARGV > 1) {
+   if ( @ARGV > 1 ) {
       print "file,key,count\n";
 
-      for my $k (sort (keys %$count_by_key)) {
+      for my $k ( sort ( keys %$count_by_key ) ) {
          print " $f,$k,$count_by_key->{$k}\n";
       }
    } else {
       print "key,count\n";
-      for my $k (sort (keys %$count_by_key)) {
+      for my $k ( sort ( keys %$count_by_key ) ) {
          print "$k,$count_by_key->{$k}\n";
       }
    }
@@ -203,26 +207,26 @@ package TPSUP::Expression;
 
 sub HalfHour {
    my ($MM) = @_;
-   
-   if ($MM > 30) {
-      return '30' ;
+
+   if ( $MM > 30 ) {
+      return '30';
    } else {
-      return '00' ;
+      return '00';
    }
 }
 
 sub TenMin {
    my ($MM) = @_;
 
-   if ($MM < 10) {
+   if ( $MM < 10 ) {
       return '00';
-   } elsif ($MM < 20) {
+   } elsif ( $MM < 20 ) {
       return '10';
-   } elsif ($MM < 30) {
+   } elsif ( $MM < 30 ) {
       return '20';
-   } elsif ($MM < 40) {
+   } elsif ( $MM < 40 ) {
       return '30';
-   } elsif ($MM < 50) {
+   } elsif ( $MM < 50 ) {
       return '40';
    } else {
       return '50';

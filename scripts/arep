@@ -5,21 +5,23 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw(get_dependency 
-                      query_jobs_superset
-                      autorep_J
-                      get_autorep_J_format
-                      print_autorep_J_header
-                      print_autorep_J_job
-                      print_autorep_q_J_job
-                      print_job_csv
-                      resolve_jobs
-                      parse_cmdline_jobs
-                      );
-use TPSUP::UTIL    qw(get_in_fh close_in_fh);
+use TPSUP::AUTOSYS qw(get_dependency
+  query_jobs_superset
+  autorep_J
+  get_autorep_J_format
+  print_autorep_J_header
+  print_autorep_J_job
+  print_autorep_q_J_job
+  print_job_csv
+  resolve_jobs
+  parse_cmdline_jobs
+);
+use TPSUP::FILE qw(get_in_fh close_in_fh);
+
 # use Carp::Always;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 my $DetailExpire = 300;
 my $StatusExpire = 15;
@@ -100,7 +102,6 @@ examples:
 
 END
 
-
    exit 1;
 }
 
@@ -119,31 +120,33 @@ my $csv_fields;
 my $csv_delimiter = ',';
 
 GetOptions(
-   'v|verbose'     => \$verbose,
-   'r|reset'       => \$reset,
-   'noExpire'      => \$noExpire,
-   'q'             => \$detail,
-   'mp=s'          => \$MatchPattern,
-   'xp=s'          => \$ExcludePattern,
-   'me=s'          => \@JobExps,
-   'df=s'          => \$DetailFiles,
-   'sf=s'          => \$StatusFiles,
-   'de=s'          => \$DetailExpire,
-   'se=s'          => \$StatusExpire,
-   'J'             => \$arg_is_job,
-   'c=s'           => \$check_tags,
-   'csv=s'         => \$csv_fields,
-   'delimiter=s'   => \$csv_delimiter,
+   'v|verbose'   => \$verbose,
+   'r|reset'     => \$reset,
+   'noExpire'    => \$noExpire,
+   'q'           => \$detail,
+   'mp=s'        => \$MatchPattern,
+   'xp=s'        => \$ExcludePattern,
+   'me=s'        => \@JobExps,
+   'df=s'        => \$DetailFiles,
+   'sf=s'        => \$StatusFiles,
+   'de=s'        => \$DetailExpire,
+   'se=s'        => \$StatusExpire,
+   'J'           => \$arg_is_job,
+   'c=s'         => \$check_tags,
+   'csv=s'       => \$csv_fields,
+   'delimiter=s' => \$csv_delimiter,
 ) || usage("cannot parse command line: $!");
 
-usage("wrong number of args") if ! @ARGV;
+usage("wrong number of args") if !@ARGV;
 
-my ($jobs, $seen, $jobFlags) 
-   = parse_cmdline_jobs(\@ARGV, {
-                                         JFlag=>$arg_is_job,
-                                  MatchPattern=>$MatchPattern,
-                                ExcludePattern=>$ExcludePattern,
-                        });
+my ( $jobs, $seen, $jobFlags ) = parse_cmdline_jobs(
+   \@ARGV,
+   {
+      JFlag          => $arg_is_job,
+      MatchPattern   => $MatchPattern,
+      ExcludePattern => $ExcludePattern,
+   }
+);
 
 $verbose && print "jobs = ", Dumper($jobs);
 
@@ -157,11 +160,11 @@ my $opt = {
 };
 
 my $is_status_attr = {
-    LastStart => 1, 
-    LastEnd   => 1,
-    Status    => 1,
+   LastStart => 1,
+   LastEnd   => 1,
+   Status    => 1,
 };
-      
+
 if ($detail) {
    $opt->{DetailOnly} = 1;
 } else {
@@ -172,23 +175,24 @@ if ($csv_fields) {
    my @fields = split /,/, $csv_fields;
 
    for my $var (@fields) {
-      if ($is_status_attr->{$var}) {
+      if ( $is_status_attr->{$var} ) {
          $opt->{DetailOnly} = 0;
       } else {
          $opt->{StatusOnly} = 0;
       }
    }
-} 
+}
 
 if (@JobExps) {
    $opt->{NotFoundMsg} = 'not match';
 
    for my $je (@JobExps) {
+
       # this may not be accurate
-      my @vars = ($je =~ /\$([a-zA-Z_-]+)/g);
-   
+      my @vars = ( $je =~ /\$([a-zA-Z_-]+)/g );
+
       for my $var (@vars) {
-         if ($is_status_attr->{$var}) {
+         if ( $is_status_attr->{$var} ) {
             $opt->{DetailOnly} = 0;
          } else {
             $opt->{StatusOnly} = 0;
@@ -198,7 +202,7 @@ if (@JobExps) {
 }
 
 if ($check_tags) {
-   @{$opt->{ValidateVars}} = split /,/, $check_tags;
+   @{ $opt->{ValidateVars} } = split /,/, $check_tags;
 }
 
 my $info;
@@ -206,14 +210,14 @@ if ($reset) {
    my $opt2 = {%$opt};
    $opt2->{DetailExpire} = 0;
    $opt2->{StatusExpire} = 0;
-   $info = query_jobs_superset($seen, $opt2);
+   $info                 = query_jobs_superset( $seen, $opt2 );
 } elsif ($noExpire) {
    my $opt2 = {%$opt};
-   $opt2->{DetailExpire} = 3600*24*365;
-   $opt2->{StatusExpire} = 3600*24*365;
-   $info = query_jobs_superset($seen, $opt2);
+   $opt2->{DetailExpire} = 3600 * 24 * 365;
+   $opt2->{StatusExpire} = 3600 * 24 * 365;
+   $info                 = query_jobs_superset( $seen, $opt2 );
 } else {
-   $info = query_jobs_superset($seen, $opt);
+   $info = query_jobs_superset( $seen, $opt );
 }
 
 #my $exists_box_job;
@@ -228,37 +232,41 @@ if ($reset) {
 
 $verbose && print "info = ", Dumper($info);
 
-my @superset = sort(keys(%$info));
+my @superset = sort( keys(%$info) );
 
-$verbose && print "superset = ", Dumper(\@superset);
+$verbose && print "superset = ", Dumper( \@superset );
 
-my $resolved_jobs = resolve_jobs($jobs, \@superset, {
-                                                       MatchPattern=>$MatchPattern,
-                                                     ExcludePattern=>$ExcludePattern,
-                                                     WithinSuperset=>1,
-                                                    }
-                                );
+my $resolved_jobs = resolve_jobs(
+   $jobs,
+   \@superset,
+   {
+      MatchPattern   => $MatchPattern,
+      ExcludePattern => $ExcludePattern,
+      WithinSuperset => 1,
+   }
+);
 
 $verbose && print "resolved_jobs = ", Dumper($resolved_jobs);
 
 if ($csv_fields) {
    my @fields = split /,/, $csv_fields;
 
-   print join($csv_delimiter, @fields), "\n";
+   print join( $csv_delimiter, @fields ), "\n";
 
    for my $job (@$resolved_jobs) {
-      print_job_csv($info, $job, \@fields, $opt);
-   }  
+      print_job_csv( $info, $job, \@fields, $opt );
+   }
 } elsif ($detail) {
    for my $job (@$resolved_jobs) {
-      print_autorep_q_J_job($info, $job, "", $opt);
-   }  
+      print_autorep_q_J_job( $info, $job, "", $opt );
+   }
 } else {
+
    # status only
    print_autorep_J_header();
 
    for my $job (@$resolved_jobs) {
-      print_autorep_J_job($info, $job, "", $opt);
+      print_autorep_J_job( $info, $job, "", $opt );
    }
 }
 

@@ -6,19 +6,24 @@ use Carp;
 use Getopt::Long;
 
 use TPSUP::FIX qw(
-   filter_fix
-   map_desc_by_tag_value
+  filter_fix
+  map_desc_by_tag_value
 );
 
 use TPSUP::UTIL qw(
-   insert_namespaces
-   get_exps_from_string
-   get_ExpHash_from_ArrayOfStrings
-   get_out_fh
+  insert_namespaces
+  get_exps_from_string
+  get_ExpHash_from_ArrayOfStrings
 );
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir = $0; $dir =~ s:[^/]+$::;
+use TPSUP::FILE qw(
+  get_out_fh
+);
+
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
 my $min_idle = 60;
 
@@ -230,33 +235,33 @@ my $SortKeyString;
 my $delimiter;
 
 GetOptions(
-   "xp=s" => \@exclude_pattern,
-   "mp=s" => \@match_pattern,
-   "me=s" => \@match_expression,
-   "xe=s" => \@exclude_expression,
-   "ee=s" => \@ExportExps,
-   "te=s" => \@TempExps,
-   "v" => \$verbose,
-   "PrintMatch" => \$PrintMatch,
-   "render" => \$render,
-   "delimiter=s" => \$delimiter,
-   "o|output=s" => \$output,
-   "h|header=s" => \$header,
-   "f|fields=s" => \@ExportExps,
-   "dict=s" => \$FixDictFile,
-   "maxmatch=s" => \$maxmatch,
+   "xp=s"           => \@exclude_pattern,
+   "mp=s"           => \@match_pattern,
+   "me=s"           => \@match_expression,
+   "xe=s"           => \@exclude_expression,
+   "ee=s"           => \@ExportExps,
+   "te=s"           => \@TempExps,
+   "v"              => \$verbose,
+   "PrintMatch"     => \$PrintMatch,
+   "render"         => \$render,
+   "delimiter=s"    => \$delimiter,
+   "o|output=s"     => \$output,
+   "h|header=s"     => \$header,
+   "f|fields=s"     => \@ExportExps,
+   "dict=s"         => \$FixDictFile,
+   "maxmatch=s"     => \$maxmatch,
    "SourceNewOrder" => \$SourceNewOrder,
-   'grpkeys=s' => \$groupKeyString,
-   'grpacts=s' => \@groupActs,
-   'grpexps=s' => \@groupExps,
-   'summary=s' => \@summActs,
-   'summexp=s' => \@summExps,
-   'sort=s' => \$SortKeyString,
-   'code=s' => \@SpaceCodes,
-   'codefile=s' => \@SpaceFiles,
-   'delete=s' => \$delete_tags,
-   'op|option=s' => \@other_options,
-   'nested' => \$nested,
+   'grpkeys=s'      => \$groupKeyString,
+   'grpacts=s'      => \@groupActs,
+   'grpexps=s'      => \@groupExps,
+   'summary=s'      => \@summActs,
+   'summexp=s'      => \@summExps,
+   'sort=s'         => \$SortKeyString,
+   'code=s'         => \@SpaceCodes,
+   'codefile=s'     => \@SpaceFiles,
+   'delete=s'       => \$delete_tags,
+   'op|option=s'    => \@other_options,
+   'nested'         => \$nested,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -265,43 +270,44 @@ my ($file) = @ARGV;
 
 my $FixDict;
 if ($FixDictFile) {
-   croak "$FixDictFile not found" if ! -f $FixDictFile;
+   croak "$FixDictFile not found" if !-f $FixDictFile;
 
    $FixDict = `cat $FixDictFile`;
 
    # load the user-specified dict here because filter_fix may not take $opt when
    # applying TPSUP::Expression
-   map_desc_by_tag_value({FixDict => $FixDict});
+   map_desc_by_tag_value( { FixDict => $FixDict } );
 }
 
 my $opt = {
-   MatchExps => \@match_expression,
-   ExcludeExps => \@exclude_expression,
-   MatchPatterns => \@match_pattern,
+   MatchExps       => \@match_expression,
+   ExcludeExps     => \@exclude_expression,
+   MatchPatterns   => \@match_pattern,
    ExcludePatterns => \@exclude_pattern,
-   FixDelimiter => $delimiter,
-   Output => $output,
+   FixDelimiter    => $delimiter,
+   Output          => $output,
+
    #SelectTags => $tags,
-   verbose => $verbose,
-   FixPrintMatch => $PrintMatch,
-   ExportExps => \@ExportExps,
-   TempExps => \@TempExps,
-   RenderOutput => $render,
+   verbose           => $verbose,
+   FixPrintMatch     => $PrintMatch,
+   ExportExps        => \@ExportExps,
+   TempExps          => \@TempExps,
+   RenderOutput      => $render,
    FilterFixMaxMatch => $maxmatch,
-   SourceNewOrder => $SourceNewOrder,
-   NestedFix => $nested,
-   SortKeys => $SortKeyString,
+   SourceNewOrder    => $SourceNewOrder,
+   NestedFix         => $nested,
+   SortKeys          => $SortKeyString,
 };
 
-insert_namespaces(\@SpaceCodes, 'code', $opt) if @SpaceCodes;
-insert_namespaces(\@SpaceFiles, 'file', $opt) if @SpaceFiles;
+insert_namespaces( \@SpaceCodes, 'code', $opt ) if @SpaceCodes;
+insert_namespaces( \@SpaceFiles, 'file', $opt ) if @SpaceFiles;
 
 for my $op (@other_options) {
-   if ($op =~ /^(.+?)=(.+)/) {
-      my ($k, $v) = ($1, $2);
+   if ( $op =~ /^(.+?)=(.+)/ ) {
+      my ( $k, $v ) = ( $1, $2 );
 
-      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
-         @{$opt->{$k}} = split /,/, $v;
+      if ( $k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/ ) {
+         @{ $opt->{$k} } = split /,/, $v;
       } else {
          $opt->{$k} = $v;
       }
@@ -319,28 +325,28 @@ if ($groupKeyString) {
 if (@groupActs) {
    croak "must also set -grpkeys when you set -grpacts" if !$groupKeyString;
 
-   $opt->{GroupAction} = get_ExpHash_from_ArrayOfStrings(\@groupActs);
+   $opt->{GroupAction} = get_ExpHash_from_ArrayOfStrings( \@groupActs );
 }
 
 if (@groupExps) {
    croak "must also set -grpkeys when you set -grpexps" if !$groupKeyString;
 
-   $opt->{GroupActExp} = get_ExpHash_from_ArrayOfStrings(\@groupExps);
+   $opt->{GroupActExp} = get_ExpHash_from_ArrayOfStrings( \@groupExps );
 }
 
 if (@summActs) {
-   $opt->{SummaryAction} = get_ExpHash_from_ArrayOfStrings(\@summActs);
+   $opt->{SummaryAction} = get_ExpHash_from_ArrayOfStrings( \@summActs );
 }
 
 if (@summExps) {
-   $opt->{SummaryExp} = get_ExpHash_from_ArrayOfStrings(\@summExps);
+   $opt->{SummaryExp} = get_ExpHash_from_ArrayOfStrings( \@summExps );
 }
 
 if ($delete_tags) {
-   @{$opt->{DeleteColumns}} = split /,/, $delete_tags;
+   @{ $opt->{DeleteColumns} } = split /,/, $delete_tags;
 }
 
-my $ret = filter_fix($file, $opt);
+my $ret = filter_fix( $file, $opt );
 
 $verbose && print "ret =", Dumper($ret);
 
@@ -348,14 +354,14 @@ exit 0;
 
 package TPSUP::Expression;
 
-use TPSUP::DATE qw(/./);
+use TPSUP::DATE;
 
 no strict 'refs';
 
 sub yyyymmdd_dMonyy {
    my ($yyyymmdd) = @_;
 
-   return convert_from_yyyymmdd('${d}-${Mon}-${yy}', $yyyymmdd);
+   return TPSUP::DATE::convert_from_yyyymmdd( '${d}-${Mon}-${yy}', $yyyymmdd );
 }
 
 #backward compatiblity
@@ -365,38 +371,38 @@ sub yyyymmdd_dMmmyy {
 }
 
 sub FixTime2Any {
-   my ($FixTime, $output_template, $opt) = @_;
+   my ( $FixTime, $output_template, $opt ) = @_;
 
    # SendingTime 52 = 20170118-16:54:05.047
    #TransactTime 60 = 20170118-16:54:05.047
 
-   if ($opt->{GetMillSec}) {
+   if ( $opt->{GetMillSec} ) {
       return date2any(
-                       $FixTime,
-                       '^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2}).(\d{3})',
-                       'yyyy,mm,dd,HH,MM,SS,mmm',
-                       "sprintf(\"$output_template\")",
-                       $opt # don't set FIX=>1 here because there is no numeric var, eg ${35}.
-                     );
+         $FixTime,
+         '^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2}).(\d{3})',
+         'yyyy,mm,dd,HH,MM,SS,mmm',
+         "sprintf(\"$output_template\")",
+         $opt # don't set FIX=>1 here because there is no numeric var, eg ${35}.
+      );
    } else {
       return date2any(
-                       $FixTime,
-                       '^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})',
-                       'yyyy,mm,dd,HH,MM,SS',
-                       "sprintf(\"$output_template\")",
-                       $opt # don't set FIX=>1 here because there is no numeric var, eg ${35}.
-                     );
+         $FixTime,
+         '^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})',
+         'yyyy,mm,dd,HH,MM,SS',
+         "sprintf(\"$output_template\")",
+         $opt # don't set FIX=>1 here because there is no numeric var, eg ${35}.
+      );
    }
 
-   # $ echo "35=8;60=20170118-16:54:05.047" |\
-   # fixlog2csv-f 'Type=fixdesc(35),Time=FixTime2Any(${60}, "\$HH:\$MM:\$SS")' -
-   # Type,Time
-   # Execution Report <8>,16:54:05
-   # a tricky one: gmt21ocal=>1, $d (8), $Mon (Jan), $yy (17)
-   # $ echo "35=8;60=20170108-16:54:05.047" |\
-   # fixlog2csv-f 'Type=fixdesc(35),Time=FixTime2Any(${60}, "\$d-\$Mon-\$yy\$HH:\$MM:\$SS", {gmt21ocal=>1})' -
-   # Type,Time
-   # Execution Report <8>,8-Jan-17 11:54:05
+# $ echo "35=8;60=20170118-16:54:05.047" |\
+# fixlog2csv-f 'Type=fixdesc(35),Time=FixTime2Any(${60}, "\$HH:\$MM:\$SS")' -
+# Type,Time
+# Execution Report <8>,16:54:05
+# a tricky one: gmt21ocal=>1, $d (8), $Mon (Jan), $yy (17)
+# $ echo "35=8;60=20170108-16:54:05.047" |\
+# fixlog2csv-f 'Type=fixdesc(35),Time=FixTime2Any(${60}, "\$d-\$Mon-\$yy\$HH:\$MM:\$SS", {gmt21ocal=>1})' -
+# Type,Time
+# Execution Report <8>,8-Jan-17 11:54:05
 
 }
 1

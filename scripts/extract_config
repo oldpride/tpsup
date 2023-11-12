@@ -5,10 +5,12 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL    qw(get_in_fh);
+use TPSUP::FILE qw(get_in_fh);
+
 # use Carp::Always;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 my $comment_pattern = '[#;]';
 
@@ -40,9 +42,8 @@ END
 
 my $verbose;
 
-GetOptions(
-   'v|verbose'     => \$verbose,
-) || usage("cannot parse command line: $!");
+GetOptions( 'v|verbose' => \$verbose, )
+  || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
 
@@ -51,8 +52,8 @@ my ($file) = @ARGV;
 my $ifh = get_in_fh($file);
 
 while (<$ifh>) {
-   next if /^\s*$/;                    # skip blank lines
-   next if /^\s*$comment_pattern/;     # skip comment
+   next if /^\s*$/;                   # skip blank lines
+   next if /^\s*$comment_pattern/;    # skip comment
 
    print;
 }

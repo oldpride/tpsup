@@ -11,142 +11,140 @@ our @EXPORT_OK = qw(
 use Carp;
 use Data::Dumper;
 
-use TPSUP::UTIL qw(
+use TPSUP::FILE qw(
   get_in_fh
   close_in_fh
 );
 
 sub grep {
-    my ( $files, $opt ) = @_;
+   my ( $files, $opt ) = @_;
 
-    my $MatchPatterns = $opt->{MatchPatterns} ? $opt->{MatchPatterns} : [];
-    my $ExcludePatterns =
-      $opt->{ExcludePatterns} ? $opt->{ExcludePatterns} : [];
+   my $MatchPatterns = $opt->{MatchPatterns} ? $opt->{MatchPatterns} : [];
+   my $ExcludePatterns =
+     $opt->{ExcludePatterns} ? $opt->{ExcludePatterns} : [];
 
-    if ( !@$opt->{MatchPatterns} && $opt->{MatchPattern} ) {
-        $MatchPatterns = [ $opt->{MatchPattern} ];
-    }
+   if ( !@$opt->{MatchPatterns} && $opt->{MatchPattern} ) {
+      $MatchPatterns = [ $opt->{MatchPattern} ];
+   }
 
-    if ( !@$opt->{ExcludePatterns} && $opt->{ExcludePattern} ) {
-        $ExcludePatterns = [ $opt->{ExcludePattern} ];
-    }
+   if ( !@$opt->{ExcludePatterns} && $opt->{ExcludePattern} ) {
+      $ExcludePatterns = [ $opt->{ExcludePattern} ];
+   }
 
-    my @CompiledMatch;
-    my @CompiledExclude;
-    for my $p (@$MatchPatterns) {
-        push @CompiledMatch, qr/$p/;
-    }
+   my @CompiledMatch;
+   my @CompiledExclude;
+   for my $p (@$MatchPatterns) {
+      push @CompiledMatch, qr/$p/;
+   }
 
-    for my $p (@$ExcludePatterns) {
-        push @CompiledExclude, qr/$p/;
-    }
+   for my $p (@$ExcludePatterns) {
+      push @CompiledExclude, qr/$p/;
+   }
 
-    my $FileNameOnly   = $opt->{FileNameOnly};
-    my $Recursive      = $opt->{Recursive};
-    my $verbose        = $opt->{verbose};
-    my $FindFirstFile  = $opt->{FindFirstFile};
-    my $PrintCount     = $opt->{PrintCount};
-    my $print_filename = $opt->{print_filename};
+   my $FileNameOnly   = $opt->{FileNameOnly};
+   my $Recursive      = $opt->{Recursive};
+   my $verbose        = $opt->{verbose};
+   my $FindFirstFile  = $opt->{FindFirstFile};
+   my $PrintCount     = $opt->{PrintCount};
+   my $print_filename = $opt->{print_filename};
 
-    usage("at least one of -m and -x must be specified")
-      if !@CompiledMatch && !@CompiledExclude;
+   usage("at least one of -m and -x must be specified")
+     if !@CompiledMatch && !@CompiledExclude;
 
-    my @lines2;
+   my @lines2;
 
-    # https://stackoverflow.com/questions/25399728
-    my $grep_1_file = sub {
-        my ($file) = @_;
-        my @lines;
+   # https://stackoverflow.com/questions/25399728
+   my $grep_1_file = sub {
+      my ($file) = @_;
+      my @lines;
 
-        my $tf = get_inf_fh( $file, $opt );
+      my $tf = get_inf_fh( $file, $opt );
 
-        while ( my $line = <$tf> ) {
-            if ( $verbose > 2 ) {
-                print STDERR "line=$line\n";
+      while ( my $line = <$tf> ) {
+         if ( $verbose > 2 ) {
+            print STDERR "line=$line\n";
+         }
+
+         if (@CompiledMatch) {
+            my $all_matched = 1;
+            for my $p (@CompiledMatch) {
+               if ( $line !~ /$p/ ) {
+                  $all_matched = 0;
+                  last;
+               }
             }
-
-            if (@CompiledMatch) {
-                my $all_matched = 1;
-                for my $p (@CompiledMatch) {
-                    if ( $line !~ /$p/ ) {
-                        $all_matched = 0;
-                        last;
-                    }
-                }
-                if ( !$all_matched ) {
-                    next;
-                }
+            if ( !$all_matched ) {
+               next;
             }
+         }
 
-            if (@CompiledExclude) {
-                my $to_exclude = 0;
-                for my $p (@CompiledExclude) {
-                    if ( $line =~ /$p/ ) {
-                        $to_exclude = 1;
-                        last;
-                    }
-                }
-                if ($to_exclude) {
-                    next;
-                }
+         if (@CompiledExclude) {
+            my $to_exclude = 0;
+            for my $p (@CompiledExclude) {
+               if ( $line =~ /$p/ ) {
+                  $to_exclude = 1;
+                  last;
+               }
             }
-
-            if ($FileNameOnly) {
-                push @lines, $file;
-                if ( $opt->{print_output} ) {
-                    print "$file\n";
-                }
-                last;
+            if ($to_exclude) {
+               next;
             }
+         }
 
-            if ($print_filename) {
-                push @lines, "$file:$line";
-                if ( $opt->{print_output} ) {
-                    print "$file:$line";
-                }
+         if ($FileNameOnly) {
+            push @lines, $file;
+            if ( $opt->{print_output} ) {
+               print "$file\n";
             }
-            else {
-                push @lines, $line;
-                if ( $opt->{print_output} ) {
-                    print $line;
-                }
+            last;
+         }
+
+         if ($print_filename) {
+            push @lines, "$file:$line";
+            if ( $opt->{print_output} ) {
+               print "$file:$line";
             }
-        }
+         } else {
+            push @lines, $line;
+            if ( $opt->{print_output} ) {
+               print $line;
+            }
+         }
+      }
 
-        return \@lines;
-    };    # end of $grep_1_file->()
+      return \@lines;
+   };    # end of $grep_1_file->()
 
-    for my $path (@$files) {
-        my @files;
-        if ($Recursive) {
-            @files = `find $path -type f|sort`;
-            chomp @files;
-        }
-        else {
-            @files = ($path);
-        }
+   for my $path (@$files) {
+      my @files;
+      if ($Recursive) {
+         @files = `find $path -type f|sort`;
+         chomp @files;
+      } else {
+         @files = ($path);
+      }
 
-        for my $f (@files) {
-            $verbose && print STDERR "scanning file=$f\n";
-            my $matched = $grep_1_file->($f);
-            push @lines2, @$matched;
-        }
-    }
+      for my $f (@files) {
+         $verbose && print STDERR "scanning file=$f\n";
+         my $matched = $grep_1_file->($f);
+         push @lines2, @$matched;
+      }
+   }
 
-    return \@lines2;
+   return \@lines2;
 }
 
 sub main {
-    use TPSUP::TEST qw(test_lines);
+   use TPSUP::TEST qw(test_lines);
 
-    # TPSUP = os.environ.get('TPSUP')
-    # files1 = f'{TPSUP}/python3/scripts/ptgrep_test*'
-    # files2 = f'{TPSUP}/python3/lib/tpsup/searchtools_test*'
-    my $TPSUP  = $ENV{TPSUP};
-    my $files1 = "$TPSUP/python3/scripts/ptgrep_test*";
-    my $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
+   # TPSUP = os.environ.get('TPSUP')
+   # files1 = f'{TPSUP}/python3/scripts/ptgrep_test*'
+   # files2 = f'{TPSUP}/python3/lib/tpsup/searchtools_test*'
+   my $TPSUP  = $ENV{TPSUP};
+   my $files1 = "$TPSUP/python3/scripts/ptgrep_test*";
+   my $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
 
-    my $test_code = <<'END';
+   my $test_code = <<'END';
         our $TPSUP  = $ENV{TPSUP};
         our $files1 = "$TPSUP/python3/scripts/ptgrep_test*";
         our  $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
@@ -154,7 +152,7 @@ sub main {
         grep($files1, { ExcludePattern => 'abc|def' });
 END
 
-    test_lines($test_code);
+   test_lines($test_code);
 }
 
 main() unless caller();

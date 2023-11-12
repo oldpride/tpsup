@@ -26,7 +26,7 @@ sub1();
 __END__
 output
 
-Variable "$v" will not stay shared at /home/tian/sitebase/github/tpsup/scripts/test_sub_in_sub.pl line 11.
+Variable "$v" will not stay shared at /home/tian/sitebase/github/tpsup/scripts/test_sub_in_sub_bad.pl line 11.
 in sub1 v=set by sub1
 in sub2 v=set by sub1
 in sub2 v=set by sub2

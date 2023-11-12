@@ -6,12 +6,14 @@ use Data::Dumper;
 use Getopt::Long;
 use POSIX ":sys_wait_h";
 use Carp;
-use TPSUP::SSH qw(tpssh get_remote_login_host);
-use TPSUP::UTIL qw(get_in_fh close_in_fh get_timestamp get_tmp_file parse_rc);
+use TPSUP::SSH  qw(tpssh get_remote_login_host);
+use TPSUP::FILE qw(get_in_fh close_in_fh);
+use TPSUP::UTIL qw(get_timestamp get_tmp_file parse_rc);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 my $default_ssh_maxcount = 5;
-my $default_scp_maxcount = 1;   # scp should be single-thread
+my $default_scp_maxcount = 1;    # scp should be single-thread
 
 my $default_hostfile = "~/.tpsup/hosts.csv";
 
@@ -172,40 +174,40 @@ GetOptions(
    'x|exclude=s'   => \@ExcludePatterns,
    'prefix'        => \$prefix,
    'rp=s'          => \$remote_profile,
-   'ExecArgType=s'=> \$ExecArgType,
-   'GlobArray'    => \$GlobArray,
-   'copy=s'       => \$copy,
-   'cpRun'        => \$cpRun,
-   'list'         => \$list,
+   'ExecArgType=s' => \$ExecArgType,
+   'GlobArray'     => \$GlobArray,
+   'copy=s'        => \$copy,
+   'cpRun'         => \$cpRun,
+   'list'          => \$list,
 ) || usage("cannot parse command line: $!");
 
 my $cfg;
 
 if ($hostlist) {
-   for my $e (split /[\s,]+/, $hostlist) {
+   for my $e ( split /[\s,]+/, $hostlist ) {
       next if !$e;
-      $cfg->{$e}->{host} = $e;
+      $cfg->{$e}->{host}    = $e;
       $cfg->{$e}->{profile} = $remote_profile if $remote_profile;
    }
 } else {
-   if (!$hostfile) {
+   if ( !$hostfile ) {
       $hostfile = `bash -c "echo $default_hostfile"`;
       chomp $hostfile;
    }
 
    my $fh = get_in_fh($hostfile);
-   
-   LINE:
-   while (my $line = <$fh>) {
+
+ LINE:
+   while ( my $line = <$fh> ) {
       chomp $line;
 
-      next if $line =~ /^(host|hostname)/;      # skip header
-      next if $line =~ /^\s*#/;                  # skip comment
-      next if $line =~ /^\s*$/;                  # skip blank lines
+      next if $line =~ /^(host|hostname)/;    # skip header
+      next if $line =~ /^\s*#/;               # skip comment
+      next if $line =~ /^\s*$/;               # skip blank lines
 
       if (@MatchPatterns) {
          for my $m (@MatchPatterns) {
-            if ($line !~ /$m/) {
+            if ( $line !~ /$m/ ) {
                next LINE;
             }
          }
@@ -215,7 +217,7 @@ if ($hostlist) {
          my $excluded = 1;
 
          for my $m (@ExcludePatterns) {
-            if ($line !~ /$m/) {
+            if ( $line !~ /$m/ ) {
                $excluded = 0;
                last;
             }
@@ -224,37 +226,38 @@ if ($hostlist) {
          next LINE if $excluded;
       }
 
-      my ($host, $profile) = split /,/, $line;
+      my ( $host, $profile ) = split /,/, $line;
 
       next if !$host;
 
-      print "ERROR: duplicate host=$host in $hostfile, overwriten\n" if $cfg->{$host};
-      @{$cfg->{$host}}{qw(host profile)} = ($host, $profile);
+      print "ERROR: duplicate host=$host in $hostfile, overwriten\n"
+        if $cfg->{$host};
+      @{ $cfg->{$host} }{qw(host profile)} = ( $host, $profile );
    }
 
    close_in_fh($fh);
 }
 
-if (!$cfg) {
+if ( !$cfg ) {
    print "no hosts matched criteria\n";
    exit 0;
 } elsif ($list) {
-   print "cfg = ", Dumper($cfg);   
+   print "cfg = ", Dumper($cfg);
    exit 0;
 }
 
 usage("wrong number of args") if @ARGV < 1;
 
-my @hosts = sort (keys %$cfg);
+my @hosts = sort ( keys %$cfg );
 
 if ($action) {
-   if ($action ne 'ssh' && $action ne 'scp') {
+   if ( $action ne 'ssh' && $action ne 'scp' ) {
       usage("unsupported action='$action'");
    }
 } else {
-   if ($prog =~ /ssh/) {
+   if ( $prog =~ /ssh/ ) {
       $action = 'ssh';
-   } elsif ($prog =~ /scp/) {
+   } elsif ( $prog =~ /scp/ ) {
       $action = 'scp';
       usage("wrong number of args") if @ARGV < 2;
    } else {
@@ -262,10 +265,10 @@ if ($action) {
    }
 }
 
-if (!$maxcount) {
-   if ($action eq 'ssh') {
+if ( !$maxcount ) {
+   if ( $action eq 'ssh' ) {
       $maxcount = $default_ssh_maxcount;
-   } elsif ($action eq 'scp') {
+   } elsif ( $action eq 'scp' ) {
       $maxcount = $default_scp_maxcount;
    } else {
       $maxcount = 1;
@@ -277,18 +280,18 @@ if (!$maxcount) {
 my $executed;
 
 my $count = 0;
-my @todo = @hosts;
+my @todo  = @hosts;
 my $info_by_pid;
 
 while (1) {
-   while ($count<$maxcount && @todo) {
-      my $host = shift @todo;
+   while ( $count < $maxcount && @todo ) {
+      my $host    = shift @todo;
       my $profile = $cfg->{$host}->{profile};
 
-      my ($remote_login, $remote_host)
-         = get_remote_login_host($host, {remote_login => $remote_login});
+      my ( $remote_login, $remote_host ) =
+        get_remote_login_host( $host, { remote_login => $remote_login } );
 
-      my $tmp_prefix = get_tmp_file("/var/tmp", $prog);
+      my $tmp_prefix = get_tmp_file( "/var/tmp", $prog );
       my $tmp_stdout = "$tmp_prefix.$host.stdout";
       my $tmp_stderr = "$tmp_prefix.$host.stderr";
 
@@ -303,14 +306,14 @@ while (1) {
          stderr       => $tmp_stderr,
          dryrun       => $dryrun,
 
-         # use 'exec' method here as 'system' will make later waitpid() complicated
-         ExecMethod   => 'exec',   
-         ExecArgType  => $ExecArgType,
-         GlobArray    => $GlobArray,
-         copy         => $copy,
+      # use 'exec' method here as 'system' will make later waitpid() complicated
+         ExecMethod  => 'exec',
+         ExecArgType => $ExecArgType,
+         GlobArray   => $GlobArray,
+         copy        => $copy,
       };
 
-      # make a copy as we need to use this many times; 
+      # make a copy as we need to use this many times;
       # otherwise it will be change @ARGV in place
       my @ARGV2 = @ARGV;
 
@@ -318,8 +321,8 @@ while (1) {
 
       my $timestamp = get_timestamp();
 
-      my ($yyyy, $mm, $dd, $HH, $MM, $SS)
-         = ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
+      my ( $yyyy, $mm, $dd, $HH, $MM, $SS ) =
+        ( $timestamp =~ /^(\d{4})(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})/ );
 
       for my $e (@ARGV2) {
          $e =~ s/\%\{host\}/$remote_host/g;
@@ -337,40 +340,43 @@ while (1) {
       if ($cpRun) {
          $opt->{copy} = $command[0];
          $command[0] =~ s:.*/::;
-         $command[0] =  "\$RDIR/$command[0]";
+         $command[0] = "\$RDIR/$command[0]";
       }
 
       my $key;
-      if ($action eq 'ssh') {
-         $key = join(",", ($host, @command));
-      } elsif ($action eq 'scp')  {
-         $key= join(",", @command);
+      if ( $action eq 'ssh' ) {
+         $key = join( ",", ( $host, @command ) );
+      } elsif ( $action eq 'scp' ) {
+         $key = join( ",", @command );
       }
 
       print STDERR "key=$key\n" if $verbose;
 
-      if ($executed->{$key}) {
+      if ( $executed->{$key} ) {
          print STDERR "\nINFO: key=$key repeats. skipped.\n";
          next;
       } else {
-         $executed->{$key} ++;
+         $executed->{$key}++;
       }
-      
+
       my $child_pid = fork();
 
       if ($child_pid) {
+
          # this is the parent
 
-         $info_by_pid->{$child_pid}->{host} = $host;
-         $info_by_pid->{$child_pid}->{begin} = $timestamp;
+         $info_by_pid->{$child_pid}->{host}      = $host;
+         $info_by_pid->{$child_pid}->{begin}     = $timestamp;
          $info_by_pid->{$child_pid}->{begin_sec} = time();
-         $info_by_pid->{$child_pid}->{stdout}= $tmp_stdout;
-         $info_by_pid->{$child_pid}->{stderr}= $tmp_stderr;
+         $info_by_pid->{$child_pid}->{stdout}    = $tmp_stdout;
+         $info_by_pid->{$child_pid}->{stderr}    = $tmp_stderr;
 
-         $count ++;
-      } elsif ($child_pid == 0) {
+         $count++;
+      } elsif ( $child_pid == 0 ) {
+
          # this is the child
-         tpssh($action, $host, \@command, $opt);
+         tpssh( $action, $host, \@command, $opt );
+
          # tpssh() here was run with exec(); therefore, no more code below this.
       } else {
          print STDERR "fork() failed. count=$count, host=$host\n";
@@ -379,8 +385,8 @@ while (1) {
    }
 
    # this is the parent
-   while ( $count ) {
-      my $kid = waitpid(-1, WNOHANG);
+   while ($count) {
+      my $kid = waitpid( -1, WNOHANG );
 
       my $rc = $?;
 
@@ -388,62 +394,64 @@ while (1) {
 
       $count--;
 
-      if (!$dryrun) {
+      if ( !$dryrun ) {
          $info_by_pid->{$kid}->{end}     = get_timestamp();
          $info_by_pid->{$kid}->{end_sec} = time();
          $info_by_pid->{$kid}->{rc}      = $rc;
-         $info_by_pid->{$kid}->{duration}
-            = $info_by_pid->{$kid}->{end_sec} - $info_by_pid->{$kid}->{begin_sec};
-   
+         $info_by_pid->{$kid}->{duration} =
+           $info_by_pid->{$kid}->{end_sec} - $info_by_pid->{$kid}->{begin_sec};
+
          my $host = $info_by_pid->{$kid}->{host};
-   
+
          my $r = parse_rc($rc);
-         if ($r->{rc} == 255) {
+         if ( $r->{rc} == 255 ) {
             $r->{msg} = "ssh connection failed";
-         } elsif ($r->{rc} == 254) {
+         } elsif ( $r->{rc} == 254 ) {
             $r->{msg} = "remote command timed out";
          }
 
          print "host=$host,pid=$kid",
-               ",rc=$r->{rc},sig=$r->{sig},msg=$r->{msg}",
-               ",begin=$info_by_pid->{$kid}->{begin}",
-               ",end=$info_by_pid->{$kid}->{end}",
-               ",duration=$info_by_pid->{$kid}->{duration}",
-               "\n" if ! $quiet;
+           ",rc=$r->{rc},sig=$r->{sig},msg=$r->{msg}",
+           ",begin=$info_by_pid->{$kid}->{begin}",
+           ",end=$info_by_pid->{$kid}->{end}",
+           ",duration=$info_by_pid->{$kid}->{duration}", "\n"
+           if !$quiet;
 
          my $row_count = 0;
-   
-         for my $output ( qw(stdout stderr) ) {
-            print "\n" if ! $prefix;
-   
-            next if ! -f $info_by_pid->{$kid}->{$output};
+
+         for my $output (qw(stdout stderr)) {
+            print "\n" if !$prefix;
+
+            next if !-f $info_by_pid->{$kid}->{$output};
 
             for my $line (`cat $info_by_pid->{$kid}->{$output}`) {
-               $row_count ++;
-   
+               $row_count++;
+
                if ($prefix) {
                   print "$host,$output,$line";
                } else {
                   print "$line";
                }
             }
-   
-            print "\n" if ! $prefix;
+
+            print "\n" if !$prefix;
          }
-   
+
          # make sure there is explicit output when in prefix mode; otherwise, we
          # may fail to notice that ssh command failure
-         if (!$row_count && $prefix) {
-            if ($rc == 0) {
-               print "$host,stdout,\n";         # print a new line to stdout when successful
+         if ( !$row_count && $prefix ) {
+            if ( $rc == 0 ) {
+               print
+                 "$host,stdout,\n"; # print a new line to stdout when successful
             } else {
-               print "$host,stderr,ssh cmd failed\n";  # print error to stderr when failed
+               print "$host,stderr,ssh cmd failed\n"
+                 ;                  # print error to stderr when failed
             }
          }
       }
-   
-      $verbose && print STDERR "count=$count, todo=", scalar (@todo),
-                               ",total=", scalar(@hosts), "\n";
+
+      $verbose && print STDERR "count=$count, todo=", scalar(@todo),
+        ",total=", scalar(@hosts), "\n";
    }
 
    last if !$count && !@todo;

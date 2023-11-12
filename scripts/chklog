@@ -4,11 +4,13 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use TPSUP::DATE qw(get_interval_seconds);
-use TPSUP::LOG qw(find_log_PatternCfg get_log_time);
-use TPSUP::UTIL qw(get_in_fh);
+use TPSUP::LOG  qw(find_log_PatternCfg get_log_time);
+use TPSUP::FILE qw(get_in_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir = $0; $dir =~ s:[^/]+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
 my $last_seconds = 3600;
 
@@ -68,17 +70,17 @@ EOF
    exit 1;
 }
 
-my ($verbose, $case_sensitive, $print_summary, $LogPatternCfg, $old);
+my ( $verbose, $case_sensitive, $print_summary, $LogPatternCfg, $old );
 
- GetOptions(
-   "x=s"            => \$exclude_pattern,
-   "m=s"            => \$match_pattern,
-   "v"              => \$verbose,
-   "s"              => \$print_summary,
-   "old"            => \$old,
-   "case"           => \$case_sensitive,
-   "t=s"            => \$last_seconds,
-   "pf=s"           => \$LogPatternCfg,
+GetOptions(
+   "x=s"  => \$exclude_pattern,
+   "m=s"  => \$match_pattern,
+   "v"    => \$verbose,
+   "s"    => \$print_summary,
+   "old"  => \$old,
+   "case" => \$case_sensitive,
+   "t=s"  => \$last_seconds,
+   "pf=s" => \$LogPatternCfg,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -87,17 +89,19 @@ my $current_yyyymmdd = $TPSUP::LOG::yyyymmdd;
 my $current_yyyy     = $TPSUP::LOG::yyyy;
 my $current_HHMMSS   = $TPSUP::LOG::HHMMSS;
 
-my $compiled_match   =   $match_pattern ?   
-                             ($case_sensitive ?    qr/$match_pattern/ :   qr/$match_pattern/i)
-                             : undef;
-my $compiled_exclude = $exclude_pattern ?
-                             ($case_sensitive ?  qr/$exclude_pattern/ : qr/$exclude_pattern/i)
-                             : undef;
+my $compiled_match =
+  $match_pattern
+  ? ( $case_sensitive ? qr/$match_pattern/ : qr/$match_pattern/i )
+  : undef;
+my $compiled_exclude =
+  $exclude_pattern
+  ? ( $case_sensitive ? qr/$exclude_pattern/ : qr/$exclude_pattern/i )
+  : undef;
 
 for my $f (@ARGV) {
    print "\nfile=$f\n";
 
-   my $cfg = find_log_PatternCfg($f, {LogPatternCfg=>$LogPatternCfg});
+   my $cfg = find_log_PatternCfg( $f, { LogPatternCfg => $LogPatternCfg } );
 
    if ($cfg) {
       print "file=$f, matched time pattern =", Dumper($cfg), "\n" if $verbose;
@@ -114,49 +118,52 @@ for my $f (@ARGV) {
 
    my $ifh = get_in_fh($f);
 
-   while(<$ifh>) {
+   while (<$ifh>) {
       my $line = $_;
-      $summary->{total_rows} ++ if $print_summary;
+      $summary->{total_rows}++ if $print_summary;
 
-      if (!$last_part_started) {
-         my $t = get_log_time(\$line, $cfg);
+      if ( !$last_part_started ) {
+         my $t = get_log_time( \$line, $cfg );
 
-         next if !$t;
-         $summary->{dated_rows} ++ if $print_summary;
+         next                     if !$t;
+         $summary->{dated_rows}++ if $print_summary;
 
-         if (!$old) {
-            next if $t->{yyyymmdd} ne $current_yyyymmdd;
-            $summary->{today_rows} ++ if $print_summary;
+         if ( !$old ) {
+            next                     if $t->{yyyymmdd} ne $current_yyyymmdd;
+            $summary->{today_rows}++ if $print_summary;
          }
 
          if ($last_part_started) {
-            my $backwardness = get_interval_seconds($t->{yyyymmdd}, $t->{HHMMSS}, $current_yyyymmdd, $current_HHMMSS);
-            if ($backwardness > $last_seconds) {
+            my $backwardness = get_interval_seconds(
+               $t->{yyyymmdd},    $t->{HHMMSS},
+               $current_yyyymmdd, $current_HHMMSS
+            );
+            if ( $backwardness > $last_seconds ) {
                next;
             }
-         } 
+         }
 
-         $last_part_started ++;
+         $last_part_started++;
 
          print "parse log from $t->{yyyymmdd} $t->{HHMMSS}\n";
       }
 
-      $summary->{last_rows} ++ if $print_summary;
+      $summary->{last_rows}++ if $print_summary;
 
       if ($compiled_match) {
-         next if $line !~ /$compiled_match/;
-         $summary->{matched_rows} ++ if $print_summary;
+         next                       if $line !~ /$compiled_match/;
+         $summary->{matched_rows}++ if $print_summary;
       }
-   
+
       if ($compiled_exclude) {
-         next if $line =~ /$compiled_exclude/;
-         $summary->{excluded_rows} ++ if $print_summary;
+         next                        if $line =~ /$compiled_exclude/;
+         $summary->{excluded_rows}++ if $print_summary;
       }
 
       print $line;
    }
 
-   print "summary = ", Dumper($summary), "\n" if $print_summary; 
+   print "summary = ", Dumper($summary), "\n" if $print_summary;
 }
 
 exit 0;

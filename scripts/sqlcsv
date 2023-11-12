@@ -3,10 +3,11 @@
 use strict;
 use Data::Dumper;
 use Getopt::Long;
-use TPSUP::CSV qw(run_sqlcsv);
-use TPSUP::UTIL qw(get_out_fh);
+use TPSUP::CSV  qw(run_sqlcsv);
+use TPSUP::FILE qw(get_out_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($msg) = @_;
@@ -65,11 +66,11 @@ examples:
 EOF
 
    exit 1;
-} 
+}
 
-my $separator = ','; 
+my $separator = ',';
 
-our ($output, $outheader, $verbose, $num_rows, $noheader, $skip);
+our ( $output, $outheader, $verbose, $num_rows, $noheader, $skip );
 
 GetOptions(
    "outheader=s" => \$outheader,
@@ -77,50 +78,51 @@ GetOptions(
    "noheader"    => \$noheader,
    "rows=i"      => \$num_rows,
    "output|o=s"  => \$output,
-) or usage("Could not parse command line: $!"); 
+) or usage("Could not parse command line: $!");
 
-usage("wrong number of args") if @ARGV < 2; 
+usage("wrong number of args") if @ARGV < 2;
 
-my $sql = shift @ARGV; 
+my $sql = shift @ARGV;
 
-my $out_fh = get_out_fh($output); 
+my $out_fh = get_out_fh($output);
 
-die "cannot open output" if !$out_fh; 
+die "cannot open output" if !$out_fh;
 
-my $ref = run_sqlcsv($sql, \@ARGV, {verbose=>$verbose, withHeader=>1, separator=>$separator}); 
+my $ref = run_sqlcsv( $sql, \@ARGV,
+   { verbose => $verbose, withHeader => 1, separator => $separator } );
 
-die "query failed" if !$ref; 
+die "query failed" if !$ref;
 
-exit 0 if $sql !~ /^\s*select/i; 
-exit 0 if !@$ref; 
+exit 0 if $sql !~ /^\s*select/i;
+exit 0 if !@$ref;
 
-my $header_row = shift @$ref; 
+my $header_row = shift @$ref;
 
-if (!$noheader) {
+if ( !$noheader ) {
    if ($outheader) {
       print {$out_fh} "$outheader\n";
    } else {
-      print {$out_fh} join(",", @$header_row), "\n";
+      print {$out_fh} join( ",", @$header_row ), "\n";
    }
-} 
-   
-if (!$num_rows) {
+}
+
+if ( !$num_rows ) {
    for my $row (@$ref) {
-      print {$out_fh} join(",", @$row), "\n";
+      print {$out_fh} join( ",", @$row ), "\n";
    }
-} elsif ($num_rows>0) {
+} elsif ( $num_rows > 0 ) {
    my $total = scalar(@$ref);
-   my $end = $total <= $num_rows ? $total-1 : $num_rows-1;
-   for (my $i=0; $i<=$end; $i++) {
+   my $end   = $total <= $num_rows ? $total - 1 : $num_rows - 1;
+   for ( my $i = 0 ; $i <= $end ; $i++ ) {
       my $row = $ref->[$i];
-      print {$out_fh} join(",", @$row), "\n";
+      print {$out_fh} join( ",", @$row ), "\n";
    }
 } else {
    my $total = scalar(@$ref);
-   my $start = $total+$num_rows<=0 ? 0 : $total+$num_rows;
-   for (my $i=$start; $i<$total; $i++) {
+   my $start = $total + $num_rows <= 0 ? 0 : $total + $num_rows;
+   for ( my $i = $start ; $i < $total ; $i++ ) {
       my $row = $ref->[$i];
-      print {$out_fh} join(",", @$row), "\n";
+      print {$out_fh} join( ",", @$row ), "\n";
    }
 }
 

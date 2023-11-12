@@ -5,10 +5,12 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL    qw(get_in_fh);
+use TPSUP::FILE qw(get_in_fh);
+
 # use Carp::Always;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 my $timeout = 3;
 
@@ -53,38 +55,38 @@ my $MatchPattern;
 my $ExcludePattern;
 
 GetOptions(
-   'v|verbose'     => \$verbose,
-   'file_switch'   => \$file_switch,
-   'timeout=s'     => \$timeout,
-   'm=s'           => \$MatchPattern,
-   'x=s'           => \$ExcludePattern,
+   'v|verbose'   => \$verbose,
+   'file_switch' => \$file_switch,
+   'timeout=s'   => \$timeout,
+   'm=s'         => \$MatchPattern,
+   'x=s'         => \$ExcludePattern,
 ) || usage("cannot parse command line: $!");
 
-usage("wrong number of args") if ! @ARGV;
+usage("wrong number of args") if !@ARGV;
 
 my @hosts;
 if ($file_switch) {
    for my $file (@ARGV) {
-      
+
       my $ifh = get_in_fh($file);
-      
-      while (my $line = <$ifh>) {
+
+      while ( my $line = <$ifh> ) {
          chomp $line;
-      
+
          #$line =~ s/^\s+//;     # trim spaces
          #$line =~ s/\s+$//;     # trim spaces
-         $line =~ s/^[^0-9a-zA-Z.#_-]+//;     # trim spaces or bad chars at front
-         $line =~ s/[^0-9a-zA-Z.#_-]+$//;     # trim spaces or bad chars at end
-      
-         next if $line =~ /^\s*$/;     # skip blank lines
-         next if $line =~ /^\s*#/;     # skip comment
+         $line =~ s/^[^0-9a-zA-Z.#_-]+//;    # trim spaces or bad chars at front
+         $line =~ s/[^0-9a-zA-Z.#_-]+$//;    # trim spaces or bad chars at end
+
+         next if $line =~ /^\s*$/;           # skip blank lines
+         next if $line =~ /^\s*#/;           # skip comment
 
          next if $line eq '';
-      
-         next if defined   $MatchPattern && $line !~   /$MatchPattern/i; 
+
+         next if defined $MatchPattern   && $line !~ /$MatchPattern/i;
          next if defined $ExcludePattern && $line =~ /$ExcludePattern/i;
-      
-         my @a = split /\s+/, $line;
+
+         my @a    = split /\s+/, $line;
          my $host = shift @a;
 
          push @hosts, $host;
@@ -107,22 +109,22 @@ for my $host (@hosts) {
 
    $verbose && print STDERR @lines;
 
-   # $ ping -c 1 linux1
-   # PING linux1.fios-router.home (192.168.1.191) 56(84) bytes of data.
-   # 64 bytes from linux1.fios-router.home (192.168.1.191): icmp_seq=1 ttl=64 time=0.082 ms
-   # 
-   # --- linux1.fios-router.home ping statistics ---
-   # 1 packets transmitted, 1 received, 0% packet loss, time 0ms
-   # rtt min/avg/max/mdev = 0.082/0.082/0.082/0.000 ms
+# $ ping -c 1 linux1
+# PING linux1.fios-router.home (192.168.1.191) 56(84) bytes of data.
+# 64 bytes from linux1.fios-router.home (192.168.1.191): icmp_seq=1 ttl=64 time=0.082 ms
+#
+# --- linux1.fios-router.home ping statistics ---
+# 1 packets transmitted, 1 received, 0% packet loss, time 0ms
+# rtt min/avg/max/mdev = 0.082/0.082/0.082/0.000 ms
 
-   my ($line) = grep {/^rtt/} @lines;
+   my ($line) = grep { /^rtt/ } @lines;
    if ($line) {
-      my @a = split /\//, $line;
+      my @a   = split /\//, $line;
       my $rtt = $a[5];
       print "OK:    $host $rtt ms\n";
    } else {
       print "ERROR: failed to reach $host.\n";
-      $error ++;
+      $error++;
    }
 }
 

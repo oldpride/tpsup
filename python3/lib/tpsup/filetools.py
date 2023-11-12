@@ -248,6 +248,10 @@ def tpfind(paths: Union[list, str],
         raise RuntimeError(
             f'number of HandleExps {len(HandleExps)} not match number of HandleActs {len(HandleActs)}')
 
+    # find_print is the default print method
+    find_print = find_print or not (
+        find_ls or find_dump or FlowExps or HandleExps)
+
     mod_name = 'tmp_mod'
     mod_source = '''
 import os
@@ -311,6 +315,15 @@ def readline(**opt):
     #############################################################
     # begin - function inside function
     # we use function inside function to avoid passing too many parameters.
+    def print_path(r: dict):
+        if find_dump:
+            print(pformat(r))
+        elif find_ls:
+            print(
+                f'{r["fmode"]} {r["owner"]:7} {r["group"]:7} {r["size"]:7} {r["mtimel"]} {r["path"]}')
+        elif find_print:
+            print(f'{r["path"]}')
+
     def process_node(full_path: str = None, dir: str = None, short: str = None, isDir: bool = None, **opt):
         # 'r' is the node info, for expression matching.
         # 'result' is the return value of this function, mainly for flow control.
@@ -372,7 +385,6 @@ def readline(**opt):
         # export r into the module, so that functions in the module can access it.
         export_r(r)
 
-        print_p = True
         for i in range(0, len(FlowExps)):
             compiled = CompiledFlowExps[i]
             exp = FlowExps[i]
@@ -392,8 +404,6 @@ def readline(**opt):
                         if verbose:
                             print(f'pruning {r["path"]}')
                         result['direction'] = 'prune'
-
-                        print_p = False
                     # try:
                     #     dirs.remove(p)
                     # except ValueError as e:
@@ -406,6 +416,10 @@ def readline(**opt):
                     result['direction'] = 'exit'
                     return result
 
+        count_path = True
+
+        if HandleExps:
+            count_path = False
         for i in range(0, len(HandleExps)):
             exp = HandleExps[i]
             act = HandleActs[i]
@@ -413,6 +427,7 @@ def readline(**opt):
             compiled_act = CompiledHandleActs[i]
             try:
                 if compiled():
+                    count_path = True
                     if verbose:
                         log_FileFuncLine(
                             f'Handle exp={exp} matched r={pformat(r)}, act={act}')
@@ -421,7 +436,10 @@ def readline(**opt):
                 print(e)
 
         if MatchExps:
-            Matched = True
+            count_path = False
+            # MatchExps doesn't affect flow control;
+            # it only affects whether to count or print the path
+            all_matched = True
             for i in range(0, len(MatchExps)):
                 exp = MatchExps[i]
                 compiled = CompiledMatchExps[i]
@@ -432,27 +450,21 @@ def readline(**opt):
                     print(e)
                     passed = False
 
-                if not compiled():
+                if not passed:
                     if verbose >= 2:
                         log_FileFuncLine(
                             f'Match exp={exp} failed r={pformat(r)}')
-                    Matched = False
+                    all_matched = False
                     break
-            if not Matched:
+            if not all_matched:
                 return result
+            else:
+                count_path = True
 
-        ret['hashes'].append(r)
-        ret['count'] += 1
-        # log_FileFuncLine(f'count={ret["count"]},path={r["path"]}')
-
-        if print_p:
-            if find_dump:
-                print(pformat(r))
-            elif find_ls:
-                print(
-                    f'{r["fmode"]} {r["owner"]:7} {r["group"]:7} {r["size"]:7} {r["mtimel"]} {r["path"]}')
-            elif find_print:
-                print(f'{r["path"]}')
+        if count_path:
+            ret['hashes'].append(r)
+            ret['count'] += 1
+            print_path(r)
         return result
 
     # end - function inside function

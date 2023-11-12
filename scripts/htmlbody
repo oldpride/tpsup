@@ -5,9 +5,10 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(get_in_fh get_out_fh);
+use TPSUP::FILE qw(get_in_fh get_out_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($message) = @_;
@@ -30,7 +31,7 @@ examples:
     csv2html -TableOnly tpcsv2_test.csv | $prog -
 
 END
-   
+
    exit 1;
 }
 
@@ -39,25 +40,25 @@ my $title;
 my $output = "-";
 
 GetOptions(
-   'v|verbose'     => \$verbose,
-   'title=s'       => \$title,
-   'o|output=s'    => \$output,
-) || usage ("cannot parse command line: $!");
+   'v|verbose'  => \$verbose,
+   'title=s'    => \$title,
+   'o|output=s' => \$output,
+) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
 
 my ($input) = @ARGV;
 
 my $opt = {
-   verbose         => $verbose,
-   CSVHTMLTitle    => $title,
+   verbose      => $verbose,
+   CSVHTMLTitle => $title,
 };
 
-my $input_string = slurp($input, $opt);
+my $input_string = slurp( $input, $opt );
 
 my $out_fh = get_out_fh($output);
 
-print {$out_fh} wrap_in_html_body(\$input_string), "\n";
+print {$out_fh} wrap_in_html_body( \$input_string ), "\n";
 
 exit 0;
 
@@ -67,21 +68,21 @@ exit 0;
 
 # https://perlmaven.com/slurp
 sub slurp {
-    my ($input, $opt) = @_;
+   my ( $input, $opt ) = @_;
 
-    my $in_fh  = get_in_fh($input, $opt);
+   my $in_fh = get_in_fh( $input, $opt );
 
-    local $/ = undef;
+   local $/ = undef;
 
-    my $cont = <$in_fh>;
+   my $cont = <$in_fh>;
 
-    close $in_fh if $in_fh != \*STDIN;
+   close $in_fh if $in_fh != \*STDIN;
 
-    return $cont;
+   return $cont;
 }
 
 sub wrap_in_html_body {
-   my ($string_ref, $opt) = @_;
+   my ( $string_ref, $opt ) = @_;
 
    my $html = "<HTML><body bgcolor=white>";
 
@@ -91,7 +92,7 @@ sub wrap_in_html_body {
 
    $html .= $$string_ref;
 
-   $html .= "</body></HTML>";;
+   $html .= "</body></HTML>";
 
    return $html;
 }

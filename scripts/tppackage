@@ -3,24 +3,28 @@
 use warnings;
 use strict;
 use Data::Dumper;
-$Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
-$Data::Dumper::Terse = 1;
+$Data::Dumper::Sortkeys = 1;    # this sorts the Dumper output!
+$Data::Dumper::Terse    = 1;
 
 use Getopt::Long;
 use Carp;
 use File::Basename;
+use TPSUP::FILE qw(
+  get_out_fh
+  close_out_fh
+);
+
 use TPSUP::UTIL qw(
-     get_out_fh 
-   close_out_fh 
-   get_tmp_file
-   get_user
-   get_homedir
-   resolve_scalar_var_in_string
-   eval_perl
+  get_tmp_file
+  get_user
+  get_homedir
+  resolve_scalar_var_in_string
+  eval_perl
 );
 use TPSUP::ENV qw(get_uname);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($message) = @_;
@@ -58,36 +62,36 @@ my $cfg_dir;
 my $dryrun;
 
 GetOptions(
-   'verbose'     => \$verbose,
-   'c=s'         => \$cfg_dir,
-   'n|dryrun'    => \$dryrun,
-) || usage ("cannot parse command line: $!");
+   'verbose'  => \$verbose,
+   'c=s'      => \$cfg_dir,
+   'n|dryrun' => \$dryrun,
+) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1 && @ARGV != 2;
 
-if ($ARGV[0] eq 'list') {
+if ( $ARGV[0] eq 'list' ) {
    system("ls $ENV{SITESPEC}/cfg/pkgs");
    exit 0;
 }
 
 usage("wrong number of args") if @ARGV != 2;
 
-my ($pkg_name, $target_dir) = @ARGV;
+my ( $pkg_name, $target_dir ) = @ARGV;
 
 my $flag = "";
 if ($dryrun) {
    $flag = "-n";
-} 
+}
 
 our $cfg;
-if (!$cfg_dir) {
+if ( !$cfg_dir ) {
    my $sitedir = $ENV{SITESPEC};
    die "\$SITESPEC is not defined" if !defined $sitedir;
 
    $cfg_dir = "$sitedir/cfg/pkgs/${pkg_name}";
-   die   "default cfg dir $cfg_dir not found" if ! -d $cfg_dir;
+   die "default cfg dir $cfg_dir not found" if !-d $cfg_dir;
 } else {
-   die "specified cfg dir $cfg_dir not found" if ! -d $cfg_dir;
+   die "specified cfg dir $cfg_dir not found" if !-d $cfg_dir;
 }
 
 my $cfg_file = "$cfg_dir/pkg.cfg";
@@ -108,7 +112,7 @@ $dict->{HOME} = get_homedir();
 
 my @env_vars = qw(SITEBASE SITESPEC TPSUP);
 for my $ev (@env_vars) {
-   die "$ev is not defined in env." if ! $ENV{$ev};
+   die "$ev is not defined in env." if !$ENV{$ev};
    $dict->{$ev} = $ENV{$ev};
 }
 
@@ -117,53 +121,53 @@ $dict->{PKGBASE} = "$cfg_dir/base";
 $verbose && print "dict = ", Dumper($dict);
 
 # don't use /var/tmp as it may not exists in gitbash
-my $tmp_file = get_tmp_file("/tmp", $prog);
+my $tmp_file = get_tmp_file( "/tmp", $prog );
 
 my $i = 0;
-for my $r (@{$cfg->{rsyncs}}) {
+for my $r ( @{ $cfg->{rsyncs} } ) {
    $i++;
    print "\n";
 
-   my     ($source, $condition, $files) =
-   @{$r}{qw(source   condition   files)};
+   my ( $source, $condition, $files ) =
+     @{$r}{qw(source   condition   files)};
 
    #remove leading spaces, and comments
-   #  convert 
+   #  convert
    #        aaa
    #        bbb
    #        #ccc
    #  to
    #     aaa
    #     bbb
-   #$files =~ s:^\s+::;  
-   #$files =~ s:\n\s+:\n:gs;  
+   #$files =~ s:^\s+::;
+   #$files =~ s:\n\s+:\n:gs;
 
-   my @list = split/\n/, $files; 
+   my @list = split /\n/, $files;
    my @list2;
    for my $f (@list) {
-      next if $f =~ /^\s*$/;  # skip blank lines
-      next if $f =~ /^\s*#/;  # skip comments
+      next if $f =~ /^\s*$/;    # skip blank lines
+      next if $f =~ /^\s*#/;    # skip comments
 
-      $f =~ s:^\s+::;  # remove leading spaces
-      $f =~ s:\s+$::;  # remove ending spaces
+      $f =~ s:^\s+::;           # remove leading spaces
+      $f =~ s:\s+$::;           # remove ending spaces
 
       push @list2, $f;
    }
 
-   if (!@list2) {
+   if ( !@list2 ) {
       print "section #$i is skipped because it is empty\n";
       next;
    }
 
-   $files = join("\n", @list2);
+   $files = join( "\n", @list2 );
 
-   $source    = resolve_scalar_var_in_string($source,    $dict);
-   $condition = resolve_scalar_var_in_string($condition, $dict);
-   $files     = resolve_scalar_var_in_string($files,     $dict);
+   $source    = resolve_scalar_var_in_string( $source,    $dict );
+   $condition = resolve_scalar_var_in_string( $condition, $dict );
+   $files     = resolve_scalar_var_in_string( $files,     $dict );
 
-   if (defined $condition) {
+   if ( defined $condition ) {
       print "checking condition: $condition\n";
-      if (eval_perl($condition)) {
+      if ( eval_perl($condition) ) {
          print "condition passed\n";
       } else {
          print "section #$i is skipped because it failed condition\n";
@@ -176,24 +180,25 @@ for my $r (@{$cfg->{rsyncs}}) {
    print {$ofh} $files;
    close_out_fh($ofh);
 
-   # note: --files-from changed rsync default behavior
-   #    https://stackoverflow.com/questions/16647476/how-to-rsync-only-a-specific-list-of-files
-   #
-   # -a                   archive mode, equals -rlptgoD
-   # -r                   recursive.                       had to explicitly specify when --files-from 
-   # --delete             delete files not in source side. had to explicitly specify when --files-from
-   #                      because we need to run rsync multiple time, we disable this to prevent later run
-   #                      delete earlier run
-   # --exclude='*[.]site' to skips site-specific files
-   # --exclude='[.]git*'  to skip .git/ and .gitignore
-   # -i                   to print item to be changed, ie, --itemize-changes
-   # --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
-   # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn 
+# note: --files-from changed rsync default behavior
+#    https://stackoverflow.com/questions/16647476/how-to-rsync-only-a-specific-list-of-files
+#
+# -a                   archive mode, equals -rlptgoD
+# -r                   recursive.                       had to explicitly specify when --files-from
+# --delete             delete files not in source side. had to explicitly specify when --files-from
+#                      because we need to run rsync multiple time, we disable this to prevent later run
+#                      delete earlier run
+# --exclude='*[.]site' to skips site-specific files
+# --exclude='[.]git*'  to skip .git/ and .gitignore
+# -i                   to print item to be changed, ie, --itemize-changes
+# --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
+# [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
 
-   my $cmd = qq(rsync -ar $flag -exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" --files-from='$tmp_file' '$source' '$target_dir');
-   
+   my $cmd =
+qq(rsync -ar $flag -exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" --files-from='$tmp_file' '$source' '$target_dir');
+
    print "cmd = $cmd\n";
-   
+
    system($cmd);
 }
 

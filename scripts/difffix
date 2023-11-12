@@ -4,13 +4,16 @@ use strict;
 use Data::Dumper;
 use Carp;
 use Getopt::Long;
-use TPSUP::UTIL qw(get_exps_from_string get_out_fh);
-use TPSUP::FIX qw(diff_fix map_desc_by_tag_value);
+use TPSUP::UTIL qw(get_exps_from_string);
+use TPSUP::FILE qw(get_out_fh);
+use TPSUP::FIX  qw(diff_fix map_desc_by_tag_value);
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir = $0; $dir =~ s:[^/]+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
-my $min_idle = 60;
+my $min_idle   = 60;
 my $fdelimiter = ",";
 
 sub usage {
@@ -103,20 +106,20 @@ my @ref_keystring;
 my $tagString;
 
 GetOptions(
-   "xp=s" => \@exclude_pattern,
-   "mp=s" => \@match_pattern,
-   "me=s" => \@match_expression,
-   "xe=s" => \@exclude_expression,
-   "ee=s" => \@ExportExps,
-   "v"      =>      \$verbose,
-   "o=s"      =>      \$output,
+   "xp=s"        => \@exclude_pattern,
+   "mp=s"        => \@match_pattern,
+   "me=s"        => \@match_expression,
+   "xe=s"        => \@exclude_expression,
+   "ee=s"        => \@ExportExps,
+   "v"           => \$verbose,
+   "o=s"         => \$output,
    "delimiter=s" => \$delimiter,
-   "front=s"      =>      \$front_tags,
-   "dict=s"      =>      \$FixDictFile,
-   "maxmatch=s" => \$maxmatch,
-   'delete=s' => \$delete_tags,
+   "front=s"     => \$front_tags,
+   "dict=s"      => \$FixDictFile,
+   "maxmatch=s"  => \$maxmatch,
+   'delete=s'    => \$delete_tags,
    'op|option=s' => \@other_options,
-   't|tags=s' => \$tagString,
+   't|tags=s'    => \$tagString,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if @ARGV < 2;
@@ -126,13 +129,13 @@ my @files = @ARGV;
 my $FixDict;
 
 if ($FixDictFile) {
-   croak "$FixDictFile not found" if ! -f $FixDictFile;
+   croak "$FixDictFile not found" if !-f $FixDictFile;
 
    $FixDict = `cat $FixDictFile`;
 
    # load the user-specified dict here because filter_fix may not take $opt when
    # applying TPSUP::Expression
-   map_desc_by_tag_value({FixDict => $FixDict});
+   map_desc_by_tag_value( { FixDict => $FixDict } );
 }
 
 my @RefMatrix;
@@ -143,14 +146,14 @@ if (@ref_keystring) {
       push @RefMatrix, \@keys;
    }
 
-   if (@RefMatrix < @files) {
-      for (my $i=@RefMatrix; $i<@files; $i++) {
+   if ( @RefMatrix < @files ) {
+      for ( my $i = @RefMatrix ; $i < @files ; $i++ ) {
          push @RefMatrix, @RefMatrix[0];
       }
    }
 } else {
-   for (my $i=0; $i<@files; $i++) {
-      push @RefMatrix, [ 11, 35, 39];
+   for ( my $i = 0 ; $i < @files ; $i++ ) {
+      push @RefMatrix, [ 11, 35, 39 ];
    }
 }
 
@@ -168,15 +171,15 @@ my $opt = {
 };
 
 if ($delete_tags) {
-   @{$opt->{DeleteColumns}} = split /,/, $delete_tags;
+   @{ $opt->{DeleteColumns} } = split /,/, $delete_tags;
 }
 
 for my $op (@other_options) {
-   if ($op =~ /^(.+?)=(.+)/) {
-      my ($k, $v) = ($1, $2);
+   if ( $op =~ /^(.+?)=(.+)/ ) {
+      my ( $k, $v ) = ( $1, $2 );
 
-      if ($k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/) {
-         @{$opt->{$k}} = split /,/, $v;
+      if ( $k =~ /^(DQuoteColumns|InGroupSortKeys|GroupKeys|DeleteColumns)$/ ) {
+         @{ $opt->{$k} } = split /,/, $v;
       } else {
          $opt->{$k} = $v;
       }
@@ -187,6 +190,6 @@ for my $op (@other_options) {
 
 $verbose && print "opt=", Dumper($opt);
 
-diff_fix([@files], \@RefMatrix, $opt);
+diff_fix( [@files], \@RefMatrix, $opt );
 
 exit 0;

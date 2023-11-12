@@ -5,10 +5,11 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::XML qw(query_xml);
-use TPSUP::UTIL qw(get_out_fh);
+use TPSUP::XML  qw(query_xml);
+use TPSUP::FILE qw(get_out_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($message) = @_;
@@ -63,45 +64,49 @@ my $ForceArrayString = 'tr';
 my $addRoot;
 my $output;
 my $delimiter = ',';
-my $quote = 'none';
+my $quote     = 'none';
 
 GetOptions(
-   'v|verbose'    => \$verbose,
-   'ForceArray=s' => \$ForceArrayString,
-   'KeyAttr=s'    => \%attr_by_key,
-   'addRoot=s'    => \$addRoot,
-   'output|o=s'   => \$output,
-   'delimiter|d=s'=> \$delimiter,
-   'quote=s'      => \$quote,
-) || usage ("cannot parse command line: $!");
+   'v|verbose'     => \$verbose,
+   'ForceArray=s'  => \$ForceArrayString,
+   'KeyAttr=s'     => \%attr_by_key,
+   'addRoot=s'     => \$addRoot,
+   'output|o=s'    => \$output,
+   'delimiter|d=s' => \$delimiter,
+   'quote=s'       => \$quote,
+) || usage("cannot parse command line: $!");
 
-usage("wrong number of args") if @ARGV != 2 ;
+usage("wrong number of args") if @ARGV != 2;
 
-my ($file, $path) = @ARGV;
+my ( $file, $path ) = @ARGV;
 
 my $out_fh = get_out_fh($output);
 die "cannot open output" if !$out_fh;
 
-my $rows = query_xml($file, {
-   KeyAttr     =>\%attr_by_key,
-   ForceArray  =>$ForceArrayString,
-   # verbose     =>$verbose,
-   paths       =>[$path],
-   AddRootNode =>$addRoot,
-})->[0];
+my $rows = query_xml(
+   $file,
+   {
+      KeyAttr    => \%attr_by_key,
+      ForceArray => $ForceArrayString,
+
+      # verbose     =>$verbose,
+      paths       => [$path],
+      AddRootNode => $addRoot,
+   }
+)->[0];
 
 $verbose && print STDERR "rows = ", Dumper($rows);
 
 for my $r (@$rows) {
-   if (exists $r->{th}) {
-      print_row($r->{th}, $delimiter, $quote);
+   if ( exists $r->{th} ) {
+      print_row( $r->{th}, $delimiter, $quote );
       last;
    }
 }
 
 for my $r (@$rows) {
-   if (exists $r->{td}) {
-      print_row($r->{td}, $delimiter, $quote);
+   if ( exists $r->{td} ) {
+      print_row( $r->{td}, $delimiter, $quote );
    }
 }
 
@@ -112,21 +117,19 @@ exit 0;
 ###################################################
 
 sub print_row {
-   my ($row, $delimiter, $quote_style) = @_;
+   my ( $row, $delimiter, $quote_style ) = @_;
 
    my @array;
-      
+
    # the xml parser converts an empty cell <td></td> into a empty hash {}.
    # we replace the empty hash {} with empty string
-   if ($quote_style eq 'double') {
+   if ( $quote_style eq 'double' ) {
       @array = map { ref($_) eq 'HASH' ? qq("") : qq("$_") } @{$row};
-   } elsif ($quote_style eq 'single') {
+   } elsif ( $quote_style eq 'single' ) {
       @array = map { ref($_) eq 'HASH' ? qq('') : qq('$_') } @{$row};
    } else {
       @array = map { ref($_) eq 'HASH' ? '' : $_ } @{$row};
    }
-   print {$out_fh} join($delimiter, @array), "\n";
+   print {$out_fh} join( $delimiter, @array ), "\n";
 }
-   
-
 

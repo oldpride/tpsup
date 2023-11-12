@@ -7,9 +7,10 @@ use warnings;
 use Data::Dumper;
 use Carp;
 use Getopt::Long;
-use TPSUP::UTIL qw(get_in_fh get_out_fh);
+use TPSUP::FILE qw(get_in_fh get_out_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($msg) = @_;
@@ -50,10 +51,10 @@ GetOptions(
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
-   
+
 my ($file) = @ARGV;
 
-if (!defined $libdir) {
+if ( !defined $libdir ) {
    usage("One of \$TPSUP or -libdir must be setting") if !defined $ENV{TPSUP};
    $libdir = "$ENV{TPSUP}/lib/perl";
 }
@@ -61,9 +62,9 @@ if (!defined $libdir) {
 my $info_by_pkg;
 my $dependency;
 
-my $result = parse_pkg('', {file=>$file});
+my $result = parse_pkg( '', { file => $file } );
 
-if (!$result) {
+if ( !$result ) {
    print STDERR "failed to parse $file\n";
    exit 1;
 }
@@ -72,19 +73,21 @@ print STDERR "info_by_pkg = ", Dumper($info_by_pkg);
 
 my $ofh = get_out_fh($output);
 
-for my $pkg ( sort(keys %$info_by_pkg) ) {
-   my $pkgfile = $info_by_pkg->{$pkg}->{file};
-   my $import = $info_by_pkg->{$pkg}->{import};
-   my @functions = $import ? sort(keys %$import) : ();
+for my $pkg ( sort( keys %$info_by_pkg ) ) {
+   my $pkgfile   = $info_by_pkg->{$pkg}->{file};
+   my $import    = $info_by_pkg->{$pkg}->{import};
+   my @functions = $import ? sort( keys %$import ) : ();
 
    print STDERR "print $pkgfile\n";
 
    if ($pkg) {
-      print {$ofh} "#################################################################\n";
+      print {$ofh}
+        "#################################################################\n";
       print {$ofh} "#\n";
       print {$ofh} "# $pkgfile\n";
       print {$ofh} "#\n";
-      print {$ofh} "#################################################################\n";
+      print {$ofh}
+        "#################################################################\n";
    }
 
    my $ifh = get_in_fh($pkgfile);
@@ -99,27 +102,27 @@ for my $pkg ( sort(keys %$info_by_pkg) ) {
 
       if ($comment_till_semicolon) {
          print {$ofh} "#$line\n";
-         
-         if ($line =~ /^[^#]*;/) {
-            $comment_till_semicolon = 0; # done with this comment
+
+         if ( $line =~ /^[^#]*;/ ) {
+            $comment_till_semicolon = 0;    # done with this comment
          }
 
          next;
       }
 
-      if ($line =~ /^\s*use\s+TPSUP::/) {
-         print {$ofh} "#$line\n"; # comment it out
+      if ( $line =~ /^\s*use\s+TPSUP::/ ) {
+         print {$ofh} "#$line\n";    # comment it out
 
          $line =~ s/#.*//;
 
          if ( $line =~ /;/ ) {
-            $comment_till_semicolon = 0; # done with this comment
+            $comment_till_semicolon = 0;    # done with this comment
          } else {
-            $comment_till_semicolon = 1; # need to keep commenting
+            $comment_till_semicolon = 1;    # need to keep commenting
          }
 
          next;
-      } elsif ($line =~ /^use warnings/) {
+      } elsif ( $line =~ /^use warnings/ ) {
          print {$ofh} "$line\n";
 
          # http://perldoc.perl.org/warnings.html
@@ -129,7 +132,7 @@ for my $pkg ( sort(keys %$info_by_pkg) ) {
          #
          # 'no warnings "closure"' disables this warning
          # Variable "$ref" will not stay shared at /tmp/junk.pl line 4481.
-       #
+         #
          print {$ofh} "no warnings qw(once closure);\n";
 
          next;
@@ -155,8 +158,8 @@ close $ofh if $ofh != \*STDOUT;
 if ($dependency) {
    print "\n";
    print "----------extra dependency----------------\n";
-   for my $other_pkg (sort (keys %$dependency)) {
-      for my $msg ( @{$dependency->{$other_pkg}} ) {
+   for my $other_pkg ( sort ( keys %$dependency ) ) {
+      for my $msg ( @{ $dependency->{$other_pkg} } ) {
          print "$other_pkg: $msg\n";
       }
    }
@@ -170,13 +173,13 @@ exit 0;
 ########################################################################
 
 sub parse_pkg {
-   my ($pkg, $opt) = @_;
+   my ( $pkg, $opt ) = @_;
 
    return 1 if $info_by_pkg->{$pkg};
 
    my $file = $opt->{file} ? $opt->{file} : "$libdir/TPSUP/${pkg}.pm";
 
-   if (! -f $file) {
+   if ( !-f $file ) {
       print STDERR "cannot find $file\n";
       return undef;
    }
@@ -190,15 +193,15 @@ sub parse_pkg {
    my $new_pkg;
 
    while (<$ifh>) {
-      my $line = $_;
+      my $line      = $_;
       my $orig_line = $_;
 
       chomp $line;
       chomp $orig_line;
 
-      $line =~ s/#.*//; #skip comment
+      $line =~ s/#.*//;    #skip comment
 
-      next if $line =~ /^\s*$/; #skip blank line
+      next if $line =~ /^\s*$/;    #skip blank line
 
       #use TPSUP::Expression;
       #
@@ -208,12 +211,13 @@ sub parse_pkg {
       #                  );
       #
       #use TPSUP::CSV qw(render_csv);
-      
+
       if ($new_pkg) {
+
          # "use TPSUP::.." already started before, not done yet
-       
-         if ($line =~ /^\s*([^);]+)/) {
-            my $string = $1;
+
+         if ( $line =~ /^\s*([^);]+)/ ) {
+            my $string    = $1;
             my @functions = split /\s+/, $string;
             for my $f (@functions) {
                next if !$f;
@@ -221,54 +225,58 @@ sub parse_pkg {
             }
          }
 
-         if ($ line =~ /[);]/) {
-            $new_pkg = undef; # done with "use TPSUP:: ...;"
+         if ( $line =~ /[);]/ ) {
+            $new_pkg = undef;    # done with "use TPSUP:: ...;"
          }
-      } elsif ($line =~ /^\s*use\s*TPSUP::([^;\s]+)\s*(\S*.*)/) {
+      } elsif ( $line =~ /^\s*use\s*TPSUP::([^;\s]+)\s*(\S*.*)/ ) {
+
          # a new "use TPSUP::.." starts
-       
+
          $new_pkg = $1;
          my $rest = $2;
 
          my $result = parse_pkg($new_pkg);
 
-         if (!$result) {
-            print STDERR "failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
+         if ( !$result ) {
+            print STDERR
+"failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
             return undef;
          }
 
-         if ($rest eq ";") {
+         if ( $rest eq ";" ) {
+
             # no specific function to import, wierd
-       
-            if ($new_pkg !~ /^Expression$/) {
+
+            if ( $new_pkg !~ /^Expression$/ ) {
                print STDERR "In $file: $orig_line. no function specified\n";
             }
 
-            $new_pkg = undef; # done with this pkg
-         } elsif ($rest =~ /[(]([^);]*)/) {
-            my $string = $1;
+            $new_pkg = undef;    # done with this pkg
+         } elsif ( $rest =~ /[(]([^);]*)/ ) {
+            my $string    = $1;
             my @functions = split /\s+/, $string;
             for my $f (@functions) {
                next if !$f;
-               $info_by_pkg->{$pkg}->{import}->{ $f} = $new_pkg;
+               $info_by_pkg->{$pkg}->{import}->{$f} = $new_pkg;
             }
-         
-            if ($rest =~ /[);]/) {
-               $new_pkg = undef; # done with this pkg
+
+            if ( $rest =~ /[);]/ ) {
+               $new_pkg = undef;    # done with this pkg
             }
          }
-      } elsif ($ line =~ /TPSUP::([^;:,=\s(]+)/) {
+      } elsif ( $line =~ /TPSUP::([^;:,=\s(]+)/ ) {
          $new_pkg = $1;
 
          my $result = parse_pkg($new_pkg);
 
-         if (!$result) {
-            print STDERR "failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
+         if ( !$result ) {
+            print STDERR
+"failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
             return undef;
          }
 
-         $new_pkg = undef; # done with this pkg
-      } elsif ($line =~ /^\s*use\s*([^;\s]+)/) {
+         $new_pkg = undef;    # done with this pkg
+      } elsif ( $line =~ /^\s*use\s*([^;\s]+)/ ) {
          my $other_pkg = $1;
 
          my $other_pkg_file = $other_pkg;
@@ -280,11 +288,14 @@ sub parse_pkg {
 
          eval "use $other_pkg; \$path = \$INC{'$other_pkg_file'}";
 
-         if (!$path) {
-            push @{$dependency->{$other_pkg}}, "cannot find file $other_pkg_file, used by $file";
-         } elsif ($path =~ /tpsup/) {
-            # these are non-homemade, non-OS-build-in packages, requiring download
-            push @{$dependency->{$other_pkg}}, "need to download pkg $path used by $file";
+         if ( !$path ) {
+            push @{ $dependency->{$other_pkg} },
+              "cannot find file $other_pkg_file, used by $file";
+         } elsif ( $path =~ /tpsup/ ) {
+
+          # these are non-homemade, non-OS-build-in packages, requiring download
+            push @{ $dependency->{$other_pkg} },
+              "need to download pkg $path used by $file";
          }
       }
    }

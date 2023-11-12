@@ -4,10 +4,12 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(get_in_fh);
+use TPSUP::FILE qw(get_in_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir = $0; $dir =~ s:[^/]+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
 my $last_seconds = 3600;
 
@@ -43,9 +45,8 @@ EOF
 
 my $verbose;
 
- GetOptions(
-   "v"              => \$verbose,
-) or usage("Could not parse command line: $!");
+GetOptions( "v" => \$verbose, )
+  or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
 
@@ -53,7 +54,8 @@ for my $f (@ARGV) {
    print STDERR "\nfile=$f\n" if $verbose;
 
    my $ifh = get_in_fh($f);
-   while (my $line = <$ifh>) {
+   while ( my $line = <$ifh> ) {
+
       # convert
       #    key => 'value'
       # to
@@ -65,21 +67,24 @@ for my $f (@ARGV) {
       $line =~ s/\bundef\b/None/g;
 
       # "...$known->{$key}..."  =>  f"...{known[key]}..."
-      $line =~ s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\{\$([a-zA-Z0-0_ ]+)\}([^"]*)"/f"$1\{$2\[$4\]\}$5"/g;
+      $line =~
+s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\{\$([a-zA-Z0-0_ ]+)\}([^"]*)"/f"$1\{$2\[$4\]\}$5"/g;
 
       # "...$known->{RESOLUTIONCODE}..."  =>  f"...{known['RESOLUTIONCODE']}..."
       # "...$known{RESOLUTIONCODE}..."    =>  f"...{known['RESOLUTIONCODE']}..."
-      $line =~ s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\{[']?[\$]?([a-zA-Z0-0_ ]+)[']?\}([^"]*)"/f"$1\{$2\['$4'\]\}$5"/g;
-
+      $line =~
+s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\{[']?[\$]?([a-zA-Z0-0_ ]+)[']?\}([^"]*)"/f"$1\{$2\['$4'\]\}$5"/g;
 
       # "...$known->[5]..."  =>  f"...{known[5]}..."
       # "...$known[5]..."    =>  f"...{known[5]}..."
-      $line =~ s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\[([0-9]+)\]([^"]*)"/f"$1\{$2\[$4\]\}$5"/g;
+      $line =~
+s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\[([0-9]+)\]([^"]*)"/f"$1\{$2\[$4\]\}$5"/g;
 
       # "...$known[$i]..."   =>  f"...{known[i]}..."
-      $line =~ s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\[\$([a-zA-Z0-0_]+)\]([^"]*)"/f"$1\{$2\[$4\]\}$5"/g;
+      $line =~
+s/"([^"]*)\$([a-zA-Z0-0_]+)(->)?\[\$([a-zA-Z0-0_]+)\]([^"]*)"/f"$1\{$2\[$4\]\}$5"/g;
 
-      # convert 
+      # convert
       #    ... <<'END'
       #    ...
       #    END
@@ -88,10 +93,10 @@ for my $f (@ARGV) {
       # ...
       # '''
       $line =~ s/<<\s*'(EOF|END)'/'''/;     # 'END' =>  '''
-      $line =~ s/<<\s*"(EOF|END)"/f'''/;    # "END" => f''' 
+      $line =~ s/<<\s*"(EOF|END)"/f'''/;    # "END" => f'''
       $line =~ s/^(END|EOF)$/'''/;
 
-      print $line; 
+      print $line;
    }
 }
 

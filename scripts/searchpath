@@ -4,10 +4,12 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(get_in_fh);
+use TPSUP::FILE qw(get_in_fh);
 
-my $prog = $0; $prog =~ s:.*/::;
-my $dir = $0; $dir =~ s:[^/]+$::;
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
 
 my $delimiter = ":";
 
@@ -47,31 +49,31 @@ EOF
 my $verbose;
 
 GetOptions(
-   "v"              => \$verbose,
-   "d=s"            => \$delimiter,
+   "v"   => \$verbose,
+   "d=s" => \$delimiter,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 2;
 
-my ($env_var, $file) = @ARGV;
+my ( $env_var, $file ) = @ARGV;
 
-my $value = exists($ENV{$env_var}) ? $ENV{$env_var} : "";
+my $value = exists( $ENV{$env_var} ) ? $ENV{$env_var} : "";
 
-if (!$value) {
+if ( !$value ) {
    print STDERR "env_var='$env_var' is empty or not defined\n";
    exit 0;
 }
 
-for my $part (split (/$delimiter/, $value)) {
+for my $part ( split( /$delimiter/, $value ) ) {
    my $cmd = "/bin/ls -d '$part/'$file 2>/dev/null";
 
    $verbose && print STDERR "cmd=$cmd\n";
 
    my @globs = `$cmd`;
 
-   next if ($? || !@globs);
+   next if ( $? || !@globs );
 
-   print join("", @globs);
+   print join( "", @globs );
 }
 
 exit 0;
