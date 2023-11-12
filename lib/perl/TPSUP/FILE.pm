@@ -510,7 +510,6 @@ sub tpfind {
       push @pathLevels, $pathLevel;
    }
 
-   my $level = 0;
    my %seen;
 
    while ( my $pathLevel = shift @pathLevels ) {

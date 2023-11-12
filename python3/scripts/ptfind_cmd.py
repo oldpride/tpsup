@@ -35,20 +35,36 @@ examples = textwrap.dedent(f"""
         -print                 print path
         -ls                    print like 'ls -l'
         -dump                  print out detail of the path
+        -maxdepth  int         max depth to search. 0 means given path only.
+        -maxcount  int         max count to search
 
-        {prog} .
+        # print the dir tree
+        {prog} -maxdepth 0 $TPSUP
+        {prog} -maxdepth 1 $TPSUP
+        {prog} -maxdepth 1 $TPSUP -ls
+        {prog} -maxdepth 1 $TPSUP -dump
 
-        {prog} -m 'r["path"].endswith(".py")' .
+        # filter files
+        {prog} -maxcount 5 -m 'r["path"].endswith(".py")' $TPSUP
+        {prog} -maxcount 5 -m 'r["size"] > 50000 and r["type"] != "dir"' $TPSUP -ls
 
-        {prog} -fe 'not r["short"].endswith("profile.d")' -fd prune $TPSUP
-        {prog} -fe 'r["size"] > 5000'                        -fd exit $TPSUP
-        {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP
-        {prog} -fe 'r["size"] > 5000 and r["type"] != "dir"' -fd exit $TPSUP  -ls
+        # flow control
+        {prog} -fe 'r["short"] in ["scripts", "lib", "python3", "cmd_exe"]' -fd prune $TPSUP
+        {prog} -fe 'r["short"] in ["scripts", "lib", "python3", "cmd_exe"]' -fd exit  $TPSUP
 
+        # use handlers, note: be careful with the using of quotes. i used str() here instead of f"..."
+        {prog} -maxcount 5 -he '"python" in r["path"]' -ha 'os.system("ls -ld " + str(r["path"]))' $TPSUP
+
+        # mtime/now. eg, file changed yesterday, one day is 86400 seconds
+        {prog} -maxcount 5 -m 'r["mtime"]<r["now"]-86400 and r["mtime"]>r["now"]-(2*86400)' -ls $TPSUP
+
+        # mode, eg, file is writable, 0o222 is octal. 
+        # use '%' formatter instead of f"..." to reduce layer of quotes
+        {prog} -maxcount 5 -he 'r["mode"] & 0o222' -ha 'print("mode=%o file=%s" % (r["mode"], r["path"]))' $TPSUP
+
+        # getline() function
         # find script that doesn't have 755 mode
-        cd $TPSUP/python3/scripts
-        {prog} -he "r['type'] == 'file' and (r['mode']&0o755) !=0o755 and r['size']>0 and readline().startswith('#!')" \\
-               -ha "print(oct(r['mode']&0o755)); os.system(f'''ls -l {{r['path']}}''')" .
+        {prog} -maxcount 5 -m "r['type'] == 'file' and (r['mode']&0o755) !=0o755 and r['size']>0 and getline().startswith('#!')" $TPSUP
                 
     """)
 
@@ -89,6 +105,14 @@ parser.add_argument(
 parser.add_argument(
     '-dump', dest='find_dump', action="store_true",
     help='print out detail of the path')
+
+parser.add_argument(
+    '-maxdepth', dest='MaxDepth', type=int, default=None,
+    help='max depth to search')
+
+parser.add_argument(
+    '-maxcount', dest='MaxCount', type=int, default=None,
+    help='max count to search')
 
 parser.add_argument(
     'paths',  # this is the remaining args

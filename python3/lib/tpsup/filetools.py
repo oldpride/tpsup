@@ -18,7 +18,7 @@ class TpInput:
     def __init__(self, filename, **opt):
         self.verbose = opt.get('verbose', 0)
         self.need_header = opt.get('need_header', False)
-        self.filename = filename
+        self.filename = filename.replace('\\', '/')
         self.need_close_fh = False
         self.fh = None
 
@@ -109,7 +109,7 @@ class TpInput:
                 # print(f'iamhere {line}')
                 yield line
         except UnicodeDecodeError as e:
-            print(e)
+            print(f'{e} in {self.filename}', file=sys.stderr)
             return
         return
 
@@ -229,6 +229,7 @@ def tpfind(paths: Union[list, str],
            find_ls=0,
            find_dump=0,
            MaxCount: int = None,
+           MaxDepth: int = None,
            **opt):
     verbose = opt.get('verbose', 0)
 
@@ -260,29 +261,52 @@ import tpsup.filetools
 
 
 r = None
-readline_gen = None
+# readline_gen = None
 
 def export_r(r2):
-    global r, readline_gen
+    global r
+    # global r, readline_gen
     r = r2
     
-    # reset readline_gen so that we can start a new generator
-    readline_gen = None
+    # # reset readline_gen so that we can start a new generator
+    # readline_gen = None
 
-def readline(**opt):
-    global r, readline_gen
-    if not readline_gen:
-        def gen(**opt):
-            with tpsup.filetools.TpInput(filename=r['path'], **opt) as tf:
-                for line in tf:
-                    yield line
-        readline_gen = gen(**opt) 
-        # mention gen() with '()' to call it - init it.
+# def readline(**opt):
+#     global r, readline_gen
+#     if not readline_gen:
+#         def gen(**opt):
+#             with tpsup.filetools.TpInput(filename=r['path'], **opt) as tf:
+#                 for line in tf:
+#                     yield line
+#         readline_gen = gen(**opt) 
+#         # mention gen() with '()' to call it - init it.
 
 
-    return next(readline_gen) 
-    # mention readline_gen without "()" because we don't call the generator here.
-    # the generator is already running.
+#     return next(readline_gen) 
+#     # mention readline_gen without "()" because we don't call the generator here.
+#     # the generator is already running.
+
+def getline(**opt):
+    # this is mimic perl-version's getline()
+    global r
+    lines = []
+    if 'count' in opt:
+        count = opt['count']
+        ret_type = 'list'
+    else:
+        count = 1
+        ret_type = 'str'
+    i = 0
+    with tpsup.filetools.TpInput(filename=r['path'], **opt) as tf:
+        for line in tf:
+            lines.append(line)
+            i += 1
+            if i >= count:
+                break
+    if ret_type == 'str':
+        return lines[0]
+    else:
+        return lines
 
 '''
     mod = sys.modules.setdefault(mod_name, types.ModuleType(mod_name))
@@ -304,13 +328,13 @@ def readline(**opt):
     # export_r = mod.export_r
     export_r = getattr(mod, 'export_r')
 
-    paths2 = tpglob(paths, **opt)
-
     ret = {
         'error': 0,
         'hashes': [],
         'count': 0,
     }
+
+    now = time.time()
 
     #############################################################
     # begin - function inside function
@@ -355,6 +379,9 @@ def readline(**opt):
         r['atime'] = info.st_atime
         r['mtime'] = info.st_mtime
         r['ctime'] = info.st_ctime
+
+        r['now'] = now
+
         if isDir:
             r['type'] = 'dir'
         else:
@@ -400,17 +427,9 @@ def readline(**opt):
                     log_FileFuncLine(
                         f'Flow exp={exp} matched r={pformat(r)}, direction={direction}')
                 if direction == 'prune':
-                    if r['type'] == 'dir':
-                        if verbose:
-                            print(f'pruning {r["path"]}')
-                        result['direction'] = 'prune'
-                    # try:
-                    #     dirs.remove(p)
-                    # except ValueError as e:
-                    #     # ValueError: list.remove(x): x not in list
-                    #     if verbose:
-                    #         log_FileFuncLine(
-                    #             f'{e}', file=sys.stderr)
+                    if verbose:
+                        print(f'pruning {r["path"]}')
+                    result['direction'] = 'prune'
                     continue
                 elif direction == 'exit':
                     result['direction'] = 'exit'
@@ -470,38 +489,49 @@ def readline(**opt):
     # end - function inside function
     #############################################################
 
-    for p in paths2:
-        if MaxCount and ret['count'] >= MaxCount:
-            return ret
+    # the following mimic perl's tpfind()
+    globbed_paths = tpglob(paths, **opt)
 
-        if not os.path.isdir(p):
-            full_path = os.path.abspath(p)
-            result = process_node(full_path=full_path, isDir=False, **opt)
+    pathLevels = []
+    for path in globbed_paths:
+        pathLevel = [path, 0]
+        pathLevels.append(pathLevel)
 
-            if result.get('direction', None) == 'exit':
+    seen = {}
+    exclude_dirs = set(['.', '..', '.git', '.idea',
+                       '.vscode', '__pycache__', '.snapshot'])
+
+    while pathLevels:
+        if MaxCount is not None:
+            if ret['count'] >= MaxCount:
+                break
+
+        pathLevel = pathLevels.pop(0)
+        path, level = pathLevel
+        result = process_node(full_path=path, **opt)
+        if direction := result.get('direction', None):
+            if direction == 'exit':
                 return ret
-            continue
+            elif direction == 'prune':
+                continue
 
-        for root, dirs, fnames in os.walk(p, topdown=True):
-            # https://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
-            # key point: use [:] to modify dirs in place
-            dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        if MaxDepth is not None:
+            if level >= MaxDepth:
+                continue
 
-            isDir = True
-            for p in dirs + ['EndOfDirs']+fnames:
-                if MaxCount and ret['count'] >= MaxCount:
-                    return ret
-
-                if p == 'EndOfDirs':
-                    isDir = False
+        if os.path.isdir(path):
+            shorts = os.listdir(path)
+            for short in shorts:
+                if short in exclude_dirs:
                     continue
 
-                result = process_node(dir=root, short=p, isDir=isDir, **opt)
-                if result.get('direction', None) == 'prune':
-                    dirs.remove(p)
+                path2 = f'{path}/{short}'
+                if path2 in seen:
                     continue
-                elif result.get('direction', None) == 'exit':
-                    return ret
+                seen[path2] = 1
+
+                pathLevel = [path2, level + 1]
+                pathLevels.append(pathLevel)
 
     return ret
 
