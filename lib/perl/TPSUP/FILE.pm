@@ -264,7 +264,7 @@ sub get_latest_files {
 sub tpfind {
    my ( $paths, $opt ) = @_;
 
-   # use 'require' instead of 'use' to avoid compile loop because
+   # use 'require' instead of 'use' to break module dependency loop because
    # TPSUP::UTIL also uses TPSUP::FILE.
    #    use TPSUP::UTIL qw(
    #      get_user_by_uid

@@ -348,25 +348,21 @@ def getline(**opt):
         elif find_print:
             print(f'{r["path"]}')
 
-    def process_node(full_path: str = None, dir: str = None, short: str = None, isDir: bool = None, **opt):
+    def process_node(full_path: str = None, **opt):
         # 'r' is the node info, for expression matching.
         # 'result' is the return value of this function, mainly for flow control.
         r = {}
         result = {}
 
-        if full_path:
-            r['path'] = full_path
-            r['dir'] = os.path.dirname(full_path)
-            r['short'] = os.path.basename(full_path)
-            # isDir = os.path.isdir(full_path)
-        elif dir and short:
-            r['path'] = f'{dir}/{short}'
-            r['dir'] = dir
-            r['short'] = short
-            # isDir = os.path.isdir(r['path'])
+        r['path'] = full_path
+        r['short'] = os.path.basename(full_path)
+
+        if os.path.isdir(full_path):
+            r['type'] = 'dir'
+        elif os.path.islink(full_path):
+            r['type'] = 'link'
         else:
-            raise RuntimeError(
-                'either full_path or dir+short must be provided')
+            r['type'] = 'file'
 
         info = os.lstat(r['path'])
         r['dev'] = info.st_dev
@@ -381,11 +377,6 @@ def getline(**opt):
         r['ctime'] = info.st_ctime
 
         r['now'] = now
-
-        if isDir:
-            r['type'] = 'dir'
-        else:
-            r['type'] = 'file'
         r['fmode'] = stat.filemode(info.st_mode)
 
         r['atimel'] = time.strftime(
@@ -614,21 +605,22 @@ def main():
         tpglob(searchfiles)
         tpglob(searchfiles, sort='time')
         get_latest_files([libfiles])[:2]  # get the latest 2 files
-        tpfind(TPSUP, FlowExps=['not(r["path"].endswith("profile.d"))'],
+        tpfind(TPSUP, FlowExps=['r["short"] in ["scripts", "lib", "python3", "cmd_exe"]'],
                FlowDirs=['prune'],
                MaxCount=5)
 
         tpfind(p3scripts, FlowExps=['r["size"] > 2000'],
                FlowDirs=['exit'],
+               find_ls=1,
                MaxCount=5)
         tpfind(p3scripts,
                HandleExps=[
                    # file mode in cygwin and git bash is not handled correctly in python.
-                   'r["type"] == "file" and r["size"] > 0 and readline().startswith("#!") and (r["mode"] & 0o755) != 0o755'
+                   'r["type"] == "file" and r["size"] > 0 and getline().startswith("#!") and (r["mode"] & 0o755) != 0o755'
                    #    'r["type"] == "file" and r["size"] > 0',
                ],
                HandleActs=[
-                   '''print('------');print(len(list(readline_gen)));os.system(f"ls -l {r['path']}")'''],
+                   '''print('------');print(getline(count=10));os.system(f"ls -l {r['path']}")'''],
                MaxCount=5,
                )
 

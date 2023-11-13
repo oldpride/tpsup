@@ -17,7 +17,9 @@ use Carp;
 use DBI;
 use JSON;
 use Data::Dumper;
-use TPSUP::UTIL qw(get_tmp_file render_arrays);
+use TPSUP::TMP  qw(get_tmp_file);
+use TPSUP::UTIL qw(render_arrays);
+
 use TPSUP::FILE qw(get_out_fh);
 use TPSUP::LOCK qw(tpeng_unlock);
 use TPSUP::CSV  qw(parse_csv_file);

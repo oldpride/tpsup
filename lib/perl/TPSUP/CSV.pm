@@ -32,8 +32,11 @@ our @EXPORT_OK = qw(
 use Carp;
 
 use Data::Dumper;
-use TPSUP::UTIL qw(
+use TPSUP::TMP qw(
   get_tmp_file
+);
+
+use TPSUP::UTIL qw(
   cp_file2_to_file1
   backup_filel_to_file2
   get_exps_from_string

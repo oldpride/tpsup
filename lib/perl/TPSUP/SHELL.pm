@@ -16,7 +16,7 @@ use Data::Dumper;
 $Data::Dumper::Terse    = 1;        # print without "$VAR1="
 $Data::Dumper::Sortkeys = 1;        # this sorts the Dumper output!
 
-use TPSUP::UTIL qw(
+use TPSUP::TMP qw(
   get_tmp_file
 );
 

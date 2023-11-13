@@ -5,22 +5,24 @@ package TPSUP::SSH;
 use strict;
 use base qw( Exporter );
 our @EXPORT_OK = qw(
-   tpssh
-   get_local_login
-   get_remote_login_host
+  tpssh
+  get_local_login
+  get_remote_login_host
 );
 
 use Carp;
 use Data::Dumper;
-$Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
-$Data::Dumper::Terse = 1;     # print without "$VAR1="
-use TPSUP::UTIL qw(get_timestamp get_tmp_file parse_rc get_abs_path);
+$Data::Dumper::Sortkeys = 1;    # this sorts the Dumper output!
+$Data::Dumper::Terse    = 1;    # print without "$VAR1="
+use TPSUP::UTIL qw(get_timestamp parse_rc get_abs_path);
+use TPSUP::TMP  qw(get_tmp_file);
 
 my $timeout_rc = 254;
 
 my $local_login;
+
 sub get_local_login {
-   if (!$local_login) {
+   if ( !$local_login ) {
       $local_login = `id | cut -d\\\( -f2 | cut -d\\\) -f1`;
       chomp $local_login;
    }
@@ -29,7 +31,7 @@ sub get_local_login {
 }
 
 sub get_remote_login_host {
-   my ($remote, $opt) = @_;
+   my ( $remote, $opt ) = @_;
 
    my $login;
    my $host;
@@ -37,120 +39,123 @@ sub get_remote_login_host {
    if ( $remote =~ /(\S+)\@(\S+)/ ) {
       $login = $1;
       $host  = $2;
-   } elsif ($opt->{remote_login}) {
+   } elsif ( $opt->{remote_login} ) {
       $login = $opt->{remote_login};
       $host  = $remote;
    } else {
       $login = get_local_login();
-      $host = $remote
+      $host  = $remote;
    }
 
-   return ($login, $host);
+   return ( $login, $host );
 }
 
 sub tpssh {
-   my ($action, $host, $args, $opt) = @_;
-   # $host could be host, or login@host. login could also come from $opt
-   my ($remote_login, $remote_host) = get_remote_login_host($host, $opt);
+   my ( $action, $host, $args, $opt ) = @_;
 
+   # $host could be host, or login@host. login could also come from $opt
+   my ( $remote_login, $remote_host ) = get_remote_login_host( $host, $opt );
 
    # this is the cmd timeout, not the ssh handshake ConnectTimeout
    my $verbose = $opt->{verbose} ? $opt->{verbose} : 0;
    my $profile = $opt->{profile};
-   my $timeout = defined($opt->{timeout}) ? $opt->{timeout} : -1;
+   my $timeout = defined( $opt->{timeout} ) ? $opt->{timeout} : -1;
 
-   # system/exec takes both Array and String
-   #     exec @Array
-   #     exec $String
-   #
-   # Pro and Con 
-   #      Array                 |  String
-   #    ----------------------------------------------------
-   #    exec 'ls', '/etc/hosts' |  exec 'ls /etc/hosts'
-   #    better variable border  |  can handle pipe (|)
-   #    handle quotes better    |  can handle wildcard, ie, glob(): *, ?
-   #
-   # therefore, we add $opt->{GlobArray} to glob() in Array type. but there is
-   # a detrimental effect. for example, in
-   #    egrep "pattern.*" myfile.txt
-   # if we glob("pattern.*"), it becomes blank, try below
-   #    $ perl -e 'print glob("pattern.*"), "\n";'
-   #
-   # therefore, try not to use wildcard (*, ?) or pipe (|) when ExecArgType = Array
+# system/exec takes both Array and String
+#     exec @Array
+#     exec $String
+#
+# Pro and Con
+#      Array                 |  String
+#    ----------------------------------------------------
+#    exec 'ls', '/etc/hosts' |  exec 'ls /etc/hosts'
+#    better variable border  |  can handle pipe (|)
+#    handle quotes better    |  can handle wildcard, ie, glob(): *, ?
+#
+# therefore, we add $opt->{GlobArray} to glob() in Array type. but there is
+# a detrimental effect. for example, in
+#    egrep "pattern.*" myfile.txt
+# if we glob("pattern.*"), it becomes blank, try below
+#    $ perl -e 'print glob("pattern.*"), "\n";'
+#
+# therefore, try not to use wildcard (*, ?) or pipe (|) when ExecArgType = Array
 
    my $ExecArgType = $opt->{ExecArgType} ? $opt->{ExecArgType} : "Array";
    my $GlobArray   = $opt->{GlobArray}   ? $opt->{GlobArray}   : 0;
-   
+
    $verbose && print "tpssh opt = ", Dumper($opt);
 
    my $extra_ssh = "";
 
    $extra_ssh .= "-q" if !$verbose;
 
-   if ($opt->{sshargs}) {
-      $extra_ssh .= " " . join(" ", @{$opt->{sshargs}}) ;
+   if ( $opt->{sshargs} ) {
+      $extra_ssh .= " " . join( " ", @{ $opt->{sshargs} } );
    }
 
    my $ConnectTimeout = $opt->{ConnectTimeout} ? $opt->{ConnectTimeout} : 3;
 
-   my $stdout = !$opt->{stdout}             ? ""                 :
-                 $opt->{stdout} eq 'stderr' ? '>&2'              :
-                                              ">$opt->{stdout}"  ;
+   my $stdout =
+      !$opt->{stdout}             ? ""
+     : $opt->{stdout} eq 'stderr' ? '>&2'
+     :                              ">$opt->{stdout}";
 
-   my $stderr = !$opt->{stderr}             ? ""                 :
-                 $opt->{stderr} eq 'stdout' ? '2>&1'             :
-                                              "2>$opt->{stderr}" ;
+   my $stderr =
+      !$opt->{stderr}             ? ""
+     : $opt->{stderr} eq 'stdout' ? '2>&1'
+     :                              "2>$opt->{stderr}";
 
    my $cmd;
    my $dryrun_cmd;
 
-   if ($action eq 'scp') {
-      my $command = join(' ', @$args);
+   if ( $action eq 'scp' ) {
+      my $command = join( ' ', @$args );
 
-      $cmd =   "scp -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout"
-             . " -o BatchMode=yes $extra_ssh $command $stdout $stderr";
+      $cmd = "scp -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout"
+        . " -o BatchMode=yes $extra_ssh $command $stdout $stderr";
       $dryrun_cmd = "scp $command";
-   } elsif ($action eq 'ssh') {
+   } elsif ( $action eq 'ssh' ) {
       my $local_login = get_local_login();
-   
+
       my $unique_string = "dir_";
       {
-          # get the calling script path
-          my ($package, $filename, $line) = caller;
+         # get the calling script path
+         my ( $package, $filename, $line ) = caller;
 
-          # get the script name
-          $filename =~ s:.*/::;
+         # get the script name
+         $filename =~ s:.*/::;
 
-          $unique_string .= $filename;
-   
-          my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-          $unique_string =  substr($unique_string, 0, 10)
-                          . sprintf("%02d%02d%02d", $hour, $min, $sec);
+         $unique_string .= $filename;
+
+         my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
+           localtime(time);
+         $unique_string = substr( $unique_string, 0, 10 )
+           . sprintf( "%02d%02d%02d", $hour, $min, $sec );
       }
-        
-      # use "l" and "r" to distinguish between local and remote in case we do "ssh localhost"
-      my $dir0  = get_tmp_file("/var/tmp", $unique_string, {IsDir=>1});
+
+# use "l" and "r" to distinguish between local and remote in case we do "ssh localhost"
+      my $dir0    = get_tmp_file( "/var/tmp", $unique_string, { IsDir => 1 } );
       my $cmdfile = "cmd";
 
-      my $ldir  = "${dir0}.L";
+      my $ldir           = "${dir0}.L";
       my $local_cmd_file = "$ldir/$cmdfile";
 
-      my $rdir  = "${dir0}.R";
-         $rdir  =~ s:/var/tmp/tmp_${local_login}:/var/tmp/tmp_${remote_login}:;
+      my $rdir = "${dir0}.R";
+      $rdir =~ s:/var/tmp/tmp_${local_login}:/var/tmp/tmp_${remote_login}:;
       my $remote_cmd_file = "$rdir/$cmdfile";
 
-      $verbose && print STDERR  "local_cmd_file = $local_cmd_file\n";
+      $verbose && print STDERR "local_cmd_file = $local_cmd_file\n";
       $verbose && print STDERR "remote_cmd_file = $remote_cmd_file\n";
-   
-      if (!-d $ldir) {
+
+      if ( !-d $ldir ) {
          system("mkdir -p $ldir");
          confess "mkdir -p $ldir failed" if $? != 0;
       }
 
-      if (defined $opt->{copy}) {
-         my $src = $opt->{copy};
+      if ( defined $opt->{copy} ) {
+         my $src      = $opt->{copy};
          my $abs_path = get_abs_path($src);
-         my ($dir, $file) = ($abs_path =~ m:^(.+)/([^/]+)$:);
+         my ( $dir, $file ) = ( $abs_path =~ m:^(.+)/([^/]+)$: );
 
          my $cmd = "cd $dir; tar cf - $file | (cd $ldir; tar xf -)";
          $verbose && print STDERR "cmd = $cmd\n";
@@ -158,15 +163,16 @@ sub tpssh {
       }
 
       open my $cfh, ">$local_cmd_file" or die "cannot write to $local_cmd_file";
-   
-      if ($opt->{style} eq 'bash') {
+
+      if ( $opt->{style} eq 'bash' ) {
          print {$cfh} "#!/bin/bash\n\n";
-         print {$cfh} join(" ", @$args), "\n";
+         print {$cfh} join( " ", @$args ), "\n";
       } else {
+
          # default to perl style
          # use single quote  in heredoc to disable interpolation
          # use double quotes in heredoc to  enable interpolation
-         print {$cfh} <<"EOF";   
+         print {$cfh} <<"EOF";
 #!/usr/bin/perl
 
 use strict;
@@ -184,9 +190,9 @@ my \$timeout_rc  = $timeout_rc;
 EOF
 
          print {$cfh} "my \$ARGS=", Dumper($args), ";\n";
-      
+
          #print {$cfh} qq(\$ENV{PATH}="/usr/bin:/bin:\$ENV{PATH}";\n);
-         
+
          # use single quote  in heredoc to disable interpolation
          # use double quotes in heredoc to  enable interpolation
          print {$cfh} <<'EOF';
@@ -363,56 +369,60 @@ if ($child_pid) {
 
 EOF
       }
-   
+
       close $cfh;
-   
+
       system("chmod 744 $local_cmd_file");
       $? && exit 1;
-   
-      $verbose && system("cat $local_cmd_file") ;
-   
-      # idea was coming from:
-      # http://unix.stackexchange.com/questions/57807/copy-over-ssh-and-execute-commands-in-one-session
-      # $cmd = "tar cf - -C $ldir $cmdfile | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes \\
-      # ${ remote_login}\@${host} 'OWD=`pwd`; mkdir -p $rdir && cd $rdir && tar xf - && cd \$OWD && $remote_cmd_file'";
-      
+
+      $verbose && system("cat $local_cmd_file");
+
+# idea was coming from:
+# http://unix.stackexchange.com/questions/57807/copy-over-ssh-and-execute-commands-in-one-session
+# $cmd = "tar cf - -C $ldir $cmdfile | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o BatchMode=yes \\
+# ${ remote_login}\@${host} 'OWD=`pwd`; mkdir -p $rdir && cd $rdir && tar xf - && cd \$OWD && $remote_cmd_file'";
+
       #$cmd =   "cat $local_cmd_file|"
-      $cmd =   "cd $ldir; tar -cf - .|"
-             . " ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout -o BatchMode=yes"
-             . " $extra_ssh $remote_login\@$remote_host"
-             . " '";
-             
+      $cmd =
+          "cd $ldir; tar -cf - .|"
+        . " ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$ConnectTimeout -o BatchMode=yes"
+        . " $extra_ssh $remote_login\@$remote_host" . " '";
+
       $cmd .= ". $profile; " if $profile;
       $cmd .= "RDIR=$rdir; export RDIR;";
-      #$cmd .= " mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file' $stdout $stderr";
-      #$cmd .= ' mkdir -p $RDIR && cat >$RDIR/' . $cmdfile . ' && chmod u+rx $RDIR/' . $cmdfile .
-      $cmd .= ' mkdir -p $RDIR && chmod u+rx $RDIR && cd $RDIR && tar -xf - && $RDIR/'
-              . $cmdfile . "' $stdout $stderr";
 
-      $dryrun_cmd = "ssh $remote_login\@$remote_host " . join(" ", @$args);
+#$cmd .= " mkdir -p $rdir && cat >$remote_cmd_file && chmod u+rx $remote_cmd_file && $remote_cmd_file' $stdout $stderr";
+#$cmd .= ' mkdir -p $RDIR && cat >$RDIR/' . $cmdfile . ' && chmod u+rx $RDIR/' . $cmdfile .
+      $cmd .=
+        ' mkdir -p $RDIR && chmod u+rx $RDIR && cd $RDIR && tar -xf - && $RDIR/'
+        . $cmdfile
+        . "' $stdout $stderr";
+
+      $dryrun_cmd = "ssh $remote_login\@$remote_host " . join( " ", @$args );
    } else {
       croak "unknown action='$action'. expecting 'ssh' or 'scp'";
    }
 
    $verbose && print "cmd = $cmd\n";
 
-   if ($opt->{dryrun}) {
+   if ( $opt->{dryrun} ) {
       print "dryrun (not exact) = $dryrun_cmd\n";
    } else {
-      if (!$opt->{ExecMethod} || $opt->{ExecMethod} =~ /^system$/i) { 
+      if ( !$opt->{ExecMethod} || $opt->{ExecMethod} =~ /^system$/i ) {
          system($cmd);
          my $rc = $?;
-         my $r = parse_rc($rc);
-         if ($r->{rc} == 255) {
-            print STDERR "ssh connection to $remote_login\@$remote_host failed\n";
-         } elsif ($r->{rc} == $timeout_rc) {
+         my $r  = parse_rc($rc);
+         if ( $r->{rc} == 255 ) {
+            print STDERR
+              "ssh connection to $remote_login\@$remote_host failed\n";
+         } elsif ( $r->{rc} == $timeout_rc ) {
             print STDERR "remote cmd timed out.\n";
          }
 
          $verbose && print STDERR "r=", Dumper($r);
 
          return $rc;
-      } elsif ($opt->{ExecMethod} =~ /^exec$/ ) { 
+      } elsif ( $opt->{ExecMethod} =~ /^exec$/ ) {
          exec($cmd);
       } else {
          confess "unsupport exec=$opt->{ExecMethod}";
@@ -423,14 +433,15 @@ EOF
 sub main {
    use Getopt::Long;
 
-   my $prog = $0; $prog =~ s:.*/::;  
-   
+   my $prog = $0;
+   $prog =~ s:.*/::;
+
    sub usage {
-      my ($message) = @_; 
-   
-      print "$message\n" if $message;  
-   
-      print << "END";  
+      my ($message) = @_;
+
+      print "$message\n" if $message;
+
+      print << "END";
    usage:  
    
       $0               host -- command
@@ -513,10 +524,10 @@ sub main {
       $prog -cpRun linux1 ./tpssh_test_local.pl
 
 END
-   
+
       exit 1;
    }
-   
+
    my $verbose;
    my $remote_login;
    my $style = 'perl';
@@ -527,26 +538,26 @@ END
    my $ExecMethod  = "System";
    my $ExecArgType = "String";
    my $GlobArray   = 0;
-   
+
    GetOptions(
-      'v|verbose'    => \$verbose,
-      'l=s'          => \$remote_login,
-      'style=s'      => \$style,
-      'sshargs=s'    => \@sshargs,
-      't|timeout=s'  => \$timeout,
-      'ExecMethod=s' => \$ExecMethod,
-      'ExecArgType=s'=> \$ExecArgType,
-      'GlobArray'    => \$GlobArray,
-      'copy=s'       => \$copy,
-      'cpRun'        => \$cpRun,
+      'v|verbose'     => \$verbose,
+      'l=s'           => \$remote_login,
+      'style=s'       => \$style,
+      'sshargs=s'     => \@sshargs,
+      't|timeout=s'   => \$timeout,
+      'ExecMethod=s'  => \$ExecMethod,
+      'ExecArgType=s' => \$ExecArgType,
+      'GlobArray'     => \$GlobArray,
+      'copy=s'        => \$copy,
+      'cpRun'         => \$cpRun,
    ) || usage("cannot parse command line: $!");
-   
+
    usage("wrong number of args") if @ARGV < 2;
-   
+
    my ($host) = shift @ARGV;
-   
-   $verbose && print "command = ", Dumper (\@ARGV) ;
-   
+
+   $verbose && print "command = ", Dumper( \@ARGV );
+
    my $opt = {
       style        => $style,
       timeout      => $timeout,
@@ -564,9 +575,9 @@ END
       $ARGV[0] =~ s:.*/::;
       $ARGV[0] = "\$RDIR/$ARGV[0]";
    }
-   
-   my $rc = tpssh('ssh', $host, \@ARGV, $opt);
-   my $r = parse_rc($rc);
+
+   my $rc = tpssh( 'ssh', $host, \@ARGV, $opt );
+   my $r  = parse_rc($rc);
    exit $r->{rc};
 }
 

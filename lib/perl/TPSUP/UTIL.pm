@@ -3,7 +3,6 @@ package TPSUP::UTIL;
 use strict;
 use base qw( Exporter );
 our @EXPORT_OK = qw(
-  get_tmp_file
   get_patterns_from_log
   cp_file2_to_file1
   backup_filel_to_file2
@@ -71,7 +70,12 @@ use IO::Select;
 use Cwd;
 use Cwd 'abs_path';
 use TPSUP::Expression;
-use TPSUP::FILE qw( get_in_fh get_out_fh );
+
+# UTIL is a basic module, so it should not hard-depend on other modules.
+# therefore, we use 'require' instead of 'use' here,
+# this breaks module-depency look during compile time.
+require TPSUP::FILE;
+require TPSUP::TMP;
 
 sub get_setting_from_env {
    my ( $VarName, $VarToFile, $FileName, $opt ) = @_;
@@ -166,89 +170,6 @@ sub get_timestamp {
    );
 }
 
-my $tmp_index;
-
-sub get_tmp_file {
-   my ( $basedir, $prefix, $opt ) = @_;
-
-   if ( $opt->{chkSpace} ) {
-      my $os = 'uname -a';
-      chomp $os;
-
-      my $cmd = $os =~ /^Linux/ ? "df -kP $basedir" : "df -k $basedir";
-
-      my @DF = `$cmd`;
-
-      #Solaris 10$ df -k /var/tmp
-      #Filesystem kbytes  used    avail    capacity Mounted on
-      #/          4130542 2837486 1251751 70%      /
-
-      if ( !$DF[1] ) {
-         carp "cmd='$cmd' failed" . return undef;
-      }
-
-      chomp @DF;
-
-      my @a = split /\s+/, $DF[1];
-
-      my $avail = $a[3];
-
-      $avail *= 1024;
-
-      if ( $avail < $opt->{chkSpace} ) {
-         carp
-"$basedir doesn't have enough space, avail=$avail, require=$opt->{chkSpace}";
-         return undef;
-      }
-   }
-
-   my $id = `id`;
-   my ($user) = ( $id =~ /^.+?\((.+?)\)/ );
-
-   my $yyyymmdd = `date +%Y%m%d`;
-   chomp $yyyymmdd;
-   my $HHMMSS = `date +%H%M%S`;
-   chomp $HHMMSS;
-
-   my $tmpdir = "$basedir/tmp_${user}";
-   my $daydir = "$tmpdir/$yyyymmdd";
-
-   if ( !-d $daydir ) {
-      system("mkdir -p $daydir");
-      die "failed mkdir -p $daydir" if $?;
-
-#system("find $tmpdir -mount -mtime +7 -exec /bin/rm -fr {} \\; 2>/dev/null");
-# https://unix.stackexchange.com/questions/115863/delete-files-and-directories-by-their-names-no-such-file-or-directory
-      system(
-"find $tmpdir -mount -mtime +7 -prune -exec /bin/rm -fr {} \\; 2>/dev/null"
-      );
-   }
-
-   if ( $opt->{AddIndex} ) {
-      if ( !$tmp_index ) {
-         $tmp_index = 1;
-      } else {
-         $tmp_index++;
-      }
-   }
-
-   if ( $opt->{isDir} && "$opt->{isDir}" !~ /^[nf0]/i ) {
-      my $dir = "$daydir/$prefix.$HHMMSS.$$.dir";
-
-      $dir .= ".$tmp_index" if $opt->{AddIndex};
-
-      mkdir($dir) || return undef;
-
-      return $dir;
-   } else {
-      my $file = "$daydir/$prefix.$HHMMSS.$$";
-
-      $file .= ".$tmp_index" if $opt->{AddIndex};
-
-      return $file;
-   }
-}
-
 sub get_patterns_from_log {
    my ( $log, $match_pattern, $opt ) = @_;
 
@@ -260,7 +181,7 @@ sub get_patterns_from_log {
      defined $opt->{BeginPattern} ? qr/$opt->{BeginPattern}/ : undef;
    my $EndPattern = defined $opt->{EndPattern} ? qr/$opt->{EndPattern}/ : undef;
 
-   my $fh = get_in_fh($log);
+   my $fh = TPSUP::FILE::get_in_fh($log);
 
    my $ret;
 
@@ -341,7 +262,8 @@ sub cp_file2_to_file1 {
 
       $prog =~ s:.*/::;
 
-      my $tmpfile = get_tmp_file( "/var/tmp", "${prog}", { AddIndex => 1 } );
+      my $tmpfile =
+        TPSUP::TMP::get_tmp_file( "/var/tmp", "${prog}", { AddIndex => 1 } );
 
       my $rc = backup_file1_to_file2( $file1, $tmpfile, $opt );
 
@@ -1725,8 +1647,8 @@ sub get_items {
    if ( !$type ) {
 
       # $input is a file name
-      $fh       = get_in_fh( $input, $opt );
-      $get_line = looper($fh);                 # generator/iterator
+      $fh       = TPSUP::FILE::get_in_fh( $input, $opt );
+      $get_line = looper($fh);                              # generator/iterator
    } elsif ( $type eq 'GLOB' ) {
 
       # $ perl -e 'print ref(\*STDIN), "\n";'
