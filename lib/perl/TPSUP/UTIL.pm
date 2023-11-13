@@ -6,7 +6,6 @@ our @EXPORT_OK = qw(
   get_patterns_from_log
   cp_file2_to_file1
   backup_filel_to_file2
-  expect_socket
   get_abs_path
   get_abs_cwd
   get_exps_from_string
@@ -413,79 +412,6 @@ sub get_homedir_by_user {
 
 sub get_homedir {
    return get_homedir_by_user();
-}
-
-sub expect_socket {
-   my ( $socket, $patterns, $opt ) = @_;
-
-   my $type = ref $patterns;
-   croak "\$patterns must be ref to ARRAY, yours is $type" if $type ne 'ARRAY';
-
-   my $interval = $opt->{ExpectInterval} ? $opt->{ExpectInterval} : 30;
-
-   my $total_data;
-   my @matched;
-   my @captures;
-
-   my $select = IO::Select->new($socket) or die "IO::Select $!";
-
-   my $num_patterns = scalar(@$patterns);
-   my $total_wait   = 0;
-
-   while (1) {
-      if ( !$select->can_read($interval) ) {
-         if ( $opt->{ExpectTimeout} ) {
-            $total_wait += $interval;
-
-            if ( $total_wait >= $opt->{ExpectTimeout} ) {
-               print STDERR
-"expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
-               return ( \@matched, \@captures, { status => 'timed out' } );
-            }
-         }
-
-         next;
-      }
-
-      my $data;
-
-      my $size = read( $socket, $data, 1024000 );
-
-      if ( !$size ) {
-         my $total_size = length($total_data);
-         my $print_size = $total_size - 100 < 0 ? $total_size : 100;
-
-         my $last_words = substr $total_data, $total_size - $print_size,
-           $print_size;
-
-         $opt->{verbose}
-           && print STDERR
-           "Socket closed. Last words from peer: ... $last_words\n";
-         return ( \@matched, \@captures, { status => 'closed' } );
-      } else {
-         $opt->{verbose} && print STDERR "received data: $data\n";
-
-         $total_data .= $data;
-
-         my $all_matched = 1;
-
-         for ( my $i = 0 ; $i < $num_patterns ; $i++ ) {
-            next if $matched[$i];
-
-            if ( $total_data =~ /$patterns->[$i]/s ) {
-               $opt->{verbose} && print STDERR "matched $patterns->[$i]\n";
-
-               $matched[$i]  = 1;
-               $captures[$i] = [ $1, $2, $3 ];
-            } else {
-               $all_matched = 0;
-            }
-         }
-
-         return ( \@matched, \@captures, { status => "done" } )
-           if $all_matched;
-      }
-   }
 }
 
 sub get_exps_from_string {

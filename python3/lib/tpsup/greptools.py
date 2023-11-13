@@ -5,19 +5,19 @@ import os
 import re
 import sys
 from typing import Union
-from tpsup.filetools import TpInput, tpglob
+from tpsup.filetools import TpInput, tpglob, tpfind
 from tpsup.logtools import log_FileFuncLine
 from tpsup.searchtools import binary_search_first
 
 
-def grep(files: Union[list, str], MatchPattern: str = None,
-         MatchPatterns: list = None,
-         ExcludePattern: str = None,
-         ExcludePatterns: list = None,
-         FileNameOnly: bool = False,
-         Recursive: bool = False,
-         FindFirstFile=False,
-         **opt):
+def tpgrep(files: Union[list, str], MatchPattern: str = None,
+           MatchPatterns: list = None,
+           ExcludePattern: str = None,
+           ExcludePatterns: list = None,
+           FileNameOnly: bool = False,
+           Recursive: bool = False,
+           FindFirstFile=False,
+           **opt):
     """
     grep a file, return a list of matched lines
     """
@@ -25,16 +25,15 @@ def grep(files: Union[list, str], MatchPattern: str = None,
     verbose = opt.get('verbose', 0)
     print_output = opt.get('print_output', False)
 
-    if isinstance(files, str):
-        # split string by space or newline
-        files2 = re.split('\s+', files, re.MULTILINE)
-    else:
-        files2 = files
+    found = tpfind(files, MatchExps=['r["type"] != "dir"'], **opt)
 
-    files3 = tpglob(files, **opt)
+    # print(f"found={found}", file=sys.stderr)
+    files2 = [r['path'] for r in found["hashes"]]
+
+    # print(f"files2={files2}")
 
     if verbose:
-        print(f'files3={files3}', file=sys.stderr)
+        print(f'files2={files2}', file=sys.stderr)
 
     if MatchPatterns:
         MatchPatterns2 = MatchPatterns
@@ -128,10 +127,10 @@ def grep(files: Union[list, str], MatchPattern: str = None,
         # use binary search to find the first file has the match
         def grep2(f):
             return grep_1_file(f)
-        index = binary_search_first(files3, grep2)
-        return files3[index] if index >= 0 else None
+        index = binary_search_first(files2, grep2)
+        return files2[index] if index >= 0 else None
     else:
-        for file in files3:
+        for file in files2:
             if file in seen_file:
                 if verbose:
                     log_FileFuncLine(
@@ -139,33 +138,6 @@ def grep(files: Union[list, str], MatchPattern: str = None,
                 continue
             else:
                 seen_file[file] = True
-
-            # skip directories
-            if os.path.isdir(file):
-                if Recursive:
-                    if file in exclude_dirs:
-                        if verbose:
-                            log_FileFuncLine(
-                                f'{file} is in exclude_dirs, skip', file=sys.stderr)
-                        continue
-
-                    for root, dirs, fnames in os.walk(file, topdown=True):
-                        # https://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
-                        # key point: use [:] to modify dirs in place
-                        dirs[:] = [d for d in dirs if d not in exclude_dirs]
-                        for f in fnames:
-                            full_path = os.path.join(root, f)
-                            if verbose:
-                                print(f'grep {full_path}', file=sys.stderr)
-                            matches = grep_1_file(full_path)
-                            lines2.extend(matches)
-                else:
-                    if verbose:
-                        print(f'{file} is a directory, skip', file=sys.stderr)
-                continue
-
-            if verbose:
-                print(f'grep {file}', file=sys.stderr)
 
             match = grep_1_file(file)
             lines2.extend(match)
@@ -180,11 +152,11 @@ def main():
     files2 = f'{TPSUP}/python3/lib/tpsup/searchtools_test*'
 
     def test_codes():
-        grep(files1, 'mypattern')
-        grep(files1, ExcludePattern='abc|def')
-        grep(files1, 'mypattern', FileNameOnly=True)
-        grep(files2, 'bc', FindFirstFile=True)
-        grep(files2, 'bc', FindFirstFile=True, sort='time')
+        tpgrep(files1, 'mypattern')
+        tpgrep(files1, ExcludePattern='abc|def')
+        tpgrep(files1, 'mypattern', FileNameOnly=True)
+        tpgrep(files2, 'bc', FindFirstFile=True)
+        tpgrep(files2, 'bc', FindFirstFile=True, sort='time')
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
