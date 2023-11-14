@@ -15,6 +15,7 @@ use TPSUP::FILE qw(
   get_in_fh
   close_in_fh
   tpglob
+  tpfind
 );
 
 use TPSUP::SEARCH qw(
@@ -24,14 +25,29 @@ use TPSUP::SEARCH qw(
 sub tpgrep {
    my ( $files, $opt ) = @_;
 
-   my $FileNameOnly   = $opt->{FileNameOnly};
-   my $Recursive      = $opt->{Recursive};
-   my $verbose        = $opt->{verbose} || 0;
-   my $FindFirstFile  = $opt->{FindFirstFile};
-   my $PrintCount     = $opt->{PrintCount};
-   my $print_filename = $opt->{print_filename};
+   my $FileNameOnly    = $opt->{FileNameOnly};
+   my $Recursive       = $opt->{Recursive};
+   my $verbose         = $opt->{verbose} || 0;
+   my $FindFirstFile   = $opt->{FindFirstFile};
+   my $PrintCount      = $opt->{PrintCount};
+   my $print_output    = $opt->{print_output};
+   my $CaseInsensitive = $opt->{CaseInsensitive};
 
-   my @files2 = tpglob( $files, $opt );
+   my $MaxDepth = $Recursive ? undef : 1;
+
+   my $found = tpfind(
+      $files,
+      {
+         %$opt,
+         no_print  => 1,
+         MaxDepth  => $MaxDepth,
+         MatchExps => ['$type ne "dir"']
+      }
+   );
+
+   my @files2 = map { $_->{path} } @{ $found->{hashes} };
+
+   my $print_filename = 1 if @files2 > 1;
 
    my $MatchPatterns = $opt->{MatchPatterns} ? $opt->{MatchPatterns} : [];
    my $ExcludePatterns =
@@ -48,10 +64,16 @@ sub tpgrep {
    my @MatchCompiled;
    my @ExcludeCompiled;
    for my $p (@$MatchPatterns) {
+      if ($CaseInsensitive) {
+         $p = "(?i)$p";
+      }
       push @MatchCompiled, qr/$p/;
    }
 
    for my $p (@$ExcludePatterns) {
+      if ($CaseInsensitive) {
+         $p = "(?i)$p";
+      }
       push @ExcludeCompiled, qr/$p/;
    }
 
@@ -109,12 +131,12 @@ sub tpgrep {
 
          if ($print_filename) {
             push @lines, "$file:$line";
-            if ( $opt->{print_output} ) {
+            if ($print_output) {
                print "$file:$line";
             }
          } else {
             push @lines, $line;
-            if ( $opt->{print_output} ) {
+            if ($print_output) {
                print $line;
             }
          }
@@ -136,20 +158,19 @@ sub tpgrep {
       my $index = binary_search_first( \@files2, $grep2 );
       return $files2[$index];
    } else {
-      for my $path (@files2) {
-         my @files;
-         if ($Recursive) {
-            @files = `find $path -type f|sort`;
-            chomp @files;
+      my %seen_file;
+      for my $file (@files2) {
+         if ( $seen_file{$file} ) {
+            if ($verbose) {
+               print STDERR "file=$file already seen. skip\n";
+            }
+            next;
          } else {
-            @files = ($path);
+            $seen_file{$file} = 1;
          }
 
-         for my $f (@files) {
-            $verbose && print STDERR "scanning file=$f\n";
-            my $matched = $grep_1_file->($f);
-            push @lines2, @$matched;
-         }
+         my $match = $grep_1_file->($file);
+         push @lines2, @$match;
       }
 
       return \@lines2;
@@ -167,12 +188,14 @@ sub main {
    my $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
 
    my $test_code = <<'END';
-        our $TPSUP  = $ENV{TPSUP};
-        our $files1 = "$TPSUP/python3/scripts/ptgrep_test*";
-        our  $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
-        TPSUP::GREP::tpgrep($files1, { MatchPattern => 'mypattern' });
-      #   grep($files1, { ExcludePattern => 'abc|def' });
-      #   grep($files2, { MatchPattern => 'bc', FindFirstFile => 1 });
+      our $TPSUP  = $ENV{TPSUP};
+      our $files1 = "$TPSUP/python3/scripts/ptgrep_test*";
+      our  $files2 = "$TPSUP/python3/lib/tpsup/searchtools_test*";
+      TPSUP::GREP::tpgrep($files1, { MatchPattern => 'Mypattern', CaseInsensitive => 1 });
+      TPSUP::GREP::tpgrep($files1, { ExcludePattern => 'abc|def' });
+      TPSUP::GREP::tpgrep($files2, { MatchPattern => 'bc', FindFirstFile => 1 });
+      TPSUP::GREP::tpgrep( $files2, { MatchPattern => 'bc', FindFirstFile => 1, sort=>'time' } );
+
 END
 
    test_lines($test_code);

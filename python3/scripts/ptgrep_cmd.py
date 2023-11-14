@@ -6,7 +6,7 @@ import sys
 import argparse
 import textwrap
 from pprint import pprint, pformat
-from tpsup.greptools import grep
+from tpsup.greptools import tpgrep
 
 prog = os.path.basename(sys.argv[0]).replace('_cmd.py', '')
 
@@ -130,4 +130,4 @@ if verbose:
     print(f'opt={pformat(opt)}', file=sys.stderr)
     print(f'files={pformat(files)}', file=sys.stderr)
 
-grep(files, **opt)
+tpgrep(files, **opt)

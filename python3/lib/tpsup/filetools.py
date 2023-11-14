@@ -225,12 +225,15 @@ def tpfind(paths: Union[list, str],
            FlowDirs: list = [],
            HandleExps: list = [],
            HandleActs: list = [],
-           find_print=1,
-           find_ls=0,
-           find_dump=0,
+           no_print: bool = False,
+           find_print: bool = False,
+           find_ls: bool = False,
+           find_dump: bool = False,
            MaxCount: int = None,
            MaxDepth: int = None,
            **opt):
+
+    # verbose will be passed to downstream functions, therefore, it stays in **opt
     verbose = opt.get('verbose', 0)
 
     import platform
@@ -249,9 +252,12 @@ def tpfind(paths: Union[list, str],
         raise RuntimeError(
             f'number of HandleExps {len(HandleExps)} not match number of HandleActs {len(HandleActs)}')
 
-    # find_print is the default print method
-    find_print = find_print or not (
-        find_ls or find_dump or FlowExps or HandleExps)
+    # no_print is used to suppress printing the path, for example,
+    # when another function calls tpfind() to get a list of files.
+    if not no_print:
+        # find_print is the default print method
+        find_print = find_print or not (
+            find_ls or find_dump or FlowExps or HandleExps)
 
     mod_name = 'tmp_mod'
     mod_source = '''

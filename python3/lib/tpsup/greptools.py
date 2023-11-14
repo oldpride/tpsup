@@ -16,21 +16,28 @@ def tpgrep(files: Union[list, str], MatchPattern: str = None,
            ExcludePatterns: list = None,
            FileNameOnly: bool = False,
            Recursive: bool = False,
-           FindFirstFile=False,
+           FindFirstFile: bool = False,
+           print_output: bool = False,
+           CaseInsensitive: bool = False,
            **opt):
     """
     grep a file, return a list of matched lines
     """
 
+    # verbose will be passed to downstream functions, therefore, it stays in **opt
     verbose = opt.get('verbose', 0)
-    print_output = opt.get('print_output', False)
 
-    found = tpfind(files, MatchExps=['r["type"] != "dir"'], **opt)
+    MaxDepth = None if Recursive else 0
 
-    # print(f"found={found}", file=sys.stderr)
+    found = tpfind(files,
+                   MaxDepth=MaxDepth,
+                   MatchExps=['r["type"] != "dir"'],
+                   no_print=True,
+                   **opt)
+
     files2 = [r['path'] for r in found["hashes"]]
 
-    # print(f"files2={files2}")
+    print_filename = len(files2) > 1
 
     if verbose:
         print(f'files2={files2}', file=sys.stderr)
@@ -52,25 +59,22 @@ def tpgrep(files: Union[list, str], MatchPattern: str = None,
     MatchCompiled = []
     if MatchPatterns2:
         for p in MatchPatterns2:
-            if opt.get('CaseInsensitive', False):
+            if CaseInsensitive:
                 MatchCompiled.append(re.compile(p, re.IGNORECASE))
             else:
                 MatchCompiled.append(re.compile(p))
     ExcludeCompiled = []
     if ExcludePatterns2:
         for p in ExcludePatterns2:
-            if opt.get('CaseInsensitive', False):
+            if CaseInsensitive:
                 ExcludeCompiled.append(re.compile(p, re.IGNORECASE))
             else:
                 ExcludeCompiled.append(re.compile(p))
 
     lines2 = []
-    seen_file = {}
-
-    print_filename = len(files2) > 1 or Recursive
-    exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
 
     # define a function inside a function to save from passing parameters
+
     def grep_1_file(f: str):
         lines = []
         with TpInput(filename=f, **opt) as tf:
@@ -101,7 +105,7 @@ def tpgrep(files: Union[list, str], MatchPattern: str = None,
 
                     if FileNameOnly:
                         lines.append(f)
-                        if opt.get('print_output', False):
+                        if print_output:
                             print(f)
                         break
 
@@ -130,11 +134,12 @@ def tpgrep(files: Union[list, str], MatchPattern: str = None,
         index = binary_search_first(files2, grep2)
         return files2[index] if index >= 0 else None
     else:
+        seen_file = {}
         for file in files2:
             if file in seen_file:
                 if verbose:
                     log_FileFuncLine(
-                        f'{file} already seen, skip', file=sys.stderr)
+                        f'file={file} already seen, skip', file=sys.stderr)
                 continue
             else:
                 seen_file[file] = True

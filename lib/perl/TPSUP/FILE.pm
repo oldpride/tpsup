@@ -151,7 +151,10 @@ sub close_out_fh {
 }
 
 sub tpglob {
-   my ( $pattern, $flags ) = @_;
+   my ( $pattern, $opt ) = @_;
+
+   my $sort    = $opt->{sort};
+   my $reverse = $opt->{reverse};
 
    my @patterns;
    my $type = ref($pattern);
@@ -177,8 +180,21 @@ sub tpglob {
       }
    }
 
-   # print "tpglob: files=", Dumper( \@files );
-   return @files;
+   if ( !$sort ) {
+      return @files;
+   } elsif ( $sort eq 'time' ) {
+      return sorted_files_by_mtime( \@files, { reverse => $reverse } );
+   } elsif ( $sort eq 'name' ) {
+      my @files2 = sort { $a cmp $b } @files;
+      if ($reverse) {
+         return reverse @files2;
+      } else {
+         return @files2;
+      }
+   } else {
+      croak "tpglob: unknown sort option '$sort'";
+   }
+
 }
 
 sub sorted_files {
@@ -275,6 +291,7 @@ sub tpfind {
    require TPSUP::UTIL;
 
    my $verbose    = $opt->{verbose} || 0;
+   my $no_print   = $opt->{no_print};
    my $find_dump  = $opt->{find_dump};
    my $find_ls    = $opt->{find_ls};
    my $find_print = $opt->{find_print};
@@ -319,12 +336,17 @@ sub tpfind {
          [ $exps, $dirs, $opt->{FlowExps}, $opt->{FlowDirs} ], $opt );
    }
 
-   # find_print is the default way of print
-   $find_print = $find_print
-     || (!$find_dump
-      && !$find_ls
-      && !$Handlers
-      && !$FlowControl );
+   # no_print is used to suppress printing the path, for example,
+   # when another function calls tpfind() to get a list of files.
+   if ( !$no_print ) {
+
+      # find_print is the default way of print
+      $find_print = $find_print
+        || (!$find_dump
+         && !$find_ls
+         && !$Handlers
+         && !$FlowControl );
+   }
 
    my $ret = { error => 0, count => 0, hashes => [] };
 
@@ -502,7 +524,7 @@ sub tpfind {
 
    # end - function inside function
 
-   my @globbed_paths = tpglob($paths);
+   my @globbed_paths = tpglob( $paths, $opt );
 
    my @pathLevels;
    for my $path (@globbed_paths) {
@@ -557,7 +579,7 @@ sub tpfind {
 }
 
 sub main {
-   use TPSUP::TEST qw(test_lines);
+   require TPSUP::TEST;
 
    # use 'our' in test code, not 'my'
    my $test_code = <<'END';
@@ -571,7 +593,7 @@ sub main {
         @{TPSUP::FILE::get_latest_files($files) }[0..1]; # slice
 END
 
-   test_lines($test_code);
+   TPSUP::TEST::test_lines($test_code);
 }
 
 main() unless caller();
