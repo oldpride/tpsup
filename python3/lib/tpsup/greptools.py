@@ -10,12 +10,14 @@ from tpsup.logtools import log_FileFuncLine
 from tpsup.searchtools import binary_search_first
 
 
-def tpgrep(files: Union[list, str], MatchPattern: str = None,
+def tpgrep(files: Union[list, str],
+           MatchPattern: str = None,
            MatchPatterns: list = None,
            ExcludePattern: str = None,
            ExcludePatterns: list = None,
            FileNameOnly: bool = False,
            Recursive: bool = False,
+           MaxDepth: int = None,
            FindFirstFile: bool = False,
            print_output: bool = False,
            CaseInsensitive: bool = False,
@@ -27,7 +29,8 @@ def tpgrep(files: Union[list, str], MatchPattern: str = None,
     # verbose will be passed to downstream functions, therefore, it stays in **opt
     verbose = opt.get('verbose', 0)
 
-    MaxDepth = None if Recursive else 0
+    if not Recursive:
+        MaxDepth = 0
 
     found = tpfind(files,
                    MaxDepth=MaxDepth,
@@ -157,11 +160,11 @@ def main():
     files2 = f'{TPSUP}/python3/lib/tpsup/searchtools_test*'
 
     def test_codes():
-        tpgrep(files1, 'mypattern')
+        tpgrep(files1, 'Mypattern', CaseInsensitive=True)
         tpgrep(files1, ExcludePattern='abc|def')
         tpgrep(files1, 'mypattern', FileNameOnly=True)
         tpgrep(files2, 'bc', FindFirstFile=True)
-        tpgrep(files2, 'bc', FindFirstFile=True, sort='time')
+        tpgrep(files2, 'bc', FindFirstFile=True, sort_name='mtime')
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())

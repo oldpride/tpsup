@@ -27,13 +27,16 @@ sub tpgrep {
 
    my $FileNameOnly    = $opt->{FileNameOnly};
    my $Recursive       = $opt->{Recursive};
+   my $MaxDepth        = $opt->{MaxDepth};
    my $verbose         = $opt->{verbose} || 0;
    my $FindFirstFile   = $opt->{FindFirstFile};
    my $PrintCount      = $opt->{PrintCount};
    my $print_output    = $opt->{print_output};
    my $CaseInsensitive = $opt->{CaseInsensitive};
 
-   my $MaxDepth = $Recursive ? undef : 1;
+   if ( !$Recursive ) {
+      $MaxDepth = 0;
+   }
 
    my $found = tpfind(
       $files,
@@ -194,7 +197,7 @@ sub main {
       TPSUP::GREP::tpgrep($files1, { MatchPattern => 'Mypattern', CaseInsensitive => 1 });
       TPSUP::GREP::tpgrep($files1, { ExcludePattern => 'abc|def' });
       TPSUP::GREP::tpgrep($files2, { MatchPattern => 'bc', FindFirstFile => 1 });
-      TPSUP::GREP::tpgrep( $files2, { MatchPattern => 'bc', FindFirstFile => 1, sort=>'time' } );
+      TPSUP::GREP::tpgrep( $files2, { MatchPattern => 'bc', FindFirstFile => 1, sort_name=>'mtime' } );
 
 END
 

@@ -166,7 +166,11 @@ class TpOutput:
         self.close()
 
 
-def tpglob(file: Union[list, str],  sort=None, **opt):
+def tpglob(file: Union[list, str],
+           sort_name=None,
+           sort_func=None,
+           reverse=False,
+           **opt):
     if isinstance(file, str):
         files = file.split()
     elif isinstance(file, list):
@@ -188,32 +192,82 @@ def tpglob(file: Union[list, str],  sort=None, **opt):
             posixed = [x.replace('\\', '/') for x in globbed]
             files2.extend(posixed)
 
-    if not sort:
-        return files2
-    elif sort == 'time':
-        return sorted_files_by_mtime(files2, **opt)
-    elif sort == 'name':
-        return sorted(files2, **opt)
+    if sort_name or sort_func:
+        return sort_files(files2,
+                          sort_name=sort_name,
+                          sort_func=sort_func,
+                          reverse=reverse,
+                          globbed=True,  # this is to avoid infinite loop
+                          **opt)
     else:
-        raise RuntimeError(f'unsupported sort={sort}')
+        return files2 if not reverse else files2[::-1]
 
 
-def sorted_files(files: Union[list, str], sort_func, globbed: bool = False, reverse=False, **opt):
+mtime_by_file = {}
+
+
+def get_mtime(file: str, **opt):
+    global mtime_by_file
+
+    if file in mtime_by_file:
+        return mtime_by_file[file]
+
+    mtime = os.path.getmtime(file)
+    mtime_by_file[file] = mtime
+    return mtime
+
+
+size_by_file = {}
+
+
+def get_size(file: str, **opt):
+    global size_by_file
+
+    if file in size_by_file:
+        return size_by_file[file]
+
+    size = os.path.getsize(file)
+    size_by_file[file] = size
+    return size
+
+
+def sort_files(files: Union[list, str],
+               sort_name: str = None,
+               sort_func=None,
+               reverse=False,
+               globbed: bool = False,  # sort_files() uses this to avoid infinite loop
+               **opt):
     if not globbed:
         files2 = tpglob(files, **opt)
     else:
         files2 = files
 
-    # sort descending
-    return list(sorted(files2, key=sort_func, reverse=reverse))
+    # python's sorted() is different from perl's sort()
+    #    sorted() takes a key arg, which converts a list item to a comparable object
+    #    sort() takes a cmp arg, which compares 2 list items
+    # therefore, their sort_func are different.
+    if not sort_func:
+        if sort_name:
+            if sort_name == 'mtime':
+                sort_func = get_mtime
+            elif sort_name == 'name':
+                pass
+            elif sort_name == 'size':
+                sort_func = get_size
+            else:
+                raise RuntimeError(f'unknown sort_name={sort_name}')
 
-
-def sorted_files_by_mtime(files: list, **opt):
-    return sorted_files(files, os.path.getmtime, **opt)
+    if sort_func or sort_name:
+        if sort_func:
+            return sorted(files2, key=sort_func, reverse=reverse)
+        else:
+            return sorted(files2, reverse=reverse)
+    else:
+        return files2
 
 
 def get_latest_files(files: list, **opt):
-    return sorted_files_by_mtime(files, reverse=True, **opt)
+    return sort_files(files, sort_name='mtime', reverse=True, **opt)
 
 
 exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
@@ -607,9 +661,9 @@ def main():
     searchfiles = f'{TPSUP}/python3/lib/tpsup/searchtools_test*.txt'
 
     def test_codes():
-        sorted_files_by_mtime([libfiles])
+        sort_files([libfiles], sort_name='mtime')
         tpglob(searchfiles)
-        tpglob(searchfiles, sort='time')
+        tpglob(searchfiles, sort_name='mtime')
         get_latest_files([libfiles])[:2]  # get the latest 2 files
         tpfind(TPSUP, FlowExps=['r["short"] in ["scripts", "lib", "python3", "cmd_exe"]'],
                FlowDirs=['prune'],

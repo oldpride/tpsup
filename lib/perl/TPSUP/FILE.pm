@@ -10,8 +10,8 @@ our @EXPORT_OK = qw(
   close_in_fh
   close_out_fh
   tpglob
-  sorted_files
-  sorted_files_by_mtime
+  sort_files
+  sort_files_by_mtime
   get_latest_files
   tpfind
   convert_filemode
@@ -153,8 +153,9 @@ sub close_out_fh {
 sub tpglob {
    my ( $pattern, $opt ) = @_;
 
-   my $sort    = $opt->{sort};
-   my $reverse = $opt->{reverse};
+   my $sort_name = $opt->{sort_name};
+   my $sort_func = $opt->{sort_func};
+   my $reverse   = $opt->{reverse};
 
    my @patterns;
    my $type = ref($pattern);
@@ -180,28 +181,28 @@ sub tpglob {
       }
    }
 
-   if ( !$sort ) {
-      return @files;
-   } elsif ( $sort eq 'time' ) {
-      return sorted_files_by_mtime( \@files, { reverse => $reverse } );
-   } elsif ( $sort eq 'name' ) {
-      my @files2 = sort { $a cmp $b } @files;
-      if ($reverse) {
-         return reverse @files2;
-      } else {
-         return @files2;
-      }
+   if ( $sort_name || $sort_func ) {
+      return sort_files(
+         \@files,
+         {
+            globbed   => 1,            # must have this to avoid infinite loop
+            sort_name => $sort_name,
+            sort_func => $sort_func,
+            reverse   => $reverse
+         }
+      );
    } else {
-      croak "tpglob: unknown sort option '$sort'";
+      return $reverse ? reverse @files : @files;
    }
-
 }
 
-sub sorted_files {
+sub sort_files {
    my ( $files, $opt ) = @_;
 
-   my $globbed   = $opt->{globbed};
+   my $globbed =
+     $opt->{globbed};    # sort_files() uses this to avoid infinite loop
    my $reverse   = $opt->{reverse};
+   my $sort_name = $opt->{sort_name};
    my $sort_func = $opt->{sort_func};
 
    my @files2;
@@ -211,8 +212,36 @@ sub sorted_files {
       @files2 = @$files;
    }
 
+# python's sorted() is different from perl's sort()
+#    sorted() takes a key arg, which converts a list item to a comparable object
+#    sort() takes a cmp arg, which compares 2 list items
+# therefore, their sort_func are very different
+
    if ( !$sort_func ) {
-      $sort_func = sub { $_[0] cmp $_[1] };
+      if ($sort_name) {
+         if ( $sort_name eq 'mtime' ) {
+            $sort_func = sub {
+               my ( $f1, $f2 ) = @_;
+               my $mtime1 = get_mtime($f1);
+               my $mtime2 = get_mtime($f2);
+               return $mtime1 <=> $mtime2;
+            };
+         } elsif ( $sort_name eq 'name' ) {
+            $sort_func = sub { $_[0] cmp $_[1] };
+
+         } elsif ( $sort_name eq 'size' ) {
+            $sort_func = sub {
+               my ( $f1, $f2 ) = @_;
+               my $size1 = get_size($f1);
+               my $size2 = get_size($f2);
+               return $size1 <=> $size2;
+            };
+         } else {
+            croak "unknown sort_name=$sort_name";
+         }
+      } else {
+         $sort_func = sub { $_[0] cmp $_[1] };
+      }
    }
 
    my @sorted_files = sort { $sort_func->( $a, $b ) } @files2;
@@ -237,6 +266,24 @@ sub get_mtime {
    return $mtime_by_file->{$file};
 }
 
+my $size_by_file;
+
+sub get_size {
+   my $file = shift;
+
+   if ( !$size_by_file->{$file} ) {
+
+      # my @array = lstat($file);
+      # my (
+      #     $dev,  $ino,   $mode,  $nlink, $uid,     $gid, $rdev,
+      #     $size, $atime, $mtime, $ctime, $blksize, $blocks
+      # ) = @array;
+      $size_by_file->{$file} = ( stat($file) )[7];
+   }
+
+   return $size_by_file->{$file};
+}
+
 sub convert_filemode {
    my ( $input, $action ) = @_;
 
@@ -255,25 +302,12 @@ sub convert_filemode {
 
 }
 
-sub sorted_files_by_mtime {
-   my ( $files, $opt ) = @_;
-
-   my $sort_func = sub {
-      my ( $f1, $f2 ) = @_;
-      my $mtime1 = get_mtime($f1);
-      my $mtime2 = get_mtime($f2);
-      return $mtime1 <=> $mtime2;
-   };
-
-   my $opt2 = $opt ? $opt : {};
-   return sorted_files( $files, { %$opt2, sort_func => $sort_func } );
-}
-
 sub get_latest_files {
    my ( $files, $opt ) = @_;
 
-   my $opt2         = $opt ? $opt : {};
-   my @sorted_files = sorted_files_by_mtime( $files, { %$opt2, reverse => 1 } );
+   my $opt2 = $opt ? $opt : {};
+   my @sorted_files =
+     sort_files( $files, { %$opt2, sort_name => 'mtime', reverse => 1 } );
    return \@sorted_files;
 }
 
@@ -433,9 +467,9 @@ sub tpfind {
 
 #TPSUP::Expression::dump_var(); # I can see 'user' was populated even at this step
 
-         if ($verbose) {
-            $TPSUP::Expression::verbose = 1;
-         }
+         # if ($verbose) {
+         #    $TPSUP::Expression::verbose = 1;
+         # }
       }
 
       if ($FlowControl) {
@@ -587,8 +621,8 @@ sub main {
         our $TPSUP = $ENV{TPSUP};
         our $files = "$TPSUP/python3/lib/tpsup/searchtools_test*";
         TPSUP::FILE::tpglob([$files]);
-        TPSUP::FILE::sorted_files_by_mtime($files);
-        TPSUP::FILE::sorted_files_by_mtime($files, {reverse=>1});
+        TPSUP::FILE::sort_files($files, {sort_name=>'mtime'});
+        TPSUP::FILE::sort_files($files, {sort_name=>'mtime', reverse=>1});
         ${TPSUP::FILE::get_latest_files($files)}[0];     # convert result to array
         @{TPSUP::FILE::get_latest_files($files) }[0..1]; # slice
 END
