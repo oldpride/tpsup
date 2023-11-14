@@ -65,14 +65,14 @@ sub tpgrep {
    my @ExcludeCompiled;
    for my $p (@$MatchPatterns) {
       if ($CaseInsensitive) {
-         $p = "(?i)$p";
+         $p = "(?i)$p";    # case-insensitive
       }
       push @MatchCompiled, qr/$p/;
    }
 
    for my $p (@$ExcludePatterns) {
       if ($CaseInsensitive) {
-         $p = "(?i)$p";
+         $p = "(?i)$p";    # case-insensitive
       }
       push @ExcludeCompiled, qr/$p/;
    }
