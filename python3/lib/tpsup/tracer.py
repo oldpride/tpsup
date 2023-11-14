@@ -257,7 +257,7 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
             method_cfg, 'logic', default='OR')
 
         # 'grep -E' will be good for linux but not for windows
-        default_grep = f'"{TPSUP}/python3/scripts/tpgrep"'
+        default_grep = f'"{TPSUP}/python3/scripts/ptgrep"'
         grep = get_value_by_key_case_insensitive(
             method_cfg, 'grep', default=default_grep)
 
@@ -314,7 +314,7 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                 f"attr='value' is not defined at method_cfg={pformat(method_cfg)}")
 
         # 'grep -E' will be good for linux but not for windows
-        default_grep = f'"{TPSUP}/python3/scripts/tpgrep"'
+        default_grep = f'"{TPSUP}/python3/scripts/ptgrep"'
         grep = get_value_by_key_case_insensitive(
             method_cfg, 'grep', default=default_grep)
 
@@ -340,9 +340,10 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
                 if not values:
                     continue
 
-                # jin windows cmd.exe, only double quotes does grouping.
+                # in windows cmd.exe, only double quotes does grouping.
                 cmd2 += ' "' + '|'.join(values) + '"'
-            elif m := re.search(r'^tpgrepl=(.+)', r[0]):
+            elif m := re.search(r'^ptgrepl=(.+)', r[0]):
+                # todo: this needs fix
                 cmd2 = m.group(1)
 
                 # example:

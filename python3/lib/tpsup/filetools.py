@@ -270,7 +270,8 @@ def get_latest_files(files: list, **opt):
     return sort_files(files, sort_name='mtime', reverse=True, **opt)
 
 
-exclude_dirs = set(['.git', '.idea', '__pycache__', '.snapshot'])
+exclude_dirs = set(['.', '..', '-', '.git', '.idea',
+                   '__pycache__', '.snapshot', '.vscode'])
 
 
 def tpfind(paths: Union[list, str],
@@ -549,8 +550,6 @@ def getline(**opt):
         pathLevels.append(pathLevel)
 
     seen = {}
-    exclude_dirs = set(['.', '..', '.git', '.idea',
-                       '.vscode', '__pycache__', '.snapshot'])
 
     while pathLevels:
         if MaxCount is not None:
@@ -559,6 +558,11 @@ def getline(**opt):
 
         pathLevel = pathLevels.pop(0)
         path, level = pathLevel
+
+        if path == '-':
+            # this is stdin
+            continue
+
         result = process_node(full_path=path, **opt)
         if direction := result.get('direction', None):
             if direction == 'exit':

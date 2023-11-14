@@ -1,14 +1,14 @@
 import re
 import sys
 
-from tpsup.filetools import TpInput, sorted_files_by_mtime, tpglob
+from tpsup.filetools import TpInput, sort_files, tpglob
 from tpsup.modtools import load_module
 
 
 def get_logs(log, LogLastCount: int = 0, **opt):
     verbose = opt.get('verbose', 0)
 
-    logs = sorted_files_by_mtime(log, **opt)
+    logs = sort_files(log, sort_name="mtime", **opt)
 
     return logs[-LogLastCount:]
 
