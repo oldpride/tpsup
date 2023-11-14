@@ -560,7 +560,9 @@ def getline(**opt):
         path, level = pathLevel
 
         if path == '-':
-            # this is stdin
+            # this is stdin. skip it.
+            # we could come here when tpfind() is called by tpgrep() which
+            # can take stdin as input.
             continue
 
         result = process_node(full_path=path, **opt)

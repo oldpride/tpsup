@@ -573,6 +573,15 @@ sub tpfind {
          last if $ret->{count} >= $MaxCount;
       }
       my ( $path, $level ) = @$pathLevel;
+
+      if ( $path eq '-' ) {
+
+         # this is stdin. skip it.
+         # we could come here when tpfind() is called by tpgrep() which
+         # can take stdin as input
+         next;
+      }
+
       my $result = $process_node->($path);
       if ( exists $result->{direction} ) {
          if ( $result->{direction} eq 'prune' ) {
