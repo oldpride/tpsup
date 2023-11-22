@@ -42,11 +42,10 @@ use TPSUP::UTIL qw(
   top_array
   tail_array
   resolve_scalar_var_in_string
-  tpfind
   tp_quote_wrap
 );
 
-use TPSUP::FILE qw(get_in_fh close_in_fh);
+use TPSUP::FILE qw(get_in_fh close_in_fh tpfind);
 use TPSUP::LOG  qw(
   get_log_sections
   get_log_section_headers

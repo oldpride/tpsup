@@ -5,7 +5,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(get_tmp_file);
+use TPSUP::TMP qw(get_tmp_file);
 use TPSUP::SQL qw(run_sql);
 
 my $prog = $0; $prog =~ s:.*/::;
