@@ -59,8 +59,18 @@ sub test_lines {
 
 sub main {
 
-  # var declared using "our" which is global to the package. "my" will not work.
+    # suppress "once" warning
+    #   Name "DUMMY::array1" used only once: possible typo at TEST.pm line 63.
+    no warnings 'once';
+
+    # multiple-line variable declaration, use DUMMY namespace
+    $DUMMY::array1 =[
+        [1,2,3],
+        [4,5,6],
+    ];
+
     my $pre_code = <<END;
+        # var declared using "our" which is global to the package. "my" will not work.
         our \$a = 1;
         our \$b = "hello";
 END
@@ -68,6 +78,10 @@ END
     my $test_code = <<'END';
         $a+1;
         $b;
+
+        # caller is in DUMMY package (namespace), therefore, we just use $array1;
+        # don't need to use $DUMMY::array1
+        Data::Dumper::Dumper($array1);
 END
 
     test_lines( $test_code, { pre_code => $pre_code } );
