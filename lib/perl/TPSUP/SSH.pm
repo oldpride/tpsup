@@ -8,6 +8,7 @@ our @EXPORT_OK = qw(
   tpssh
   get_local_login
   get_remote_login_host
+  get_ssh_opt
 );
 
 use Carp;
@@ -16,6 +17,12 @@ $Data::Dumper::Sortkeys = 1;    # this sorts the Dumper output!
 $Data::Dumper::Terse    = 1;    # print without "$VAR1="
 use TPSUP::UTIL qw(get_timestamp parse_rc get_abs_path);
 use TPSUP::TMP  qw(get_tmp_file);
+
+sub get_ssh_opt {
+   my ($opt) = @_;
+
+   return "-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
+}
 
 my $timeout_rc = 254;
 
