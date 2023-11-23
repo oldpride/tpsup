@@ -8,7 +8,8 @@ use POSIX ":sys_wait_h";
 use Carp;
 use TPSUP::SSH  qw(tpssh get_remote_login_host);
 use TPSUP::FILE qw(get_in_fh close_in_fh);
-use TPSUP::UTIL qw(get_timestamp get_tmp_file parse_rc);
+use TPSUP::UTIL qw(get_timestamp parse_rc);
+use TPSUP::TMP qw(get_tmp_file);
 
 my $prog = $0;
 $prog =~ s:.*/::;
