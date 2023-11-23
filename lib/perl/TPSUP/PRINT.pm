@@ -320,6 +320,7 @@ sub render_arrays {
         print $out_fh "some columns were truncated to MaxColumnWidth=$MaxColumnWidth\n";
     }
     
+    return;
 }
 
 sub main {
