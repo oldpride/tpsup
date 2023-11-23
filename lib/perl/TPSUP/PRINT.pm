@@ -173,7 +173,7 @@ sub render_arrays {
             # print(f"headers={headers}", file=sys.stderr);
 
             my $i = 0;
-            for my $r ( @$rows ) {
+            for my $r ( @$rows[1..$#$rows] ) {
                 for my $j ( 0 .. scalar(@$r) - 1 ) {
                     if ( $j < $num_headers ) {
                         printf $out_fh "%-25s '%s'\n", $headers->[$j], $r->[$j];
