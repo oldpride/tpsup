@@ -112,17 +112,16 @@ def render_arrays(rows: Union[list, None], **opt):
     MaxRows = opt.get('MaxRows', len(rows))
 
     if opt.get('Vertical', False):
-        # when vertically print the arrays, we need at least 2 rows, with the first
-        # as the header
-        #    name: tian
-        #     age: 36
-        #
-        #    name: john
-        #     age: 30
-        if len(rows) < 2:
-            return
-
         if RowType == list:
+            # when vertically print the arrays, we need at least 2 rows, with the first
+            # as the header
+            #    name: tian
+            #     age: 36
+            #
+            #    name: john
+            #     age: 30
+            if len(rows) < 2:
+                return
             headers = rows[0]
             num_headers = len(headers)
             # print(f"headers={headers}", file=sys.stderr)
