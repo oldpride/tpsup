@@ -35,8 +35,15 @@ if '%2' == '' (
    echo missing args
    goto :usage
 )
+
+if '%3' == '' (
+   : no sleep_seconds, use default 5 second
+    set "sleep_seconds=5"
+) else (
+   set "sleep_seconds=%3"
+)
    
-if NOT '%3' == '' (
+if NOT '%4' == '' (
    echo more args than expected
    goto :usage
 )
@@ -73,8 +80,8 @@ for /l %%x in (2, 1, !count!) do (
 
     REM sleep 1 second may not be enough, as 'START' is async, the command finish time
     REM is unpredictable.
-    echo sleep 2 second
-    timeout /t 2
+    echo sleep  !sleep_seconds! seconds
+    timeout /t !sleep_seconds! /nobreak
 )
 
 endlocal & set "USERFULLNAME=%DisplayName%"
@@ -86,7 +93,7 @@ exit /b 0
    echo.
    echo usage:   
    echo.
-   echo    %prog% config count
+   echo    %prog% config count sleep_seconds
    echo.
    echo    start putty with config for count times.
    echo.
@@ -97,7 +104,10 @@ exit /b 0
    echo    if done like this, only the first putty will ask for auth, 
    echo    and only 1 putty needs to turn off the timeout: unset TMOUT.
    echo. 
-   echo    -d               debug mode. besically turn on ECHO.      
+   echo    -d               debug mode. besically turn on ECHO.   
+   echo.
+   echo    sleep_seconds    sleep seconds between each putty start.
+   echo                     default is 5 seconds.   
    echo.
    echo example:
    echo.
