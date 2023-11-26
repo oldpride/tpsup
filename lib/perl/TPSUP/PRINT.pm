@@ -206,14 +206,13 @@ sub render_arrays {
          my $start_row = 0;
          if ( !$headers ) {
             if ( scalar(@$rows) < 2 ) {
-
-     # when vertically print the arrays, we need at least 2 rows, with the first
-     # as the header
-     #    name: tian
-     #     age: 36
-     #
-     #    name: john
-     #     age: 30
+                # when vertically print the arrays, we need at least 2 rows, with the first
+                # as the header
+                #    name: tian
+                #     age: 36
+                #
+                #    name: john
+                #     age: 30
                return;
             }
             $headers   = $rows->[0];
