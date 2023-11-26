@@ -24,6 +24,7 @@ sub process_block {
         }
 
         $line =~ s/^\s+//;    # remove leading spaces
+        print "----------------------------------------\n";
         print "eval: $line\n";
         my $code = "package DUMMY; no strict; $line";
         print "eval $code\n" if $verbose;
@@ -41,6 +42,8 @@ sub process_block {
         if ( !$opt->{not_show_result} ) {
             print "result=", Dumper(@$result), "\n";
         }
+
+        print "\n";
     }
 }
 
