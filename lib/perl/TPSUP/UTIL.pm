@@ -39,8 +39,8 @@ our @EXPORT_OK = qw(
   should_do_it
   hit_enter_to_continue
   binary_search_numeric
-  render_arrays
-  Print_ArrayOfHashes_Vertically
+  render_arrays_deco
+  Print_ArrayOfHashes_Vertically_deco
   looper
   get_items
   get_value_by_key_case_insensitive
@@ -79,19 +79,18 @@ require TPSUP::TMP;
 sub get_setting_from_env {
    my ( $VarName, $VarToFile, $FileName, $opt ) = @_;
 
-# 1. if $VarName is defined in env, return this.
-# 2. if $VarToFile is defined in env, search $VarName in file named by $VarToFile.
-#    return if found.
-# 3. if $FileName exists, search $VarName in $FileName. return if found.
-# 4. return undef
+   # 1. if $VarName is defined in env, return this.
+   # 2. if $VarToFile is defined in env, search $VarName in file named by $VarToFile.
+   #    return if found.
+   # 3. if $FileName exists, search $VarName in $FileName. return if found.
+   # 4. return undef
 
    return $ENV{$VarName} if exists $ENV{$VarName};
 
    if ( exists $ENV{$VarToFile} ) {
       my $value = get_setting_from_profile( $VarName, $ENV{$VarToFile} );
       if ( !defined $value ) {
-         confess
-           "cannot find $VarName in $VarName or $VarToFile=$ENV{$VarToFile}";
+         confess "cannot find $VarName in $VarName or $VarToFile=$ENV{$VarToFile}";
       }
       return $value;
    } else {
@@ -130,9 +129,9 @@ sub source_profile {
 
          $v = '' if !defined $v;
 
-        # exclude functions because they tend to be multilines and cause errors.
-        # BASH_FUNC_tpproxy%%=() {  local usage;
-        # BASH_FUNC_tpsup()=() {  local usage;
+         # exclude functions because they tend to be multilines and cause errors.
+         # BASH_FUNC_tpproxy%%=() {  local usage;
+         # BASH_FUNC_tpsup()=() {  local usage;
          next if $v =~ /^\(\)/;
 
          $ENV{$k} = $v;
@@ -160,13 +159,8 @@ sub resolve_string_in_env {
 }
 
 sub get_timestamp {
-   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-     localtime(time);
-   return sprintf(
-      "%04d%02d%02d %02d:%02d:%02d",
-      $year + 1900,
-      $mon + 1, $mday, $hour, $min, $sec
-   );
+   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime(time);
+   return sprintf( "%04d%02d%02d %02d:%02d:%02d", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
 }
 
 sub get_patterns_from_log {
@@ -174,11 +168,9 @@ sub get_patterns_from_log {
 
    my $exclude_pattern = $opt->{ExcludePattern};
 
-   my $ErasePattern =
-     defined $opt->{ErasePattern} ? qr/$opt->{ErasePattern}/ : undef;
-   my $BeginPattern =
-     defined $opt->{BeginPattern} ? qr/$opt->{BeginPattern}/ : undef;
-   my $EndPattern = defined $opt->{EndPattern} ? qr/$opt->{EndPattern}/ : undef;
+   my $ErasePattern = defined $opt->{ErasePattern} ? qr/$opt->{ErasePattern}/ : undef;
+   my $BeginPattern = defined $opt->{BeginPattern} ? qr/$opt->{BeginPattern}/ : undef;
+   my $EndPattern   = defined $opt->{EndPattern}   ? qr/$opt->{EndPattern}/   : undef;
 
    my $fh = TPSUP::FILE::get_in_fh($log);
 
@@ -261,8 +253,7 @@ sub cp_file2_to_file1 {
 
       $prog =~ s:.*/::;
 
-      my $tmpfile =
-        TPSUP::TMP::get_tmp_file( "/var/tmp", "${prog}", { AddIndex => 1 } );
+      my $tmpfile = TPSUP::TMP::get_tmp_file( "/var/tmp", "${prog}", { AddIndex => 1 } );
 
       my $rc = backup_file1_to_file2( $file1, $tmpfile, $opt );
 
@@ -349,12 +340,12 @@ sub should_do_it {
 sub get_abs_path {
    my ($path) = @_;
 
-# $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";'
-# /home/gpt/tpsup/autopath
-# $ perl -e 'use Cwd 'abs_path'; print abs_path("./tpsup/scripts/../autopath"), "\n";'
-# /home/gpt/tpsup/autopath
-# $ perl -e 'use Cwd 'abs_path'; print abs_path(".//tpsup/scripts/../autopath/"), "\n";'
-# /home/gpt/tpsup/autopath
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";'
+   # /home/gpt/tpsup/autopath
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("./tpsup/scripts/../autopath"), "\n";'
+   # /home/gpt/tpsup/autopath
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path(".//tpsup/scripts/../autopath/"), "\n";'
+   # /home/gpt/tpsup/autopath
 
    return abs_path($path);
 }
@@ -388,7 +379,7 @@ sub get_homedir_by_user {
 
    $user = get_user() if !$user;
 
-# http://stackoverflow.com/questions/3526420/how-do-i-get-the-current-user-in-perl-in-a-portable-way
+   # http://stackoverflow.com/questions/3526420/how-do-i-get-the-current-user-in-perl-in-a-portable-way
 
    return $homedir_by_user->{$user} if exists $homedir_by_user->{$user};
 
@@ -479,8 +470,7 @@ sub get_exps_from_string {
          $current_exp .= $c;
 
          if ( !@nesttings ) {
-            carp
-"string '$string' has unmatched $c at position $i. (starting from 1)";
+            carp "string '$string' has unmatched $c at position $i. (starting from 1)";
             return undef;
          }
 
@@ -504,14 +494,12 @@ sub get_exps_from_string {
    push @exps, $current_exp;
 
    if ($quote_char) {
-      carp
-"string '$string' has unmatched $quote_char at position $quote_pos. (starting from 1)";
+      carp "string '$string' has unmatched $quote_char at position $quote_pos. (starting from 1)";
       return undef;
    }
 
    if (@nesttings) {
-      carp
-"string '$string' has unmatched '(', last one at position $nesttings[-1]. (starting from 1)";
+      carp "string '$string' has unmatched '(', last one at position $nesttings[-1]. (starting from 1)";
       return undef;
    }
 
@@ -552,8 +540,7 @@ sub get_ExpHash_from_ArrayOfStrings {
 sub transpose_arrays {
    my ( $arrays, $opt ) = @_;
 
-   $opt->{verbose} && print STDERR "transpose_arrays arrays = ",
-     Dumper($arrays);
+   $opt->{verbose} && print STDERR "transpose_arrays arrays = ", Dumper($arrays);
 
    my @out_array;
 
@@ -584,8 +571,7 @@ sub transpose_arrays {
 
          $type = "" if !$type;
 
-         croak
-           "sub array ref $i wrong type='$type' when calling transpose_arrays"
+         croak "sub array ref $i wrong type='$type' when calling transpose_arrays"
            if !$type || $type ne 'ARRAY';
 
          $count = scalar(@$a);
@@ -595,8 +581,7 @@ sub transpose_arrays {
          $max = $count;
       } else {
          if ( !$opt->{TranposeLooseSize} ) {
-            croak
-"transpose_arrays input arrays have different sizes: $max vs $count"
+            croak "transpose_arrays input arrays have different sizes: $max vs $count"
               if $max != $count;
          }
 
@@ -738,8 +723,7 @@ sub recursive_handle {
 
          if ( $match->() ) {
             if ( $opt->{verbose} ) {
-               print STDERR "matched:   $match_code\n",
-                 "direction: $direction_code\n";
+               print STDERR "matched:   $match_code\n", "direction: $direction_code\n";
             }
 
             if ( $direction eq 'prune' ) {
@@ -763,7 +747,7 @@ sub recursive_handle {
 
    $level++;
 
-# RecursiveDepth is for flow control, violation means return to calling function
+   # RecursiveDepth is for flow control, violation means return to calling function
    my $max_depth = $opt->{RecursiveDepth};
 
    if ( $max_depth && $level > $max_depth ) {
@@ -795,8 +779,7 @@ sub recursive_handle {
 
          $i++;
 
-         $opt->{verbose} && print STDERR "entering $opt2->{XMLpath}, $opt2=",
-           Dumper($opt2);
+         $opt->{verbose} && print STDERR "entering $opt2->{XMLpath}, $opt2=", Dumper($opt2);
 
          my $ref = recursive_handle( $r, $opt2 );
 
@@ -825,8 +808,7 @@ sub recursive_handle {
          my $new_type = ref $v;
          $opt2->{XMLtypes} = [ @$types, $new_type ];
 
-         $opt->{verbose} && print STDERR "entering $opt2->{XMLpath}, $opt2=",
-           Dumper($opt2);
+         $opt->{verbose} && print STDERR "entering $opt2->{XMLpath}, $opt2=", Dumper($opt2);
 
          my $ref = recursive_handle( $v, $opt2 );
 
@@ -890,8 +872,7 @@ sub compile_perl {
 
    my $warn = $opt->{verbose} ? "use" : "no";
 
-   my $wrapped =
-     "$warn warnings; no strict; package TPSUP::Expression; sub { $string }";
+   my $wrapped = "$warn warnings; no strict; package TPSUP::Expression; sub { $string }";
 
    my $compiled;
    $compiled = eval $wrapped;
@@ -947,9 +928,7 @@ sub compile_paired_strings {
    } elsif ( $type eq 'ARRAY' ) {
       @strings = @{$input};
    } else {
-      croak
-        "unsupported type='$type'. must be scalar or a ref to ARRAY, input = "
-        . Dumper($input);
+      croak "unsupported type='$type'. must be scalar or a ref to ARRAY, input = " . Dumper($input);
    }
 
    my $ret;
@@ -988,7 +967,7 @@ sub get_user_by_uid {
 
    if ( !exists $user_by_uid->{$uid} ) {
 
-# http://stackoverflow.com/questions/2899518/how-can-i-map-uids-to-user-names-using-perl-library-functions
+      # http://stackoverflow.com/questions/2899518/how-can-i-map-uids-to-user-names-using-perl-library-functions
       my @a = getpwuid($uid);
       $user_by_uid->{$uid} = $a[0];
    }
@@ -1003,7 +982,7 @@ sub get_group_by_gid {
 
    if ( !exists $group_by_gid->{$gid} ) {
 
-# http://stackoverflow.com/questions/2899518/how-can-i-map-uids-to-user-names-using-perl-library-functions
+      # http://stackoverflow.com/questions/2899518/how-can-i-map-uids-to-user-names-using-perl-library-functions
       my @a = getgrgid($gid);
       $group_by_gid->{$gid} = $a[0];
    }
@@ -1074,8 +1053,7 @@ sub insert_namespaces {
             }
          }
       } else {
-         croak
-"bad format at '$pair'; expecting 'namespace1,namespace2,...=string'";
+         croak "bad format at '$pair'; expecting 'namespace1,namespace2,...=string'";
       }
    }
 
@@ -1229,8 +1207,7 @@ sub get_java {
       chomp $java;
 
       if ( !$java ) {
-         my $other_familiar_places =
-           [ '/dir1/java/*/bin/java', '/dir2/java/*/bin/java', ];
+         my $other_familiar_places = [ '/dir1/java/*/bin/java', '/dir2/java/*/bin/java', ];
 
          for my $pattern (@$other_familiar_places) {
             $java = `/bin/ls -1 $pattern|tail -1`;
@@ -1280,8 +1257,7 @@ sub get_java {
    }
 
    if ( !$version_main ) {
-      $result->{error} =
-        "cannot fingure out java version from 'java -version' output:\n@lines";
+      $result->{error} = "cannot fingure out java version from 'java -version' output:\n@lines";
       return $result;
    }
 
@@ -1307,12 +1283,10 @@ sub binary_search_numeric {
    my ( $target, $aref, $begin, $end, $opt ) = @_;
 
    if ( $target < $aref->[$begin] ) {
-      confess
-"binary_search_numeric: target='$target' fell out the lower bound '$aref->[$begin]'\n";
+      confess "binary_search_numeric: target='$target' fell out the lower bound '$aref->[$begin]'\n";
 
    } elsif ( $target > $aref->[$end] ) {
-      confess
-"binary_search_numeric: target='$target' over the upper bound '$aref->[$end]'\n";
+      confess "binary_search_numeric: target='$target' over the upper bound '$aref->[$end]'\n";
    }
 
    while (1) {
@@ -1350,7 +1324,7 @@ sub binary_search_numeric {
    }
 }
 
-sub render_arrays {
+sub render_arrays_deco {
    my ( $rows, $opt ) = @_;
 
    if ($rows) {
@@ -1373,13 +1347,13 @@ sub render_arrays {
 
    if ( $opt->{Vertical} ) {
 
-     # when vertically print the arrays, we need at least 2 rows, with the first
-     # as the header
-     #    name: tian
-     #     age: 36
-     #
-     #    name: john
-     #     age: 30
+      # when vertically print the arrays, we need at least 2 rows, with the first
+      # as the header
+      #    name: tian
+      #     age: 36
+      #
+      #    name: john
+      #     age: 30
       return if @$rows < 2;
 
       my $headers = $rows->[0];
@@ -1451,13 +1425,12 @@ sub render_arrays {
             last;
          }
       }
-      print STDERR
-        "$truncated columns were truncated to MaxColumnWidth=$MaxColumnWidth\n"
+      print STDERR "$truncated columns were truncated to MaxColumnWidth=$MaxColumnWidth\n"
         if $truncated;
    }
 }
 
-sub render_one_row {
+sub render_one_row_deco {
    my ( $r, $max_by_pos, $out_fh, $opt ) = @_;
 
    my $verbose = $opt->{verbose} ? $opt->{verbose} : 0;
@@ -1497,7 +1470,7 @@ sub render_one_row {
    $verbose && print "(truncated at column: ", join( ",", @truncated ), ")\n";
 }
 
-sub Print_ArrayOfHashes_Vertically {
+sub Print_ArrayOfHashes_Vertically_deco {
    my ( $aref, $opt ) = @_;
 
    return if !$aref || !@$aref;
@@ -1591,9 +1564,8 @@ sub get_items {
 
    my @result;
 
-   my $MatchPattern = $opt->{MatchPattern} ? qr/$opt->{MatchPattern}/i : undef;
-   my $ExcludePattern =
-     $opt->{ExcludePattern} ? qr/$opt->{ExcludePattern}/i : undef;
+   my $MatchPattern   = $opt->{MatchPattern}   ? qr/$opt->{MatchPattern}/i   : undef;
+   my $ExcludePattern = $opt->{ExcludePattern} ? qr/$opt->{ExcludePattern}/i : undef;
 
    while ( defined( my $line = $get_line->() ) ) {
       chomp $line;
@@ -1615,8 +1587,8 @@ sub get_items {
          push @result, split( /$delimiter/, $line );
       } else {
 
-  # each line is an item. this will allow a string item with space in the middle
-  # for example CHL's HK exchange ticker is "941 HK"
+         # each line is an item. this will allow a string item with space in the middle
+         # for example CHL's HK exchange ticker is "941 HK"
          push @result, $line;
       }
    }
@@ -1637,8 +1609,7 @@ sub get_items {
 sub get_value_by_key_case_insensitive {
    my ( $value_by_key, $key, $opt ) = @_;
 
-   $opt->{verbose} && print "UTIL.pm ", __LINE__, " value_by_key = ",
-     Dumper($value_by_key);
+   $opt->{verbose} && print "UTIL.pm ", __LINE__, " value_by_key = ", Dumper($value_by_key);
 
    return $value_by_key->{$key}
      if exists $value_by_key->{$key};    #lucky that case matched
@@ -1654,8 +1625,7 @@ sub get_value_by_key_case_insensitive {
    if ( exists $opt->{default} ) {
       return $opt->{default};
    } else {
-      confess "key=$key has no match even if case-insensitive in ",
-        Dumper($value_by_key);
+      confess "key=$key has no match even if case-insensitive in ", Dumper($value_by_key);
    }
 }
 
@@ -1797,14 +1767,7 @@ sub get_node_list {
 
       my $i = 0;
       for my $e (@$addr) {
-         push @pairs,
-           @{
-            get_node_list(
-               $addr->[$i],
-               "$path" . "->[$i]",
-               { %$opt, NodeDepth => $depth + 1, }
-            )
-           };
+         push @pairs, @{ get_node_list( $addr->[$i], "$path" . "->[$i]", { %$opt, NodeDepth => $depth + 1, } ) };
          $i++;
       }
    } else {
@@ -1815,14 +1778,7 @@ sub get_node_list {
         if $depth >= $max_depth;
 
       for my $k ( sort ( keys %$addr ) ) {
-         push @pairs,
-           @{
-            get_node_list(
-               $addr->{$k},
-               "$path" . "->{$k}",
-               { %$opt, NodeDepth => $depth + 1, }
-            )
-           };
+         push @pairs, @{ get_node_list( $addr->{$k}, "$path" . "->{$k}", { %$opt, NodeDepth => $depth + 1, } ) };
       }
    }
 
@@ -2078,12 +2034,11 @@ sub resolve_scalar_var_in_string {
    # this function relies on %$Dict, not %vars or %known,
    return $clause if !$clause;
 
-# scalar_vars is enclosed by double curlies {{...=default}},
-# but exclude {{pattern::...} and {{where::...}}
-# /s mean stream, ie, multiline
-# my @scalar_vars = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)\}\}/sg);  # get all scalar vars
-   my @vars_defaults =
-     ( $clause =~ /\{\{([0-9a-zA-Z_.-]+)(=.{0,200}?)?\}\}/sg );
+   # scalar_vars is enclosed by double curlies {{...=default}},
+   # but exclude {{pattern::...} and {{where::...}}
+   # /s mean stream, ie, multiline
+   # my @scalar_vars = ($clause =~ /\{\{([0-9a-zA-Z_.-]+)\}\}/sg);  # get all scalar vars
+   my @vars_defaults = ( $clause =~ /\{\{([0-9a-zA-Z_.-]+)(=.{0,200}?)?\}\}/sg );
 
    # there are 2 '?':
    #    the 1st '?' is for ungreedy match
@@ -2105,17 +2060,17 @@ sub resolve_scalar_var_in_string {
       push @scalar_vars,                  $var;
       push @{ $defaults_by_var->{$var} }, $default;
 
-   # note: @scalar_vars may have dups and we don't want to remove dups because
-   #       the dup var may have different default.
-   #       one scenario we cannot handle yet: for the same var, some has default
-   #       and some doesn't. if the var is not in %known, then, will be problem.
+      # note: @scalar_vars may have dups and we don't want to remove dups because
+      #       the dup var may have different default.
+      #       one scenario we cannot handle yet: for the same var, some has default
+      #       and some doesn't. if the var is not in %known, then, will be problem.
    }
 
    return $clause if !@scalar_vars;    # return when no variable found
 
    my $yyyymmdd = get_first_by_key( [ $Dict, $opt ], 'YYYYMMDD' );
 
-   my $Dict2 = {};    # this is a local Dict to avoid polluting caller's $Dict
+   my $Dict2 = {};                     # this is a local Dict to avoid polluting caller's $Dict
 
    if ($yyyymmdd) {
       if ( $yyyymmdd =~ /^(\d{4})(\d{2})(\d{2})$/ ) {
@@ -2143,14 +2098,12 @@ sub resolve_scalar_var_in_string {
 
       my $value;
 
-# add 'use strict; use warnings;' to catch syntax errors. for example, once
-# i didn't define $opt, eval{} just failed silently without setting any error in $@.
+      # add 'use strict; use warnings;' to catch syntax errors. for example, once
+      # i didn't define $opt, eval{} just failed silently without setting any error in $@.
       eval {
          use strict;
          use warnings;
-         $value =
-           get_value_by_key_case_insensitive( { %$Dict, %$Dict2, %$opt },
-            $var );
+         $value = get_value_by_key_case_insensitive( { %$Dict, %$Dict2, %$opt }, $var );
       };
       if ($@) {
          if ( $opt->{verbose} ) {
@@ -2182,13 +2135,11 @@ sub resolve_scalar_var_in_string {
    my $level = defined $opt->{level} ? $opt->{level} : 0;
    $level++;
    my $max_level = 10;
-   croak
-"max_level=$max_level reached when trying to resolve clause=$clause. use verbose mode to debug"
+   croak "max_level=$max_level reached when trying to resolve clause=$clause. use verbose mode to debug"
      if $level >= $max_level;
 
    # recursive call
-   $clause =
-     resolve_scalar_var_in_string( $clause, $Dict, { %$opt, level => $level } );
+   $clause = resolve_scalar_var_in_string( $clause, $Dict, { %$opt, level => $level } );
 
    return $clause;
 }
@@ -2204,8 +2155,7 @@ sub gen_combinations_from_a {
    }
 
    if ( $number_of_items > @$array ) {
-      croak "number_of_items to be selected=$number_of_items > total="
-        . scalar(@$array);
+      croak "number_of_items to be selected=$number_of_items > total=" . scalar(@$array);
    }
 
    if ( $number_of_items == @$array ) {
@@ -2316,37 +2266,34 @@ sub main {
    eval { binary_search_numeric( -5, $aref, 0, scalar( @$aref - 1 ) ) };
    print $@;
 
-   print "\n------------------------------------------------\n";
-   print "test render_arrays()\n";
-   {
-      my $a = [
-         [ 'name', 'age' ],
-         [ 'john', 50, 'non-smoker' ],
-         [ 'judy', 49, 'smoker' ],
-         [ 'ava',  16 ],
-         ['michael'],
-      ];
-      render_arrays($a);
-      render_arrays( $a, { Vertical => 1 } );
-   }
+   # print "\n------------------------------------------------\n";
+   # print "test render_arrays()\n";
+   # {
+   #    my $a = [
+   #       [ 'name', 'age' ],
+   #       [ 'john', 50, 'non-smoker' ],
+   #       [ 'judy', 49, 'smoker' ],
+   #       [ 'ava',  16 ],
+   #       ['michael'],
+   #    ];
+   #    render_arrays($a);
+   #    render_arrays( $a, { Vertical => 1 } );
+   # }
 
-   print "\n------------------------------------------------\n";
-   print "test Print_ArrayOfHashes_Vertically()\n";
-   {
-      my $aref = [
-         { name => 'tian', age => 36, ranking => 'solider' },
-         { name => 'john', age => 30, ranking => 'general' },
-      ];
-      Print_ArrayOfHashes_Vertically( $aref,
-         { headers => "name,age,ranking" } );
-   }
+   # print "\n------------------------------------------------\n";
+   # print "test Print_ArrayOfHashes_Vertically()\n";
+   # {
+   #    my $aref = [
+   #       { name => 'tian', age => 36, ranking => 'solider' },
+   #       { name => 'john', age => 30, ranking => 'general' },
+   #    ];
+   #    Print_ArrayOfHashes_Vertically( $aref,
+   #       { headers => "name,age,ranking" } );
+   # }
 
    print "\n------------------------------------------------\n";
    print "test resolve_string_in_env()\n";
-   my @strings = (
-      '$HOME/junk',  '>>$HOME/junk',
-      '<$HOME/junk', '$HOME/`date +%Y%m%d`.log',
-   );
+   my @strings = ( '$HOME/junk', '>>$HOME/junk', '<$HOME/junk', '$HOME/`date +%Y%m%d`.log', );
 
    for my $s (@strings) {
       print "resolve_string_in_env($s) = ", resolve_string_in_env($s), "\n";
@@ -2360,8 +2307,7 @@ sub main {
    print "\n------------------------------------------------\n";
    print "test get_items(), multiple per line\n";
    {
-      my $a =
-        get_items( "UTIL_test_get_items.txt", { InlineDelimiter => '\s+' } );
+      my $a = get_items( "UTIL_test_get_items.txt", { InlineDelimiter => '\s+' } );
       print join( "\n", @$a ), "\n";
    }
 
@@ -2455,23 +2401,14 @@ jkl
       };
 
       print "test uppcase_hash original = ", Dumper($h);
-      print "key only = ",
-        Dumper( convert_to_uppercase( $h, { ConvertKey => 1 } ) );
-      print "value only = ",
-        Dumper( convert_to_uppercase( $h, { ConvertValue => 1 } ) );
-      print "key and value = ",
-        Dumper(
-         convert_to_uppercase( $h, { ConvertKey => 1, ConvertValue => 1 } ) );
+      print "key only = ",      Dumper( convert_to_uppercase( $h, { ConvertKey   => 1 } ) );
+      print "value only = ",    Dumper( convert_to_uppercase( $h, { ConvertValue => 1 } ) );
+      print "key and value = ", Dumper( convert_to_uppercase( $h, { ConvertKey   => 1, ConvertValue => 1 } ) );
    }
 
    print "\n------------------------------------------------\n";
    {
-      my @a = (
-         "no_need_wrapping",
-         "has space",
-         "'already wrapped'",
-         "isn't wrapped"
-      );
+      my @a = ( "no_need_wrapping", "has space", "'already wrapped'", "isn't wrapped" );
       print "original = ", Dumper( \@a );
       print "tp_join = ", tp_join( \@a ), "\n";
    }
@@ -2480,27 +2417,21 @@ jkl
    {
       my @a = ( 1, 2, 3, 4 );
       print "a = ", Dumper( \@a );
-      print "gen_combinations_from_a(\\\@a, 2) = ",
-        Dumper( gen_combinations_from_a( \@a, 2 ) ), "\n";
+      print "gen_combinations_from_a(\\\@a, 2) = ", Dumper( gen_combinations_from_a( \@a, 2 ) ), "\n";
    }
 
    print "\n------------------------------------------------\n";
    {
       my @a = ( [ 1, 2 ], [ 'A', 'B' ], [ 'a', 'b' ] );
       print "a = ", Dumper( \@a );
-      print "gen_combinations_from_aa = ",
-        Dumper( gen_combinations_from_aa( \@a ) ), "\n";
+      print "gen_combinations_from_aa = ", Dumper( gen_combinations_from_aa( \@a ) ), "\n";
    }
 
    print "\n------------------------------------------------\n";
    {
-      my @a =
-        ( "abc12.dat", "abc1.dat", "abc2.dat", "abc9.dat", "abc101.dat", );
+      my @a = ( "abc12.dat", "abc1.dat", "abc2.dat", "abc9.dat", "abc101.dat", );
       print "a = ", Dumper( \@a );
-      print "sort_pattern = ",
-        Dumper(
-         sort_pattern( \@a, '^...(\d+).dat', { numeric => 1, verbose => 1 } ) ),
-        "\n";
+      print "sort_pattern = ", Dumper( sort_pattern( \@a, '^...(\d+).dat', { numeric => 1, verbose => 1 } ) ), "\n";
    }
 }
 

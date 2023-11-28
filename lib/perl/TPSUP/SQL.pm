@@ -17,8 +17,8 @@ use Carp;
 use DBI;
 use JSON;
 use Data::Dumper;
-use TPSUP::TMP  qw(get_tmp_file);
-use TPSUP::UTIL qw(render_arrays);
+use TPSUP::TMP   qw(get_tmp_file);
+use TPSUP::PRINT qw(render_arrays);
 
 use TPSUP::FILE qw(get_out_fh);
 use TPSUP::LOCK qw(tpeng_unlock);
@@ -71,8 +71,7 @@ sub unlock_conn {
 
    my $rows = $rows_by_lc->{$lc_nickname};
 
-   croak
-     "nickname='$nickname' lowercase='$lc_nickname' doesn't exist in $connfile"
+   croak "nickname='$nickname' lowercase='$lc_nickname' doesn't exist in $connfile"
      if !$rows;
 
    my $r;
@@ -95,8 +94,7 @@ sub unlock_conn {
             my $value = $2;
 
             if ( exists $r->{$key} ) {
-               print STDERR
-"$connfile has dup key '$key' in nickname '$nickname': $string\n";
+               print STDERR "$connfile has dup key '$key' in nickname '$nickname': $string\n";
             }
 
             $r->{$key} = $value;
@@ -167,13 +165,13 @@ sub get_dbh {
 
       $dbh = DBI->connect( $string, $login, $password );
 
-# how to add a method during runtime
-# https://www.perlmonks.org/?node_id=755089
-# https://stackoverflow.com/questions/4185482/how-to-convert-perl-objects-into-json-and-vice-versa/4185679#4185679
-# https://stackoverflow.com/questions/28373405/add-new-method-to-existing-object-in-perl
+      # how to add a method during runtime
+      # https://www.perlmonks.org/?node_id=755089
+      # https://stackoverflow.com/questions/4185482/how-to-convert-perl-objects-into-json-and-vice-versa/4185679#4185679
+      # https://stackoverflow.com/questions/28373405/add-new-method-to-existing-object-in-perl
 
-# how to unbless an object
-# https://stackoverflow.com/questions/25508197/unblessing-perl-objects-and-constructing-the-to-json-method-for-convert-blessed
+      # how to unbless an object
+      # https://stackoverflow.com/questions/25508197/unblessing-perl-objects-and-constructing-the-to-json-method-for-convert-blessed
 
       # i tried to use this to dump $dbh, but always get an empty hash.
 
@@ -187,13 +185,9 @@ sub get_dbh {
       return $dbh;
    } elsif ( $opt->{dbiArray} ) {
 
-# my $dbh =DBI->connect("dbi:Oracle:host=AHOST.ABC.COM;sid=ADB;port=1501", "ADB_USER", 'xxxx');
+      # my $dbh =DBI->connect("dbi:Oracle:host=AHOST.ABC.COM;sid=ADB;port=1501", "ADB_USER", 'xxxx');
 
-      my ( $string, $login, $password ) = (
-         $opt->{dbiArray}->[0],
-         $opt->{dbiArray}->[1],
-         $opt->{dbiArray}->[2]
-      );
+      my ( $string, $login, $password ) = ( $opt->{dbiArray}->[0], $opt->{dbiArray}->[1], $opt->{dbiArray}->[2] );
 
       if ( exists $dbh_by_key->{"$string;$login"} ) {
          $current_dbh = $dbh_by_key->{"$string;$login"};
@@ -219,8 +213,8 @@ sub get_dbh {
 sub dump_object {
    my ( $obj, $opt ) = @_;
 
-# https://stackoverflow.com/questions/4185482/how-to-convert-perl-objects-into-json-and-vice-versa/4185679#4185679
-# https://stackoverflow.com/questions/28373405/add-new-method-to-existing-object-in-perl
+   # https://stackoverflow.com/questions/4185482/how-to-convert-perl-objects-into-json-and-vice-versa/4185679#4185679
+   # https://stackoverflow.com/questions/28373405/add-new-method-to-existing-object-in-perl
    $opt->{verbose} && print STDERR "Dumper(\$obj) = ", Dumper($obj);
 
    # the following didn't work. i keeps getting
@@ -256,8 +250,8 @@ sub parse_sql {
 
    my $verbose = $opt->{verbose};
 
-# this is to handle multi-commands sql
-# https://stackoverflow.com/questions/22709497/perl-dbi-mysql-how-to-run-multiple-queries-statements
+   # this is to handle multi-commands sql
+   # https://stackoverflow.com/questions/22709497/perl-dbi-mysql-how-to-run-multiple-queries-statements
 
    # first remove multi-line comments /* ... */
    $sql =~ s:/[*].*?[*]/::gs;
@@ -270,8 +264,7 @@ sub parse_sql {
    if ( $opt->{NotSplitAtSemiColon} ) {
 
       # then we split at GO
-      my @sqls = split /;\s*GO\s*;/i,
-        $sql;    # # split separator can be a multi-line string
+      my @sqls = split /;\s*GO\s*;/i, $sql;    # # split separator can be a multi-line string
       my @sqls2;
 
       # add back GO statement as we use it to determine restart point
@@ -280,7 +273,7 @@ sub parse_sql {
          push @sqls2, 'GO';
       }
 
-      pop @sqls2;    # remove the last 'GO' as it the default
+      pop @sqls2;                              # remove the last 'GO' as it the default
 
       return @sqls2;
    } else {
@@ -319,8 +312,7 @@ sub run_sql {
 
    my ( $out_fh, $out_fh_need_closing ) = handle_output_out_fh($opt);
 
-   my $looking_for_GO
-     ;    # if a command failed, we skip following commands upto the next GO.
+   my $looking_for_GO;    # if a command failed, we skip following commands upto the next GO.
    my $ret;
    for my $s (@sqls) {
 
@@ -329,30 +321,30 @@ sub run_sql {
       # $ perl -e '(" quit " =~ /^\s*QUIT\s*;?$/i) && print "yes\n";'
       last if $s =~ /^\s*QUIT\s*;?$/i;
 
-# 'GO' vs ';'
-# https://stackoverflow.com/questions/1517527/what-is-the-difference-between-
-# and-go-in-t-sql
-# "
-#    GO is not actually a T-SQL command. The GO command was introduced by Microsoft
-#    tools as a way to separate batch statements such as the end of a stored
-#    procedure. GO is supported by the Microsoft SQL stack tools but is not
-#    formally part of other tools.
-#    "GO" is similar to ; in many cases, but does in fact signify the end of a batch.
-#    Each batch is committed when the "GO" statement is called, so if you have:
-#       SELECT * FROM table-that-does-not-exist;
-#       SELECT * FROM good-table;
-#    in your batch, then the good-table select will never get called because the
-#    first select will cause an error.
-#
-#    If you instead had:
-#       SELECT * FROM table-that-does-not-exist
-#       GO
-#       SELECT * FROM good-table
-#       GO
-#    The first select statement still causes an error, but since the second statement
-#    is in its own batch, it will still execute.
-#    GO has nothing to do with committing a transaction.
-# "
+      # 'GO' vs ';'
+      # https://stackoverflow.com/questions/1517527/what-is-the-difference-between-
+      # and-go-in-t-sql
+      # "
+      #    GO is not actually a T-SQL command. The GO command was introduced by Microsoft
+      #    tools as a way to separate batch statements such as the end of a stored
+      #    procedure. GO is supported by the Microsoft SQL stack tools but is not
+      #    formally part of other tools.
+      #    "GO" is similar to ; in many cases, but does in fact signify the end of a batch.
+      #    Each batch is committed when the "GO" statement is called, so if you have:
+      #       SELECT * FROM table-that-does-not-exist;
+      #       SELECT * FROM good-table;
+      #    in your batch, then the good-table select will never get called because the
+      #    first select will cause an error.
+      #
+      #    If you instead had:
+      #       SELECT * FROM table-that-does-not-exist
+      #       GO
+      #       SELECT * FROM good-table
+      #       GO
+      #    The first select statement still causes an error, but since the second statement
+      #    is in its own batch, it will still execute.
+      #    GO has nothing to do with committing a transaction.
+      # "
       if ($looking_for_GO) {
 
          # if a command failed, we skip following commands upto the next GO.
@@ -436,8 +428,7 @@ sub run_single_sql {
 
       #$dbh->{LongReadLen} = 12800;
 
-      $verbose && print STDERR "modifed dump_object(\$dbh) = ",
-        dump_object($dbh);
+      $verbose && print STDERR "modifed dump_object(\$dbh) = ", dump_object($dbh);
       $verbose && print STDERR "modifed      Dumper(\$dbh) = ", Dumper($dbh);
    }
 
@@ -477,13 +468,13 @@ sub run_single_sql {
       return undef;
    }
 
-# https://stackoverflow.com/questions/6923230/how-do-i-get-the-number-of-affected-rows-when-i-use-dbis-prepare-execute-for-no
-# From the documentation about the execute method in DBI:
-#    For a non-"SELECT" statement, "execute" returns the number of rows affected, if
-#    known. If no rows were affected, then "execute" returns "0E0", which Perl will
-#    treat as 0 but will regard as true. Note that it is not an error for no rows to
-#    be affected by a statement. If the number of rows affected is not known,
-#    then "execute" returns -1.
+   # https://stackoverflow.com/questions/6923230/how-do-i-get-the-number-of-affected-rows-when-i-use-dbis-prepare-execute-for-no
+   # From the documentation about the execute method in DBI:
+   #    For a non-"SELECT" statement, "execute" returns the number of rows affected, if
+   #    known. If no rows were affected, then "execute" returns "0E0", which Perl will
+   #    treat as 0 but will regard as true. Note that it is not an error for no rows to
+   #    be affected by a statement. If the number of rows affected is not known,
+   #    then "execute" returns -1.
    my $rows = $sth->execute();
    $verbose > 1 && print STDERR "rows = ", Dumper($rows);
 
@@ -493,41 +484,40 @@ sub run_single_sql {
       return undef;
    }
 
-# RowsInCache doesn't seem to work in mysql. RawRowsInCaches always undef when i tested.
-# looks like it is not implemented in mysql driver.
-# from https://metacpan.org/pod/DBI#RowsInCache
-#    If the driver supports a local row cache for SELECT statements, then this
-#    attribute holds the number of un-fetched rows in the cache. If the driver doesn't,
-#    then it returns undef. Note that some drivers pre-fetch rows on execute, whereas
-#     others wait till the first fetch.
+   # RowsInCache doesn't seem to work in mysql. RawRowsInCaches always undef when i tested.
+   # looks like it is not implemented in mysql driver.
+   # from https://metacpan.org/pod/DBI#RowsInCache
+   #    If the driver supports a local row cache for SELECT statements, then this
+   #    attribute holds the number of un-fetched rows in the cache. If the driver doesn't,
+   #    then it returns undef. Note that some drivers pre-fetch rows on execute, whereas
+   #     others wait till the first fetch.
    $verbose > 1 && print STDERR "RowsInCache = ", Dumper( $sth->{RowsInCache} );
 
-#if (!$sth->{RowsInCache}) {
-#   #return a ref to empty array to indicate query successful but returned nothing
-#   return [];
-#}
+   #if (!$sth->{RowsInCache}) {
+   #   #return a ref to empty array to indicate query successful but returned nothing
+   #   return [];
+   #}
 
-# there is no reliable way for DBI to tell us whether rows are returned by command
-#    https://metacpan.org/pod/DBI#rows
-# if we do a eval {fetchall}, it will work but will print nasty errors
-#    DBD::mysql::st FETCH failed: statement contains no result at /home/tian/sitebase/
-#    github/tpsup/lib/perl/TPSUP/SQL.pm line 384.
-# the above error message is in DBD::mysql source code
-#    DBD-mysql-4.050/dbdimp.c
-# I don't see a way to silence it without changing the source code
+   # there is no reliable way for DBI to tell us whether rows are returned by command
+   #    https://metacpan.org/pod/DBI#rows
+   # if we do a eval {fetchall}, it will work but will print nasty errors
+   #    DBD::mysql::st FETCH failed: statement contains no result at /home/tian/sitebase/
+   #    github/tpsup/lib/perl/TPSUP/SQL.pm line 384.
+   # the above error message is in DBD::mysql source code
+   #    DBD-mysql-4.050/dbdimp.c
+   # I don't see a way to silence it without changing the source code
 
-# https://metacpan.org/pod/DBI chat room folks told me use 'Active', working in mysql.
-# https://metacpan.org/pod/DBI#Active
-#   The Active attribute is true if the handle object is "active". This is rarely used
-#   in applications. The exact meaning of active is somewhat vague at the moment. For a
-#   database handle it typically means that the handle is connected to a database
-#   ($dbh->disconnect sets Active off). For a statement handle it typically means that
-#   the handle is a SELECT that may have more data to fetch. (Fetching all the data or
-#   calling $sth->finish sets Active off.)
+   # https://metacpan.org/pod/DBI chat room folks told me use 'Active', working in mysql.
+   # https://metacpan.org/pod/DBI#Active
+   #   The Active attribute is true if the handle object is "active". This is rarely used
+   #   in applications. The exact meaning of active is somewhat vague at the moment. For a
+   #   database handle it typically means that the handle is connected to a database
+   #   ($dbh->disconnect sets Active off). For a statement handle it typically means that
+   #   the handle is a SELECT that may have more data to fetch. (Fetching all the data or
+   #   calling $sth->finish sets Active off.)
    $verbose > 1 && print STDERR "Active = ", Dumper( $sth->{Active} );
 
-   $verbose > 1 && print STDERR "dhb driver name = ", $dbh->{Driver}{Name},
-     "\n";
+   $verbose > 1 && print STDERR "dhb driver name = ", $dbh->{Driver}{Name}, "\n";
 
    my $has_result;
 
@@ -549,14 +539,12 @@ sub run_single_sql {
          # SELECT tz.person,
          #   FROM PeopleAndTZs tz;
          $has_result = 1;
-      } elsif ( $sql =~
-         /^\s*(CREATE|DROP|INSERT|UPDATE|DELETE|GRANT|SET|BEGIN|COMMIT)/i )
-      {
+      } elsif ( $sql =~ /^\s*(CREATE|DROP|INSERT|UPDATE|DELETE|GRANT|SET|BEGIN|COMMIT)/i ) {
          $has_result = 0;
       } else {
 
-   # this includes stored procedures, hard to tell whether output will come out.
-   # this part is let command-line to decide
+         # this includes stored procedures, hard to tell whether output will come out.
+         # this part is let command-line to decide
          $has_result = !$opt->{NonQuery};
       }
    } else {
@@ -572,12 +560,10 @@ sub run_single_sql {
         "1 non-query command executed successfully, affected rows = ",
         defined($rows) ? int($rows) : 'unknown',
         ".\n";
-      return []
-        ;  #return empty array to indicate query successful but returned nothing
+      return [];    #return empty array to indicate query successful but returned nothing
    }
 
-   my $OutputDelimiter =
-     defined $opt->{OutputDelimiter} ? $opt->{OutputDelimiter} : ',';
+   my $OutputDelimiter = defined $opt->{OutputDelimiter} ? $opt->{OutputDelimiter} : ',';
 
    my ( $out_fh, $out_fh_need_closing ) = handle_output_out_fh($opt);
 
@@ -625,8 +611,7 @@ sub run_single_sql {
 
       close($out_fh) if $out_fh_need_closing && $out_fh != \*STDOUT;
 
-      return []
-        ;  #return empty array to indicate query successful but returned nothing
+      return [];    #return empty array to indicate query successful but returned nothing
    }
 
    while ( $$sth{syb_more_results} ) {
@@ -650,8 +635,7 @@ sub run_single_sql {
 
    if ($out_fh) {
       if ( $opt->{RenderOutput} ) {
-         TPSUP::UTIL::render_arrays( [ $headers, @$return_aref ],
-            { %$opt, RenderHeader => 1 } );
+         TPSUP::PRINT::render_arrays( [ $headers, @$return_aref ], { %$opt, RenderHeader => 1 } );
       } else {
 
          # no warnings for the join
@@ -675,8 +659,7 @@ sub run_single_sql {
 sub array_to_InClause {
    my ( $aref, $opt ) = @_;
 
-   die
-"array_to_InClause() received empty array. SQL doesn't allow empty in-clause: in ()"
+   die "array_to_InClause() received empty array. SQL doesn't allow empty in-clause: in ()"
      if !$aref || !@$aref;
 
    return "'" . join( "', '", @$aref ) . "'";
@@ -690,8 +673,7 @@ sub main {
       WHERE m.id = a.MemberId and r.id = a.RankingId
    ";
 
-   run_sql( $sql,
-      { nickname => 'tian@tiandb', RenderOutput => 1, output => '-' } );
+   run_sql( $sql, { nickname => 'tian@tiandb', RenderOutput => 1, output => '-' } );
 
    print "\n\ntest dump_conn_csv\n\n";
 
