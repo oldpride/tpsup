@@ -152,33 +152,32 @@ sub render_arrays {
       croak "unsupported RowType: $RowType. can only be ARRAY or HASH";
    }
 
-# user-specified headers make code more complicated, but we still need it
-# because csv module (CSV.pm) needs to call this module to print data, and csv
-# module needs to specify headers:
-#    csv module often needs to print a structure of either:
-#       1. headers + a array of arrays of data
-#       2. headers + a array of hashes of data
-#    in the first case, the headers are like the first row of data.
-#    in the second case, the headers are used to filter keys of the hashes.
-# Headers' role could get more complicated if want to support other features around them.
-#    But we should keep this part simple.
-#    if users need more feautures around headers, they can use CSV module to pre-process
-#       the data, and then use this module to print the data.
-#    For example, if user wanted to specify headers to filter array of arrays, it should
-#       convert the array of arrays to array of hashes first, using CSV module, and then
-#       filter the keys.
-# outside csv module, we rarely need user-specifed headers. but we will
-# keep the behavior consistent with csv module.
-# summary:
-#    If $rows is array of arrays,
-#       if user specified headers, we prepend it to the rows, making it the first row.
-#       if user didn't specify headers,
-#           if user wanted to render headers, we use the first row as headers.
-#           if user didn't want to render headers, we print rows without headers.
-#    If $rows is array of hashes,
-#       if user specified headers, we use it to filter out unwanted keys.
-#       if user didn't specify headers, we use all keys as headers.
-
+   # user-specified headers make code more complicated, but we still need it
+   # because csv module (CSV.pm) needs to call this module to print data, and csv
+   # module needs to specify headers:
+   #    csv module often needs to print a structure of either:
+   #       1. headers + a array of arrays of data
+   #       2. headers + a array of hashes of data
+   #    in the first case, the headers are like the first row of data.
+   #    in the second case, the headers are used to filter keys of the hashes.
+   # Headers' role could get more complicated if want to support other features around them.
+   #    But we should keep this part simple.
+   #    if users need more feautures around headers, they can use CSV module to pre-process
+   #       the data, and then use this module to print the data.
+   #    For example, if user wanted to specify headers to filter array of arrays, it should
+   #       convert the array of arrays to array of hashes first, using CSV module, and then
+   #       filter the keys.
+   # outside csv module, we rarely need user-specifed headers. but we will
+   # keep the behavior consistent with csv module.
+   # summary:
+   #    If $rows is array of arrays,
+   #       if user specified headers, we prepend it to the rows, making it the first row.
+   #       if user didn't specify headers,
+   #           if user wanted to render headers, we use the first row as headers.
+   #           if user didn't want to render headers, we print rows without headers.
+   #    If $rows is array of hashes,
+   #       if user specified headers, we use it to filter out unwanted keys.
+   #       if user didn't specify headers, we use all keys as headers.
    my $headers;
    my $print_header;
    if ( $opt->{headers} ) {
@@ -206,13 +205,14 @@ sub render_arrays {
          my $start_row = 0;
          if ( !$headers ) {
             if ( scalar(@$rows) < 2 ) {
-                # when vertically print the arrays, we need at least 2 rows, with the first
-                # as the header
-                #    name: tian
-                #     age: 36
-                #
-                #    name: john
-                #     age: 30
+
+               # when vertically print the arrays, we need at least 2 rows, with the first
+               # as the header
+               #    name: tian
+               #     age: 36
+               #
+               #    name: john
+               #     age: 30
                return;
             }
             $headers   = $rows->[0];
@@ -241,15 +241,13 @@ sub render_arrays {
             }
          }
       } else {    # RowType == HASH
+         if ( !$headers ) {
+            $headers = [ find_hashes_keys( $rows, $opt ) ];
+         }
          my $i = 0;
          for my $r (@$rows) {
-            for my $k ( sort( keys %$r ) ) {
-
-   # for hash, if user specified headers, we use it to filter out unwanted keys.
-               if ( $print_header && !$print_header->{$k} ) {
-                  next;
-               }
-               printf $out_fh "%-25s '%s'\n", $k, $r->{$k};
+            for my $k (@$headers) {
+               printf $out_fh "%-25s '%s'\n", $k, $r->{$k} ? $r->{$k} : '';
             }
 
             print $out_fh "\n";    # blank line
@@ -268,13 +266,13 @@ sub render_arrays {
    my $MaxColumnWidth = $opt->{MaxColumnWidth};
    my $truncated      = 0;
 
-# fix headers of hash (dict), so that we can convert dict to list in a consistent way.
+   # fix headers of hash (dict), so that we can convert dict to list in a consistent way.
    if ( $RowType eq 'HASH' ) {
       if ( !$headers ) {
 
          # for hash:
          # if user specified headers, we use it to filter out unwanted keys.
-         $headers = [ find_hashes_keys( $rows, $opt )];
+         $headers = [ find_hashes_keys( $rows, $opt ) ];
       }
 
       for my $k (@$headers) {
@@ -287,10 +285,10 @@ sub render_arrays {
       }
    }
 
-# at this point, $headers is defined for array of hashes, but not for array of arrays.
-# only if user specified headers, then headers is defined for array of arrays.
-# on the other hand, array of hashes always has headers, but array of arrays may not.
-# array of arrays only need headers when user want to render headers.
+   # at this point, $headers is defined for array of hashes, but not for array of arrays.
+   # only if user specified headers, then headers is defined for array of arrays.
+   # on the other hand, array of hashes always has headers, but array of arrays may not.
+   # array of arrays only need headers when user want to render headers.
 
    # find max width for each column
    my $i = 0;
@@ -345,7 +343,7 @@ sub render_arrays {
 
             if ( $opt->{MaxRows} ) {
                $range_end =
-                 $opt->{MaxRows} > $#{$rows}-1
+                   $opt->{MaxRows} > $#{$rows} - 1
                  ? $#{$rows} - 1
                  : $opt->{MaxRows};    # ie $opt->{MaxRows}-1 +1
             }
@@ -396,8 +394,8 @@ sub render_arrays {
 sub main {
    use TPSUP::TEST qw(test_lines);
 
-# to suppress "once" warning
-#     once used only once: possible typo at /home/tian/perl5/lib/perl5/TPSUP/PRINT.pm line 10.
+   # to suppress "once" warning
+   #     once used only once: possible typo at /home/tian/perl5/lib/perl5/TPSUP/PRINT.pm line 10.
    no warnings 'once';
 
    $DUMMY::rows1 = [

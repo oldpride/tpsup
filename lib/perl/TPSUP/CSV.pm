@@ -17,7 +17,7 @@ our @EXPORT_OK = qw(
   delete_csv_inplace
   diff_csv
   diff_csv_long
-  render_csv
+  render_csv_deco
   find_safe_delimiter
   filter_csv_array
   query_csv2
@@ -34,6 +34,10 @@ use Carp;
 use Data::Dumper;
 use TPSUP::TMP qw(
   get_tmp_file
+);
+
+use TPSUP::PRINT qw(
+  render_arrays
 );
 
 use TPSUP::UTIL qw(
@@ -234,8 +238,7 @@ sub parse_csv_array {
    return undef if !$in_ref;
 
    if ( ref($in_ref) ne 'ARRAY' ) {
-      croak "parse_csv_array takes ref to array as input, in_ref=",
-        Dumper($in_ref);
+      croak "parse_csv_array takes ref to array as input, in_ref=", Dumper($in_ref);
    }
 
    return undef if !@$in_ref;
@@ -262,12 +265,12 @@ sub parse_csv_array {
    if ( $opt->{OriginalHeaderRef} ) {
       ${ $opt->{OriginalHeaderRef} } = $h1;
 
-   # this is hack to return the original header:
-   #
-   # examp1e:
-   #    my $headers
-   #    my $cmd = "sql.linux ...";
-   #    my $array_of_hash = parse_csv_cmd($cmd, {OriginalHeaderRef=>\$headers});
+      # this is hack to return the original header:
+      #
+      # examp1e:
+      #    my $headers
+      #    my $cmd = "sql.linux ...";
+      #    my $array_of_hash = parse_csv_cmd($cmd, {OriginalHeaderRef=>\$headers});
    }
 
    my @h2;
@@ -375,8 +378,7 @@ sub run_sqlcsv ($$;$) {
 
    my @out_array;
 
-   my $tmpdir = get_tmp_file( "/var/tmp", "sqlcsv",
-      { isDir => 1, chkSpace => 102400000 } );
+   my $tmpdir = get_tmp_file( "/var/tmp", "sqlcsv", { isDir => 1, chkSpace => 102400000 } );
 
    if ( !$tmpdir ) {
       carp "failed to get tmp dir";
@@ -385,8 +387,7 @@ sub run_sqlcsv ($$;$) {
 
    require DBI;
 
-   my $dbh = DBI->connect(
-      "DBI:CSV:f_dir=$tmpdir;csv_eol=\n;csv_sep_char=\\$separator;");
+   my $dbh = DBI->connect("DBI:CSV:f_dir=$tmpdir;csv_eol=\n;csv_sep_char=\\$separator;");
 
    if ( ref($inputs) ne 'ARRAY' ) {
       croak "run_sql_csv() 2nd arg needs to be ref to array";
@@ -569,8 +570,7 @@ sub update_csv {
       croak "column name='$k' doesn't exist in $file" if !exists $pos->{$k};
    }
 
-   $opt->{verbose} && print "set_clause='$set', resolved to v_by_k =",
-     Dumper($v_by_k);
+   $opt->{verbose} && print "set_clause='$set', resolved to v_by_k =", Dumper($v_by_k);
 
    my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ',';
    if ( $delimiter eq '|' || $delimiter eq '^' ) {
@@ -582,8 +582,7 @@ sub update_csv {
    my $matchExps;
    if ( $opt->{MatchExps} && @{ $opt->{MatchExps} } ) {
       @$matchExps = map {
-         my $compiled = eval
-           "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
          $@ ? ( die "Bad match expression '$_' : $@" ) : $compiled;
       } @{ $opt->{MatchExps} };
    }
@@ -591,8 +590,7 @@ sub update_csv {
    my $excludeExps;
    if ( $opt->{ExcludeExps} && @{ $opt->{ExcludeExps} } ) {
       @$excludeExps = map {
-         my $compiled = eval
-           "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
          $@ ? ( die "Bad match expression '$_' : $@" ) : $compiled;
       } @{ $opt->{ExcludeExps} };
    }
@@ -714,15 +712,15 @@ sub update_csv {
 sub parse_quoted_line {
    my ( $line, $delimiter, $opt ) = @_;
 
-# take the hassle to parse double-quoted csv. (single quote cannot group in csv)
-#
-# COLLOQ_TY P E,COLLOQ_NAME,COLLOQ_COD E,XDATA
-# S,"BELT,FAN",003541547,
-# S,"BELT V,FAN",000324244,
-# S,SHROUD SPRING SCREW,000868265,
-# S,"D" REL VALVE ASSY,000771881,
-# S,"YBELT,"V"",000323030,
-# S,"YBELT,'V'",000322933,
+   # take the hassle to parse double-quoted csv. (single quote cannot group in csv)
+   #
+   # COLLOQ_TY P E,COLLOQ_NAME,COLLOQ_COD E,XDATA
+   # S,"BELT,FAN",003541547,
+   # S,"BELT V,FAN",000324244,
+   # S,SHROUD SPRING SCREW,000868265,
+   # S,"D" REL VALVE ASSY,000771881,
+   # S,"YBELT,"V"",000323030,
+   # S,"YBELT,'V'",000322933,
 
    my $len = length($line);
    pos($line) = 0;    # reset
@@ -740,8 +738,7 @@ sub parse_quoted_line {
          # 'c' is to keep the current position during repeated matching
          # 'g' is to globally match the pattern repeatedly in the string
 
-         $opt->{verbose} && print "starting a quoted cell, pos=", pos($line),
-           "\n";
+         $opt->{verbose} && print "starting a quoted cell, pos=", pos($line), "\n";
 
          if ( $line =~ /\G(.*?)"$delimiter/gc ) {
             if ( $opt->{RemoveInputQuotes} ) {
@@ -766,8 +763,7 @@ sub parse_quoted_line {
       } else {
 
          # this is not a quoted cell
-         $opt->{verbose} && print "starting a non-quoted cell, pos=",
-           pos($line), "\n";
+         $opt->{verbose} && print "starting a non-quoted cell, pos=", pos($line), "\n";
 
          if ( $line =~ /\G(.*?)$delimiter/gc ) {
             $cell = $1;
@@ -780,8 +776,7 @@ sub parse_quoted_line {
          }
       }
 
-      $opt->{verbose} && print "cell='$cell', clen=", length($cell), ", pos=",
-        pos($line), "\n";
+      $opt->{verbose} && print "cell='$cell', clen=", length($cell), ", pos=", pos($line), "\n";
    }
 
    return \@a;
@@ -858,7 +853,7 @@ sub csv_file_to_array {
          for my $qr (@match_qrs) {
             if ( $line !~ /$qr/ ) {
 
-              # remember this is AND logic; therefore, one fails means all fail.
+               # remember this is AND logic; therefore, one fails means all fail.
                next LINE;
             }
          }
@@ -871,15 +866,15 @@ sub csv_file_to_array {
 
       if ( $opt->{QuotedInput} ) {
 
-# take the hassle to parse double-quoted csv. (single quote cannot group in csv)
-#
-# COLLOQ_TY P E,COLLOQ_NAME,COLLOQ_COD E,XDATA
-# S,"BELT,FAN",003541547,
-# S,"BELT V,FAN",000324244,
-# S,SHROUD SPRING SCREW,000868265,
-# S,"D" REL VALVE ASSY,000771881,
-# S,"YBELT,"V"",000323030,
-# S,"YBELT,'V'",000322933,
+         # take the hassle to parse double-quoted csv. (single quote cannot group in csv)
+         #
+         # COLLOQ_TY P E,COLLOQ_NAME,COLLOQ_COD E,XDATA
+         # S,"BELT,FAN",003541547,
+         # S,"BELT V,FAN",000324244,
+         # S,SHROUD SPRING SCREW,000868265,
+         # S,"D" REL VALVE ASSY,000771881,
+         # S,"YBELT,"V"",000323030,
+         # S,"YBELT,'V'",000322933,
 
          $a = parse_quoted_line( $line, $delimiter, $opt );
       } else {
@@ -945,8 +940,7 @@ sub query_csv2 {
      if $opt->{InputHashArray};
    croak "please change InputArrayArray to \$opt->{InputType} = 'ArrayArray'"
      if $opt->{InputArrayArray};
-   croak
-"please change InputStructuredHash to \$opt->{InputType} = 'StructuredHash'"
+   croak "please change InputStructuredHash to \$opt->{InputType} = 'StructuredHash'"
      if $opt->{InputStructuredHash};
 
    if ( !$opt->{InputType} || $opt->{InputType} eq 'CSV' ) {
@@ -964,8 +958,7 @@ sub query_csv2 {
 
       # input is an array of hash
       if ( !$opt->{InputHashColumns} ) {
-         croak
-"calling query_csv2($input) with InputType=HashArray must also set InputHashColumns";
+         croak "calling query_csv2($input) with InputType=HashArray must also set InputHashColumns";
       }
 
       $ref1->{array}   = $input;
@@ -1001,7 +994,7 @@ sub query_csv2 {
       croak "unsupported InputType=$opt->{InputType}";
    }
 
-#trim floating point numbers, 2.03000 => 2.03. $opt->{TrimFloats} contains column names
+   #trim floating point numbers, 2.03000 => 2.03. $opt->{TrimFloats} contains column names
    if ( $opt->{TrimFloats} ) {
       my @Floats = @{ $opt->{TrimFloats} };
       my $need_trim;
@@ -1059,8 +1052,7 @@ sub query_csv2 {
          } elsif ( $type eq 'ARRAY' ) {
             @keys2 = @{ $opt->{InGroupSortKeys} };
          } else {
-            croak "unsupported type='$type' of InGroupSortKeys. opt = "
-              . Dumper($opt);
+            croak "unsupported type='$type' of InGroupSortKeys. opt = " . Dumper($opt);
          }
 
          for my $k ( sort ( keys %$tmpref ) ) {
@@ -1080,8 +1072,7 @@ sub query_csv2 {
               ? sort { $a <=> $b } keys(%$tmpref2)
               : sort { $a cmp $b } keys(%$tmpref2);
 
-            my @tmpkeys2 =
-              $opt->{InGroupSortDescend} ? reverse(@tmpkeys1) : @tmpkeys1;
+            my @tmpkeys2 = $opt->{InGroupSortDescend} ? reverse(@tmpkeys1) : @tmpkeys1;
 
             if ( $opt->{InGroupGetFirst} ) {
                push @{ $ref3->{array} }, $tmpref2->{ $tmpkeys2[0] }->[0];
@@ -1096,8 +1087,7 @@ sub query_csv2 {
 
          if ( $opt->{GroupAction} ) {
             for my $c ( keys %{ $opt->{GroupAction} } ) {
-               croak
-"$c is a GroupKey; we cannot act ($opt->{GroupAction}->{$c}) on it"
+               croak "$c is a GroupKey; we cannot act ($opt->{GroupAction}->{$c}) on it"
                  if $is_GroupKey->{$c};
             }
 
@@ -1115,8 +1105,7 @@ sub query_csv2 {
                # in my (\$c, \$ah):
                # \$c will be the column name,
                # \$ah will be ref to that group of array of hashes
-               my $compiled =
-                 eval "no strict; sub { my (\$c, \$ah) = \@_; $exp }";
+               my $compiled = eval "no strict; sub { my (\$c, \$ah) = \@_; $exp }";
 
                croak "bad GroupActExp at $c='$exp': $@" if $@;
 
@@ -1290,14 +1279,12 @@ sub query_csv2 {
       my $ExpKey = $1;
 
       my $warn     = $opt->{verbose} ? 'use' : 'no';
-      my $compiled = eval
-"$warn warnings; no strict; package TPSUP::Expression; sub { return $opt->{ExpKey}; }";
+      my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { return $opt->{ExpKey}; }";
 
       my $KeyedHash;
 
       for my $r ( @{ $ref3->{array} } ) {
-         TPSUP::Expression::export_var( $r,
-            { FIX => $opt->{FIX}, RESET => 1 } );
+         TPSUP::Expression::export_var( $r, { FIX => $opt->{FIX}, RESET => 1 } );
 
          #no warnings "uninitialized";
          my $k = $compiled->();
@@ -1487,8 +1474,7 @@ sub print_csv_hashArray {
    my $print_HashArray;
 
    if ( $opt->{SortKeys} ) {
-      $print_HashArray =
-        sort_HashArray_by_keys( $HashArray, $opt->{SortKeys}, $opt );
+      $print_HashArray = sort_HashArray_by_keys( $HashArray, $opt->{SortKeys}, $opt );
    } else {
       $print_HashArray = $HashArray;
    }
@@ -1508,7 +1494,16 @@ sub print_csv_hashArray {
    my $tmpref;
 
    if ( $opt->{RenderStdout} ) {
-      render_csv( $print_HashArray, $fields, $opt );
+      # render_csv_deco( $print_HashArray, $fields, $opt );
+      render_arrays(
+         $print_HashArray,
+         {
+            %$opt,
+            headers      => $fields,
+            RenderHeader => 1,
+            MaxRows      => $opt->{PrintCsvMaxRows}
+         }
+      );
    } else {
       my $out_fh;
 
@@ -1596,8 +1591,7 @@ sub delete_csv {
    my $matchExps;
    if ( $opt->{MatchExps} && @{ $opt->{MatchExps} } ) {
       @$matchExps = map {
-         my $compiled = eval
-           "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
          $@ ? ( die "Bad match expression '$_' : $@" ) : $compiled;
       } @{ $opt->{MatchExps} };
    }
@@ -1605,8 +1599,7 @@ sub delete_csv {
    my $excludeExps;
    if ( $opt->{ExcludeExps} && @{ $opt->{ExcludeExps} } ) {
       @$excludeExps = map {
-         my $compiled = eval
-           "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
          $@ ? ( die "Bad match expression '$_' : $@" ) : $compiled;
       } @{ $opt->{ExcludeExps} };
    }
@@ -1614,8 +1607,7 @@ sub delete_csv {
    my $exportExps;
    if ( $opt->{ExportExps} && @{ $opt->{ExportExps} } ) {
       @$exportExps = map {
-         my $compiled = eval
-           "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
          $@ ? ( die "Bad match expression '$_' : $@" ) : $compiled;
       } @{ $opt->{ExportExps} };
    }
@@ -1776,9 +1768,7 @@ sub diff_csv_long {
 
             if ( $opt->{RequireUniqueKey} ) {
                if ( $count > 1 ) {
-                  croak "$csvs->[$i] has dup ref key "
-                    . join( ",", @$refkeys )
-                    . "=$key $count times";
+                  croak "$csvs->[$i] has dup ref key " . join( ",", @$refkeys ) . "=$key $count times";
                }
             } else {
                if ( !$maxrow_by_key->{$key} ) {
@@ -1845,7 +1835,7 @@ sub diff_csv_long {
             for my $k (@cmpkeys) {
                for ( my $i = 0 ; $i < $num_files ; $i++ ) {
 
-         # use staircase tests to prevent perl from creating new data structures
+                  # use staircase tests to prevent perl from creating new data structures
                   if (  defined $refs->[$i]
                      && defined $refs->[$i]->{$key}
                      && defined $refs->[$i]->{$key}->[$m] )
@@ -1859,7 +1849,7 @@ sub diff_csv_long {
 
             my @last_cells;
 
-         # use staircase tests to prevent perl from creating new data structures
+            # use staircase tests to prevent perl from creating new data structures
             if (  defined $refs->[0]
                && defined $refs->[0]->{$key}
                && defined $refs->[0]->{$key}->[$m] )
@@ -1877,7 +1867,7 @@ sub diff_csv_long {
 
             my $mismatched;
 
-         # use staircase tests to prevent perl from creating new data structures
+            # use staircase tests to prevent perl from creating new data structures
             if (  !defined $refs->[0]
                || !defined $refs->[0]->{$key}
                || !defined $refs->[0]->{$key}->[$m] )
@@ -1990,14 +1980,10 @@ sub diff_csv_long {
 
       return $ret;
    } else {
-      croak "unbalanced args: $num_files csvs vs "
-        . scalar(@$ref_keys)
-        . " set of ref keys"
+      croak "unbalanced args: $num_files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
         if scalar(@$ref_keys) != $num_files;
 
-      croak "unbalanced args: $num_files csvs vs "
-        . scalar(@$cmp_keys)
-        . " set of cmp keys"
+      croak "unbalanced args: $num_files csvs vs " . scalar(@$cmp_keys) . " set of cmp keys"
         if scalar(@$cmp_keys) != $num_files;
 
       my $num_ref_keys = scalar( @{ $ref_keys->[0] } );
@@ -2010,15 +1996,13 @@ sub diff_csv_long {
          my $new_num_ref_keys = scalar( @{ $ref_keys->[$i] } );
 
          if ( $num_ref_keys != $new_num_ref_keys ) {
-            croak
-"inconsistent number of ref keys: $num_ref_keys vs $new_num_ref_keys";
+            croak "inconsistent number of ref keys: $num_ref_keys vs $new_num_ref_keys";
          }
 
          my $new_num_cmp_keys = scalar( @{ $cmp_keys->[$i] } );
 
          if ( $num_cmp_keys != $new_num_cmp_keys ) {
-            croak
-"inconsistent number of cmp keys: $num_cmp_keys vs $new_num_cmp_keys";
+            croak "inconsistent number of cmp keys: $num_cmp_keys vs $new_num_cmp_keys";
          }
 
          push @header_row, map { $_ . "\@$i" } @{ $cmp_keys->[$i] };
@@ -2070,9 +2054,7 @@ sub diff_csv_long {
 
             if ( $opt->{RequireUniqueKey} ) {
                if ( $count > 1 ) {
-                  croak "$csvs->[$i] has dup ref key "
-                    . join( ",", @{ $ref_keys->[$i] } )
-                    . "=$key $count times";
+                  croak "$csvs->[$i] has dup ref key " . join( ",", @{ $ref_keys->[$i] } ) . "=$key $count times";
                }
             } else {
                if ( !$maxrow_by_key->{$key} ) {
@@ -2094,8 +2076,7 @@ sub diff_csv_long {
             my @row = split /,/, $key;    #output row
 
             for ( my $i = 0 ; $i < $num_files ; $i++ ) {
-               push @row,
-                 @{ $refs->[$i]->{$key}->[$m] }{ @{ $cmp_keys->[$i] } };
+               push @row, @{ $refs->[$i]->{$key}->[$m] }{ @{ $cmp_keys->[$i] } };
             }
 
             my @last_cells =
@@ -2309,7 +2290,7 @@ sub write_keys_to_file {
    close $out_fh;
 }
 
-sub render_csv {
+sub render_csv_deco {
    my ( $rows, $fields, $opt ) = @_;
 
    if ($rows) {
@@ -2505,8 +2486,7 @@ sub filter_csv_array {
    for my $oc (@SelectColumns) {
       if ( !defined $pos->{$oc} ) {
          if ( !( $opt->{UsePosition} && $oc =~ /^c\d+$/ ) ) {
-            my $msg = "Selected Column='$oc' isn't part of header="
-              . join( ",", @$columns );
+            my $msg = "Selected Column='$oc' isn't part of header=" . join( ",", @$columns );
             carp $msg;
 
             $ret->{status} = "ERROR: $msg";
@@ -2527,8 +2507,7 @@ sub filter_csv_array {
       } elsif ( $type eq 'ARRAY' ) {
          $DQuoteColumns = $opt->{DQuoteColumns};
       } else {
-         croak "unsupported type='$type' of \$opt->{DQuoteColumns} = "
-           . Dumper( $opt->{DQuoteColumns} );
+         croak "unsupported type='$type' of \$opt->{DQuoteColumns} = " . Dumper( $opt->{DQuoteColumns} );
       }
 
       for my $c (@$DQuoteColumns) {
@@ -2540,14 +2519,12 @@ sub filter_csv_array {
 
    my $matchExps;
    if ( $opt->{MatchExps} && @{ $opt->{MatchExps} } ) {
-      @$matchExps = map { TPSUP::Expression::compile_exp( $_, $opt ) }
-        @{ $opt->{MatchExps} };
+      @$matchExps = map { TPSUP::Expression::compile_exp( $_, $opt ) } @{ $opt->{MatchExps} };
    }
 
    my $excludeExps;
    if ( $opt->{ExcludeExps} && @{ $opt->{ExcludeExps} } ) {
-      @$excludeExps = map { TPSUP::Expression::compile_exp( $_, $opt ) }
-        @{ $opt->{ExcludeExps} };
+      @$excludeExps = map { TPSUP::Expression::compile_exp( $_, $opt ) } @{ $opt->{ExcludeExps} };
    }
 
    my $Exps;
@@ -2635,8 +2612,7 @@ sub filter_csv_array {
             %$r,
          };
 
-         TPSUP::Expression::export_var( $r2,
-            { FIX => $opt->{FIX}, RESET => 1 } );
+         TPSUP::Expression::export_var( $r2, { FIX => $opt->{FIX}, RESET => 1 } );
 
          if (@tempCols) {
             my $temp_r;
@@ -2649,13 +2625,11 @@ sub filter_csv_array {
                $temp_r->{$c} = $v;
             }
 
-            TPSUP::Expression::export_var( $temp_r, { FIX => $opt->{FIX} } )
-              ;    # don't RESET here
+            TPSUP::Expression::export_var( $temp_r, { FIX => $opt->{FIX} } );    # don't RESET here
          }
 
          if ( $opt->{verbose} ) {
-            print STDERR "calling dump_var({FIX=>$opt->{FIX}}) from ",
-              __FILE__, " line ", __LINE__, "\n";
+            print STDERR "calling dump_var({FIX=>$opt->{FIX}}) from ", __FILE__, " line ", __LINE__, "\n";
             TPSUP::Expression::dump_var( { FIX => $opt->{FIX} } );
          }
       }
@@ -2742,14 +2716,10 @@ sub join_csv {
 
    croak "need at least 2 csvs to join, you have $num_files" if $num_files < 2;
 
-   croak "unbalanced args: $num_files csvs vs "
-     . scalar(@$ref_keys)
-     . " set of ref keys"
+   croak "unbalanced args: $num_files csvs vs " . scalar(@$ref_keys) . " set of ref keys"
      if scalar(@$ref_keys) != $num_files;
 
-   croak
-     "csv files number ($num_files) is less than number of set of join keys "
-     . scalar(@$join_keys)
+   croak "csv files number ($num_files) is less than number of set of join keys " . scalar(@$join_keys)
      if scalar(@$join_keys) > $num_files;
 
    my @header_row;
@@ -2809,9 +2779,7 @@ sub join_csv {
 
          if ( $opt->{JoinRequireUniqueKey} ) {
             if ( $count > 1 ) {
-               croak "$csvs->[$i] has dup ref key "
-                 . join( ",", @{ $ref_keys->[$i] } )
-                 . "=$key $count times";
+               croak "$csvs->[$i] has dup ref key " . join( ",", @{ $ref_keys->[$i] } ) . "=$key $count times";
             }
          } else {
             if ( !$maxrow_by_key->{$key} ) {
@@ -2842,7 +2810,7 @@ sub join_csv {
             }
 
             next
-              if !defined $join_keys->[$i];   # this file has no columns to join
+              if !defined $join_keys->[$i];    # this file has no columns to join
 
             # Allow missing ref keys, use undef as placeholder
             push @row, @{ $refs->[$i]->{$key}->[$m] }{ @{ $join_keys->[$i] } };
@@ -3015,12 +2983,11 @@ sub join_query_csv {
       if ( $opt->{JQTableNames}->[$i] ) {
          $TableNames[$i] = $opt->{JQTableNames}->[$i];
       } else {
-         $TableNames[$i] = sprintf( "t%d", $i + 1 );  # example: first csv is t1
+         $TableNames[$i] = sprintf( "t%d", $i + 1 );    # example: first csv is t1
       }
 
       for my $c ( @{ $ref->{columns} } ) {
-         push @header_row,
-           "$TableNames[$i]_$c";    # example: first csv's column c3: tl.c3
+         push @header_row, "$TableNames[$i]_$c";        # example: first csv's column c3: tl.c3
       }
    }
 
@@ -3067,8 +3034,7 @@ sub join_query_csv {
 
  RECORD:
    while (1) {
-      $opt->{verbose} && print STDERR "pos=", join( " ", @pos ), ", max=",
-        join( " ", @max ), "\n";
+      $opt->{verbose} && print STDERR "pos=", join( " ", @pos ), ", max=", join( " ", @max ), "\n";
 
       # process this record
       my $joined;
@@ -3096,8 +3062,8 @@ sub join_query_csv {
       for ( my $i = $last ; $i >= 0 ; $i-- ) {
          if ( !$addone ) {
 
-     # this digit is not full yet, so nothing needs doing for digits above this.
-     # increment is done
+            # this digit is not full yet, so nothing needs doing for digits above this.
+            # increment is done
 
             next RECORD;
          }
@@ -3121,9 +3087,7 @@ sub join_query_csv {
                next;
             }
          } elsif ( $pos[$i] > $max[$i] ) {
-            croak "should have never been here (col $i): pos=",
-              join( " ", @pos ),
-              ", max=", join( " ", @max );
+            croak "should have never been here (col $i): pos=", join( " ", @pos ), ", max=", join( " ", @max );
          }
       }
    }
@@ -3206,8 +3170,7 @@ sub csv_to_html {
 
    my @columns = @{ $ref->{columns} };
 
-   $html .=
-     "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
+   $html .= "<TABLE CELLPADDING='1' CELLSPACING='1' BORDER='1' bordercolor=black>\n";
 
    # header
    {
