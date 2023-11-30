@@ -123,7 +123,7 @@ sub swagger {
       #   Make curl display information on stdout after a completed transfer.
       # we use -w to get http status code.
 
-      my $command = "$flag_string -w '\nhttp_code: \%{http_code}' -X $method --header 'Accept: $Accept'";
+      my $command = "$flag_string -w '\nhttp_code: \%{http_code}\n' -X $method --header 'Accept: $Accept'";
       if ($entry_name) {
          $command = "tpentry -- /usr/bin/curl -u tpentry{$entry_name}{user}:tpentry{$entry_name}{decoded} $command";
       } else {
