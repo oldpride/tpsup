@@ -20,11 +20,42 @@ App_Resources\
 .FCStd4\
 .FCStd5\
 
+# java
+target\
+.class\
+
 # nextjs
 .next\
 
-# hardhat
+# blockchain hardhat
 artifacts\
+coverage\
+deployments\
+factories\
 
 # openzeppline
 out\
+
+# android studio
+build\
+.gradle\
+gradle\
+
+# blockchain foundry
+forge-std\
+chainlink-brownie-contracts\
+foundry-devops\
+openzeppelin-contracts\
+openzeppelin-contracts-upgradeable\
+solmate\
+
+# blockchain scaffold
+packages\
+
+
+
+
+
+
+
+

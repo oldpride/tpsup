@@ -11,8 +11,11 @@ set "source=%SITEBASE%\github"
 :: set "backup_base=D:\backup\"
 set "backup_base=D:\backup\"
 set "backup_dir=%backup_base%\%yyyymmdd%\github\"
+set "backup_log=%backup_base%\%yyyymmdd%\github.log"
 
-xcopy "%source%" "%backup_dir%" /s /e /y /exclude:%TPSUP%\cmd_exe\backup_github_locally_ex.txt || goto :error
+mkdir "%backup_base%\%yyyymmdd%" || goto :error
+
+xcopy "%source%" "%backup_dir%" /s /e /y /exclude:%TPSUP%\cmd_exe\backup_github_locally_ex.txt >> %backup_log% 2>&1 || goto :error
 
 cd /D "%backup_base%" || goto :error
 REM https://stackoverflow.com/questions/5497211/batch-file-to-delete-folders-older-than-10-days-in-windows-7

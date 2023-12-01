@@ -25,9 +25,10 @@ $SIG{__DIE__} = \&Carp::confess;    # this stack-trace on all fatal error !!!
 # we need this stack trace to catch run-time compile errors because we are using
 # eval() intensively.
 
-use TPSUP::SQL  qw(run_sql get_dbh dbh_do);
-use TPSUP::CSV  qw(query_csv2 render_csv);
-use TPSUP::UTIL qw(
+use TPSUP::SQL   qw(run_sql get_dbh dbh_do);
+use TPSUP::CSV   qw(query_csv2);
+use TPSUP::PRINT qw(render_arrays);
+use TPSUP::UTIL  qw(
   get_abs_path
   get_first_by_key
   get_value_by_key_case_insensitive
@@ -89,17 +90,16 @@ our %known = ();
 #
 # we call the following GLOBAL BUFFER, to contrast global config, global vars, and
 # global %known.
-our %vars;    # entity-level vars
-our $row_count
-  ;    # from cmd, db, log extract, whereever @lines/@arrays/@hashes is used.
-our @lines;      # from cmd output, array of strings
-our $output;     # from cmd output
-our $rc;         # from cmd output
-our @arrays;     # from db  output, array of arrays
-our @headers;    # from db  output, array
-our @hashes;     # from db/log extraction and section, array of hashes
-our %hash1;      # converted from @hashes using $entity_cfg->{output_key}
-our %r;          # only used by update_knowledge_from_row
+our %vars;         # entity-level vars
+our $row_count;    # from cmd, db, log extract, whereever @lines/@arrays/@hashes is used.
+our @lines;        # from cmd output, array of strings
+our $output;       # from cmd output
+our $rc;           # from cmd output
+our @arrays;       # from db  output, array of arrays
+our @headers;      # from db  output, array
+our @hashes;       # from db/log extraction and section, array of hashes
+our %hash1;        # converted from @hashes using $entity_cfg->{output_key}
+our %r;            # only used by update_knowledge_from_row
 
 # backoffice tracer is to search through the live cycle
 #
@@ -130,12 +130,12 @@ sub parse_input {
    for my $pair (@$input_array) {
       if ( $pair =~ /^(any|check)$/i ) {
 
-  # just ignore this. this allows us to run the script without specify key=value
+         # just ignore this. this allows us to run the script without specify key=value
       } elsif ( $pair =~ /^(.+?)=(.+)$/ ) {
          my ( $key, $value ) = ( uc($1), $2 );
 
- # convert key to upper case so that user can use both upper case and lower case
- # on command line.
+         # convert key to upper case so that user can use both upper case and lower case
+         # on command line.
          if ( $key =~ /QTY/ ) {
             $value =~ s/,//g;    #decommify
          }
@@ -152,8 +152,7 @@ sub parse_input {
          my $key = uc( $opt->{AliasMap}->{$alias} );
 
          if ( defined $ref->{ uc($alias) } ) {
-            $ref->{$key} = $ref->{ uc($alias) }
-              ;    # remember that $ref's keys are all upper case
+            $ref->{$key} = $ref->{ uc($alias) };    # remember that $ref's keys are all upper case
          }
       }
    }
@@ -207,8 +206,7 @@ sub get_keys_in_uppercase {
       for my $a ( keys(%$alias_map) ) {
          my $v = $alias_map->{$a};
          if ( !$seen->{ uc($v) } ) {
-            print
-"'$v' is used in alias map but not seen in original keys even if case insensitive. seen keys = "
+            print "'$v' is used in alias map but not seen in original keys even if case insensitive. seen keys = "
               . Dumper($seen);
             exit 1;
          }
@@ -233,13 +231,11 @@ sub resolve_a_clause {
    my ( $clause, $Dict, $opt ) = @_;
 
    # first substitute the scalar var in {{...}}
-   $opt->{verbose} && print "line ", __LINE__,
-     " before substitution, clause = $clause, Dict = ", Dumper($Dict);
+   $opt->{verbose} && print "line ", __LINE__, " before substitution, clause = $clause, Dict = ", Dumper($Dict);
 
    $clause = resolve_scalar_var_in_string( $clause, $Dict, $opt );
 
-   $opt->{verbose} && print "line ", __LINE__,
-     " after substitution, clause = $clause\n";
+   $opt->{verbose} && print "line ", __LINE__, " after substitution, clause = $clause\n";
 
    # we don't need this because we used 'our' to declare %known.
    # had we used 'my', we would have needed this.
@@ -274,9 +270,8 @@ sub resolve_vars_array {
 
       my $v2 = resolve_a_clause( $v, $Dict2, $opt );
 
-      $ref->{$k} = $v2;
-      $Dict2->{$k} =
-        $v2;    # previous variables will be used to resolve later variables
+      $ref->{$k}   = $v2;
+      $Dict2->{$k} = $v2;    # previous variables will be used to resolve later variables
    }
 
    return $ref;
@@ -359,7 +354,7 @@ sub process_cmd {
       $cmd = $method_cfg->{example};
       if ( !defined($cmd) ) {
          print
-"ERROR: entity='$entity' attr='example' is not defined in method_cfg = ",
+           "ERROR: entity='$entity' attr='example' is not defined in method_cfg = ",
            Dumper($method_cfg);
          exit 1;
       }
@@ -396,8 +391,7 @@ sub process_cmd {
                croak "attr='pattern' is not defined at row=" . Dumper($row)
                  if !defined $pattern;
 
-               my $resolved_pattern = resolve_scalar_var_in_string( $pattern,
-                  { %known, %vars, opt_value => $value } );
+               my $resolved_pattern = resolve_scalar_var_in_string( $pattern, { %known, %vars, opt_value => $value } );
 
                push @patterns, $resolved_pattern;
                print "$method_cfg->{type} using $key=$resolved_pattern\n";
@@ -412,15 +406,13 @@ sub process_cmd {
          return;
       }
 
-      my $logic = get_value_by_key_case_insensitive( $method_cfg, 'logic',
-         { default => 'OR' } );
-      my $grep = get_value_by_key_case_insensitive( $method_cfg, 'grep',
-         { default => 'zgrep -E' } );
+      my $logic = get_value_by_key_case_insensitive( $method_cfg, 'logic', { default => 'OR' } );
+      my $grep  = get_value_by_key_case_insensitive( $method_cfg, 'grep',  { default => 'zgrep -E' } );
 
       print "$method_cfg->{type} using logic = $logic\n";
 
- # zgrep can handle both compressed and uncompressed files, but cannot recursive
- # zgrep -E is like egrep
+      # zgrep can handle both compressed and uncompressed files, but cannot recursive
+      # zgrep -E is like egrep
 
       if ( $logic eq 'OR' ) {
          $cmd = "$grep '" . join( '|', @patterns ) . "' $file";
@@ -432,32 +424,31 @@ sub process_cmd {
       }
    } elsif ( $method_cfg->{type} eq 'pipe' ) {
 
-# 2D array,
-#    outer loop is connected by pipe
-#    inner loop is for OR logic for grep command.
-#
-# method_cfg => {
-#    type  => 'pipe',
-#    value => [
-#       ['grep=grep -E', 'OR11', 'OR12'],
-#       ['grep=grep -v -E', 'OR21', 'OR22'],
-#       ['grep=grep -E ',   'OR31', 'OR32'],
-#       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
-#       ['cmd=tail -10'],
-#    ],
-#    file => 'app.log',
-# },
-#
-#  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate
-#    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
-#
-#  other value:
-#      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+      # 2D array,
+      #    outer loop is connected by pipe
+      #    inner loop is for OR logic for grep command.
+      #
+      # method_cfg => {
+      #    type  => 'pipe',
+      #    value => [
+      #       ['grep=grep -E', 'OR11', 'OR12'],
+      #       ['grep=grep -v -E', 'OR21', 'OR22'],
+      #       ['grep=grep -E ',   'OR31', 'OR32'],
+      #       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
+      #       ['cmd=tail -10'],
+      #    ],
+      #    file => 'app.log',
+      # },
+      #
+      #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate
+      #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
+      #
+      #  other value:
+      #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
 
       my $file = get_value_by_key_case_insensitive( $method_cfg, 'file' );
       if ( !defined $file ) {
-         print "attr='file' is not defined at method_cfg="
-           . Dumper($method_cfg);
+         print "attr='file' is not defined at method_cfg=" . Dumper($method_cfg);
       } else {
          $file = resolve_scalar_var_in_string( $file, { %known, %vars } );
       }
@@ -559,15 +550,13 @@ sub process_cmd {
       }
 
       if ( !@commands ) {
-         print "'method_cfg didn't resolve to any command. "
-           . Dumper($method_cfg);
+         print "'method_cfg didn't resolve to any command. " . Dumper($method_cfg);
          return;
       } else {
          $cmd = join( "|", @commands );
       }
    } else {
-      croak "unsupported type='$method_cfg->{type}' in cmd = ",
-        Dumper($method_cfg);
+      croak "unsupported type='$method_cfg->{type}' in cmd = ", Dumper($method_cfg);
    }
 
    # when combining hashes, make sure not poluting $known and $Dict
@@ -669,16 +658,15 @@ sub extract_from_fh {
    my $verbose     = $opt->{verbose} ? $opt->{verbose} : 0;
    my $MaxExtracts = $opt->{MaxExtracts};
 
-# https://stackoverflow.com/questions/2304577/how-can-i-store-regex-captures-in-an-array-in-perl
-# extract_pattern => 'orderid=(?<ORDERID>{{pattern::ORDERID}}),.*tradeid=(?<TRADEID>{{pattern::TRADEID}}),.*sid=(?<SID>{{pattern::SID}}),.*filledqty=(?<FILLEDQTY>{{pattern::FILLEDQTY}}),',
+   # https://stackoverflow.com/questions/2304577/how-can-i-store-regex-captures-in-an-array-in-perl
+   # extract_pattern => 'orderid=(?<ORDERID>{{pattern::ORDERID}}),.*tradeid=(?<TRADEID>{{pattern::TRADEID}}),.*sid=(?<SID>{{pattern::SID}}),.*filledqty=(?<FILLEDQTY>{{pattern::FILLEDQTY}}),',
 
    my @capture_keys = ( $extract_pattern =~ /\?<([a-zA-Z0-9_]+?)>/g );
    my $headers      = unique_array( [ \@capture_keys ] );
 
    print "origial extract_pattern = $extract_pattern\n";
    $extract_pattern = apply_key_pattern( $extract_pattern, $opt );
-   $extract_pattern =
-     resolve_scalar_var_in_string( $extract_pattern, { %vars, %known }, $opt );
+   $extract_pattern = resolve_scalar_var_in_string( $extract_pattern, { %vars, %known }, $opt );
    print "resolved extract_pattern = $extract_pattern\n";
 
    my $CompiledExtract = qr/$extract_pattern/;
@@ -729,7 +717,7 @@ sub extract_from_fh {
 sub apply_key_pattern {
    my ( $string, $opt ) = @_;
 
-# line_pattern => 'orderid=(?<ORDERID>{{pattern::ORDERID}}),.*tradeid=(?<TRADEID>{{pattern::TRADEID}}),.*sid=(?<SID>{{pattern::SID}}),.*filledqty=(?<FILLEDQTY>{{pattern::FILLEDQTY}}),',
+   # line_pattern => 'orderid=(?<ORDERID>{{pattern::ORDERID}}),.*tradeid=(?<TRADEID>{{pattern::TRADEID}}),.*sid=(?<SID>{{pattern::SID}}),.*filledqty=(?<FILLEDQTY>{{pattern::FILLEDQTY}}),',
 
    my $scalar_key_pattern = qr/\{\{pattern::([0-9a-zA-Z_.-]+)\}\}/;
 
@@ -740,9 +728,7 @@ sub apply_key_pattern {
    my $key_pattern = $all_cfg->{key_pattern};
 
    for my $k (@needed_keys) {
-      confess
-        "'{{pattern::$k}}' in '$string' but '$k' is not defined in key_pattern="
-        . Dumper($key_pattern)
+      confess "'{{pattern::$k}}' in '$string' but '$k' is not defined in key_pattern=" . Dumper($key_pattern)
         if !$key_pattern->{$k};
    }
 
@@ -773,8 +759,7 @@ sub process_log {
    } elsif ( $log_type eq 'ARRAY' ) {
       @logs = @$resolved_log;
    } else {
-      croak "unsuppported resolved log type=$log_type, resolved log="
-        . Dumper($resolved_log);
+      croak "unsuppported resolved log type=$log_type, resolved log=" . Dumper($resolved_log);
    }
 
    my $extract_pattern = $method_cfg->{extract};
@@ -800,8 +785,7 @@ sub process_log {
 
       my $count = scalar(@hashes);
       if ( $count >= $MaxExtracts ) {
-         print
-           "(stopped extraction as count=$count >= MaxExtracts=$MaxExtracts)";
+         print "(stopped extraction as count=$count >= MaxExtracts=$MaxExtracts)";
          last;
       }
    }
@@ -829,15 +813,13 @@ sub process_section {
    } elsif ( $log_type eq 'ARRAY' ) {
       @logs = @$resolved_log;
    } else {
-      croak "unsuppported resolved log type=$log_type, resolved log="
-        . Dumper($resolved_log);
+      croak "unsuppported resolved log type=$log_type, resolved log=" . Dumper($resolved_log);
    }
 
    my $MaxExtracts = $opt->{MaxExtracts};
    my $count       = 0;
    for my $l (@logs) {
-      my $sections = get_log_sections( $l, $method_cfg,
-         { %$opt, MaxSections => $MaxExtracts } );
+      my $sections = get_log_sections( $l, $method_cfg, { %$opt, MaxSections => $MaxExtracts } );
 
       if ($sections) {
          push @hashes, @$sections;
@@ -871,13 +853,13 @@ sub apply_csv_filter_href {
       croak "wrong type='$type'. Only HASH is supported";
    }
 
-# example of $filter1:
-#            {
-#             ExportExps => [
-#                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-#                ],
-#              SortKeys => [ 'weight' ],
-#            },
+   # example of $filter1:
+   #            {
+   #             ExportExps => [
+   #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+   #                ],
+   #              SortKeys => [ 'weight' ],
+   #            },
 
    my $filter2;
    my $changed;
@@ -888,8 +870,7 @@ sub apply_csv_filter_href {
 
          my $Exps2 = [];
          for my $e1 (@$Exps1) {
-            my $e2 =
-              resolve_scalar_var_in_string( $e1, { %vars, %known }, $opt );
+            my $e2 = resolve_scalar_var_in_string( $e1, { %vars, %known }, $opt );
             $e2 = apply_key_pattern( $e2, $opt );
 
             $changed++ if $e2 ne $e1;
@@ -927,27 +908,27 @@ sub apply_csv_filter {
       $filters = [ [], $filters ];
    }
 
-# examples:
-# can be array, which depending knowledge keys
-# $csv_filter => [
-#          [
-#            [ ], # depending keys, like entry_points
-#            {
-#             ExportExps => [
-#                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-#                ],
-#              SortKeys => [ 'weight' ],
-#            },
-#          ]
-#       ],
-# can be Hash
-# $csv_filter =>
-#       {
-#          ExportExps => [
-#             'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
-#             ],
-#          SortKeys => [ 'weight' ],
-#       },
+   # examples:
+   # can be array, which depending knowledge keys
+   # $csv_filter => [
+   #          [
+   #            [ ], # depending keys, like entry_points
+   #            {
+   #             ExportExps => [
+   #                'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+   #                ],
+   #              SortKeys => [ 'weight' ],
+   #            },
+   #          ]
+   #       ],
+   # can be Hash
+   # $csv_filter =>
+   #       {
+   #          ExportExps => [
+   #             'weight=$STATUS eq "COMPLETED" ? 0 : $STATUS eq "PARTIAL" ? 1 : 2',
+   #             ],
+   #          SortKeys => [ 'weight' ],
+   #       },
 
    my $filter3 = {};
  ROW:
@@ -972,7 +953,7 @@ sub apply_csv_filter {
    my $PrintCsvMaxRows = $opt->{MaxExtracts};
 
    my $StructuredHashArray = query_csv2(
-      { columns => \@headers, array => \@hashes },  # these are in global buffer
+      { columns => \@headers, array => \@hashes },    # these are in global buffer
       {
          InputType           => 'StructuredHash',
          RenderStdout        => 1,
@@ -1012,62 +993,62 @@ sub craft_sql {
 
       # for example
 
-    # select  *
-    # from (
-    #   select
-    #     PosQty - LAG(PosQty, 1, 0) OVER (Order By LastUpdateTime) as TradeQty,
-    #     '{{YYYYMMDD}}' as day,
-    #     *
-    #    from
-    #     Position (nolock)
-    #   where
-    #     1 = 1
-    #     {{where::YYYYMMDD}}
-    #     {{where::ACCOUNT}}
-    #     {{where::SECURITYID}}
-    #     {{where::LE}}
-    #     and PosQty is not null
-    #   )
-    # where
-    #   1=1
-    #   {{where::QTY}}
+      # select  *
+      # from (
+      #   select
+      #     PosQty - LAG(PosQty, 1, 0) OVER (Order By LastUpdateTime) as TradeQty,
+      #     '{{YYYYMMDD}}' as day,
+      #     *
+      #    from
+      #     Position (nolock)
+      #   where
+      #     1 = 1
+      #     {{where::YYYYMMDD}}
+      #     {{where::ACCOUNT}}
+      #     {{where::SECURITYID}}
+      #     {{where::LE}}
+      #     and PosQty is not null
+      #   )
+      # where
+      #   1=1
+      #   {{where::QTY}}
 
       # will be resolved to
 
-    # select  *
-    # from (
-    #   select
-    #     PosQty - LAG(PosQty, 1, 0) OVER (Order By LastUpdateTime) as TradeQty,
-    #     '20211101' as day,
-    #     *
-    #    from
-    #     Position (nolock)
-    #   where
-    #     TradeDate = '20211101'
-    #     and Account = 'BLK12345'
-    #     and SecurityId = '437855'
-    #     and LegalEntity = 'ABC'
-    #     and PosQty is not null
-    #   )
-    # where TradeQty = 2000
+      # select  *
+      # from (
+      #   select
+      #     PosQty - LAG(PosQty, 1, 0) OVER (Order By LastUpdateTime) as TradeQty,
+      #     '20211101' as day,
+      #     *
+      #    from
+      #     Position (nolock)
+      #   where
+      #     TradeDate = '20211101'
+      #     and Account = 'BLK12345'
+      #     and SecurityId = '437855'
+      #     and LegalEntity = 'ABC'
+      #     and PosQty is not null
+      #   )
+      # where TradeQty = 2000
 
-    # note:
-    #   use where:: to difference regular var to be replaced by $dict and var to
-    #   be replaced by where_clause. YYYYMMDD above is an example
-    # default template is shown below
+      # note:
+      #   use where:: to difference regular var to be replaced by $dict and var to
+      #   be replaced by where_clause. YYYYMMDD above is an example
+      # default template is shown below
 
    } else {
       my $table = defined $method_cfg->{table} ? $method_cfg->{table} : $entity;
 
       my $db_type = $method_cfg->{db_type};
 
-# nolock setting is easy in MSSQL using DBD
-#
-# however, for mysql, i am not sure what to do yet
-#
-# i followed the following two links
-#    https://stackoverflow.com/questions/917640/any-way-to-select-without-causing-locking-in-mysql
-#    https://www.perlmonks.org/?node_id=1074673
+      # nolock setting is easy in MSSQL using DBD
+      #
+      # however, for mysql, i am not sure what to do yet
+      #
+      # i followed the following two links
+      #    https://stackoverflow.com/questions/917640/any-way-to-select-without-causing-locking-in-mysql
+      #    https://www.perlmonks.org/?node_id=1074673
 
       my $mssql_specific1 = "";
       my $mssql_specific2 = "";
@@ -1147,8 +1128,8 @@ sub craft_sql {
                if ( !tracer_eval_code( $if_exp, $opt ) ) {
                   if ( defined($else_clause) ) {
 
-             # if 'if_exp' is defined and is false and 'else_clause' is defined,
-             # then use else_clause as clause
+                     # if 'if_exp' is defined and is false and 'else_clause' is defined,
+                     # then use else_clause as clause
                      $clause = $else_clause;
                   } else {
                      next;
@@ -1157,8 +1138,7 @@ sub craft_sql {
             }
 
             if ($clause) {
-               $clause = resolve_scalar_var_in_string( $clause,
-                  { %$dict, opt_value => $opt_value }, $opt );
+               $clause = resolve_scalar_var_in_string( $clause, { %$dict, opt_value => $opt_value }, $opt );
                $string = "and $clause";
             } elsif ( !defined $column ) {
                $column = $key;
@@ -1202,8 +1182,8 @@ sub craft_sql {
    my $TrimSql = get_first_by_key( [ $opt, $method_cfg ], 'TrimSql' );
    if ($TrimSql) {
 
-     # make Trim optional because it is actually easier to modify the sql with \
-     # the '1=1' - we only need to comment out a unneeded clause with '--'
+      # make Trim optional because it is actually easier to modify the sql with \
+      # the '1=1' - we only need to comment out a unneeded clause with '--'
 
       # trim unnecessary where clause
       if ( $sql =~ /where 1 = 1\n$/s ) {    # multiline regex
@@ -1218,18 +1198,18 @@ sub craft_sql {
 
          $sql =~ s/[^\n]*where 1 = 1\n$//s; # multiline regex
       } elsif ( $sql =~ /where 1 = 1\n\s*and/s ) {    # multiline regex
-             # trim
-             #       select  *
-             #         from tblMembers
-             #        where 1 = 1
-             #              and lastname = 'Tianhua'
-             #  to
-             #
-             #       select  *
-             #         from tblMembers
-             #        where lastname = 'Tianhua'
+                                                      # trim
+                                                      #       select  *
+                                                      #         from tblMembers
+                                                      #        where 1 = 1
+                                                      #              and lastname = 'Tianhua'
+                                                      #  to
+                                                      #
+                                                      #       select  *
+                                                      #         from tblMembers
+                                                      #        where lastname = 'Tianhua'
 
-         $sql =~ s/where 1 = 1\n\s*and/where /s;    # multiline regex
+         $sql =~ s/where 1 = 1\n\s*and/where /s;      # multiline regex
       }
    }
 
@@ -1240,7 +1220,7 @@ sub craft_sql {
 
    $sql .= $footer;
 
-# resolve the rest scalar vars at the last moment to avoid resolve where_clause vars.
+   # resolve the rest scalar vars at the last moment to avoid resolve where_clause vars.
    my $resolved_sql = resolve_scalar_var_in_string( $sql, $dict, $opt );
 
    return $resolved_sql;
@@ -1265,8 +1245,7 @@ sub process_db {
 
    if ($is_mysql) {
       my $dbh = get_dbh( { nickname => $db } );
-      $dbh->{AutoCommit} =
-        0;    # Disable global leverl, so we can SET FOR TRANSACTION LEVEL
+      $dbh->{AutoCommit} = 0;    # Disable global leverl, so we can SET FOR TRANSACTION LEVEL
 
       my $setting = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED ;';
       print "$setting\n\n";
@@ -1316,11 +1295,10 @@ sub process_path {
    my @resolved_paths =
      map { resolve_scalar_var_in_string( $_, { %known, %vars } ) } @$paths;
 
-#$RecursiveMax = 1 if ! defined $RecursiveMax;  # 1 means one level, not recursive
+   #$RecursiveMax = 1 if ! defined $RecursiveMax;  # 1 means one level, not recursive
 
    if ($HandleExp) {
-      $HandleExp =
-        resolve_scalar_var_in_string( $HandleExp, { %known, %vars } );
+      $HandleExp = resolve_scalar_var_in_string( $HandleExp, { %known, %vars } );
    } else {
       $HandleExp = 1;
    }
@@ -1348,7 +1326,7 @@ sub process_path {
 
 sub reset_global_buffer {
 
-# this only reset global buffer, not global config, nor global vars, neither %known.
+   # this only reset global buffer, not global config, nor global vars, neither %known.
 
    # all these should be reserved words
    my $all_cfg = get_all_cfg();
@@ -1402,19 +1380,16 @@ sub process_entity {
 
    my $entity_vars = $entity_cfg->{vars};
    if ($entity_vars) {
-      $entity_vars =
-        resolve_vars_array( $entity_vars, { %vars, %known, entity => $entity },
-         $opt );
-      $verbose && print "resolved entity=$entity entity_vars=",
-        Dumper($entity_vars);
+      $entity_vars = resolve_vars_array( $entity_vars, { %vars, %known, entity => $entity }, $opt );
+      $verbose && print "resolved entity=$entity entity_vars=", Dumper($entity_vars);
    } else {
       $entity_vars = { entity => $entity };
    }
 
-# we check entity-level condition after resolving entity-level vars.
-# if we need to set up a condition before resolving entity-level vars, do it in
-# the trace_route. If trace_route cannot help, for example, when isExample is true,
-# then convert the var section into using pre_code to update %known
+   # we check entity-level condition after resolving entity-level vars.
+   # if we need to set up a condition before resolving entity-level vars, do it in
+   # the trace_route. If trace_route cannot help, for example, when isExample is true,
+   # then convert the var section into using pre_code to update %known
 
    %vars = ( %vars, %$entity_vars );
    $verbose && print "vars = ", Dumper( \%vars );
@@ -1443,8 +1418,7 @@ EOF
    my $comment =
      get_first_by_key( [ $opt, $entity_cfg ], 'comment', { default => '' } );
    if ($comment) {
-      $comment =
-        resolve_scalar_var_in_string( $comment, { %vars, %known }, $opt );
+      $comment = resolve_scalar_var_in_string( $comment, { %vars, %known }, $opt );
       print "$comment\n\n";
    }
 
@@ -1476,8 +1450,7 @@ EOF
          my $v = $row->{$output_key};
 
          if ( !defined $v ) {
-            die "ERROR: output_key=$output_key is not defined in row=",
-              Dumper($row);
+            die "ERROR: output_key=$output_key is not defined in row=", Dumper($row);
          }
 
          push @{ $hash1{$v} }, $row;
@@ -1490,13 +1463,13 @@ EOF
 
    $verbose > 1 && print_global_buffer();
 
-# should 'example' be applyed by filter?
-#     pro: this can help find specific example
-#     con: without filter, it opens up more example, avoid not finding any example
-#if (!$opt->{isExample}) {
-#   # this affects global variables
-#   apply_csv_filter($entity_cfg->{csv_filter});
-#}
+   # should 'example' be applyed by filter?
+   #     pro: this can help find specific example
+   #     con: without filter, it opens up more example, avoid not finding any example
+   #if (!$opt->{isExample}) {
+   #   # this affects global variables
+   #   apply_csv_filter($entity_cfg->{csv_filter});
+   #}
    apply_csv_filter( $entity_cfg->{csv_filter}, $opt );
 
    my $Tail =
@@ -1507,7 +1480,7 @@ EOF
    if (@lines) {
       print "----- lines begin ------\n";
 
-#print @lines[0..$Top];  # array slice will insert undef element if beyond range.
+      #print @lines[0..$Top];  # array slice will insert undef element if beyond range.
       if ($Tail) {
          print @{ tail_array( \@lines, $Tail ) };
       } else {
@@ -1516,9 +1489,9 @@ EOF
       print "----- lines end ------\n";
       print "\n";
 
- # $row_count is not reliable
- #    - sometime the code forgot updating it
- #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
+      # $row_count is not reliable
+      #    - sometime the code forgot updating it
+      #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
       my $count = scalar(@lines);
       if ($Tail) {
          print "(Truncated. Total $count, only displayed tail $Tail.)\n"
@@ -1535,11 +1508,11 @@ EOF
 
       render_csv(
          \@hashes,
-         \@headers,
          {
             %$opt,
             MaxColumnWidth  => $MaxColumnWidth,
             PrintCsvMaxRows => $Top,
+            headers         => \@headers,
          }
       );
       print "\n";
@@ -1559,13 +1532,8 @@ EOF
    }
 
    if ( !$opt->{isExample} ) {
-      my $AllowZero = get_first_by_key( [ $opt, $entity_cfg ], 'AllowZero',
-         { default => 0 } );
-      my $AllowMultiple = get_first_by_key(
-         [ $opt, $entity_cfg ],
-         'AllowMultiple',
-         { default => 0 }
-      );
+      my $AllowZero     = get_first_by_key( [ $opt, $entity_cfg ], 'AllowZero',     { default => 0 } );
+      my $AllowMultiple = get_first_by_key( [ $opt, $entity_cfg ], 'AllowMultiple', { default => 0 } );
 
       if ( !$row_count ) {
          if ($AllowZero) {
@@ -1582,8 +1550,7 @@ EOF
             print
 "WARN:  matched multiple ($row_count) rows, but AllowMultiple=$AllowMultiple, so we will use the 1st one.\n\n";
          } else {
-            print
-"ERROR: matched multiple ($row_count) rows. please narrow your search.\n\n";
+            print "ERROR: matched multiple ($row_count) rows. please narrow your search.\n\n";
             if ( exists $entity_cfg->{method_cfg} ) {
                print "methond_cfg = ", Dumper( $entity_cfg->{method_cfg} );
             }
@@ -1640,16 +1607,16 @@ sub update_knowledge_from_rows {
 
    %r = %$row;
 
-# $key_cfg is mapping between $known's keys and $rows' keys (column names), as they may
-# be different in spelling
-# $key_cfg = {
-#    known_key1 => 'row_key1',  # this converted to below after unify_hash() call.
-#    known_key1 => { column=>row_key1 },
-#    known_key2 => { column=>row_key2, flag2=>value },
-#    known_key3 => { flag3=>value },    # here we default column = known_key3
-#    known_key4 => {},                  # here we default column = known_key4
-#    ...
-# },
+   # $key_cfg is mapping between $known's keys and $rows' keys (column names), as they may
+   # be different in spelling
+   # $key_cfg = {
+   #    known_key1 => 'row_key1',  # this converted to below after unify_hash() call.
+   #    known_key1 => { column=>row_key1 },
+   #    known_key2 => { column=>row_key2, flag2=>value },
+   #    known_key3 => { flag3=>value },    # here we default column = known_key3
+   #    known_key4 => {},                  # here we default column = known_key4
+   #    ...
+   # },
 
    for my $k ( keys %$cfg ) {
       my $kc = $cfg->{$k};
@@ -1672,13 +1639,13 @@ sub update_knowledge_from_rows {
          }
       }
 
-# in where_clause/update_key, $known's key is mapped to row's column.
-# in key_pattern,  $known's key is also the row's key.
-# column key can have multiple column names. we will use the first defined column
-# to update knowledge
-#   {column=>'TRDQTY,ORDQTY',
-#    clause=>'(TRDQTY={{opt_value}} or ORDQTY={{opt_value}})',
-#   }
+      # in where_clause/update_key, $known's key is mapped to row's column.
+      # in key_pattern,  $known's key is also the row's key.
+      # column key can have multiple column names. we will use the first defined column
+      # to update knowledge
+      #   {column=>'TRDQTY,ORDQTY',
+      #    clause=>'(TRDQTY={{opt_value}} or ORDQTY={{opt_value}})',
+      #   }
       my $kc_column = defined $kc->{column} ? $kc->{column} : $k;
       my @columns   = split /,/, $kc_column;
 
@@ -1689,13 +1656,12 @@ sub update_knowledge_from_rows {
          my $without_prefix = $column;
          $without_prefix =~ s:^.+[.]::;
 
-         $new_value = get_value_by_key_case_insensitive( $row, $without_prefix,
-            { default => undef } );
+         $new_value = get_value_by_key_case_insensitive( $row, $without_prefix, { default => undef } );
 
          if (  !defined($new_value)
             && !( defined($code) && $code =~ /\{\{new_value\}\}/ ) )
          {
-# if code is not defined, or defined without using {{value}}, no need $new_value
+            # if code is not defined, or defined without using {{value}}, no need $new_value
             print "selected row's '$without_prefix' is not defined.\n";
             next;
          }
@@ -1703,20 +1669,13 @@ sub update_knowledge_from_rows {
       }
 
       if ( defined($condition) && $condition =~ /\{\{new_value\}\}/ ) {
-         if (
-            !tracer_eval_code(
-               $condition,
-               { %$opt, Dict => { %vars, %known, new_value => $new_value } }
-            )
-           )
-         {
+         if ( !tracer_eval_code( $condition, { %$opt, Dict => { %vars, %known, new_value => $new_value } } ) ) {
             next;
          }
       }
 
       if ( defined($code) ) {
-         my $v = tracer_eval_code( $code,
-            { %$opt, Dict => { %vars, %known, new_value => $new_value } } );
+         my $v = tracer_eval_code( $code, { %$opt, Dict => { %vars, %known, new_value => $new_value } } );
          update_knowledge( $k, $v, { KeyConfig => $kc } );
       } else {
          update_knowledge( $k, $new_value, { KeyConfig => $kc } )
@@ -1749,8 +1708,7 @@ sub update_knowledge {
         if $mismatch;
    } else {
       $known{$k} = $new_value;
-      print "\nadded knowledge key='$k' from $column=", Dumper($new_value),
-        "\n";
+      print "\nadded knowledge key='$k' from $column=", Dumper($new_value), "\n";
 
       my $all_cfg = get_all_cfg();
 
@@ -1758,7 +1716,7 @@ sub update_knowledge {
       if ( defined $extender ) {
          print "\nextending knowledge from key='$k'\n\n";
 
-# extender->() is out of this scope, therefore it  needs to take %known as a variable
+         # extender->() is out of this scope, therefore it  needs to take %known as a variable
          $extender->( \%known, $k );
       }
    }
@@ -1827,9 +1785,9 @@ sub parse_cfg {
    #    eval `cat code.pl`
    #       only eval keeps the current lexical scope.
 
- # use 'our' here to allow us use it again in the cfg file and make the cfg file
- # capable of a standlone perl file, so that we can check the cfg file's syntax
- # by its own.
+   # use 'our' here to allow us use it again in the cfg file and make the cfg file
+   # capable of a standlone perl file, so that we can check the cfg file's syntax
+   # by its own.
    our $our_cfg;
    eval $cfg_string;
    if ($@) {
@@ -1848,9 +1806,9 @@ sub parse_cfg {
       }
    }
 
-# 'vars' is array of pairs of key=>value
-# 'value' is an expression, therefore, we need to use two different quotes.
-# unshift put the key=value to the front, therefore, allow cfg file to overwrite it.
+   # 'vars' is array of pairs of key=>value
+   # 'value' is an expression, therefore, we need to use two different quotes.
+   # unshift put the key=value to the front, therefore, allow cfg file to overwrite it.
    unshift @{ $our_cfg->{vars} }, ( cfgdir  => "'$cfgdir'" );
    unshift @{ $our_cfg->{vars} }, ( cfgname => "'$cfgname'" );
 
@@ -1861,14 +1819,10 @@ sub parse_cfg {
       $our_cfg->{key_pattern} = {};
    }
 
-   my (
-      $cfg_by_entity, $alias_map,   $extra_keys,
-      $entry_points,  $trace_route, $extend_key_map
-     )
-     = @{$our_cfg}{
+   my ( $cfg_by_entity, $alias_map, $extra_keys, $entry_points, $trace_route, $extend_key_map ) = @{$our_cfg}{
       qw(
         cfg_by_entity   alias_map   extra_keys   entry_points   trace_route   extend_key_map)
-     };
+   };
 
    # checking for required attributes
    croak "missing cfg_by_entity in $cfg_file" if !defined $cfg_by_entity;
@@ -1883,8 +1837,7 @@ sub parse_cfg {
       my $type = ref $entity_cfg;
       $type = '' if !defined($type);
       if ( $type ne 'HASH' ) {
-         die "ERROR: entity=$e, cfg has wrong type='$type'. ",
-           Dumper($entity_cfg);
+         die "ERROR: entity=$e, cfg has wrong type='$type'. ", Dumper($entity_cfg);
       }
 
       if ( !check_cfg_keys( $entity_cfg, $entity_syntax, $opt ) ) {
@@ -1897,8 +1850,7 @@ sub parse_cfg {
 
       if ( $method eq 'code' ) {
          if ($method_cfg) {
-            print
-              "entity=$e is method=$method which should not have method_cg\n";
+            print "entity=$e is method=$method which should not have method_cg\n";
             $failed++;
             next;
          }
@@ -1959,9 +1911,8 @@ sub parse_cfg {
       $usage_detail .= "\n   yyyymmdd is default to today $today\n";
    }
 
-   my $extender_by_key
-     ;    # this provides the quick access to the extender function
-   my @extender_keys;    # this provides the order of the map
+   my $extender_by_key;    # this provides the quick access to the extender function
+   my @extender_keys;      # this provides the order of the map
    if ( $extend_key_map && @$extend_key_map ) {
       for my $row (@$extend_key_map) {
          my ( $k, $func ) = @$row;
@@ -1981,14 +1932,11 @@ sub parse_cfg {
       qw(
         allowed_keys   entities   trace_route_entities   extender_keys  extender_by_key  usage_detail)
      }
-     = (
-      \@allowed_keys,   \@entities, \@trace_route_entities, \@extender_keys,
-      $extender_by_key, $usage_detail
-     );
+     = ( \@allowed_keys, \@entities, \@trace_route_entities, \@extender_keys, $extender_by_key, $usage_detail );
 
    for my $e (@entities) {
 
-  # push down some higher-level config because we may pass the lower config only
+      # push down some higher-level config because we may pass the lower config only
       my $entity_cfg = $cfg_by_entity->{$e};
 
       $entity_cfg->{entity} = $e;
@@ -2016,11 +1964,11 @@ END
    my $node_pairs = get_node_list( $our_cfg, 'our_cfg', $opt );
 
    my @eval_patterns = (
-      qr/\{vars\}->\[\d*[13579]\]$/, # vars are pairs. odd-numberred are values.
-qr/\{(condition|code|pre_code|post_code|test|if_fail|if_success|update_knowledge|Exps)\}$/,
+      qr/\{vars\}->\[\d*[13579]\]$/,    # vars are pairs. odd-numberred are values.
+      qr/\{(condition|code|pre_code|post_code|test|if_fail|if_success|update_knowledge|Exps)\}$/,
    );
 
-   $failed = 0;                      #restart count
+   $failed = 0;                         #restart count
 
    while (@$node_pairs) {
       my $node = shift @$node_pairs;
@@ -2050,8 +1998,7 @@ qr/\{(condition|code|pre_code|post_code|test|if_fail|if_success|update_knowledge
             {
                $failed = 1;
                print "ERROR: failed to compile node: $node\n";
-               print
-"In order to test compilation, we temporarily substituted vars in {{}} with '1'\n";
+               print "In order to test compilation, we temporarily substituted vars in {{}} with '1'\n";
             }
          }
       }
@@ -2110,9 +2057,7 @@ sub get_keys_from_array {
       } elsif ( $type eq 'HASH' ) {
          push @keys, $row->{$key_name};
       } else {
-         croak "unsupported type='$type' in "
-           . Dumper($rows) . " at "
-           . Dumper($row);
+         croak "unsupported type='$type' in " . Dumper($rows) . " at " . Dumper($row);
       }
    }
 
@@ -2132,9 +2077,7 @@ sub set_all_cfg {
    } elsif ( $cfg_type eq 'HASH' ) {
       $my_cfg = $given_cfg;
    } else {
-      croak
-"unknown cfg type=$cfg_type, expecting file name (string) or HASH. given_cfg = "
-        . Dumper($given_cfg);
+      croak "unknown cfg type=$cfg_type, expecting file name (string) or HASH. given_cfg = " . Dumper($given_cfg);
    }
 }
 
@@ -2170,7 +2113,7 @@ sub trace {
     SELECTED:
       for my $e (@selected_entities) {
 
-# if the entity is already in the configured trace route, add it with the config.
+         # if the entity is already in the configured trace route, add it with the config.
          for my $t (@$trace_route) {
             if ( $e eq $t->{entity} ) {
                push @new_trace_route, $t;
@@ -2197,7 +2140,7 @@ sub trace {
       }
    );
 
-# these keys has precedence to populate because extender func may need this info.
+   # these keys has precedence to populate because extender func may need this info.
    for my $k (qw(YYYYMMDD)) {
       update_knowledge( $k, $parsed_input->{$k} )
         if defined $parsed_input->{$k};
@@ -2227,9 +2170,8 @@ sub trace {
    print "global_vars=", Dumper( $all_cfg->{global_vars} );
 
    if ( $known{EXAMPLE} ) {
-      my $entity = $known{EXAMPLE};
-      my $entity_cfg =
-        get_value_by_key_case_insensitive( $cfg_by_entity, $entity );
+      my $entity     = $known{EXAMPLE};
+      my $entity_cfg = get_value_by_key_case_insensitive( $cfg_by_entity, $entity );
 
       my $opt2 = {
          %$opt,
@@ -2238,7 +2180,7 @@ sub trace {
          isExample     => 1,
       };
 
-      reset_global_buffer();   # only reset buffer not $known neither global cfg
+      reset_global_buffer();    # only reset buffer not $known neither global cfg
       $vars{entity} = $entity;
 
       process_entity( $entity, $entity_cfg, $opt2 );
@@ -2262,8 +2204,8 @@ sub trace {
 
    if ( $opt->{ForceThrough} && !$verbose ) {
 
-     # use the default die handler is less verbose when force through as we will
-     # print failures many times
+      # use the default die handler is less verbose when force through as we will
+      # print failures many times
       $SIG{__DIE__} = $saved_die_handler;
    }
 
@@ -2283,13 +2225,9 @@ sub trace {
          for my $entity (@$entities) {
             next if $SkipTrace->{$entity};
 
-            my $entity_cfg =
-              get_value_by_key_case_insensitive( $cfg_by_entity, $entity );
+            my $entity_cfg = get_value_by_key_case_insensitive( $cfg_by_entity, $entity );
 
-            eval {
-               $result->{$entity} =
-                 process_entity( $entity, $entity_cfg, $opt );
-            };
+            eval { $result->{$entity} = process_entity( $entity, $entity_cfg, $opt ); };
             if ($@) {
 
                # don't print stack trace for easy understanding errors.
@@ -2327,21 +2265,17 @@ EOF
          next;
       }
 
-      reset_global_buffer();   # only reset buffer not $known neither global cfg
+      reset_global_buffer();    # only reset buffer not $known neither global cfg
       $vars{entity} = $entity;
 
       my $condition = $row->{condition};
 
       next if defined($condition) && !tracer_eval_code( $condition, $opt );
 
-      my $entity_cfg =
-        get_value_by_key_case_insensitive( $cfg_by_entity, $entity,
-         { default => undef } );
+      my $entity_cfg = get_value_by_key_case_insensitive( $cfg_by_entity, $entity, { default => undef } );
       die "ERROR: entity=$entity is not configured\n" if !$entity_cfg;
 
-      eval {
-         $result->{$entity} = process_entity( $entity, $entity_cfg, $opt2 );
-      };
+      eval { $result->{$entity} = process_entity( $entity, $entity_cfg, $opt2 ); };
       if ($@) {
          print "$@" if $@ !~ /\(no need stack trace\)/;
          exit 1     if !$opt->{ForceThrough};
@@ -2421,8 +2355,7 @@ sub main {
 
    my $table = 'tblMembers';
 
-   my $member =
-     process_db( $table, $method_cfg, { MaxExtracts => 10000, verbose => 1 } );
+   my $member = process_db( $table, $method_cfg, { MaxExtracts => 10000, verbose => 1 } );
 
    print "member = ", Dumper($member);
 
@@ -2430,19 +2363,14 @@ sub main {
    reset_global_buffer();
    %known = ();
 
-   trace(
-      "$ENV{TPSUP}/scripts/tptrace_test.cfg",
-      ['example=applog_cmd_extract'],
-      { verbose => 0 }
-   );
+   trace( "$ENV{TPSUP}/scripts/tptrace_test.cfg", ['example=applog_cmd_extract'], { verbose => 0 } );
 
    print "\n---- next ----\n\n";
 
    reset_global_buffer();
    %known = ();
 
-   trace( "$ENV{TPSUP}/scripts/tptrace_test.cfg",
-      ['example=applog_log'], { verbose => 0 } );
+   trace( "$ENV{TPSUP}/scripts/tptrace_test.cfg", ['example=applog_log'], { verbose => 0 } );
 
    print "\n---- next ----\n\n";
 
