@@ -1,36 +1,81 @@
-local OPTIND OPTARG o quiet usage expected_version actual_version binaries binary find_binary tmpvar d2 prog
+local OPTIND OPTARG o quiet usage prog old new value var
 
 prog=${FUNCNAME[1]}
 
 usage="
 usage: 
-   $prog [-r] [-e var] path"
+   $prog [-r] [-e var] [-v] path
 
    add a new element to env var, eg, PATH
-   
-   -r      add path to rear. default to front
-   -e var  change this env var. default to PATH
-   -q      quite mode
+
+   -r add path to rear. default to front
+   -e var change this env var. default to PATH
+   -v verbose mode
+
+   example:
+      $prog /usr/local/bin
+      $prog -r /usr/local/bin
+      $prog -e LD_LIBRARY_PATH /usr/local/lib
+
+"
 
 quiet=N
 rear=N
 var=PATH
+verbose=N
+flag="-q"
 
-while getopts qre: o;
-do  
+while getopts vre: o; do
    case "$o" in
-      q) quiet=Y;; 
-      r) rear=Y; flag="-q";;
-      e) var = 
-      *) echo "unknow switch. $usage">&2; return 1;; 
+   v)
+      verbose=Y
+      flag=""
+      ;;
+   r)
+      rear=Y
+      ;;
+   e) var=$OPTARG ;;
+   *)
+      echo "unknow switch. $usage" >&2
+      return 1
+      ;;
    esac
 done
 
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 if [ $# -ne 1 ]; then
    echo "wrong number of args: expected 1, actual $#"
-   echo $usage
+   echo "$usage"
    return
-fi  
+fi
 
+value=$1
+
+old="eval echo \$$var"
+
+if [ "$verbose" = "Y" ]; then
+   echo "old $var: $($old)"
+fi
+
+if [ "$rear" = "Y" ]; then
+   new="$($old):$value"
+else
+   new="$value:$($old)"
+fi
+
+# reduce $var
+# this caused error in perlenv in cygwin
+
+if [ "$verbose" = "Y" ]; then
+   echo "new $var: $new"
+fi
+
+if [ "X$new" = "X$$old" ]; then
+   if [ "$verbose" = "Y" ]; then
+      echo "no change"
+   fi
+   return
+fi
+
+export $var="$new"

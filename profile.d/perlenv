@@ -1,0 +1,72 @@
+local j perl_bin found BASEDIRS b usage prog version
+
+prog=${FUNCNAME[1]}
+
+usage="
+
+usage:
+
+$prog check     # check current perl
+$prog version   # set to a specific version
+
+example:
+
+$prog check
+$prog st       # strawberry
+$prog sys
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+version=$1
+
+user=$(id | cut -d\( -f2 | cut -d\) -f1)
+
+if [[ $UNAME =~ CYGWIN ]]; then
+   declare -A path_by_tag=([sys]=/usr/bin [st]="/cygdrive/c/Strawberry/perl/bin")
+   inc=$(convertpath -t batch "$TPSUP/lib/perl")
+   declare -A inc_by_tag=([sys]="$TPSUP/lib/perl" [st]="$inc")
+elif [[ $UNAME =~ MINGW64_NT ]]; then
+   declare -A path_by_tag=([sys]=/usr/bin [st]="/c/Strawberry/perl/bin")
+   declare -A inc_by_tag=([sys]="$TPSUP/lib/perl" [st]="$TPSUP/lib/perl")
+else
+   declare -A path_by_tag=([sys]=/usr/bin)
+   declare -A inc_by_tag=()
+fi
+
+if [ $version = check ]; then
+   which perl
+   perl --version
+else
+   path=${path_by_tag[$version]}
+
+   if [ "X$path" = "X" ]; then
+      echo "'version' perl is not configured"
+      return
+   fi
+
+   /bin/ls -l "$path/perl" || return 1
+
+   addpath "$path"
+   which perl
+   perl --version
+
+   inc=${inc_by_tag[$version]}
+   if [ "X$inc" != "X" ]; then
+      echo "inc=$inc"
+      export PERL5LIB="$inc"
+      echo "PERL5LIB=$PERL5LIB"
+   fi
+
+   cat <<END
+   
+to use perl in cygwin: perl prog.pl
+in gitbash: prog.pl
+
+END
+fi
