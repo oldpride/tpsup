@@ -1506,7 +1506,7 @@ EOF
       my $MaxColumnWidth = $entity_cfg->{MaxColumnWidth};
       print "MaxColumnWidth = $MaxColumnWidth\n" if defined $MaxColumnWidth;
 
-      render_csv(
+      render_arrays(
          \@hashes,
          {
             %$opt,
@@ -1523,7 +1523,7 @@ EOF
 
    if ( @hashes && ( $verbose || !@headers ) ) {
 
-      # we print this only when we didn't print render_csv() or verbose mode
+      # we print this only when we didn't call render_arrays() or verbose mode
       print Dumper( top_array( \@hashes, $Top ) );
       print "\n";
       my $count = scalar(@hashes);
