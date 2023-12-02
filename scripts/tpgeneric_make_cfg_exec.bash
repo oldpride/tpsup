@@ -9,27 +9,23 @@ all_targets='bash bat'
 # i didn't include taskbash and taskbat in all_targets because they are not used often.
 
 usage() {
-   msg = $1
+   msg=$1
 
    [ "X$msg" = "X" ] || echo >&2 "ERROR: $msg"
 
    cat >&2 <<END
 usage:
 
-   $prog bash|bat|taskbash|taskbat
+   $prog bash|bat
    $prog all
    
    'all' covers: $all_targets.
 
-   create a wrapper script for *_cfg.py, 
+   create a wrapper script for *.cfg, 
       bash - for bash on linux/cygwin/gitbash. 
             target will be launched from inside venv.
       bat - for batch on windows, 
             target will be launched from inside venv.
-      taskbash - for bash on linux/cygwin/gitbash. 
-            target will be launched from outside venv
-      taskbat - for batch on windows, 
-             target will be lauched from outside venv.
 
    ideally this can be done by a symbolic link but gitbash and cygwin cannot use 
    symbolic link reliablely. so we make hard copies
@@ -40,10 +36,9 @@ usage:
 
 examples:
 
-   $prog -m test_input taskbat
-   C:\Users\william>sitebase\github\tpsup\python3\scripts\ptslnm_test_input_task.bat  s=henry
+   $prog -m tptrace_test bat
+   C:\Users\william>sitebase\github\tpsup\scripts\tptrace_test.bat any
 
-   $prog -m test_input taskbash
 
 END
    exit 1
@@ -72,14 +67,14 @@ target=$1
 
 if [ $target = all ]; then
    targets=$all_targets
-elif [ $target = bash -o $target = bat -o $target = taskbash -o $target = taskbat ]; then
+elif [ $target = bash -o $target = bat ]; then
    targets=$target
 else
    usage "unsupport target='$target'"
 fi
 
 for t in $(echo $targets); do
-   for f in *_cfg_*.py; do
+   for f in *_batch.cfg *_trace.cfg; do
       if [ "X$pattern" != "X" ]; then
          if ! echo $f | egrep -q "$pattern"; then
             continue
@@ -89,29 +84,25 @@ for t in $(echo $targets); do
       # https://unix.stackexchange.com/questions/145402
       # sed -e would not work.
       # sed -E is extended regular expression, which is similar to perl's regex.
-      target_type=$(echo $f | sed -E 's:^.*_cfg_(batch|trace).py:\1:')
-      target_prefix=$(echo $f | sed -E 's:_cfg_(batch|trace).py::')
+      target_type=$(  echo $f | sed -E 's:^.*_(batch|trace).cfg:\1:')
+      target_prefix=$(echo $f | sed -E 's:_(batch|trace).cfg::')
       [ $verbose = Y ] && echo "target_type=$target_type, target_prefix=$target_prefix"
 
       if [ $t = bat ]; then
          target_script="$target_prefix.bat"
       elif [ $t = bash ]; then
          target_script="$target_prefix"
-      elif [ $t = taskbash ]; then
-         target_script="${target_prefix}_task"
-      elif [ $t = taskbat ]; then
-         target_script="${target_prefix}_task.bat"
+      # elif [ $t = taskbash ]; then
+      #    target_script="${target_prefix}_task"
+      # elif [ $t = taskbat ]; then
+      #    target_script="${target_prefix}_task.bat"
       else
          echo "FATAL: unknown target '$t'"
          exit 1
       fi
 
       if [ $t = bash -o $t = bat ]; then
-         source_script="$TPSUP/python3/scripts/ptgeneric_py.$t"
-      elif [ $t = taskbash ]; then
-         source_script="$TPSUP/python3/scripts/pt${target_type}_generic_task.bash"
-      elif [ $t = taskbat ]; then
-         source_script="$TPSUP/python3/scripts/pt${target_type}_py_generic_task.bat"
+         source_script="$TPSUP/scripts/tpgeneric.$t"
       fi
 
       if [ ! -e "$source_script" ]; then
