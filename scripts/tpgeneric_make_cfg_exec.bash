@@ -111,15 +111,18 @@ for t in $(echo $targets); do
       fi
 
       if [ -e "$target_script" ]; then
-         if [ "$target_script" -nt "$source_script" ]; then
-            echo "skipped $target_script as it is newer than $source_script"
+         if [ -h "$target_script" ]; then
+            echo "$target_script is a old-style sym link. removed. will use file copy"
+            rm -f "$target_script"
+         elif [ "$target_script" -nt "$source_script" ]; then
+            echo "$target_script skipped as it is newer than $source_script"
             continue
          else
             rm -f "$target_script"
          fi
       fi
 
-      echo "updating $target_script ..."
+      echo "$target_script updated"
       cp -f "$source_script" "$target_script"
    done
 
