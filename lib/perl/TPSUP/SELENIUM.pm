@@ -52,7 +52,7 @@ use TPSUP::NET    qw(is_tcp_alive);
 sub wdkeys {
    my ( $key, $count, $opt ) = @_;
 
-# example application: use this function to generate plenty backspaces to clear a field
+   # example application: use this function to generate plenty backspaces to clear a field
 
    # Selenium::Remote::WDKeys
    my @array = ( KEYS->{$key} ) x $count;
@@ -68,14 +68,12 @@ sub get_driver {
 
    my $host_port = $opt->{host_port} ? $opt->{host_port} : 'auto';
 
-   my $drivername =
-     $driver_cfg->{drivername} ? $driver_cfg->{drivername} : "chromedriver";
+   my $drivername = $driver_cfg->{drivername} ? $driver_cfg->{drivername} : "chromedriver";
    my $BrowserArgs =
      $driver_cfg->{BrowserArgs} ? $driver_cfg->{BrowserArgs} : [];
 
-# startup_timeout is in seconds. basically is how long to wait for the browser ready
-   my $startup_timeout =
-     $driver_cfg->{startup_timeout} ? $driver_cfg->{startup_timeout} : 60;
+   # startup_timeout is in seconds. basically is how long to wait for the browser ready
+   my $startup_timeout = $driver_cfg->{startup_timeout} ? $driver_cfg->{startup_timeout} : 60;
 
    my $user     = get_user();
    my $home_dir = get_homedir();
@@ -85,13 +83,12 @@ sub get_driver {
    my $driver_log2 = "$log_base/selenium_driver2.log";
    my $browser_dir = "$log_base/selenium_browser";
 
-   my $driver_args = "--verbose --log-path=$driver_log"; # chromedriver cmd line
+   my $driver_args = "--verbose --log-path=$driver_log";    # chromedriver cmd line
 
    my $browser_options;
 
    if ( $host_port eq 'auto' ) {
-
-  # these args are chrome browser (including chromium-browser) command line args
+      # these args are chrome browser (including chromium-browser) command line args
       $browser_options->{args} = [
          '--no-sandbox',               # to run without root
          '--disable-dev-shm-usage',    # to run without root
@@ -110,19 +107,28 @@ sub get_driver {
          push @{ $browser_options->{args} }, "--$ba";
       }
 
+      # when we run chromedriver in default way, it launches a chrome with 
+      #      --remote-debugging-port=0
+      # 2023/12/02, I noticed the folliwing info in chromedriver log
+      # 
+      #    [1701562004.739][INFO]: ChromeDriver supports communication with Chrome via pipes.
+      #    This is more reliable and more secure.
+      #    [1701562004.740][INFO]: Use the --remote-debugging-pipe Chrome switch
+      #    instead of the default --remote-debugging-port to enable this communication mode.
+      #
+      # therefore, I added the follwing
       push @{ $browser_options->{args} }, "--remote-debugging-pipe";
 
-# without $browser_options->{debuggerAddress} set, chromedriver will start
-# a chrome. In this case, connection between chromedriver and chrome is likely
-# not using tcp/ip because --remote-debugging-port=0
-#
-# tian      8660 26.8  1.9 17542768 159492 pts/2 Sl+  22:23   0:01 /opt/google/chrome/chrome --allow-pre-commit-input --disable-background-networking --disable-client-side-phishing-detection --disable-default-apps --disable-dev-shm-usage --disable-hang-monitor --disable-popup-blocking --disable-prompt-on-repost --disable-sync --enable-automation --enable-blink-features=ShadowDOMV0 --enable-logging --ignore-certificate-errors --log-level=0 --no-first-run --no-sandbox --no-service-autorun --password-store=basic --remote-debugging-port=0 --test-type=webdriver --use-mock-keychain --user-data-dir=/tmp/selenium_browser_tian --window-size=960,540 --enable-crashpad
+      # without $browser_options->{debuggerAddress} set, chromedriver will start
+      # a chrome. In this case, connection between chromedriver and chrome is likely
+      # not using tcp/ip because --remote-debugging-port=0
+      #
+      # tian      8660 26.8  1.9 17542768 159492 pts/2 Sl+  22:23   0:01 /opt/google/chrome/chrome --allow-pre-commit-input --disable-background-networking --disable-client-side-phishing-detection --disable-default-apps --disable-dev-shm-usage --disable-hang-monitor --disable-popup-blocking --disable-prompt-on-repost --disable-sync --enable-automation --enable-blink-features=ShadowDOMV0 --enable-logging --ignore-certificate-errors --log-level=0 --no-first-run --no-sandbox --no-service-autorun --password-store=basic --remote-debugging-port=0 --test-type=webdriver --use-mock-keychain --user-data-dir=/tmp/selenium_browser_tian --window-size=960,540 --enable-crashpad
       print "we will start a chromedriver which will auto start a browser\n";
    } elsif ( $host_port =~ /^(.+?):([^:]+)$/ ) {
       my ( $host, $port ) = ( $1, $2 );
 
-      print
-"we will start a chrome driver which will connect to an existing browser at host:port=$host_port\n";
+      print "we will start a chrome driver which will connect to an existing browser at host:port=$host_port\n";
 
       # this is the browser's debugger listener port.
       # once we set this, chromedriver will not start up a browser
@@ -150,11 +156,11 @@ sub get_driver {
 
          if ( !$opt->{X11} && exists( $ENV{DISPLAY} ) ) {
 
-         # $driver->send_keys_to_active_element() will try to open an X
-         # connection if it detects $DISPLAY. This will trigger a firewall alert
-         # on PC in an corporate env. So we unset $DISPLAY by default. But if
-         # we run the browser locally, we leave $DISPLAY alone, because broswer
-         # needs $DISPLAY to launch.
+            # $driver->send_keys_to_active_element() will try to open an X
+            # connection if it detects $DISPLAY. This will trigger a firewall alert
+            # on PC in an corporate env. So we unset $DISPLAY by default. But if
+            # we run the browser locally, we leave $DISPLAY alone, because broswer
+            # needs $DISPLAY to launch.
             delete $ENV{DISPLAY};
          }
       }
@@ -162,7 +168,7 @@ sub get_driver {
       croak "host_port='$host_port' is not in host:port format";
    }
 
-# to check any lingering chromedriver. they should have been killed before we start
+   # to check any lingering chromedriver. they should have been killed before we start
    my $cmd = "ps -f -u $user |grep $drivername|grep -v grep";
    print "$cmd\n";
    my @lines = `$cmd`;
@@ -189,8 +195,7 @@ sub get_driver {
    if ( $path !~ m:/usr/sbin: ) {
       $ENV{PATH} .= ":/usr/sbin";
       $verbose
-        && print
-        "added /usr/sbin to PATH for lsof(1s) in Selenium::CanStartBinary\n";
+        && print "added /usr/sbin to PATH for lsof(1s) in Selenium::CanStartBinary\n";
    }
 
    my $driver = Selenium::Chrome->new(
@@ -200,7 +205,7 @@ sub get_driver {
       custom_args     => $driver_args,
 
       # the following setting are in Selenium/CanStartBinary.pm
-      logfile => "${driver_log2}",   # another chromedriver log, shorter version
+      logfile => "${driver_log2}",    # another chromedriver log, shorter version
 
       # Selenium::Chrome is an extension of Selenium::Remote::Driver
       # the following setting are in Selenium::Remote::Driver
@@ -210,8 +215,7 @@ sub get_driver {
       },
    );
 
-   $driver->{seleniumEnv}->{log_base} =
-     $log_base;    # monkey patchig for convenience
+   $driver->{seleniumEnv}->{log_base} = $log_base;    # monkey patchig for convenience
 
    return $driver;
 
@@ -220,20 +224,19 @@ sub get_driver {
 sub run_actions {
    my ( $driver, $actions, $opt ) = @_;
 
-   my $dryrun      = $opt->{dryrun};
-   my $interactive = $opt->{interactive};
-   my $debug       = $opt->{debug} ? $opt->{debug} : 0;
-   my $print_console_log =
-     $opt->{print_console_log} ? $opt->{pring_console_log} : 0;
+   my $dryrun            = $opt->{dryrun};
+   my $interactive       = $opt->{interactive};
+   my $debug             = $opt->{debug}             ? $opt->{debug}             : 0;
+   my $print_console_log = $opt->{print_console_log} ? $opt->{pring_console_log} : 0;
 
    my $result = {};
 
    for my $row (@$actions) {
 
-# locator                             input         comment     extra
-# [ 'tab=1', ['stirng='.wdkeys('backtick',30).'hello', 'code=sleep 1'], 'greeting' ]
-# [ {locator=>'xpath=//botton[@id="Submit"], NotFound=>'$we_return=1'},
-#   ['click', 'sleep=2'],           'Submit ]
+      # locator                             input         comment     extra
+      # [ 'tab=1', ['stirng='.wdkeys('backtick',30).'hello', 'code=sleep 1'], 'greeting' ]
+      # [ {locator=>'xpath=//botton[@id="Submit"], NotFound=>'$we_return=1'},
+      #   ['click', 'sleep=2'],           'Submit ]
 
       my ( $locator, $input, $comment, $extra ) = @$row;
 
@@ -303,67 +306,67 @@ sub locate {
 
    if ( !$locator_driver || !$driver_url || $current_url ne $driver_url ) {
 
-# - when in a shadow root, $locator_driver and $driver are diffrent.
-# - when we click and go to a different page, which can be told by a url change,
-#   we need to sync up $locator_driver with $driver.
-# - when in an iframe, even if the iframe is in a shadow root, $locator_driver
-#   and $driver are the same.
+      # - when in a shadow root, $locator_driver and $driver are diffrent.
+      # - when we click and go to a different page, which can be told by a url change,
+      #   we need to sync up $locator_driver with $driver.
+      # - when in an iframe, even if the iframe is in a shadow root, $locator_driver
+      #   and $driver are the same.
 
       $locator_driver = $driver;
       $driver_url     = $current_url;
    }
 
-# example of actions:
-#
-#     $actions = [
-#         [ 'xpath=/a/b,xpath=/a/c', 'click', 'string locator' ],
-#         [ ['xpath=/a/b', 'shadow', 'css=d'], 'click', 'chain locator'],
-#         [
-#             {
-#                 locator => 'xpath=/a/b,xpath=/a/c',
-#                 NotFound => 'print "not found\n";',
-#             },
-#             'click',
-#             'use hash for the most flexibility'
-#         ],
-#         [
-#             '
-#                 xpath=//dhi-wc-apply-button[@applystatus="true"],
-#                 xpath=//dhi-wc-apply-button[@applystatus="false"],
-#             ',
-#             {
-#                 0 => 'code=
-#                       $action_data->{error} = "applied previously";
-#                       $we_return=1;
-#                      ',
-#                 1 => undef,
-#             },
-#             'find applied or not. If applied, return'
-#         ],
-#         [
-#            {
-#              chains => [
-#                  # branch in the beginning
-#                  [
-#                      'xpath=/html/body[1]/ntp-app[1]', 'shadow',
-#                      'css=#mostVisited', 'shadow',
-#                      'css=#removeButton2', # correct on ewould be 'css=#removeButton'. we purposefully typoed
-#                  ],
-#                  [
-#                      'xpath=/html/body[1]/ntp-app[1]', 'shadow',
-#                      'css=#mostVisited', 'shadow',
-#                      'css=#actionMenuButton'
-#                  ],
-#              ],
-#            },
-#            {
-#              # first number is the chain number, followed by locator number
-#              '0.0.0.0.0.0' => 'code=print "found remove button\n";',
-#              '1.0.0.0.0.0' => 'code=print "found action button\n";',
-#            },
-#            "test chains",
-#        ],
-#     ];
+   # example of actions:
+   #
+   #     $actions = [
+   #         [ 'xpath=/a/b,xpath=/a/c', 'click', 'string locator' ],
+   #         [ ['xpath=/a/b', 'shadow', 'css=d'], 'click', 'chain locator'],
+   #         [
+   #             {
+   #                 locator => 'xpath=/a/b,xpath=/a/c',
+   #                 NotFound => 'print "not found\n";',
+   #             },
+   #             'click',
+   #             'use hash for the most flexibility'
+   #         ],
+   #         [
+   #             '
+   #                 xpath=//dhi-wc-apply-button[@applystatus="true"],
+   #                 xpath=//dhi-wc-apply-button[@applystatus="false"],
+   #             ',
+   #             {
+   #                 0 => 'code=
+   #                       $action_data->{error} = "applied previously";
+   #                       $we_return=1;
+   #                      ',
+   #                 1 => undef,
+   #             },
+   #             'find applied or not. If applied, return'
+   #         ],
+   #         [
+   #            {
+   #              chains => [
+   #                  # branch in the beginning
+   #                  [
+   #                      'xpath=/html/body[1]/ntp-app[1]', 'shadow',
+   #                      'css=#mostVisited', 'shadow',
+   #                      'css=#removeButton2', # correct on ewould be 'css=#removeButton'. we purposefully typoed
+   #                  ],
+   #                  [
+   #                      'xpath=/html/body[1]/ntp-app[1]', 'shadow',
+   #                      'css=#mostVisited', 'shadow',
+   #                      'css=#actionMenuButton'
+   #                  ],
+   #              ],
+   #            },
+   #            {
+   #              # first number is the chain number, followed by locator number
+   #              '0.0.0.0.0.0' => 'code=print "found remove button\n";',
+   #              '1.0.0.0.0.0' => 'code=print "found action button\n";',
+   #            },
+   #            "test chains",
+   #        ],
+   #     ];
 
    my $type = ref $locator2;
    if ( $type && $type eq 'HASH' && exists $locator2->{chains} ) {
@@ -377,8 +380,7 @@ sub locate {
          $element = wait_until { $finder->find($driver) };
 
          if ( !$element ) {
-            print "locate failed. matched_paths =\n",
-              Dumper( $finder->{matched_paths} );
+            print "locate failed. matched_paths =\n", Dumper( $finder->{matched_paths} );
 
             my $code = $h->{NotFound};
             if ( defined $code ) {
@@ -495,10 +497,10 @@ sub locate {
 
             $locator_driver = $shadow_root;
 
-    #for my $e ( @{$locator_driver->find_elements(':host > *', 'css')} ) {
-    #   # crashed with: Can't call method "find_elements" on unblessed reference
-    #   print tp_get_outerHTML($driver, $e), "\n";
-    #}
+            #for my $e ( @{$locator_driver->find_elements(':host > *', 'css')} ) {
+            #   # crashed with: Can't call method "find_elements" on unblessed reference
+            #   print tp_get_outerHTML($driver, $e), "\n";
+            #}
          }
       } elsif ( $locator eq 'iframe' ) {
          print "locate(): switch to iframe\n";
@@ -522,7 +524,7 @@ sub locate {
             }
             $ac->key_up( [ KEYS->{'shift'} ] );
 
-    # print "ac = ", Dumper($ac->actions); # this only print DUMMY(...), useless
+            # print "ac = ", Dumper($ac->actions); # this only print DUMMY(...), useless
 
             $ac->perform;
 
@@ -532,7 +534,7 @@ sub locate {
          }
       } elsif ( $locator =~ /^\s*(xpath|click_xpath|css|click_css)=(.+)/s ) {
 
-# xpath=//a[contains(@aria-label, "Open record: ")],xpath=//tr[contains(text(), "No records to display")]
+         # xpath=//a[contains(@aria-label, "Open record: ")],xpath=//tr[contains(text(), "No records to display")]
          my $type   = $1;
          my $string = $2;
 
@@ -543,25 +545,23 @@ sub locate {
 
          my @paths;
 
-         while (
-            $string =~ /\G(.+?)\s*,\s*(xpath|click_xpath|css|click_css)=/gcs )
-         {
+         while ( $string =~ /\G(.+?)\s*,\s*(xpath|click_xpath|css|click_css)=/gcs ) {
             # 'c' - keep the current position during repeated matching
             # 'g' - globally match the pattern repeatedly in the string
             # 's' - treat string as single line
 
-          # auto-click or not ?!
-          #    an element located by xpath is NOT the active (focused) element.
-          #    we have to click it to make it active (foucsed)
-          #
-          #    on the other side, element located by tab is the active (focused)
-          #    element
-          #
-          #    sounds like we should click on the element found by xpath.
-          #    but then if it is submit button, clicking will trigger the action
-          #    likely prematurally
-          #
-          # therefore, we introduced the click_xxxx switch
+            # auto-click or not ?!
+            #    an element located by xpath is NOT the active (focused) element.
+            #    we have to click it to make it active (foucsed)
+            #
+            #    on the other side, element located by tab is the active (focused)
+            #    element
+            #
+            #    sounds like we should click on the element found by xpath.
+            #    but then if it is submit button, clicking will trigger the action
+            #    likely prematurally
+            #
+            # therefore, we introduced the click_xxxx switch
 
             $path = $1;
             my $type2 = $2;
@@ -659,32 +659,32 @@ package tp_find_element_by_chains {
       $attr->{matched_numbers}      = undef;
       $attr->{current_matched_path} = undef;
 
-# parse chains
-#
-#  example: convert ONE chain from
-#
-# [
-#     'xpath=/html/body[1]/ntp-app[1]', 'shadow', 'css=#mostVisited', 'shadow',
-#     '
-#     css=#removeButton2,
-#     css=#actionMenuButton
-#     ',
-# ],
-#
-# into
-#
-# [
-#     [['xpath', '/html/body[1]/ntp-app[1]']], [['shadow']] , [['css', '#mostVisited']], [['shadow']] ,
-#     [['css', '#removeButton2'], ['css', '#actionMenuButton']],
-# ]
-#
+      # parse chains
+      #
+      #  example: convert ONE chain from
+      #
+      # [
+      #     'xpath=/html/body[1]/ntp-app[1]', 'shadow', 'css=#mostVisited', 'shadow',
+      #     '
+      #     css=#removeButton2,
+      #     css=#actionMenuButton
+      #     ',
+      # ],
+      #
+      # into
+      #
+      # [
+      #     [['xpath', '/html/body[1]/ntp-app[1]']], [['shadow']] , [['css', '#mostVisited']], [['shadow']] ,
+      #     [['css', '#removeButton2'], ['css', '#actionMenuButton']],
+      # ]
+      #
       for ( my $i = 0 ; $i < scalar(@$chains) ; $i++ ) {
          for my $locator ( @{ $chains->[$i] } ) {
             if ( ( $locator eq 'shadow' || $locator eq 'iframe' ) ) {
                push @{ $attr->{chains}->[$i] }, [ [$locator] ];
             } elsif ( $locator =~ /^\s*(xpath|css)=(.+)/s ) {
 
-# xpath=//a[contains(@aria-label, "Open record: ")],xpath=//tr[contains(text(), "No records to display")]
+               # xpath=//a[contains(@aria-label, "Open record: ")],xpath=//tr[contains(text(), "No records to display")]
                my $type   = $1;
                my $string = $2;
 
@@ -701,18 +701,18 @@ package tp_find_element_by_chains {
                   # 'g' - globally match the pattern repeatedly in the string
                   # 's' - treat string as single line
 
-          # auto-click or not ?!
-          #    an element located by xpath is NOT the active (focused) element.
-          #    we have to click it to make it active (foucsed)
-          #
-          #    on the other side, element located by tab is the active (focused)
-          #    element
-          #
-          #    sounds like we should click on the element found by xpath.
-          #    but then if it is submit button, clicking will trigger the action
-          #    likely prematurally
-          #
-          # therefore, we introduced the click_xxxx switch
+                  # auto-click or not ?!
+                  #    an element located by xpath is NOT the active (focused) element.
+                  #    we have to click it to make it active (foucsed)
+                  #
+                  #    on the other side, element located by tab is the active (focused)
+                  #    element
+                  #
+                  #    sounds like we should click on the element found by xpath.
+                  #    but then if it is submit button, clicking will trigger the action
+                  #    likely prematurally
+                  #
+                  # therefore, we introduced the click_xxxx switch
 
                   $path = $1;
                   my $type2 = $2;
@@ -803,7 +803,7 @@ package tp_find_element_by_chains {
                my $j                         = 0;
                for my $parallel_path (@$locator) {
 
-           # if one of the rows found, we move to next locator. otherwise, fail.
+                  # if one of the rows found, we move to next locator. otherwise, fail.
                   my ( $type, $path ) = @$parallel_path;
                   print "testing $type=$path\n" if $verbose;
                   if ( $type =~ /xpath/ ) {
@@ -848,8 +848,7 @@ package tp_find_element_by_chains {
                $e = $driver->get_active_element();
             }
 
-            print "matched_paths->[$i] = ",
-              Dumper( $self->{matched_paths}->[$i] )
+            print "matched_paths->[$i] = ", Dumper( $self->{matched_paths}->[$i] )
               if $verbose;
             $self->{current_matched_path} =
               [ @{ $self->{matched_paths}->[$i] } ];    #copy array
@@ -857,10 +856,8 @@ package tp_find_element_by_chains {
 
          if ($found_chain) {
             $e->{tpdata} = {
-               matched_chain => [ @{ $self->{matched_paths}->[$i] } ]
-               ,                                        # copy array
-               position => "$i."
-                 . join( ".", @{ $self->{matched_numbers}->[$i] } ),
+               matched_chain => [ @{ $self->{matched_paths}->[$i] } ],                      # copy array
+               position      => "$i." . join( ".", @{ $self->{matched_numbers}->[$i] } ),
             };    # monkey patch
 
             return $e;
@@ -938,12 +935,10 @@ sub send_input {
             } elsif ( $input2_type eq "ARRAY" ) {
                push @steps, @$input2;
             } else {
-               croak "input->{$position} type=$input2_type is not supported."
-                 . Dumper($input2);
+               croak "input->{$position} type=$input2_type is not supported." . Dumper($input2);
             }
          } else {
-            croak "position='$position' is not defined in input="
-              . Dumper($input);
+            croak "position='$position' is not defined in input=" . Dumper($input);
          }
       } else {
          croak "tpdata is not available from element";
@@ -1001,8 +996,7 @@ sub send_input {
             if ($value) {
                print "attr='$value'. removing it with backspaces now\n";
                my $length = length($value);
-               $driver->send_keys_to_active_element(
-                  wdkeys( 'backspace', $length ) );
+               $driver->send_keys_to_active_element( wdkeys( 'backspace', $length ) );
             }
          }
       } elsif ( $step =~ /^tab=(\d+)/ ) {
@@ -1041,8 +1035,7 @@ sub send_input {
             TPSUP::SELENIUM::dump( $driver, $output_dir, undef, $opt );
          } else {
             if ( !$element ) {
-               print
-"dump_element is called but element is undef. dump all instead\n";
+               print "dump_element is called but element is undef. dump all instead\n";
             }
             TPSUP::SELENIUM::dump( $driver, $output_dir, $element, $opt );
          }
@@ -1075,11 +1068,9 @@ sub send_input {
 
          push @paths, [ $type, $leftover ];
 
-         my $interval =
-           defined $opt->{gone_interval} ? $opt->{gone_interval} : 60;
+         my $interval = defined $opt->{gone_interval} ? $opt->{gone_interval} : 60;
 
-         print "action: wait max $interval seconds for elements gone, paths = ",
-           Dumper( \@paths );
+         print "action: wait max $interval seconds for elements gone, paths = ", Dumper( \@paths );
 
          hit_enter_to_continue() if $interactive;
 
@@ -1125,8 +1116,7 @@ sub send_input {
 
             if ($e) {
                js_print_debug( $driver, $e );
-               croak
-"at least one of the element still exists after $interval seconds";
+               croak "at least one of the element still exists after $interval seconds";
             }
          }
       } else {
@@ -1146,8 +1136,7 @@ sub locator_chain_to_js_list {
       if ( $locator =~ /^(xpath|css)=(.+)/ ) {
          my ( $ptype, $path ) = ( $1, $2 );
          if ( $ptype eq 'xpath' ) {
-            $js .=
-".evaluate(\"$path\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue";
+            $js .= ".evaluate(\"$path\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue";
          } else {    # ($ptype eq 'css') {
             $js .= ".querySelector(\"$path\")";
          }
@@ -1251,8 +1240,7 @@ sub dump {
       # this is dump_all()
       $iframe_list = $driver->find_elements( '//iframe', 'xpath' );
    } else {
-      $iframe_list =
-        tp_find_elements_from_element( $driver, $element, '//iframe', 'xpath' );
+      $iframe_list = tp_find_elements_from_element( $driver, $element, '//iframe', 'xpath' );
 
       #tp_find_elements_from_element($driver, $element, 'iframe', 'css');
    }
@@ -1285,14 +1273,14 @@ sub dump {
       dump_deeper( $driver, $iframe, $dump_state, 'iframe', $opt );
    }
 
-# get all shadow doms
-#
-# https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_shadow_DOM
-#   There are some bits of shadow DOM terminology to be aware of:
-#     Shadow host: The regular DOM node that the shadow DOM is attached to.
-#     Shadow tree: The DOM tree inside the shadow DOM.
-#     Shadow boundary: the place where the shadow DOM ends, and the regular DOM begins.
-#     Shadow root: The root node of the shadow tree.
+   # get all shadow doms
+   #
+   # https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_shadow_DOM
+   #   There are some bits of shadow DOM terminology to be aware of:
+   #     Shadow host: The regular DOM node that the shadow DOM is attached to.
+   #     Shadow tree: The DOM tree inside the shadow DOM.
+   #     Shadow boundary: the place where the shadow DOM ends, and the regular DOM begins.
+   #     Shadow root: The root node of the shadow tree.
 
    my $start_node;
    my $find_path;
@@ -1308,8 +1296,7 @@ sub dump {
       dump_deeper( $driver, $element, $dump_state, 'shadow', $opt );
    }
 
-   my $elements =
-     tp_find_elements_from_element( $driver, $start_node, $find_path, 'xpath' );
+   my $elements = tp_find_elements_from_element( $driver, $start_node, $find_path, 'xpath' );
 
    for my $e (@$elements) {
       dump_deeper( $driver, $e, $dump_state, 'shadow', $opt );
@@ -1331,8 +1318,7 @@ sub dump {
    print "total scanned $total_scan_count, for iframe $iframe_scan_count, ",
      "for shadow $shadow_scan_count, iframe can be scanned by locator, ",
      "therefore, less count\n";
-   print
-"current depth=$scan_depth, max_depth_so_far so far=$max_depth_so_far, max_exist_depth is 1 less\n";
+   print "current depth=$scan_depth, max_depth_so_far so far=$max_depth_so_far, max_exist_depth is 1 less\n";
 
    # we put the chain check at last so that we won't miss the summary
    croak "dump_state type_chain is not empty" if $scan_depth;
@@ -1358,14 +1344,11 @@ sub dump_deeper {
    if (  ( ( $total_scan_count % 100 ) == 0 )
       || ( $scan_depth >= $limit_depth ) )
    {
-      print
-"total scanned $total_scan_count, for iframe $iframe_scan_count, for shadow $shadow_scan_count\n";
-      print
-"current depth=$scan_depth, max depth so far=$max_depth_so_far, max_exist_depth is 1 less\n";
+      print "total scanned $total_scan_count, for iframe $iframe_scan_count, for shadow $shadow_scan_count\n";
+      print "current depth=$scan_depth, max depth so far=$max_depth_so_far, max_exist_depth is 1 less\n";
 
       if ( $scan_depth >= $limit_depth ) {
-         print
-"current depth=$scan_depth >= limit_depth=$limit_depth, stop going deepper\n";
+         print "current depth=$scan_depth >= limit_depth=$limit_depth, stop going deepper\n";
          return;
       }
    }
@@ -1388,8 +1371,8 @@ sub dump_deeper {
    print "dump_state = ", Dumper($dump_state);
    print "type = $type\n";
 
-# selenium.common.exceptions.StaleElementReferenceException: Message: stale element reference:
-#   element is not attached to the page document
+   # selenium.common.exceptions.StaleElementReferenceException: Message: stale element reference:
+   #   element is not attached to the page document
    my $xpath;
 
    # https://perlmaven.com/fatal-errors-in-external-modules
@@ -1515,7 +1498,7 @@ sub tp_get_url {
    if ( $opt->{accept_alert} ) {
       sleep 1;
 
-# https://stackoverflow.com/questions/14843724/selenium-perl-check-if-alert-exists
+      # https://stackoverflow.com/questions/14843724/selenium-perl-check-if-alert-exists
       eval { $driver->accept_alert; };
       if ($@) {
          warn "Maybe no alert?";
@@ -1534,11 +1517,9 @@ sub tp_get_outerHTML {
    # https://stackoverflow.com/questions/35905517
    if ( !$element ) {
       print "getting whole html\n";
-      $html =
-        $driver->execute_script("return document.documentElement.outerHTML;");
+      $html = $driver->execute_script("return document.documentElement.outerHTML;");
    } else {
-      $html =
-        $driver->execute_script( "return arguments[0].outerHTML;", $element );
+      $html = $driver->execute_script( "return arguments[0].outerHTML;", $element );
    }
 
    if ( !defined($html) ) {
@@ -1556,7 +1537,7 @@ sub human_delay {
    # default to sleep, 1, 2, or 3 seconds
    croak "min=$min is less than 0, not acceptable. min must >= 0" if $min < 0;
    croak "max=$max is less than 0, not acceptable. max must >= 0" if $max < 0;
-   croak "max ($max) < min ($min)" if $max < $min;
+   croak "max ($max) < min ($min)"                                if $max < $min;
    if ( $max == $min ) {
 
       # not random any more
@@ -1672,14 +1653,12 @@ END
 
 sub tp_find_elements_from_element {
    my ( $driver, $element, $target, $scheme, $opt ) = @_;
-   return tp_find_from_element( $driver, 'elements', $element, $target,
-      $scheme, $opt );
+   return tp_find_from_element( $driver, 'elements', $element, $target, $scheme, $opt );
 }
 
 sub tp_find_element_from_element {
    my ( $driver, $element, $target, $scheme, $opt ) = @_;
-   return tp_find_from_element( $driver, 'element', $element, $target, $scheme,
-      $opt );
+   return tp_find_from_element( $driver, 'element', $element, $target, $scheme, $opt );
 }
 
 my $js_by_key = {
@@ -1796,7 +1775,7 @@ END
       return createXPathFromElement(arguments[0], arguments[1]);   
 END
 
-# https://stackoverflow.com/questions/4588119/get-elements-css-selector-when-it-doesnt-have-an-id
+   # https://stackoverflow.com/questions/4588119/get-elements-css-selector-when-it-doesnt-have-an-id
    css => <<'END',
       if (typeof(getCssFullPath) !== 'function') {
          window.getCssFullPath = function (el) { 
@@ -1913,8 +1892,8 @@ sub get_detail {
    # innerHTML of element "pid" == welcome
    # outerHTML of element "pid" == <p id="pid">welcome</p>
 
-# perl selenimu doesn't support $element->get_attribute('innerHTML' or 'outerHTML');
-# therefore, we use this sub to get the basic idea of the the element.
+   # perl selenimu doesn't support $element->get_attribute('innerHTML' or 'outerHTML');
+   # therefore, we use this sub to get the basic idea of the the element.
 
    my @attributes = qw( id name class href value );
 
