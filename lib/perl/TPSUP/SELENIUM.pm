@@ -106,10 +106,11 @@ sub get_driver {
       }
 
       for my $ba (@$BrowserArgs) {
-
          #'--proxy-pac-url=http://pac.abc.net',
-         push @{ $browser_options->{args} }, "--$ba",;
+         push @{ $browser_options->{args} }, "--$ba";
       }
+
+      push @{ $browser_options->{args} }, "--remote-debugging-pipe";
 
 # without $browser_options->{debuggerAddress} set, chromedriver will start
 # a chrome. In this case, connection between chromedriver and chrome is likely
@@ -154,7 +155,6 @@ sub get_driver {
          # on PC in an corporate env. So we unset $DISPLAY by default. But if
          # we run the browser locally, we leave $DISPLAY alone, because broswer
          # needs $DISPLAY to launch.
-
             delete $ENV{DISPLAY};
          }
       }
