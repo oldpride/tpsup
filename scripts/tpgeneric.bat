@@ -26,7 +26,7 @@ if not defined seen_type (
 
 set "type=%seen_type%"
 
-set "cfg=%dir%/%prog%_%type%.cfg"
+set "cfg=%dir%\%prog%_%type%.cfg"
 perl "%TPSUp%/scripts/tp%type%" "%cfg%" -c "%prog%" %*
 
 
