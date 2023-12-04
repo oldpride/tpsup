@@ -291,7 +291,7 @@ sub render_arrays {
    # array of arrays only need headers when user want to render headers.
 
    # find max width for each column
-   my $i = 0;
+   my $j = 0;
    for my $r2 (@$rows) {
       my $r;
       if ( $RowType eq 'ARRAY' ) {
@@ -319,8 +319,8 @@ sub render_arrays {
          }
       }
 
-      $i++;
-      if ( $i >= $MaxRows ) {
+      $j++;
+      if ( $j >= $MaxRows ) {
          last;
       }
    }
