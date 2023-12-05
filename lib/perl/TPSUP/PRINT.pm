@@ -298,10 +298,10 @@ sub render_arrays {
       }
 
       for my $i ( 0 .. scalar(@$r) - 1 ) {
-         my $i_length = length( $r->[$i] );
+         my $i_length = defined( $r->[$i] ) ? length( $r->[$i] ) : 0;
 
          # check whether an index in a list
-         if ( $i >= scalar(@$max_by_pos) - 1 ) {
+         if ( $i >= scalar(@$max_by_pos) ) {
             if ( $MaxColumnWidth && $i_length > $MaxColumnWidth ) {
                $i_length  = $MaxColumnWidth;
                $truncated = 1;
