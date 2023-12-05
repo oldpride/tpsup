@@ -34,8 +34,7 @@ sub find_row_type {
       if ( !$previous_type ) {
          $previous_type = $row_type;
       } elsif ( $previous_type ne $row_type ) {
-         print
-"ERROR: inconsistent row type at row $i, $row_type vs $previous_type";
+         print "ERROR: inconsistent row type at row $i, $row_type vs $previous_type";
          return undef;
       }
 
@@ -188,9 +187,7 @@ sub render_arrays {
       } elsif ( $header_type eq 'ARRAY' ) {
          $headers = $headers2;
       } else {
-         croak
-           "unsupported header type: $header_type. can only be ARRAY or string."
-           . Dumper($headers2);
+         croak "unsupported header type: $header_type. can only be ARRAY or string." . Dumper($headers2);
       }
 
       for my $h (@$headers) {
@@ -304,7 +301,7 @@ sub render_arrays {
          my $i_length = length( $r->[$i] );
 
          # check whether an index in a list
-         if ( $i >= scalar(@$max_by_pos) ) {
+         if ( $i >= scalar(@$max_by_pos) - 1 ) {
             if ( $MaxColumnWidth && $i_length > $MaxColumnWidth ) {
                $i_length  = $MaxColumnWidth;
                $truncated = 1;
@@ -384,8 +381,7 @@ sub render_arrays {
    }
 
    if ($truncated) {
-      print $out_fh
-        "some columns were truncated to MaxColumnWidth=$MaxColumnWidth\n";
+      print $out_fh "some columns were truncated to MaxColumnWidth=$MaxColumnWidth\n";
    }
 
    return;
@@ -398,17 +394,10 @@ sub main {
    #     once used only once: possible typo at /home/tian/perl5/lib/perl5/TPSUP/PRINT.pm line 10.
    no warnings 'once';
 
-   $DUMMY::rows1 = [
-      [ 'name',       'age' ],
-      [ 'tian',       '36' ],
-      [ 'olenstroff', '40', 'will discuss later' ],
-      [ 'john',       '30' ], ['mary'],
-   ];
+   $DUMMY::rows1 =
+     [ [ 'name', 'age' ], [ 'tian', '36' ], [ 'olenstroff', '40', 'will discuss later' ], [ 'john', '30' ], ['mary'], ];
 
-   $DUMMY::rows2 = [
-      { 'name' => 'tian', 'age'     => '36' },
-      { 'name' => 'john', 'comment' => 'friend of tian' },
-   ];
+   $DUMMY::rows2 = [ { 'name' => 'tian', 'age' => '36' }, { 'name' => 'john', 'comment' => 'friend of tian' }, ];
 
    my $test_code = <<'END';
     TPSUP::PRINT::find_row_type($rows1);
