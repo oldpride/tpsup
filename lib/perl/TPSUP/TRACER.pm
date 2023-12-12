@@ -1513,6 +1513,7 @@ EOF
             MaxColumnWidth  => $MaxColumnWidth,
             PrintCsvMaxRows => $Top,
             headers         => \@headers,
+            RenderHeader => 1,
          }
       );
       print "\n";
