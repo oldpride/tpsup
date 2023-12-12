@@ -315,29 +315,29 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
 #         print()
 
 
-# def string_short(obj, top: int = 5, maxlen: int = 200, **opt):
-#     # print the first top rows of obj
-#     if isinstance(obj, list):
-#         rows = obj
-#     elif isinstance(obj, str):
-#         rows = obj.splitlines()
-#     else:
-#         return pformat(obj)
+def string_short(obj, top: int = 5, maxlen: int = 200, **opt):
+    # print the first top rows of obj
+    if isinstance(obj, list):
+        rows = obj
+    elif isinstance(obj, str):
+        rows = obj.splitlines()
+    else:
+        return pformat(obj)
 
-#     rows2 = []
-#     for r in rows[:top]:
-#         if isinstance(r, str):
-#             if len(r) > maxlen:
-#                 r = r[0:maxlen] + f'..(truncated at {maxlen}'
-#             rows2.append(r)
-#         else:
-#             rows2.append(pformat(r))
+    rows2 = []
+    for r in rows[:top]:
+        if isinstance(r, str):
+            if len(r) > maxlen:
+                r = r[0:maxlen] + f'..(truncated at {maxlen}'
+            rows2.append(r)
+        else:
+            rows2.append(pformat(r))
 
-#     if len(rows) > top:
-#         rows2.append(
-#             f"(total {len(rows)} lines, only show the first {top} lines)")
+    if len(rows) > top:
+        rows2.append(
+            f"(total {len(rows)} lines, only show the first {top} lines)")
 
-#     return '\n'.join(rows2)
+    return '\n'.join(rows2)
 
 
 def print_short(obj, desc: str = '', **opt):
