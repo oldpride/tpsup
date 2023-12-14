@@ -1,0 +1,29 @@
+#!/bin/bash
+
+help () {
+   cat <<END
+   
+    see https://gitee.com/xucs007/cxterm/blob/master/README.md
+
+    F6     - pinyin
+    space  - select the first choice.
+    escape - back to english
+
+END
+   exit 1
+}
+
+locale_dir="/var/lib/locales/supported.d"
+locale_file="$locale_dir/local"
+
+if ! [ -f $locale_file ]; then
+   echo "missing $locale_file"
+   help
+fi
+
+if ! grep zh_CN.GB2312 $locale_file >/dev/null; then
+   echo "missing h_CN.GB2312 in $locale_file"
+   help
+fi
+
+CHAR_ENCODING=GB LC_CTYPE=zh_CN.GB2312 exec cxterm "$@"
