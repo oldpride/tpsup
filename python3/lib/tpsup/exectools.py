@@ -408,6 +408,8 @@ def main():
     print(
         (f'test eval_block(source) = {eval_block(source, globals(), locals())}'))
 
+    # the downside of using array instead of function to manage test codes
+    # is missing syntax check.
     test_codes = [
         # the following will pass compile():
         'print(f"test unknown var {unknown_var}")',  # undefined var

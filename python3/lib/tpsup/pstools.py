@@ -5,6 +5,7 @@ import subprocess
 import platform
 import re
 
+
 def prog_running(basename, printOutput=0,  verbose=0):
     if verbose:
         sys.stderr.write(f'Find any running {basename}\n')
@@ -28,7 +29,8 @@ def prog_running(basename, printOutput=0,  verbose=0):
     # https://stackoverflow.com/questions/13332268/how-to-use-subprocess-command-with-pipes
 
     # output = subprocess.check_output(cmdArray).decode()
-    ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    ps = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output = ps.communicate()[0].decode()
 
     if printOutput:
@@ -43,7 +45,8 @@ def prog_running(basename, printOutput=0,  verbose=0):
         # because Fail message could be translated
         return last_line.lower().startswith(basename.lower())
 
-def pid_alive(pid:int):
+
+def pid_alive(pid: int):
     """ Check For whether a pid is alive """
 
     system = platform.uname().system
@@ -55,7 +58,8 @@ def pid_alive(pid:int):
         else:
             return True
     elif re.search('Windows', system, re.IGNORECASE):
-        out = subprocess.check_output(["tasklist","/fi",f"PID eq {pid}"]).strip()
+        out = subprocess.check_output(
+            ["tasklist", "/fi", f"PID eq {pid}"]).strip()
         # b'INFO: No tasks are running which match the specified criteria.'
 
         if re.search(b'No tasks', out, re.IGNORECASE):
@@ -92,27 +96,39 @@ def ps_grep_basename(basename: str, **opt):
     os.system(cmd)
 
 
-
 def main():
-    print("--------- test ps_grep_basename() -----------------")
-    ps_grep_basename('pycharm', verbose=1)
+    # print("--------- test ps_grep_basename() -----------------")
+    # ps_grep_basename('pycharm', verbose=1)
 
-    print("--------- test pid_alive() -----------------")
+    # print("--------- test pid_alive() -----------------")
+    # good_pid = os.getpid()
+    # if pid_alive(good_pid):
+    #     print(f"OK:    good_pid={good_pid} is alive")
+    # else:
+    #     print(f"ERROR: good_pid={good_pid} is NOT alive")
+
+    # bad_pid = 1111111
+    # if not pid_alive(bad_pid):
+    #     print(f"OK:    bad_pid={bad_pid} is NOT alive")
+    # else:
+    #     print(f"ERROR: bad_pid={bad_pid} is alive")
+
+    # test = f'prog_running("chrome", printOutput=1)'
+    # print(f'---- test {test} -----')
+    # print(f'result={eval(test)}')
+
     good_pid = os.getpid()
-    if pid_alive(good_pid):
-        print(f"OK:    good_pid={good_pid} is alive")
-    else:
-        print(f"ERROR: good_pid={good_pid} is NOT alive")
-
     bad_pid = 1111111
-    if not pid_alive(bad_pid):
-        print(f"OK:    bad_pid={bad_pid} is NOT alive")
-    else:
-        print(f"ERROR: bad_pid={bad_pid} is alive")
 
-    test = f'prog_running("chrome", printOutput=1)'
-    print(f'---- test {test} -----')
-    print(f'result={eval(test)}')
+    def test_codes():
+        ps_grep_basename('pycharm', verbose=1)
+        pid_alive(good_pid)
+        pid_alive(bad_pid)
+        prog_running("chrome", printOutput=1)
+
+    from tpsup.exectools import test_lines
+    test_lines(test_codes, source_globals=globals(), source_locals=locals())
+
 
 if __name__ == '__main__':
     main()

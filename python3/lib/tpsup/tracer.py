@@ -34,7 +34,7 @@ def parse_input(input: Union[list, str], **opt):
 
     for pair in input:
         if re.match(r'any|check', pair, re.IGNORECASE):
-            return ref
+            continue
         elif pair_pattern.match(pair):
             key, value = pair_pattern.match(pair).groups()
             # convert key to upper case so that user can use both upper case and lower case

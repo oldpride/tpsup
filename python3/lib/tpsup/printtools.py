@@ -317,6 +317,7 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
 
 def string_short(obj, top: int = 5, maxlen: int = 200, **opt):
     # print the first top rows of obj
+    # used by pttrace.py
     if isinstance(obj, list):
         rows = obj
     elif isinstance(obj, str):
