@@ -222,12 +222,13 @@ sub render_arrays {
          my $i = 0;
          for my $r ( @$rows[ $start_row .. $#$rows ] ) {
             for my $j ( 0 .. scalar(@$r) - 1 ) {
+               my $v = $r->[$j];
+               $v = "" if !defined($v);
                if ( $j < $num_headers ) {
-                  printf $out_fh "%-25s '%s'\n", $headers->[$j], $r->[$j];
+                  printf $out_fh "%-25s '%s'\n", $headers->[$j], $v;
                } else {
-
                   # repeating chars
-                  printf $out_fh "%-25s '%s'\n", ' ', $r->[$j];
+                  printf $out_fh "%-25s '%s'\n", ' ', $v;
                }
             }
             print $out_fh "\n";    # blank line
@@ -244,7 +245,7 @@ sub render_arrays {
          my $i = 0;
          for my $r (@$rows) {
             for my $k (@$headers) {
-               printf $out_fh "%-25s '%s'\n", $k, $r->{$k} ? $r->{$k} : '';
+               printf $out_fh "%-25s '%s'\n", $k, defined( $r->{$k} ) ? $r->{$k} : '';
             }
 
             print $out_fh "\n";    # blank line
