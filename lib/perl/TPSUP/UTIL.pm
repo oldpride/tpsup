@@ -38,9 +38,6 @@ our @EXPORT_OK = qw(
   resolve_string_in_env
   should_do_it
   hit_enter_to_continue
-  binary_search_numeric
-  render_arrays_deco
-  Print_ArrayOfHashes_Vertically_deco
   looper
   get_items
   get_value_by_key_case_insensitive
@@ -1279,227 +1276,6 @@ sub glob2regex {
    return $regex;
 }
 
-sub binary_search_numeric {
-   my ( $target, $aref, $begin, $end, $opt ) = @_;
-
-   if ( $target < $aref->[$begin] ) {
-      confess "binary_search_numeric: target='$target' fell out the lower bound '$aref->[$begin]'\n";
-
-   } elsif ( $target > $aref->[$end] ) {
-      confess "binary_search_numeric: target='$target' over the upper bound '$aref->[$end]'\n";
-   }
-
-   while (1) {
-      if ( $begin + 1 < $end ) {
-         my $mid = int( ( $begin + $end ) / 2 );
-
-         if ( $target < $aref->[$mid] ) {
-            $end = $mid;
-            next;
-         } elsif ( $target > $aref->[$mid] ) {
-            $begin = $mid;
-            next;
-         } else {
-            return $mid;
-         }
-      } elsif ( $begin + 1 == $end ) {
-
-         # nothing in between
-         if ( $target == $aref->[$end] ) {
-            return $end;
-         } elsif ( $target == $aref->[$begin] ) {
-            return $begin;
-         } elsif ( $opt->{WhenInBetween}
-            && $opt->{WhenInBetween} eq 'ChooseBigger' )
-         {
-            return $end;
-         } else {
-            return $begin;
-         }
-      } else {
-
-         # $begin == $end
-         return $end;
-      }
-   }
-}
-
-sub render_arrays_deco {
-   my ( $rows, $opt ) = @_;
-
-   if ($rows) {
-      my $type = ref $rows;
-      croak "wrong ref type '$type'. expecting 'ARRAY'" if $type ne 'ARRAY';
-   }
-
-   return if !@$rows;
-
-   my $out_fh;
-   if ( $opt->{interactive} ) {
-      my $cmd = "less -S";
-
-      open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
-   } elsif ( $opt->{out_fh} ) {
-      $out_fh = $opt->{out_fh};
-   } else {
-      $out_fh = \*STDOUT;
-   }
-
-   if ( $opt->{Vertical} ) {
-
-      # when vertically print the arrays, we need at least 2 rows, with the first
-      # as the header
-      #    name: tian
-      #     age: 36
-      #
-      #    name: john
-      #     age: 30
-      return if @$rows < 2;
-
-      my $headers = $rows->[0];
-
-      my $num_columns = scalar(@$headers);
-
-      for ( my $i = 1 ; $i < scalar(@$rows) ; $i++ ) {
-         my $r = $rows->[$i];
-         for ( my $j = 0 ; $j < $num_columns ; $j++ ) {
-            printf {$out_fh} "%25s '%s'\n",
-              defined( $headers->[$j] ) ? $headers->[$j] : '',
-              defined( $r->[$j] )       ? $r->[$j]       : '';
-         }
-         print "\n";
-      }
-
-      return;
-   }
-
-   my $max_by_pos = [];
-
-   for my $r (@$rows) {
-      for ( my $i = 0 ; $i < scalar(@$r) ; $i++ ) {
-         my $len = length( $r->[$i] );
-
-         if ( !$max_by_pos->[$i] ) {
-            $max_by_pos->[$i] = $len;
-         } elsif ( $max_by_pos->[$i] < $len ) {
-            $max_by_pos->[$i] = $len;
-         }
-      }
-   }
-
-   my $num_fields = scalar(@$max_by_pos);
-
-   my $MaxColumnWidth = $opt->{MaxColumnWidth};
-
-   if ( $opt->{RenderHeader} ) {
-      my $r = shift(@$rows);
-
-      render_one_row( $r, $max_by_pos, $out_fh, $opt );
-
-      # print {$out_fh} the bar right under the header
-      my $length = 3 * ( $num_fields - 1 );
-
-      for ( my $i = 0 ; $i < $num_fields ; $i++ ) {
-         my $max =
-           defined($MaxColumnWidth)
-           && $max_by_pos->[$i] > $MaxColumnWidth
-           ? $MaxColumnWidth
-           : $max_by_pos->[$i];
-         $length += $max;
-      }
-
-      print {$out_fh} +( '=' x $length ), "\n";
-   }
-
-   for my $r (@$rows) {
-      render_one_row( $r, $max_by_pos, $out_fh, $opt );
-   }
-
-   close $out_fh if $out_fh != \*STDOUT && !$opt->{out_fh};
-
-   if ( defined($MaxColumnWidth) ) {
-      my $truncated;
-      for ( my $i = 0 ; $i < $num_fields ; $i++ ) {
-         if ( $MaxColumnWidth < $max_by_pos->[$i] ) {
-            $truncated++;
-            last;
-         }
-      }
-      print STDERR "$truncated columns were truncated to MaxColumnWidth=$MaxColumnWidth\n"
-        if $truncated;
-   }
-}
-
-sub render_one_row_deco {
-   my ( $r, $max_by_pos, $out_fh, $opt ) = @_;
-
-   my $verbose = $opt->{verbose} ? $opt->{verbose} : 0;
-
-   my $MaxColumnWidth = $opt->{MaxColumnWidth};
-
-   my $num_fields = scalar(@$r);
-
-   my @truncated;
-
-   for ( my $i = 0 ; $i < $num_fields ; $i++ ) {
-      my $max =
-        defined($MaxColumnWidth)
-        && $max_by_pos->[$i] > $MaxColumnWidth
-        ? $MaxColumnWidth
-        : $max_by_pos->[$i];
-
-      my $v = defined( $r->[$i] ) ? "$r->[$i]" : "";
-
-      my $v2;
-      if ( length($v) > $max ) {
-         push @truncated, $i;
-         $v2 = substr( $v, 0, $max - 2 ) . '..';
-      } else {
-         $v2 = $v;
-      }
-
-      my $buffLen = $max - length($v2);
-
-      print {$out_fh} ' | ', unless $i == 0;
-
-      print {$out_fh} +( ' ' x $buffLen ), $v2;
-   }
-
-   print {$out_fh} "\n";
-
-   $verbose && print "(truncated at column: ", join( ",", @truncated ), ")\n";
-}
-
-sub Print_ArrayOfHashes_Vertically_deco {
-   my ( $aref, $opt ) = @_;
-
-   return if !$aref || !@$aref;
-
-   my $headers;
-
-   if ( $opt->{headers} ) {
-
-      # user-specified headers can be a ref of array or a string
-      my $type = ref $opt->{headers};
-
-      if ( $type eq 'ARRAY' ) {
-         $headers = $opt->{headers};
-      } else {
-         @$headers = split /,/, $opt->{headers};
-      }
-   } else {
-      @$headers = sort( keys( %{ $aref->[0] } ) );
-   }
-
-   my $out_fh = $opt->{out_fh} ? $opt->{out_fh} : \*STDOUT;
-
-   for my $r (@$aref) {
-      for my $c (@$headers) {
-         printf "%25s '%s'\n", $c, defined( $r->{$c} ) ? $r->{$c} : '';
-      }
-      print "\n";
-   }
-}
 
 # generator/iterator to loop through fh or array
 sub looper {
@@ -2250,47 +2026,7 @@ sub sort_pattern {
 }
 
 sub main {
-   print "\n------------------------------------------------\n";
-   print "test binary search\n";
-   my $aref = [ -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ];
-
-   eval {
-      print "binary_search_numeric 5.5 = ",
-        binary_search_numeric( 5.5, $aref, 0, scalar( @$aref - 1 ) ),
-        ", expecting 6\n\n";
-   };
-
-   eval { binary_search_numeric( 15, $aref, 0, scalar( @$aref - 1 ) ) };
-   print $@;
-
-   eval { binary_search_numeric( -5, $aref, 0, scalar( @$aref - 1 ) ) };
-   print $@;
-
-   # print "\n------------------------------------------------\n";
-   # print "test render_arrays()\n";
-   # {
-   #    my $a = [
-   #       [ 'name', 'age' ],
-   #       [ 'john', 50, 'non-smoker' ],
-   #       [ 'judy', 49, 'smoker' ],
-   #       [ 'ava',  16 ],
-   #       ['michael'],
-   #    ];
-   #    render_arrays($a);
-   #    render_arrays( $a, { Vertical => 1 } );
-   # }
-
-   # print "\n------------------------------------------------\n";
-   # print "test Print_ArrayOfHashes_Vertically()\n";
-   # {
-   #    my $aref = [
-   #       { name => 'tian', age => 36, ranking => 'solider' },
-   #       { name => 'john', age => 30, ranking => 'general' },
-   #    ];
-   #    Print_ArrayOfHashes_Vertically( $aref,
-   #       { headers => "name,age,ranking" } );
-   # }
-
+   
    print "\n------------------------------------------------\n";
    print "test resolve_string_in_env()\n";
    my @strings = ( '$HOME/junk', '>>$HOME/junk', '<$HOME/junk', '$HOME/`date +%Y%m%d`.log', );
@@ -2433,6 +2169,8 @@ jkl
       print "a = ", Dumper( \@a );
       print "sort_pattern = ", Dumper( sort_pattern( \@a, '^...(\d+).dat', { numeric => 1, verbose => 1 } ) ), "\n";
    }
+
+
 }
 
 main() unless caller();

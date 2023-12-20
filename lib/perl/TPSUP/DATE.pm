@@ -33,7 +33,8 @@ our @EXPORT_OK = qw(
 use Carp;
 use Data::Dumper;
 use TPSUP::CSV  qw(parse_csv_file);
-use TPSUP::UTIL qw(binary_search_numeric);
+# use TPSUP::UTIL qw(binary_search_numeric);
+use TPSUP::SEARCH qw(binary_search_match);
 use TPSUP::FILE qw(get_in_fh);
 use Time::Local;
 use File::Spec;
@@ -447,15 +448,21 @@ sub get_tradeday_by_exch_begin_offset {
    }
 
  # if the binary search falls between two connective trade days, eg, on weekends
-   my $ChooseBigger = undef;
+   # my $ChooseBigger = undef;
+   my $UseClosest = 'low';
    if ( $opt->{OnWeekend} && $opt->{OnWeekend} eq 'next' ) {
-      $ChooseBigger = 'ChooseBigger';
+      # $ChooseBigger = 'ChooseBigger';
+      $UseClosest = 'high';
    }
 
-   my $begin_weekday_pos = binary_search_numeric(
-      $begin, $weekdays, 0,
-      scalar(@$weekdays) - 1,
-      { WhenInBetween => $ChooseBigger }
+   # my $begin_weekday_pos = binary_search_numeric(
+   #    $begin, $weekdays, 0,
+   #    scalar(@$weekdays) - 1,
+   #    { WhenInBetween => $ChooseBigger }
+   # );
+   my $begin_weekday_pos = binary_search_match(
+      $weekdays, $begin, sub { $_[0] <=> $_[1] },
+      { UseClosest => $UseClosest }
    );
    my $begin_weekday = $weekdays->[$begin_weekday_pos];
    $opt->{verbose} && print "begin_weekday=$begin_weekday\n";

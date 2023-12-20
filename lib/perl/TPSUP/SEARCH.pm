@@ -13,10 +13,32 @@ use Carp;
 use Data::Dumper;
 
 sub binary_search_match {
-    my ( $arr, $target, $compare_func ) = @_;
+    my ( $arr, $target, $compare_func, $opt ) = @_;
 
-    my $low  = 0;
-    my $high = scalar(@$arr) - 1;
+    my $verbose = $opt->{verbose};
+
+    my $low0  = 0;
+    my $high0 = scalar(@$arr) - 1;
+
+    if (defined($opt->{low})) {
+        if ($opt->{low} < 0) {
+            croak "low cannot be negative";
+        }
+        $low0 = $opt->{low};
+    }
+
+    if (defined($opt->{high})) {
+        if ($opt->{high} > $high0) {
+            croak "high cannot be larger than the size of the array";
+        }
+        $high0 = $opt->{high};
+    }
+
+
+    my $low = $low0;
+    my $high = $high0;
+
+    
 
     while ( $low <= $high ) {
         my $mid = int( ( $low + $high ) / 2 );
@@ -34,6 +56,38 @@ sub binary_search_match {
         }
     }
 
+    # at this point, $low > $high
+    if ($low > $high0) {
+        if ($verbose) {
+            print STDERR "target $target is larger than the largest element in the array\n";
+        }
+        if ($opt->{UseClosest}) {
+            return $high0;
+        }
+    } elsif ($high < $low0) {
+        if ($verbose) {
+            print STDERR "target $target is smaller than the smallest element in the array\n";
+        }
+        if ($opt->{UseClosest}) {
+            return $low0;
+        }
+    } else {
+        # target is in between 2 elements;
+        if ($verbose) {
+            print STDERR "target $target is in between 2 elements\n";
+        }
+        if ($opt->{UseClosest}) {
+            if ($opt->{UseClosest} eq 'low') {
+                return $high; # remember at this point, $low > $high
+            } else {
+                return $low;
+            }
+        }
+    }
+  
+    if ($verbose) {
+        print STDERR "target $target is not in the array. consider set flag 'UseClosest'\n";
+    }
     return -1;
 }
 
@@ -65,6 +119,11 @@ sub main {
     my $test_code = <<'END';
         our @arr = (1, 2,  4,  10, 12); # use "our" to make it global. "my" will not work.
         TPSUP::SEARCH::binary_search_match(\@arr, 10, sub { $_[0] <=> $_[1] });
+        TPSUP::SEARCH::binary_search_match(\@arr, 9, sub { $_[0] <=> $_[1] }, {verbose=>1, UseClosest=>'low'});
+        TPSUP::SEARCH::binary_search_match(\@arr, 9, sub { $_[0] <=> $_[1] }, {verbose=>1, UseClosest=>'high'});
+        TPSUP::SEARCH::binary_search_match(\@arr, 15, sub { $_[0] <=> $_[1] }, {verbose=>1, UseClosest=>'high'});
+        TPSUP::SEARCH::binary_search_match(\@arr, 0, sub { $_[0] <=> $_[1] }, {verbose=>1, UseClosest=>'low'});
+        
         TPSUP::SEARCH::binary_search_first(\@arr, sub { $_[0] >= 4 });
 END
 
