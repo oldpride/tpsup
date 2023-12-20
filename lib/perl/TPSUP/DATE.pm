@@ -33,7 +33,6 @@ our @EXPORT_OK = qw(
 use Carp;
 use Data::Dumper;
 use TPSUP::CSV  qw(parse_csv_file);
-# use TPSUP::UTIL qw(binary_search_numeric);
 use TPSUP::SEARCH qw(binary_search_match);
 use TPSUP::FILE qw(get_in_fh);
 use Time::Local;
@@ -455,11 +454,6 @@ sub get_tradeday_by_exch_begin_offset {
       $UseClosest = 'high';
    }
 
-   # my $begin_weekday_pos = binary_search_numeric(
-   #    $begin, $weekdays, 0,
-   #    scalar(@$weekdays) - 1,
-   #    { WhenInBetween => $ChooseBigger }
-   # );
    my $begin_weekday_pos = binary_search_match(
       $weekdays, $begin, sub { $_[0] <=> $_[1] },
       { UseClosest => $UseClosest }
