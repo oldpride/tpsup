@@ -17,6 +17,20 @@ sub binary_search_match {
 
     my $verbose = $opt->{verbose};
 
+    my $compare_type = ref($compare_func);
+    my $compare_usage = "compare_func must be either a string ('<=>', 'numeric', 'cmp', 'string'), or a code reference.";
+    if (! $compare_type) {
+        if ($compare_func eq '<=>' || $compare_func eq 'numeric') {
+            $compare_func = sub { $_[0] <=> $_[1] };
+        } elsif ($compare_func eq 'cmp' || $compare_func eq 'string') {
+            $compare_func = sub { $_[0] cmp $_[1] };
+        } else {
+            croak $compare_usage . "yours is a string '$compare_func'";
+        }
+    } elsif ( $compare_type ne 'CODE' ) {
+        croak $compare_usage . "your type is '$compare_type'";
+    }
+
     my $low0  = 0;
     my $high0 = scalar(@$arr) - 1;
 
@@ -124,6 +138,13 @@ sub main {
         TPSUP::SEARCH::binary_search_match(\@arr, 15, sub { $_[0] <=> $_[1] }, {verbose=>1, UseClosest=>'high'});
         TPSUP::SEARCH::binary_search_match(\@arr, 0, sub { $_[0] <=> $_[1] }, {verbose=>1, UseClosest=>'low'});
         
+        TPSUP::SEARCH::binary_search_match(\@arr, 10, 'numeric');
+        TPSUP::SEARCH::binary_search_match(['a', 'b', 'c', 'd', 'e'], 'd', 'string');
+
+        TPSUP::SEARCH::binary_search_match(\@arr, 10, 'string'); # not sorted, not working
+        TPSUP::SEARCH::binary_search_match(['1', '2', '4', '10', '12'], '10', 'string'); # not sorted, not working
+        TPSUP::SEARCH::binary_search_match([ sort {$a cmp $b} @arr], 10, 'string'); # sorted, working
+
         TPSUP::SEARCH::binary_search_first(\@arr, sub { $_[0] >= 4 });
 END
 

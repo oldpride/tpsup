@@ -1090,9 +1090,17 @@ sub sort_unique {
 
    #$in_arrays is a ref to array of arrays
 
+   my $type1 = ref $in_arrays;
+   croak "wrong array type='$type1' when calling sort_unique(). expecting ARRAY of ARRAY"
+     if !$type1 || $type1 ne 'ARRAY';
+
    my $seen;
 
    for my $in_array (@$in_arrays) {
+      my $type2 = ref $in_array;
+      croak "wrong element type='$type2' when calling sort_unique(). expecting ARRAY of ARRAY"
+        if !$type2 || $type2 ne 'ARRAY';
+
       for my $e (@$in_array) {
          $seen->{$e}++;
       }
@@ -2070,7 +2078,9 @@ sub main {
       our %known;
       eval `cat $ENV{TPSUP}/scripts/tptrace_test_trace.cfg`;
       TPSUP::UTIL::get_node_list( $our_cfg, '$our_cfg' );
-   
+
+      TPSUP::UTIL::sort_unique( [ [ 1, 2, 3 ], [ 2, 3, 4 ], [ 3, 4, 5 ] ] );
+      #TPSUP::UTIL::sort_unique( [ 1, 2, 3, 3]); # wrong type; will fail
 END
 
    test_lines($test_code);
