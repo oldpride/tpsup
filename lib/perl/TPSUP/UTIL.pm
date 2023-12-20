@@ -1276,7 +1276,6 @@ sub glob2regex {
    return $regex;
 }
 
-
 # generator/iterator to loop through fh or array
 sub looper {
    my ( $input, $opt ) = @_;
@@ -1536,7 +1535,7 @@ sub get_node_list {
    my $type = ref($addr);
 
    if ( !$type || ( $type ne 'ARRAY' && $type ne 'HASH' ) ) {
-      push @pairs, ( "$path" => $addr );
+      push @pairs, { "$path" => $addr };
    } elsif ( $type eq 'ARRAY' ) {
       croak "get_node_list() reached maxdepth $max_depth"
         if $depth >= $max_depth;
@@ -2026,33 +2025,55 @@ sub sort_pattern {
 }
 
 sub main {
+   use TPSUP::TEST qw(test_lines);
+
+   # for multiple lines of a declaration, do it outside of the test code; and put it into DUMMY namespace.
+   $DUMMY::h = {
+         a => "hello",
+         b => {
+            c => "world",
+            d => 1,
+         },
+         e => [qw(kingdom comes)],
+         f => [ { g => 'galois' } ],
+         j => sub { sleep 1 },
+      };
+
+
+   my $test_code = <<'END';
+      TPSUP::UTIL::convert_to_uppercase( $h, { ConvertKey   => 1 } );
+      TPSUP::UTIL::convert_to_uppercase( $h, { ConvertValue => 1 } );
+      TPSUP::UTIL::convert_to_uppercase( $h, { ConvertKey   => 1, ConvertValue => 1 } );
+
+      TPSUP::UTIL::resolve_string_in_env('$HOME/junk');
+      TPSUP::UTIL::resolve_string_in_env('>>$HOME/junk');
+      TPSUP::UTIL::resolve_string_in_env('<$HOME/junk');
+      TPSUP::UTIL::resolve_string_in_env('$HOME/`date +%Y%m%d`.log');
+      TPSUP::UTIL::get_items("UTIL_test_get_items.txt", { InlineDelimiter => '\s+' }); # multiple per line
+      TPSUP::UTIL::get_items("UTIL_test_get_items.txt"); # one per line
+
+      our @a = ( "abc12.dat", "abc1.dat", "abc2.dat", "abc9.dat", "abc101.dat", );
+      TPSUP::UTIL::sort_pattern( \@a, '^...(\d+).dat', { numeric => 1, verbose => 1 } );
+
+      TPSUP::UTIL::gen_combinations_from_a( [1,2,3,4], 2 );
+      TPSUP::UTIL::gen_combinations_from_aa( [[ 1, 2 ], [ 'A', 'B' ], [ 'a', 'b' ]] );
+
+      TPSUP::UTIL::get_value_by_key_case_insensitive( { bottom => 3, top => 4 }, 'Top', { default => 5 } );
+
+      TPSUP::UTIL::get_first_by_key([ {a=> 1,b=>2},{bottom=> 3, top=>4} ],'Top', {default=>5,verbose=>1});
+
+      TPSUP::UTIL::unify_hash( {'TRADEID'=>'.+?', 'FILLEDQTY'=>{pattern =>'\d+', numeric=>1}}, 'pattern');
    
-   print "\n------------------------------------------------\n";
-   print "test resolve_string_in_env()\n";
-   my @strings = ( '$HOME/junk', '>>$HOME/junk', '<$HOME/junk', '$HOME/`date +%Y%m%d`.log', );
+      TPSUP::UTIL::tp_join( ["no_need_wrapping", "has space", "'already wrapped'", "isn't wrapped"] );
 
-   for my $s (@strings) {
-      print "resolve_string_in_env($s) = ", resolve_string_in_env($s), "\n";
-   }
+      our $our_cfg;
+      our %known;
+      eval `cat $ENV{TPSUP}/scripts/tptrace_test_trace.cfg`;
+      TPSUP::UTIL::get_node_list( $our_cfg, '$our_cfg' );
+   
+END
 
-   print "\n------------------------------------------------\n";
-   print "test get_file_stamp('/etc/profile')\n";
-
-   # print Dumper(lstat('/etc/.profile')), "\n";
-
-   print "\n------------------------------------------------\n";
-   print "test get_items(), multiple per line\n";
-   {
-      my $a = get_items( "UTIL_test_get_items.txt", { InlineDelimiter => '\s+' } );
-      print join( "\n", @$a ), "\n";
-   }
-
-   print "\n------------------------------------------------\n";
-   print "test get_items(), one per line\n";
-   {
-      my $a = get_items("UTIL_test_get_items.txt");
-      print join( "\n", @$a ), "\n";
-   }
+   test_lines($test_code);
 
    print "\n------------------------------------------------\n";
    print "test get_items() on array, multiple items per element\n";
@@ -2069,107 +2090,6 @@ jkl
       my $a     = get_items( \@array, { InlineDelimiter => '\s+' } );
       print join( "\n", @$a ), "\n";
    }
-
-   print "\n------------------------------------------------\n";
-   print "test get_node_list() on array\n";
-   {
-      our $all_cfg;
-      our %known;
-
-      my $code          = `cat $ENV{TPSUP}/scripts/tptrace_test.cfg`;
-      my $numbered_code = add_line_number_to_code($code);
-      eval $code;
-      if ($@) {
-         croak "failed to compile: $numbered_code\n$@";
-      }
-
-      my $node_list = get_node_list( $all_cfg, '$all_cfg' );
-      print "node_list = ", Dumper($node_list);
-   }
-
-   print "\n------------------------------------------------\n";
-   print "test unify_hash() on array\n";
-   {
-
-      my $old_key_pattern = {
-         'TRADEID'   => '.+?',
-         'FILLEDQTY' => { pattern => '\d+', numeric => 1 },
-      };
-
-      my $new_key_pattern = unify_hash( $old_key_pattern, 'pattern' );
-
-      print "old = ", Dumper($old_key_pattern);
-      print "new = ", Dumper($new_key_pattern);
-   }
-
-   print "\n------------------------------------------------\n";
-   print "test get_value_by_key_case_insensitive/get_first_by_key\n";
-   {
-      my $href1 = { a      => 1, b   => 2 };
-      my $href2 = { bottom => 3, top => 4 };
-
-      print "get_value_by_key_case_insensitive() = ",
-        get_value_by_key_case_insensitive( $href2, 'Top', { default => 5 } ),
-        "\n";
-      print "get_first_by_key() = ",
-        get_first_by_key(
-         [ $href1, $href2 ],
-         'Top',
-         {
-            default => 5,
-            verbose => 1
-         }
-        ),
-        "\n";
-   }
-
-   print "\n------------------------------------------------\n";
-   {
-      my $h = {
-         a => "hello",
-         b => {
-            c => "world",
-            d => 1,
-         },
-         e => [qw(kingdom comes)],
-         f => [ { g => 'galois' } ],
-         j => sub { sleep 1 },
-      };
-
-      print "test uppcase_hash original = ", Dumper($h);
-      print "key only = ",      Dumper( convert_to_uppercase( $h, { ConvertKey   => 1 } ) );
-      print "value only = ",    Dumper( convert_to_uppercase( $h, { ConvertValue => 1 } ) );
-      print "key and value = ", Dumper( convert_to_uppercase( $h, { ConvertKey   => 1, ConvertValue => 1 } ) );
-   }
-
-   print "\n------------------------------------------------\n";
-   {
-      my @a = ( "no_need_wrapping", "has space", "'already wrapped'", "isn't wrapped" );
-      print "original = ", Dumper( \@a );
-      print "tp_join = ", tp_join( \@a ), "\n";
-   }
-
-   print "\n------------------------------------------------\n";
-   {
-      my @a = ( 1, 2, 3, 4 );
-      print "a = ", Dumper( \@a );
-      print "gen_combinations_from_a(\\\@a, 2) = ", Dumper( gen_combinations_from_a( \@a, 2 ) ), "\n";
-   }
-
-   print "\n------------------------------------------------\n";
-   {
-      my @a = ( [ 1, 2 ], [ 'A', 'B' ], [ 'a', 'b' ] );
-      print "a = ", Dumper( \@a );
-      print "gen_combinations_from_aa = ", Dumper( gen_combinations_from_aa( \@a ) ), "\n";
-   }
-
-   print "\n------------------------------------------------\n";
-   {
-      my @a = ( "abc12.dat", "abc1.dat", "abc2.dat", "abc9.dat", "abc101.dat", );
-      print "a = ", Dumper( \@a );
-      print "sort_pattern = ", Dumper( sort_pattern( \@a, '^...(\d+).dat', { numeric => 1, verbose => 1 } ) ), "\n";
-   }
-
 
 }
 
