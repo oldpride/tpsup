@@ -448,15 +448,15 @@ sub get_tradeday_by_exch_begin_offset {
 
  # if the binary search falls between two connective trade days, eg, on weekends
    # my $ChooseBigger = undef;
-   my $UseClosest = 'low';
+   my $InBetween = 'low';
    if ( $opt->{OnWeekend} && $opt->{OnWeekend} eq 'next' ) {
       # $ChooseBigger = 'ChooseBigger';
-      $UseClosest = 'high';
+      $InBetween= 'high';
    }
 
    my $begin_weekday_pos = binary_search_match(
       $weekdays, $begin, sub { $_[0] <=> $_[1] },
-      { UseClosest => $UseClosest }
+      { InBetween => $InBetween, OutBound => 'Error'}
    );
    my $begin_weekday = $weekdays->[$begin_weekday_pos];
    $opt->{verbose} && print "begin_weekday=$begin_weekday\n";
