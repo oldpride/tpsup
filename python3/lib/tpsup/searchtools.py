@@ -19,9 +19,16 @@ def binary_search_match(arr: List[Any], x: Any,
     """
     if isinstance(compare, str):
         if compare == 'cmp' or compare == 'string':
-            def compare(a, b): return a - b
+            def compare(a, b):
+                if a < b:
+                    return -1
+                elif a > b:
+                    return 1
+                else:
+                    return 0
         elif compare == '<=>' or compare == 'numeric':
             def compare(a, b): return a - b
+            # compare = lambda a, b: a - b
         else:
             raise Exception(
                 f'unknown compare method {compare}. only support str, int or a function')
@@ -134,10 +141,11 @@ def binary_search_first(arr: List[Any], testfunc: Callable[[Any], int]) -> int:
 
 def main():
     arr = [1, 2, 4, 10, 12]
+    arr2 = ['a', 'b', 'c', 'd', 'e']
 
     from tpsup.filetools import tpglob
     TPSUP = os.environ.get('TPSUP')
-    arr2 = tpglob(f'{TPSUP}/python3/lib/tpsup/searchtools_test*.txt')
+    arr3 = tpglob(f'{TPSUP}/python3/lib/tpsup/searchtools_test*.txt')
     from tpsup.greptools import tpgrep
 
     def grep2(file):
@@ -145,13 +153,15 @@ def main():
 
     def test_codes():
         binary_search_match(arr, 10, 'numeric')  # expect 3
+        binary_search_match(arr2, 'd', 'string')  # expect 3
+
         binary_search_first(arr, lambda a: a > 4)  # expect 3
 
         binary_search_match(arr, 15, 'numeric')  # expect -1
         binary_search_match(arr, 15, 'numeric', OutBound='UseClosest')  # 4
         binary_search_match(arr, 9, 'numeric', InBetween='low')  # 2
 
-        binary_search_first(arr2, grep2)  # 3
+        binary_search_first(arr3, grep2)  # 3
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
