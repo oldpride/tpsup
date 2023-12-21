@@ -68,13 +68,13 @@ sub binary_search_match {
    # at this point, $low > $high
    if ( $low > $high0 ) {
       if ($verbose) {
-         print STDERR "target $target is larger than the largest element in the array\n";
+         print STDERR "target $target is after the last element in the array\n";
       }
       if ( $opt->{OutBound} ) {
          if ( $opt->{OutBound} eq 'UseClosest' ) {
             return $high0;
          } elsif ( $opt->{OutBound} eq 'Error' ) {
-            croak "target $target is larger than the largest element in the array";
+            croak "target $target is after the last element in the array";
          } else {
             croak "'OutBound' must be either 'UseClosest' or 'Error'. Yours is '$opt->{OutBound}'";
          }
@@ -83,13 +83,13 @@ sub binary_search_match {
       }
    } elsif ( $high < $low0 ) {
         if ($verbose) {
-             print STDERR "target $target is smaller than the smallest element in the array\n";
+             print STDERR "target $target is before the first element in the array\n";
         }
         if ( $opt->{OutBound} ) {
              if ( $opt->{OutBound} eq 'UseClosest' ) {
                 return $low0;
              } elsif ( $opt->{OutBound} eq 'Error' ) {
-                croak "target $target is smaller than the smallest element in the array";
+                croak "target $target is before the first element in the array";
              } else {
                 croak "'OutBound' must be either 'UseClosest' or 'Error'. Yours is '$opt->{OutBound}'";
              }
