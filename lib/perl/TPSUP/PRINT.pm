@@ -195,7 +195,14 @@ sub render_arrays {
       }
    }
 
-   my $MaxRows = $opt->{MaxRows} || scalar(@$rows);
+   my $MaxRows= $opt->{MaxRows};
+   if (defined $MaxRows) {
+      if ( $MaxRows > scalar(@$rows)) {
+         $MaxRows = scalar(@$rows);
+      }
+   } else {
+      $MaxRows = scalar(@$rows);
+   }
 
    if ( $opt->{Vertical} ) {
       if ( $RowType eq 'ARRAY' ) {
@@ -340,6 +347,9 @@ sub render_arrays {
             $range_start = 1;
 
             if ( $opt->{MaxRows} ) {
+               # we need to check $opt->{MaxRows}, not just $MaxRows. Because $MaxRows was set without
+               # considering the header row. 
+               # if we take out the first row as header, then we need to print 1 more row from the array.
                $range_end =
                    $opt->{MaxRows} > $#{$rows} - 1
                  ? $#{$rows} - 1
