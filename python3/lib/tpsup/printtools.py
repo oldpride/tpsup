@@ -250,6 +250,8 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
         if headers is None:
             if RowType == list:
                 headers = rows[0]
+                # if we take the first row as header
+                # then we print one more row at bottom.
                 range_start = 1
                 range_end = MaxRows + 1
             # else:  # RowType == dict
