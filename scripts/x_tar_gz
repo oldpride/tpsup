@@ -74,8 +74,16 @@ open my $ifh, "$cmd|" or die "cmd=$cmd failed: $!, $?";
 my @members;
 my $seen;
 
+my $count = 0;
+
 LINE:
 while ( my $line = <$ifh> ) {
+   $count++;
+
+   if ( $count % 1000 == 0 ) {
+      print STDERR "$count lines processed\n";
+   }
+
    chomp $line;
    $line =~ s:/$::;    # remove trailing /
 
