@@ -13,10 +13,12 @@ set "backup_base=D:\backup\"
 set "backup_dir=%backup_base%\%yyyymmdd%\github\"
 set "backup_log=%backup_base%\%yyyymmdd%\github.log"
 
+echo "copy files to archive"
 mkdir "%backup_base%\%yyyymmdd%" || goto :error
 
 xcopy "%source%" "%backup_dir%" /s /e /y /exclude:%TPSUP%\cmd_exe\backup_github_locally_ex.txt >> %backup_log% 2>&1 || goto :error
 
+echo "delete old files"
 cd /D "%backup_base%" || goto :error
 REM https://stackoverflow.com/questions/5497211/batch-file-to-delete-folders-older-than-10-days-in-windows-7
 REM FORFILES /D -20 /M 20* /C "cmd /c echo @path"

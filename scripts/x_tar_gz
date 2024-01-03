@@ -1,0 +1,112 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(should_do_it);
+use File::Basename;
+use Cwd 'abs_path';
+
+my $prog = $0;
+$prog =~ s:.*/::;
+my $scriptdir = dirname( abs_path($0) );
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+Usage:
+
+   $prog file.tar.gz    pattern1 pattern2 ...
+   $prog file.tar       pattern1 pattern2 ...
+
+   -n        dryrun
+   -v        verbose
+   -f        force without asking
+
+   extract files by pattern
+
+Examples:
+
+   cd /tmp; $prog $scriptdir/x_tar_gz_test.tar.gz b2
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $dryrun;
+my $force;
+
+GetOptions(
+   'v|verbose' => \$verbose,
+   'n'         => \$dryrun,
+   'f|force'   => \$force,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV < 2;
+
+my $arch = shift @ARGV;
+
+my @compiled;
+
+for my $p (@ARGV) {
+   push @compiled, qr/$p/;
+}
+
+my $cmd;
+my $cmd2;
+if ( $arch =~ /gz$/ ) {
+   $cmd  = "gunzip -c $arch|tar -tf -";
+   $cmd2 = "gunzip -c $arch|tar -xvf -";
+} else {
+   $cmd  = "tar -tf $arch";
+   $cmd2 = "tar -xvf $arch";
+}
+
+open my $ifh, "$cmd|" or die "cmd=$cmd failed: $!, $?";
+
+my @members;
+my $seen;
+
+LINE:
+while ( my $line = <$ifh> ) {
+   chomp $line;
+   $line =~ s:/$::;    # remove trailing /
+
+   for my $p (@compiled) {
+      next if $line !~ /$p/;
+
+      my @a = split /\//, $line;
+
+      for ( my $i = scalar(@a) - 1 ; $i > 0 ; $i-- ) {
+         my $parent = join "/", @a[ 0 .. $i - 1 ];
+         $verbose && print "line=$line parent=$parent\n";
+         if ( $seen->{$parent} ) {
+            # this path is under a parent
+            $verbose && print "$line is under $parent. skipped\n";
+            next LINE;
+
+         }
+      }
+
+      push @members, $line;
+      $seen->{$line} = 1;
+
+      next LINE;
+   }
+}
+
+close $ifh;
+
+$cmd2 .= " " . join " ", @members;
+print "$cmd2\n";
+if ( should_do_it( { DRYRUN => $dryrun, FORCE => $force } ) ) {
+   system($cmd2);
+}
+
