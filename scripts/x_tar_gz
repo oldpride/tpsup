@@ -81,7 +81,7 @@ while ( my $line = <$ifh> ) {
    $count++;
 
    if ( $count % 1000 == 0 ) {
-      print STDERR "$count lines processed\n";
+      print "$count lines processed\n";
    }
 
    chomp $line;
@@ -103,6 +103,7 @@ while ( my $line = <$ifh> ) {
          }
       }
 
+      print "added $line to members\n";
       push @members, $line;
       $seen->{$line} = 1;
 
