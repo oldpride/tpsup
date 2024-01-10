@@ -344,6 +344,64 @@ my $entity_syntax = {
    ],
 };
 
+sub resolve_files {
+   my ( $cfg, $files_k, $opt ) = @_;
+
+   my $files_v = get_value_by_key_case_insensitive( $cfg, $files_k );
+
+   if ( !$files_v ) {
+      croak "cannot find key='$files_k' (case-insensitive) in cfg=", Dumper($cfg);
+   }
+
+   # file => '/a/app.log /b/app.log' # multiple files, space separated
+   # file => [ '/a/app.log', '/b/app.log' ] # multiple files using array
+   # file => '{{adir}}/app.log}} {{bdir}}/app.log' # with vars
+   # file => 'get_logs()' # paths are returned by a expression
+   # file => '"/a/app.log"' # path returned by expressiobn
+   # file => ['/cygdrive/c/program files/a/app.log']   # use array to specify path containing space
+   # file => '"/cygdrive/c/program files/a/app.log"'   # use expression (str) for path containing space
+
+   my @files;
+   my $type = ref $files_v;
+   if ( !$type ) {
+      # if user used string, try to split by space.
+      my $resolved = resolve_scalar_var_in_string( $files_v, { %known, %vars } );
+      @files = split /\s+/, $resolved;
+   } elsif ( $type eq 'ARRAY' ) {
+      # if user used ARRAY, don't split it by space.
+      for my $f (@$files_v) {
+         my $resolved = resolve_scalar_var_in_string( $f, { %known, %vars } );
+         push @files, $resolved;
+      }
+   } else {
+      croak "unsupported type='$type' at files_v=" . Dumper($files_v);
+   }
+
+   # print "files = ", Dumper(@files);
+   # exit 1;
+
+   my @files2;
+   for my $f (@files) {
+      if ( $f =~ /^['"]*\// ) {
+         # this is a full path
+         #  /a/app.log
+         #  "/a/app.log"
+         #  '/a/app.log'
+         push @files2, $f;
+      } else {
+         # this is a expression
+         my $resolved = resolve_a_clause( $f, { %known, %vars }, $opt );
+         push @files2, $resolved;
+      }
+   }
+
+   my $files_str = '"' . join( '" "', @files2 ) . '"';
+
+   croak "attr='file' is not resolved to any files at cfg=" . Dumper($cfg) if !$files_str;
+
+   return $files_str;
+}
+
 sub process_cmd {
    my ( $entity, $method_cfg, $opt ) = @_;
 
@@ -361,10 +419,7 @@ sub process_cmd {
    } elsif ( $method_cfg->{type} eq 'cmd' ) {
       $cmd = $method_cfg->{value};
    } elsif ( $method_cfg->{type} eq 'grep_keys' ) {
-      my $file = get_value_by_key_case_insensitive( $method_cfg, 'file' );
-      croak "attr='file' is not defined at method_cfg=" . Dumper($method_cfg)
-        if !defined $file;
-      $file = resolve_scalar_var_in_string( $file, { %known, %vars } );
+      my $files_str = resolve_files( $method_cfg, 'file' );
 
       my $grep_keys = get_value_by_key_case_insensitive( $method_cfg, 'value' );
       croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg)
@@ -415,9 +470,9 @@ sub process_cmd {
       # zgrep -E is like egrep
 
       if ( $logic eq 'OR' ) {
-         $cmd = "$grep '" . join( '|', @patterns ) . "' $file";
+         $cmd = "$grep '" . join( '|', @patterns ) . "' $files_str";
       } elsif ( $logic =~ /AND/i ) {
-         $patterns[0] = "$grep '$patterns[0]' $file";
+         $patterns[0] = "$grep '$patterns[0]' $files_str";
          $cmd = join( " | egrep ", @patterns );
       } else {
          croak "unsupported logic='$logic' at cmd = " . Dumper($method_cfg);
@@ -437,7 +492,7 @@ sub process_cmd {
       #       ['cmd=grep -v -E "{{JUNK1=j1}}|{{JUNK2=j2}}"'],
       #       ['cmd=tail -10'],
       #    ],
-      #    file => 'app.log',
+      #    file => '/a/app.log',
       # },
       #
       #  if only $known{OR11}, $known{OR12}, $known{OR21} are defined, this will generate
@@ -446,12 +501,7 @@ sub process_cmd {
       #  other value:
       #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
 
-      my $file = get_value_by_key_case_insensitive( $method_cfg, 'file' );
-      if ( !defined $file ) {
-         print "attr='file' is not defined at method_cfg=" . Dumper($method_cfg);
-      } else {
-         $file = resolve_scalar_var_in_string( $file, { %known, %vars } );
-      }
+      my $files_str = resolve_files( $method_cfg, 'file' );
 
       my $rows = get_value_by_key_case_insensitive( $method_cfg, 'value' );
       croak "attr='value' is not defined at method_cfg=" . Dumper($method_cfg)
@@ -544,7 +594,7 @@ sub process_cmd {
          if ( !@commands ) {
 
             # for first command
-            $cmd2 .= " $file" if defined $file;
+            $cmd2 .= " $files_str" if defined $files_str;
          }
          push @commands, $cmd2;
       }
@@ -1513,7 +1563,7 @@ EOF
             MaxColumnWidth  => $MaxColumnWidth,
             PrintCsvMaxRows => $Top,
             headers         => \@headers,
-            RenderHeader => 1,
+            RenderHeader    => 1,
          }
       );
       print "\n";

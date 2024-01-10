@@ -40,6 +40,10 @@ def tpgrep(files: Union[list, str],
 
     files2 = [r['path'] for r in found["hashes"]]
 
+    if '-' in files:
+        # tpfind will throw away '-' because it is not a file. we need to add it back
+        files2.append('-')
+
     print_filename = len(files2) > 1
 
     if verbose:
@@ -58,6 +62,8 @@ def tpgrep(files: Union[list, str],
         ExcludePatterns2 = [ExcludePattern]
     else:
         ExcludePatterns2 = []
+    # print(f'MatchPatterns2={MatchPatterns2}', file=sys.stderr)
+    # print(f'ExcludePatterns2={ExcludePatterns2}', file=sys.stderr)  # toremove
 
     MatchCompiled = []
     if MatchPatterns2:
@@ -101,6 +107,8 @@ def tpgrep(files: Union[list, str],
                     if ExcludeCompiled:
                         for p in ExcludeCompiled:
                             if p.search(line):
+                                # print(f'exclude {f}:{line}',
+                                #       file=sys.stderr)  # toremove
                                 to_exclude = True
                                 break
                     if to_exclude:

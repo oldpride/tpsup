@@ -184,6 +184,65 @@ def process_code(entity: str, method_cfg: dict, **opt):
     return
 
 
+def resolve_files(cfg: dict, files_k: str, **opt):
+    files_v = get_value_by_key_case_insensitive(cfg, files_k)
+
+    global vars, known
+
+    if not files_v:
+        raise Exception(
+            f"cannot find key='{files_k}' (case-insensitive) in cfg={pformat(cfg)}")
+
+    # file => '/a/app.log /b/app.log' # multiple files, space separated
+    # file => [ '/a/app.log', '/b/app.log' ] # multiple files using array
+    # file => '{{adir}}/app.log}} {{bdir}}/app.log' # with vars
+    # file => 'get_logs()' # paths are returned by a expression
+    # file => '"/a/app.log"' # path returned by expressiobn
+    # file => ['/cygdrive/c/program files/a/app.log']   # use array to specify path containing space
+    # file => '"/cygdrive/c/program files/a/app.log"'   # use expression (str) for path containing space
+
+    files = []
+    v_type = type(files_v)
+    if v_type == str:
+        # if user used string, try to split by space.
+        resolved = resolve_scalar_var_in_string(files_v, {**known, **vars})
+        files = re.split(r'\s+', resolved)
+    elif v_type == list:
+        # if user used ARRAY, don't split it by space.
+        for f in files_v:
+            resolved = resolve_scalar_var_in_string(f, {**known, **vars})
+            files.append(resolved)
+    else:
+        raise Exception(
+            f"unsupported type='{v_type}' at files_v={pformat(files_v)}")
+
+    # print(f"files = {pformat(files)}")
+    # exit(1)
+
+    path_pattern = re.compile(r'^[\'"]*\/|^.*[\'"]*[a-z]:', re.IGNORECASE)
+    # this is a full path
+    #  /a/app.log
+    #  C:/Program Files/a/app.log
+    #  "/a/app.log"
+    #  '/a/app.log'
+    files2 = []
+    for f in files:
+        if path_pattern.match(f):
+            files2.append(f)
+        else:
+            # this is a expression
+            resolved = resolve_a_clause(f, {**opt, **known, **vars}, **opt)
+            files2.append(resolved)
+
+    files_str = '"' + '" "'.join(files2) + '"'
+
+    if not files_str:
+        raise RuntimeError(
+            f"attr='file' is not resolved to any files at cfg={pformat(cfg)}")
+
+    return files_str
+
+
 def process_cmd(entity: str, method_cfg: dict, **opt):
     verbose = opt.get('verbose', 0)
 
@@ -200,12 +259,7 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
     elif method_type == 'cmd':
         cmd = method_cfg.get('value', None)
     elif method_type == 'grep_keys':
-        file = get_value_by_key_case_insensitive(
-            method_cfg, 'file', default=None)
-        if file is None:
-            raise Exception(
-                f"attr='file' is not defined at method_cfg={pformat(method_cfg)}")
-        file = resolve_scalar_var_in_string(file, {**opt, **known, **vars})
+        files_str = resolve_files(method_cfg, 'file', **opt)
 
         grep_keys = get_value_by_key_case_insensitive(
             method_cfg, 'value', default=None)
@@ -270,9 +324,9 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
         # use double-quotes "" to wrap pattern and file name because
         # in windows, only double quotes does grouping on command line (cmd.exe)
         if f"{logic}".upper() == 'OR':
-            cmd = f'{grep} "' + '|'.join(patterns) + f'" {file}'
+            cmd = f'{grep} "' + '|'.join(patterns) + f'" {files_str}'
         elif f"{logic}".upper() == 'AND':
-            cmd = f'{grep} "{patterns[0]}" {file} | {grep} ' + \
+            cmd = f'{grep} "{patterns[0]}" {files_str} | {grep} ' + \
                 '"' + f'" | {grep} "'.join(patterns[1:]) + '"'
         else:
             raise Exception(
@@ -300,12 +354,7 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
         #  other value:
         #      ['tpgrepl=tpgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
 
-        file = get_value_by_key_case_insensitive(
-            method_cfg, 'file', default=None)
-        if file is None:
-            raise Exception(
-                f"attr='file' is not defined at method_cfg={pformat(method_cfg)}")
-        file = resolve_scalar_var_in_string(file, {**opt, **known, **vars})
+        files_str = resolve_files(method_cfg, 'file', **opt)
 
         rows = get_value_by_key_case_insensitive(
             method_cfg, 'value', default=None)
@@ -403,8 +452,8 @@ def process_cmd(entity: str, method_cfg: dict, **opt):
 
             if not commands:
                 # for first command
-                if file is not None:
-                    cmd2 += f' "{file}"'
+                if files_str is not None:
+                    cmd2 += f' {files_str}'
             commands.append(cmd2)
 
         if not commands:

@@ -55,7 +55,7 @@ our_cfg = {
         'applog_cmd_grep_keys': {
             'method': 'cmd',
             'vars': [
-                'log', '"{{cfgdir}}/tptrace_test.log"',
+                'log', '"{{cfgdir}}/pttrace_test.log"',
             ],
 
             'method_cfg': {
@@ -83,7 +83,7 @@ our_cfg = {
         'applog_cmd_pipe': {
             'method': 'cmd',
             'vars': [
-                'log', '"{{cfgdir}}/tptrace_test.log"',
+                'log', '"{{cfgdir}}/pttrace_test.log"',
             ],
 
             'method_cfg': {
@@ -108,12 +108,12 @@ our_cfg = {
                 #    grep -E '{{OR11}}|{{OR12}}' app.log |grep -v -E '{{OR21}}'|grep -v "j1|j2"|tail -10
                 #
                 #  other value:
-                #      ['pygrepl=pygrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
+                #      ['ptgrepl=ptgrepl', 'TRADEID|ORDERID', 'x=BOOKID'],
 
                 'value': [
-                    ['grep=pygrep', 'TRADEID', 'ORDERID'],
-                    ['grep=pygrep -v', 'BOOKID'],
-                    ['cmd=pygrep -v "{{JUNK=junk1}}|{{JUNK=junk2}}"'],
+                    ['grep=ptgrep', 'TRADEID', 'ORDERID'],
+                    ['grep=ptgrep -v', 'BOOKID'],
+                    ['cmd=ptgrep -v "{{JUNK=junk1}}|{{JUNK=junk2}}"'],
                 ],
                 'file': '{{log}}',
             },
@@ -134,12 +134,12 @@ our_cfg = {
         'applog_cmd_post_code': {
             'method': 'cmd',
             'vars': [
-                'log', '"{{cfgdir}}/tptrace_test.log"',
+                'log', '"{{cfgdir}}/pttrace_test.log"',
             ],
 
             'method_cfg': {
                 'type': 'cmd',
-                'value': 'pygrep -E " (ERROR|FAIL)[ :]" {{log}}',
+                'value': 'ptgrep -E " (ERROR|FAIL)[ :]" {{log}}',
             },
 
             'top': 5,
@@ -246,7 +246,7 @@ our_cfg = {
             'AllowMultiple': 1,
             'top': 1,
             # to test:
-            #     tptrace_test -t actions orderid=ORD-0001
+            #     pttrace_test -t actions orderid=ORD-0001
         },
 
         'booking': {
@@ -295,7 +295,7 @@ our_cfg = {
         'applog_log': {
             'method': 'log',
             'method_cfg': {
-                'log': '"{{cfgdir}}/tptrace_test.log"',
+                'log': '"{{cfgdir}}/pttrace_test.log"',
                 # named groups
                 # https://docs.python.org/3/library/re.html#regular-expression-syntax
                 # https://stackoverflow.com/questions/10059673
@@ -312,7 +312,7 @@ our_cfg = {
         'applog_section': {
             'method': 'section',
             'method_cfg': {
-                'log': '"{{cfgdir}}/tptrace_test_section*.log"',
+                'log': '"{{cfgdir}}/pttrace_test_section*.log"',
 
                 # PreMatch/PreExclude are tried before BeginPattern/EndPattern are tried
                 # they are for speedup, it covers every line, therefore, be careful to
@@ -370,14 +370,14 @@ our_cfg = {
             'method': 'path',
             'method_cfg': {
                 'paths': ['{{cfgdir}}'],
-                'MatchExps': ['"tptrace_test" in r["short"]'],
-                # 'HandleExps': ['$short =~ /tptrace_test/'],    # default to 1
+                'MatchExps': ['"pttrace_test" in r["short"]'],
+                # 'HandleExps': ['$short =~ /pttrace_test/'],    # default to 1
                 # 'RecursiveMax': 2,                         # depth. default to 100
                 'find_ls': 1,
             },
             'output_key': 'short',      # use short file name to convert @hashes to %hash1
             'code': '''
-                short = "tptrace_test_cfg_trace.py"
+                short = "pttrace_test_cfg_trace.py"
                 if short in hash1:
                     mtime_local = hash1[short][0]['mtimel']
                     if re.search(r'{{YYYY}}{{MM}}{{DD}}', mtime_local):
@@ -475,5 +475,5 @@ def get_log_example(arg1, known):
 
     import os
     TPSUP = os.environ.get('TPSUP')
-    log = f'{TPSUP}/scripts/tptrace_test.log'
+    log = f'{TPSUP}/scripts/pttrace_test.log'
     return log

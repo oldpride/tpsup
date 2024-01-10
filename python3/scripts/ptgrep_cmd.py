@@ -25,6 +25,9 @@ examples = textwrap.dedent(f"""
         {prog}    "abc1|def2" ptgrep_test*
         {prog} "^(abc1|def2)" ptgrep_test*
 
+        echo "abc1" | {prog} abc
+        echo "abc1" | {prog} -v abc
+
         # match multiple patterns in any order. use -m to specify extra patterns
         {prog} -m ab c1 ptgrep_test*
         # if we used normal egrep, we would have to do
