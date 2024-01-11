@@ -182,5 +182,5 @@ def post_batch(all_cfg, known, **opt):
     global driver
     print(f'running post batch')
     driver.quit()
-    if tpsup.pstools.prog_running('chromed', printOutput=1):
+    if tpsup.pstools.ps_grep('chromed', printOutput=1):
         print(f"seeing leftover chrome")

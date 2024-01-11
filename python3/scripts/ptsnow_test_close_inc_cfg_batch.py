@@ -176,5 +176,5 @@ def post_batch(all_cfg, known, **opt):
     print(f'running post batch')
     driver = all_cfg['resources']['selenium']['driver']
     driver.quit()
-    if tpsup.pstools.prog_running('chromedriver', printOutput=1):
+    if tpsup.pstools.ps_grep('chromedriver', printOutput=1):
         print(f"seeing leftover chromedriver")

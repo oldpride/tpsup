@@ -190,5 +190,5 @@ from code(), opt =
 #     print(f'running post batch')
 #     driver = all_cfg['resources']['selenium']['driver']
 #     driver.quit()
-#     if tpsup.pstools.prog_running('chrome', printOutput=1):
+#     if tpsup.pstools.ps_grep('chrome', printOutput=1):
 #         print(f"seeing leftover chrome")

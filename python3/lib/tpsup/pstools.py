@@ -6,18 +6,28 @@ import platform
 import re
 
 
-def prog_running(basename, printOutput=0,  verbose=0):
+def ps_grep(pattern, printOutput=1,  verbose=0):
     if verbose:
-        sys.stderr.write(f'Find any running {basename}\n')
+        sys.stderr.write(f'Find any running {pattern}\n')
+
+    compiled_pattern = re.compile(pattern, re.IGNORECASE)
 
     env = tpsup.envtools.Env()
 
     # "ps -ef" in GitBash and Cygwin can only see its own processes
     # if env.isLinux or env.isGitBash or env.isCygwin:
-    if env.isLinux:
-        cmd = f'ps -ef | grep -i {basename} | grep -v grep'
+    if env.isLinux or env.isDarwin:
+        # cmd = f'ps -ef | grep -i {pattern} | grep -v grep'
+        cmd = f'ps -ef'
     elif env.isWindows:
-        cmd = f'tasklist /fi "Imagename eq {basename}*"'
+        # tasklist doesn't support regex
+        # cmd = f'tasklist /fi "Imagename eq {pattern}*"'
+
+        # this is slow, taking about 20 seconds
+        # cmd = f'tasklist /v /fo csv'
+
+        # this is fast, taking about 1 second
+        cmd = 'PowerShell -command "get-process"'
     else:
         raise RuntimeError(f"unsupported os {env.uname}")
 
@@ -33,17 +43,28 @@ def prog_running(basename, printOutput=0,  verbose=0):
         cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output = ps.communicate()[0].decode()
 
+    # if printOutput:
+    #     print(output)
+
+    # # check in last line for process name
+    # last_line = output.strip().split('\r\n')[-1]
+    # if env.isLinux:
+    #     return last_line.lower().find(basename.lower()) != -1
+    # else:
+    #     # because Fail message could be translated
+    #     return last_line.lower().startswith(pattern.lower())
+
+    # pattern match
+    matched_lines = []
+    for line in (output.strip().split('\r\n')):
+        if compiled_pattern.search(line):
+            matched_lines.append(line)
+
     if printOutput:
-        print(output)
+        for line in matched_lines:
+            print(line)
 
-    # check in last line for process name
-    last_line = output.strip().split('\r\n')[-1]
-
-    if env.isLinux:
-        return last_line.lower().find(basename.lower()) != -1
-    else:
-        # because Fail message could be translated
-        return last_line.lower().startswith(basename.lower())
+    return matched_lines
 
 
 def pid_alive(pid: int):
@@ -70,61 +91,15 @@ def pid_alive(pid: int):
         raise RuntimeError(f"unsupported system={system}")
 
 
-def ps_grep_basename(basename: str, **opt):
-    verbose = opt.get('verbose', 0)
-
-    if verbose:
-        sys.stderr.write(f'Find any running {basename}\n')
-
-    env = opt.get('env', None)
-
-    if env is None:
-        env = tpsup.envtools.Env()
-
-    # "ps -ef" in GitBash and Cygwin can only see its own processes
-    # if env.isLinux or env.isGitBash or env.isCygwin:
-    if env.isLinux:
-        cmd = f'ps -ef|grep -i {basename}|grep -v grep'
-    elif env.isWindows:
-        cmd = f'tasklist /fi "Imagename eq {basename}*"'
-    else:
-        raise RuntimeError(f"unsupported os {env.uname}")
-
-    if verbose:
-        env.adapt()
-        sys.stderr.write(f"{cmd}\n")
-    os.system(cmd)
-
-
 def main():
-    # print("--------- test ps_grep_basename() -----------------")
-    # ps_grep_basename('pycharm', verbose=1)
-
-    # print("--------- test pid_alive() -----------------")
-    # good_pid = os.getpid()
-    # if pid_alive(good_pid):
-    #     print(f"OK:    good_pid={good_pid} is alive")
-    # else:
-    #     print(f"ERROR: good_pid={good_pid} is NOT alive")
-
-    # bad_pid = 1111111
-    # if not pid_alive(bad_pid):
-    #     print(f"OK:    bad_pid={bad_pid} is NOT alive")
-    # else:
-    #     print(f"ERROR: bad_pid={bad_pid} is alive")
-
-    # test = f'prog_running("chrome", printOutput=1)'
-    # print(f'---- test {test} -----')
-    # print(f'result={eval(test)}')
 
     good_pid = os.getpid()
     bad_pid = 1111111
 
     def test_codes():
-        ps_grep_basename('pycharm', verbose=1)
         pid_alive(good_pid)
         pid_alive(bad_pid)
-        prog_running("chrome", printOutput=1)
+        ps_grep("chrome|code|pycharm")
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())

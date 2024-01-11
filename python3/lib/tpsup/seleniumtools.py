@@ -422,7 +422,7 @@ class SeleniumEnv:
 
     def print_running_drivers(self):
         driver_basename = os.path.basename(self.driver_exe)
-        tpsup.pstools.ps_grep_basename(
+        tpsup.pstools.ps_grep(
             driver_basename, env=self.env, verbose=self.verbose
         )
 
@@ -2585,7 +2585,7 @@ def post_batch(all_cfg, known, **opt):
 
     print(f"check if chromedriver is still running")
     my_env = tpsup.envtools.Env()
-    if tpsup.pstools.prog_running("chromedriver", printOutput=1):
+    if tpsup.pstools.ps_grep("chromedriver", printOutput=1):
         print(f"seeing leftover chromedriver, kill it")
         if my_env.isWindows:
             cmd = f"pkill chromedriver"

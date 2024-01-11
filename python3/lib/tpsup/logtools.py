@@ -155,33 +155,31 @@ def rotate_log(file: str, size: int = 1024*1024, count: int = 1, **opt):
 
 
 def main():
-    print()
-    print("----------------------------------------")
-    print("test log_FileFuncLine")
-    log_FileFuncLine("This is a test")
-
-    print()
-    print("----------------------------------------")
-    print("test logger")
     logger = get_logger()
-    logger.debug("This is a debug log")
-    logger.info("This is an info log")
-    logger.critical("This is critical")
-    logger.error("An error occurred")
-
-    logger.setLevel(level='WARN')
-    logger.info("I should not see this line")
-
     # logging.basicConfig(level="DEBUG")
     logger2 = get_logger('new')
-    logger2.info("I should see this line")
 
-    print()
-    print("\n------ test tplog")
-    tplog("hello world")
+    test_obj = {'a': 1, 'b': 2}
 
-    print("\n------ test a short version of tplog")
-    tplog("hello world", prefix="time")
+    def test_codes():
+        log_FileFuncLine("This is a test")
+
+        logger.debug("This is a debug log")
+        logger.info("This is an info log")
+        logger.critical("This is critical")
+        logger.error("An error occurred")
+
+        logger.setLevel(level='WARN')
+        logger.info("I should not see this line")
+        logger2.info("I should see this line")
+
+        tplog("hello world")
+        tplog("hello world", prefix="time")
+
+        log_FileFuncLineObj('test_obj', test_obj)
+
+    from tpsup.exectools import test_lines
+    test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
     print("\n------ test print_exception")
     try:
@@ -211,12 +209,6 @@ def main():
         tpsup.filetools.ls_l(f'{testfile}*')
         print('rotating...')
         rotate_log(testfile, count=i, size=99, verbose=2)
-
-    print()
-    print("-----------------------------------------")
-    print("test log_FileFuncLineObj")
-    test_obj = {'a': 1, 'b': 2}
-    log_FileFuncLineObj('test_obj', test_obj)
 
 
 if __name__ == '__main__':

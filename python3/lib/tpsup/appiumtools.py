@@ -799,7 +799,7 @@ def check_proc(**opt):
     for proc in ["qemu-system-x86_64.exe", "node.exe", "adb.exe"]:
         print(f"check if {proc} is still running")
         my_env = tpsup.envtools.Env()
-        if tpsup.pstools.prog_running(f"{proc}", printOutput=1):
+        if tpsup.pstools.ps_grep(f"{proc}", printOutput=1):
             print(f"seeing leftover {proc}")
             # try not to kill it because it takes time to start up
             if opt.get('kill', False):
