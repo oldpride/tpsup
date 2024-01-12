@@ -26,4 +26,12 @@ if ! grep zh_CN.GB2312 $locale_file >/dev/null; then
    help
 fi
 
-CHAR_ENCODING=GB LC_CTYPE=zh_CN.GB2312 exec cxterm "$@"
+CHAR_ENCODING=GB LC_CTYPE=zh_CN.GB2312 exec cxterm \
+      -xrm 'cxterm*selectToClipboard: true' \
+      -xrm 'cxterm.vt100.translations: #override \n\
+           <Btn1Down>: select-start(CLIPBOARD) \n\
+           <Btn1Up>: select-end(CLIPBOARD) \n\
+           <Btn3Down>: insert-selection(CLIPBOARD) \n\
+      ' \
+      "$@"
+
