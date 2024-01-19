@@ -1561,7 +1561,7 @@ EOF
          {
             %$opt,
             MaxColumnWidth  => $MaxColumnWidth,
-            PrintCsvMaxRows => $Top,
+            MaxRows => $Top,
             headers         => \@headers,
             RenderHeader    => 1,
          }

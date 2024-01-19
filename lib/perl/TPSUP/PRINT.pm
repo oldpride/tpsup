@@ -99,6 +99,7 @@ sub render_one_row {
       }
 
       my $buffLen = $max_len - length($v);
+      # print "i=$i, max_len=$max_len, v=$v, buffLen=$buffLen\n" if $verbose > 1;
 
       if ( $i == 0 ) {
          printf $out_fh "%s%s", ' ' x $buffLen, $v;
@@ -110,7 +111,7 @@ sub render_one_row {
    print $out_fh "\n";
 
    if ($verbose) {
-      print $out_fh "(truncated at column: ", join( ',', @$truncated ), ")\n";
+      print $out_fh "(truncated at column: ", join( ',', @$truncated ), ")\n" if $truncated && @$truncated;
    }
 
 }
@@ -118,7 +119,12 @@ sub render_one_row {
 sub render_arrays {
    my ( $rows, $opt ) = @_;
 
-   my $verbose = $opt->{verbose} || 0;
+   my $verbose      = $opt->{verbose} || 0;
+   my $TakeTail     = $opt->{TakeTail};
+   my $RenderHeader = $opt->{RenderHeader};
+   my $headers2     = $opt->{headers};
+   my $RowType      = $opt->{RowType};
+   my $Vertical     = $opt->{Vertical};
 
    print "rows=", Dumper($rows) if $verbose > 1;
 
@@ -141,7 +147,7 @@ sub render_arrays {
       $out_fh = \*STDOUT;
    }
 
-   my $RowType = $opt->{RowType} || find_row_type( $rows, $opt );
+   $RowType = find_row_type( $rows, $opt ) if !$RowType;
 
    if ( !$RowType ) {
       croak "RowType is not specified and cannot be determined from rows";
@@ -157,8 +163,8 @@ sub render_arrays {
    #    csv module often needs to print a structure of either:
    #       1. headers + a array of arrays of data
    #       2. headers + a array of hashes of data
-   #    in the first case, the headers are like the first row of data.
-   #    in the second case, the headers are used to filter keys of the hashes.
+   #    in the array case, the headers are like the first row of data.
+   #    in the hash  case, the headers are used to filter keys of the hashes.
    # Headers' role could get more complicated if want to support other features around them.
    #    But we should keep this part simple.
    #    if users need more feautures around headers, they can use CSV module to pre-process
@@ -178,9 +184,9 @@ sub render_arrays {
    #       if user specified headers, we use it to filter out unwanted keys.
    #       if user didn't specify headers, we use all keys as headers.
    my $headers;
-   my $print_header;
-   if ( $opt->{headers} ) {
-      my $headers2    = $opt->{headers};
+   my $min_start_row = 0;
+   if ($headers2) {
+      $min_start_row = 0;
       my $header_type = ref $headers2;
       if ( !$header_type ) {
          $headers = [ split( /[ ,]+/, $headers2 ) ];
@@ -189,44 +195,65 @@ sub render_arrays {
       } else {
          croak "unsupported header type: $header_type. can only be ARRAY or string." . Dumper($headers2);
       }
-
-      for my $h (@$headers) {
-         $print_header->{$h} = 1;
+   } elsif ( $RenderHeader || $RowType eq 'HASH' || $Vertical ) {
+      if ( $RowType eq 'ARRAY' ) {
+         # if user want to render header but didn't specify headers, we use the first row as headers.
+         $min_start_row = 1;
+         $headers       = $rows->[0];
+      } else {    # RowType == HASH
+         $headers = [ find_hashes_keys( $rows, $opt ) ];
       }
    }
 
-   my $MaxRows= $opt->{MaxRows};
-   if (defined $MaxRows) {
-      if ( $MaxRows > scalar(@$rows)) {
+   my $MaxRows = $opt->{MaxRows};
+   if ( defined $MaxRows ) {
+      if ( $MaxRows > scalar(@$rows) ) {
          $MaxRows = scalar(@$rows);
       }
    } else {
       $MaxRows = scalar(@$rows);
    }
 
+   if ( $Vertical && $RowType eq 'ARRAY' && scalar(@$rows) < 2 ) {
+      # when vertically print the arrays, we need at least 2 rows, with the first
+      # as the header
+      #    name: tian
+      #     age: 36
+      #
+      #    name: john
+      #     age: 30
+      return;
+   }
+
+   my $start_row = 0;
+   if ( $RowType eq 'ARRAY' ) {
+      if ($TakeTail) {
+         # $#rows vs scalar(@$rows)
+         #    $#rows is the last index of the array
+         #    scalar(@$rows) is the number of elements in the array
+         $start_row = scalar(@$rows) - $MaxRows > $min_start_row ? scalar(@$rows) - $MaxRows : $min_start_row;
+         # print "$start_row = $#$rows - $MaxRows\n";
+      } else {
+         $start_row = $min_start_row;
+      }
+   } else {    # RowType == HASH
+      if ($TakeTail) {
+         $start_row = scalar(@$rows) - $MaxRows > $min_start_row ? scalar(@$rows) - $MaxRows : $min_start_row;
+      } else {
+         $start_row = $min_start_row;
+      }
+   }
+
    if ( $opt->{Vertical} ) {
       if ( $RowType eq 'ARRAY' ) {
-         my $start_row = 0;
-         if ( !$headers ) {
-            if ( scalar(@$rows) < 2 ) {
-
-               # when vertically print the arrays, we need at least 2 rows, with the first
-               # as the header
-               #    name: tian
-               #     age: 36
-               #
-               #    name: john
-               #     age: 30
-               return;
-            }
-            $headers   = $rows->[0];
-            $start_row = 1;
-         }
          my $num_headers = scalar(@$headers);
 
          # print(f"headers={headers}", file=sys.stderr);
 
          my $i = 0;
+         # $#rows vs scalar(@$rows)
+         #    $#rows is the last index of the array
+         #    scalar(@$rows) is the number of elements in the array
          for my $r ( @$rows[ $start_row .. $#$rows ] ) {
             for my $j ( 0 .. scalar(@$r) - 1 ) {
                my $v = $r->[$j];
@@ -249,8 +276,10 @@ sub render_arrays {
          if ( !$headers ) {
             $headers = [ find_hashes_keys( $rows, $opt ) ];
          }
+
          my $i = 0;
-         for my $r (@$rows) {
+         # for my $r (@$rows) {
+         for my $r ( @$rows[ $start_row .. $#$rows ] ) {
             for my $k (@$headers) {
                printf $out_fh "%-25s '%s'\n", $k, defined( $r->{$k} ) ? $r->{$k} : '';
             }
@@ -271,22 +300,12 @@ sub render_arrays {
    my $MaxColumnWidth = $opt->{MaxColumnWidth};
    my $truncated      = 0;
 
-   # fix headers of hash (dict), so that we can convert dict to list in a consistent way.
-   if ( $RowType eq 'HASH' ) {
-      if ( !$headers ) {
-
-         # for hash:
-         # if user specified headers, we use it to filter out unwanted keys.
-         $headers = [ find_hashes_keys( $rows, $opt ) ];
-      }
-
-      for my $k (@$headers) {
-         if ( $MaxColumnWidth && length($k) > $MaxColumnWidth ) {
-            push @$max_by_pos, $MaxColumnWidth;
-            $truncated = 1;
-         } else {
-            push @$max_by_pos, length($k);
-         }
+   for my $k (@$headers) {
+      if ( $MaxColumnWidth && length($k) > $MaxColumnWidth ) {
+         push @$max_by_pos, $MaxColumnWidth;
+         $truncated = 1;
+      } else {
+         push @$max_by_pos, length($k);
       }
    }
 
@@ -297,13 +316,17 @@ sub render_arrays {
 
    # find max width for each column
    my $j = 0;
-   for my $r2 (@$rows) {
+   # for my $r2 (@$rows) {
+   # print "start_row=$start_row\n";
+   for my $r2 ( @$rows[ $start_row .. $#$rows ] ) {
       my $r;
       if ( $RowType eq 'ARRAY' ) {
          $r = $r2;
       } else {    # RowType == HASH
          $r = [ map { defined( $r2->{$_} ) ? $r2->{$_} : '' } @$headers ];
       }
+
+      # print "r=", Dumper($r) if $verbose > 1;
 
       for my $i ( 0 .. scalar(@$r) - 1 ) {
          my $i_length = defined( $r->[$i] ) ? length( $r->[$i] ) : 0;
@@ -336,28 +359,7 @@ sub render_arrays {
 
    my $max_fields = scalar(@$max_by_pos);
 
-   # range of rows to be printed. the following defaults works for most cases.
-   my $range_start = 0;
-   my $range_end   = $MaxRows - 1;    # from 0 .. $MaxRows-1, total $MaxRows rows
-
-   if ( $opt->{RenderHeader} ) {
-      if ( $RowType eq 'ARRAY' ) {
-         if ( !$headers ) {
-            $headers     = $rows->[0];
-            $range_start = 1;
-
-            if ( $opt->{MaxRows} ) {
-               # we need to check $opt->{MaxRows}, not just $MaxRows. Because $MaxRows was set without
-               # considering the header row. 
-               # if we take out the first row as header, then we need to print 1 more row from the array.
-               $range_end =
-                   $opt->{MaxRows} > $#{$rows} - 1
-                 ? $#{$rows} - 1
-                 : $opt->{MaxRows};    # ie $opt->{MaxRows}-1 +1
-            }
-         }
-      }
-
+   if ($RenderHeader) {
       render_one_row( $headers, $max_by_pos, $out_fh, $opt );
 
       # print the bar right under the header.
@@ -372,7 +374,10 @@ sub render_arrays {
       print $out_fh '=' x $r_length, "\n";
    }
 
-   for my $r2 ( @$rows[ $range_start .. $range_end ] ) {
+   $j = 0;
+   # print "start_row=$start_row\n";
+   for my $r2 ( @$rows[ $start_row .. $#$rows ] ) {
+      # print "r2=", Dumper($r2) if $verbose > 1;
       my $r;
       if ( $RowType eq 'ARRAY' ) {
          $r = $r2;
@@ -381,6 +386,10 @@ sub render_arrays {
       }
 
       render_one_row( $r, $max_by_pos, $out_fh, $opt );
+      $j++;
+      if ( $j >= $MaxRows ) {
+         last;
+      }
    }
 
    if ( $out_fh != \*STDOUT ) {
@@ -412,11 +421,15 @@ sub main {
 
    my $test_code = <<'END';
     TPSUP::PRINT::find_row_type($rows1);
+    
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10});
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1});
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1, headers=>'name'});
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, Vertical=>1});
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, Vertical=>1, headers=>'name'});
+
+   TPSUP::PRINT::render_arrays($rows1, {MaxRows=>2, RenderHeader=>1});
+   TPSUP::PRINT::render_arrays($rows1, {MaxRows=>2, RenderHeader=>1, TakeTail=>1});
     
 
     TPSUP::PRINT::find_row_type($rows2);
