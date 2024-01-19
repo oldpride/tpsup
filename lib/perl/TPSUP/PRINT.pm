@@ -125,6 +125,10 @@ sub render_arrays {
    my $headers2     = $opt->{headers};
    my $RowType      = $opt->{RowType};
    my $Vertical     = $opt->{Vertical};
+   my $MaxRows      = $opt->{MaxRows};
+   my $interactive  = $opt->{interactive};
+   my $out_fh       = $opt->{out_fh};
+   my $MaxColumnWidth = $opt->{MaxColumnWidth};
 
    print "rows=", Dumper($rows) if $verbose > 1;
 
@@ -136,13 +140,12 @@ sub render_arrays {
       return;
    }
 
-   my $out_fh;
-   if ( $opt->{interactive} ) {
-      my $cmd = "less -S";
-
-      open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
-   } elsif ( $opt->{out_fh} ) {
+   
+   if ( $out_fh ) {
       $out_fh = $opt->{out_fh};
+    } elsif ( $interactive ) {
+      my $cmd = "less -S";
+      open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
    } else {
       $out_fh = \*STDOUT;
    }
@@ -186,7 +189,6 @@ sub render_arrays {
    my $headers;
    my $min_start_row = 0;
    if ($headers2) {
-      $min_start_row = 0;
       my $header_type = ref $headers2;
       if ( !$header_type ) {
          $headers = [ split( /[ ,]+/, $headers2 ) ];
@@ -205,7 +207,6 @@ sub render_arrays {
       }
    }
 
-   my $MaxRows = $opt->{MaxRows};
    if ( defined $MaxRows ) {
       if ( $MaxRows > scalar(@$rows) ) {
          $MaxRows = scalar(@$rows);
@@ -215,36 +216,22 @@ sub render_arrays {
    }
 
    if ( $Vertical && $RowType eq 'ARRAY' && scalar(@$rows) < 2 ) {
-      # when vertically print the arrays, we need at least 2 rows, with the first
-      # as the header
-      #    name: tian
-      #     age: 36
-      #
-      #    name: john
-      #     age: 30
+      # when vertically print the arrays, we need at least 2 rows, with first row being as the header
       return;
    }
 
-   my $start_row = 0;
-   if ( $RowType eq 'ARRAY' ) {
-      if ($TakeTail) {
-         # $#rows vs scalar(@$rows)
-         #    $#rows is the last index of the array
-         #    scalar(@$rows) is the number of elements in the array
-         $start_row = scalar(@$rows) - $MaxRows > $min_start_row ? scalar(@$rows) - $MaxRows : $min_start_row;
-         # print "$start_row = $#$rows - $MaxRows\n";
-      } else {
-         $start_row = $min_start_row;
+   my $start_row = $min_start_row;
+   
+   if ($TakeTail) {
+      # $#rows vs scalar(@$rows)
+      #    $#rows is the last index of the array
+      #    scalar(@$rows) is the number of elements in the array
+      if (scalar(@$rows) - $MaxRows > $min_start_row) {
+         $start_row = scalar(@$rows) - $MaxRows;
       }
-   } else {    # RowType == HASH
-      if ($TakeTail) {
-         $start_row = scalar(@$rows) - $MaxRows > $min_start_row ? scalar(@$rows) - $MaxRows : $min_start_row;
-      } else {
-         $start_row = $min_start_row;
-      }
-   }
-
-   if ( $opt->{Vertical} ) {
+   } 
+   
+   if ( $Vertical) {
       if ( $RowType eq 'ARRAY' ) {
          my $num_headers = scalar(@$headers);
 
@@ -273,10 +260,6 @@ sub render_arrays {
             }
          }
       } else {    # RowType == HASH
-         if ( !$headers ) {
-            $headers = [ find_hashes_keys( $rows, $opt ) ];
-         }
-
          my $i = 0;
          # for my $r (@$rows) {
          for my $r ( @$rows[ $start_row .. $#$rows ] ) {
@@ -297,7 +280,6 @@ sub render_arrays {
    }
 
    my $max_by_pos     = [];
-   my $MaxColumnWidth = $opt->{MaxColumnWidth};
    my $truncated      = 0;
 
    for my $k (@$headers) {
@@ -309,15 +291,8 @@ sub render_arrays {
       }
    }
 
-   # at this point, $headers is defined for array of hashes, but not for array of arrays.
-   # only if user specified headers, then headers is defined for array of arrays.
-   # on the other hand, array of hashes always has headers, but array of arrays may not.
-   # array of arrays only need headers when user want to render headers.
-
    # find max width for each column
    my $j = 0;
-   # for my $r2 (@$rows) {
-   # print "start_row=$start_row\n";
    for my $r2 ( @$rows[ $start_row .. $#$rows ] ) {
       my $r;
       if ( $RowType eq 'ARRAY' ) {
