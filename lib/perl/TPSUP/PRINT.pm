@@ -282,12 +282,16 @@ sub render_arrays {
    my $max_by_pos     = [];
    my $truncated      = 0;
 
-   for my $k (@$headers) {
-      if ( $MaxColumnWidth && length($k) > $MaxColumnWidth ) {
-         push @$max_by_pos, $MaxColumnWidth;
-         $truncated = 1;
-      } else {
-         push @$max_by_pos, length($k);
+   # print "headers=", Dumper($headers);
+
+   if ($headers) {
+      for my $k (@$headers) {
+         if ( $MaxColumnWidth && length($k) > $MaxColumnWidth ) {
+            push @$max_by_pos, $MaxColumnWidth;
+            $truncated = 1;
+         } else {
+            push @$max_by_pos, length($k);
+         }
       }
    }
 
@@ -396,7 +400,8 @@ sub main {
 
    my $test_code = <<'END';
     TPSUP::PRINT::find_row_type($rows1);
-    
+
+    TPSUP::PRINT::render_arrays($rows1);
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10});
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1});
     TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1, headers=>'name'});
