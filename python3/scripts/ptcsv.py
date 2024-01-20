@@ -8,49 +8,49 @@ from pprint import pformat
 import tpsup.csvtools
 
 usage = textwrap.dedent("""
-    parse csv file like perl-version tpcsv
+    parse csv file like perl-version ptcsv
     """)
 
 examples = textwrap.dedent(""" 
 examples:
-    tpcsv.py                 tpcsv_py_test.csv
-    tpcsv.py -f number,alpha tpcsv_py_test.csv
+    ptcsv.py                 ptcsv_py_test.csv
+    ptcsv.py -f number,alpha ptcsv_py_test.csv
     
-    tpcsv.py      -od '|' tpcsv_py_test.csv
-    tpcsv.py -d , -od '|' tpcsv_py_test.csv
+    ptcsv.py      -od '|' ptcsv_py_test.csv
+    ptcsv.py -d , -od '|' ptcsv_py_test.csv
     
-    tpcsv.py -mp 'c,2' tpcsv_py_test.csv
-    tpcsv.py -xp 'c,2' tpcsv_py_test.csv
+    ptcsv.py -mp 'c,2' ptcsv_py_test.csv
+    ptcsv.py -xp 'c,2' ptcsv_py_test.csv
     
-    tpcsv.py -me "r['alpha'] is 'c'" tpcsv_py_test.csv
-    tpcsv.py -xe "r['alpha'] is 'c'" tpcsv_py_test.csv
+    ptcsv.py -me "r['alpha'] is 'c'" ptcsv_py_test.csv
+    ptcsv.py -xe "r['alpha'] is 'c'" ptcsv_py_test.csv
     
-    tpcsv.py -me "re.search('c', r['alpha'])" tpcsv_py_test.csv
+    ptcsv.py -me "re.search('c', r['alpha'])" ptcsv_py_test.csv
     
     # for raw pattern, use r in front of the pattern, compare the following two
-    tpcsv.py -me "re.search(r'\\\\\\\\w', r['alpha'])" tpcsv_py_test.csv
-    tpcsv.py -me "re.search( '\\\\\\\\w', r['alpha'])" tpcsv_py_test.csv
+    ptcsv.py -me "re.search(r'\\\\\\\\w', r['alpha'])" ptcsv_py_test.csv
+    ptcsv.py -me "re.search( '\\\\\\\\w', r['alpha'])" ptcsv_py_test.csv
     
     # can also use different quote combination, to save some \\
-    tpcsv.py -me 're.search(r"\\\\w", r["alpha"])' tpcsv_py_test.csv
-    tpcsv.py -me 're.search( "\\\\w", r["alpha"])' tpcsv_py_test.csv
+    ptcsv.py -me 're.search(r"\\\\w", r["alpha"])' ptcsv_py_test.csv
+    ptcsv.py -me 're.search( "\\\\w", r["alpha"])' ptcsv_py_test.csv
     
     # use temporary expression. the first doesn't print; the second one does
-    tpcsv.py -te "a2=r['alpha']+'z'" -te n2="int(r['number'])+100"              tpcsv_py_test.csv
-    tpcsv.py -te "a2=r['alpha']+'z'" -te n2="int(r['number'])+100" -f number,n2 tpcsv_py_test.csv
+    ptcsv.py -te "a2=r['alpha']+'z'" -te n2="int(r['number'])+100"              ptcsv_py_test.csv
+    ptcsv.py -te "a2=r['alpha']+'z'" -te n2="int(r['number'])+100" -f number,n2 ptcsv_py_test.csv
     
-    tpcsv.py -o /tmp/junk.csv tpcsv_py_test.csv; cat /tmp/junk.csv
-    cat tpcsv_py_test.csv | tpcsv.py -
+    ptcsv.py -o /tmp/junk.csv ptcsv_py_test.csv; cat /tmp/junk.csv
+    cat ptcsv_py_test.csv | ptcsv.py -
     
-    tpcsv.py                         tpcsv_py_test_missing.csv
-    tpcsv.py -f number,alpha         tpcsv_py_test_missing.csv
-    tpcsv.py -me "r['alpha'] is 'c'" tpcsv_py_test_missing.csv
+    ptcsv.py                         ptcsv_py_test_missing.csv
+    ptcsv.py -f number,alpha         ptcsv_py_test_missing.csv
+    ptcsv.py -me "r['alpha'] is 'c'" ptcsv_py_test_missing.csv
     
-    tpcsv.py         tpcsv_py_test_skip_header.csv
-    tpcsv.py -skip 2 tpcsv_py_test_skip_header.csv
+    ptcsv.py         ptcsv_py_test_skip_header.csv
+    ptcsv.py -skip 2 ptcsv_py_test_skip_header.csv
     
     # test empty file
-    tpcsv.py tpcsv_py_test_empty.csv
+    ptcsv.py ptcsv_py_test_empty.csv
     
     """)
 
@@ -129,9 +129,9 @@ if args['verbose'] >= 1:
 # a function. You should use **kwargs if you want to handle named arguments
 # in a function.
 
-#query_csv(**args);
+# query_csv(**args);
 
 with tpsup.csvtools.QueryCsv(
-              **args) as qc:
+        **args) as qc:
     args.pop('filename')
     qc.output(filename=args['Output'], **args)
