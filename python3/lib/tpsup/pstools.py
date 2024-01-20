@@ -27,7 +27,11 @@ def ps_grep(pattern, printOutput=1,  verbose=0):
         # cmd = f'tasklist /v /fo csv'
 
         # this is fast, taking about 1 second
-        cmd = 'PowerShell -command "get-process"'
+        # cmd = 'PowerShell -command "get-process"'
+
+        # this is the best, giving command line args too and is fast
+
+        cmd = 'PowerShell -command "(Get-CimInstance -ClassName Win32_Process|Select-object -property CreationDate,ProcessId,CommandLIne| Out-String -Stream -Width 1000).Trim()"'
     else:
         raise RuntimeError(f"unsupported os {env.uname}")
 
@@ -99,7 +103,7 @@ def main():
     def test_codes():
         pid_alive(good_pid)
         pid_alive(bad_pid)
-        ps_grep("chrome|code|pycharm")
+        ps_grep("code.exe|pycharm")
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())

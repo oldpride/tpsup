@@ -81,8 +81,20 @@ def find_hashes_keys(rows: Union[list, None], **opt):
     return sorted(seen_keys)
 
 
-def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **opt):
-    verbose = opt.get('verbose', 0)
+def render_arrays(rows: Union[list, None],
+                  headers: Union[list, str] = None,
+                  verbose=0,
+                  Vertical: bool = False,
+                  TakeTail=False,
+                  RenderHeader=False,
+                  MaxRows=None,
+                  RowType=None,
+                  interactive=False,
+                  out_fh=None,
+                  **opt):
+
+    # this is in ** because we want to pass it to render_one_row()
+    MaxColumnWidth = opt.get('MaxColumnWidth', None)
 
     if rows is None:
         return
@@ -90,23 +102,25 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
     if len(rows) == 0:
         return
 
-    out_fh = None
-    if opt.get('interactive', False):
+    if out_fh:
+        pass
+    elif interactive:
         # todo: this is unix only
         cmd = "less -S"
         out_fh = os.popen(cmd, 'w')
-    elif opt.get('out_fh', None):
-        out_fh = opt['out_fh']
     else:
         out_fh = sys.stdout
 
-    if RowType := opt.get('RowType', find_row_type(rows, **opt)):
-        if RowType not in [list, dict]:
-            raise Exception(
-                f"unsupported RowType: {RowType}. can only be list or dict")
-    else:
+    if RowType is None:
+        RowType = find_row_type(rows, **opt)
+
+    if RowType is None:
         raise Exception(
             "RowType is not specified and cannot be determined from rows")
+
+    if RowType not in [list, dict]:
+        raise Exception(
+            f"unsupported RowType: {RowType}. can only be list or dict")
 
     # user-specified headers make code more complicated, but we still need it
     # because csv module (CSV.pm) needs to call this module to print data, and csv
@@ -114,16 +128,16 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
     #    csv module often needs to print a structure of either:
     #       1. headers + a array of arrays of data
     #       2. headers + a array of hashes of data
-    #    in the first case, the headers are like the first row of data.
-    #    in the second case, the headers are used to filter keys of the hashes.
+    #    in the array case, the headers are like the first row of data.
+    #    in the hash  case, the headers are used to filter keys of the hashes.
     # Headers' role could get more complicated if want to support other features around them.
     #    But we should keep this part simple.
-    #    if users need more feautures around headers, they can use CSV module to pre-process
+    #    if users need more features around headers, they can use CSV module to pre-process
     #       the data, and then use this module to print the data.
     #    For example, if user wanted to specify headers to filter array of arrays, it should
     #       convert the array of arrays to array of hashes first, using CSV module, and then
     #       filter the keys.
-    # outside csv module, we rarely need user-specifed headers. but we will
+    # outside csv module, we rarely need user-specified headers. but we will
     # keep the behavior consistent with csv module.
     # summary:
     #    If $rows is array of arrays,
@@ -135,8 +149,7 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
     #       if user specified headers, we use it to filter out unwanted keys.
     #       if user didn't specify headers, we use all keys as headers.
 
-    print_header = {}
-
+    min_start_row = 0
     if headers is not None:
         if isinstance(headers, str):
             headers = headers.split(',')
@@ -145,27 +158,32 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
         else:
             raise Exception(
                 f"unsupported type of headers: {type(headers)}")
-        for h in headers:
-            print_header[h] = 1
-
-    # log_FileFuncLine(f"opt={pformat(opt)}")
-    MaxRows = opt.get('MaxRows', len(rows))
-
-    if opt.get('Vertical', False):
+    elif RenderHeader or RowType == dict or Vertical:
         if RowType == list:
-            start_row = 0
-            if headers is None:
-                # when vertically print the arrays, we need at least 2 rows, with the first
-                # as the header
-                #    name: tian
-                #     age: 36
-                #
-                #    name: john
-                #     age: 30
-                if len(rows) < 2:
-                    return
-                start_row = 1
-                headers = rows[0]
+            # if user want to render header but didn't specify headers, we use the first row as headers.
+            min_start_row = 1
+            headers = rows[0]
+        else:  # RowType == dict
+            headers = find_hashes_keys(rows, **opt)
+
+    if MaxRows:
+        if MaxRows > len(rows):
+            MaxRows = len(rows)
+    else:
+        MaxRows = len(rows)
+
+    if Vertical and RowType == list and len(rows) < 2:
+        # when vertically print the arrays, we need at least 2 rows, with first row being as the header
+        return
+
+    start_row = min_start_row
+
+    if TakeTail:
+        if len(rows) - MaxRows > min_start_row:
+            start_row = len(rows) - MaxRows
+
+    if Vertical:
+        if RowType == list:
             num_headers = len(headers)
             # print(f"headers={headers}", file=sys.stderr)
             for r in rows[start_row:MaxRows]:
@@ -178,8 +196,6 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
                         print(f"{' '*25} '{r[j]}'", file=out_fh)
                 print(file=out_fh)  # blank line
         else:  # RowType == dict
-            if headers is None:
-                headers = find_hashes_keys(rows, **opt)
             for r in rows[:MaxRows]:
                 for k in headers:
                     print(f"""{k:25} '{r.get(k, '')}'""",
@@ -188,16 +204,9 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
         return
 
     max_by_pos = []
-    MaxColumnWidth = opt.get('MaxColumnWidth', None)
     truncated = 0
 
-    # fix headers of hash (dict), so that we can convert dict to list in a consistent way.
-    if RowType == dict:
-        if headers is None:
-            headers = find_hashes_keys(rows, **opt)
-            # print(f"headers={headers}", file=sys.stderr)
-
-        # for dict, headers is not part of rows, so we handle it separately.
+    if headers:
         for k in headers:
             if MaxColumnWidth and len(k) > MaxColumnWidth:
                 max_by_pos.append(MaxColumnWidth)
@@ -206,7 +215,7 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
                 max_by_pos.append(len(k))
 
     # find max width for each column
-    for r2 in rows[:MaxRows]:
+    for r2 in rows[start_row:start_row+MaxRows]:
         if RowType == list:
             r = r2
         else:  # RowType == dict
@@ -235,9 +244,6 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
 
     max_fields = len(max_by_pos)
 
-    # range of rows to be printed. the following defaults works for most cases.
-    range_start = 0
-    range_end = MaxRows
     # note:
     # python's range_end is exclusive while perl's range_end is inclusive
     # $ python
@@ -246,17 +252,7 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
     # $ perl -e '@a=split(//,"abc"); print @a[0..1], "\n";'
     # ab
 
-    if opt.get('RenderHeader', False):
-        if headers is None:
-            if RowType == list:
-                headers = rows[0]
-                # if we take the first row as header
-                # then we print one more row at bottom.
-                range_start = 1
-                range_end = MaxRows + 1
-            # else:  # RowType == dict
-                # headers = find_hashes_keys(rows) # already done above
-
+    if RenderHeader:
         render_one_row(headers, max_by_pos, out_fh, **opt)
 
         # print the bar right under the header.
@@ -269,7 +265,7 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
 
         print('=' * r_length, file=out_fh)
 
-    for r in rows[range_start:range_end]:
+    for r in rows[start_row:start_row+MaxRows]:
         if RowType == dict:
             array = [r.get(k, "") for k in headers]
         else:  # RowType == list
@@ -284,37 +280,6 @@ def render_arrays(rows: Union[list, None], headers: Union[list, str] = None, **o
     if truncated:
         print(
             f"some columns were truncated to MaxColumnWidth={MaxColumnWidth}", file=sys.stderr)
-
-
-# deco'ed. - use render_arrays() instead 2023-11-23
-# def Print_ArrayOfHashes_Vertically(aref: Union[list, None], **opt):
-#     if not aref:
-#         return
-
-#     headers = None
-
-#     if opt.get('headers', None):
-#         # user-specified headers can be a ref of array or a string
-#         if isinstance(opt['headers'], list):
-#             headers = opt['headers']
-#         elif isinstance(opt['headers'], str):
-#             headers = opt['headers'].split(',')
-#         else:
-#             raise Exception(
-#                 f"unsupported type of headers: {type(opt['headers'])}")
-
-#     out_fh = opt.get('out_fh', sys.stdout)
-
-#     MaxRows = opt.get('MaxRows', len(aref))
-
-#     for r in aref[:MaxRows]:
-#         if headers is None:
-#             for k, v in r.items():
-#                 print(f"{k:25} '{v}'", file=out_fh)
-#         else:
-#             for c in headers:
-#                 print(f"""{c:25} '{r.get(c,"")}'""", file=out_fh)
-#         print()
 
 
 def string_short(obj, top: int = 5, maxlen: int = 200, **opt):
@@ -364,10 +329,12 @@ def main():
     def test_codes():
         find_row_type(rows1)
         render_arrays(rows1)
-        render_arrays(rows1, RenderHeader=True)
-        render_arrays(rows1, RenderHeader=True, headers='name')
-        render_arrays(rows1, Vertical=True)
+        render_arrays(rows1, MaxColumnWidth=10, RenderHeader=True)
+        render_arrays(rows1, MaxColumnWidth=10, RenderHeader=True, headers='name')
+        render_arrays(rows1, MaxColumnWidth=10, Vertical=True)
         render_arrays(rows1, Vertical=True, headers='name')
+        render_arrays(rows1, RenderHeader=1, MaxRows=2)
+        render_arrays(rows1, RenderHeader=1, MaxRows=2, TakeTail=True)
 
         find_row_type(rows2)
         find_hashes_keys(rows2)

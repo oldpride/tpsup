@@ -1769,6 +1769,7 @@ process {entity}
         [opt, entity_cfg], 'tail', default=None)
     Top = get_first_by_key(
         [opt, entity_cfg], 'top', default=5)
+    MaxRows = None
 
     log_FileFuncLine(f"\nprint result")
     # display the top results
@@ -1787,14 +1788,17 @@ process {entity}
         #    - sometime the code forgot updating it
         #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
         count = len(lines)
+
         if Tail:
             if count > Tail:
                 print(
                     f"(Truncated. Total {count}, only displayed tail {Tail}.)\n")
+                MaxRows = Tail
         else:
             if count > Top:
                 print(
                     f"(Truncated. Total {count}, only displayed top  {Top}.)\n")
+                MaxRows = Top
 
     if headers:
         MaxColumnWidth = entity_cfg.get('MaxColumnWidth', None)
@@ -1803,7 +1807,8 @@ process {entity}
         print(f"top {Top} of hashes")
         render_arrays(hashes,
                       MaxColumnWidth=MaxColumnWidth,
-                      MaxRows=Top,
+                      MaxRows=MaxRows,
+                      TakeTail=Tail,
                       RenderHeader=1
                       )
         print("\n")
