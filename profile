@@ -834,24 +834,6 @@ myandroid() {
    [ "X$ANDROID_HOME" = "X" ] || cd "$ANDROID_HOME"
 }
 
-mydir() {
-   if [ $# -ne 1 ]; then
-      echo "ERROR: wrong number of args"
-      echo "usage:   mydir pattern"
-      echo "         mydir list"
-      echo "         script will auto add * at the end pattern"
-      echo "example: mydir angular"
-      echo "         mydir list"
-      return
-   fi
-
-   if [ "$1" = "list" ]; then
-      ls -d "$MYBASE"/github/*
-   else
-      cd "$MYBASE"/github/$1*
-   fi
-}
-
 clear() {
    # https://superuser.com/questions/555554
    /usr/bin/clear
