@@ -1,0 +1,172 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+my $prog = $0;
+$prog =~ s:.*/::;
+my $dir = $0;
+$dir =~ s:[^/]+$::;
+
+my $exclude_pattern;
+my $max_depth = 20;
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog mount_point
+
+description:
+   
+   find big disk usage under mount_point
+
+   -v                     verbose mode
+
+   -x exclude_pattern     Perl RegEx style, exclude.
+
+examples:
+
+   $prog .
+
+EOF
+
+   # -k count in kilobytes
+
+   exit 1;
+}
+
+my ( $verbose, $unit, $k );
+
+GetOptions(
+   "x=s" => \$exclude_pattern,
+   "v"   => \$verbose,
+   # 'k'   => \$k,
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my $base = $ARGV[0];
+
+my $top           = 2;
+my $biggest_ratio = 0.5;
+my $size_by_path;
+# my $unit_divsor = $k ? 1024 : 1;
+# my $unit_name   = $k ? 'k'  : 'byte';
+# my $unit_flag   = $k ? '-k' : '';
+
+# get df usage
+my $os = 'uname -a';
+
+my $cmd = $os =~ /^Linux/ ? "df -kP $base" : "df -k $base";
+
+my @DF = `$cmd`;
+
+if ( !$DF[1] ) {
+   croak "cmd='$cmd' failed" . return undef;
+}
+
+chomp @DF;
+
+# Filesystem     1K-blocks      Used Available Use% Mounted on
+# C:             498687252 238734208 259953044  48% /cygdrive/c
+
+my @a = split /\s+/, $DF[1];
+
+my $used = $a[2];
+
+$verbose && print "base=$base, used=$used\n";
+
+my @todos = ( [ $base, $used, 0 ] );
+
+my $format = 'size=%13sk, path=%-50s, %s' . "\n";    # right-align size, left-align path
+
+while (@todos) {
+   my $todo = shift @todos;
+   my ( $path, $size, $level ) = @$todo;
+   printf $format, $size, $path, "level=$level";
+
+   if ( -d $path ) {
+      my @fulls;
+      opendir( DIR, $path ) or die "Cannot open $path\n";
+      my @shorts = grep { $_ ne '.' && $_ ne '..' } readdir(DIR);
+      closedir(DIR);
+      for my $short (@shorts) {
+         push @fulls, "$path/$short";
+      }
+
+      my @big_ones = find_the_big_ones( \@fulls, { parent_size => $size } );
+
+      if ( $level < $max_depth ) {
+         push @todos, map { [ $_, $size_by_path->{$_}, $level + 1 ] } @big_ones;
+      } else {
+         for my $path (@big_ones) {
+            printf $format, $size_by_path->{$path}, $path, "reached max_depth=$max_depth";
+         }
+      }
+   }
+}
+
+exit 0;
+
+#############################################
+# subroutines
+#############################################
+sub find_the_big_ones {
+   my ( $paths, $opt ) = @_;
+
+   my $parent_size = $opt->{parent_size};
+   my $biggest_size;
+   if ($parent_size) {
+      $biggest_size = $parent_size * $biggest_ratio;
+   }
+
+   for my $path (@$paths) {
+      my $size;
+      if ( -d $path ) {
+         $size = du_1_node($path);
+      } elsif ( -f $path ) {
+         $size = -s $path;
+         $size = int( $size / 1024 );
+      } else {
+         $verbose && print "path=$path is not a file or directory\n";
+         next;
+      }
+      $verbose && print "found path=$path, size=${size}k\n";
+      $size_by_path->{$path} = $size;
+      if ( $size > $biggest_size ) {
+         return ($path);
+      }
+   }
+
+   my @sorted = sort { $size_by_path->{$b} <=> $size_by_path->{$a} } @$paths;
+
+   if ( scalar(@sorted) > $top ) {
+      # perl slice will insert undef if ending index is beyond
+      return @sorted[ 0 .. $top ];
+   } else {
+      return @sorted;
+   }
+}
+
+sub du_1_node {
+   my ( $path, $opt ) = @_;
+
+   my $cmd = "du -sk $path";
+   $verbose && print "cmd=$cmd\n";
+
+   my $output = `$cmd`;
+   return undef if $?;
+
+   #    $ du -sk Linux
+   # 12      Linux
+   chomp $output;
+   my ( $size, $path2 ) = split /\s+/, $output, 2;
+   return $size;
+}
