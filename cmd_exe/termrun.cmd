@@ -74,16 +74,26 @@ if "%type%" == "cyg" (
     exit /b 0
 )
 
+if "%type%" == "cmd" (
+    @REM run cmd.exe number of times
+    for /l %%x in (1, 1, %number%) do (
+        start "" cmd.exe
+    )
+
+    exit /b 0
+)
+
 @REM : echo. is to print blank line (empty line)
 :usage
    echo.
    echo usage:   
    echo.
-   echo    %prog% [flags] cyg|git number
+   echo    %prog% [flags] cyg|git|cmd number
    echo.
    echo.   launch a number of cygwin terminals
    echo.       'cyg' is the cygwin terminals
    echo.       'git' is the git-bash terminals
+   echo.       'cmd' is the cmd.exe terminals
    echo.
    echo.       -d              debug flag
    echo.
