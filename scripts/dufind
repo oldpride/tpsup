@@ -4,6 +4,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
+use TPSUP::UTIL qw(get_user);
 
 my $prog = $0;
 $prog =~ s:.*/::;
@@ -11,7 +12,8 @@ my $dir = $0;
 $dir =~ s:[^/]+$::;
 
 my $exclude_pattern;
-my $max_depth = 20;
+my $max_depth        = 20;
+my $expiration_hours = 120;    # hours
 
 sub usage {
    my ($msg) = @_;
@@ -31,6 +33,10 @@ description:
 
    -x exclude_pattern     Perl RegEx style, exclude.
 
+   -r                     reset du store
+
+   -e expiration_hours    in hours. default to $expiration_hours
+
 examples:
 
    $prog .
@@ -42,17 +48,27 @@ EOF
    exit 1;
 }
 
-my ( $verbose, $unit, $k );
+my ( $verbose, $unit, $reset );
 
 GetOptions(
    "x=s" => \$exclude_pattern,
    "v"   => \$verbose,
+   "r"   => \$reset,
+   "e=s" => \$expiration_hours,
+
    # 'k'   => \$k,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
 
 my $base = $ARGV[0];
+my $abs  = `cd $base; pwd`;
+chomp $abs;
+$base = $abs;
+
+my $now_sec        = time();
+my $expiration_sec = $expiration_hours * 3600;
+my $cutoff_sec     = $now_sec - $expiration_sec;
 
 my $exclude_compiled = $exclude_pattern ? qr/$exclude_pattern/ : undef;
 
@@ -87,12 +103,12 @@ $verbose && print "base=$base, used=$used\n";
 
 my @todos = ( [ $base, $used, 0 ] );
 
-my $format = 'size=%13sk, path=%-50s, %s' . "\n";    # right-align size, left-align path
+my $print_format = '%11sk %s' . "\n";    # right-align size %13s, left-align path %-13s
 
 while (@todos) {
    my $todo = shift @todos;
    my ( $path, $size, $level ) = @$todo;
-   printf $format, $size, $path, "level=$level";
+   printf $print_format, $size, $path, "level=$level";
 
    if ( -d $path ) {
       my @fulls;
@@ -112,7 +128,7 @@ while (@todos) {
          push @todos, map { [ $_, $size_by_path->{$_}, $level + 1 ] } @big_ones;
       } else {
          for my $path (@big_ones) {
-            printf $format, $size_by_path->{$path}, $path, "reached max_depth=$max_depth";
+            printf $print_format, $size_by_path->{$path}, $path, "reached max_depth=$max_depth";
          }
       }
    }
@@ -160,10 +176,23 @@ sub find_the_big_ones {
    }
 }
 
-sub du_1_node {
-   my ( $path, $opt ) = @_;
+my $du_by_abs = {};
+my $du_store_ofh;
 
-   my $cmd = "du -sk $path";
+sub du_1_node {
+   my ( $abs, $opt ) = @_;
+
+   if ( !$du_store_ofh ) {
+      $du_store_ofh = init_du_store($opt);    # this also init $du_by_abs
+   }
+
+   if ( exists $du_by_abs->{$abs} ) {
+      my $size = $du_by_abs->{$abs};
+      $verbose && print "found du in store file: $size $abs\n";
+      return $size;
+   }
+
+   my $cmd = "du -sk $abs";
    $verbose && print "cmd=$cmd\n";
 
    my $output = `$cmd`;
@@ -173,5 +202,46 @@ sub du_1_node {
    # 12      Linux
    chomp $output;
    my ( $size, $path2 ) = split /\s+/, $output, 2;
+   $du_by_abs->{$abs} = $size;
+   print $du_store_ofh "$size $now_sec $abs\n";
+
    return $size;
+}
+
+sub init_du_store {
+   my ($opt)    = @_;
+   my $username = get_user();
+   my $file     = "/tmp/$prog.$username.txt";
+
+   my @to_keep;
+   my $file_need_change;
+
+   if ( -f $file ) {
+      open my $ifh, "<$file" or croak "cannot read $file: $!";
+      while ( my $line = <$ifh> ) {
+         chomp $line;
+         next if !$line;
+         my ( $size, $sec_stamp, $abs ) = split /\s+/, $line, 3;
+         if ( $sec_stamp < $cutoff_sec ) {
+            $verbose && print "skip $abs, old_time=$sec_stamp < cutoff_time=$cutoff_sec\n";
+            $file_need_change++;
+            next;
+         }
+         $du_by_abs->{$abs} = $size;
+         push @to_keep, $line;
+      }
+      close $ifh;
+   }
+
+   my $ofh;
+   if ( $file_need_change or $reset ) {
+      $verbose && print "rewrite store file: $file\n";
+      open $ofh, ">$file" or croak "cannot write to $file: $!";
+      print $ofh "$_\n" for @to_keep;
+   } else {
+      $verbose && print "append to store file: $file\n";
+      open $ofh, ">>$file" or croak "cannot append to $file: $!";
+   }
+
+   return $ofh;
 }
