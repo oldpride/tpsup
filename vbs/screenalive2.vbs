@@ -38,6 +38,42 @@ Function sprintf(sFmt, aData)
    g_oSB.Length = 0
 End Function
 
+Function get_cursor_pos()
+    Dim objShell
+    Set objShell = WScript.CreateObject("WScript.Shell")
+
+    ' Specify the path to your Python interpreter and script
+    Dim pythonExePath
+    ' pythonExePath = "C:\Python\python.exe"
+    ' use the python in PATH
+    pythonExePath = "python"
+
+    Dim pythonScriptPath
+    ' pythonScriptPath = "C:\path\to\your\python\script.py"
+    'script path uses environment variable
+    pythonScriptPath = "%TPSUP%\python3\scripts\get_cursor_pos.py"
+    WScript.echo pythonScriptPath
+
+    Dim cmd
+    cmd = pythonExePath & " " & pythonScriptPath
+    WScript.echo cmd
+
+    ' Run the command and capture stdout, stderr, and the exit code
+    Dim objExec
+    Set objExec = objShell.Exec(cmd)
+
+    ' Read the stdout
+    Dim stdout
+    stdout = objExec.StdOut.ReadAll()
+
+    return stdout
+End Function
+
+    ' 'stdout is like 123,456. assign it to x,y
+    ' Dim x, y
+    ' x = Split(stdout, ",")(0)
+    ' y = Split(stdout, ",")(1)
+
 if mode = "worktime" then
     HHMM1 = TimeValue("6:20am")
     HHMM2 = TimeValue("3:00pm")
@@ -63,6 +99,12 @@ end if
 
 WScript.Echo "HHMM1='" & HHMM1 & "'"
 WScript.Echo "HHMM2='" & HHMM2 & "'"
+
+cursor_pos = get_cursor_pos()
+old_x = Split(cursor_pos, ",")(0)
+old_y = Split(cursor_pos, ",")(1)
+WScript.Echo "old_x='" & old_x & "'"
+WScript.Echo "old_y='" & old_y & "'"
 
 set wsc = CreateObject("WScript.Shell")
 Do
