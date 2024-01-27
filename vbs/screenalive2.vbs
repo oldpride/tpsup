@@ -95,6 +95,22 @@ Function get_cursor_pos()
         Dim stdout
         stdout = objExec.StdOut.ReadAll()
 
+        ' Read the stderr
+        Dim stderr
+        stderr = objExec.StdErr.ReadAll()
+        ' if stderr is not empty, then print it
+        if stderr <> "" then
+            WScript.echo "stderr = " & stderr
+        end if
+
+        ' Read the exit code
+        Dim exitCode
+        exitCode = objExec.ExitCode
+        ' if exitCode is not 0, then print it
+        if exitCode <> 0 then
+            WScript.echo "exitCode = " & exitCode
+        end if
+
         ' remove the trailing newline
         stdout = Replace(stdout, vbCrLf, "")
 

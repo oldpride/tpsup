@@ -1,5 +1,7 @@
 #!/bin/bash
 
+prog=`basename $0`
+
 usage () {
    cat >&2 <<EOF
 usage:
