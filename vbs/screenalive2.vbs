@@ -55,7 +55,7 @@ pythonScriptPath = "%TPSUP%\python3\scripts\get_cursor_pos.py"
 'resolve environment variables
 pythonScriptPath = objShell.ExpandEnvironmentStrings(pythonScriptPath)
 
-WScript.echo pythonScriptPath
+WScript.echo "script path=" & pythonScriptPath
 
 'check whether the script exists
 Dim fso
@@ -67,14 +67,18 @@ if has_script = false then
     'return value by assigning to function name
 end if
 
+Dim cmd
+' cmd = pythonExePath & " " & pythonScriptPath
+' wrap the script path in double quotes in case it contains spaces
+' in vbscript, double quotes are escaped by double double quotes
+cmd = pythonExePath & " " & """" & pythonScriptPath & """"
+
+WScript.echo "cmd = " & cmd
+
 Function get_cursor_pos()
     if has_script = false then
         get_cursor_pos = ""
     else
-        Dim cmd
-        cmd = pythonExePath & " " & pythonScriptPath
-        ' WScript.echo cmd
-
         ' Run the command and capture stdout, stderr, and the exit code
         Dim objExec
         Set objExec = objShell.Exec(cmd)
