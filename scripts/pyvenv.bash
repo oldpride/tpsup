@@ -39,7 +39,7 @@ fi
 
 action=$1
 
-. $TPSUP/profile
+. "$TPSUP/profile"
 #p3env
 
 uname=`uname -a`
@@ -65,13 +65,13 @@ fi
 # $ python --version
 # Python 3.10.6
 
-pythons="python3 python"
+pythons="python python3"
 # WSL only has python3 at /usr/bin/python3
 
 for p in `echo $pythons`
 do
-   if which $p; then
-      python=$p
+   if which "$p"; then
+      python="$p"
       break
    fi
 done
@@ -81,7 +81,7 @@ if [ "X$python" = "X" ] ;then
    exit 1
 fi
 
-python_version=`$python --version|cut -d' ' -f2|cut -d. -f1-2`
+python_version=`"$python" --version|cut -d' ' -f2|cut -d. -f1-2`
 expected_sitevenv="$SITEBASE/python3/venv/$OS/${PREFIX}${VERSION}-python$python_version"
 
 if [ $action = check ]; then
@@ -93,12 +93,12 @@ if [ $action = check ]; then
       echo "OK:    SITEVENV matched expected"
    fi
    set -x
-   cd $SITEVENV
+   cd "$SITEVENV"
    pwd
 elif [ $action = make ]; then
    echo "this may take a minute ..."
    set -x
-   $python -m venv $SITEVENV
+   "$python" -m venv "$SITEVENV"
 else 
    echo "unknown action='$action'" >&2
    usage
