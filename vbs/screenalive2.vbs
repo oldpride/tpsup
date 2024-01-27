@@ -141,7 +141,7 @@ set wsc = CreateObject("WScript.Shell")
 Do
     WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss}", Array(dt)) & " sleep 5 minutes"
     'FIVE MINUTES
-    WScript.Sleep(1*60*1000)
+    WScript.Sleep(5*60*1000)
 
     dt = now()
     HHMM_now = TimeValue(dt)
