@@ -77,9 +77,9 @@ end if
 
 Dim cmd
 ' cmd = pythonExePath & " " & pythonScriptPath
-' wrap the script path in double quotes in case it contains spaces
+' wrap the path in double quotes in case it contains spaces
 ' in vbscript, double quotes are escaped by double double quotes
-cmd = pythonExePath & " " & """" & pythonScriptPath & """"
+cmd = """" & pythonExePath & """" & " " & """" & pythonScriptPath & """"
 
 WScript.echo "cmd = " & cmd
 
