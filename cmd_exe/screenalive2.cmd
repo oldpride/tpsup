@@ -20,4 +20,6 @@ if NOT %argC% == 1 (
 
 endlocal
 
+call p3env
+call svenv
 @cscript "%TPSUP%/vbs/screenalive2.vbs" %*
