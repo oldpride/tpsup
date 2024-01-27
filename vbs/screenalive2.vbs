@@ -53,7 +53,7 @@ Dim objExec
 Set objExec = objShell.Exec(cmd)
 Dim stdout
 stdout = objExec.StdOut.ReadAll()
-WScript.echo "stdout = " & stdout
+WScript.echo "python path = " & stdout
 
 Dim pythonScriptPath
 ' pythonScriptPath = "C:\path\to\your\python\script.py"
@@ -63,7 +63,7 @@ pythonScriptPath = "%TPSUP%\python3\scripts\get_cursor_pos.py"
 'resolve environment variables
 pythonScriptPath = objShell.ExpandEnvironmentStrings(pythonScriptPath)
 
-WScript.echo "script path=" & pythonScriptPath
+WScript.echo "script path =" & pythonScriptPath
 
 'check whether the script exists
 Dim fso
