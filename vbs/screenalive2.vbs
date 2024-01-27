@@ -47,6 +47,14 @@ Dim pythonExePath
 ' use the python in PATH
 pythonExePath = "python"
 
+cmd = "where " & pythonExePath
+WScript.echo "cmd = " & cmd
+Dim objExec
+Set objExec = objShell.Exec(cmd)
+Dim stdout
+stdout = objExec.StdOut.ReadAll()
+WScript.echo "stdout = " & stdout
+
 Dim pythonScriptPath
 ' pythonScriptPath = "C:\path\to\your\python\script.py"
 'script path uses environment variable
