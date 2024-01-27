@@ -141,7 +141,7 @@ Do
     HHMM_now = TimeValue(dt)
 
     if HHMM1 <= HHMM_now AND HHMM_now <= HHMM2 then 
-        WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "within (" & HHMM1 & "," & HHMM2 & ") click F13 key"
+        WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "within (" & HHMM1 & "," & HHMM2 & ")"
 
        'check whether the cursor position has changed.
         '  if it has not changed, then click F13 key
