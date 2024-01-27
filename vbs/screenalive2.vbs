@@ -132,12 +132,18 @@ WScript.Echo "HHMM2='" & HHMM2 & "'"
 'save the current cursor position
 Dim cursor_pos
 cursor_pos_old = get_cursor_pos()
-WScript.Echo "cursor_pos='" & cursor_pos & "'"
+WScript.Echo "cursor_pos_old='" & cursor_pos_old & "'"
 
+Dim dt : dt = now()
+HHMM_now = TimeValue(dt)
 
 set wsc = CreateObject("WScript.Shell")
 Do
-    Dim dt : dt = now()
+    WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss}", Array(dt)) & " sleep 5 minutes"
+    'FIVE MINUTES
+    WScript.Sleep(1*60*1000)
+
+    dt = now()
     HHMM_now = TimeValue(dt)
 
     if HHMM1 <= HHMM_now AND HHMM_now <= HHMM2 then 
@@ -167,8 +173,6 @@ Do
         end if
     end if
 
-    WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss}", Array(dt)) & " sleep 5 minutes"
-    'fIVE MINUTES
-    WScript.Sleep(5*60*1000)
+
 
 Loop
