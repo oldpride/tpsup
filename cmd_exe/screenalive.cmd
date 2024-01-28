@@ -2,6 +2,7 @@
 
 setlocal EnableDelayedExpansion
 
+set "prog=%~n0"
 REM batch script doesn't have a $# equivalent. the following script is the best so far
 set argC=0
 for %%x in (%*) do Set /A argC+=1
