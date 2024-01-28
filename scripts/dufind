@@ -97,11 +97,19 @@ chomp @DF;
 
 my @a = split /\s+/, $DF[1];
 
-my $used = $a[2];
+my $used        = $a[2];
+my $mount_point = $a[5];
 
-$verbose && print "base=$base, used=$used\n";
+$verbose && print "mount_point=$mount_point, used=${used}k\n";
 
-my @todos = ( [ $base, $used, 0 ] );
+# my @todos = ( [ $base, $used, 0 ] );
+my @todos;
+if ( $base eq $mount_point ) {
+   @todos = ( [ $base, $used, 0 ] );
+} else {
+   my $size = du_1_node($base);
+   @todos = ( [ $base, $size, 0 ] );
+}
 
 my $print_format = '%11sk %s' . "\n";    # right-align size %13s, left-align path %-13s
 
@@ -152,14 +160,15 @@ sub find_the_big_ones {
       my $size;
       if ( -d $path ) {
          $size = du_1_node($path);
+         $verbose && print "dir=$path, size=${size}k\n";
       } elsif ( -f $path ) {
          $size = -s $path;
          $size = int( $size / 1024 );
+         $verbose && print "file=$path, size=${size}k\n";
       } else {
          $verbose && print "path=$path is not a file or directory\n";
          next;
       }
-      $verbose && print "found path=$path, size=${size}k\n";
       $size_by_path->{$path} = $size;
       if ( $size > $biggest_size ) {
          return ($path);
@@ -216,7 +225,7 @@ sub init_du_store {
    my @to_keep;
    my $file_need_change;
 
-   if ( -f $file ) {
+   if ( -f $file && !$reset ) {
       open my $ifh, "<$file" or croak "cannot read $file: $!";
       while ( my $line = <$ifh> ) {
          chomp $line;
