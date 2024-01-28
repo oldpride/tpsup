@@ -38,6 +38,87 @@ Function sprintf(sFmt, aData)
    g_oSB.Length = 0
 End Function
 
+Dim objShell
+Set objShell = WScript.CreateObject("WScript.Shell")
+
+' Specify the path to your Python interpreter and script
+Dim pythonExePath
+' pythonExePath = "C:\Python\python.exe"
+' use the python in PATH
+pythonExePath = "python"
+
+cmd = "where " & pythonExePath
+WScript.echo "cmd = " & cmd
+Dim objExec
+Set objExec = objShell.Exec(cmd)
+Dim stdout
+stdout = objExec.StdOut.ReadAll()
+WScript.echo "python path = " & stdout
+
+Dim pythonScriptPath
+' pythonScriptPath = "C:\path\to\your\python\script.py"
+'script path uses environment variable
+pythonScriptPath = "%TPSUP%\python3\scripts\get_cursor_pos.py"
+
+'resolve environment variables
+pythonScriptPath = objShell.ExpandEnvironmentStrings(pythonScriptPath)
+
+WScript.echo "script path =" & pythonScriptPath
+
+'check whether the script exists
+Dim fso
+Set fso = CreateObject("Scripting.FileSystemObject")
+Dim has_script
+has_script = fso.FileExists(pythonScriptPath)
+if has_script = false then
+    WScript.echo "ERROR: python script '" & pythonScriptPath & "' does not exist"
+    'return value by assigning to function name
+end if
+
+Dim cmd
+' cmd = pythonExePath & " " & pythonScriptPath
+' wrap the path in double quotes in case it contains spaces
+' in vbscript, double quotes are escaped by double double quotes
+cmd = """" & pythonExePath & """" & " " & """" & pythonScriptPath & """"
+
+WScript.echo "cmd = " & cmd
+
+Function get_cursor_pos()
+    if has_script = false then
+        get_cursor_pos = ""
+    else
+        ' Run the command and capture stdout, stderr, and the exit code
+        Dim objExec
+        Set objExec = objShell.Exec(cmd)
+
+        ' Read the stdout
+        Dim stdout
+        stdout = objExec.StdOut.ReadAll()
+
+        ' Read the stderr
+        Dim stderr
+        stderr = objExec.StdErr.ReadAll()
+        ' if stderr is not empty, then print it
+        if stderr <> "" then
+            WScript.echo "stderr = " & stderr
+        end if
+
+        ' Read the exit code
+        Dim exitCode
+        exitCode = objExec.ExitCode
+        ' if exitCode is not 0, then print it
+        if exitCode <> 0 then
+            WScript.echo "exitCode = " & exitCode
+        end if
+
+        ' remove the trailing newline
+        stdout = Replace(stdout, vbCrLf, "")
+
+        'return value by assigning to function name
+        get_cursor_pos = stdout
+    end if
+End Function
+
 if mode = "worktime" then
     HHMM1 = TimeValue("6:20am")
     HHMM2 = TimeValue("3:00pm")
@@ -64,18 +145,35 @@ end if
 WScript.Echo "HHMM1='" & HHMM1 & "'"
 WScript.Echo "HHMM2='" & HHMM2 & "'"
 
+'save the current cursor position
+Dim cursor_pos
+cursor_pos_old = get_cursor_pos()
+WScript.Echo "cursor_pos_old='" & cursor_pos_old & "'"
+
+
 set wsc = CreateObject("WScript.Shell")
 Do
     Dim dt : dt = now()
     HHMM_now = TimeValue(dt)
 
     if HHMM1 <= HHMM_now AND HHMM_now <= HHMM2 then 
-        WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "within (" & HHMM1 & "," & HHMM2 & ") click F13 key"
+        WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "within (" & HHMM1 & "," & HHMM2 & ")"
 
-       'F13 key is normally not used. therefore, clicking it won't cause side effect
-       'found side effect of F13 - it changes lower case to upper case
-       'To access function keys F13 - F24, press the Shift key in conjunction with function keys F1 - F12
-       wsc.SendKeys("{F13}")
+       'check whether the cursor position has changed.
+        '  if it has not changed, then click F13 key
+        'F13 key is normally not used.
+        'found side effect of F13 - it changes lower case to upper case. therefore, avoid using it if possible.
+        'To access function keys F13 - F24, press the Shift key in conjunction with function keys F1 - F12.
+        Dim cursor_pos_now
+        cursor_pos_now = get_cursor_pos()
+        WScript.Echo "cursor_pos_now='" & cursor_pos_now & "'"
+        if cursor_pos_now = cursor_pos_old then
+            WScript.Echo "cursor_pos_now='" & cursor_pos_now & "' is the same as cursor_pos_old='" & cursor_pos_old & "', click F13 key"
+            wsc.SendKeys("{F13}")
+        else
+            WScript.Echo "cursor_pos_now='" & cursor_pos_now & "' is different from cursor_pos_old='" & cursor_pos_old & "', do nothing"
+        end if
+        cursor_pos_old = cursor_pos_now
     else
         if forever = false then
             WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss} ", Array(dt)) & "outside (" & HHMM1 & "," & HHMM2 & ") exit"
@@ -88,6 +186,5 @@ Do
     WScript.Echo sprintf("{0:yyyy/MM/dd hh:mm:ss}", Array(dt)) & " sleep 5 minutes"
     'fIVE MINUTES
     WScript.Sleep(5*60*1000)
-
 
 Loop

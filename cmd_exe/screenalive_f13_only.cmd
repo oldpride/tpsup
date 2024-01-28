@@ -20,12 +20,4 @@ if NOT %argC% == 1 (
 
 endlocal
 
-REM check whether i am already in venv
-if defined VIRTUAL_ENV (
-    echo INFO:   already in venv %VIRTUAL_ENV%
-) else  (
-    call p3env
-    call svenv
-)
-@cscript "%TPSUP%/vbs/screenalive2.vbs" %*
-call dvenv
+@cscript "%TPSUP%/vbs/screenalive_f13_only.vbs" %*
