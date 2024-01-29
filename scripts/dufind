@@ -35,7 +35,11 @@ for my $dir (@no_du_dirs) {
 }
 
 # cannot or no need to drill into these dirs
-my @no_drill_in_dirs = ( '.', '..', '.zfs', '.snapshot', '.git', '.vscode', '__pycache__', 'log', 'logs' );
+# my $no_drill_in_pattern  = '^[._]';
+my $no_drill_in_compiled = qr/^[._-]/;
+
+# my @no_drill_in_dirs = ( '.', '..', '.zfs', '.snapshot', '.git', '.vscode', '__pycache__', 'log', 'logs' );
+my @no_drill_in_dirs = ( 'log', 'logs', 'tmp' );
 my $no_drill_in;
 for my $dir (@no_drill_in_dirs) {
    $no_drill_in->{$dir} = 1;
@@ -155,7 +159,8 @@ while (@todos) {
    print "\n";
    printf $print_format, $size, $path, "level=$level";
 
-   if ( -d $path && !$no_drill_in->{ basename($path) } ) {
+   my $short2 = basename($path);
+   if ( -d $path && !$no_drill_in->{$short2} && $short2 !~ $no_drill_in_compiled ) {
       my @fulls;
       opendir( DIR, $path ) or die "Cannot open $path\n";
       my @shorts = readdir(DIR);
