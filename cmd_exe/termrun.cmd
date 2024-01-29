@@ -1,5 +1,7 @@
 @echo off
 
+
+
 set "prog=%~n0"
 
 if "%1"=="" goto usage
@@ -26,12 +28,16 @@ set type=%1
 if "%2"=="" goto usage
 set number=%2
 
+@REM this only affects block of code inside of ()
+@REM see test_if_set.cmd
+setlocal ENABLEDELAYEDEXPANSION
+
 if "%type%" == "git" (
     if exist "C:\Program Files\Git\usr\bin\mintty.exe" (
         set "git_path=C:\Program Files\Git\usr\bin\mintty.exe"
     )
 
-    if "%git_path%"=="" (
+    if "!git_path!" == "" (
         echo git-bash not found
         exit /b 1
     )
@@ -39,7 +45,7 @@ if "%type%" == "git" (
     @REM run git-bash number of times
     for /l %%x in (1, 1, %number%) do (
         @REM use start "" to return the prompt
-        start "" "%git_path%" --nodaemon -o AppID=GitForWindows.Bash -o AppLaunchCmd="C:\Program Files\Git\git-bash.exe" -o AppName="Git Bash" -i "C:\Program Files\Git\git-bash.exe" --store-taskbar-properties -- /usr/bin/bash --login -i
+        start "" "!git_path!" --nodaemon -o AppID=GitForWindows.Bash -o AppLaunchCmd="C:\Program Files\Git\git-bash.exe" -o AppName="Git Bash" -i "C:\Program Files\Git\git-bash.exe" --store-taskbar-properties -- /usr/bin/bash --login -i
     )
 
     exit /b 0
@@ -55,7 +61,7 @@ if "%type%" == "cyg" (
         set "cygwin_path=C:\Program Files\cygwin64\bin\mintty.exe"
     )
 
-    if "%cygwin_path%"=="" (
+    if "!cygwin_path!"=="" (
         echo cygwin not found
         exit /b 1
     )
@@ -66,7 +72,7 @@ if "%type%" == "cyg" (
 
     @REM run cygwin number of times
     for /l %%x in (1, 1, %number%) do (
-        "%cygwin_path%" -i /Cygwin-Terminal.ico -
+        "!cygwin_path!" -i /Cygwin-Terminal.ico -
     )
 
     @REM restore HOME
@@ -83,12 +89,14 @@ if "%type%" == "cmd" (
     exit /b 0
 )
 
+endlocal
+
 @REM : echo. is to print blank line (empty line)
 :usage
    echo.
    echo usage:   
    echo.
-   echo    %prog% [flags] cyg|git|cmd number
+   echo    %prog% [flags] "cyg|git|cmd" number
    echo.
    echo.   launch a number of cygwin terminals
    echo.       'cyg' is the cygwin terminals
@@ -101,8 +109,10 @@ if "%type%" == "cmd" (
    echo.
    echo    %prog% cyg 2
    echo.   %prog% git 3
+   echo.   %prog% cmd 3
    echo.
    @REM this is function return; it doesn't exit the script.
    @REM no good way to exit script from inside a function
    exit /b 0
+
 

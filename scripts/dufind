@@ -4,7 +4,9 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(get_user);
+use TPSUP::UTIL qw(get_user top_array);
+# import basename() and dirname() from File::Basename
+use File::Basename qw(basename dirname);
 
 my $prog = $0;
 $prog =~ s:.*/::;
@@ -21,13 +23,19 @@ my $expiration_hours = 120;    # hours
 # stop searching other items under a folder if we already searched this percent of parent
 my $stop_percent = 70;
 
-my @du_exclude_dirs = ( '.zfs', '.snapshot' );
-my $du              = "du";
-for my $dir (@du_exclude_dirs) {
-   $du .= " --exclude=$dir";
+my @no_du_dirs = (
+   '.zfs',         # cannot du. will cause dead loop
+   '.snapshot',    # cannot count this into du
+);
+my $du_cmd = "du";
+my $no_du;
+for my $dir (@no_du_dirs) {
+   $du_cmd .= " --exclude=$dir";
+   $no_du->{$dir} = 1;
 }
 
-my @no_drill_in_dirs = ( '.', '..', '.zfs', '.snapshot', '.git', 'log', 'logs' );
+# cannot or no need to drill into these dirs
+my @no_drill_in_dirs = ( '.', '..', '.zfs', '.snapshot', '.git', '.vscode', '__pycache__', 'log', 'logs' );
 my $no_drill_in;
 for my $dir (@no_drill_in_dirs) {
    $no_drill_in->{$dir} = 1;
@@ -63,7 +71,9 @@ description:
 
    -f store_file          default to $store_file
 
-   when 'du', 'du' excludes these dirs: @du_exclude_dirs
+   The following dirs are not drilled in: @no_drill_in_dirs
+
+   When 'du', 'du' excludes these dirs: @no_du_dirs.
 
 examples:
 
@@ -126,7 +136,7 @@ my @a = split /\s+/, $DF[1];
 my $used        = $a[2];
 my $mount_point = $a[5];
 
-$verbose && print "mount_point=$mount_point, used=${used}k\n";
+print "mount_point=$mount_point, used=${used}k\n";
 
 my $print_format = '%11sk %s %s' . "\n";    # right-align size %13s, left-align path %-13s
 
@@ -142,21 +152,38 @@ if ( $base eq $mount_point ) {
 while (@todos) {
    my $todo = shift @todos;
    my ( $path, $size, $level ) = @$todo;
+   print "\n";
    printf $print_format, $size, $path, "level=$level";
 
-   if ( -d $path ) {
+   if ( -d $path && !$no_drill_in->{ basename($path) } ) {
       my @fulls;
       opendir( DIR, $path ) or die "Cannot open $path\n";
       my @shorts = readdir(DIR);
       closedir(DIR);
 
       for my $short (@shorts) {
-         next if $no_drill_in->{$short};
-         next if $exclude_compiled and $short =~ $exclude_compiled;
-         push @fulls, "$path/$short";
+         next if $short eq '.' or $short eq '..' or $no_du->{$short};
+
+         my $full = "$path/$short";
+         if ($exclude_compiled) {
+            if ( $short =~ $exclude_compiled ) {
+               $verbose && print "skip $short, exclude_pattern=$exclude_pattern\n";
+               next;
+            }
+            if ( $full =~ $exclude_compiled ) {
+               $verbose && print "skip $full, exclude_pattern=$exclude_pattern\n";
+               next;
+            }
+         }
+         push @fulls, $full;
       }
 
       my @big_ones = find_the_big_ones( \@fulls, { parent_size => $size } );
+      for my $path (@big_ones) {
+         my $size       = $size_by_path->{$path};
+         my $next_level = $level + 1;
+         printf $print_format, $size, $path, "level=$next_level";
+      }
 
       if ( $level < $max_depth ) {
          push @todos, map { [ $_, $size_by_path->{$_}, $level + 1 ] } @big_ones;
@@ -209,12 +236,8 @@ sub find_the_big_ones {
    # $b is before $a because we want to sort in reverse order
    my @sorted = sort { $size_by_path->{$b} <=> $size_by_path->{$a} } @sized_paths;
 
-   if ( scalar(@sorted) > $top ) {
-      # perl slice will insert undef if ending index is beyond
-      return @sorted[ 0 .. $top ];
-   } else {
-      return @sorted;
-   }
+   # perl slice will insert undef if ending index is beyond
+   return @{ top_array( \@sorted, $top ) };
 }
 
 my $du_by_abs = {};
@@ -233,7 +256,7 @@ sub du_1_node {
       return $size;
    }
 
-   my $cmd = "$du -sk $abs";
+   my $cmd = "$du_cmd -sk $abs";
    $verbose && print "cmd=$cmd\n";
 
    my $output = `$cmd`;
@@ -266,7 +289,13 @@ sub init_du_store {
          chomp $line;
          next if !$line;
 
-         next if $reset_pattern and $line =~ $reset_pattern;
+         if ($reset_pattern) {
+            if ( $line =~ $reset_pattern ) {
+               $verbose && print "skip $line, reset_pattern=$reset_pattern\n";
+               $file_need_change++;
+               next;
+            }
+         }
 
          my ( $size, $sec_stamp, $abs ) = split /\s+/, $line, 3;
          if ( $sec_stamp < $cutoff_sec ) {
@@ -281,7 +310,7 @@ sub init_du_store {
    }
 
    my $ofh;
-   if ( $file_need_change or $reset ) {
+   if ( $file_need_change or ( $reset and $reset eq 'all' ) ) {
       $verbose && print "rewrite store file: $store_file\n";
       open $ofh, ">$store_file" or croak "cannot write to $store_file: $!";
       print $ofh "$_\n" for @to_keep;
