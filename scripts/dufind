@@ -18,10 +18,19 @@ my $exclude_pattern;
 my $max_depth        = 20;
 my $expiration_hours = 120;    # hours
 
+# stop searching other items under a folder if we already searched this percent of parent
+my $stop_percent = 70;
+
 my @du_exclude_dirs = ( '.zfs', '.snapshot' );
 my $du              = "du";
 for my $dir (@du_exclude_dirs) {
    $du .= " --exclude=$dir";
+}
+
+my @no_drill_in_dirs = ( '.', '..', '.zfs', '.snapshot', '.git', 'log', 'logs' );
+my $no_drill_in;
+for my $dir (@no_drill_in_dirs) {
+   $no_drill_in->{$dir} = 1;
 }
 
 sub usage {
@@ -42,7 +51,13 @@ description:
 
    -x exclude_pattern     Perl RegEx style, exclude.
 
-   -reset                 reset du store
+   -stop percent          stop checking the current folder further after
+                          this percent of size is investigated.
+                          default to $stop_percent
+
+   -reset pattern         reset du store's files that match this pattern.
+                          default to no reset.
+                          to reset all, use 'all' or '.*'.
 
    -e expiration_hours    in hours. default to $expiration_hours
 
@@ -64,12 +79,11 @@ EOF
 my ( $verbose, $unit, $reset );
 
 GetOptions(
-   "x=s"   => \$exclude_pattern,
-   "v"     => \$verbose,
-   "reset" => \$reset,
-   "e=s"   => \$expiration_hours,
-
-   # 'k'   => \$k,
+   "x=s"     => \$exclude_pattern,
+   "v"       => \$verbose,
+   "reset=s" => \$reset,
+   "e=s"     => \$expiration_hours,
+   "stop=s"  => \$stop_percent,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -85,8 +99,7 @@ my $cutoff_sec     = $now_sec - $expiration_sec;
 
 my $exclude_compiled = $exclude_pattern ? qr/$exclude_pattern/ : undef;
 
-my $top           = 2;
-my $biggest_ratio = 0.5;
+my $top = 2;
 my $size_by_path;
 # my $unit_divsor = $k ? 1024 : 1;
 # my $unit_name   = $k ? 'k'  : 'byte';
@@ -138,7 +151,7 @@ while (@todos) {
       closedir(DIR);
 
       for my $short (@shorts) {
-         next if $short eq '.' or $short eq '..' or $short eq '.zfs' or $short eq '.snapshot';
+         next if $no_drill_in->{$short};
          next if $exclude_compiled and $short =~ $exclude_compiled;
          push @fulls, "$path/$short";
       }
@@ -164,11 +177,12 @@ sub find_the_big_ones {
    my ( $paths, $opt ) = @_;
 
    my $parent_size = $opt->{parent_size};
-   my $biggest_size;
+   my $stop_size;
    if ($parent_size) {
-      $biggest_size = $parent_size * $biggest_ratio;
+      $stop_size = $parent_size * $stop_percent;
    }
 
+   my $sub_total_size = 0;
    for my $path (@$paths) {
       my $size;
       if ( -d $path ) {
@@ -183,12 +197,17 @@ sub find_the_big_ones {
          next;
       }
       $size_by_path->{$path} = $size;
-      if ( $size > $biggest_size ) {
-         return ($path);
+      $sub_total_size += $size;
+      if ( $sub_total_size > $stop_size ) {
+         last;
       }
    }
 
-   my @sorted = sort { $size_by_path->{$b} <=> $size_by_path->{$a} } @$paths;
+   # somme $size_by_path->{} may not be defined. but as we only pick the biggest ones, it should be ok.
+   my @sized_paths = grep { exists( $size_by_path->{$_} ) } @$paths;
+
+   # $b is before $a because we want to sort in reverse order
+   my @sorted = sort { $size_by_path->{$b} <=> $size_by_path->{$a} } @sized_paths;
 
    if ( scalar(@sorted) > $top ) {
       # perl slice will insert undef if ending index is beyond
@@ -236,11 +255,19 @@ sub init_du_store {
    my @to_keep;
    my $file_need_change;
 
-   if ( -f $store_file && !$reset ) {
+   my $reset_pattern;
+   if ( $reset && $reset ne 'all' ) {
+      $reset_pattern = qr/$reset/;
+   }
+
+   if ( -f $store_file && ( !$reset or $reset ne 'all' ) ) {
       open my $ifh, "<$store_file" or croak "cannot read $store_file: $!";
       while ( my $line = <$ifh> ) {
          chomp $line;
          next if !$line;
+
+         next if $reset_pattern and $line =~ $reset_pattern;
+
          my ( $size, $sec_stamp, $abs ) = split /\s+/, $line, 3;
          if ( $sec_stamp < $cutoff_sec ) {
             $verbose && print "skip $abs, old_time=$sec_stamp < cutoff_time=$cutoff_sec\n";
