@@ -17,7 +17,7 @@ my $username   = get_user();
 my $store_file = "/tmp/$prog.$username.txt";
 
 my $exclude_pattern;
-my $max_depth        = 20;
+my $max_depth        = 10;
 my $expiration_hours = 120;    # hours
 
 # stop searching other items under a folder if we already searched this percent of parent
@@ -75,6 +75,9 @@ description:
 
    -f store_file          default to $store_file
 
+   -depth int             max depth (level) to drill in. default to $max_depth.
+                          command line level is 0.
+
    The following dirs are not drilled in: @no_drill_in_dirs
 
    When 'du', 'du' excludes these dirs: @no_du_dirs.
@@ -98,6 +101,7 @@ GetOptions(
    "reset=s" => \$reset,
    "e=s"     => \$expiration_hours,
    "stop=s"  => \$stop_percent,
+   "depth=s" => \$max_depth,
 ) or usage("Could not parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
