@@ -5,8 +5,9 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 use TPSUP::UTIL qw(get_user top_array);
-# import basename() and dirname() from File::Basename
-use File::Basename qw(basename dirname);
+# import basename() from File::Basename
+use File::Basename qw(basename);
+use TPSUP::PRINT   qw(commify);
 
 my $prog = $0;
 $prog =~ s:.*/::;
@@ -179,7 +180,7 @@ while (@todos) {
    my $todo = shift @todos;
    my ( $path, $size, $level ) = @$todo;
    print "\n";
-   printf $print_format, $size, $path, "level=$level";
+   printf $print_format, commify($size), $path, "level=$level";
 
    my $short2 = basename($path);
    if ( -d $path && !$no_drill_in->{$short2} && $short2 !~ $no_drill_in_compiled ) {
@@ -214,7 +215,7 @@ while (@todos) {
       for my $path (@big_ones) {
          my $size       = $size_by_path->{$path};
          my $next_level = $level + 1;
-         printf $print_format, $size, $path, "level=$next_level";
+         printf $print_format, commify($size), $path, "level=$next_level";
       }
 
       if ( $level < $max_depth ) {
@@ -310,9 +311,9 @@ sub init_du_store {
    my @to_keep;
    my $file_need_change;
 
-   my $reset_pattern;
+   my $reset_compiled;
    if ( $reset && $reset ne 'all' ) {
-      $reset_pattern = qr/$reset/;
+      $reset_compiled = qr/$reset/;
    }
 
    if ( -f $store_file && ( !$reset or $reset ne 'all' ) ) {
@@ -321,9 +322,9 @@ sub init_du_store {
          chomp $line;
          next if !$line;
 
-         if ($reset_pattern) {
-            if ( $line =~ $reset_pattern ) {
-               $verbose && print "skip $line, reset_pattern=$reset_pattern\n";
+         if ($reset_compiled) {
+            if ( $line =~ $reset_compiled ) {
+               $verbose && print "reset pattern matched $line in store, will refresh\n";
                $file_need_change++;
                next;
             }

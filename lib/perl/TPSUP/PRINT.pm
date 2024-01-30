@@ -5,7 +5,7 @@ use warnings;
 use base qw( Exporter );
 our @EXPORT_OK = qw(
   render_arrays
-
+  commify
 );
 
 use Carp;
@@ -119,15 +119,15 @@ sub render_one_row {
 sub render_arrays {
    my ( $rows, $opt ) = @_;
 
-   my $verbose      = $opt->{verbose} || 0;
-   my $TakeTail     = $opt->{TakeTail};
-   my $RenderHeader = $opt->{RenderHeader};
-   my $headers2     = $opt->{headers};
-   my $RowType      = $opt->{RowType};
-   my $Vertical     = $opt->{Vertical};
-   my $MaxRows      = $opt->{MaxRows};
-   my $interactive  = $opt->{interactive};
-   my $out_fh       = $opt->{out_fh};
+   my $verbose        = $opt->{verbose} || 0;
+   my $TakeTail       = $opt->{TakeTail};
+   my $RenderHeader   = $opt->{RenderHeader};
+   my $headers2       = $opt->{headers};
+   my $RowType        = $opt->{RowType};
+   my $Vertical       = $opt->{Vertical};
+   my $MaxRows        = $opt->{MaxRows};
+   my $interactive    = $opt->{interactive};
+   my $out_fh         = $opt->{out_fh};
    my $MaxColumnWidth = $opt->{MaxColumnWidth};
 
    print "rows=", Dumper($rows) if $verbose > 1;
@@ -140,10 +140,9 @@ sub render_arrays {
       return;
    }
 
-   
-   if ( $out_fh ) {
+   if ($out_fh) {
       $out_fh = $opt->{out_fh};
-    } elsif ( $interactive ) {
+   } elsif ($interactive) {
       my $cmd = "less -S";
       open $out_fh, "|$cmd" or croak "cmd=$cmd failed: $!";
    } else {
@@ -221,17 +220,17 @@ sub render_arrays {
    }
 
    my $start_row = $min_start_row;
-   
+
    if ($TakeTail) {
       # $#rows vs scalar(@$rows)
       #    $#rows is the last index of the array
       #    scalar(@$rows) is the number of elements in the array
-      if (scalar(@$rows) - $MaxRows > $min_start_row) {
+      if ( scalar(@$rows) - $MaxRows > $min_start_row ) {
          $start_row = scalar(@$rows) - $MaxRows;
       }
-   } 
-   
-   if ( $Vertical) {
+   }
+
+   if ($Vertical) {
       if ( $RowType eq 'ARRAY' ) {
          my $num_headers = scalar(@$headers);
 
@@ -279,8 +278,8 @@ sub render_arrays {
       return;
    }
 
-   my $max_by_pos     = [];
-   my $truncated      = 0;
+   my $max_by_pos = [];
+   my $truncated  = 0;
 
    # print "headers=", Dumper($headers);
 
@@ -386,6 +385,12 @@ sub render_arrays {
    return;
 }
 
+sub commify {
+   my ($number) = @_;
+   $number =~ s/(\d)(?=(\d\d\d)+(?!\d))/$1,/g;
+   return $number;
+}
+
 sub main {
    use TPSUP::TEST qw(test_lines);
 
@@ -399,26 +404,29 @@ sub main {
    $DUMMY::rows2 = [ { 'name' => 'tian', 'age' => '36' }, { 'name' => 'john', 'comment' => 'friend of tian' }, ];
 
    my $test_code = <<'END';
-    TPSUP::PRINT::find_row_type($rows1);
+      TPSUP::PRINT::find_row_type($rows1);
 
-    TPSUP::PRINT::render_arrays($rows1);
-    TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10});
-    TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1});
-    TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1, headers=>'name'});
-    TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, Vertical=>1});
-    TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, Vertical=>1, headers=>'name'});
+      TPSUP::PRINT::render_arrays($rows1);
+      TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10});
+      TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1});
+      TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, RenderHeader=>1, headers=>'name'});
+      TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, Vertical=>1});
+      TPSUP::PRINT::render_arrays($rows1, {MaxColumnWidth=>10, Vertical=>1, headers=>'name'});
 
-   TPSUP::PRINT::render_arrays($rows1, {MaxRows=>2, RenderHeader=>1});
-   TPSUP::PRINT::render_arrays($rows1, {MaxRows=>2, RenderHeader=>1, TakeTail=>1});
-    
+      TPSUP::PRINT::render_arrays($rows1, {MaxRows=>2, RenderHeader=>1});
+      TPSUP::PRINT::render_arrays($rows1, {MaxRows=>2, RenderHeader=>1, TakeTail=>1});
+         
+      TPSUP::PRINT::find_row_type($rows2);
+      TPSUP::PRINT::find_hashes_keys($rows2);
+      TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10});
+      TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, RenderHeader=>1});
+      TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, RenderHeader=>1, headers=>'name,age'});
+      TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, Vertical=>1});
+      TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, Vertical=>1, headers=>'name,age'});
 
-    TPSUP::PRINT::find_row_type($rows2);
-    TPSUP::PRINT::find_hashes_keys($rows2);
-    TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10});
-    TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, RenderHeader=>1});
-    TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, RenderHeader=>1, headers=>'name,age'});
-    TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, Vertical=>1});
-    TPSUP::PRINT::render_arrays($rows2, {MaxColumnWidth=>10, Vertical=>1, headers=>'name,age'});
+      TPSUP::PRINT::commify(1234567890);
+      TPSUP::PRINT::commify(123);
+      TPSUP::PRINT::commify(123.4567);
     
 END
 
