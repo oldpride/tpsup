@@ -146,6 +146,24 @@ my $mount_point = $a[5];
 
 print "mount_point=$mount_point, used=${used}k\n";
 
+# to protect against cross over mount points, we use 'find' command to make sure
+# that we stay within the same mount point.
+# mount points is normally near root level, therefore, we only drill in 2 levels
+my $find_depth        = $max_depth > 2 ? 2 : $max_depth;
+my @find_prune_dirs   = ( ".zfs", "snapshot", ".git", ".vscode", "__pycache__" );
+my $find_prune_clause = "-name " . join( " -o -name ", @find_prune_dirs );
+my $find_cmd = "find $base -mount -maxdepth $find_depth \\( $find_prune_clause \\) -print -prune -o -type d -print";
+$verbose && print "find_cmd=$find_cmd\n";
+my @find_dirs = `$find_cmd`;
+
+$verbose && print "dirs within this mount =\n @find_dirs\n\n";
+chomp @find_dirs;
+
+my $within_mount_point = {};
+for my $dir (@find_dirs) {
+   $within_mount_point->{$dir} = 1;
+}
+
 my $print_format = '%11sk %s %s' . "\n";    # right-align size %13s, left-align path %-13s
 
 # my @todos = ( [ $base, $used, 0 ] );
@@ -173,7 +191,7 @@ while (@todos) {
       for my $short (@shorts) {
          next if $short eq '.' or $short eq '..' or $no_du->{$short};
 
-         my $full = "$path/$short";
+         my $full = "$path/$short";    # full path is not necessarily absolute path
          if ($exclude_compiled) {
             if ( $short =~ $exclude_compiled ) {
                $verbose && print "skip $short, exclude_pattern=$exclude_pattern\n";
@@ -184,6 +202,11 @@ while (@todos) {
                next;
             }
          }
+         if ( -d $full && $level < $find_depth && !$within_mount_point->{$full} ) {
+            print "skip $full, not within the same mount point\n";
+            next;
+         }
+
          push @fulls, $full;
       }
 
