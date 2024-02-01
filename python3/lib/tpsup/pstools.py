@@ -31,7 +31,7 @@ def ps_grep(pattern, printOutput=1,  verbose=0):
 
         # this is the best, giving command line args too and is fast
 
-        cmd = 'PowerShell -WindowStyle Hidden -command "(Get-CimInstance -ClassName Win32_Process|Select-object -property CreationDate,ProcessId,CommandLIne| Out-String -Stream -Width 1000).Trim()"'
+        cmd = 'PowerShell -command "(Get-CimInstance -ClassName Win32_Process|Select-object -property CreationDate,ProcessId,CommandLIne| Out-String -Stream -Width 1000).Trim()"'
     else:
         raise RuntimeError(f"unsupported os {env.uname}")
 
