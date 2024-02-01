@@ -99,8 +99,8 @@ die "cannot be both quite and verbose" if $quiet && $verbose;
 {
    # server running in background
    my $cmd = "tpdist -maxAccept 1 -timeout $timeout server $port &";
-   print "$cmd\n" if $verbose;
-   system($cmd) == 0 or die "command failed: $!";
+   print "server cmd = $cmd\n";
+   system($cmd) == 0 or die "server command failed: $!";
 }
 
 {
@@ -114,6 +114,6 @@ die "cannot be both quite and verbose" if $quiet && $verbose;
    }
 
    my @cmd = ( "tpdist", "client", "localhost", "$port", "-exclude", "'$exclude_pattern'", @ARGV );
-   print "cmd=", Dumper( \@cmd ) if $verbose;
-   system(@cmd) == 0 or die "command failed: $!";
+   print "client cmd=", Dumper( \@cmd ) if $verbose;
+   system(@cmd) == 0 or die "client command failed: $!";
 }
