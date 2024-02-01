@@ -98,7 +98,9 @@ usage("wrong number of args") if @ARGV < 2;
 die "cannot be both quite and verbose" if $quiet && $verbose;
 
 {
-   # server running in background
+   # server running in background.
+   #    only accept one connection and then exit.
+   #    this is safer and cleaner - no need to worry about zombie process.
    my $cmd = "tpdist -maxAccept 1 -timeout $timeout server $port &";
    print "server cmd = $cmd\n";
    system($cmd) == 0 or die "server command failed: $!";
@@ -114,6 +116,7 @@ die "cannot be both quite and verbose" if $quiet && $verbose;
       $exclude_pattern = $default_exclude;
    }
 
+   # client command uses array to handle spaces in file names
    my @cmd = ( "tpdist", "client", "localhost", "$port" );
 
    # pass through all options
