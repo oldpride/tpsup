@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
-my $version = '7.5';
-my ($expected_peer_protocol) = ( $version =~ /^(\d+)/ );
+my $version = '7.4';
+my ($expected_peer_protocol) = ($version =~ /^(\d+)/);
 
 use warnings;
 use strict;
@@ -14,13 +14,12 @@ use IO::Select;
 use Socket;
 use POSIX;
 
-my $timeout  = 300;
-my $idle     = 600;
-my $maxtry   = 3;
+my $timeout = 300;
+my $idle = 600;
+my $maxtry = 3;
 my $interval = 5;
 
-my $prog = $0;
-$prog =~ s:.*/::;
+my $prog = $0; $prog =~ s:.*/::;
 
 # we cannot copy root dir
 # root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/,
@@ -28,49 +27,67 @@ my $root_dir_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)$';
 my $abs_path_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)';
 
 my @crctab = (
-   0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
-   0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
-   0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75,
-   0x6a1936c8, 0x6ed82b7f, 0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a, 0x745e66cd,
-   0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039, 0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5,
-   0xbe2b5b58, 0xbaea46ef, 0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033, 0xa4ad16ea, 0xa06c0b5d,
-   0xd4326d90, 0xd0f37027, 0xddb056fe, 0xd9714b49, 0xc7361b4c, 0xc3f706fb, 0xceb42022, 0xca753d95,
-   0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1, 0xe13ef6f4, 0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d,
-   0x34867077, 0x30476dc0, 0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5, 0x2ac12072,
-   0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16, 0x018aeb13, 0x054bf6a4, 0x0808d07d, 0x0cc9cdca,
-   0x7897ab07, 0x7c56b6b0, 0x71159069, 0x75d48dde, 0x6b93dddb, 0x6f52c06c, 0x6211e6b5, 0x66d0fb02,
-   0x5e9f46bf, 0x5a5e5b08, 0x571d7dd1, 0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
-   0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b, 0xbb60adfc, 0xb6238b25, 0xb2e29692,
-   0x8aad2b2f, 0x8e6c3698, 0x832f1041, 0x87ee0df6, 0x99a95df3, 0x9d684044, 0x902b669d, 0x94ea7b2a,
-   0xe0b41de7, 0xe4750050, 0xe9362689, 0xedf73b3e, 0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2,
-   0xc6bcf05f, 0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34, 0xdc3abded, 0xd8fba05a,
-   0x690ce0ee, 0x6dcdfd59, 0x608edb80, 0x644fc637, 0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb,
-   0x4f040d56, 0x4bc510e1, 0x46863638, 0x42472b8f, 0x5c007b8a, 0x58c1663d, 0x558240e4, 0x51435d53,
-   0x251d3b9e, 0x21dc2629, 0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5, 0x3f9b762c, 0x3b5a6b9b,
-   0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff, 0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623,
-   0xf12f560e, 0xf5ee4bb9, 0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65, 0xeba91bbc, 0xef68060b,
-   0xd727bbb6, 0xd3e6a601, 0xdea580d8, 0xda649d6f, 0xc423cd6a, 0xc0e2d0dd, 0xcda1f604, 0xc960ebb3,
-   0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7, 0xae3afba2, 0xaafbe615, 0xa7b8c0cc, 0xa379dd7b,
-   0x9b3660c6, 0x9ff77d71, 0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74, 0x857130c3,
-   0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640, 0x4e8ee645, 0x4a4ffbf2, 0x470cdd2b, 0x43cdc09c,
-   0x7b827d21, 0x7f436096, 0x7200464f, 0x76c15bf8, 0x68860bfd, 0x6c47164a, 0x61043093, 0x65c52d24,
-   0x119b4be9, 0x155a565e, 0x18197087, 0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
-   0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d, 0x2056cd3a, 0x2d15ebe3, 0x29d4f654,
-   0xc5a92679, 0xc1683bce, 0xcc2b1d17, 0xc8ea00a0, 0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb, 0xdbee767c,
-   0xe3a1cbc1, 0xe760d676, 0xea23f0af, 0xeee2ed18, 0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4,
-   0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662, 0x933eb0bb, 0x97ffad0c,
-   0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
+   0x00000000,
+   0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b,
+   0x1a864db2, 0x1e475005, 0x2608edb8, 0x22c9f00f, 0x2f8ad6d6,
+   0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd,
+   0x4c11db70, 0x48d0c6c7, 0x4593e01e, 0x4152fda9, 0x5f15adac,
+   0x5bd4b01b, 0x569796c2, 0x52568b75, 0x6a1936c8, 0x6ed82b7f,
+   0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3, 0x709f7b7a,
+   0x745e66cd, 0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039,
+   0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5, 0xbe2b5b58,
+   0xbaea46ef, 0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033,
+   0xa4ad16ea, 0xa06c0b5d, 0xd4326d90, 0xd0f37027, 0xddb056fe,
+   0xd9714b49, 0xc7361b4c, 0xc3f706fb, 0xceb42022, 0xca753d95,
+   0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1, 0xe13ef6f4,
+   0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d, 0x34867077, 0x30476dc0,
+   0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5,
+   0x2ac12072, 0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16,
+   0x018aeb13, 0x054bf6a4, 0x0808d07d, 0x0cc9cdca, 0x7897ab07,
+   0x7c56b6b0, 0x71159069, 0x75d48dde, 0x6b93dddb, 0x6f52c06c,
+   0x6211e6b5, 0x66d0fb02, 0x5e9f46bf, 0x5a5e5b08, 0x571d7dd1,
+   0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
+   0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b,
+   0xbb60adfc, 0xb6238b25, 0xb2e29692, 0x8aad2b2f, 0x8e6c3698,
+   0x832f1041, 0x87ee0df6, 0x99a95df3, 0x9d684044, 0x902b669d,
+   0x94ea7b2a, 0xe0b41de7, 0xe4750050, 0xe9362689, 0xedf73b3e,
+   0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2, 0xc6bcf05f,
+   0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34,
+   0xdc3abded, 0xd8fba05a, 0x690ce0ee, 0x6dcdfd59, 0x608edb80,
+   0x644fc637, 0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb,
+   0x4f040d56, 0x4bc510e1, 0x46863638, 0x42472b8f, 0x5c007b8a,
+   0x58c1663d, 0x558240e4, 0x51435d53, 0x251d3b9e, 0x21dc2629,
+   0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5, 0x3f9b762c,
+   0x3b5a6b9b, 0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff,
+   0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623, 0xf12f560e,
+   0xf5ee4bb9, 0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65,
+   0xeba91bbc, 0xef68060b, 0xd727bbb6, 0xd3e6a601, 0xdea580d8,
+   0xda649d6f, 0xc423cd6a, 0xc0e2d0dd, 0xcda1f604, 0xc960ebb3,
+   0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7, 0xae3afba2,
+   0xaafbe615, 0xa7b8c0cc, 0xa379dd7b, 0x9b3660c6, 0x9ff77d71,
+   0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74,
+   0x857130c3, 0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640,
+   0x4e8ee645, 0x4a4ffbf2, 0x470cdd2b, 0x43cdc09c, 0x7b827d21,
+   0x7f436096, 0x7200464f, 0x76c15bf8, 0x68860bfd, 0x6c47164a,
+   0x61043093, 0x65c52d24, 0x119b4be9, 0x155a565e, 0x18197087,
+   0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
+   0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d,
+   0x2056cd3a, 0x2d15ebe3, 0x29d4f654, 0xc5a92679, 0xc1683bce,
+   0xcc2b1d17, 0xc8ea00a0, 0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb,
+   0xdbee767c, 0xe3a1cbc1, 0xe760d676, 0xea23f0af, 0xeee2ed18,
+   0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4, 0x89b8fd09,
+   0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662,
+   0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf,
+   0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
 );
 
-my ( $os_name, $nodename, $os_release, $os_version, $machine ) = POSIX::uname();
-my $tmpdir = ( $os_name =~ /MINGW/i ) ? "/tmp" : "/var/tmp";    # Git Bash's os_name is MINGW
+my ($os_name, $nodename, $os_release, $os_version, $machine) = POSIX::uname();
+my $tmpdir = ($os_name =~ /MINGW/i) ? "/tmp" : "/var/tmp"; # Git Bash's os_name is MINGW
 
 my $cygwin;
-$cygwin++ if $os_name =~ /^CYGWIN/i;
+$cygwin ++ if $os_name =~ /^CYGWIN/i;
 
 my $encrypt_key;
-
-my $default_exclude = "[.]git/|[.]sw[op]|[.]nfs|[.]idea|[.]github|__pycache__";
 
 sub usage {
    my ($message) = @_;
@@ -163,16 +180,12 @@ Active-Side Switches: (To Pull, normal Client State)
 
    -exclude pattern   exclude files that matching this pattern (Perl RegEx style)
                       can be specified multiple times (in OR logic).
-                      default exclude pattern is '$default_exclude'
 
    -deep              set to always use cksum to check. Default is fast check: if file size
                       and timestamp matches, we don't use cksum. cksum is time-consumig.
 
    -maxtry times
                       retry to connect to server, default to $maxtry
-
-   -maxAccept times
-                      max times that server acccepts any client. default to infinit times.
 
    -interval seconds
                       time between each retry, default to $interval;
@@ -187,18 +200,18 @@ Source-side switches
 Examples:
 
    # to copy this script to a new host, 'host2', from this host, 'host1'
-   host1\$ cat $prog | tpnc -l 4444
+   host1\$ cat tpdist | tpnc -l 4444
 
-   host2\$ tpnc host1 4444 > $prog
+   host2\$ tpnc host1 4444 > tpdist
         or
-           telnet host1 4444 > $prog
+           telnet host1 4444 > tpdist
         or
            if the host has no telnet/nc/tpnc but has perl (eg cygwin), copy the netsuck
            (a very short perl program) first by copy-and-paste using an editor
-           netsuck host1 4444 > $prog
+           netsuck host1 4444 > tpdist
 
-   host1\$ $prog server 5555
-   host2\$ $prog client host1 5555 tpsup ~
+   host1\$ dist server 5555
+   host2\$ tpdist client host1 5555 tpsup ~
 
 END
 
@@ -216,7 +229,7 @@ my $denyhost;
 my $allowhost;
 my $dryrun;
 my $diff;
-my $maxsize = -1;    # -1 means no limit
+my $maxsize = -1; # -1 means no limit
 my @matches;
 my @excludes;
 my $deep = 0;
@@ -226,34 +239,33 @@ my $print_version;
 my $PreserveFullPath;
 my $strict_tar;
 my $stop_at_change;
-my $maxAccept;
 
 GetOptions(
-   'v|verbose'          => \$verbose,
-   'version'            => \$print_version,
-   'r|reverse'          => \$reverse,
-   'q|quiet'            => \$quiet,
-   'KeepTmpFile'        => \$KeepTmpFile,
-   'denyfile=s'         => \$denyfile,
-   'allowfile=s'        => \$allowfile,
-   'denyhost=s'         => \$denyhost,
-   'allowhost=s'        => \$allowhost,
-   'n|dryrun'           => \$dryrun,
-   'diff'               => \$diff,
-   'deep'               => \$deep,
-   'maxsize=s'          => \$maxsize,
-   'timeout=s'          => \$timeout,
-   'idle=s'             => \$idle,
-   'maxtry=s'           => \$maxtry,
-   'interval=s'         => \$interval,
-   'match=s'            => \@matches,
-   'exclude=s'          => \@excludes,
-   'tmpdir=s'           => \$tmpdir,
-   'enc|encrypt=s'      => \$encrypt_key,
-   'p|PreserveFullPath' => \$PreserveFullPath,
-   'strict_tar'         => \$strict_tar,
-   'stop'               => \$stop_at_change,
-) || usage("cannot parse command line: $!");
+   'v|verbose'       => \$verbose,
+   'version'         => \$print_version,
+   'r|reverse'       => \$reverse,
+   'q|quiet'         => \$quiet,
+   'KeepTmpFile'     => \$KeepTmpFile,
+   'denyfile=s'      => \$denyfile,
+   'allowfile=s'     => \$allowfile,
+   'denyhost=s'      => \$denyhost,
+   'allowhost=s'     => \$allowhost,
+   'n|dryrun'        => \$dryrun,
+   'diff'            => \$diff,
+   'deep'            => \$deep,
+   'maxsize=s'       => \$maxsize,
+   'timeout=s'       => \$timeout,
+   'idle=s'          => \$idle,
+   'maxtry=s'        => \$maxtry,
+   'interval=s'      => \$interval,
+   'match=s'         => \@matches,
+   'exclude=s'       => \@excludes,
+   'tmpdir=s'        => \$tmpdir,
+   'enc|encrypt=s'   => \$encrypt_key,
+   'p|PreserveFullPath'=> \$PreserveFullPath,
+   'strict_tar'      => \$strict_tar,
+   'stop'            => \$stop_at_change,
+) || usage ("cannot parse command line: $!");
 
 if ($print_version) {
    print "version $version\n";
@@ -274,34 +286,33 @@ my $local_dir;
 my $homedir = get_homedir();
 $verbose && print STDERR "homedir=$homedir\n";
 
-my $old_pwd = `pwd`;
-chomp $old_pwd;
+my $old_pwd = `pwd`; chomp $old_pwd;
 
-my $out_count        = 0;    # outgoing byte counter
-my $in_count         = 0;    # incoming byte counter
+my $out_count = 0; # outgoing byte counter
+my $in_count  = 0; # incoming byte counter 
 my $key_index_by_tag = {
-   in  => 0,                 # encrypt key index for incoming message
-   out => 0,                 # encrypt key index for outgoing message
+   in => 0,  # encrypt key index for incoming message
+   out => 0, # encrypt key index for outgoing message
 };
 
 my $key_length;
 my @key_array;
 if ($encrypt_key) {
-   @key_array  = split //, $encrypt_key;
+   @key_array = split //, $encrypt_key;
    $key_length = scalar(@key_array);
 }
-
-if ( $mode eq 'server' ) {
+  
+if ($mode eq 'server') {
    $port = shift @ARGV;
 
    if ($reverse) {
       usage("wrong number of args") if @ARGV < 2;
-      $local_dir     = pop @ARGV;
+      $local_dir = pop @ARGV;
       @$remote_paths = @ARGV;
    } else {
       usage("wrong number of args") if @ARGV;
    }
-} elsif ( $mode eq 'client' ) {
+} elsif ($mode eq 'client') {
    $host = shift @ARGV;
    $port = shift @ARGV;
 
@@ -309,18 +320,14 @@ if ( $mode eq 'server' ) {
       usage("wrong number of args") if @ARGV;
    } else {
       usage("wrong number of args") if @ARGV < 2;
-      $local_dir     = pop @ARGV;
+      $local_dir = pop @ARGV;
       @$remote_paths = @ARGV;
    }
 } else {
    usage("first arg must be either 'server' or 'client'");
 }
 
-if ( !@excludes ) {
-   @excludes = ($default_exclude);
-}
-
-if ( defined($local_dir) && -e $local_dir && !-d $local_dir ) {
+if ( defined($local_dir) && -e $local_dir  && ! -d $local_dir) {
    print "ERROR: local_dir=$local_dir is not a directory\n";
    exit 1;
 }
@@ -331,49 +338,42 @@ umask(022);
 
 my $user_specified = {
    allowfile => $allowfile,
-   denyfile  => $denyfile,
+    denyfile =>  $denyfile,
    allowhost => $allowhost,
-   denyhost  => $denyhost,
+    denyhost =>  $denyhost,
 };
 
 my $AccessMatrix = load_access($user_specified);
-if ($verbose) {
+if ($verbose)  {
    print "AccessMatrix=", Dumper($AccessMatrix);
-}
+}   
 
-if ( $mode eq 'server' ) {
+if ($mode eq 'server') {
    # this is a server
-
-   my $listener_socket = new IO::Socket::INET(
-      LocalPort => $port,
-      Proto     => 'tcp',
-      Listen    => 5,
-      Reuse     => 1,
-      Timeout   => $idle,
+   
+   my $listener_socket = new IO::Socket::INET (
+         LocalPort => $port,
+         Proto => 'tcp',
+         Listen => 5,
+         Reuse => 1,
+         Timeout => $idle,
    ) or die "ERROR in Socket Creation : $!\n";
 
-   my $total_accepts = 0;
- CONNECTION:
+   CONNECTION:
    while (1) {
-      if ( defined($maxAccept) && $total_accepts > $maxAccept ) {
-         print get_timestamp(), "Server reached maxAccept=$maxAccept. quitl\n";
-         last;
-      }
-      $total_accepts++;
-
       # waiting for new client connection.
       print "---------------------------------------------------- \n";
       print get_timestamp(), "Server Waiting for new client connection on port $port (max $idle seconds)\n";
       my $socket = $listener_socket->accept();
 
-      if ( !defined $socket ) {
+      if (! defined $socket) {
          print get_timestamp(), "No new client connection for $idle seconds. Server quits\n";
          exit 0;
       }
 
       # get the host and port number of newly connected client.
       my $peer_address = $socket->peerhost();
-      my $peer_port    = $socket->peerport();
+      my $peer_port = $socket->peerport();
       print "------------------------------------------------------- \n";
       print get_timestamp(), "Accepted new client connection from $peer_address:$peer_port\n";
 
@@ -390,38 +390,38 @@ if ( $mode eq 'server' ) {
          #$VAR4 = 4;
          #$VAR5 = '
          #j';
-
-         my @a = gethostbyaddr( inet_aton("$peer_address"), AF_INET );
+          
+         my @a = gethostbyaddr(inet_aton("$peer_address"), AF_INET);
          push @peer_hostnames, $a[0] if $a[0];
          push @peer_hostnames, split / /, $a[1] if $a[1];
          push @peer_hostnames, $peer_address;
          push @peer_hostnames, "localhost" if $peer_address eq '127.0.0.1';
-         print get_timestamp(), "peer_hostnames = ", join( " ", @peer_hostnames ), "\n";
+         print get_timestamp(), "peer_hostnames = ", join(" ", @peer_hostnames), "\n";
       }
 
       # reset key_index
-      $key_index_by_tag->{in}  = 0;
-      $key_index_by_tag->{out} = 0;
+      $key_index_by_tag->{in}  = 0; 
+      $key_index_by_tag->{out}  = 0; 
 
-      $in_count  = 0;
+      $in_count  = 0; 
       $out_count = 0;
 
-      for my $h ( ( $peer_address, @peer_hostnames ) ) {
-         if ( !is_allowed( $h, $AccessMatrix->{host}, { verbose => $verbose } ) ) {
+      for my $h (($peer_address, @peer_hostnames)) {
+         if (! is_allowed($h, $AccessMatrix->{host}, {verbose=>$verbose}) ) {
             print get_timestamp(), "$peer_address: $h is not allowed to connect to us.\n";
-            socket_send( $socket, "connection is not allowed\n" );
+            socket_send($socket, "connection is not allowed\n");
             $socket->close();
             next CONNECTION;
-         }
+         } 
       }
 
       # restore pwd as functions may chdir to other places
       chdir($old_pwd) || croak "cannot cd '$old_pwd'";
 
       if ($reverse) {
-         to_pull( $socket, $remote_paths, $local_dir, { verbose => $verbose } );
+         to_pull($socket, $remote_paths, $local_dir, {verbose=>$verbose});
       } else {
-         to_be_pulled( $socket, { verbose => $verbose, AllowDenyPatterns => $AccessMatrix->{file} } );
+         to_be_pulled($socket, {verbose=>$verbose, AllowDenyPatterns=>$AccessMatrix->{file}});
       }
    }
 } else {
@@ -429,18 +429,18 @@ if ( $mode eq 'server' ) {
 
    $quiet || print get_timestamp(), "connecting to server $host:$port\n";
    my $socket;
-   for ( my $i = 0 ; $i < $maxtry ; $i++ ) {
-      $socket = new IO::Socket::INET(
-         PeerHost => $host,
-         PeerPort => $port,
-         Proto    => 'tcp',
-      );
+   for (my $i=0; $i<$maxtry; $i++) {
+      $socket = new IO::Socket::INET (
+                                       PeerHost => $host,
+                                       PeerPort => $port,
+                                       Proto => 'tcp',
+                                      );
       last if $socket;
       print STDERR get_timestamp(), "Cannot connect to server $host:$port: $!.\n";
-      if ( $i < $maxtry - 1 ) {
+      if ($i<$maxtry-1) {
          print STDERR "   On $host please run\n";
-         print STDERR "     $prog server $port\n";
-         print STDERR "     Will retry in $interval seconds for ", $maxtry - $i - 1, " time(s)\n";
+         print STDERR "     tpdist server $port\n";
+         print STDERR "     Will retry in $interval seconds for ", $maxtry-$i-1, " time(s)\n";
          sleep $interval;
       } else {
          exit 1;
@@ -448,9 +448,9 @@ if ( $mode eq 'server' ) {
    }
 
    if ($reverse) {
-      to_be_pulled( $socket, { verbose => $verbose, AllowDenyPatterns => $AccessMatrix->{file} } );
+      to_be_pulled($socket, {verbose=>$verbose, AllowDenyPatterns=>$AccessMatrix->{file}});
    } else {
-      to_pull( $socket, $remote_paths, $local_dir, { verbose => $verbose } );
+      to_pull($socket, $remote_paths, $local_dir, {verbose=>$verbose});
    }
 }
 
@@ -462,17 +462,17 @@ exit 0;
 
 sub get_homedir {
    my $homedir = $ENV{HOME} ? $ENV{HOME} : glob("-");
-   if ( !$homedir ) {
+   if (!$homedir) {
       # normally the above logic would work, it not, take the hassle
-
+       
       my $user;
-      {
+      { 
          my $line = `id`;
          #uid=9020(tian) gid=7296(uniz)
          ($user) = ( $line =~ /^.+?\((.+?)\)/ );
          die "cannot figure out user from 'id' command: $line" if !$user;
       }
-
+   
       {
          my $line = `getent passwd $user`;
          #tian:x:9020:7296:Tianhua Han,APP,2254201:/home/tian:/bin/ksh
@@ -485,18 +485,17 @@ sub get_homedir {
 }
 
 sub load_access {
-   my ( $user_specified, $opt ) = @_;
+   my ($user_specified, $opt) = @_;
 
    my $matrix;
 
    for my $type (qw(host file)) {
       for my $access (qw(allow deny)) {
          my $key = "${access}${type}";
-         my $file =
-             $user_specified->{$key}                  ? $user_specified->{$key}
-           : ( -f "$homedir/.tpsup/tpdist_$key.txt" ) ? "$homedir/.tpsup/tpdist_$key.txt"
-           :                                            undef;
-         if ($file) {
+         my $file = $user_specified->{$key}                 ? $user_specified->{$key} :
+                     (-f "$homedir/.tpsup/tpdist_$key.txt") ? "$homedir/.tpsup/tpdist_$key.txt" :
+                                                               undef ;
+         if ($file ) {
             my $patterns = read_security_file($file);
             if ($patterns) {
                $matrix->{$type}->{$access} = $patterns;
@@ -504,8 +503,7 @@ sub load_access {
                # why fatal here?
                # because if a file exists but is empty, for example, if the allow file exists but is
                # empty, should we allow all or allow none? this becomes ambiguous and prone to error!!
-               print STDERR
-"FATAL: there is no settings in $file. It may mean 'allow all' or 'deny all'. To avoid ambiguity, either remove file or add settings.\n";
+               print STDERR "FATAL: there is no settings in $file. It may mean 'allow all' or 'deny all'. To avoid ambiguity, either remove file or add settings.\n";
                exit 1;
             }
          }
@@ -516,10 +514,10 @@ sub load_access {
 }
 
 sub tar_file_list {
-   my ( $front, $tar_file, $created_tar, $tar_list ) = @_;
+   my ($front, $tar_file, $created_tar, $tar_list) = @_;
 
    my $cmd;
-   if ( !$created_tar ) {
+   if (!$created_tar) {
       $cmd = "cd '$front'; tar -cvf $tar_file -T $tar_list";
    } else {
       $cmd = "cd '$front'; tar -uvf $tar_file -T $tar_list";
@@ -529,16 +527,16 @@ sub tar_file_list {
    my $perl_rc = $?;
 
    my $shell_rc;
-   if ( $perl_rc == -1 ) {
+   if ($perl_rc == - 1) {
       $shell_rc = 255;
    } else {
-      $shell_rc = $perl_rc;
+      $shell_rc =  $perl_rc;
       $shell_rc = $shell_rc & 0xffff;
       $shell_rc >>= 8;
    }
-
+      
    # from man tar
-   #
+   # 
    #  0  Successful termination.
    #
    #  1  Some files differ.  If tar was invoked with the --compare (--diff, -d) command
@@ -557,14 +555,14 @@ sub tar_file_list {
 }
 
 sub get_timestamp {
-   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime(time);
-   return sprintf( "%04d%02d%02d %02d:%02d:%02d ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
+   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+   return sprintf("%04d%02d%02d %02d:%02d:%02d ", $year+1900, $mon+1, $mday, $hour, $min, $sec); 
 }
 
 sub read_security_file {
-   my ( $file, $opt ) = @_;
+   my ($file, $opt) = @_;
 
-   croak "cannot find $file" if !-f $file;
+   croak "cannot find $file" if ! -f $file;
 
    my @lines = `cat $file`;
    croak "cannot read $file" if $?;
@@ -578,7 +576,7 @@ sub read_security_file {
       $l =~ s/^\s+//;
       $l =~ s/\s+$//;
 
-      push @patterns, qr/$l/;    # pre-compile the pattern
+      push @patterns, qr/$l/; # pre-compile the pattern
    }
    return \@patterns;
 }
@@ -586,33 +584,34 @@ sub read_security_file {
 my $tmp_index;
 
 sub get_tmp_file {
-   my ( $basedir, $prefix, $opt ) = @_;
+   my ($basedir, $prefix, $opt) = @_;
 
-   if ( $opt->{chkSpace} ) {
+   if ($opt->{chkSpace}) {
       #my $os = `uname -a`; chomp $os;
 
       my $found = `which df`;
-      if ( $? || !$found ) {
+      if ($? || !$found) {
          print STDERR "cannot find df command, skipped space check\n";
       } else {
          my $cmd = $os_name =~ /^Linux/ ? "df -kP $basedir" : "df -k $basedir";
-         my @DF  = `$cmd`;
+         my @DF = `$cmd`;
          #$ df -k /var/tmp
          #Filesystem kbytes used avail capacity Mounted on
          #/ 4130542 2837486 1251751 70% /
-         if ( !$DF[1] ) {
-            carp "cmd='$cmd' failed" . return undef;
+         if ( ! $DF[1]) {
+            carp "cmd='$cmd' failed".
+            return undef;
          }
          chomp @DF;
-         if ( @DF == 3 ) {
+         if (@DF == 3) {
             # some old solaris system split a long line into 2. therefore, we merge them
             $DF[1] = $DF[1] . " " . $DF[2];
          }
 
-         my @a     = split /\s+/, $DF[1];
+         my @a = split /\s+/, $DF[1];
          my $avail = $a[3];
          $avail *= 1024;
-         if ( $avail < $opt->{chkSpace} ) {
+         if ($avail < $opt->{chkSpace}) {
             carp "$basedir doesn't have enough space, available=$avail, required=$opt->{chkSpace}";
             return undef;
          }
@@ -620,31 +619,29 @@ sub get_tmp_file {
    }
 
    my $id = `id`;
-   my ($user) = ( $id =~ /^.+?\((.+?)\)/ );
+   my ($user) = ($id =~ /^.+?\((.+?)\)/ );
 
-   my $yyyymmdd = `date +%Y%m%d`;
-   chomp $yyyymmdd;
-   my $HHMMSS = `date +%H%M%S`;
-   chomp $HHMMSS;
+   my $yyyymmdd = `date +%Y%m%d`; chomp $yyyymmdd;
+   my $HHMMSS = `date +%H%M%S`; chomp $HHMMSS;
    my $tmpdir = "$basedir/tmp_${user}";
    my $daydir = "$tmpdir/$yyyymmdd";
 
-   if ( !-d $daydir ) {
+   if (! -d $daydir ) {
       my $cmd = "mkdir -p '$daydir'";
       system($cmd);
       die "cmd=$cmd failed" if $?;
       system("find $tmpdir -mount -mtime +7 -exec /bin/rm -fr {} \\;");
    }
 
-   if ( $opt->{AddIndex} ) {
-      if ( !$tmp_index ) {
+   if ($opt->{AddIndex}) {
+      if (!$tmp_index) {
          $tmp_index = 1;
       } else {
          $tmp_index++;
       }
    }
 
-   if ( $opt->{isDir} && "$opt->{isDir}" !~ /^[0nf]/i ) {
+   if ($opt->{isDir} && "$opt->{isDir}" !~ /^[0nf]/i) {
       my $dir = "$daydir/$prefix.$HHMMSS.$$.dir";
       $dir .= ".$tmp_index" if $opt->{AddIndex};
       mkdir($dir) || return undef;
@@ -665,11 +662,11 @@ sub get_abs_path {
 
    croak "path is no defined" if !$path;
 
-   if ( $path !~ /$abs_path_pattern/ ) {
+   if ($path !~ /$abs_path_pattern/)  {
       my $cwd = getcwd();
       $path = "$cwd/$path";
    }
-
+   
    {
       # If the path is dir and already exists, using "cd path; pwd" to find abs is the best way.
       # This also fixed this problem with the network path in windows, which starts with "//".
@@ -678,10 +675,10 @@ sub get_abs_path {
       #    ...
       #    20200717 16:07:09 cd '//linux1.fios-router.home/tian'
       #    ...
-      my $saved_pwd = getcwd();    # save current path
-      if ( chdir($path) ) {
-         my $abs = getcwd();
-         chdir($saved_pwd);        # restore pwd before returning
+      my $saved_pwd = getcwd(); # save current path
+      if (chdir($path)) {
+         my $abs = getcwd(); 
+         chdir($saved_pwd); # restore pwd before returning
          return $abs;
       }
    }
@@ -694,20 +691,20 @@ sub get_abs_path {
    #    william@tianpc:/c/Users/william$ tpdist client localhost 5555 //linux1.fios-router.home/tian/test.txt .
 
    my $is_network_path = 0;
-   if ( $path =~ m:^//: ) {
+   if ($path =~ m:^//:) {
       # eg //linux1.fios-router.home/tian
       $is_network_path = 1;
    }
 
    my @a1 = split /\/+/, $path;
-   shift @a1;    # shift away the undef before the first /
+   shift @a1; # shift away the undef before the first /
 
    my @a2;
    for my $e (@a1) {
-      if ( $e eq '.' ) {
+      if ($e eq '.') {
          # convert /a/./b to /a/b
          next;
-      } elsif ( $e eq '..' ) {
+      } elsif ($e eq '..' ) {
          # convert /a/b/../c to /a/c
          pop @a2;
          next;
@@ -718,13 +715,13 @@ sub get_abs_path {
    }
 
    my $newpath = $is_network_path ? '//' : '/';
-   $newpath .= join( '/', @a2 );
+   $newpath .= join('/', @a2);
 
    return $newpath;
 }
 
 sub build_dir_tree {
-   my ( $paths, $opt ) = @_;
+   my ($paths, $opt) = @_;
 
    my $AllowDenyPatterns = $opt->{AllowDenyPatterns};
 
@@ -733,79 +730,79 @@ sub build_dir_tree {
    my $tree;
 
    for my $path (@$paths) {
-      chdir($saved_cwd);    # start from saved cwd
-
-      if ( $opt->{RelativeBase} && $path !~ m:^/: ) {
+      chdir($saved_cwd); # start from saved cwd
+      
+      if ($opt->{RelativeBase} && $path !~ m:^/: ) {
          # RelativeBase is from command line and only on the to-pull side.
          print get_timestamp(), "cd '$opt->{RelativeBase}'\n";
-         if ( !chdir( $opt->{RelativeBase} ) ) {
-            # if there is an error, we just print locally, not to send to remote side.
+         if ( !chdir($opt->{RelativeBase}) ) {
+            # if there is an error, we just print locally, not to send to remote side. 
             # therefore, we won't add the error into $tree.
             print get_timestamp(), "cd '$opt->{RelativeBase}' failed, $path is skipped.\n";
             next;
          }
       }
 
-      # resolve * when filename has space.
+      # resolve * when filename has space. 
       # note: if we wrapped * in quotes, it would not be a wildcard anymore.
       # example:
       #    ls -1d  /cygdrive/c/users/william/My\ Documents/*txt     # works
-      #    ls -1d  /cygdrive/c/users/william/'My Documents'/*txt    # works
-      #    ls -1d  /cygdrive/c/users/william/My' 'Documents/*txt    # works
+      #    ls -1d  /cygdrive/c/users/william/'My Documents'/*txt    # works 
+      #    ls -1d  /cygdrive/c/users/william/My' 'Documents/*txt    # works 
       #    ls -1d '/cygdrive/c/users/william/My Documents/*txt'     # doesn't work
 
       # either escape space or wrap space
       # $path =~ s/(\s)/\\$1/g;   # escape the space
-      $path =~ s/(\s)/'$1'/g;    # wrap space
+      $path =~ s/(\s)/'$1'/g;     # wrap space
 
       my @globs = `/bin/ls -1d $path`;
-      if ( $? || !@globs ) {
+      if ($? || !@globs) {
          print get_timestamp(), "/bin/ls -1d '$path' failed, skipped $path\n";
          $tree->{$path}->{skip} = "$path not found";
          next;
       }
       chomp @globs;
 
-      if ( !$quiet ) {
+      if (!$quiet) {
          if ( scalar(@globs) != 1 || $globs[0] ne $path ) {
             # print only if globs actually made a difference
-            print get_timestamp(), "resolved globs if any: $path=>", join( ' ', @globs ), "\n";
-         }
+            print get_timestamp(), "resolved globs if any: $path=>", join(' ', @globs), "\n";
+         }            
       }
 
       for my $p (@globs) {
          my $abs_path;
 
-         if ( $p !~ m:^/: ) {
+         if ($p !~ m:^/:) {
             # this is relative path
-            if ( $opt->{RelativeBase} ) {
+            if ($opt->{RelativeBase}) {
                $abs_path = get_abs_path("$opt->{RelativeBase}/$p");
                #$abs_path = "$opt->{RelativeBase}/$p";
             } else {
                $abs_path = get_abs_path("$saved_cwd/$p");
             }
          } else {
-            # this is absolute path, still simplify eg. from a/../b to b
-            $abs_path = get_abs_path("$p");
+            # this is absolute path, still simplify eg. from a/../b to b 
+            $abs_path = get_abs_path("$p")
          }
 
-         if ( !$abs_path ) {
+         if (!$abs_path) {
             print get_timestamp(), "cannot find abs_path for $p. skipped\n";
             $tree->{$p}->{skip} = "cannot find abs_path for $p";
             next;
          }
 
          # -l $abs_path allows a symbolic link pointing to nowhere
-         if ( !-e $abs_path && !-l $abs_path ) {
+         if (! -e $abs_path && ! -l $abs_path) {
             print get_timestamp(), "cannot find $abs_path for $p\n";
             $tree->{$p}->{skip} = "abs path $abs_path for $p not found";
             next;
          }
 
-         if ( $abs_path =~ m!$root_dir_pattern! ) {
-            if ( $p ne $abs_path ) {
+         if ($abs_path =~ m!$root_dir_pattern!) {
+            if ($p ne $abs_path) {
                $tree->{$p}->{skip} = "cannot handle root dir: $p, abs=$abs_path";
-            } else {
+            } else {   
                $tree->{$p}->{skip} = "cannot handle root dir: $p";
             }
             next;
@@ -819,10 +816,10 @@ sub build_dir_tree {
          # when comparing *.csv, server needs to 'cd /a/b'. client needs to 'cd /f/g'.
          # when comparing e, server needs to 'cd /c/d'. client needs to 'cd /f/g'.
 
-         my ( $front, $back );
-         if ( $abs_path =~ m:^(.*/)(.+): ) {
+         my ($front, $back);
+         if ($abs_path =~ m:^(.*/)(.+):) {
             $front = $1;
-            $back  = $2;
+            $back = $2;
          } else {
             $tree->{$p}->{skip} = "unexpected abs path: $abs_path. expecting front/back format";
             next;
@@ -830,13 +827,13 @@ sub build_dir_tree {
 
          # now that we have clearly identified $back, we should use it as key rather than
          # $abs_path or $p as key
-         if ( !is_allowed( $abs_path, $AllowDenyPatterns, $opt ) ) {
+         if (!is_allowed($abs_path, $AllowDenyPatterns, $opt)) {
             $tree->{$back}->{skip} = "not allowed";
             next;
          }
 
          $quiet || print get_timestamp(), "cd '$front'\n";
-         if ( !chdir($front) ) {
+         if (! chdir($front) ) {
             $tree->{$back}->{skip} = "chdir($front) failed";
             next;
          }
@@ -846,28 +843,28 @@ sub build_dir_tree {
 
          my $file_count = 0;
          my $fh;
-         if ( !open( $fh, "$cmd |" ) ) {
+         if ( ! open($fh, "$cmd |") ) {
             $tree->{$back}->{skip} = "$cmd failed";
             next;
          }
 
-       FILES:
+         FILES:
          while (<$fh>) {
             my $f = $_;
             chomp $f;
 
-            $file_count++;
+            $file_count ++;
 
-            if ( $file_count % 1000 == 0 ) {
+            if ($file_count % 1000 == 0) {
                $quiet || print get_timestamp(), "checked $file_count files\n";
             }
 
-            if ( @{ $opt->{matches} } ) {
+            if (@{$opt->{matches}}) {
                my $matched;
 
-               for my $m ( @{ $opt->{matches} } ) {
-                  if ( $f =~ /$m/ ) {
-                     $matched++;
+               for my $m (@{$opt->{matches}}) {
+                  if ($f =~ /$m/) {
+                     $matched ++;
                      last;
                   }
                }
@@ -875,28 +872,28 @@ sub build_dir_tree {
                next if !$matched;
             }
 
-            if ( @{ $opt->{excludes} } ) {
-               for my $m ( @{ $opt->{excludes} } ) {
-                  if ( $f =~ /$m/ ) {
-                     next FILES;
+            if (@{$opt->{excludes}}) {
+               for my $m (@{$opt->{excludes}}) {
+                  if ($f =~ /$m/) {
+                      next FILES;
                   }
                }
             }
 
-            if ( !is_allowed( $f, $AllowDenyPatterns, $opt ) ) {
+            if ( !is_allowed($f, $AllowDenyPatterns, $opt) ) {
                $tree->{$f}->{skip} = "not allowed";
                next;
             }
 
-            if ( !-l $f && !-r $f ) {
-               if ( !$cygwin || !test_read_by_open($f) ) {
+            if ( ! -l $f && ! -r $f ) {
+               if (!$cygwin || !test_read_by_open($f)) {
                   # why cygwin? see comment at test_read_by_open()
                   $tree->{$f}->{skip} = "no read access";
                   next;
                }
             }
 
-            if ( $tree->{$f}->{back} ) {
+            if ($tree->{$f}->{back}) {
                $tree->{$f}->{skip} = "duplicate target path: skip $front/$f";
                next;
             } else {
@@ -904,36 +901,36 @@ sub build_dir_tree {
             }
             $tree->{$f}->{front} = $front;
 
-            my ( $dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks ) =
-              lstat($f);
+            my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks)
+             = lstat($f);
 
             $tree->{$f}->{mtime} = $mtime;
-            my $octal_mode = sprintf( "0%o", ( $mode & 07777 ) );
+            my $octal_mode = sprintf("0%o", ($mode & 07777));
             $tree->{$f}->{mode} = $octal_mode;
 
-            if ( -d $f && !-l $f ) {
+            if (-d $f && !-l $f) {
                # a link to dir is both a link and a dir.
                # (-d $f && !-l $f) gives us only the non-link dir
                $tree->{$f}->{type} = "dir";
-               $tree->{$f}->{size} = 128;      # hard coded
-               $tree->{$f}->{test} = "dir";    # not much to test
+               $tree->{$f}->{size} = 128; # hard coded
+               $tree->{$f}->{test} = "dir"; # not much to test
 
                # check whether the dir is empty, need this info when making a tar.
                # if the directory is empty, we can tar the dir.
                # if the directory is not empty, and if we don't want to tar all files
                # in it, we can tar the dir.
                my $dfh;
-               opendir( $dfh, $f );
+               opendir($dfh, $f);
 
-               if ( !$dfh ) {
+               if (!$dfh) {
                   print STDERR "cannot open dir $f\n";
                } else {
                   my @files_in_dir = grep { $_ ne '.' && $_ ne '..' } readdir($dfh);
                   $tree->{$f}->{DirEmpty} = 1 if !@files_in_dir;
                }
-            } elsif ( -l $f ) {
+            } elsif (-l $f) {
                $tree->{$f}->{type} = "link";
-               $tree->{$f}->{size} = 22;             # hard coded
+               $tree->{$f}->{size} = 22; # hard coded
                $tree->{$f}->{test} = readlink($f);
 
                # we cannot change link's mtimes because lutimes is not implemented
@@ -942,16 +939,16 @@ sub build_dir_tree {
 
                # we cannot change link's mode because luchown is not implemented
                # in perl, therefore, we hard code it here
-               my $mode       = 0777;
-               my $octal_mode = sprintf( "0%o", ( $mode & 07777 ) );
+               my $mode = 0777;
+               my $octal_mode = sprintf("0%o", ($mode & 07777));
                $tree->{$f}->{mode} = $octal_mode;
 
-            } elsif ( -f $f ) {
+            } elsif (-f $f) {
                $tree->{$f}->{type} = "file";
                $tree->{$f}->{size} = $size;
 
                # cksum for {test} is delayed because it is too time consuming,
-               #$tree->{$f}->{test} = cksum($f);
+	       #$tree->{$f}->{test} = cksum($f);
             } else {
                print get_timestamp(), "skipped $front/$f because we cannot handle this type of file\n";
                $tree->{$f}->{skip} = "cannot handle this type of file";
@@ -964,30 +961,30 @@ sub build_dir_tree {
       }
    }
 
-   chdir($saved_cwd);    # restore cwd
+   chdir($saved_cwd); # restore cwd
 
    return $tree;
 }
 
 sub is_allowed {
-   my ( $string, $AllowDenyPatterns, $opt ) = @_;
+   my ($string, $AllowDenyPatterns, $opt) = @_;
 
    # handle deny_patterns first
-   if ( exists $AllowDenyPatterns->{deny} ) {
-      for my $pattern ( @{ $AllowDenyPatterns->{deny} } ) {
-         if ( $string =~ /$pattern/ ) {
+   if (exists $AllowDenyPatterns->{deny}) {
+      for my $pattern (@{$AllowDenyPatterns->{deny}}) {
+         if ($string =~ /$pattern/) {
             $opt->{verbose} && print "$string is denied by $pattern\n";
-            return 0;
+            return 0
          }
       }
    }
 
-   # handle allow_patterns
-   if ( exists $AllowDenyPatterns->{allow} ) {
-      for my $pattern ( @{ $AllowDenyPatterns->{allow} } ) {
-         if ( $string =~ /$pattern/ ) {
+   # handle allow_patterns 
+   if (exists $AllowDenyPatterns->{allow}) {
+      for my $pattern (@{$AllowDenyPatterns->{allow}}) {
+         if ($string =~ /$pattern/) {
             $opt->{verbose} && print "$string is allowed by $pattern\n";
-            return 1;
+            return 1
          }
       }
       return 0;
@@ -997,7 +994,7 @@ sub is_allowed {
 }
 
 sub expect_socket {
-   my ( $socket, $patterns, $opt ) = @_;
+   my ($socket, $patterns, $opt) = @_;
 
    my $type = ref $patterns;
    croak "\$patterns must be ref to ARRAY, yours is $type" if $type ne 'ARRAY';
@@ -1005,76 +1002,72 @@ sub expect_socket {
    my $ExpectInterval = $opt->{ExpectInterval} ? $opt->{ExpectInterval} : 30;
 
    # turn on keepalive to quickly spot disconnection by remote side
-   $socket->setsockopt( SOL_SOCKET, SO_KEEPALIVE, 1 );
+   $socket->setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1);
 
    my $total_data;
    my @matched;
    my @captures;
-   my $num_patterns        = scalar(@$patterns);
-   my $BeginPattern        = $opt->{BeginPattern} ? qr/$opt->{BeginPattern}/ : undef;
+   my $num_patterns = scalar(@$patterns);
+   my $BeginPattern = $opt->{BeginPattern} ? qr/$opt->{BeginPattern}/ : undef;
    my $BeginPatternMatched = 0;
    my $error_message;
 
    my $select = IO::Select->new($socket) or die "IO::Select $!";
 
    my $this_section_recv = 0;
-   my $total_wait        = 0;
+   my $total_wait = 0;
    my $data;
 
    while (1) {
-      if ( !$select->can_read($ExpectInterval) ) {
-         if ( $opt->{ExpectTimeout} ) {
+      if (! $select->can_read($ExpectInterval)) {
+         if ($opt->{ExpectTimeout}) {
             $total_wait += $ExpectInterval;
 
-            if ( $total_wait >= $opt->{ExpectTimeout} ) {
+            if ($total_wait >= $opt->{ExpectTimeout}) {
                print get_timestamp(), "expect_socket timed out after $opt->{ExpectTimeout} seconds\n";
-
-               $error_message =
-"timed out after $opt->{ExpectTimeout} seconds. very likely wrong protocol. expecting $expected_peer_protocol.*";
-               socket_send( $socket, "$error_message\n" );
+               
+               $error_message = "timed out after $opt->{ExpectTimeout} seconds. very likely wrong protocol. expecting $expected_peer_protocol.*";
+               socket_send($socket, "$error_message\n");
                $socket->flush();
                last;
             }
          }
 
-         socket_send( $socket, "" );
+         socket_send($socket, "");
          $opt->{verbose} && print get_timestamp(), "no activity from remote in last $ExpectInterval seconds\n";
          next;
       }
 
-      my $size = read( $socket, $data, 1024000 );
+      my $size = read($socket, $data, 1024000);
 
-      if ( !$size ) {
+      if (!$size) {
          $error_message = "remote side closed socket";
          last;
       } else {
-         $in_count          += $size;
+         $in_count += $size;
          $this_section_recv += $size;
-         $data = xor_encode( $data, 'in' );
-         $opt->{verbose} && print get_timestamp(),
-           "received $size byte(s), total=$in_count, this section so far $this_section_recv byte(s): $data\n";
+         $data =  xor_encode($data, 'in');
+         $opt->{verbose} && print get_timestamp(), "received $size byte(s), total=$in_count, this section so far $this_section_recv byte(s): $data\n";
          $total_data .= $data;
 
-         if ( $this_section_recv > 50 && $BeginPattern && !$BeginPatternMatched ) {
-            if ( $total_data =~ /$BeginPattern/ ) {
-               $BeginPatternMatched++;
+         if ($this_section_recv > 50 && $BeginPattern && !$BeginPatternMatched) {
+            if ($total_data =~ /$BeginPattern/) {
+               $BeginPatternMatched ++;
             } else {
-               $error_message =
-                   "begin string='"
-                 . substr( $total_data, 0, 50 )
-                 . "' doesn't match BeginPattern='$opt->{BeginPattern}'";
+               $error_message =  "begin string='" . substr($total_data, 0, 50) . 
+                           "' doesn't match BeginPattern='$opt->{BeginPattern}'";
                last;
             }
          }
 
          my $all_matched = 1;
-         for ( my $i = 0 ; $i < $num_patterns ; $i++ ) {
+         for (my $i=0; $i<$num_patterns; $i++) {
             next if $matched[$i];
 
-            if ( $total_data =~ /$patterns->[$i]/s ) {
+            if ($total_data =~ /$patterns->[$i]/s) {
                $opt->{verbose} && print "   matched $patterns->[$i]\n";
-               $matched[$i]  = 1;
-               $captures[$i] = [ $1, $2, $3 ];    # we normally only need $1.
+               $matched[$i] = 1;
+               $captures[$i] = [$1, $2, $3];  # we normally only need $1.
             } else {
                $all_matched = 0;
             }
@@ -1088,18 +1081,19 @@ sub expect_socket {
    }
 
    # turn off keepalive to lower network traffic
-   $socket->setsockopt( SOL_SOCKET, SO_KEEPALIVE, 0 );
+   $socket->setsockopt(SOL_SOCKET, SO_KEEPALIVE, 0);
 
    if ($error_message) {
       print get_timestamp(), "$error_message\n";
       print "   matched so far\n";
-      for ( my $i = 0 ; $i < $num_patterns ; $i++ ) {
-         print "      pattern=$patterns->[$i]  ", $matched[$i] ? "matched" : "didn't match", "\n";
+      for (my $i=0; $i<$num_patterns; $i++) {
+           print "      pattern=$patterns->[$i]  ", $matched[$i] ? "matched" : "didn't match", "\n";
       }
-      my $data_size  = defined $total_data  ? length($total_data) : 0;
-      my $print_size = $data_size - 100 < 0 ? $data_size          : 100;
+      my $data_size = defined $total_data ? length($total_data) : 0;
+      my $print_size = $data_size - 100 < 0 ? $data_size : 100;
 
-      my $last_words = defined $total_data ? substr( $total_data, $data_size - $print_size, $print_size ) : '';
+      my $last_words = defined $total_data ?
+                       substr($total_data, $data_size-$print_size, $print_size) : '';
       print "   Last words: $last_words\n";
       return undef;
    } else {
@@ -1110,35 +1104,36 @@ sub expect_socket {
 my $bad_format_count = 0;
 
 sub to_be_pulled {
-   my ( $socket, $opt ) = @_;
+   my ($socket, $opt) = @_;
 
    # unblock socket when reading
    $socket->blocking(0);
-
+   
    print get_timestamp(), "waiting information from remote ...\n";
 
-   my $captures = expect_socket(
-      $socket,
-      [
-         '<PATH>(.+)</PATH>',            '<TREE>(.*)</TREE>',
-         '<MAXSIZE>([-]?\d+)</MAXSIZE>', '<VERSION>(.+)</VERSION>',
-         '<EXCLUDE>(.*)</EXCLUDE>',      '<MATCH>(.*)</MATCH>',
-         '<DEEP>(.)</DEEP>',             '<UNAME>(.+)</UNAME>',
-      ],
-      {
-         verbose       => $verbose,
-         ExpectTimeout => $timeout,
-         #dropped <VERSION> as it is seen in port scanners
-         #BeginPattern=>'<(VERSION|UNAME|PATH)>',
-         BeginPattern => '<(UNAME|PATH)>',
-      }
-   );
+   my $captures = expect_socket($socket,
+                      [ '<PATH>(.+)</PATH>',
+                        '<TREE>(.*)</TREE>',
+                        '<MAXSIZE>([-]?\d+)</MAXSIZE>',
+                        '<VERSION>(.+)</VERSION>',
+                        '<EXCLUDE>(.*)</EXCLUDE>',
+                        '<MATCH>(.*)</MATCH>',
+                        '<DEEP>(.)</DEEP>',
+                        '<UNAME>(.+)</UNAME>',
+                      ],
+                      {  verbose=>$verbose, 
+                         ExpectTimeout=>$timeout,
+                         #dropped <VERSION> as it is seen in port scanners
+                         #BeginPattern=>'<(VERSION|UNAME|PATH)>',
+                         BeginPattern=>'<(UNAME|PATH)>',
+                      }
+                     );
 
-   if ( !$captures ) {
-      $bad_format_count++;
+   if (!$captures) {
+      $bad_format_count ++;
       print "ERROR: received bad format $bad_format_count times\n";
 
-      if ( $bad_format_count >= 3 ) {
+      if ($bad_format_count >= 3) {
          print "FATAL: likely being under attack. we exit\n";
          exit 1;
       }
@@ -1149,28 +1144,27 @@ sub to_be_pulled {
       $bad_format_count = 0;
    }
 
-   my $local_paths_string = $captures->[0]->[0];
-   my $remote_tree_block  = $captures->[1]->[0];
-   my $maxsize            = $captures->[2]->[0];
-   my $version            = $captures->[3]->[0];
-   my $exclude_string     = $captures->[4]->[0];
-   my $match_string       = $captures->[5]->[0];
-   my $deep_check         = $captures->[6]->[0];
-   my $uname              = $captures->[7]->[0];
+   my $local_paths_string  = $captures->[0]->[0];
+   my $remote_tree_block   = $captures->[1]->[0];
+   my $maxsize             = $captures->[2]->[0];
+   my $version             = $captures->[3]->[0];
+   my $exclude_string      = $captures->[4]->[0];
+   my $match_string        = $captures->[5]->[0];
+   my $deep_check          = $captures->[6]->[0];
+   my $uname               = $captures->[7]->[0];
 
-   my ($peer_protocol) = ( $version =~ /^(\d+)/ );
+   my ($peer_protocol) = ($version =~ /^(\d+)/);
 
-   if ( $peer_protocol != $expected_peer_protocol ) {
-      my $message =
-        "wrong protocol $peer_protocol. expecting protocol $expected_peer_protocol(.*). closed the connection.\n";
+   if ($peer_protocol != $expected_peer_protocol) {
+      my $message = "wrong protocol $peer_protocol. expecting protocol $expected_peer_protocol(.*). closed the connection.\n";
       print get_timestamp(), "$message\n";
-      socket_send( $socket, "$message\n" );
+      socket_send($socket, "$message\n");
       $socket->close();
       return;
    }
 
    # we only check modes between compatible platforms
-   my $check_mode = ( $uname !~ /Windows/i ) ? 1 : 0;
+   my $check_mode = ($uname !~ /Windows/i ) ? 1 : 0;
 
    print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
 
@@ -1185,7 +1179,7 @@ sub to_be_pulled {
    if ($match_string) {
       @matches = split /\n/, $match_string;
    }
-
+   
    my $remote_tree;
 
    if ($remote_tree_block) {
@@ -1196,41 +1190,39 @@ sub to_be_pulled {
 
          my $r;
 
-         for my $pair ( split /[|]/, $l ) {
-            my ( $k, $v ) = ( $pair =~ /^(.+?)=(.+)/ );
+         for my $pair (split /[|]/, $l) {
+            my ($k, $v) = ($pair =~ /^(.+?)=(.+)/);
             $r->{$k} = $v;
          }
 
-         $remote_tree->{ $r->{key} } = $r;
+         $remote_tree->{$r->{key}} = $r;
       }
    }
 
    print get_timestamp(), "building local_tree using paths: $local_paths_string\n";
    print get_timestamp(), "relative path base is homedir=$homedir\n";
 
-   my @local_paths = split( /[|]/, $local_paths_string );
+   my @local_paths = split (/[|]/, $local_paths_string);
 
    # on to_be_pulled side, we need check access with AllowDenyPatterns.
    # matches and excludes are coming from remote side
    # RelativeBase is coming from command line
-   my $local_tree = build_dir_tree(
-      \@local_paths,
-      {
-         verbose           => $verbose,
-         RelativeBase      => $homedir,
-         AllowDenyPatterns => $opt->{AllowDenyPatterns},
-         excludes          => \@excludes,
-         matches           => \@matches,
-      }
-   );
+   my $local_tree = build_dir_tree(\@local_paths,
+                                              {verbose=>$verbose,
+                                               RelativeBase=>$homedir,
+                                               AllowDenyPatterns=>$opt->{AllowDenyPatterns},
+                                               excludes=>\@excludes,
+                                               matches=>\@matches,
+                                              }
+                                             );
 
    $verbose && print "remote_tree = ", Dumper($remote_tree);
    $verbose && print "local_tree = ",  Dumper($local_tree);
    $verbose && print "maxsize = $maxsize\n";
 
    my @deletes;
-   my $change_by_file;    # this includes both add and update
-   my $diff_by_file;      # files are diff'able, only when type=file.
+   my $change_by_file; # this includes both add and update
+   my $diff_by_file; # files are diff'able, only when type=file.
    my @modes;
    my @warns;
    my $RequiredSpace = 0;
@@ -1239,18 +1231,18 @@ sub to_be_pulled {
 
    # compare local_tree with remote_tree
    if ($remote_tree) {
-      for my $k ( sort ( keys %$remote_tree ) ) {
-         if ( !$local_tree->{$k} ) {
+      for my $k (sort (keys %$remote_tree)) {
+         if (!$local_tree->{$k}) {
             # if the back dir is not shown in local side at all, don't delete it on
             # remote side.
             # for example, assume remote side runs command as
             #    $0 client host port a b
             # if 'a' doesn't exist on the local side, we (local side) should not tell
             # remote to delete b/a on the remote side
-
+          
             my $back = $remote_tree->{$k}->{back};
-
-            if ( $local_tree->{$back} ) {
+   
+            if ($local_tree->{$back}) {
                push @deletes, $k;
             }
          }
@@ -1259,11 +1251,9 @@ sub to_be_pulled {
 
    # we sort reverse so that files come before their parent dir. This way enables
    # us to copy some (not have to be all) files under a dir
-   for my $k ( reverse( sort ( keys %$local_tree ) ) ) {
-      my ( $local_size, $local_type, $local_test, $local_mtime, $local_mode ) = @{ $local_tree->{$k} }{
-         qw(
-           size          type          test          mtime          mode )
-      };
+   for my $k (reverse (sort (keys %$local_tree))) {
+      my ( $local_size,  $local_type,  $local_test,  $local_mtime,  $local_mode) = @{ $local_tree->{$k}}{qw(
+                  size          type          test          mtime          mode )};
 
       my $skipped_message = $local_tree->{$k}->{skip};
       if ($skipped_message) {
@@ -1273,19 +1263,18 @@ sub to_be_pulled {
          next;
       }
 
-      if ( !exists $remote_tree->{$k} || $remote_tree->{$k}->{type} ne $local_type ) {
+      if (!exists $remote_tree->{$k} || $remote_tree->{$k}->{type} ne $local_type) {
          # remote missing this file or remote is a different type of file: eg, file vs directory
 
          if ($local_size) {
-            if ( $maxsize >= 0 && $RequiredSpace + $local_size > $maxsize ) {
-               print get_timestamp(),
-                 "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
+            if ($maxsize >=0 && $RequiredSpace+$local_size > $maxsize) {
+               print get_timestamp(), "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
                last;
             }
             $RequiredSpace += $local_size;
          }
 
-         if ( exists $remote_tree->{$k} ) {
+         if (exists $remote_tree->{$k}) {
             # if remote file exists, it must be of a different type, remove it first and then add
             $change_by_file->{$k} = "newType";
             if ($stop_at_change) {
@@ -1299,9 +1288,9 @@ sub to_be_pulled {
                print "$k: $change_by_file->{$k}\n";
                exit(1);
             }
-         }
+         } 
 
-         if ( $local_type eq 'dir' ) {
+         if ($local_type eq 'dir') {
             # We don't tar dir because that would tar up all files under dir.
             # But the problem with this approach is that the dir mode
             # (permission) is then not recorded in the tar file. We will have
@@ -1309,17 +1298,15 @@ sub to_be_pulled {
             # so is the mtime.
             if ($check_mode) {
                push @modes, $k;
-            }
+            }   
             $need_mtime_reset->{$k} = 1;
          }
          next;
       }
 
       # do this only after we knew the key exists in $remote_tree. otherwise, autovivification will insert the key
-      my ( $remote_size, $remote_type, $remote_test, $remote_mtime, $remote_mode ) = @{ $remote_tree->{$k} }{
-         qw(
-           size          type          test          mtime          mode )
-      };
+      my ($remote_size, $remote_type, $remote_test, $remote_mtime, $remote_mode) = @{$remote_tree->{$k}}{qw(
+                  size          type          test          mtime          mode )};
 
       # now that both sides are same kind type: file, dir, or link
       if ( $check_mode && $local_type ne 'link' && $remote_mode != $local_mode ) {
@@ -1332,9 +1319,8 @@ sub to_be_pulled {
       if ( $remote_size != $local_size ) {
          # only files can reach here
          if ($local_size) {
-            if ( $maxsize >= 0 && $RequiredSpace + $local_size > $maxsize ) {
-               print get_timestamp(),
-                 "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
+            if ($maxsize >=0 && $RequiredSpace+$local_size > $maxsize) {
+               print get_timestamp(), "size cutoff before $k: RequiredSpace+local_size($RequiredSpace+$local_size) > maxsize($maxsize)\n";
                last;
             }
             $RequiredSpace += $local_size;
@@ -1345,37 +1331,37 @@ sub to_be_pulled {
             print "$k: $change_by_file->{$k}\n";
             exit(1);
          }
-         $diff_by_file->{$k}++;    # files are diff'able
+         $diff_by_file->{$k} ++; # files are diff'able
 
          next;
       }
 
       # compare {test} if it is populated
-      # because dir's {test} and link's {test} are hardcoded, we are really only compare files,
-      if ( !$local_test && !$remote_test ) {
+      # because dir's {test} and link's {test} are hardcoded, we are really only compare files, 
+      if (!$local_test && !$remote_test) {
          # if both missing tests, we compare mtime first
          # for fast check (default), if size and mtime match, then no need to update.
          # for deep check, or when mtime not matching (but size matching), resort to
          # cksum.
 
-         if ( $remote_mtime != $local_mtime ) {
+         if ($remote_mtime != $local_mtime) {
             push @need_cksums, $k;
-            $need_mtime_reset->{$k} = 1;
+            $need_mtime_reset->{$k} = 1
          } elsif ($deep_check) {
             # $remote_mtime == $local_mtime is true
             push @need_cksums, $k;
          }
-      } elsif ( !$local_test || !$remote_test ) {
+      } elsif ( !$local_test || !$remote_test) {
          # we reach here if only one test is missing.
          # note: if both tests are missing, the previous logic would have already taken care of it.
          # not sure what situation will lead us here yet
-
+       
          $change_by_file->{$k} = "update";
          if ($stop_at_change) {
             print "$k: $change_by_file->{$k}\n";
             exit(1);
          }
-      } elsif ( $local_test ne $remote_test ) {
+      } elsif ($local_test ne $remote_test) {
          # now both tests exist, we can safely compare
          # not sure what situation will lead us here yet
 
@@ -1386,36 +1372,36 @@ sub to_be_pulled {
          }
       } else {
          # $local_test eq $remote_test
-         if ( $remote_mtime != $local_mtime ) {
-            $need_mtime_reset->{$k} = 1;
+         if ($remote_mtime != $local_mtime) {
+            $need_mtime_reset->{$k} = 1
          }
       }
    }
 
-   # instead, flush writes manually
+   # instead, flush writes manually 
    $socket->blocking(1);
 
-   my $need_cksums_string = "<NEED_CKSUMS>" . join( "\n", @need_cksums ) . "</NEED_CKSUMS>";
+   my $need_cksums_string = "<NEED_CKSUMS>" . join("\n", @need_cksums) . "</NEED_CKSUMS>";
    print get_timestamp(), "sending need_cksums request to remote: ", scalar(@need_cksums), " items.\n";
    $verbose && print "   $need_cksums_string\n";
-   socket_send( $socket, "$need_cksums_string\n" );
+   socket_send($socket, "$need_cksums_string\n");
 
-   $socket->flush();    # flush data when writes are done.
-
+   $socket->flush(); # flush data when writes are done.
+  
    print get_timestamp(), "collecting local cksums: ", scalar(@need_cksums), " items.\n";
-   my $local_cksum_by_file = get_cksums( \@need_cksums, $local_tree, { verbose => $verbose } );
+   my $local_cksum_by_file = get_cksums(\@need_cksums, $local_tree, {verbose=>$verbose});
 
    # unblock socket when reading
    $socket->blocking(0);
 
    print get_timestamp(), "waiting remote cksum results.\n";
 
-   $captures = expect_socket(
-      $socket,
-      [ '<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>', ],
-      { verbose => $verbose, ExpectTimeout => $timeout }
-   );
-   if ( !$captures ) {
+   $captures = expect_socket($socket,
+                         [ '<CKSUM_RESULTS>(.*)</CKSUM_RESULTS>',
+                         ],
+                         {verbose=>$verbose, ExpectTimeout=>$timeout}
+                    );
+   if (!$captures) {
       $socket->close();
       return;
    }
@@ -1424,40 +1410,40 @@ sub to_be_pulled {
 
    my $remote_cksum_by_file;
    if ($remote_cksums_string) {
-      for my $row ( split /\n/, $remote_cksums_string ) {
-         if ( $row =~ /^(\d+) (.+)$/ ) {
+      for my $row (split /\n/, $remote_cksums_string) {
+         if ($row =~ /^(\d+) (.+)$/) {
             $remote_cksum_by_file->{$2} = $1;
          }
       }
    }
 
-   for my $f ( keys %$local_cksum_by_file ) {
+   for my $f (keys %$local_cksum_by_file) {
       if ( !$remote_cksum_by_file->{$f} ) {
          print "ERROR: remote cksum results missing for $f\n";
          $change_by_file->{$f} = "update";
-      } elsif ( $remote_cksum_by_file->{$f} ne $local_cksum_by_file->{$f} ) {
+      } elsif ($remote_cksum_by_file->{$f} ne $local_cksum_by_file->{$f} ) {
          $change_by_file->{$f} = "update";
-         $diff_by_file->{$f}++;    # only type=file can get here.
-      } elsif ( $remote_tree->{$f}->{mtime} != $local_tree->{$f}->{mtime} ) {
-         $need_mtime_reset->{$f} = 1;
+         $diff_by_file->{$f}++; # only type=file can get here.
+      } elsif ($remote_tree->{$f}->{mtime} != $local_tree->{$f}->{mtime}) { 
+         $need_mtime_reset->{$f} = 1
       }
    }
 
-   for my $k ( @deletes, keys(%$change_by_file) ) {
+   for my $k (@deletes, keys(%$change_by_file)) {
       # when we untar to update a file, the file's parent dir's timestamp is updated. we need
       # to restore the timestamp
-      if ( $k =~ m:^(.+)/: ) {
+      if ($k =~ m:^(.+)/:) {
          my $parent_dir = $1;
-         if ( exists $local_tree->{$parent_dir} ) {
+         if (exists $local_tree->{$parent_dir}) {
             # parent_dir may be filtered out by match/exclude patterns, therefore, we need to
             # check its existence
             $need_mtime_reset->{$parent_dir} = 1;
-         }
+         }   
       }
    }
 
    my @mtimes;
-   for my $f ( keys %$need_mtime_reset ) {
+   for my $f (keys %$need_mtime_reset) {
       push @mtimes, $f if $local_tree->{$f};
    }
 
@@ -1465,35 +1451,35 @@ sub to_be_pulled {
    # instead, flush writes manually
    $socket->blocking(1);
 
-   my $delete_string = "<DELETES>" . join( "\n", sort(@deletes) ) . "</DELETES>";
+   my $delete_string = "<DELETES>" . join("\n", sort(@deletes)) . "</DELETES>";
    print get_timestamp(), "sending deletes: ", scalar(@deletes), " item(s)\n";
    $verbose && print "   $delete_string\n";
-   socket_send( $socket, "$delete_string\n" );
+   socket_send($socket, "$delete_string\n");
 
    my $adds_string = "<ADDS>";
-   my @adds_files  = sort ( keys %$change_by_file );
+   my @adds_files = sort (keys %$change_by_file);
 
    for my $f (@adds_files) {
       my $action = $change_by_file->{$f};
-      $adds_string .= sprintf( "\%6s \%s\n", $action, $f );
+      $adds_string .= sprintf("\%6s \%s\n", $action, $f);
    }
    # $adds_string =~ s:\n$::; # remove the last newline
 
    $adds_string .= "</ADDS>";
-   print get_timestamp(), "sending adds: ", scalar(@adds_files), " item(s)\n";
+   print get_timestamp(), "sending adds: ", scalar(@adds_files), " item(s)\n"; 
    $verbose && print "   $adds_string\n";
-   socket_send( $socket, "$adds_string\n" );
+   socket_send($socket, "$adds_string\n");
 
    my $mtime_string = "<MTIMES>";
    for my $f (@mtimes) {
-      my $mt = $local_tree->{$f}->{mtime};
+      my $mt = $local_tree->{$f}->{mtime}; 
       $mtime_string .= "$mt $f\n";
    }
    $mtime_string .= "</MTIMES>";
 
-   print get_timestamp(), "sending mtimes: ", scalar(@mtimes), " item(s)\n";
+   print get_timestamp(), "sending mtimes: ", scalar(@mtimes), " item(s)\n"; 
    $verbose && print "   $mtime_string\n";
-   socket_send( $socket, "$mtime_string\n" );
+   socket_send($socket, "$mtime_string\n");
 
    my $mode_string = "<MODES>";
    if ($check_mode) {
@@ -1507,21 +1493,21 @@ sub to_be_pulled {
    }
    $mode_string .= "</MODES>";
    $verbose && print "   $mode_string\n";
-   socket_send( $socket, "$mode_string\n" );
+   socket_send($socket, "$mode_string\n");
 
-   my $warn_string = "<WARNS>" . join( "\n", @warns ) . "</WARNS>";
+   my $warn_string = "<WARNS>" . join("\n", @warns) . "</WARNS>";
    print get_timestamp(), "sending warns: ", scalar(@warns), " item(s)\n";
-   print "   ", join( "\n   ", @warns ), "\n";
+   print "   ", join("\n   ", @warns), "\n";
    $verbose && print "   $warn_string\n";
-   socket_send( $socket, "$warn_string\n" );
+   socket_send($socket, "$warn_string\n");
 
    print get_timestamp(), "sending required space: $RequiredSpace\n";
    $verbose && print "   <SPACE>$RequiredSpace</SPACE>\n";
-   socket_send( $socket, "<SPACE>$RequiredSpace</SPACE>\n" );
+   socket_send($socket, "<SPACE>$RequiredSpace</SPACE>\n");
 
-   $socket->flush();    # flush data when writes are done.
+   $socket->flush(); # flush data when writes are done.
 
-   if ( !$change_by_file ) {
+   if (!$change_by_file) {
       print get_timestamp(), "remote doesn't need to add/update any new files\n";
       return;
    }
@@ -1531,10 +1517,13 @@ sub to_be_pulled {
 
    print get_timestamp(), "waiting for transfer mode from remote\n";
 
-   $captures =
-     expect_socket( $socket, ["please send (data|diff)"], { verbose => $verbose, ExpectTimeout => $timeout } );
+   $captures = expect_socket(
+              $socket,
+              ["please send (data|diff)"],
+              {verbose=>$verbose, ExpectTimeout=>$timeout}
+           );
 
-   if ( !$captures ) {
+   if (!$captures) {
       $socket->close();
       return;
    }
@@ -1543,19 +1532,19 @@ sub to_be_pulled {
 
    print get_timestamp(), "received remote tranfer mode: $mode. creating tmp local tar file\n";
 
-   my $tmp_tar_file = get_tmp_file( $tmpdir, "$prog.tar", { chkSpace => $RequiredSpace * 2 } );
-   my $tmp_tar_list = get_tmp_file( $tmpdir, "$prog.list" );
+   my $tmp_tar_file = get_tmp_file($tmpdir, "$prog.tar",  {chkSpace=>$RequiredSpace*2});
+   my $tmp_tar_list = get_tmp_file($tmpdir, "$prog.list");
 
    croak "cannot get a tmp file under $tmpdir. disk full?" if !$tmp_tar_file;
 
    my $files_to_tar;
-   if ( $mode eq 'diff' ) {
-      @{$files_to_tar} = sort ( keys %$diff_by_file );
+   if ($mode eq 'diff') {
+      @{$files_to_tar} = sort (keys %$diff_by_file);
    } else {
       $files_to_tar = \@adds_files;
    }
 
-   if ( !@{$files_to_tar} ) {
+   if (!@{$files_to_tar}) {
       print get_timestamp(), "no need to send anything to remote\n";
       return;
    }
@@ -1563,21 +1552,21 @@ sub to_be_pulled {
    my $files_by_front;
 
    for my $f (@$files_to_tar) {
-      if ( $local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
+      if ($local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
          # Skip non-empty dir because tar'ing dir will also tar the files underneath.
          # But we include empty dir
          $verbose && print "Skipped dir $f because we will add files under it anyway\n";
-         next;
+          next;
       }
 
       my $front = $local_tree->{$f}->{front};
-      push @{ $files_by_front->{$front} }, $f;
+      push @{$files_by_front->{$front}}, $f;
    }
 
    my $created_tar;
 
-   for my $front ( sort( keys %$files_by_front ) ) {
-      my @files = sort @{ $files_by_front->{$front} };
+   for my $front (sort(keys %$files_by_front)) {
+      my @files = sort @{$files_by_front->{$front}};
 
       next if !@files;
 
@@ -1585,7 +1574,7 @@ sub to_be_pulled {
       open my $list_fh, ">$tmp_tar_list" or croak "cannot write to $tmp_tar_list: $!";
 
       for my $f (@files) {
-         next if !defined $f;
+         next if ! defined $f;
 
          # use '' to wrap file name in case there are space chars.
          print {$list_fh} "$f\n";
@@ -1593,8 +1582,8 @@ sub to_be_pulled {
 
       close $list_fh;
 
-      tar_file_list( $front, $tmp_tar_file, $created_tar, $tmp_tar_list );
-      $created_tar++;
+      tar_file_list($front, $tmp_tar_file, $created_tar, $tmp_tar_list);
+      $created_tar ++;
    }
 
    if ( !$created_tar ) {
@@ -1608,19 +1597,19 @@ sub to_be_pulled {
 
    print get_timestamp(), "sending tar-format data (mode=$mode) to remote.\n";
 
-   open my $fh, "< $tmp_tar_file" or die "cannot read $tmp_tar_file";
+   open my $fh, "< $tmp_tar_file" or die "cannot read $tmp_tar_file"; 
    binmode($fh);
 
    my $tar_size = 0;
 
-   while (1) {
+   while(1) {
       my $data;
 
-      my $size = read( $fh, $data, 1024000 );
+      my $size = read($fh, $data, 1024000);
 
       last if !$size;
 
-      socket_send( $socket, $data );
+      socket_send($socket, $data);
 
       $tar_size += $size;
    }
@@ -1640,30 +1629,30 @@ sub to_be_pulled {
 }
 
 sub to_pull {
-   my ( $socket, $remote_paths, $local_dir, $opt ) = @_;
+   my ($socket, $remote_paths, $local_dir, $opt) = @_;
 
    # http://www.perlmonks.org/?node_id=304388
-
+   
    $| = 1;
 
    my $dryrun_string = "";
-   if ( $dryrun || $diff ) {
+   if ($dryrun||$diff) {
       $dryrun_string = "dryrun";
    }
 
-   $local_dir =~ s:[/]+$::;    # remove the trailing /
+   $local_dir =~ s:[/]+$::; # remove the trailing /
    my $local_dir_abs = get_abs_path($local_dir);
 
    my @local_paths;
    for my $remote_path (@$remote_paths) {
-      if ( $remote_path =~ m!$root_dir_pattern! ) {
+      if ($remote_path =~ m!$root_dir_pattern!) {
          my $message = "cannot copy root dir $remote_path";
          print "ERROR: $message\n";
-         socket_send( $socket, "$message\n" );
+         socket_send($socket, "$message\n");
          return;
-      }
+      }   
 
-      $remote_path =~ s:[/]+$::g;    # remove the trailing /
+      $remote_path =~ s:[/]+$::g;       # remove the trailing /
 
       # get the last component; we will treat it as a subdir right under local_dir
       my ($back) = ( $remote_path =~ m:([^/]+)$: );
@@ -1681,10 +1670,10 @@ sub to_pull {
       #    example:
       #       $0 client host port /a/b/c/*.csv d
       #    we need to check whether we have d/*.csv
-
-      my $cmd   = "/bin/ls -1d $local_path 2>/dev/null";
+    
+      my $cmd = "/bin/ls -1d $local_path 2>/dev/null";
       my @globs = `/bin/ls -1d $local_path 2>/dev/null`;
-      if ( !@globs ) {
+      if (!@globs) {
          print "'$local_path' couldn't be resolved by cmd=$cmd. skipped\n";
          next;
       }
@@ -1694,7 +1683,7 @@ sub to_pull {
       for my $path (@globs) {
          my $local_abs = get_abs_path("$path");
 
-         if ( !$local_abs ) {
+         if (!$local_abs) {
             print "'$path' couldn't be resolved by get_abs_path(). skipped\n";
             next;
          }
@@ -1705,18 +1694,14 @@ sub to_pull {
       }
    }
 
-   $quiet || print get_timestamp(), "building local tree using abs_path: ", join( " ", @local_paths ), "\n";
+   $quiet || print get_timestamp(), "building local tree using abs_path: ", join(" ", @local_paths), "\n";
 
    # on to_pull side, we don't check access with AllowDenyPatterns.
    # matches and excludes are coming from command line
-   my $local_tree = build_dir_tree(
-      \@local_paths,
-      {
-         verbose  => $verbose,
-         excludes => \@excludes,
-         matches  => \@matches,
-      }
-   );
+   my $local_tree = build_dir_tree(\@local_paths, {verbose=>$verbose,
+                                           excludes=>\@excludes,
+                                           matches=>\@matches,
+                                          });
    $verbose && print "local_tree = ", Dumper($local_tree);
 
    # don't unblock socket when writing; doing so would corrupt data.
@@ -1726,43 +1711,42 @@ sub to_pull {
    my $version_string = "<VERSION>$version</VERSION>";
    $quiet || print get_timestamp(), "sending version: $version\n";
    $verbose && print "   $version_string\n";
-   socket_send( $socket, "$version_string\n" );
+   socket_send($socket, "$version_string\n");
 
-   my $uname = `uname -a`;
-   chomp $uname;
+   my $uname = `uname -a`; chomp $uname;
    $uname = "Perl|$uname";
    my $uname_string = "<UNAME>$uname</UNAME>";
    $quiet || print get_timestamp(), "sending prog|uname: $uname\n";
    $verbose && print "   $uname_string\n";
-   socket_send( $socket, "$uname_string\n" );
+   socket_send($socket, "$uname_string\n");
 
-   my $paths_string = join( "|", @$remote_paths );
+   my $paths_string = join("|", @$remote_paths);
    $quiet || print get_timestamp(), "sending paths: $paths_string\n";
    $paths_string = "<PATH>$paths_string</PATH>";
    $verbose && print "   $paths_string\n";
-   socket_send( $socket, "$paths_string\n" );
+   socket_send($socket, "$paths_string\n");
 
    $quiet || print get_timestamp(), "sending deep check flag: $deep\n";
    my $deep_string = "<DEEP>$deep</DEEP>";
    $verbose && print "   $deep_string\n";
-   socket_send( $socket, "$deep_string\n" );
+   socket_send($socket, "$deep_string\n");
 
    my $local_tree_block = "";
    my $local_tree_items = 0;
 
    my $skipped = 0;
    if ($local_tree) {
-      for my $k ( sort keys(%$local_tree) ) {
+      for my $k (sort keys(%$local_tree)) {
          my $skip_message = $local_tree->{$k}->{skip};
          if ($skip_message) {
-            # don't send skipped file to remote; this way, remote will not
+            # don't send skipped file to remote; this way, remote will not 
             # tell us to delete them.
-            $skipped++;
+            $skipped ++;
             next;
          }
-         $local_tree_items++;
+         $local_tree_items ++;
          my $string = "key=$k";
-         for my $attr ( sort ( keys %{ $local_tree->{$k} } ) ) {
+         for my $attr (sort (keys %{$local_tree->{$k}})) {
             $string .= "|$attr=$local_tree->{$k}->{$attr}";
          }
          $local_tree_block .= "$string\n";
@@ -1771,32 +1755,32 @@ sub to_pull {
 
    $quiet || print get_timestamp(), "sending local_tree, $local_tree_items items, skipped $skipped\n";
    $verbose && print "   <TREE>$local_tree_block</TREE>\n";
-   socket_send( $socket, "<TREE>$local_tree_block</TREE>\n" );
+   socket_send($socket, "<TREE>$local_tree_block</TREE>\n");
 
    $quiet || print get_timestamp(), "sending maxsize: $maxsize\n";
    my $maxsize_string = "<MAXSIZE>$maxsize</MAXSIZE>";
    $verbose && print "   $maxsize_string\n";
-   socket_send( $socket, "$maxsize_string\n" );
+   socket_send($socket, "$maxsize_string\n");
 
    my $excludes_string = "";
    if (@excludes) {
-      $excludes_string = join( "\n", @excludes );
+      $excludes_string = join("\n", @excludes);
    }
    $quiet || print get_timestamp(), "sending excludes: $excludes_string\n";
    $excludes_string = "<EXCLUDE>$excludes_string</EXCLUDE>";
    $verbose && print "   $excludes_string\n";
-   socket_send( $socket, "$excludes_string\n" );
+   socket_send($socket, "$excludes_string\n");
 
    my $matches_string = "";
    if (@matches) {
-      $matches_string = join( "\n", @matches );
+      $matches_string = join("\n", @matches);
    }
    $quiet || print get_timestamp(), "sending matches: $matches_string\n";
-   $matches_string = "<MATCH>$matches_string</MATCH>";
+   $matches_string="<MATCH>$matches_string</MATCH>";
    $verbose && print "   $matches_string\n";
-   socket_send( $socket, "$matches_string\n" );
+   socket_send($socket, "$matches_string\n");
 
-   $socket->flush();    # flush data when writes are done.
+   $socket->flush(); # flush data when writes are done.
 
    # unblock socket when reading
    $socket->blocking(0);
@@ -1804,12 +1788,12 @@ sub to_pull {
    $quiet || print get_timestamp(), "waiting cksum requests from remote...\n";
 
    my $captures = expect_socket(
-      $socket,
-      [ '<NEED_CKSUMS>(.*)</NEED_CKSUMS>', ],
-      { verbose => $verbose, ExpectTimeout => $timeout }
-   );
+              $socket,
+              [ '<NEED_CKSUMS>(.*)</NEED_CKSUMS>',],
+              {verbose=>$verbose, ExpectTimeout=>$timeout}
+           );
 
-   if ( !$captures ) {
+   if (!$captures) {
       $socket->close();
       return;
    }
@@ -1820,12 +1804,11 @@ sub to_pull {
    my @cksums_results;
    if ($need_cksums_string) {
       @need_cksums = split /\n/, $need_cksums_string;
-      $quiet || print get_timestamp(), "received cksum requests, ", scalar(@need_cksums),
-        " items. calculating local cksums\n";
+      $quiet|| print get_timestamp(), "received cksum requests, ", scalar(@need_cksums), " items. calculating local cksums\n";
 
-      my $local_cksums_by_file = get_cksums( \@need_cksums, $local_tree );
+      my $local_cksums_by_file = get_cksums(\@need_cksums, $local_tree);
 
-      for my $f ( sort ( keys %$local_cksums_by_file ) ) {
+      for my $f (sort (keys %$local_cksums_by_file)) {
          push @cksums_results, "$local_cksums_by_file->{$f} $f";
       }
    } else {
@@ -1836,14 +1819,14 @@ sub to_pull {
    # instead, flush writes manually
    $socket->blocking(1);
 
-   my $cksums_results_string = join( "\n", @cksums_results );
+   my $cksums_results_string = join("\n", @cksums_results);
    $cksums_results_string = "<CKSUM_RESULTS>$cksums_results_string</CKSUM_RESULTS>";
 
    $quiet || print get_timestamp(), "sending cksum results: ", scalar(@cksums_results), " item(s)\n";
-   $verbose && print "   $cksums_results_string\n";
-   socket_send( $socket, "$cksums_results_string\n" );
+   $verbose  && print  "   $cksums_results_string\n";
+   socket_send($socket, "$cksums_results_string\n");
 
-   $socket->flush();    # flush data when writes are done.
+   $socket->flush(); # flush data when writes are done.
 
    $quiet || print get_timestamp(), "waiting instructions from remote ...\n";
 
@@ -1851,15 +1834,18 @@ sub to_pull {
    $socket->blocking(0);
 
    $captures = expect_socket(
-      $socket,
-      [
-         '<DELETES>(.*)</DELETES>', '<MTIMES>(.*)</MTIMES>', '<MODES>(.*)</MODES>', '<SPACE>(\d+)</SPACE>',
-         '<ADDS>(.*)</ADDS>',       '<WARNS>(.*)</WARNS>',
-      ],
-      { verbose => $verbose, ExpectTimeout => $timeout }
-   );
+              $socket,
+              [ '<DELETES>(.*)</DELETES>',
+                '<MTIMES>(.*)</MTIMES>',
+                '<MODES>(.*)</MODES>',
+                '<SPACE>(\d+)</SPACE>',
+                '<ADDS>(.*)</ADDS>', 
+                '<WARNS>(.*)</WARNS>',
+              ],
+              {verbose=>$verbose, ExpectTimeout=>$timeout}
+           );
 
-   if ( !$captures ) {
+   if (!$captures) {
       $socket->close();
       return;
    }
@@ -1870,32 +1856,32 @@ sub to_pull {
    my $RequiredSpace  = $captures->[3]->[0];
    my $adds_string    = $captures->[4]->[0];
    my $warns_string   = $captures->[5]->[0];
-
+    
    # if local_dir doesn't exist yet, we don't mkdir now because if this is a
    # dryrun or diff, then we shouldn't create a dir. we will create it later.
    # But why do we "cd $local_dir_abs" here? because the followed deletes use
    # the relative path; so does diff.
-   if ( -d $local_dir_abs ) {
+   if (-d $local_dir_abs) {
       $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
       chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
 
       if ($deletes_string) {
          my @deletes = split /\n/, $deletes_string;
-
+   
          my $last_delete;
-
-         for my $d ( sort @deletes ) {
-            if ( !$last_delete || $d !~ m:^$last_delete/: ) {
+   
+         for my $d (sort @deletes) {
+            if (!$last_delete || $d !~ m:^$last_delete/: ) {
                # if we already deleted the dir, no need to delete files under it.
-
+   
                my $cmd = "/bin/rm -fr '$d'";
-               if ( $dryrun || $diff ) {
+               if ($dryrun||$diff) {
                   print "dryrun $cmd\n";
                } else {
                   print "$cmd\n";
                   system($cmd);
-               }
-
+                }  
+   
                $last_delete = $d;
             }
          }
@@ -1910,13 +1896,13 @@ sub to_pull {
       my @adds = split /\n/, $adds_string;
       for my $a (@adds) {
          next if !$a;
-         if ( $a =~ /^\s*(\S+?) (.+)/ ) {
+         if ($a =~ /^\s*(\S+?) (.+)/) {
             my $action = $1;
-            my $file   = $2;
+            my $file = $2;
 
             push @diff_files, $file if $action eq 'update';
 
-            if ( $action_by_file->{$file} ) {
+            if ($action_by_file->{$file}) {
                print STDERR "ERROR: $file appeared more than once on remote side\n";
             }
             $action_by_file->{$file} = $action;
@@ -1925,7 +1911,7 @@ sub to_pull {
          }
       }
 
-      for my $f ( sort ( keys %$action_by_file ) ) {
+      for my $f (sort (keys %$action_by_file)) {
          printf "$dryrun_string %7s %s\n", $action_by_file->{$f}, $f;
       }
    }
@@ -1936,78 +1922,76 @@ sub to_pull {
    }
 
    # check tmp space
-   my $tmp_tar_file = get_tmp_file( $tmpdir, $prog, { chkSpace => $RequiredSpace * 2 } );
+   my $tmp_tar_file = get_tmp_file($tmpdir, $prog, {chkSpace=>$RequiredSpace*2});
 
-   if ( !$tmp_tar_file ) {
-      $quiet || print get_timestamp(), "space check: not enough space under $tmpdir, requiring ", $RequiredSpace * 2,
-        " bytes, disk full?\n";
+   if (!$tmp_tar_file) {
+      $quiet || print get_timestamp(), "space check: not enough space under $tmpdir, requiring ", $RequiredSpace*2, " bytes, disk full?\n";
       exit 1 if !$dryrun;
    } else {
-      $quiet || print get_timestamp(), "space check: enough space under $tmpdir, requiring ", $RequiredSpace * 2,
-        " bytes.\n";
+      $quiet || print get_timestamp(), "space check: enough space under $tmpdir, requiring ", $RequiredSpace*2, " bytes.\n";
    }
 
-   if ( !$adds_string ) {
+   if (!$adds_string) {
       my $message = "nothing to add or update\n";
       $quiet || print get_timestamp(), $message;
-      socket_send( $socket, $message );
-   } elsif ( !$dryrun ) {
+      socket_send($socket, $message);
+   } elsif (!$dryrun) {
       # don't unblock socket when writing; doing so would corrupt data.
       # instead, flush writes manually
       $socket->blocking(1);
 
       if ($diff) {
-         socket_send( $socket, "please send diff\n" );
+         socket_send($socket, "please send diff\n");
       } else {
-         socket_send( $socket, "please send data\n" );
+         socket_send($socket, "please send data\n");
       }
-
+   
       $socket->flush();
-
+   
       my $tmp_diff_dir;
       if ($diff) {
-         $tmp_diff_dir = get_tmp_file( $tmpdir, $prog, { isDir => 'Y', chkSpace => $RequiredSpace * 2 } );
-         if ( !-d $tmp_diff_dir ) {
+         $tmp_diff_dir = get_tmp_file($tmpdir, $prog, {isDir=>'Y', chkSpace=>$RequiredSpace*2});
+         if (! -d $tmp_diff_dir) {
             my $cmd = "mkdir -p '$tmp_diff_dir'";
             $quiet || print get_timestamp(), "$dryrun_string $cmd\n";
             $dryrun || system($cmd) && croak "$cmd failed";
          }
-
+   
          print get_timestamp(), "cd '$tmp_diff_dir'\n";
          chdir($tmp_diff_dir) || croak "cd '$tmp_diff_dir' failed";
       } else {
-         if ( !-d $local_dir_abs ) {
+         if (! -d $local_dir_abs) {
             my $cmd = "mkdir -p '$local_dir_abs'";
             $quiet || print get_timestamp(), "$dryrun_string $cmd\n";
             $dryrun || system($cmd) && croak "$cmd failed";
          }
-
+   
          $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
          chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
       }
-
+   
       # unblock socket when reading
       $socket->blocking(0);
-
+   
       $quiet || print get_timestamp(), "waiting for data from remote\n";
       my $select = IO::Select->new($socket) or die "IO::Select $!";
-
+   
       my $tar_size = 0;
       my $total_data;
-
+   
       my $fh;
-
-      while (1) {
+   
+      while(1) {
          next if !$select->can_read(300);
-
+   
          my $data;
-
-         my $size = read( $socket, $data, 2048000 );
-         if ( !$size ) {
+   
+         my $size = read($socket, $data, 2048000);
+         if (!$size) {
             $verbose && print get_timestamp(), "remote closed connection\n";
-            last;
+             last;
          } else {
-            if ( !$fh ) {
+            if (!$fh) {
                # Open this fh only when we really have data.
                # This doesn't work because the binmode() only works on file not on a command pipe
                # open $fh, "|tar -xvfp -" or die "tar -xvfp - failed";
@@ -2018,7 +2002,7 @@ sub to_pull {
             }
 
             $tar_size += $size;
-            print {$fh} xor_encode( $data, 'in' );
+            print {$fh} xor_encode($data, 'in');
          }
       }
 
@@ -2027,16 +2011,14 @@ sub to_pull {
 
       $quiet || print get_timestamp(), "received tar_size = $tar_size\n" if $verbose;
 
-      if ( $tar_size == 0 ) {
+      if ($tar_size == 0) {
          $quiet || print get_timestamp(), "no new file to add\n";
       } else {
          my $tar_verbose = $quiet ? "" : "v";
 
-         my $cmd =
-           ( $os_name =~ /^CYGWIN|Msys/i )
-           ? "tar -x${tar_verbose}f  $tmp_tar_file"
-           : "tar -x${tar_verbose}pf $tmp_tar_file";
-         #Msys is Git Bash
+         my $cmd = ($os_name =~ /^CYGWIN|Msys/i) ? "tar -x${tar_verbose}f  $tmp_tar_file" :
+                                                   "tar -x${tar_verbose}pf $tmp_tar_file";
+         #Msys is Git Bash 
          print get_timestamp(), "$cmd\n" if $verbose;
          system($cmd);
       }
@@ -2073,11 +2055,11 @@ sub to_pull {
       my @lines = split /\n/, $mtimes_string;
 
       for my $l (@lines) {
-         if ( $l =~ /^([0-9]+)\s+(\S.*)/ ) {
-            my ( $mtime, $f ) = ( $1, $2 );
+         if ($l =~ /^([0-9]+)\s+(\S.*)/) {
+            my ($mtime, $f) = ($1, $2);
             print "$dryrun_string utime($mtime, $mtime, $f)\n";
-            if ( !$dryrun && !$diff ) {
-               utime( $mtime, $mtime, $f ) || print "utime($mtime, $mtime, $f) failed\n";
+            if ( !$dryrun && !$diff) {
+               utime($mtime, $mtime, $f) || print "utime($mtime, $mtime, $f) failed\n";
             }
          } else {
             print "bad mtime format at line: $l\n";
@@ -2087,16 +2069,16 @@ sub to_pull {
 
    if ($modes_string) {
       my @lines = split /\n/, $modes_string;
-
+      
       for my $l (@lines) {
-         if ( $l =~ /^([0-9]+)\s+(\S.*)/ ) {
-            my ( $mode, $f ) = ( $1, $2 );
-
+         if ($l =~ /^([0-9]+)\s+(\S.*)/) {
+            my ($mode, $f) = ($1, $2);
+   
             #my $octal = sprintf("0%o", $mode);
             print "$dryrun_string chmod(oct(\"$mode\"), $f)\n";
 
-            if ( !$dryrun && !$diff ) {
-               chmod( oct("$mode"), $f );
+            if (!$dryrun && !$diff) {
+               chmod(oct("$mode"), $f);
             }
          } else {
             print "bad mode format at line: $l\n";
@@ -2106,9 +2088,9 @@ sub to_pull {
 }
 
 sub socket_send {
-   my ( $socket, $plain_str ) = @_;
+   my ($socket, $plain_str) = @_;
 
-   $socket->send( xor_encode( $plain_str, 'out' ) );
+   $socket->send(xor_encode($plain_str, 'out'));
 
    my $size = length($plain_str);
    $out_count += $size;
@@ -2116,37 +2098,37 @@ sub socket_send {
 }
 
 sub xor_encode {
-   my ( $plain_str, $tag ) = @_;
+   my ($plain_str, $tag) = @_;
 
    return $plain_str if !$encrypt_key;
 
    my $encrypted_str = '';
-   my $key_index     = $key_index_by_tag->{$tag};
+   my $key_index = $key_index_by_tag->{$tag};
 
-   for my $char ( split //, $plain_str ) {
-      $encrypted_str .= chr( ord($char) ^ ord( $key_array[$key_index] ) );
 
-      $key_index++;
-      if ( $key_index == $key_length ) {
+   for my $char (split //, $plain_str){
+      $encrypted_str .= chr(ord($char) ^ ord($key_array[$key_index]));
+
+      $key_index ++;
+      if ($key_index == $key_length) {
          $key_index = 0;
-      }
-   }
+      }   
+    }
 
-   $key_index_by_tag->{$tag} = $key_index;
-   return $encrypted_str;
+    $key_index_by_tag->{$tag} = $key_index;
+    return $encrypted_str;
 }
 
 ###################################################################################
 # BEGIN logic copied from .../site_perl/String/CRC/Cksum.pm
-use integer;    # for cksum
-
+use integer; # for cksum
 sub get_cksums {
-   my ( $files, $dir_tree, $opt ) = @_;
+   my ($files, $dir_tree, $opt) = @_;
    my $cksum_by_file;
 
    for my $f (@$files) {
       my $front = $dir_tree->{$f}->{front};
-      if ( !$front ) {
+      if (!$front) {
          print STDERR "missing \$dir_tree->{$f}->{front}. skipped\n";
          next;
       }
@@ -2157,23 +2139,23 @@ sub get_cksums {
 }
 
 sub cksum {
-   my ( $file, $opt ) = @_;
+   my ($file, $opt) = @_;
 
    my $cksum = 0;
-   my $size  = 0;
+   my $size = 0;
 
    open my $ifd, "<$file";
 
-   if ( !$ifd ) {
+   if (!$ifd) {
       carp "cannot read $file";
       return 0;
    }
 
-   while (1) {
+   while(1) {
       my $data;
-      my $n = read( $ifd, $data, 4096 );
+      my $n = read($ifd, $data, 4096);
 
-      if ( !defined $n ) {
+      if (! defined $n) {
          croak "error reading from $file: $!";
       }
 
@@ -2184,29 +2166,29 @@ sub cksum {
       #for (my $i = 0; $i < $n; ++$i) {
       # my $c = unpack 'C', substr $data, $i, 1;
       # $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c]; #}
-
+      
       # C - an unsigned char
       # If the input string is longer than needed, extra characters are ignored.
       # A * for the repeat count uses all characters of the input field. For unpack, nybbles
       # are converted to a string of hexadecimal digits.
-      for my $c ( unpack 'C*', $data ) {
+      for my $c (unpack 'C*', $data) {
          #$cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
          # break this into steps for easier troubleshooting.
-         my $index = ( 0xFF & ( $cksum >> 24 ) ) ^ $c;
-         $cksum = ( 0xFFFFFFFF & ( $cksum << 8 ) ) ^ $crctab[$index];
+	 my $index = (0xFF & ($cksum >> 24)) ^ $c;
+	 $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[$index];
       }
    }
 
    close $ifd;
 
    # Extend with the length of the data
-   while ( $size != 0 ) {
+   while($size != 0) {
       my $c = $size & 0xFF;
       $size >>= 8;
-      $cksum = ( 0xFFFFFFFF & ( $cksum << 8 ) ) ^ $crctab[ ( 0xFF & ( $cksum >> 24 ) ) ^ $c ];
+      $cksum = (0xFFFFFFFF & ($cksum << 8)) ^ $crctab[(0xFF & ($cksum >> 24)) ^ $c];
    }
 
-   $cksum = ~$cksum;
+   $cksum = ~ $cksum;
    # ~ is bitwise negation operator
    # $ perl -e 'printf("%b\n",   1);'
    # 1
@@ -2231,7 +2213,7 @@ sub cksum {
 # the end.
 #
 #    $ ls -ld /cygdrive/c/Windows/notepad.exe
-#    -rwxr-x---+ 3 NT SERVICE+TrustedInstaller NT SERVICE+TrustedInstaller 181248 Mar 11 17:07
+#    -rwxr-x---+ 3 NT SERVICE+TrustedInstaller NT SERVICE+TrustedInstaller 181248 Mar 11 17:07 
 #                                                                             /cygdrive/c/Windows/notepad.exe
 #
 # test '-r $file'
@@ -2252,7 +2234,7 @@ sub cksum {
 #    group:ALL RESTRICTED APPLICATION PACKAGES:r-x
 #    mask::r-x
 #    other::---
-#
+#    
 # we can read the file with 'head'
 #    $ head -n 1 /cygdrive/c/Windows/notepad.exe
 #    ...
@@ -2268,11 +2250,12 @@ sub cksum {
 #   -rwxr-xr-x 3 william 197121 181248 Mar 11 17:07 /c/Windows/notepad.exe
 
 sub test_read_by_open {
-   my ( $file, $opt ) = @_;
+   my ($file, $opt) = @_;
    open my $fh, "<$file" or return 0;
    close $fh;
    return 1;
 }
+
 
 # END
 ###################################################################################
