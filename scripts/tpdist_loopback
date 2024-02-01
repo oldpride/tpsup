@@ -9,7 +9,7 @@ use Carp;
 
 use POSIX;
 
-my $timeout = 300;
+my $timeout = 600;
 my $port    = 6789;
 
 my $prog = $0;
@@ -61,7 +61,8 @@ Usage:
 
 Examples:
 
-   $prog src1 src2 ... dst_dir
+   $prog       testdir1/* testdir3
+   $prog -diff testdir1/* testdir3
 
 END
 
@@ -113,7 +114,21 @@ die "cannot be both quite and verbose" if $quiet && $verbose;
       $exclude_pattern = $default_exclude;
    }
 
-   my @cmd = ( "tpdist", "client", "localhost", "$port", "-exclude", "'$exclude_pattern'", @ARGV );
-   print "client cmd=", Dumper( \@cmd ) if $verbose;
+   my @cmd = ( "tpdist", "client", "localhost", "$port" );
+
+   # pass through all options
+   push @cmd, '-diff'   if $diff;
+   push @cmd, '-dryrun' if $dryrun;
+   push @cmd, '-maxsize', $maxsize if $maxsize > 0;
+   push @cmd, '-stop' if $stop_at_change;
+   push @cmd, '-v'    if $verbose;
+   push @cmd, '-q'    if $quiet;
+   push @cmd, '-match',   "'$_'" for @matches;
+   push @cmd, '-exclude', "'$_'" for @excludes;
+
+   # required arguments
+   push @cmd, @ARGV;
+
+   print "client cmd=", Dumper( \@cmd );
    system(@cmd) == 0 or die "client command failed: $!";
 }
