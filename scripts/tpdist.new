@@ -63,7 +63,7 @@ my @crctab = (
 );
 
 my ( $os_name, $nodename, $os_release, $os_version, $machine ) = POSIX::uname();
-my $tmpdir = ( $os_name =~ /MINGW/i ) ? "/tmp" : "/var/tmp";    # Git Bash's os_name is MINGW
+my $tmpbase = ( $os_name =~ /MINGW/i ) ? "/tmp" : "/var/tmp";    # Git Bash's os_name is MINGW
 
 my $cygwin;
 $cygwin++ if $os_name =~ /^CYGWIN/i;
@@ -105,7 +105,7 @@ Common Switches (for both server and client):
    -timeout seconds
                       time to wait for peer to finish a transaction, default to $timeout
 
-   -tmpdir dir        default to $tmpdir. (current os_name=$os_name)
+   -tmpdir dir        default to $tmpbase. (current os_name=$os_name)
                       (Solaris/Linux/Cygwin default to /var/tmp, GitBash defaults to /tmp)
 
    -r|reverse         server-pull/client-push. default is server-push/client-pull             
@@ -249,7 +249,7 @@ GetOptions(
    'interval=s'         => \$interval,
    'match=s'            => \@matches,
    'exclude=s'          => \@excludes,
-   'tmpdir=s'           => \$tmpdir,
+   'tmpdir=s'           => \$tmpbase,
    'enc|encrypt=s'      => \$encrypt_key,
    'p|PreserveFullPath' => \$PreserveFullPath,
    'strict_tar'         => \$strict_tar,
@@ -1108,120 +1108,25 @@ sub expect_socket {
    }
 }
 
-my $bad_format_count = 0;
+sub compare_trees {
+   my ( $remote_tree, $local_paths, $opt ) = @_;
 
-sub to_be_pulled {
-   my ( $socket, $opt ) = @_;
-
-   # unblock socket when reading
-   $socket->blocking(0);
-
-   print get_timestamp(), "waiting information from remote ...\n";
-
-   my $captures = expect_socket(
-      $socket,
-      [
-         '<PATH>(.+)</PATH>',            '<TREE>(.*)</TREE>',
-         '<MAXSIZE>([-]?\d+)</MAXSIZE>', '<VERSION>(.+)</VERSION>',
-         '<EXCLUDE>(.*)</EXCLUDE>',      '<MATCH>(.*)</MATCH>',
-         '<DEEP>(.)</DEEP>',             '<UNAME>(.+)</UNAME>',
-      ],
-      {
-         verbose       => $verbose,
-         ExpectTimeout => $timeout,
-         #dropped <VERSION> as it is seen in port scanners
-         #BeginPattern=>'<(VERSION|UNAME|PATH)>',
-         BeginPattern => '<(UNAME|PATH)>',
-      }
-   );
-
-   if ( !$captures ) {
-      $bad_format_count++;
-      print "ERROR: received bad format $bad_format_count times\n";
-
-      if ( $bad_format_count >= 3 ) {
-         print "FATAL: likely being under attack. we exit\n";
-         exit 1;
-      }
-
-      $socket->close();
-      return;
-   } else {
-      $bad_format_count = 0;
-   }
-
-   my $local_paths_string = $captures->[0]->[0];
-   my $remote_tree_block  = $captures->[1]->[0];
-   my $maxsize            = $captures->[2]->[0];
-   my $version            = $captures->[3]->[0];
-   my $exclude_string     = $captures->[4]->[0];
-   my $match_string       = $captures->[5]->[0];
-   my $deep_check         = $captures->[6]->[0];
-   my $uname              = $captures->[7]->[0];
-
-   my ($peer_protocol) = ( $version =~ /^(\d+)/ );
-
-   if ( $peer_protocol != $expected_peer_protocol ) {
-      my $message =
-        "wrong protocol $peer_protocol. expecting protocol $expected_peer_protocol(.*). closed the connection.\n";
-      print get_timestamp(), "$message\n";
-      socket_send( $socket, "$message\n" );
-      $socket->close();
-      return;
-   }
-
-   # we only check modes between compatible platforms
-   my $check_mode = ( $uname !~ /Windows/i ) ? 1 : 0;
-
-   print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
-
-   print get_timestamp(), "remote used matched protocol $peer_protocol\n";
-
-   my @excludes;
-   if ($exclude_string) {
-      @excludes = split /\n/, $exclude_string;
-   }
-
-   my @matches;
-   if ($match_string) {
-      @matches = split /\n/, $match_string;
-   }
-
-   my $remote_tree;
-
-   if ($remote_tree_block) {
-      my @lines = split /\n/, $remote_tree_block;
-
-      for my $l (@lines) {
-         next if !$l || $l !~ /^key=/;
-
-         my $r;
-
-         for my $pair ( split /[|]/, $l ) {
-            my ( $k, $v ) = ( $pair =~ /^(.+?)=(.+)/ );
-            $r->{$k} = $v;
-         }
-
-         $remote_tree->{ $r->{key} } = $r;
-      }
-   }
-
-   print get_timestamp(), "building local_tree using paths: $local_paths_string\n";
-   print get_timestamp(), "relative path base is homedir=$homedir\n";
-
-   my @local_paths = split( /[|]/, $local_paths_string );
+   my $verbose    = $opt->{verbose};
+   my $check_mode = $opt->{check_mode};
+   my $maxsize    = $opt->{maxsize};
+   my $deep_check = $opt->{deep_check};
 
    # on to_be_pulled side, we need check access with AllowDenyPatterns.
    # matches and excludes are coming from remote side
    # RelativeBase is coming from command line
    my $local_tree = build_dir_tree(
-      \@local_paths,
+      $local_paths,
       {
          verbose           => $verbose,
          RelativeBase      => $homedir,
          AllowDenyPatterns => $opt->{AllowDenyPatterns},
-         excludes          => \@excludes,
-         matches           => \@matches,
+         excludes          => $opt->{excludes},
+         matches           => $opt->{matches},
       }
    );
 
@@ -1393,6 +1298,220 @@ sub to_be_pulled {
       }
    }
 
+   my $result = {
+      local_tree       => $local_tree,
+      deletes          => \@deletes,
+      change_by_file   => $change_by_file,
+      diff_by_file     => $diff_by_file,
+      modes            => \@modes,
+      need_mtime_reset => $need_mtime_reset,
+      need_cksums      => \@need_cksums,
+      RequiredSpace    => $RequiredSpace,
+      warns            => \@warns,
+   };
+
+   return $result;
+}
+
+sub create_tar_file {
+   my ( $local_tree, $opt ) = @_;
+
+   my $mode           = $opt->{mode};
+   my $change_by_file = $opt->{change_by_file};
+   my $RequiredSpace  = $opt->{RequiredSpace};
+   my $diff_by_file   = $opt->{diff_by_file};
+   my @adds_files     = @{ $opt->{adds_files} };
+
+   my $tmp_tar_file = get_tmp_file( $tmpbase, "$prog.tar", { chkSpace => $RequiredSpace * 2 } );
+   my $tmp_tar_list = get_tmp_file( $tmpbase, "$prog.list" );
+
+   croak "cannot get a tmp file under $tmpbase. disk full?" if !$tmp_tar_file;
+
+   my $files_to_tar;
+   if ( $mode eq 'diff' ) {
+      @{$files_to_tar} = sort ( keys %$diff_by_file );
+   } else {
+      $files_to_tar = \@adds_files;
+   }
+
+   if ( !@{$files_to_tar} ) {
+      print get_timestamp(), "no need to send anything to remote\n";
+      return;
+   }
+
+   my $files_by_front;
+
+   for my $f (@$files_to_tar) {
+      if ( $local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
+         # Skip non-empty dir because tar'ing dir will also tar the files underneath.
+         # But we include empty dir
+         $verbose && print "Skipped dir $f because we will add files under it anyway\n";
+         next;
+      }
+
+      my $front = $local_tree->{$f}->{front};
+      push @{ $files_by_front->{$front} }, $f;
+   }
+
+   my $created_tar;
+
+   for my $front ( sort( keys %$files_by_front ) ) {
+      my @files = sort @{ $files_by_front->{$front} };
+
+      next if !@files;
+
+      #my $file_string = '';
+      open my $list_fh, ">$tmp_tar_list" or croak "cannot write to $tmp_tar_list: $!";
+
+      for my $f (@files) {
+         next if !defined $f;
+
+         # use '' to wrap file name in case there are space chars.
+         print {$list_fh} "$f\n";
+      }
+
+      close $list_fh;
+
+      tar_file_list( $front, $tmp_tar_file, $created_tar, $tmp_tar_list );
+      $created_tar++;
+   }
+
+   my $tar_result = {
+      tmp_tar_file => $tmp_tar_file,
+      tmp_tar_list => $tmp_tar_list,
+      created_tar  => $created_tar,
+   };
+
+   return $tar_result;
+}
+
+my $bad_format_count = 0;
+
+sub to_be_pulled {
+   my ( $socket, $opt ) = @_;
+
+   # unblock socket when reading
+   $socket->blocking(0);
+
+   print get_timestamp(), "waiting information from remote ...\n";
+
+   my $captures = expect_socket(
+      $socket,
+      [
+         '<PATH>(.+)</PATH>',            '<TREE>(.*)</TREE>',
+         '<MAXSIZE>([-]?\d+)</MAXSIZE>', '<VERSION>(.+)</VERSION>',
+         '<EXCLUDE>(.*)</EXCLUDE>',      '<MATCH>(.*)</MATCH>',
+         '<DEEP>(.)</DEEP>',             '<UNAME>(.+)</UNAME>',
+      ],
+      {
+         verbose       => $verbose,
+         ExpectTimeout => $timeout,
+         #dropped <VERSION> as it is seen in port scanners
+         #BeginPattern=>'<(VERSION|UNAME|PATH)>',
+         BeginPattern => '<(UNAME|PATH)>',
+      }
+   );
+
+   if ( !$captures ) {
+      $bad_format_count++;
+      print "ERROR: received bad format $bad_format_count times\n";
+
+      if ( $bad_format_count >= 3 ) {
+         print "FATAL: likely being under attack. we exit\n";
+         exit 1;
+      }
+
+      $socket->close();
+      return;
+   } else {
+      $bad_format_count = 0;
+   }
+
+   my $local_paths_string = $captures->[0]->[0];
+   my $remote_tree_block  = $captures->[1]->[0];
+   my $maxsize            = $captures->[2]->[0];
+   my $version            = $captures->[3]->[0];
+   my $exclude_string     = $captures->[4]->[0];
+   my $match_string       = $captures->[5]->[0];
+   my $deep_check         = $captures->[6]->[0];
+   my $uname              = $captures->[7]->[0];
+
+   my ($peer_protocol) = ( $version =~ /^(\d+)/ );
+
+   if ( $peer_protocol != $expected_peer_protocol ) {
+      my $message =
+        "wrong protocol $peer_protocol. expecting protocol $expected_peer_protocol(.*). closed the connection.\n";
+      print get_timestamp(), "$message\n";
+      socket_send( $socket, "$message\n" );
+      $socket->close();
+      return;
+   }
+
+   # we only check modes between compatible platforms
+   my $check_mode = ( $uname !~ /Windows/i ) ? 1 : 0;
+
+   print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
+
+   print get_timestamp(), "remote used matched protocol $peer_protocol\n";
+
+   my @excludes;
+   if ($exclude_string) {
+      @excludes = split /\n/, $exclude_string;
+   }
+
+   my @matches;
+   if ($match_string) {
+      @matches = split /\n/, $match_string;
+   }
+
+   my $remote_tree;
+
+   if ($remote_tree_block) {
+      my @lines = split /\n/, $remote_tree_block;
+
+      for my $l (@lines) {
+         next if !$l || $l !~ /^key=/;
+
+         my $r;
+
+         for my $pair ( split /[|]/, $l ) {
+            my ( $k, $v ) = ( $pair =~ /^(.+?)=(.+)/ );
+            $r->{$k} = $v;
+         }
+
+         $remote_tree->{ $r->{key} } = $r;
+      }
+   }
+
+   print get_timestamp(), "building local_tree using paths: $local_paths_string\n";
+   print get_timestamp(), "relative path base is homedir=$homedir\n";
+
+   my @local_paths = split( /[|]/, $local_paths_string );
+
+   my $result = compare_trees(
+      $remote_tree,
+      \@local_paths,
+      {
+         AllowDenyPatterns => $opt->{AllowDenyPatterns},
+         verbose           => $verbose,
+         check_mode        => $check_mode,
+         excludes          => \@excludes,
+         matches           => \@matches,
+         maxsize           => $maxsize,
+         deep_check        => $deep_check,
+      }
+   );
+
+   my $local_tree       = $result->{local_tree};
+   my @deletes          = @{ $result->{deletes} };
+   my $change_by_file   = $result->{change_by_file};
+   my $diff_by_file     = $result->{diff_by_file};
+   my @modes            = @{ $result->{modes} };
+   my $need_mtime_reset = $result->{need_mtime_reset};
+   my @need_cksums      = @{ $result->{need_cksums} };
+   my $RequiredSpace    = $result->{RequiredSpace};
+   my @warns            = @{ $result->{warns} };
+
    # instead, flush writes manually
    $socket->blocking(1);
 
@@ -1544,59 +1663,21 @@ sub to_be_pulled {
 
    print get_timestamp(), "received remote tranfer mode: $mode. creating tmp local tar file\n";
 
-   my $tmp_tar_file = get_tmp_file( $tmpdir, "$prog.tar", { chkSpace => $RequiredSpace * 2 } );
-   my $tmp_tar_list = get_tmp_file( $tmpdir, "$prog.list" );
-
-   croak "cannot get a tmp file under $tmpdir. disk full?" if !$tmp_tar_file;
-
-   my $files_to_tar;
-   if ( $mode eq 'diff' ) {
-      @{$files_to_tar} = sort ( keys %$diff_by_file );
-   } else {
-      $files_to_tar = \@adds_files;
-   }
-
-   if ( !@{$files_to_tar} ) {
-      print get_timestamp(), "no need to send anything to remote\n";
-      return;
-   }
-
-   my $files_by_front;
-
-   for my $f (@$files_to_tar) {
-      if ( $local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
-         # Skip non-empty dir because tar'ing dir will also tar the files underneath.
-         # But we include empty dir
-         $verbose && print "Skipped dir $f because we will add files under it anyway\n";
-         next;
+   my $tar_result = create_tar_file(
+      $local_tree,
+      {
+         mode           => $mode,
+         change_by_file => $change_by_file,
+         diff_by_file   => $diff_by_file,
+         adds_files     => \@adds_files,
+         RequiredSpace  => $RequiredSpace,
+         verbose        => $verbose,
       }
+   );
 
-      my $front = $local_tree->{$f}->{front};
-      push @{ $files_by_front->{$front} }, $f;
-   }
-
-   my $created_tar;
-
-   for my $front ( sort( keys %$files_by_front ) ) {
-      my @files = sort @{ $files_by_front->{$front} };
-
-      next if !@files;
-
-      #my $file_string = '';
-      open my $list_fh, ">$tmp_tar_list" or croak "cannot write to $tmp_tar_list: $!";
-
-      for my $f (@files) {
-         next if !defined $f;
-
-         # use '' to wrap file name in case there are space chars.
-         print {$list_fh} "$f\n";
-      }
-
-      close $list_fh;
-
-      tar_file_list( $front, $tmp_tar_file, $created_tar, $tmp_tar_list );
-      $created_tar++;
-   }
+   my $tmp_tar_file = $tar_result->{tmp_tar_file};
+   my $tmp_tar_list = $tar_result->{tmp_tar_list};
+   my $created_tar  = $tar_result->{created_tar};
 
    if ( !$created_tar ) {
       print get_timestamp(), "no tar created, close this remote connection.\n";
@@ -1937,14 +2018,14 @@ sub to_pull {
    }
 
    # check tmp space
-   my $tmp_tar_file = get_tmp_file( $tmpdir, $prog, { chkSpace => $RequiredSpace * 2 } );
+   my $tmp_tar_file = get_tmp_file( $tmpbase, $prog, { chkSpace => $RequiredSpace * 2 } );
 
    if ( !$tmp_tar_file ) {
-      $quiet || print get_timestamp(), "space check: not enough space under $tmpdir, requiring ", $RequiredSpace * 2,
+      $quiet || print get_timestamp(), "space check: not enough space under $tmpbase, requiring ", $RequiredSpace * 2,
         " bytes, disk full?\n";
       exit 1 if !$dryrun;
    } else {
-      $quiet || print get_timestamp(), "space check: enough space under $tmpdir, requiring ", $RequiredSpace * 2,
+      $quiet || print get_timestamp(), "space check: enough space under $tmpbase, requiring ", $RequiredSpace * 2,
         " bytes.\n";
    }
 
@@ -1967,7 +2048,7 @@ sub to_pull {
 
       my $tmp_diff_dir;
       if ($diff) {
-         $tmp_diff_dir = get_tmp_file( $tmpdir, $prog, { isDir => 'Y', chkSpace => $RequiredSpace * 2 } );
+         $tmp_diff_dir = get_tmp_file( $tmpbase, $prog, { isDir => 'Y', chkSpace => $RequiredSpace * 2 } );
          if ( !-d $tmp_diff_dir ) {
             my $cmd = "mkdir -p '$tmp_diff_dir'";
             $quiet || print get_timestamp(), "$dryrun_string $cmd\n";
