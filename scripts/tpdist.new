@@ -91,8 +91,12 @@ Usage:
    If remote path is a relative path, it will be relative to remote user's home dir.
 
    WARNING: windows host doesn't preserve sym links. cygwin can handle sym link, but
-            gitbash cannot. 
-   
+            gitbash cannot. \
+
+   local mode: no network involved
+      $prog local src1 src2 ... dest_dir
+      this is useful in gitbash to handle local files because gitbash doesn't have rsync.
+
 Common Switches (for both server and client):
 
    -v                 verbose mode.
@@ -265,7 +269,7 @@ usage("wrong number of args") if @ARGV < 2;
 
 die "cannot be both quite and verbose" if $quiet && $verbose;
 
-my $mode = shift @ARGV;
+my $proc_mode = shift @ARGV;
 
 my $host;
 my $port;
@@ -292,7 +296,7 @@ if ($encrypt_key) {
    $key_length = scalar(@key_array);
 }
 
-if ( $mode eq 'server' ) {
+if ( $proc_mode eq 'server' ) {
    $port = shift @ARGV;
 
    if ($reverse) {
@@ -302,7 +306,7 @@ if ( $mode eq 'server' ) {
    } else {
       usage("wrong number of args") if @ARGV;
    }
-} elsif ( $mode eq 'client' ) {
+} elsif ( $proc_mode eq 'client' ) {
    $host = shift @ARGV;
    $port = shift @ARGV;
 
@@ -313,17 +317,33 @@ if ( $mode eq 'server' ) {
       $local_dir     = pop @ARGV;
       @$remote_paths = @ARGV;
    }
+} elsif ( $proc_mode eq 'local' ) {
+   usage("wrong number of args") if @ARGV < 2;
+   $local_dir     = pop @ARGV;    # this is destination_dir for local mode
+   @$remote_paths = @ARGV;        # this is source_files    for local mode
 } else {
-   usage("first arg must be either 'server' or 'client'");
+   usage("first arg must be either 'server', 'client' or 'local'");
+}
+
+my $local_dir_abs;
+
+if ($local_dir) {
+   $local_dir =~ s:/$::;          # remove trailing /
+   $local_dir_abs = get_abs_path($local_dir);
+}
+
+if ( defined($local_dir) && -e $local_dir && !-d $local_dir ) {
+   print "ERROR: local_dir=$local_dir is not a directory\n";
+   exit 1;
 }
 
 if ( !@excludes ) {
    @excludes = ($default_exclude);
 }
 
-if ( defined($local_dir) && -e $local_dir && !-d $local_dir ) {
-   print "ERROR: local_dir=$local_dir is not a directory\n";
-   exit 1;
+my $dryrun_string = "";
+if ( $dryrun || $diff ) {
+   $dryrun_string = "dryrun";
 }
 
 print "version=$version, protocol=$expected_peer_protocol\n";
@@ -342,7 +362,7 @@ if ($verbose) {
    print "AccessMatrix=", Dumper($AccessMatrix);
 }
 
-if ( $mode eq 'server' ) {
+if ( $proc_mode eq 'server' ) {
    # this is a server
 
    my $listener_socket = new IO::Socket::INET(
@@ -425,7 +445,7 @@ if ( $mode eq 'server' ) {
          to_be_pulled( $socket, { verbose => $verbose, AllowDenyPatterns => $AccessMatrix->{file} } );
       }
    }
-} else {
+} elsif ( $proc_mode eq 'client' ) {
    # this is a client
 
    $quiet || print get_timestamp(), "connecting to server $host:$port\n";
@@ -453,6 +473,10 @@ if ( $mode eq 'server' ) {
    } else {
       to_pull( $socket, $remote_paths, $local_dir, { verbose => $verbose } );
    }
+} else {
+   # this is local
+   local_sync( $remote_paths, $local_dir, { verbose => $verbose } );
+   # for local mode, $remote_paths is the source files, and $local_dir is the destination dir
 }
 
 exit 0;
@@ -559,7 +583,7 @@ sub tar_file_list {
 
 sub get_timestamp {
    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime(time);
-   return sprintf( "%04d%02d%02d %02d:%02d:%02d [$mode] ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
+   return sprintf( "%04d%02d%02d %02d:%02d:%02d [$proc_mode] ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
 }
 
 sub read_security_file {
@@ -1313,25 +1337,14 @@ sub compare_trees {
    return $result;
 }
 
-sub create_tar_file {
-   my ( $local_tree, $opt ) = @_;
-
-   my $mode           = $opt->{mode};
-   my $change_by_file = $opt->{change_by_file};
-   my $RequiredSpace  = $opt->{RequiredSpace};
-   my $diff_by_file   = $opt->{diff_by_file};
-   my @adds_files     = @{ $opt->{adds_files} };
-
-   my $tmp_tar_file = get_tmp_file( $tmpbase, "$prog.tar", { chkSpace => $RequiredSpace * 2 } );
-   my $tmp_tar_list = get_tmp_file( $tmpbase, "$prog.list" );
-
-   croak "cannot get a tmp file under $tmpbase. disk full?" if !$tmp_tar_file;
+sub prepare_to_create_tar {
+   my ( $local_tree, $diff_by_file, $adds_files, $data_mode ) = @_;
 
    my $files_to_tar;
-   if ( $mode eq 'diff' ) {
+   if ( $data_mode eq 'diff' ) {
       @{$files_to_tar} = sort ( keys %$diff_by_file );
    } else {
-      $files_to_tar = \@adds_files;
+      $files_to_tar = $adds_files;
    }
 
    if ( !@{$files_to_tar} ) {
@@ -1352,6 +1365,58 @@ sub create_tar_file {
       my $front = $local_tree->{$f}->{front};
       push @{ $files_by_front->{$front} }, $f;
    }
+
+   my $result = {
+      files_to_tar   => $files_to_tar,
+      files_by_front => $files_by_front,
+   };
+
+   return $result;
+}
+
+sub create_tar_file {
+   my ( $local_tree, $opt ) = @_;
+
+   my $data_mode      = $opt->{data_mode};
+   my $change_by_file = $opt->{change_by_file};
+   my $RequiredSpace  = $opt->{RequiredSpace};
+   my $diff_by_file   = $opt->{diff_by_file};
+   my @adds_files     = @{ $opt->{adds_files} };
+
+   my $tmp_tar_file = get_tmp_file( $tmpbase, "$prog.tar", { chkSpace => $RequiredSpace * 2 } );
+   my $tmp_tar_list = get_tmp_file( $tmpbase, "$prog.list" );
+
+   croak "cannot get a tmp file under $tmpbase. disk full?" if !$tmp_tar_file;
+
+   my $prepare_result = prepare_to_create_tar( $local_tree, $diff_by_file, \@adds_files, $data_mode );
+   my $files_to_tar   = $prepare_result->{files_to_tar};
+   my $files_by_front = $prepare_result->{files_by_front};
+
+   # my $files_to_tar;
+   # if ( $mode eq 'diff' ) {
+   #    @{$files_to_tar} = sort ( keys %$diff_by_file );
+   # } else {
+   #    $files_to_tar = \@adds_files;
+   # }
+
+   # if ( !@{$files_to_tar} ) {
+   #    print get_timestamp(), "no need to send anything to remote\n";
+   #    return;
+   # }
+
+   # my $files_by_front;
+
+   # for my $f (@$files_to_tar) {
+   #    if ( $local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
+   #       # Skip non-empty dir because tar'ing dir will also tar the files underneath.
+   #       # But we include empty dir
+   #       $verbose && print "Skipped dir $f because we will add files under it anyway\n";
+   #       next;
+   #    }
+
+   #    my $front = $local_tree->{$f}->{front};
+   #    push @{ $files_by_front->{$front} }, $f;
+   # }
 
    my $created_tar;
 
@@ -1385,6 +1450,38 @@ sub create_tar_file {
    return $tar_result;
 }
 
+sub decide_after_cksum {
+   my (
+      $local_cksum_by_file, $remote_cksum_by_file, $local_tree, $remote_tree, $deletes,
+      # the following will be changed in place. we don't return them. they are passed by reference.
+      $change_by_file, $diff_by_file, $need_mtime_reset
+   ) = @_;
+
+   for my $f ( keys %$local_cksum_by_file ) {
+      if ( !$remote_cksum_by_file->{$f} ) {
+         print "ERROR: remote cksum results missing for $f\n";
+         $change_by_file->{$f} = "update";
+      } elsif ( $remote_cksum_by_file->{$f} ne $local_cksum_by_file->{$f} ) {
+         $change_by_file->{$f} = "update";
+         $diff_by_file->{$f}++;    # only type=file can get here.
+      } elsif ( $remote_tree->{$f}->{mtime} != $local_tree->{$f}->{mtime} ) {
+         $need_mtime_reset->{$f} = 1;
+      }
+   }
+
+   for my $k ( @$deletes, keys(%$change_by_file) ) {
+      # when we untar to update a file, the file's parent dir's timestamp is updated. we need
+      # to restore the timestamp
+      if ( $k =~ m:^(.+)/: ) {
+         my $parent_dir = $1;
+         if ( exists $local_tree->{$parent_dir} ) {
+            # parent_dir may be filtered out by match/exclude patterns, therefore, we need to
+            # check its existence
+            $need_mtime_reset->{$parent_dir} = 1;
+         }
+      }
+   }
+}
 my $bad_format_count = 0;
 
 sub to_be_pulled {
@@ -1551,30 +1648,18 @@ sub to_be_pulled {
       }
    }
 
-   for my $f ( keys %$local_cksum_by_file ) {
-      if ( !$remote_cksum_by_file->{$f} ) {
-         print "ERROR: remote cksum results missing for $f\n";
-         $change_by_file->{$f} = "update";
-      } elsif ( $remote_cksum_by_file->{$f} ne $local_cksum_by_file->{$f} ) {
-         $change_by_file->{$f} = "update";
-         $diff_by_file->{$f}++;    # only type=file can get here.
-      } elsif ( $remote_tree->{$f}->{mtime} != $local_tree->{$f}->{mtime} ) {
-         $need_mtime_reset->{$f} = 1;
-      }
-   }
-
-   for my $k ( @deletes, keys(%$change_by_file) ) {
-      # when we untar to update a file, the file's parent dir's timestamp is updated. we need
-      # to restore the timestamp
-      if ( $k =~ m:^(.+)/: ) {
-         my $parent_dir = $1;
-         if ( exists $local_tree->{$parent_dir} ) {
-            # parent_dir may be filtered out by match/exclude patterns, therefore, we need to
-            # check its existence
-            $need_mtime_reset->{$parent_dir} = 1;
-         }
-      }
-   }
+   # based on cksum between remote and local, we decide what to do
+   decide_after_cksum(
+      $local_cksum_by_file,
+      $remote_cksum_by_file,
+      $local_tree,
+      $remote_tree,
+      \@deletes,
+      # the following will change in place, so we pass them by reference
+      $change_by_file,
+      $diff_by_file,
+      $need_mtime_reset,
+   );
 
    my @mtimes;
    for my $f ( keys %$need_mtime_reset ) {
@@ -1659,14 +1744,14 @@ sub to_be_pulled {
       return;
    }
 
-   my $mode = $captures->[0]->[0];
+   my $data_mode = $captures->[0]->[0];
 
-   print get_timestamp(), "received remote tranfer mode: $mode. creating tmp local tar file\n";
+   print get_timestamp(), "received remote tranfer mode: $data_mode. creating tmp local tar file\n";
 
    my $tar_result = create_tar_file(
       $local_tree,
       {
-         mode           => $mode,
+         data_mode      => $data_mode,
          change_by_file => $change_by_file,
          diff_by_file   => $diff_by_file,
          adds_files     => \@adds_files,
@@ -1688,7 +1773,7 @@ sub to_be_pulled {
    # instead, flush writes manually
    $socket->blocking(1);
 
-   print get_timestamp(), "sending tar-format data (mode=$mode) to remote.\n";
+   print get_timestamp(), "sending tar-format data (data_mode=$data_mode) to remote.\n";
 
    open my $fh, "< $tmp_tar_file" or die "cannot read $tmp_tar_file";
    binmode($fh);
@@ -1721,28 +1806,16 @@ sub to_be_pulled {
    }
 }
 
-sub to_pull {
-   my ( $socket, $remote_paths, $local_dir, $opt ) = @_;
+sub create_puller_local_tree {
+   my ( $remote_paths, $local_dir, $opt ) = @_;
 
-   # http://www.perlmonks.org/?node_id=304388
-
-   $| = 1;
-
-   my $dryrun_string = "";
-   if ( $dryrun || $diff ) {
-      $dryrun_string = "dryrun";
-   }
-
-   $local_dir =~ s:[/]+$::;    # remove the trailing /
-   my $local_dir_abs = get_abs_path($local_dir);
+   my $ret = {};
 
    my @local_paths;
    for my $remote_path (@$remote_paths) {
       if ( $remote_path =~ m!$root_dir_pattern! ) {
-         my $message = "cannot copy root dir $remote_path";
-         print "ERROR: $message\n";
-         socket_send( $socket, "$message\n" );
-         return;
+         $ret->{error} = "cannot copy root dir $remote_path";
+         return $ret;
       }
 
       $remote_path =~ s:[/]+$::g;    # remove the trailing /
@@ -1799,6 +1872,90 @@ sub to_pull {
          matches  => \@matches,
       }
    );
+
+   $ret->{puller_tree} = $local_tree;
+
+   return $ret;
+
+}
+
+sub take_action_before_tar {
+   my ( $deletes, $adds, $warns, $dryrun_string ) = @_;
+
+   # if local_dir doesn't exist yet, we don't mkdir now because if this is a
+   # dryrun or diff, then we shouldn't create a dir. we will create it later.
+   # But why do we "cd $local_dir_abs" here? because the followed deletes use
+   # the relative path; so does diff.
+   if ( -d $local_dir_abs ) {
+      $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
+      chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
+
+      my $last_delete;
+
+      for my $d ( sort @$deletes ) {
+         if ( !$last_delete || $d !~ m:^$last_delete/: ) {
+            # if we already deleted the dir, no need to delete files under it.
+
+            my $cmd = "/bin/rm -fr '$d'";
+            if ( $dryrun || $diff ) {
+               print "dryrun $cmd\n";
+            } else {
+               print "$cmd\n";
+               system($cmd);
+            }
+
+            $last_delete = $d;
+         }
+      }
+   }
+
+   my @diff_files;
+
+   my $action_by_file = {};
+   for my $a (@$adds) {
+      next if !$a;
+      if ( $a =~ /^\s*(\S+?) (.+)/ ) {
+         my $action = $1;
+         my $file   = $2;
+
+         push @diff_files, $file if $action eq 'update';
+
+         if ( $action_by_file->{$file} ) {
+            print STDERR "ERROR: $file appeared more than once on remote side\n";
+         }
+         $action_by_file->{$file} = $action;
+      } else {
+         croak "unexpected format $a. expecting: (add|update|newType) file";
+      }
+   }
+
+   for my $f ( sort ( keys %$action_by_file ) ) {
+      printf "$dryrun_string %7s %s\n", $action_by_file->{$f}, $f;
+   }
+
+   for my $w (@$warns) {
+      print "warning from remote side: $w\n";
+   }
+
+   my $result = { diff_files => \@diff_files, };
+
+   return $result;
+}
+
+sub to_pull {
+   my ( $socket, $remote_paths, $local_dir, $opt ) = @_;
+
+   # http://www.perlmonks.org/?node_id=304388
+   $| = 1;
+
+   my $result = create_puller_local_tree( $remote_paths, $local_dir, $opt );
+   if ( $result->{error} ) {
+      print get_timestamp(), "ERROR: ", $result->{error}, "\n";
+      socket_send( $socket, "$result->{error}\n" );
+      return;
+   }
+   my $local_tree = $result->{puller_tree};
+
    $verbose && print "local_tree = ", Dumper($local_tree);
 
    # don't unblock socket when writing; doing so would corrupt data.
@@ -1953,69 +2110,21 @@ sub to_pull {
    my $adds_string    = $captures->[4]->[0];
    my $warns_string   = $captures->[5]->[0];
 
-   # if local_dir doesn't exist yet, we don't mkdir now because if this is a
-   # dryrun or diff, then we shouldn't create a dir. we will create it later.
-   # But why do we "cd $local_dir_abs" here? because the followed deletes use
-   # the relative path; so does diff.
-   if ( -d $local_dir_abs ) {
-      $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
-      chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
-
-      if ($deletes_string) {
-         my @deletes = split /\n/, $deletes_string;
-
-         my $last_delete;
-
-         for my $d ( sort @deletes ) {
-            if ( !$last_delete || $d !~ m:^$last_delete/: ) {
-               # if we already deleted the dir, no need to delete files under it.
-
-               my $cmd = "/bin/rm -fr '$d'";
-               if ( $dryrun || $diff ) {
-                  print "dryrun $cmd\n";
-               } else {
-                  print "$cmd\n";
-                  system($cmd);
-               }
-
-               $last_delete = $d;
-            }
-         }
-      }
+   my @deletes;
+   if ($deletes_string) {
+      @deletes = split /\n/, $deletes_string;
    }
 
-   my @diff_files;
-
+   my @adds;
    if ($adds_string) {
-      my $action_by_file;
-
-      my @adds = split /\n/, $adds_string;
-      for my $a (@adds) {
-         next if !$a;
-         if ( $a =~ /^\s*(\S+?) (.+)/ ) {
-            my $action = $1;
-            my $file   = $2;
-
-            push @diff_files, $file if $action eq 'update';
-
-            if ( $action_by_file->{$file} ) {
-               print STDERR "ERROR: $file appeared more than once on remote side\n";
-            }
-            $action_by_file->{$file} = $action;
-         } else {
-            croak "unexpected format $a. expecting: (add|update|newType) file";
-         }
-      }
-
-      for my $f ( sort ( keys %$action_by_file ) ) {
-         printf "$dryrun_string %7s %s\n", $action_by_file->{$f}, $f;
-      }
+      @adds = split /\n/, $adds_string;
    }
 
    my @warns = split /\n/, $warns_string;
-   for my $w (@warns) {
-      print "warning from remote side: $w\n";
-   }
+
+   my $action1_result = take_action_before_tar( \@deletes, \@adds, \@warns, $dryrun_string, );
+
+   my @diff_files = @{ $action1_result->{diff_files} };
 
    # check tmp space
    my $tmp_tar_file = get_tmp_file( $tmpbase, $prog, { chkSpace => $RequiredSpace * 2 } );
@@ -2113,6 +2222,9 @@ sub to_pull {
          $quiet || print get_timestamp(), "no new file to add\n";
       } else {
          my $tar_verbose = $quiet ? "" : "v";
+
+         # -p, --preserve-permissions, --same-permissions
+         #      extract information about file permissions( default for superuser )
 
          my $cmd =
            ( $os_name =~ /^CYGWIN|Msys/i )
@@ -2216,6 +2328,149 @@ sub xor_encode {
 
    $key_index_by_tag->{$tag} = $key_index;
    return $encrypted_str;
+}
+
+sub local_sync {
+   # my ( $remote_paths, $local_dir, $opt ) = @_;
+   # in local mode,
+   #    $remote_paths are the source paths
+   #    $local_dir is the destination dir
+   my ( $source_paths, $dest_dir, $opt ) = @_;
+
+   # http://www.perlmonks.org/?node_id=304388
+   $| = 1;
+
+   my $tree_result = create_puller_local_tree( $source_paths, $dest_dir, $opt );
+   if ( $tree_result->{error} ) {
+      print get_timestamp(), "ERROR: ", $tree_result->{error}, "\n";
+      exit 1;
+   }
+
+   my $dest_tree = $tree_result->{puller_tree};
+   $verbose && print "dest_tree = ", Dumper($dest_tree);
+
+   # we only check modes between compatible platforms
+   my $uname = `uname -a`;
+   chomp $uname;
+   my $check_mode = ( $uname !~ /Windows/i ) ? 1 : 0;
+
+   print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
+
+   my $compare_result = compare_trees(
+      $dest_tree,
+      $source_paths,
+      {
+         AllowDenyPatterns => $opt->{AllowDenyPatterns},
+         verbose           => $verbose,
+         check_mode        => $check_mode,
+         excludes          => \@excludes,
+         matches           => \@matches,
+         maxsize           => $maxsize,
+         deep_check        => $deep,
+      }
+   );
+
+   my $source_tree      = $compare_result->{local_tree};
+   my @deletes          = @{ $compare_result->{deletes} };
+   my $change_by_file   = $compare_result->{change_by_file};
+   my $diff_by_file     = $compare_result->{diff_by_file};
+   my @modes            = @{ $compare_result->{modes} };
+   my $need_mtime_reset = $compare_result->{need_mtime_reset};
+   my @need_cksums      = @{ $compare_result->{need_cksums} };
+   my $RequiredSpace    = $compare_result->{RequiredSpace};
+   my @warns            = @{ $compare_result->{warns} };
+
+   print get_timestamp(), "collecting dest cksums: ", scalar(@need_cksums), " items.\n";
+   my $dest_cksum_by_file = get_cksums( \@need_cksums, $dest_tree, { verbose => $verbose } );
+
+   print get_timestamp(), "collecting source cksums: ", scalar(@need_cksums), " items.\n";
+   my $source_cksum_by_file = get_cksums( \@need_cksums, $source_tree, { verbose => $verbose } );
+
+   # based on cksum between remote and local, we decide what to do
+   decide_after_cksum(
+      $dest_cksum_by_file,
+      $source_cksum_by_file,
+      $dest_tree,
+      $source_tree,
+      \@deletes,
+      # the following will change in place, so we pass them by reference
+      $change_by_file,
+      $diff_by_file,
+      $need_mtime_reset,
+   );
+
+   my @adds = sort ( keys %$change_by_file );
+
+   my $action1_result = take_action_before_tar( \@deletes, \@adds, \@warns, $dryrun_string, );
+
+   my @diff_files = @{ $action1_result->{diff_files} };
+
+   my $data_mode = $diff ? "diff" : "data";
+
+   # we don't need to create tar in local mode but we use this function get the 'front'
+   my $prepare_result = prepare_to_create_tar( $dest_tree, $diff_by_file, \@adds, $data_mode, );
+
+   my $files_by_front = $prepare_result->{files_by_front};
+
+   if ( !@adds ) {
+      my $message = "nothing to add or update\n";
+      $quiet || print get_timestamp(), $message;
+   } elsif ( !$dryrun ) {
+      if ($diff) {
+         $verbose && print get_timestamp(), "cd '$old_pwd'\n";
+         chdir($old_pwd) || croak "cannot cd '$old_pwd'";
+
+         for my $front ( sort ( keys %$files_by_front ) ) {
+            my $diff_files = $files_by_front->{$front};
+            print get_timestamp(), "cd '$front'\n";
+            chdir($front) || croak "cd '$front' failed";
+
+            for my $relative_path (@diff_files) {
+               my $cmd = "diff '$front/$relative_path' '$local_dir_abs/$relative_path'";
+               print "$cmd\n";
+               system($cmd);
+               print "\n";
+            }
+         }
+      } else {
+         if ( !-d $local_dir_abs ) {
+            my $cmd = "mkdir -p '$local_dir_abs'";
+            $quiet || print get_timestamp(), "$dryrun_string $cmd\n";
+            $dryrun || system($cmd) && croak "$cmd failed";
+         }
+
+         $quiet || print get_timestamp(), "cd '$local_dir_abs'\n";
+         chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
+      }
+
+      my $tmp_tar_list = get_tmp_file( $tmpbase, "$prog.list" );
+
+
+      my $tar_verbose = $quiet ? "" : "v";
+      my $created_tar = 0;
+      for my $front ( sort ( keys %$files_by_front ) ) {
+         my $diff_files = $files_by_front->{$front};
+
+         if ( !$created_tar ) {
+            $cmd = "cd '$front'; tar -cvf $tar_file -T $tar_list";
+         } else {
+            $cmd = "cd '$front'; tar -uvf $tar_file -T $tar_list";
+         }
+
+      
+
+      my $extract_cmd =
+        ( $os_name =~ /^CYGWIN|Msys/i )
+        ? "tar -x${tar_verbose}f  -"
+        : "tar -x${tar_verbose}pf -";
+      #Msys is Git Bash
+      print get_timestamp(), "$extract_cmd\n" if $verbose;
+
+      # my $archive_cmd = "cd '$front'; tar -cvf $tar_file -T $tar_list";
+
+
+   }
+
 }
 
 ###################################################################################

@@ -1,0 +1,10 @@
+Perltidy version is 20230912
+
+<stdin>: Begin Error Output Stream
+2615: final indentation level: 1
+
+Final nesting depth of '{'s is 1
+The most recent un-matched '{' is on line 2333
+2333: sub local_sync {
+                     ^
+2615: To save a full .LOG file rerun with -g
