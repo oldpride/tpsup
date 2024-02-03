@@ -1354,6 +1354,9 @@ sub prepare_to_create_tar {
 
    my $files_by_front;
 
+   print get_timestamp(), "files_to_tar = ", Dumper($files_to_tar);
+   print get_timestamp(), "local_tree = ",   Dumper($local_tree);
+
    for my $f (@$files_to_tar) {
       if ( $local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
          # Skip non-empty dir because tar'ing dir will also tar the files underneath.
@@ -2399,7 +2402,13 @@ sub local_sync {
       $need_mtime_reset,
    );
 
-   my @adds = sort ( keys %$change_by_file );
+   my @adds_files = sort ( keys %$change_by_file );
+   my @adds;
+   for my $f (@adds_files) {
+      my $action = $change_by_file->{$f};
+      my $adds_string .= sprintf( "\%6s \%s\n", $action, $f );
+      push @adds, $adds_string;
+   }
 
    my $action1_result = take_action_before_tar( \@deletes, \@adds, \@warns, $dryrun_string, );
 
@@ -2408,7 +2417,7 @@ sub local_sync {
    my $data_mode = $diff ? "diff" : "data";
 
    # we don't need to create tar in local mode but we use this function get the 'front'
-   my $prepare_result = prepare_to_create_tar( $dest_tree, $diff_by_file, \@adds, $data_mode, );
+   my $prepare_result = prepare_to_create_tar( $source_tree, $diff_by_file, \@adds_files, $data_mode, );
 
    my $files_by_front = $prepare_result->{files_by_front};
 
@@ -2445,32 +2454,38 @@ sub local_sync {
 
       my $tmp_tar_list = get_tmp_file( $tmpbase, "$prog.list" );
 
-
       my $tar_verbose = $quiet ? "" : "v";
-      my $created_tar = 0;
-      for my $front ( sort ( keys %$files_by_front ) ) {
-         my $diff_files = $files_by_front->{$front};
-
-         if ( !$created_tar ) {
-            $cmd = "cd '$front'; tar -cvf $tar_file -T $tar_list";
-         } else {
-            $cmd = "cd '$front'; tar -uvf $tar_file -T $tar_list";
-         }
-
-      
 
       my $extract_cmd =
         ( $os_name =~ /^CYGWIN|Msys/i )
         ? "tar -x${tar_verbose}f  -"
         : "tar -x${tar_verbose}pf -";
-      #Msys is Git Bash
-      print get_timestamp(), "$extract_cmd\n" if $verbose;
 
-      # my $archive_cmd = "cd '$front'; tar -cvf $tar_file -T $tar_list";
+      for my $front ( sort( keys %$files_by_front ) ) {
+         my @files = sort @{ $files_by_front->{$front} };
 
+         next if !@files;
 
+         #my $file_string = '';
+         open my $list_fh, ">$tmp_tar_list" or croak "cannot write to $tmp_tar_list: $!";
+
+         for my $f (@files) {
+            next if !defined $f;
+
+            # use '' to wrap file name in case there are space chars.
+            print {$list_fh} "$f\n";
+         }
+
+         close $list_fh;
+
+         for my $front ( sort ( keys %$files_by_front ) ) {
+            my $diff_files = $files_by_front->{$front};
+            my $cmd        = "(cd '$front'; tar -c${tar_verbose}f - -T $tmp_tar_list) | $extract_cmd";
+            print get_timestamp(), "$cmd\n" if $verbose;
+            system($cmd);
+         }
+      }
    }
-
 }
 
 ###################################################################################
