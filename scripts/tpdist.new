@@ -1395,32 +1395,6 @@ sub create_tar_file {
    my $files_to_tar   = $prepare_result->{files_to_tar};
    my $files_by_front = $prepare_result->{files_by_front};
 
-   # my $files_to_tar;
-   # if ( $mode eq 'diff' ) {
-   #    @{$files_to_tar} = sort ( keys %$diff_by_file );
-   # } else {
-   #    $files_to_tar = \@adds_files;
-   # }
-
-   # if ( !@{$files_to_tar} ) {
-   #    print get_timestamp(), "no need to send anything to remote\n";
-   #    return;
-   # }
-
-   # my $files_by_front;
-
-   # for my $f (@$files_to_tar) {
-   #    if ( $local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
-   #       # Skip non-empty dir because tar'ing dir will also tar the files underneath.
-   #       # But we include empty dir
-   #       $verbose && print "Skipped dir $f because we will add files under it anyway\n";
-   #       next;
-   #    }
-
-   #    my $front = $local_tree->{$f}->{front};
-   #    push @{ $files_by_front->{$front} }, $f;
-   # }
-
    my $created_tar;
 
    for my $front ( sort( keys %$files_by_front ) ) {
@@ -1883,7 +1857,7 @@ sub create_puller_local_tree {
 }
 
 sub take_action_before_tar {
-   my ( $deletes, $adds, $warns, $dryrun_string ) = @_;
+   my ( $deletes, $adds, $warns ) = @_;
 
    # if local_dir doesn't exist yet, we don't mkdir now because if this is a
    # dryrun or diff, then we shouldn't create a dir. we will create it later.
@@ -2125,7 +2099,7 @@ sub to_pull {
 
    my @warns = split /\n/, $warns_string;
 
-   my $action1_result = take_action_before_tar( \@deletes, \@adds, \@warns, $dryrun_string, );
+   my $action1_result = take_action_before_tar( \@deletes, \@adds, \@warns );
 
    my @diff_files = @{ $action1_result->{diff_files} };
 
@@ -2266,10 +2240,25 @@ sub to_pull {
       }
    }
 
-   if ($mtimes_string) {
-      my @lines = split /\n/, $mtimes_string;
+   my @mtime_instructions;
+   my @mode_instructions;
 
-      for my $l (@lines) {
+   if ($mtimes_string) {
+      @mtime_instructions = split /\n/, $mtimes_string;
+   }
+
+   if ($modes_string) {
+      @mode_instructions = split /\n/, $modes_string;
+   }
+
+   take_action_after_tar( \@mtime_instructions, \@mode_instructions );
+}
+
+sub take_action_after_tar {
+   my ( $mtime_instructions, $mode_instructions ) = @_;
+
+   if ($mtime_instructions) {
+      for my $l (@$mtime_instructions) {
          if ( $l =~ /^([0-9]+)\s+(\S.*)/ ) {
             my ( $mtime, $f ) = ( $1, $2 );
             print "$dryrun_string utime($mtime, $mtime, $f)\n";
@@ -2282,10 +2271,8 @@ sub to_pull {
       }
    }
 
-   if ($modes_string) {
-      my @lines = split /\n/, $modes_string;
-
-      for my $l (@lines) {
+   if ($mode_instructions) {
+      for my $l (@$mode_instructions) {
          if ( $l =~ /^([0-9]+)\s+(\S.*)/ ) {
             my ( $mode, $f ) = ( $1, $2 );
 
@@ -2485,6 +2472,31 @@ sub local_sync {
             system($cmd);
          }
       }
+
+      my @mtime_instructions;
+      if ($need_mtime_reset) {
+         my @files = sort keys %$need_mtime_reset;
+         for my $f (@files) {
+            my $mtime = $source_tree->{$f}->{mtime};
+            push @mtime_instructions, "$mtime $f";
+         }
+      }
+
+      print get_timestamp(), "mtime instructions: ", scalar(@mtime_instructions), " item(s)\n";
+
+      my @mode_instructions;
+      if ($check_mode) {
+         for my $f (@modes) {
+            my $mode = $source_tree->{$f}->{mode};
+            push @mode_instructions, "$mode $f";
+         }
+         print get_timestamp(), "mode instructions: ", scalar(@mode_instructions), " item(s)\n";
+      } else {
+         print get_timestamp(), "mode instructions: 0 item(s) as we don't check modes\n";
+      }
+
+      take_action_after_tar( \@mtime_instructions, \@mode_instructions );
+
    }
 }
 
