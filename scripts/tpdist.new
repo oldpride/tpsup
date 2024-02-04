@@ -269,7 +269,7 @@ usage("wrong number of args") if @ARGV < 2;
 
 die "cannot be both quite and verbose" if $quiet && $verbose;
 
-my $proc_mode = shift @ARGV;
+my $prog_mode = shift @ARGV;
 
 my $host;
 my $port;
@@ -296,7 +296,7 @@ if ($encrypt_key) {
    $key_length = scalar(@key_array);
 }
 
-if ( $proc_mode eq 'server' ) {
+if ( $prog_mode eq 'server' ) {
    $port = shift @ARGV;
 
    if ($reverse) {
@@ -306,7 +306,7 @@ if ( $proc_mode eq 'server' ) {
    } else {
       usage("wrong number of args") if @ARGV;
    }
-} elsif ( $proc_mode eq 'client' ) {
+} elsif ( $prog_mode eq 'client' ) {
    $host = shift @ARGV;
    $port = shift @ARGV;
 
@@ -317,7 +317,7 @@ if ( $proc_mode eq 'server' ) {
       $local_dir     = pop @ARGV;
       @$remote_paths = @ARGV;
    }
-} elsif ( $proc_mode eq 'local' ) {
+} elsif ( $prog_mode eq 'local' ) {
    usage("wrong number of args") if @ARGV < 2;
    $local_dir     = pop @ARGV;    # this is destination_dir for local mode
    @$remote_paths = @ARGV;        # this is source_files    for local mode
@@ -362,7 +362,7 @@ if ($verbose) {
    print "AccessMatrix=", Dumper($AccessMatrix);
 }
 
-if ( $proc_mode eq 'server' ) {
+if ( $prog_mode eq 'server' ) {
    # this is a server
 
    my $listener_socket = new IO::Socket::INET(
@@ -445,7 +445,7 @@ if ( $proc_mode eq 'server' ) {
          to_be_pulled( $socket, { verbose => $verbose, AllowDenyPatterns => $AccessMatrix->{file} } );
       }
    }
-} elsif ( $proc_mode eq 'client' ) {
+} elsif ( $prog_mode eq 'client' ) {
    # this is a client
 
    $quiet || print get_timestamp(), "connecting to server $host:$port\n";
@@ -583,7 +583,7 @@ sub tar_file_list {
 
 sub get_timestamp {
    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime(time);
-   return sprintf( "%04d%02d%02d %02d:%02d:%02d [$proc_mode] ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
+   return sprintf( "%04d%02d%02d %02d:%02d:%02d [$prog_mode] ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
 }
 
 sub read_security_file {

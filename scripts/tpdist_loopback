@@ -29,6 +29,7 @@ Usage:
    
    this script runs on localhost like rsync.
    mainly for gitbash because gitbash doesn't have rsync.
+   this script can be replaced with "tpdist local" command.
 
    -port n            default to $port
    -timeout n         default to $timeout (seconds)
