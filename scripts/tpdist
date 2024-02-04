@@ -62,11 +62,15 @@ my @crctab = (
    0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668, 0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
 );
 
-my ( $os_name, $nodename, $os_release, $os_version, $machine ) = POSIX::uname();
-my $tmpbase = ( $os_name =~ /MINGW/i ) ? "/tmp" : "/var/tmp";    # Git Bash's os_name is MINGW
+# my ( $os_name, $nodename, $os_release, $os_version, $machine ) = POSIX::uname();
+# my $tmpbase = ( $os_name =~ /MINGW/i ) ? "/tmp" : "/var/tmp";    # Git Bash's os_name is MINGW
+
+my $local_uname = `uname -a`;
+chomp $local_uname;
+my $tmpbase = ( $local_uname =~ /MINGW/i ) ? "/tmp" : "/var/tmp";    # Git Bash's os_name is MINGW
 
 my $cygwin;
-$cygwin++ if $os_name =~ /^CYGWIN/i;
+$cygwin++ if $local_uname =~ /^CYGWIN/i;
 
 my $encrypt_key;
 
@@ -109,7 +113,7 @@ Common Switches (for both server and client):
    -timeout seconds
                       time to wait for peer to finish a transaction, default to $timeout
 
-   -tmpdir dir        default to $tmpbase. (current os_name=$os_name)
+   -tmpdir dir        default to $tmpbase.
                       (Solaris/Linux/Cygwin default to /var/tmp, GitBash defaults to /tmp)
 
    -r|reverse         server-pull/client-push. default is server-push/client-pull             
@@ -614,13 +618,11 @@ sub get_tmp_file {
    my ( $basedir, $prefix, $opt ) = @_;
 
    if ( $opt->{chkSpace} ) {
-      #my $os = `uname -a`; chomp $os;
-
       my $found = `which df`;
       if ( $? || !$found ) {
          print STDERR "cannot find df command, skipped space check\n";
       } else {
-         my $cmd = $os_name =~ /^Linux/ ? "df -kP $basedir" : "df -k $basedir";
+         my $cmd = $local_uname =~ /^(Linux|Darwin)/ ? "df -kP $basedir" : "df -k $basedir";
          my @DF  = `$cmd`;
          #$ df -k /var/tmp
          #Filesystem kbytes used avail capacity Mounted on
@@ -1510,7 +1512,7 @@ sub to_be_pulled {
    my $exclude_string     = $captures->[4]->[0];
    my $match_string       = $captures->[5]->[0];
    my $deep_check         = $captures->[6]->[0];
-   my $uname              = $captures->[7]->[0];
+   my $remote_uname       = $captures->[7]->[0];
 
    my ($peer_protocol) = ( $version =~ /^(\d+)/ );
 
@@ -1524,9 +1526,13 @@ sub to_be_pulled {
    }
 
    # we only check modes between compatible platforms
-   my $check_mode = ( $uname !~ /Windows/i ) ? 1 : 0;
+   my $check_mode = ( $remote_uname =~ /Linux|Darwin/i && $local_uname =~ /Linux|Darwin/ ) ? 1 : 0;
 
-   print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
+   if ($verbose) {
+      print get_timestamp(), "remote_uname='$remote_uname'.\n";
+      print get_timestamp(), "local_uname='$local_uname'.\n";
+      print get_timestamp(), "therefore, check_mode=$check_mode\n";
+   }
 
    print get_timestamp(), "remote used matched protocol $peer_protocol\n";
 
@@ -1946,11 +1952,9 @@ sub to_pull {
    $verbose && print "   $version_string\n";
    socket_send( $socket, "$version_string\n" );
 
-   my $uname = `uname -a`;
-   chomp $uname;
-   $uname = "Perl|$uname";
-   my $uname_string = "<UNAME>$uname</UNAME>";
-   $quiet || print get_timestamp(), "sending prog|uname: $uname\n";
+   my $prog_uname   = "Perl | $local_uname";
+   my $uname_string = "<UNAME>$prog_uname</UNAME>";
+   $quiet || print get_timestamp(), "sending prog|uname: $prog_uname\n";
    $verbose && print "   $uname_string\n";
    socket_send( $socket, "$uname_string\n" );
 
@@ -2206,7 +2210,7 @@ sub to_pull {
          #      extract information about file permissions( default for superuser )
 
          my $cmd =
-           ( $os_name =~ /^CYGWIN|Msys/i )
+           ( $local_uname =~ /CYGWIN|Msys/i )
            ? "tar -x${tar_verbose}f  $tmp_tar_file"
            : "tar -x${tar_verbose}pf $tmp_tar_file";
          #Msys is Git Bash
@@ -2342,11 +2346,14 @@ sub local_sync {
    $verbose && print "dest_tree = ", Dumper($dest_tree);
 
    # we only check modes between compatible platforms
-   my $uname = `uname -a`;
-   chomp $uname;
-   my $check_mode = ( $uname !~ /Windows/i ) ? 1 : 0;
+   # no need to check file mode (permission) if either side is Windows
+   #    cygwin:   CYGWIN_NT-10.0 tianpc2 3.3.4(0.341/5/3) 2022-01-31 19:35 x86_64 Cygwin
+   #    gitbash:  MINGW64_NT-10.0-19045 tianpc2 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
+   #    WSL:      Linux tianpc2 5.15.133.1 -microsoft-standard-WSL2 #1 SMP
+   #              Thu Oct 5 21:02:42 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux
+   my $check_mode = ( $local_uname =~ /Darwin|Linux/i ) ? 1 : 0;
 
-   print get_timestamp(), "remote uname='$uname'. we set check_mode=$check_mode\n";
+   print get_timestamp(), "local uname='$local_uname'. we set check_mode=$check_mode\n";
 
    my $compare_result = compare_trees(
       $dest_tree,
@@ -2447,7 +2454,7 @@ sub local_sync {
       my $tar_verbose = $quiet ? "" : "v";
 
       my $extract_cmd =
-        ( $os_name =~ /^CYGWIN|Msys/i )
+        ( $local_uname =~ /CYGWIN|Msys/i )
         ? "tar -x${tar_verbose}f  -"
         : "tar -x${tar_verbose}pf -";
 
