@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '7.5';
+my $version = '7.6';
 my ($expected_peer_protocol) = ( $version =~ /^(\d+)/ );
 
 use warnings;
@@ -1354,8 +1354,10 @@ sub prepare_to_create_tar {
 
    my $files_by_front;
 
-   print get_timestamp(), "files_to_tar = ", Dumper($files_to_tar);
-   print get_timestamp(), "local_tree = ",   Dumper($local_tree);
+   if ($verbose) {
+      print get_timestamp(), "files_to_tar = ", Dumper($files_to_tar);
+      print get_timestamp(), "local_tree = ",   Dumper($local_tree);
+   }
 
    for my $f (@$files_to_tar) {
       if ( $local_tree->{$f}->{type} eq 'dir' && !$local_tree->{$f}->{DirEmpty} ) {
@@ -2439,7 +2441,8 @@ sub local_sync {
          chdir($local_dir_abs) || croak "cd '$local_dir_abs' failed";
       }
 
-      my $tmp_tar_list = get_tmp_file( $tmpbase, "$prog.list" );
+      my $tmp_tar_list    = get_tmp_file( $tmpbase, "$prog.tar_list" );
+      my $tmp_tar_extract = get_tmp_file( $tmpbase, "$prog.tar_extract" );
 
       my $tar_verbose = $quiet ? "" : "v";
 
@@ -2467,7 +2470,12 @@ sub local_sync {
 
          for my $front ( sort ( keys %$files_by_front ) ) {
             my $diff_files = $files_by_front->{$front};
-            my $cmd        = "(cd '$front'; tar -c${tar_verbose}f - -T $tmp_tar_list) | $extract_cmd";
+            my $cmd =
+                "echo tar archiving; echo -----------------;"
+              . "(cd '$front'; tar -c${tar_verbose}f - -T $tmp_tar_list) |"
+              # direct extract output to a file so that archive and extract output won't mix.
+              . "$extract_cmd >$tmp_tar_extract; " . "echo ;"
+              . "echo tar extracting; echo -----------------; cat $tmp_tar_extract";
             print get_timestamp(), "$cmd\n" if $verbose;
             system($cmd);
          }
