@@ -1525,6 +1525,7 @@ EOF
    my $Tail =
      get_first_by_key( [ $opt, $entity_cfg ], 'tail', { default => undef } );
    my $Top = get_first_by_key( [ $opt, $entity_cfg ], 'top', { default => 5 } );
+   my $MaxRows;
 
    # display the top results
    if (@lines) {
@@ -1543,12 +1544,17 @@ EOF
       #    - sometime the code forgot updating it
       #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
       my $count = scalar(@lines);
+      
       if ($Tail) {
-         print "(Truncated. Total $count, only displayed tail $Tail.)\n"
-           if $count > $Tail;
+         if ( $count > $Tail ) {
+            print "(Truncated. Total $count, only displayed tail $Tail.)\n";
+            $MaxRows = $Tail;
+         }
       } else {
-         print "(Truncated. Total $count, only displayed top  $Top.)\n"
-           if $count > $Top;
+         if ( $count > $Top ) {
+            print "(Truncated. Total $count, only displayed top  $Top.)\n";
+            $MaxRows = $Top;
+         }
       }
    }
 
@@ -1560,10 +1566,11 @@ EOF
          \@hashes,
          {
             %$opt,
-            MaxColumnWidth  => $MaxColumnWidth,
-            MaxRows => $Top,
-            headers         => \@headers,
-            RenderHeader    => 1,
+            MaxColumnWidth => $MaxColumnWidth,
+            MaxRows        => $MaxRows,
+            TakeTail       => $Tail,
+            headers        => \@headers,
+            RenderHeader   => 1,
          }
       );
       print "\n";
