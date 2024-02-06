@@ -95,7 +95,8 @@ Usage:
    If remote path is a relative path, it will be relative to remote user's home dir.
 
    WARNING: windows host doesn't preserve sym links. cygwin can handle sym link, but
-            gitbash cannot. \
+            gitbash cannot. 
+            we handle links only when both sides are unix/linux.
 
    local mode: no network involved
       $prog local src1 src2 ... dest_dir
@@ -686,7 +687,12 @@ sub get_tmp_file {
 sub get_abs_path {
    my ($path) = @_;
 
-   # we have to write our own get_abs_path because the default abs_path resolves # symbolic links, which is undesirable here.  # $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";' # /home/tian/tpsup/autopath # $ perl -e 'use Cwd 'abs_path'; print abs_path("./tpsup/scripts/../autopath"), "\n";' # /home/tian/tpsup/autopath
+   # we have to write our own get_abs_path because the default abs_path resolves
+   # symbolic links, which is undesirable here.
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("tpsup/scripts/../autopath"), "\n";'
+   # /home/tian/tpsup/autopath
+   # $ perl -e 'use Cwd 'abs_path'; print abs_path("./tpsup/scripts/../autopath"), "\n";'
+   # /home/tian/tpsup/autopath
    # $ perl -e 'use Cwd 'abs_path'; print abs_path(".//tpsup/scripts/../autopath/"), "\n";'
    # /home/tian/tpsup/autopath
 
@@ -1142,6 +1148,10 @@ sub compare_trees {
    my $maxsize    = $opt->{maxsize};
    my $deep_check = $opt->{deep_check};
 
+   # sym link is only handeled well in linux and cygwin.
+   # this coincidets when we do check_mode.
+   my $check_link = $check_mode;
+
    # on to_be_pulled side, we need check access with AllowDenyPatterns.
    # matches and excludes are coming from remote side
    # RelativeBase is coming from command line
@@ -1218,7 +1228,17 @@ sub compare_trees {
          }
 
          if ( exists $remote_tree->{$k} ) {
-            # if remote file exists, it must be of a different type, remove it first and then add
+            # if remote file exists, it must be of a different type,
+
+            # if either remote type or local type is link, check whether we need to check link
+            if ( $remote_tree->{$k}->{type} eq 'link' or $local_type eq 'link' ) {
+               if ( !$check_link ) {
+                  push @warns, "skipped $k: remote type is link, local type is $local_type, but check_link=$check_link";
+                  next;
+               }
+            }
+
+            # remove it first and then add
             $change_by_file->{$k} = "newType";
             if ($stop_at_change) {
                print "$k: $change_by_file->{$k}\n";
@@ -1254,7 +1274,10 @@ sub compare_trees {
       };
 
       # now that both sides are same kind type: file, dir, or link
-      if ( $check_mode && $local_type ne 'link' && $remote_mode != $local_mode ) {
+      # if ( $check_mode && $local_type ne 'link' && $remote_mode != $local_mode ) {
+      if (  ( $check_mode && $remote_mode != $local_mode )
+         && ( !$check_link || $local_type ne 'link' ) )
+      {
          push @modes, $k;
       }
 
