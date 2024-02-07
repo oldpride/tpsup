@@ -31,6 +31,7 @@ usage:
    symbolic link reliablely. so we make hard copies
 
    -v          verbose mode
+   -n          dry run
 
    -m pattern  only update scripts whose name matches the pattern
 
@@ -45,10 +46,12 @@ END
 }
 
 verbose=N
+dryrun=N
 
-while getopts vm: o; do
+while getopts vnm: o; do
    case "$o" in
    v) verbose=Y ;;
+   n) dryrun=Y ;;
    m) pattern="$OPTARG" ;;
    *)
       echo "unknow switch '$o'"
@@ -112,18 +115,31 @@ for t in $(echo $targets); do
 
       if [ -e "$target_script" ]; then
          if [ -h "$target_script" ]; then
-            echo "$target_script is a old-style sym link. removed. will use file copy"
-            rm -f "$target_script"
+            if [ $dryrun = N ]; then
+               echo "$target_script is a old-style sym link. removed. will use file copy"
+               rm -f "$target_script"
+            else
+               echo "dryrun: rm -f $target_script"
+            fi
          elif [ "$target_script" -nt "$source_script" ]; then
             echo "$target_script skipped as it is newer than $source_script"
             continue
          else
-            rm -f "$target_script"
+            if [ $dryrun = N ]; then
+               echo "$target_script exists. removed. will use file copy"
+               rm -f "$target_script"
+            else
+               echo "dryrun: rm -f $target_script"
+            fi
          fi
       fi
 
-      echo "$target_script updated"
-      cp -f "$source_script" "$target_script"
+      if [ $dryrun = N ]; then
+         echo "$target_script updated"
+         cp -f "$source_script" "$target_script"
+      else
+         echo "dryrun: cp -f $source_script $target_script"
+      fi
    done
 
 done
