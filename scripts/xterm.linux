@@ -1,1 +1,164 @@
-wrapper.linux
+#!/bin/bash
+
+# PS1 is only populated (inheritated) in interactive shell
+# https://stackoverflow.com/questions/48664623/echo-ps1-in-script
+# https://www.gnu.org/savannah-checkouts/gnu/bash/manual/bash.html#Interactive-Shells
+
+# to make the shell interatvie, we can do use "-i"
+#    #!/bin/bash -i
+# but because this script is called from another script, not from shell prompt, "-i"
+# doesn't work. we hard code PS1 here
+export PS1='$USER@$HOSTNAME:$PWD$ '
+
+# to test,
+#    xterm.linux 
+#
+#    default try sequence
+#        native binary, ie, /usr/bin/xxx
+#        linux 3.10
+#        linux 2
+#
+# switches, must be on the front
+#    -debug
+#    -3.10       only try linux3.10 binary. skip the rest
+#    -2          only try linux2 binary.    skip the rest
+#    -trace      used only when binary version (eg linux 2) mismatch with actual version
+#                (eg, linux 3.10)
+
+debug=N
+trace=N
+try_native=Y
+try_linux2=Y
+try_linux3_10=Y
+
+while :
+do
+   if [ "X$1" = "X-debug" ]; then
+      debug=Y
+      set -x
+      shift
+      continue;
+   elif [ "X$1" = "X-trace" ]; then
+      trace=Y
+      shift
+      continue;
+   elif [ "X$1" = "X-3.10" ]; then
+      try_native=N
+      try_linux3_10=Y
+      try_linux2=N
+      shift;
+      continue;
+   elif [ "X$1" = "X-2" ]; then
+      try_native=N
+      try_linux3_10=N
+      try_linux2=Y
+      shift;
+      continue;
+   else
+      break
+   fi
+done
+
+scripts_dir=`dirname $0`
+prog=`basename $0`
+
+# only run this script as links, eg
+#
+# $ ln -s wrapper.linux xterm.linux
+# $ ln -s wrapper.linux xrdb.linux
+
+generic=`echo $prog|cut -d. -f1`
+# xterm.linux -----> xterm
+# xrdb.linux ------> xrdb
+
+if [ $try_native = Y ]; then
+   # try native
+   if [ -f "/usr/bin/$generic" ]; then
+      # if localhost already installed xterm/xrdb, use it
+      /usr/bin/$generic "$@"
+      exit $?
+   fi
+fi
+
+run_os_binary () {
+   expected_os_version=$1
+   shift
+
+   actual_os_version=`uname -a|awk '{print $3}'|cut -d. -f1,2`
+   # tian@linux1:/home/tian/github/notes$ uname -a
+   # Linux linux1 4.15.0-108-generic #109-Ubuntu SMP Fri Jun 19 11:33:10 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
+
+   ROOT=`cd $scripts_dir/../../../Linux/$expected_os_version && pwd -P`
+   rc=$?
+
+   if [ $rc -ne 0 ]; then
+      return
+   fi
+
+   export XFILESEARCHPATH=$ROOT/usr/share/X11/app-defaults/%N
+   export XLOCALEDIR=$ROOT/usr/share/X11/locale
+
+   epoc_time_begin=`date +%s`
+
+   if [ $actual_os_version = $expected_os_version ]; then
+      # this is a native os
+      export LD_LIBRARY_PATH=$ROOT/usr/lib64
+
+      $ROOT/usr/bin/$generic "$@"
+      rc=$?
+   else
+      # this is not a native os, we have to play with the linkers
+
+      # we need to find the exact version under $ROOT
+      # ld_version,                 as 2.17 in  /lib64/ld-2.17.so
+      # ld_linux_x86_64_version,    as 2    in  /lib64/lib64/ld-linux-x86-64.so.2
+      if [ $expected_os_version = 3.10 ]; then
+         ld_version=2.17
+         ld_linux_x86_64_version=2
+      elif [ $expected_os_version = 2 ]; then
+         ld_version=2.12
+         ld_linux_x86_64_version=2
+      else 
+         echo "unsupported expected_os_version=$expected_os_version" >&2
+         exit 1
+      fi
+
+      #  note the ld version 
+      if [ $debug = Y ]; then
+         # this is ldd only, just to dump the lib info, not to run the $generic: xterm or xrdb.
+         LD_TRACE_LOADED_OBJECTS=1 $ROOT/lib64/ld-linux-x86-64.so.$ld_linux_x86_64_version --library-path $ROOT/lib64 $ROOT/usr/bin/$generic 
+         echo "
+         On RedHat/Sussex, all linked libs should be under /usr/lib64 or /lib64.
+         If you see /usr/lib or /lib, that will be wrong as these are 32-bit libs. 
+         " 
+      fi
+      
+      # now we will run the command
+      if [ $trace = Y ]; then
+         # to trace: (note: don not use $ROOT/usr/bin/strace)
+         strace $ROOT/lib64/ld-linux-x86-64.so.$ld_linux_x86_64_version --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+         rc=$?
+      else
+         $ROOT/lib64/ld-$ld_version.so --library-path $ROOT/lib64 $ROOT/usr/bin/$generic "$@"
+         rc=$?
+      fi
+   fi
+
+   epoc_time_end=`date +%s`
+   last_run_time=`expr $epoc_time_end - $epoc_time_begin`
+
+   if [ $rc -eq 0 -o $last_run_time -gt 10 ]; then
+      # this worked. no need to try the next
+      exit $rc
+   fi
+}
+
+if [ $try_linux3_10 = Y ]; then
+   run_os_binary 3.10 "$@"
+fi
+
+if [ $try_linux2 = Y ]; then
+   run_os_binary 2 "$@"
+fi
+
+exit 1
