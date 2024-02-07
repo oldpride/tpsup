@@ -1233,9 +1233,8 @@ sub compare_trees {
             # if either remote type or local type is link, check whether we need to check link
             if ( $remote_tree->{$k}->{type} eq 'link' or $local_type eq 'link' ) {
                if ( !$check_link ) {
-                  $verbose
-                    && print "skipped $k: remote_type=$remote_tree->{$k}->{type}, "
-                    . "local_type=$local_type, but check_link=$check_link\n";
+                  push @warns, "skipped $k: remote_type=$remote_tree->{$k}->{type}, "
+                    . "local_type=$local_type, but check_link=$check_link";
                   next;
                }
             }
