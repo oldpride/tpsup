@@ -21,6 +21,9 @@ usage:
    -v         verbose mode
    -n        dry run
 
+   background: gitbash and cygwin cannot use symbolic link reliablely. so we make hard copies.
+   if our program only runs on linux, we could have used symbolic link.
+
 examples:
 
    $prog all
