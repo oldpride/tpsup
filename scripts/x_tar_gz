@@ -5,7 +5,7 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::UTIL qw(should_do_it);
+use TPSUP::UTIL qw(should_do_it get_timestamp);
 use File::Basename;
 use Cwd 'abs_path';
 
@@ -81,7 +81,7 @@ while ( my $line = <$ifh> ) {
    $count++;
 
    if ( $count % 1000 == 0 ) {
-      print "$count lines processed\n";
+      print get_timestamp() . "$count lines processed\n";
    }
 
    chomp $line;
