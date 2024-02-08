@@ -71,6 +71,8 @@ if ( $arch =~ /gz$/ ) {
 
 open my $ifh, "$cmd|" or die "cmd=$cmd failed: $!, $?";
 
+print get_timestamp() . "running cmd=$cmd\n";
+
 my @members;
 my $seen;
 
