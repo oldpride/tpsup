@@ -10,25 +10,24 @@ our @EXPORT_OK = qw(
 use warnings;
 use Data::Dumper;
 use Carp;
-use TPSUP::UTIL qw(get_tmp_file);
+use TPSUP::TMP  qw(get_tmp_file);
 use TPSUP::FILE qw(get_out_fh close_out_fh);
 use TPSUP::CSV  qw(query_csv2);
 
 sub csv_to_xlsx {
    my ( $csvs, $output, $opt ) = @_;
 
-# https://stackoverflow.com/questions/18899136/modifying-an-xlsx-file-excel-2007-and-newer
-# https://metacpan.org/pod/distribution/Excel-Writer-XLSX/lib/Excel/Writer/XLSX.pm
+   # https://stackoverflow.com/questions/18899136/modifying-an-xlsx-file-excel-2007-and-newer
+   # https://metacpan.org/pod/distribution/Excel-Writer-XLSX/lib/Excel/Writer/XLSX.pm
 
    require Excel::Writer::XLSX;
 
-   my $out_fh = get_out_fh($output);  # this creates any dir structure if needed
+   my $out_fh = get_out_fh($output);    # this creates any dir structure if needed
    close_out_fh($out_fh);
 
    my $workbook = Excel::Writer::XLSX->new("$output");
 
-   my $format_content =
-     $workbook->add_format( font => 'Courier New', size => 9, align => 'left' );
+   my $format_content = $workbook->add_format( font => 'Courier New', size => 9, align => 'left' );
    $format_content->set_left(4);
    $format_content->set_right(4);
 
@@ -72,8 +71,7 @@ sub csv_to_xlsx {
          $j++;
 
          for ( my $col = 0 ; $col < $total_col ; $col++ ) {
-            $worksheet->write( $j, $col, $r->{ $columns[$col] },
-               $format_content );
+            $worksheet->write( $j, $col, $r->{ $columns[$col] }, $format_content );
          }
       }
    }
@@ -91,8 +89,8 @@ sub xlsx_to_csvs {
       }
    }
 
-# http://www.unix.com/shell-programming-and-scripting/222095-perl-script-convert-xlsx-xls-files-csv-file.html
-#require Spreadsheet::ParseExcel;
+   # http://www.unix.com/shell-programming-and-scripting/222095-perl-script-convert-xlsx-xls-files-csv-file.html
+   #require Spreadsheet::ParseExcel;
    require Spreadsheet::XLSX;
 
    #
@@ -147,8 +145,7 @@ sub xlsx_to_csvs {
       }
 
       #close $out_fh if $out_fh && $out_fh != \*STDOUT;
-      query_csv2( \@a,
-         { %$opt, InputType => 'ArrayArray', output => $output } );
+      query_csv2( \@a, { %$opt, InputType => 'ArrayArray', output => $output } );
 
       $i++;
    }

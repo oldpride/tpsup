@@ -516,6 +516,8 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
         if record:
             record_string = resolve_record_keys(record_keys, known)
+            # change to lower case
+            record_string = record_string.lower()
             if record_string in seen_record:
                 print(
                     f'already seen record at "{seen_record[record_string]},{record_string}". skipped.', file=sys.stderr)
