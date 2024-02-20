@@ -25,7 +25,7 @@ import time
 # from tpsup.modtools import run_module, load_module
 from pprint import pformat, pprint
 import importlib
-from tpsup.util import convert_to_uppercase
+from tpsup.utilbasic import convert_to_uppercase
 import tpsup.tmptools
 from datetime import datetime
 from shlex import split

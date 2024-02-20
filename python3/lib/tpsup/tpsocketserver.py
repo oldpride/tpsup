@@ -7,7 +7,7 @@ import socket
 import sys
 from typing import Union
 import tpsup.nettools
-from tpsup.util import tplog
+from tpsup.utilbasic import tplog
 from pprint import pformat
 
 if hasattr(selectors, 'PollSelector'):
@@ -15,11 +15,12 @@ if hasattr(selectors, 'PollSelector'):
 else:
     _ServerSelector = selectors.SelectSelector
 
+
 class tpsocketserver:
     """mimic socketserver.TCPServer
     I need a timeout in the serv_forever()"""
 
-    def __init__(self, port: Union[str, int], address: str = '0.0.0.0', backlog:int = 5):
+    def __init__(self, port: Union[str, int], address: str = '0.0.0.0', backlog: int = 5):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((address, int(port)))

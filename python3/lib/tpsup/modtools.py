@@ -8,7 +8,7 @@ import types
 from pprint import pformat
 from typing import Dict, List, Union, Callable
 
-from tpsup.logtools import log_FileFuncLine
+from tpsup.logbasic import log_FileFuncLine
 
 
 # https://docs.python.org/3/library/typing.html

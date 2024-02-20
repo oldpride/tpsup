@@ -4,7 +4,7 @@ import urllib.request
 from pprint import pformat
 
 import tpsup.seleniumtools
-from tpsup.util import tplog
+from tpsup.utilbasic import tplog
 
 
 def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):

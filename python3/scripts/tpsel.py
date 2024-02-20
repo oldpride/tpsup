@@ -14,7 +14,7 @@ import tpsup.nettools
 import tpsup.seleniumtools
 import tpsup.tpsocketserver
 from tpsup.modtools import run_module
-from tpsup.util import tplog, tplog_exception
+from tpsup.utilbasic import tplog, tplog_exception
 import tpsup.tmptools
 import tpsup.tartools
 

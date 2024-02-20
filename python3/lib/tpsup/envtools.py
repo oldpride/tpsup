@@ -234,6 +234,23 @@ def get_home_dir(**opt) -> str:
     return Env(**opt).home_dir
 
 
+def get_user(secure: bool = False, **opt):
+    # https://stackoverflow.com/questions/842059
+    if secure:
+        myenv = Env(**opt)
+        if myenv.isWindows:
+            import win32api  # pip install pywin32
+            return win32api.GetUserName()
+        elif myenv.isLinux or myenv.isDarwin:
+            import pwd
+            return pwd.getpwuid(os.getuid()).pw_name
+    else:
+        # getpass.getuser() is portable but it looks at the values of various
+        # environment variables to determine the user name. Therefore,
+        # this function should not be relied on for access control purposes
+        return getpass.getuser()
+
+
 def get_user_fullname(user: str = None, **opt) -> str:
     # separate get_user_fullname() and query_user_fullname() so that
     # we can add a cache layer
@@ -573,66 +590,35 @@ def get_native_path(path: str, **opt):
 
 def main():
     myenv = Env()
-    # print(f'myenv = {myenv}')
-    print(f'myenv = {pformat(myenv.__dict__)}')
+    myenv.adapt()  # don't block output in gitbash and cygwin
 
-    sys.stdout.flush()
-    myenv.adapt()
-
-    # sys.stderr.write("1\n")
-    # time.sleep(2)
-    # sys.stderr.write("2\n")
-    # time.sleep(2)
-    # sys.stderr.write("3\n")
-
-    print()
-    for path in ("/a/b/c", r"\a\b\c"):
-        print(
-            f"converted path={path} to os standard path={myenv.adjpath(path)}")
-    print()
-
-    native_test_url = f"file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html"
-    print(f"native_test_url = {native_test_url}")
-    print("")
-
-    print(f"tmpdir = {get_tmp_dir(verbose=0)}")
-    print("")
-
-    print(f"homedir = {get_home_dir(verbose=0)}")
-    print("")
-
-    # print(f"query_user_fullname = {query_user_fullname(getpass.getuser())}")
-    print(f"get_user_fullname = {get_user_fullname(verbose=True)}")
-    print(f"get_user_firstlast = {get_user_firstlast()}")
-    print("")
-    print(f"os.path.normpath('/u/b/c') = {os.path.normpath('/u/b/c')}")
-    print("os.path.normpath(r'a\\b\\c')=" + os.path.normpath(r'a\b\c'))
-    print("os.path.normpath('C:/users/william')=" +
-          os.path.normpath('C:/users/william'))
-    print("")
-
-    # homedir = myenv.home_dir
     tpsup = os.environ.get('TPSUP')
-    tpsup_scripts = os.path.join(tpsup, 'scripts')
-    print(
-        f"path_contains({tpsup_scripts}) = {pformat(path_contains(tpsup_scripts, verbose=0))}")
-    print("")
-    print(
-        f"path_contains('python', regex=True) = {pformat(path_contains('python', regex=True, verbose=0))}")
-    print("")
+    tpsup_python3_scripts = os.path.join(tpsup, 'python3', 'scripts')
 
-    print("")
-    add_path(tpsup_scripts, verbose=1)
-    print("")
+    def test_codes():
+        myenv.__dict__
+        myenv.adjpath("/a/b/c")
+        myenv.adjpath(r"\a\b\c")
+        os.path.normpath('/u/b/c')
+        os.path.normpath(r'a\b\c')
+        os.path.normpath('C:/users/william')
+        print(f"native_url=file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html")
 
-    add_path("/junk/front", place='prepend')
-    print(f"PATH={os.environ.get('PATH')}"[:100])  # substr: first 100 chars
-    print("")
+        get_tmp_dir()
+        get_home_dir()
+        get_user()
+        get_user(secure=True)
+        get_user_fullname(verbose=True)
+        get_user_firstlast()
 
-    add_path("/junk/rear", place='append')
-    print(f"PATH={os.environ.get('PATH')}"[-100:])  # substr: last 100 chars
-    print("try again")
-    add_path("/junk/rear", place='append', verbose=1)
+        path_contains(tpsup_python3_scripts)
+        path_contains('python', regex=True)
+        add_path(tpsup_python3_scripts)
+        add_path("/junk/front", place='prepend')
+        add_path("/junk/rear", place='append')
+
+    from tpsup.exectools import test_lines
+    test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
     print("")
     print("--------------------")
@@ -645,15 +631,14 @@ def main():
     print(f"after TPSUP={os.environ.get('TPSUP', None)}")
 
     if myenv.isWindows:
-        def test_code():
+        def test_code2():
             convert_path('/cygdrive/c/Program Files', target_type='batch')
             convert_path('/cygdrive/c/Program Files', target_type='gitbash')
             convert_path('/cygdrive/c/Program Files', verbose=2)
             convert_path('TPSUP', is_env_var=True, change_env=True)
 
-        import tpsup.exectools
-        tpsup.exectools.test_lines(
-            test_code, source_globals=globals(), print_return=True, add_return=True)
+        test_lines(
+            test_code2, source_globals=globals(), print_return=True, add_return=True)
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ import tpsup.envtools
 from tpsup.lock import tpsup_unlock
 import tpsup.printtools
 from pprint import pformat
-from tpsup.logtools import log_FileFuncLine, log_FileFuncLineObj
+from tpsup.logbasic import log_FileFuncLine, log_FileFuncLineObj
 
 
 class Conn:

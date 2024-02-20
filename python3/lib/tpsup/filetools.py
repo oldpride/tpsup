@@ -10,8 +10,8 @@ import types
 from typing import Union
 from tpsup.cmdtools import run_cmd
 from tpsup.modtools import compile_codelist, strings_to_compilable_patterns, load_module
-from tpsup.logtools import log_FileFuncLine
-from tpsup.util import silence_BrokenPipeError
+from tpsup.logbasic import log_FileFuncLine
+from tpsup.utilbasic import silence_BrokenPipeError
 
 
 class TpInput:
@@ -611,31 +611,44 @@ def un_filemode(mode_str):
     return mode
 
 
-def ls_l(files: Union[list, str], **opt):
+def ls(files: Union[list, str], ls_args: str = "", print_ls=1, **opt):
     verbose = opt.get('verbose', 0)
     files2 = tpglob(files, **opt)
 
     if not files2:
         print(f'no file found for {files}')
-        return
+        return {
+            'rc': 1,
+            'stdout': None,
+            'stderr': f'no file found for {files}',
+        }
 
     # wrap each file with double quotes so that we can handle file names with spaces
     files_string = '"' + '" "'.join(files2) + '"'
 
-    cmd = f'ls -l {files_string}'
+    cmd = f'ls {ls_args} {files_string}'  # we will run it with bash so that it works in windows
 
     if verbose > 1:
         print(f'cmd = {cmd}')
 
-    run_cmd(cmd, is_bash=True, print=1)
+    # run with bash so that it works in windows
+    result = run_cmd(cmd, is_bash=True, print_output=print_ls)
+
+    return result
+
+
+def ls_l(files, **opt):
+    return ls(files, **opt, ls_args='-l')
 
 
 def main():
     verbose = 1
 
+    import tpsup.tmptools
+    tmpdir = tpsup.tmptools.get_dailydir()
+
     file = 'csvtools_test.csv'
-    testdir = '/tmp/junkdir'
-    file_gz = f'{testdir}/junk.csv.gz'
+    file_gz = f'{tmpdir}/junk.csv.gz'
     print('test1')
 
     with TpInput(filename=file, ExcludePatterns=['Smith'], verbose=verbose) as tf:
@@ -652,13 +665,16 @@ def main():
             pprint(row)
 
     print('test3')
-    os.system(f'/bin/rm -fr {testdir}')
+    # os.system(f'/bin/rm -fr {testdir}')
+    run_cmd(f"/bin/rm -fr '{tmpdir}'", is_bash=True, print_output=verbose)
     with TpInput(filename=file, MatchPatterns=[',S'], ExcludePatterns=['Stephen'], verbose=verbose) as ti, \
             TpOutput(filename=file_gz) as to:
         for line in ti:
+            print(line, end='')
             to.write(line.encode('utf-8'))
 
-    os.system(f'ls -l {file_gz}; zcat {file_gz}; /bin/rm -fr {testdir}')
+    # os.system(f'ls -l {file_gz}; zcat {file_gz}; /bin/rm -fr {testdir}')
+    run_cmd(f"ls -l '{file_gz}'; zcat '{file_gz}'; /bin/rm -fr '{tmpdir}'", is_bash=True, print_output=verbose)
 
     from tpsup.exectools import test_lines
     TPSUP = os.environ.get('TPSUP')

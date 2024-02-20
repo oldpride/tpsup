@@ -6,14 +6,13 @@ import sys
 import tpsup.envtools
 
 
-def run_cmd(cmd: str, **opt):
+def run_cmd(cmd: str, is_bash=False, bash_exe='gitbash', return_type='split', print_output=0, **opt):
     verbose = opt.get('verbose', 0)
     if verbose:
         print(f'cmd = {cmd}')
 
     # on windows, default shell is batch.
     # on linux, default shell is /bin/sh.
-    is_bash = opt.get('is_bash', False)
 
     # when calling bash.exe, $ needs to be escaped.
     # on PC, python calling bash.exe in this way.
@@ -30,7 +29,6 @@ def run_cmd(cmd: str, **opt):
     myenv = tpsup.envtools.Env()
     if myenv.isWindows:
         if is_bash:
-            bash_exe = opt.get('bash_exe', 'gitbash')
             if bash_exe == 'wsl':
                 bash = 'C:/Windows/System32/bash.exe'  # this is WSL bash
                 # wsl has its complete subsystem, for example, totally separate
@@ -74,7 +72,6 @@ def run_cmd(cmd: str, **opt):
     # The stdout and stderr arguments may not be supplied at the same time as capture_output.
     # If you wish to capture and combine both streams into one,
     #    use stdout=PIPE and stderr=STDOUT instead of capture_output.
-    return_type = opt.get('return_type', 'split')
     if return_type == 'split':
         proc = subprocess.run(cmd2,
                               shell=True,  # this allows to run multiple commands
@@ -87,7 +84,7 @@ def run_cmd(cmd: str, **opt):
             'stderr': proc.stderr,
         }
 
-        if opt.get('print', 0):
+        if print_output:
             print(ret['stdout'])
             print(ret['stderr'], file=sys.stderr)
     elif return_type == 'combined':
@@ -101,7 +98,7 @@ def run_cmd(cmd: str, **opt):
             'rc': proc.returncode,
             'combined': proc.stdout
         }
-        if opt.get('print', 0):
+        if print_output:
             print(ret['combined'])
     else:
         raise RuntimeError(f"unsupported return_type={return_type}")

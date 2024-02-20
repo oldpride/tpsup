@@ -4,8 +4,11 @@ import logging
 import os
 import pprint
 import sys
-from time import strftime, gmtime
+from time import localtime, strftime, gmtime
 import traceback
+
+from tpsup.exectools import exec_into_globals
+
 
 default = {
     # %(msecs)03d, pad with 0
@@ -24,28 +27,6 @@ def get_logger(name: str = None, **kwargs):
     logging.basicConfig(**setting)
     # once you get the logger, you cannot change it. but you can get a new one with new name
     return logging.getLogger(name)
-
-
-def get_FileFuncLine():
-    frame = inspect.stack()[2]
-    return f"{os.path.basename(frame.filename)}:{frame.function}:{frame.lineno}"
-
-
-def log_FileFuncLine(msg: str = None, **opt):
-    if msg is None:
-        string = ""
-    else:
-        string = f": {msg}"
-    print(f'{get_FileFuncLine()}{string}', **opt)
-
-
-def log_FileFuncLineObj(obj_name, obj, **opt):
-    msg = pprint.pformat(obj)
-    # if msg is multi-line, add a new line in between
-    if '\n' in msg:
-        print(f'{get_FileFuncLine()}: {obj_name}=\n{msg}')
-    else:
-        print(f'{get_FileFuncLine()}: {obj_name}= {msg}')
 
 
 def get_stack(level: int = 2):
@@ -154,16 +135,133 @@ def rotate_log(file: str, size: int = 1024*1024, count: int = 1, **opt):
         tpsup.filetools.ls_l(f'{file}*')
 
 
+def get_logs(logs, LogLastCount=None, **opt):
+    verbose = opt.get('verbose', 1)
+
+    log_patterns = []
+    if isinstance(logs, str):
+        log_patterns = [logs]
+    elif isinstance(logs, list):
+        log_patterns = logs
+    else:
+        raise RuntimeError(f"logs={logs} is not a string or a list")
+
+    from tpsup.filetools import ls
+
+    all_logs = []
+    for lp in log_patterns:
+        # cmd = f"/bin/ls -1dtr {lp}"
+        # if verbose:
+        #     print(f"cmd={cmd}")
+        # lines = os.popen(cmd).read().splitlines()
+
+        result = ls(lp, ls_args="-1dtr", print=0)
+        lines = result['stdout'].splitlines()
+        all_logs.extend(lines)
+
+    if LogLastCount is None:
+        return all_logs
+    else:
+        if LogLastCount >= len(all_logs):
+            return all_logs
+        else:
+            return all_logs[-LogLastCount:]
+
+
+# because globals() and locals() are all relative to batch.py, therefore
+# we cannot move exec_simple() to tpsup.exectools.
+def exec_simple(source, **opt):
+    return exec_into_globals(source, globals(), locals(), **opt)
+
+
+def get_logname_cfg(cfg_file: str, **opt):
+    verbose = opt.get('verbose', 1)
+
+    if not os.path.isfile(cfg_file):
+        raise RuntimeError(f"{cfg_file} not found")
+
+    if not os.access(cfg_file, os.R_OK):
+        raise RuntimeError(f"{cfg_file} not readable")
+
+    yyyymmdd = opt.get('yyyymmdd', None)
+    if yyyymmdd is None:
+        yyyymmdd = strftime("%Y%m%d", localtime())
+
+    yy2, yy, mm, dd = yyyymmdd[:2], yyyymmdd[2:4], yyyymmdd[4:6], yyyymmdd[6:8]
+    yyyy = f"{yy2}{yy}"
+
+    from tpsup.utilbasic import resolve_scalar_var_in_string
+    from tpsup.envtools import get_user
+    user = get_user()
+
+    with open(cfg_file, "r") as fh:
+        cfg_string = fh.read()
+
+    string2 = resolve_scalar_var_in_string(cfg_string, {yyyymmdd: yyyymmdd, user: user})
+
+    our_logname_cfg = {}
+    exec_simple(string2, source_filename=cfg_file)
+    if verbose:
+        print(f"our_logname_cfg={our_logname_cfg}")
+
+    return our_logname_cfg
+
+
+def get_logs_by_cfg(cfg_file: str, cfg_key: str, yyyymmdd=None, BackwardDays=0, **opt):
+    verbose = opt.get('verbose', 0)
+
+    if yyyymmdd is None:
+        yyyymmdd = strftime("%Y%m%d", localtime())
+
+    yy2, yy, mm, dd = yyyymmdd[:2], yyyymmdd[2:4], yyyymmdd[4:6], yyyymmdd[6:8]
+    yyyy = f"{yy2}{yy}"
+
+    days = [yyyymmdd]
+    if BackwardDays:
+        for i in range(1, BackwardDays+1):
+            day = strftime("%Y%m%d", localtime(strftime("%s", localtime()) - i*86400))
+            days.append(day)
+
+    logs = []
+    seen = set()
+    for day in days:
+        all_cfg = get_logname_cfg(cfg_file, **opt, yyyymmdd=day)
+        if verbose:
+            print(f"all_cfg = {all_cfg}")
+
+        cfg = all_cfg[cfg_key]
+
+        if cfg is None:
+            raise RuntimeError(f"'{cfg_key}' is not defined in {cfg_file}")
+
+        patterns = []
+        pattern_keys = []
+        if day == strftime("%Y%m%d", localtime()):
+            pattern_keys = ['yyyymmdd_pattern', 'today_pattern']
+        else:
+            pattern_keys = ['yyyymmdd_pattern']
+
+        for k in pattern_keys:
+            pattern = cfg.get(k)
+            if pattern is not None:
+                patterns.append(pattern)
+
+        logs2 = get_logs(patterns, **opt, yyyymmdd=day)
+
+        for log in logs2:
+            if log not in seen:
+                logs.append(log)
+                seen.add(log)
+
+    return logs
+
+
 def main():
     logger = get_logger()
     # logging.basicConfig(level="DEBUG")
     logger2 = get_logger('new')
 
-    test_obj = {'a': 1, 'b': 2}
-
     def test_codes():
-        log_FileFuncLine("This is a test")
-
         logger.debug("This is a debug log")
         logger.info("This is an info log")
         logger.critical("This is critical")
@@ -175,8 +273,6 @@ def main():
 
         tplog("hello world")
         tplog("hello world", prefix="time")
-
-        log_FileFuncLineObj('test_obj', test_obj)
 
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())

@@ -5,7 +5,7 @@ import os
 from tpsup.tracer import parse_cfg, trace
 from tpsup.exectools import exec_into_globals
 from pprint import pformat
-from tpsup.util import resolve_scalar_var_in_string
+from tpsup.utilbasic import resolve_scalar_var_in_string
 from tpsup.envtools import restore_posix_paths
 import sys
 

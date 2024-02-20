@@ -9,7 +9,7 @@ import tpsup.envtools
 from selenium import webdriver
 from tpsup.human import human_delay
 import tpsup.logtools
-from tpsup.logtools import log_FileFuncLine
+from tpsup.logbasic import log_FileFuncLine
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -37,7 +37,7 @@ import tpsup.pstools
 import tpsup.tmptools
 import os.path
 
-from tpsup.util import hit_enter_to_continue
+from tpsup.utilbasic import hit_enter_to_continue
 from tpsup.exectools import exec_into_globals
 
 from typing import List, Union

@@ -7,10 +7,9 @@ import re
 import sys
 from pprint import pformat
 from tpsup.filetools import TpInput, TpOutput
-from tpsup.logtools import log_FileFuncLine
-from tpsup.util import convert_kvlist_to_dict, silence_BrokenPipeError
-from tpsup.modtools import load_module, stringdict_to_funcdict, strings_to_compilable_func, \
-    strings_to_compilable_patterns
+from tpsup.logbasic import log_FileFuncLine
+from tpsup.utilbasic import convert_kvlist_to_dict, silence_BrokenPipeError
+from tpsup.modtools import load_module, stringdict_to_funcdict, strings_to_compilable_func
 
 
 def filter_dicts(dict_iter, columns, **opt):
@@ -392,7 +391,7 @@ def main():
 
     print(f'\ntest9\n')
 
-    with QueryCsv(filename=file_gz, MatchExps=["r['name'].startswith('S')"], verbose=verbose) as qc,\
+    with QueryCsv(filename=file_gz, MatchExps=["r['name'].startswith('S')"], verbose=verbose) as qc, \
             TpOutput(output_file_gz) as ofh:
         write_dictlist_to_csv(qc, qc.columns, ofh)
     os.system(f"gunzip -c {output_file_gz}")

@@ -7,7 +7,7 @@ from pprint import pformat
 from typing import List
 
 import tpsup.seleniumtools
-from tpsup.util import tplog
+from tpsup.utilbasic import tplog
 
 
 def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):

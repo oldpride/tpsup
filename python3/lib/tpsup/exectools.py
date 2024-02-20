@@ -1,9 +1,9 @@
 import types
 import re
 from typing import Literal, Union
-from tpsup.util import print_string_with_line_numer
+from tpsup.utilbasic import print_string_with_line_numer
 from pprint import pformat
-from tpsup.logtools import log_FileFuncLine
+from tpsup.logbasic import log_FileFuncLine
 
 
 def _exec_filter(_dict, **opt):
@@ -129,9 +129,16 @@ def eval_block(_source: str, _globals, _locals, **opt):
         log_FileFuncLine(f"opt = {pformat(opt)}")
 
     if "\\" in _source:
-        _source = _source.replace("\\", "\\\\")
-        log_FileFuncLine(
-            f"escaped \\ with \\\\, results in:k _source = \n{_source}")
+        raw_string_contains_escape_char = re.compile(r"r'[^']*\\|r\"[^\"]*\\")
+        # example: r'C:\Program Files\Python38\lib\site-packages\tpsup\exectools.py'
+
+        # check whether this is a raw string.
+        # if raw, we don't need to escape the backslash
+        # if not raw, we need to escape the backslash
+        if not raw_string_contains_escape_char.search(_source):
+            _source = _source.replace("\\", "\\\\")
+            log_FileFuncLine(
+                f"escaped \\ with \\\\, results _source = \n{_source}")
 
     # wrap the code block into a function so that eval() a single expression.
     # see above for explanation.

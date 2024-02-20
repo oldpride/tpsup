@@ -9,7 +9,7 @@ import tpsup.seleniumtools
 from selenium.common.exceptions import NoSuchElementException
 from urllib.parse import urlparse
 from tpsup.lock import EntryBook
-from tpsup.util import print_exception, tplog
+from tpsup.utilbasic import print_exception, tplog
 
 
 def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
