@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+prog=$(basename $0)
+
+usage() {
+   msg=$1
+
+   [ "X$msg" = "X" ] || echo >&2 "ERROR: $msg"
+
+   cat >&2 <<END
+usage:
+
+   $prog number
+   
+   launch this many iterm2 terminals
+
+   -n          dry run
+
+examples:
+
+   $prog 6
+
+END
+   exit 1
+}
+
+verbose=N
+
+while getopts v o; do
+   case "$o" in
+   v) verbose=Y ;;
+   *)
+      usage "unknow switch '$o'"
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+   usage "wrong number of args"
+fi
+
+total=$1
+
+if [[ $total =~ [^0-9] ]]; then # regex match non-numeric
+   usage "first arg must be integer"
+fi
+
+# https://stackoverflow.com/questions/56862644
+function dovt
+{
+    osascript <<EOF
+    tell application "iTerm2"
+         create window with default profile
+         tell current session of current window
+              #delay 1
+              #write text "cd $PWD"
+              #write text "$@"
+              write text "siteenv"
+              write text "date;time"
+          end tell
+    end tell
+EOF
+}
+              #write text "printf '\\e[8;35;100t'"
+              #write text 'printf "\e[8;35;100t"'
+
+for (( i=0; i < total; i++ )) 
+do
+   echo launch i=$i
+   dovt
+   sleep 1
+done

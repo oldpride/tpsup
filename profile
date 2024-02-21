@@ -56,7 +56,7 @@ export TPSUP=$(
 
 umask 022
 
-export HOSTNAME=$(hostname)
+export HOSTNAME=$(hostname|cut -d. -f1)
 
 export UNAME=$(uname -a)
 # cygwin
