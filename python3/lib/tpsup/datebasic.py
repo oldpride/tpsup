@@ -1,4 +1,9 @@
 import datetime
+import datetime
+import os
+import re
+import csv
+import datetime
 
 
 def get_date(**opt):
@@ -35,113 +40,75 @@ def get_yyyymmdd_by_yyyymmdd_offset(yyyymmdd1, offset, **opt):
     return yyyymmdd2
 
 
-'''
-sub get_timezone_offset {
-   my ($opt) = @_;
-
-  # $ perl -e 'use TPSUP::DATE; print TPSUP::DATE::get_timezone_offset(), "\n";'
-  # -5
-
-   # use Time::Local;
-   my $local_sec             = time();
-   my @t                     = localtime($local_sec);
-   my $gmt_offset_in_seconds = timegm(@t) - $local_sec;
-   my $gmt_offset_in_hours   = $gmt_offset_in_seconds / 3600;
-
-   return $gmt_offset_in_hours;
-}
-'''
-
-# convert above to python
+def get_timezone_offset():
+    local_sec = datetime.datetime.now().timestamp()
+    t = datetime.datetime.utcfromtimestamp(local_sec)
+    gmt_offset_in_seconds = (t - datetime.datetime.fromtimestamp(local_sec)).total_seconds()
+    gmt_offset_in_hours = gmt_offset_in_seconds / 3600
+    return gmt_offset_in_hours
 
 
-'''
-my $holidays_by_exch;
-my $exists_by_exch_holiday;
+exists_by_exch_holiday = {}
+holidays_by_exch = {}
 
-sub parse_holiday_csv {
-   my ( $exch, $opt ) = @_;
 
-   croak "need to specify exch when calling parse_holiday_csv()" if !$exch;
+def parse_holiday_csv(exch, HolidayRef: dict = None, HolidaysCsv: str = None, **opt):
 
-   return $exists_by_exch_holiday->{$exch}
-     if exists $exists_by_exch_holiday->{$exch};
+    if HolidayRef:
+        exists_by_exch_holiday[exch] = HolidayRef
+        return exists_by_exch_holiday[exch]
 
-   if ( exists( $opt->{HolidayRef} ) and defined( $opt->{HolidayRef} ) ) {
-      $exists_by_exch_holiday->{$exch} = $opt->{HolidayRef};
-      return $exists_by_exch_holiday->{$exch};
-   }
+    if not HolidaysCsv:
+        directory = os.path.dirname(os.path.abspath(__file__))
+        HolidaysCsv = os.path.join(directory, '../../../lib/perl/TPSUP/holidays.csv')
 
-   my $HolidaysCsv;
-   if ( exists( $opt->{HolidaysCsv} ) and defined( $opt->{HolidaysCsv} ) ) {
-      $HolidaysCsv = $opt->{HolidaysCsv};
-   } else {
+    if not os.path.isfile(HolidaysCsv):
+        raise FileNotFoundError(f"{HolidaysCsv} is not found")
 
-# https://stackoverflow.com/questions/2403343/in-perl-how-do-i-get-the-directory-or-path-of-the-current-executing-code
-      my ( $volume, $directory, $file ) = File::Spec->splitpath(__FILE__);
-      $directory = File::Spec->rel2abs($directory);
+    ref = {}
 
-      # print "$volume, $directory, $file\n";
-      $HolidaysCsv = "$directory/holidays.csv";
-   }
+    with open(HolidaysCsv, 'r') as fh:
+        row_count = 0
+        while line := fh.readline():
+            row_count += 1
 
-   croak "$HolidaysCsv is not found" if !-f $HolidaysCsv;
+            if line.startswith(f"{exch},"):
+                # name,days
+                # NYSE,20200101 20200120 20200217 ...
+                row = line.strip().split(',')
+                holidays = row[1].split()
 
-# name,days
-# NYSE,20200101 20200120 20200217 20200410 20200525 20200703 20200907 20201126 20201125 20210101 20210118 20210402 20210531 20210705 20210906 20211125 20211224 20220101 20220117 20220221 20220415 20220530 20220704 20220905 20221124 20221126
+                yyyymmdd_pattern = r'\d{8}'
+                yyyymmdd_compiled = re.compile(yyyymmdd_pattern)
 
-   my $fh = get_in_fh($HolidaysCsv);
+                item_count = 0
+                last_holiday = None
 
-   my $row_count = 0;
-   my @holidays;
-   my $ref;
+                for yyyymmdd in holidays:
+                    item_count += 1
 
-   while (<$fh>) {
-      $row_count++;
+                    if re.match(yyyymmdd_compiled, yyyymmdd):
+                        if last_holiday and yyyymmdd <= last_holiday:
+                            raise ValueError(
+                                f"{HolidaysCsv} row {row_count} item {item_count} '{yyyymmdd}' <= last one '{last_holiday}', out of order")
+                        last_holiday = yyyymmdd
+                        ref[yyyymmdd] = 1
+                    else:
+                        raise ValueError(f"{HolidaysCsv} row {row_count} item {item_count} '{yyyymmdd}' bad format")
 
-      if (/^$exch,(.+)/) {
-         @holidays = map { int($_) } split( /\s+/, $1 );
+                break
+    if not ref:
+        raise ValueError(f"no holiday info found for {exch} in {HolidaysCsv}")
 
-         my $item_count = 0;
-         my $last_holiday;
+    holidays_by_exch[exch] = holidays
+    exists_by_exch_holiday[exch] = ref
 
-         for my $yyyymmdd (@holidays) {
-            $item_count++;
+    return exists_by_exch_holiday[exch]
 
-            if ( $yyyymmdd =~ /$yyyymmdd_pattern/ ) {
-               my ( $yyyy, $mm, $dd ) = ( $1, $2, $3 );
-               if ( $last_holiday && $yyyymmdd <= $last_holiday ) {
-                  croak
-"$HolidaysCsv row $row_count item $item_count '$yyyymmdd' <= last one '$last_holiday', out of order";
-               }
 
-               $last_holiday = $yyyymmdd;
-               $ref->{$yyyymmdd}++;
-            } else {
-               croak
-"$HolidaysCsv row $row_count item $item_count '$yyyymmdd'  bad format";
-            }
-         }
-
-         last;
-      }
-   }
-
-   close $fh;
-
-   $holidays_by_exch->{$exch}       = \@holidays;
-   $exists_by_exch_holiday->{$exch} = $ref;
-
-   #$opt->{verbose} && print STDERR "\$exists_by_exch_holiday->{$exch} = \n";
-   #$opt->{verbose} && print STDERR Dumper($exists_by_exch_holiday->{$exch});
-
-   $opt->{verbose} && print STDERR "\$holidays_by_exch->{$exch} = \n";
-   $opt->{verbose} && print STDERR Dumper( $holidays_by_exch->{$exch} );
-
-   return $exists_by_exch_holiday->{$exch};
-}
-
-'''
+def is_holiday(exch, yyyymmdd, **opt):
+    parse_holiday_csv(exch, **opt)
+    return exists_by_exch_holiday[exch].get(yyyymmdd, None)
 
 
 def yyyymmdd_to_DayOfWeek(yyyymmdd: str, **opt):
@@ -155,7 +122,9 @@ def main():
         get_yyyymmdd()
         yyyymmdd_to_DayOfWeek(yyyymmdd=get_yyyymmdd())
         get_date(yyyymmdd='20200901')
-        get_yyyymmdd_by_yyyymmdd_offset('20200901', -1)
+        get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) == '20200831'
+        get_timezone_offset() in (4.0, 5.0)
+        is_holiday('NYSE', '20240101') == 1
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())

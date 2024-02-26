@@ -15,10 +15,13 @@ our @EXPORT_OK = qw(
   get_holidays_by_exch_begin_end
   get_tradedays_by_exch_begin_end
   get_interval_seconds                    # this only supports strict yyyymmddHHMMSS
-  get_seconds_between_yyyymmddHHMMSS      # this supports wider format
+  get_seconds_between_yyyymmddHHMMSS
+
+  # this supports wider format
   get_seconds_between_two_days
   get_Mon_by_number
-  get_mm_by_Mon
+  get_mm_by_
+  Mon
   convert_from_yyyymmdd
   date2any
   yyyymmddHHMMSS_to_epoc
@@ -32,9 +35,9 @@ our @EXPORT_OK = qw(
 
 use Carp;
 use Data::Dumper;
-use TPSUP::CSV  qw(parse_csv_file);
+use TPSUP::CSV    qw(parse_csv_file);
 use TPSUP::SEARCH qw(binary_search_match);
-use TPSUP::FILE qw(get_in_fh);
+use TPSUP::FILE   qw(get_in_fh);
 use Time::Local;
 use File::Spec;
 use POSIX;
@@ -50,8 +53,24 @@ sub get_yyyymmdd {
 sub get_date {
    my ($opt) = @_;
 
-   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-     localtime();
+   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst );
+   my $yyyymmdd = $opt->{yyyymmdd};
+   if ($yyyymmdd) {
+      if ( $yyyymmdd =~ /^(\d{4})(\d{2})(\d{2})/ ) {
+         ( $year, $mon, $mday ) = ( $1, $2, $3 );
+         $year -= 1900;
+         $mon  -= 1;
+
+         # we need the following to get the correct wday (weekday)
+         ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
+           localtime( timelocal( 0, 0, 0, $mday, $mon, $year ) );
+      } else {
+         croak "yyyymmdd='$yyyymmdd', bad format";
+      }
+   } else {
+      ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime();
+   }
+
    my $date;
 
    $date->{yyyy} = sprintf( "%4d",  $year + 1900 );
@@ -98,15 +117,12 @@ sub get_weekday_generator {
 
    my $add_CalendarDays_seconds = $add_CalendarDays * $day_seconds;
 
-# we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
-   my $epoc_seconds =
-     yyyymmddHHMMSS_to_epoc("${begin}120000") + $add_CalendarDays_seconds;
+   # we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
+   my $epoc_seconds = yyyymmddHHMMSS_to_epoc("${begin}120000") + $add_CalendarDays_seconds;
 
    return sub {
-      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-        localtime($epoc_seconds);
-      my $to_be_returned =
-        sprintf( "%4d%02d%02d", 1900 + $year, $mon + 1, $mday );
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($epoc_seconds);
+      my $to_be_returned = sprintf( "%4d%02d%02d", 1900 + $year, $mon + 1, $mday );
 
       # this block is for the next loop
       if ( ( $DayOfWeek % 5 ) == 0 ) {
@@ -126,8 +142,8 @@ sub get_weekday_generator {
 sub get_timezone_offset {
    my ($opt) = @_;
 
-  # $ perl -e 'use TPSUP::DATE; print TPSUP::DATE::get_timezone_offset(), "\n";'
-  # -5
+   # $ perl -e 'use TPSUP::DATE; print TPSUP::DATE::get_timezone_offset(), "\n";'
+   # -5
 
    # use Time::Local;
    my $local_sec             = time();
@@ -181,13 +197,8 @@ sub yyyymmddHHMMSS_to_epoc {
 sub epoc_to_yyyymmddHHMMSS {
    my ( $epoc, $opt ) = @_;
 
-   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-     localtime($epoc);
-   my $yyyymmddHHMMSS = sprintf(
-      '%4d%02d%02d%02d%02d%02d',
-      1900 + $year,
-      $mon + 1, $mday, $hour, $min, $sec,
-   );
+   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($epoc);
+   my $yyyymmddHHMMSS = sprintf( '%4d%02d%02d%02d%02d%02d', 1900 + $year, $mon + 1, $mday, $hour, $min, $sec, );
 
    return $yyyymmddHHMMSS;
 }
@@ -208,23 +219,13 @@ sub get_new_yyyymmddHHMMSS {
       $old_t = $1;
       my $tail = defined($2) ? $2 : '';
       $out_format = '%4d%02d%02d%02d%02d%02d' . $tail;
-   } elsif (
-      my @c = (
-         $old_yyyymmddHHMMSS =~
-/^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/
-      )
-     )
+   } elsif ( my @c =
+      ( $old_yyyymmddHHMMSS =~ /^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/ ) )
    {
       $old_t = "$c[0]$c[2]$c[4]$c[6]$c[8]$c[10]";
       my $tail = defined( $c[13] ) ? $c[13] : '';
-      $out_format = '%4d'
-        . $c[1] . '%02d'
-        . $c[3] . '%02d'
-        . $c[5] . '%02d'
-        . $c[7] . '%02d'
-        . $c[9] . '%02d'
-        . $c[11]
-        . $tail;
+      $out_format =
+        '%4d' . $c[1] . '%02d' . $c[3] . '%02d' . $c[5] . '%02d' . $c[7] . '%02d' . $c[9] . '%02d' . $c[11] . $tail;
    } else {
       confess "unsupported format at old_yyyymmddHHMMSS='$old_yyyymmddHHMMSS'";
    }
@@ -232,10 +233,8 @@ sub get_new_yyyymmddHHMMSS {
    my $old_sec = yyyymmddHHMMSS_to_epoc($old_t);
    my $new_sec = $old_sec + $offset;
 
-   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-     localtime($new_sec);
-   my $new_yyyymmddHHMMSS =
-     sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec, );
+   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($new_sec);
+   my $new_yyyymmddHHMMSS = sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec, );
 
    return $new_yyyymmddHHMMSS;
 }
@@ -252,23 +251,13 @@ sub local_vs_utc {
       $old_t = $1;
       my $tail = defined($2) ? $2 : '';
       $out_format = '%4d%02d%02d%02d%02d%02d' . $tail;
-   } elsif (
-      my @c = (
-         $old_yyyymmddHHMMSS =~
-/^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/
-      )
-     )
+   } elsif ( my @c =
+      ( $old_yyyymmddHHMMSS =~ /^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/ ) )
    {
       $old_t = "$c[0]$c[2]$c[4]$c[6]$c[8]$c[10]";
       my $tail = defined( $c[13] ) ? $c[13] : '';
-      $out_format = '%4d'
-        . $c[1] . '%02d'
-        . $c[3] . '%02d'
-        . $c[5] . '%02d'
-        . $c[7] . '%02d'
-        . $c[9] . '%02d'
-        . $c[11]
-        . $tail;
+      $out_format =
+        '%4d' . $c[1] . '%02d' . $c[3] . '%02d' . $c[5] . '%02d' . $c[7] . '%02d' . $c[9] . '%02d' . $c[11] . $tail;
    } else {
       confess "unsupported format at old_yyyymmddHHMMSS='$old_yyyymmddHHMMSS'";
    }
@@ -279,17 +268,11 @@ sub local_vs_utc {
    my $old_sec = yyyymmddHHMMSS_to_epoc( $old_t, { IsUTC => $OldIsUTC } );
 
    if ($OldIsUTC) {
-      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-        localtime($old_sec);
-      return
-        sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min,
-         $sec );
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($old_sec);
+      return sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec );
    } else {
-      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-        gmtime($old_sec);
-      return
-        sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min,
-         $sec );
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = gmtime($old_sec);
+      return sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec );
    }
 }
 
@@ -314,7 +297,7 @@ sub parse_holiday_csv {
       $HolidaysCsv = $opt->{HolidaysCsv};
    } else {
 
-# https://stackoverflow.com/questions/2403343/in-perl-how-do-i-get-the-directory-or-path-of-the-current-executing-code
+      # https://stackoverflow.com/questions/2403343/in-perl-how-do-i-get-the-directory-or-path-of-the-current-executing-code
       my ( $volume, $directory, $file ) = File::Spec->splitpath(__FILE__);
       $directory = File::Spec->rel2abs($directory);
 
@@ -324,8 +307,8 @@ sub parse_holiday_csv {
 
    croak "$HolidaysCsv is not found" if !-f $HolidaysCsv;
 
-# name,days
-# NYSE,20200101 20200120 20200217 20200410 20200525 20200703 20200907 20201126 20201125 20210101 20210118 20210402 20210531 20210705 20210906 20211125 20211224 20220101 20220117 20220221 20220415 20220530 20220704 20220905 20221124 20221126
+   # name,days
+   # NYSE,20200101 20200120 20200217 20200410 20200525 20200703 20200907 20201126 20201125 20210101 20210118 20210402 20210531 20210705 20210906 20211125 20211224 20220101 20220117 20220221 20220415 20220530 20220704 20220905 20221124 20221126
 
    my $fh = get_in_fh($HolidaysCsv);
 
@@ -353,10 +336,9 @@ sub parse_holiday_csv {
                }
 
                $last_holiday = $yyyymmdd;
-               $ref->{$yyyymmdd}++;
+               $ref->{$yyyymmdd} = 1;
             } else {
-               croak
-"$HolidaysCsv row $row_count item $item_count '$yyyymmdd'  bad format";
+               croak "$HolidaysCsv row $row_count item $item_count '$yyyymmdd'  bad format";
             }
          }
 
@@ -365,6 +347,10 @@ sub parse_holiday_csv {
    }
 
    close $fh;
+
+   if ( !$ref ) {
+      croak "no holiday information for exch=$exch in $HolidaysCsv";
+   }
 
    $holidays_by_exch->{$exch}       = \@holidays;
    $exists_by_exch_holiday->{$exch} = $ref;
@@ -396,8 +382,7 @@ sub get_tradeday {
    if ( $opt->{Begin} ) {
       $begin = $opt->{Begin};
    } else {
-      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-        localtime();
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime();
       $begin = sprintf( "%4d%02d%02d", 1900 + $year, $mon + 1, $mday );
    }
 
@@ -446,18 +431,16 @@ sub get_tradeday_by_exch_begin_offset {
       $weekdays = $TPSUP::DATE_Weekdays::weekdays;
    }
 
- # if the binary search falls between two connective trade days, eg, on weekends
+   # if the binary search falls between two connective trade days, eg, on weekends
    # my $ChooseBigger = undef;
    my $InBetween = 'low';
    if ( $opt->{OnWeekend} && $opt->{OnWeekend} eq 'next' ) {
       # $ChooseBigger = 'ChooseBigger';
-      $InBetween= 'high';
+      $InBetween = 'high';
    }
 
-   my $begin_weekday_pos = binary_search_match(
-      $weekdays, $begin, sub { $_[0] <=> $_[1] },
-      { InBetween => $InBetween, OutBound => 'Error'}
-   );
+   my $begin_weekday_pos = binary_search_match( $weekdays, $begin, sub { $_[0] <=> $_[1] },
+      { InBetween => $InBetween, OutBound => 'Error' } );
    my $begin_weekday = $weekdays->[$begin_weekday_pos];
    $opt->{verbose} && print "begin_weekday=$begin_weekday\n";
 
@@ -562,11 +545,9 @@ sub get_holidays_by_exch_begin_end {
    }
 
    if ( !$end_covered ) {
-      warn
-"end=$end exceeded upper range of '$exch' holidays ($all_holidays->[-1])";
+      warn "end=$end exceeded upper range of '$exch' holidays ($all_holidays->[-1])";
    } elsif ( !$begin_covered ) {
-      warn
-"begin=$begin exceeded lower range of '$exch' holidays ($all_holidays->[0])";
+      warn "begin=$begin exceeded lower range of '$exch' holidays ($all_holidays->[0])";
    }
 
    return \@holidays;
@@ -578,17 +559,16 @@ sub yyyymmdd_to_DayOfWeek {
    if ( "$yyyymmdd" =~ /$yyyymmdd_pattern/ ) {
       my ( $yyyy, $mm, $dd ) = ( $1, $2, $3 );
 
-  # https://perldoc.perl.org/Time::Local
-  #     The value for the day of the month is the actual day (i.e. 1..31), while
-  #     the month is the number of months since January (0..11).
-  #     timelocal( $sec, $min, $hour, $mday, $mon, $year );
-  # i use 12pm instead of 0 am, to avoid daylight-saving-change causing +/- day
+      # https://perldoc.perl.org/Time::Local
+      #     The value for the day of the month is the actual day (i.e. 1..31), while
+      #     the month is the number of months since January (0..11).
+      #     timelocal( $sec, $min, $hour, $mday, $mon, $year );
+      # i use 12pm instead of 0 am, to avoid daylight-saving-change causing +/- day
       my $seconds = timelocal( 0, 0, 12, $dd, $mm - 1, $yyyy );
 
       # https://perldoc.pl/functions/localtime
       # the month in the range 0..11, with 0 for January and 11 for December.
-      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-        localtime($seconds);
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($seconds);
 
       # print "$mday,$mon,$year\n";
 
@@ -605,7 +585,7 @@ sub get_seconds_between_two_days {
 
    return 0 if $yyyymmdd1 == $yyyymmdd2;    # optimize
 
-# we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
+   # we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
 
    if ( $opt->{IntervalDaysNoCaching} ) {
       $opt->{verbose} && print "no caching\n";
@@ -618,8 +598,7 @@ sub get_seconds_between_two_days {
          my $seconds1 = yyyymmddHHMMSS_to_epoc("${yyyymmdd1}120000");
          my $seconds2 = yyyymmddHHMMSS_to_epoc("${yyyymmdd2}120000");
          $opt->{verbose} && print "seconds1=$seconds1, seconds2=$seconds2\n";
-         $seconds_between_two_days->{"$yyyymmdd1,$yyyymmdd2"} =
-           $seconds2 - $seconds1;
+         $seconds_between_two_days->{"$yyyymmdd1,$yyyymmdd2"} = $seconds2 - $seconds1;
       }
 
       return $seconds_between_two_days->{"$yyyymmdd1,$yyyymmdd2"};
@@ -633,10 +612,10 @@ sub get_interval_seconds {
 
    if ( $yyyymmdd1 && $yyyymmdd2 && $yyyymmdd1 != $yyyymmdd2 ) {
 
-# we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
-#my $seconds1 = yyyymmddHHMMSS_to_epoc("${yyyymmdd1}120000");
-#my $seconds2 = yyyymmddHHMMSS_to_epoc("${yyyymmdd2}120000");
-#$seconds = $seconds2 - $seconds1;
+      # we use 12:00:00 instead of 00:00:00 to avoid daylight-saving-change causing +/- day
+      #my $seconds1 = yyyymmddHHMMSS_to_epoc("${yyyymmdd1}120000");
+      #my $seconds2 = yyyymmddHHMMSS_to_epoc("${yyyymmdd2}120000");
+      #$seconds = $seconds2 - $seconds1;
 
       $seconds = get_seconds_between_two_days( $yyyymmdd1, $yyyymmdd2, $opt );
    }
@@ -644,10 +623,10 @@ sub get_interval_seconds {
    {
       my ( $HH1, $MM1, $SS1, $HH2, $MM2, $SS2 );
 
-   #tian@linux1$ perl -e 'print "012" =~ /^[0-9]{3}$/ ? "true" : "false", "\n";'
-   #true
-   #tian@linux1$ perl -e 'print "012" =~ /^[0-9]{2}$/ ? "true" : "false", "\n";'
-   #false
+      #tian@linux1$ perl -e 'print "012" =~ /^[0-9]{3}$/ ? "true" : "false", "\n";'
+      #true
+      #tian@linux1$ perl -e 'print "012" =~ /^[0-9]{2}$/ ? "true" : "false", "\n";'
+      #false
 
       if ( "$HHMMSS1" =~ /^([0-9]{2})([0-9]{2})([0-9]{2})$/ ) {
          ( $HH1, $MM1, $SS1 ) = ( $1, $2, $3 );
@@ -678,13 +657,7 @@ sub get_seconds_between_yyyymmddHHMMSS {
       my $t2;
       if ( $t1 =~ /^([12][09]\d{12})(.*)/ ) {
          $t2 = $1;
-      } elsif (
-         my @c = (
-            $t1 =~
-/^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/
-         )
-        )
-      {
+      } elsif ( my @c = ( $t1 =~ /^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/ ) ) {
          $t2 = "$c[0]$c[2]$c[4]$c[6]$c[8]$c[10]";
       } else {
          confess "unsupported format at '$t1'";
@@ -802,8 +775,7 @@ sub convert_from_yyyymmdd {
       my $yyyy = "$YY$yy";
 
       $opt->{verbose}
-        && print STDERR
-"template=$template, YY=$YY, mm=$mm, m=$m, dd=$dd, d=$d, Mon=$Mon, yyyy=$yyyy\n";
+        && print STDERR "template=$template, YY=$YY, mm=$mm, m=$m, dd=$dd, d=$d, Mon=$Mon, yyyy=$yyyy\n";
 
       eval "return qq($template)";
    } else {
@@ -855,16 +827,16 @@ sub get_tradedays_by_exch_begin_end {
 sub date2any {
    my ( $date, $input_pattern, $input_assignment, $output_template, $opt ) = @_;
 
-# test winter time, GMT-5=local
-# $ date -u; date; perl -e 'use TPSUP::DATE qw(/./);print date_template('date -u +%Y%m%d%S', "^(\\d{4})(\\d{2})(\\d{2})-(\\d{2}):(\\d{2}):(\\d{2})", "yyyy,mm,dd,HH,MM,SS", "sprintf(\"\$Mon-\$dd-\$yyyy,\$HH:\$MM:\$SS\")", {gmt21ocal=>1}), "\n";'
-# Thursday, January 19, 2017 11:32:10 PM GMT
-# Thursday, January 19, 2017 06:32:10 PM EST
-# Jan-19-2017,18:32:13
+   # test winter time, GMT-5=local
+   # $ date -u; date; perl -e 'use TPSUP::DATE qw(/./);print date_template('date -u +%Y%m%d%S', "^(\\d{4})(\\d{2})(\\d{2})-(\\d{2}):(\\d{2}):(\\d{2})", "yyyy,mm,dd,HH,MM,SS", "sprintf(\"\$Mon-\$dd-\$yyyy,\$HH:\$MM:\$SS\")", {gmt21ocal=>1}), "\n";'
+   # Thursday, January 19, 2017 11:32:10 PM GMT
+   # Thursday, January 19, 2017 06:32:10 PM EST
+   # Jan-19-2017,18:32:13
 
-# test summer time, GMT-4=local
-# $ perl -e 'use TPSUP::DATE qw(/./);print date_template("20160704-02:00:09", "^(\\d{4})(\\d{2})(\\d{2})-(\\d{2}):(\\d{2}):(\\d{2})", "yyyy,mm,dd,HH,MM,SS", "sprintf(\"\$Mon-\$dd-\$yyyy,\$HH:\$MM:\$SS\")", {gmt21ocal=>1, verbose=>l}), "\n";
-# compile exp='sprintf("$Mon-$dd-$yyyy,$HH:$MM:$SS")'
-# Jul-03-2016,22:00:09
+   # test summer time, GMT-4=local
+   # $ perl -e 'use TPSUP::DATE qw(/./);print date_template("20160704-02:00:09", "^(\\d{4})(\\d{2})(\\d{2})-(\\d{2}):(\\d{2}):(\\d{2})", "yyyy,mm,dd,HH,MM,SS", "sprintf(\"\$Mon-\$dd-\$yyyy,\$HH:\$MM:\$SS\")", {gmt21ocal=>1, verbose=>l}), "\n";
+   # compile exp='sprintf("$Mon-$dd-$yyyy,$HH:$MM:$SS")'
+   # Jul-03-2016,22:00:09
 
    my @assignments = split /,/, $input_assignment;
 
@@ -897,7 +869,7 @@ sub date2any {
 
    if ( $opt->{gmt21ocal} ) {
 
-# http://stackoverflow.com/questions/411740/how-can-i-parse-dates-and-convert-time-zones-in-perl
+      # http://stackoverflow.com/questions/411740/how-can-i-parse-dates-and-convert-time-zones-in-perl
       if (  !exists $r->{mm}
          || !exists $r->{dd}
          || !exists $r->{yyyy}
@@ -911,11 +883,7 @@ sub date2any {
       $r->{MM} - 0 if !exists $r->{MM};
       $r->{SS} = 0 if !exists $r->{SS};
 
-      my $gmt_seconds = timegm(
-         $r->{SS}, $r->{MM}, $r->{HH}, $r->{dd},
-         $r->{mm} - 1,
-         $r->{yyyy} - 1900
-      );
+      my $gmt_seconds = timegm( $r->{SS}, $r->{MM}, $r->{HH}, $r->{dd}, $r->{mm} - 1, $r->{yyyy} - 1900 );
 
       my ( $sec, $min, $hour, $day, $mon, $year ) = localtime($gmt_seconds);
 
@@ -968,12 +936,22 @@ sub date2any {
 }
 
 sub main {
-   print "get_yyyymmdd() = ", get_yyyymmdd(), "\n\n";
+   require TPSUP::TEST;
 
-   print "get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) = ",
-     get_yyyymmdd_by_yyyymmdd_offset( '20200901', -1 ), "\n\n";
+   # use 'our' in test code, not 'my'
+   my $test_code = <<'END';
+         TPSUP::DATE::get_date();
+         TPSUP::DATE::get_yyyymmdd();
+         TPSUP::DATE::yyyymmdd_to_DayOfWeek(TPSUP::DATE::get_yyyymmdd());
+         TPSUP::DATE::get_date( {yyyymmdd => '20200901'} )
+         TPSUP::DATE::get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) == '20200831';
+         TPSUP::DATE::get_timezone_offset();
+         TPSUP::DATE::is_holiday('NYSE', '20240101') == 1;
+END
 
-   print "get_timezone_offset() = ", get_timezone_offset(), "\n\n";
+   TPSUP::TEST::test_lines($test_code);
+
+   exit(0);
 
    print "get_interval_seconds('20200901', '120000', '20200902', '120001') = ",
      get_interval_seconds( '20200901', '120000', '20200902', '120001' ),
@@ -982,62 +960,52 @@ sub main {
    my $verbose = 0;
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200901', 3) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3, { verbose => $verbose } ),
      ", expecting 20200904\n\n";
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200901', 4) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4, { verbose => $verbose } ),
      ", expecting 20200908\n\n";
 
    print "get_tradeday_by_exch_begin_offset('WeekDay', '20200901', 4) = ",
-     get_tradeday_by_exch_begin_offset( 'WeekDay', '20200901', 4,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'WeekDay', '20200901', 4, { verbose => $verbose } ),
      ", expecting 20200907\n\n";
    "\n";
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200908', -4) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4, { verbose => $verbose } ),
      ", expecting 20200901\n\n";
    "\n";
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200904', -3) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3, { verbose => $verbose } ),
      ", expecting 20200901\n\n";
    "\n";
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200904', 0) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0, { verbose => $verbose } ),
      ", expecting 20200904\n\n";
    "\n";
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, { verbose => $verbose } ),
      ", expecting 20200904\n\n";
    "\n";
 
    print
-"get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, {OnWeekend=>'next'}) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0,
-      { OnWeekend => 'next', verbose => $verbose } ),
+     "get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, {OnWeekend=>'next'}) = ",
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, { OnWeekend => 'next', verbose => $verbose } ),
      ", expecting 20200908\n\n";
    "\n";
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, { verbose => $verbose } ),
      ", expecting 20200904\n\n";
    "\n";
 
    print
-"get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, {OnWeekend=>'next'}) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0,
-      { OnWeekend => 'next', verbose => $verbose } ),
+     "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, {OnWeekend=>'next'}) = ",
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, { OnWeekend => 'next', verbose => $verbose } ),
      ", expecting 20200908\n\n";
    "\n";
 
@@ -1045,37 +1013,23 @@ sub main {
    $verbose && print Dumper( $tradeday_by_exch_begin_offset->{NYSE} );
 
    print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1,
-      { verbose => $verbose } ),
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, { verbose => $verbose } ),
      ", expecting 20200908\n\n";
    "\n";
 
    print
-"get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1, {OnWeekend=>'next'}) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1,
-      { OnWeekend => 'next', verbose => $verbose } ),
+     "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1, {OnWeekend=>'next'}) = ",
+     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, { OnWeekend => 'next', verbose => $verbose } ),
      ", expecting 20200909\n\n";
    "\n";
 
    print "get_tradedays_by_exch_begin_end('NYSE', '20200901', '20200907') = ",
-     join(
-      ",",
-      @{
-         get_tradedays_by_exch_begin_end( 'NYSE', '20200901', '20200907',
-            { verbose => $verbose } )
-      }
-     ),
+     join( ",", @{ get_tradedays_by_exch_begin_end( 'NYSE', '20200901', '20200907', { verbose => $verbose } ) } ),
      ", expecting 4 days\n\n";
    "\n";
 
    print "get_tradedays_by_exch_begin_end('NYSE', '20200901', '20200908') = ",
-     join(
-      ",",
-      @{
-         get_tradedays_by_exch_begin_end( 'NYSE', '20200901', '20200908',
-            { verbose => $verbose } )
-      }
-     ),
+     join( ",", @{ get_tradedays_by_exch_begin_end( 'NYSE', '20200901', '20200908', { verbose => $verbose } ) } ),
      ", expecting 5 days\n\n";
    "\n";
 
@@ -1085,8 +1039,7 @@ sub main {
    "\n";
 
    print "get_seconds_between_two_days('20210917', '20210918') = ",
-     get_seconds_between_two_days( '20210917', '20210918',
-      { verbose => $verbose } ),
+     get_seconds_between_two_days( '20210917', '20210918', { verbose => $verbose } ),
      ", expecting 86400\n\n";
    "\n";
 
@@ -1111,11 +1064,8 @@ sub main {
    "\n";
 
    print
-"get_seconds_between_yyyymmddHHMMSS('2021-10-21 07:01:02.513447', '2021-10-21 03:01:02.000000') = ",
-     get_seconds_between_yyyymmddHHMMSS(
-      '2021-10-21 07:01:02.513447',
-      '2021-10-21 03:01:02.000000'
-     ),
+     "get_seconds_between_yyyymmddHHMMSS('2021-10-21 07:01:02.513447', '2021-10-21 03:01:02.000000') = ",
+     get_seconds_between_yyyymmddHHMMSS( '2021-10-21 07:01:02.513447', '2021-10-21 03:01:02.000000' ),
      ", expecting 600\n\n";
    "\n";
 }
