@@ -118,98 +118,46 @@ def yyyymmdd_to_DayOfWeek(yyyymmdd: str, **opt):
     return date['WD']
 
 
-'''
-sub yyyymmddHHMMSS_to_epoc {
-   my ( $yyyymmddHHMMSS, $opt ) = @_;
-
-   my $type = ref $yyyymmddHHMMSS;
-
-   if ( $type eq 'ARRAY' ) {
-      if ( $opt->{IsUTC} ) {
-         return timegm(
-            $yyyymmddHHMMSS->[5],        # SS
-            $yyyymmddHHMMSS->[4],        # MM
-            $yyyymmddHHMMSS->[3],        # HH
-            $yyyymmddHHMMSS->[2],        # dd
-            $yyyymmddHHMMSS->[1] - 1,    # mm-1
-            $yyyymmddHHMMSS->[0],        # yyyy
-         );
-      } else {
-         return timelocal(
-            $yyyymmddHHMMSS->[5],        # SS
-            $yyyymmddHHMMSS->[4],        # MM
-            $yyyymmddHHMMSS->[3],        # HH
-            $yyyymmddHHMMSS->[2],        # dd
-            $yyyymmddHHMMSS->[1] - 1,    # mm-1
-            $yyyymmddHHMMSS->[0],        # yyyy
-         );
-      }
-   } else {
-      if ( "$yyyymmddHHMMSS" =~ /$yyyymmddHHMMSS_pattern/ ) {
-         my ( $yyyy, $mm, $dd, $HH, $MM, $SS ) = ( $1, $2, $3, $4, $5, $6 );
-
-         if ( $opt->{IsUTC} ) {
-            return timegm( $SS, $MM, $HH, $dd, $mm - 1, $yyyy );
-         } else {
-            return timelocal( $SS, $MM, $HH, $dd, $mm - 1, $yyyy );
-         }
-      } else {
-         croak "yyyymmddHHMMSS='$yyyymmddHHMMSS', bad format";
-      }
-   }
-}
-'''
+yyyymmddHHMMSS_pattern = r'(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})'
+yyyymmddHHMMSS_compiled = None
 
 
 def yyyymmddHHMMSS_to_epoc(yyyymmddHHMMSS, IsUTC=False, **opt):
     # convert time to seconds from epoch
+
+    settings = {}
+    if IsUTC:
+        settings['tzinfo'] = datetime.timezone.utc
 
     if type(yyyymmddHHMMSS) == list:
         if len(yyyymmddHHMMSS) != 6:
             print(f"bad format of yyyymmddHHMMSS list={pformat(yyyymmddHHMMSS)}", file=sys.stderr)
             raise ValueError("List size must be 6")
 
-        if IsUTC:
-            return datetime.datetime.utcfromtimestamp(datetime.datetime(*yyyymmddHHMMSS).timestamp())
-        else:
-            return datetime.datetime.fromtimestamp(datetime.datetime(*yyyymmddHHMMSS).timestamp())
+        dt = datetime.datetime(*yyyymmddHHMMSS, **settings)
+
     else:
-        yyyymmddHHMMSS_pattern = r'(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})'
-        yyyymmddHHMMSS_compiled = re.compile(yyyymmddHHMMSS_pattern)
+        global yyyymmddHHMMSS_compiled
+        if yyyymmddHHMMSS_compiled == None:
+            yyyymmddHHMMSS_compiled = re.compile(yyyymmddHHMMSS_pattern)
 
         if m := re.match(yyyymmddHHMMSS_compiled, yyyymmddHHMMSS):
             yyyy, mm, dd, HH, MM, SS = m.groups()
-            if IsUTC:
-                return datetime.datetime.utcfromtimestamp(datetime.datetime(int(yyyy), int(mm), int(dd), int(HH), int(MM), int(SS)).timestamp())
-            else:
-                return datetime.datetime.fromtimestamp(datetime.datetime(int(yyyy), int(mm), int(dd), int(HH), int(MM), int(SS)).timestamp())
+
+            dt = datetime.datetime(int(yyyy), int(mm), int(dd), int(HH), int(MM), int(SS), **settings)
         else:
             raise ValueError(f"yyyymmddHHMMSS='{yyyymmddHHMMSS}', bad format")
 
-
-'''
-
-sub epoc_to_yyyymmddHHMMSS {
-   my ( $epoc, $opt ) = @_;
-
-   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($epoc);
-   my $yyyymmddHHMMSS = sprintf( '%4d%02d%02d%02d%02d%02d', 1900 + $year, $mon + 1, $mday, $hour, $min, $sec, );
-
-   return $yyyymmddHHMMSS;
-}
-
-sub get_yyyymmddHHMMSS {
-   my ($opt)          = @_;
-   my $now_sec        = time();
-   my $yyyymmddHHMMSS = epoc_to_yyyymmddHHMMSS($now_sec);
-   return $yyyymmddHHMMSS;
-}
-'''
+    seconds = dt.timestamp()
+    return seconds
 
 
-def epoc_to_yyyymmddHHMMSS(epoc, **opt):
-    date = datetime.datetime.fromtimestamp(epoc)
-    return date.strftime('%Y%m%d%H%M%S')
+def epoc_to_yyyymmddHHMMSS(epoc, isUTC=False, **opt):
+    if isUTC:
+        dt = datetime.datetime.utcfromtimestamp(epoc)
+    else:
+        dt = datetime.datetime.fromtimestamp(epoc)
+    return dt.strftime('%Y%m%d%H%M%S')
 
 
 def get_yyyymmddHHMMSS(**opt):
@@ -227,12 +175,13 @@ def main():
         get_timezone_offset() in (4.0, 5.0)
         is_holiday('NYSE', '20240101') == 1
         yyyymmddHHMMSS_to_epoc('20200901120000')
-        epoc_to_yyyymmddHHMMSS(1598959200)
+        epoc_to_yyyymmddHHMMSS(1598976000)
         yyyymmddHHMMSS_to_epoc('20200901120000', IsUTC=True)
-        epoc_to_yyyymmddHHMMSS(1598959200, IsUTC=True)
+        epoc_to_yyyymmddHHMMSS(1598961600, IsUTC=True)
 
         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59])
         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], IsUTC=1)
+        yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], IsUTC=1) - yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59])
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())
