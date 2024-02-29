@@ -7,24 +7,58 @@ import csv
 import datetime
 import sys
 
+# Date and time objects may be categorized as “aware” or “naive” depending on whether or not they include timezone information.
+#     Objects of the "date" type are always naive.
+#     An object of type "time" or "datetime" may be aware or naive.
+#
+# A datetime object d is aware if both of the following hold:
+#     d.tzinfo is not None
+#     d.tzinfo.utcoffset(d) does not return None
+# Otherwise, d is naive.
+#
+# A time object t is aware if both of the following hold:
+#     t.tzinfo is not None
+#     t.tzinfo.utcoffset(None) does not return None.
+# Otherwise, t is naive.
+# Subclass relationships:
+# object
+#     timedelta
+#     tzinfo
+#         timezone
+#     time
+#     date
+#         datetime
+
+
+tzinfo = None
+
+
+def get_timezone():
+    if tzinfo:
+        return tzinfo
+    else:
+        tzinfo = datetime.datetime.now().astimezone().tzinfo
+    return tzinfo
+
 
 def get_date(**opt):
     if yyyymmdd := opt.get('yyyymmdd', None):
         yyyy, mm, dd = yyyymmdd[:4], yyyymmdd[4:6], yyyymmdd[6:8]
-        now = datetime.datetime(year=int(yyyy), month=int(mm), day=int(dd))
+        dt = datetime.datetime(year=int(yyyy), month=int(mm), day=int(dd), tzinfo=get_timezone())
     else:
-        now = datetime.datetime.now()
-    date = {}
-    date['yyyy'] = now.strftime('%Y')
-    date['mm'] = now.strftime('%m')
-    date['dd'] = now.strftime('%d')
-    date['HH'] = now.strftime('%H')
-    date['MM'] = now.strftime('%M')
-    date['SS'] = now.strftime('%S')
-    date['DST'] = now.strftime('%z')
-    date['WD'] = now.strftime('%w')
+        dt = datetime.datetime.now(tz=get_timezone())
+    r = {}
+    r['yyyy'] = dt.strftime('%Y')
+    r['mm'] = dt.strftime('%m')
+    r['dd'] = dt.strftime('%d')
+    r['HH'] = dt.strftime('%H')
+    r['MM'] = dt.strftime('%M')
+    r['SS'] = dt.strftime('%S')
+    r['offset'] = dt.strftime('%z')
+    r['WD'] = dt.strftime('%w')
+    r['datetime'] = dt
 
-    return date
+    return r
 
 
 def get_yyyymmdd(**opt):
@@ -122,11 +156,11 @@ yyyymmddHHMMSS_pattern = r'(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})'
 yyyymmddHHMMSS_compiled = None
 
 
-def yyyymmddHHMMSS_to_epoc(yyyymmddHHMMSS, IsUTC=False, **opt):
+def yyyymmddHHMMSS_to_epoc(yyyymmddHHMMSS, fromUTC=False, **opt):
     # convert time to seconds from epoch
 
     settings = {}
-    if IsUTC:
+    if fromUTC:
         settings['tzinfo'] = datetime.timezone.utc
 
     if type(yyyymmddHHMMSS) == list:
@@ -152,12 +186,18 @@ def yyyymmddHHMMSS_to_epoc(yyyymmddHHMMSS, IsUTC=False, **opt):
     return seconds
 
 
-def epoc_to_yyyymmddHHMMSS(epoc, isUTC=False, **opt):
-    if isUTC:
+def epoc_to_yyyymmddHHMMSS(epoc, toUTC=False, **opt):
+    if toUTC:
         dt = datetime.datetime.utcfromtimestamp(epoc)
     else:
         dt = datetime.datetime.fromtimestamp(epoc)
+    # print(pformat(dt))
     return dt.strftime('%Y%m%d%H%M%S')
+    # dt = datetime.datetime.fromtimestamp(epoc)
+    # if toUTC:
+    #     return dt.astimezone(datetime.timezone.utc).strftime('%Y%m%d%H%M%S')
+    # else:
+    #     return dt.strftime('%Y%m%d%H%M%S')
 
 
 def get_yyyymmddHHMMSS(**opt):
@@ -167,6 +207,7 @@ def get_yyyymmddHHMMSS(**opt):
 
 def main():
     def test_codes():
+        get_timezone()
         get_date()
         get_yyyymmdd()
         yyyymmdd_to_DayOfWeek(yyyymmdd=get_yyyymmdd())
@@ -176,12 +217,12 @@ def main():
         is_holiday('NYSE', '20240101') == 1
         yyyymmddHHMMSS_to_epoc('20200901120000')
         epoc_to_yyyymmddHHMMSS(1598976000)
-        yyyymmddHHMMSS_to_epoc('20200901120000', IsUTC=True)
-        epoc_to_yyyymmddHHMMSS(1598961600, IsUTC=True)
+        yyyymmddHHMMSS_to_epoc('20200901120000', fromUTC=True)
+        epoc_to_yyyymmddHHMMSS(1598961600, toUTC=True)
 
         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59])
-        yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], IsUTC=1)
-        yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], IsUTC=1) - yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59])
+        yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], fromUTC=1)
+        yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], fromUTC=1) - yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59])
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())
