@@ -71,8 +71,15 @@ if "%type%" == "cyg" (
     set "HOME="
 
     @REM run cygwin number of times
+    set "x=0"
+    set "y=0"
     for /l %%x in (1, 1, %number%) do (
-        "!cygwin_path!" -i /Cygwin-Terminal.ico -
+        @REM the extra - is to source .bash_profile
+        @REM "!cygwin_path!" -i /Cygwin-Terminal.ico -
+        @REM set offset from top-left corner 0,0, add 30 to x and y each time
+        "!cygwin_path!" -i /Cygwin-Terminal.ico -p !x!,!y! -
+        set /a "x+=30"
+        set /a "y+=30"
     )
 
     @REM restore HOME
