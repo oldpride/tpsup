@@ -14,14 +14,42 @@ use TPSUP::UTIL qw(get_timestamp parse_rc get_abs_path get_user);
 use TPSUP::TMP  qw(get_tmp_file);
 use IPC::Open3;
 use POSIX ":sys_wait_h";
-use IO::Select;
+use POSIX qw(:sys_wait_h :unistd_h);    # For WNOHANG and isatty
 use IO::Pty;
+use IO::Select;
+use Symbol 'gensym';                    # vivify a separate handle for STDERR for open3()
 
-my $default_child;
+my $current_child;
 
-sub spawn {
+sub init_child {
    my ( $cmd, $opt ) = @_;
-   # learned from Expect.pm
+
+   my $verbose = $opt->{verbose};
+
+   my $child;
+   if ( !$opt->{method} || $opt->{method} eq 'open3' ) {
+      $child = ipc_open3( $cmd, $opt );
+   } elsif ( $opt->{method} eq 'pty' ) {
+      $child = spawn_pty( $cmd, $opt );
+   } else {
+      croak "unsupported method: $opt->{method}";
+   }
+
+   $current_child = $child;
+   $verbose && print STDERR "current_child = ", Dumper($current_child), "\n";
+
+   return $child;
+}
+
+# Expect spawn() vs IPC::Open3 open3()
+#     Expect spawn() can handle subprocess outputs
+#     https://unix.stackexchange.com/questions/771371
+#     IPC::Open3 open3() can is cleaner
+
+# spawn() is copied from Expect.pm
+# There, Expect is a subclass of IO::Pty.
+sub spawn_pty {
+   my ( $cmd, $opt ) = @_;
 
    my $verbose = $opt->{verbose};
 
@@ -29,8 +57,9 @@ sub spawn {
    $pty->autoflush(1);
 
    my $child = {};
-   $child->{pty} = $pty;
-   $child->{cmd} = $cmd;
+   $child->{pty}    = $pty;
+   $child->{cmd}    = $cmd;
+   $child->{method} = 'pty';
 
    # set up pipe to detect childs exec error
    pipe( FROM_CHILD,  TO_PARENT ) or die "Cannot open pipe: $!";
@@ -54,7 +83,8 @@ sub spawn {
       close TO_PARENT;
       close FROM_PARENT;
       $pty->close_slave();
-      # $pty->set_raw() if $pty->raw_pty and isatty($pty);
+      # $pty->set_raw() if $pty->raw_pty() and isatty($pty);
+      $pty->set_raw() if isatty($pty);
       close TO_CHILD;    # so child gets EOF and can go ahead
 
       # now wait for child exec (eof due to close-on-exit) or exec error
@@ -77,6 +107,7 @@ sub spawn {
         or die "Cannot get slave: $!";
 
       # $slv->set_raw() if $pty->raw_pty;
+      $slv->set_raw();
       close($pty);
 
       # wait for parent before we detach
@@ -103,38 +134,35 @@ sub spawn {
 
    }
 
-   $default_child = $child;
-   return $child;
+   # parent again
+   $child->{Tty}       = $pty->ttyname();
+   $child->{fh}->{in}  = $pty;
+   $child->{fh}->{out} = $pty;
 
+   return $child;
 }
 
-sub init_child {
+sub ipc_open3 {
    my ( $cmd, $opt ) = @_;
 
    my $verbose = $opt->{verbose};
 
    my $child;
-   my $child->{cmd} = $cmd;
+   $child->{cmd}    = $cmd;
+   $child->{method} = 'open3';
 
-   # this 1-liner is not working. the file handles are not assigned.
-   # my $child->{pid} = open3( $child->{in}, $child->{out}, $child->{err}, $cmd ) or croak "open3 failed: $!";
-   # so I have to do it the long way.
-   my $child_stdin;
-   my $child_stdout;
-   my $child_stderr;
-   my $child->{pid} = open3( $child_stdin, $child_stdout, $child_stderr, $cmd ) or croak "open3 failed: $!";
-
-   $child_stdin->blocking(0);
-
-   $child->{in}  = $child_stdin;
-   $child->{out} = $child_stdout;
-   $child->{err} = $child_stderr;
-
-   $verbose && print STDERR "child = ", Dumper($child), "\n";
-
-   $default_child = $child;
+   $child->{pid} = open3( $child->{fh}->{in}, $child->{fh}->{out}, $child->{fh}->{err} = gensym, $cmd )
+     or croak "open3 failed: $!";
 
    return $child;
+}
+
+# convert control characters to '.'
+sub clean_data {
+   my $data = shift;
+   # 's/(?!\t)[[:cntrl:]]//g';    # remove control characters except tab
+   $data =~ s/[^a-zA-Z0-9.~!@#$%^&*()=\[\]{}+|\\:;'"?\/<>, `_-]/./g;
+   return $data;
 }
 
 sub expect_child {
@@ -143,10 +171,10 @@ sub expect_child {
    my $child = $opt->{child};
 
    if ( !$child ) {
-      if ( !$default_child ) {
+      if ( !$current_child ) {
          croak "no child process is defined";
       } else {
-         $child = $default_child;
+         $child = $current_child;
       }
    }
 
@@ -161,8 +189,31 @@ sub expect_child {
 
    my $expect_interval = 3;
    my $total_wait      = 0;
-   my $data            = '';
-   my $select          = IO::Select->new( $child->{pty}->fileno ) or die "IO::Select $!";
+   my $data            = {};
+
+   # https://perldoc.perl.org/functions/select
+   # my $readmask = '';
+   # if ($child->{method} eq 'open3') {
+   #    vec( $readmask, $child->{out}->fileno, 1 ) = 1;
+   #    vec( $readmask, $child->{err}->fileno, 1 ) = 1;
+   # } elsif ($child->{method} eq 'pty') {
+   #    vec( $readmask, $child->{pty}->fileno, 1 ) = 1;
+   # } else {
+   #    croak "unsupported method: $child->{method}";
+   # }
+
+   # IO::Select is more user friendly than select
+   # IO::Select is a wrapper around select, handling the bit mask for you.
+   # https://perldoc.perl.org/IO::Select
+   # my $select = IO::Select->new();
+   # for my $fh_name (qw(out err)) {
+   #    if ( defined $child->{fh}->{$fh_name} ) {
+   #       $verbose && print STDERR "add $fh_name to select\n";
+   #       $select->add( $child->{fh}->{$fh_name} );
+   #    }
+   # }
+
+   # $verbose && print STDERR "select = ", Dumper($select), "\n";
 
    my $matches = [];
 
@@ -182,28 +233,80 @@ sub expect_child {
       #   1. print verbose message
       #   2. enrich the return value
       my $v = shift;
+
+      $verbose && print STDERR "expect_child input: ", Dumper($v), "\n";
+
       $v->{logic}           = $logic;
       $v->{timeout}         = $timeout;
       $v->{expect_interval} = $expect_interval;
       $v->{total_wait}      = $total_wait;
+      if ( exists $v->{data} ) {
+         my $data2 = $v->{data};
+         for my $c ( keys %$data2 ) {
+            $data2->{$c}->{clean} = clean_data( $data2->{$c}->{raw} );
+         }
+      }
+
       $verbose && print STDERR "expect_child return: ", Dumper($v), "\n";
       return $v;
    };
 
-   # check if the child is still alive
-   if ( !$child->{pty}->fileno ) {
-      return $enrich->( { error => "child process pty is closed", data => $data, matches => $matches } );
-   }
-
    my $pid = waitpid( $child->{pid}, WNOHANG );
    if ( $pid == -1 ) {
-      # croak "child process $child->{pid} is dead";
-      return $enrich->( { error => "child process $child->{pid} is dead", data => $data, matches => $matches } );
+      print STDERR "INFO: child pid=$child->{pid} is dead";
    }
 
+   my $start_seconds = time();
+   my $loop_count    = 0;
+   my $closed_fh     = {};
+
    while (1) {
-      print STDERR "waiting $expect_interval seconds for child process $child->{pid} to output\n" if $verbose;
-      if ( !$select->can_read($expect_interval) ) {
+      my $some_fh_open = 0;
+      my $select       = IO::Select->new();
+      for my $fh_name (qw(out err)) {
+         if ( $closed_fh->{$fh_name} ) {
+            next;
+         }
+         if ( defined $child->{fh}->{$fh_name} ) {
+            $verbose && print STDERR "add $fh_name to select\n";
+            $select->add( $child->{fh}->{$fh_name} );
+            $some_fh_open = 1;
+         }
+      }
+      $verbose && print STDERR "select = ", Dumper($select), "\n";
+
+      if ( !$some_fh_open ) {
+         return $enrich->( { data => $data, matches => $matches } );
+      }
+
+      $verbose && print STDERR "waiting $expect_interval seconds for child process $child->{pid} to output\n";
+
+      # catch busy loop
+      $loop_count++;
+      if ( $loop_count % 10 == 0 ) {
+         my $elapsed_seconds = time() - $start_seconds;
+         if ( $elapsed_seconds < 20 ) {
+            croak "expect_child is in a busy loop. elapsed_seconds=$elapsed_seconds, loop_count=$loop_count";
+         }
+      }
+
+      for my $c (qw(out err)) {
+         if ( defined $child->{fh}->{$c} ) {
+            # $child->{fh}->{$c}->autoflush(0); # autoflush(0) is for write. non-blocking write.
+            $child->{fh}->{$c}->blocking(0);    # blocking(0)  is for read.  non-blocking read.
+         }
+      }
+
+      # select() is working, but IO::Select is more user friendly.
+      # my $nfound = select(
+      #    $readmask,
+      #    undef,    # write mask
+      #    undef,    # exception mask
+      #    $expect_interval
+      # );
+      my @ready = $select->can_read($expect_interval);
+
+      if ( !@ready ) {
          $total_wait += $expect_interval;
          if ( $total_wait > $timeout ) {
             my $msg = "expect timed out after timeout seconds";
@@ -212,24 +315,67 @@ sub expect_child {
          }
          $verbose && print STDERR "idled for $total_wait seconds.\n";
          next;
+      } else {
+         $verbose && print STDERR "child process $child->{pid} pty has data to read\n";
       }
 
-      my $sub_data;
-      my $size = read( $child->{pty}, $sub_data, 1024000 );
-      if ( !defined($size) ) {
-         print "child process $child->{pid} output is closed \n";
-         return $enrich->(
-            { error => "child process $child->{pid} output is closed", data => $data, matches => $matches } );
+      if ( $child->{method} eq 'pty' ) {
+         $verbose && print STDERR "child process $child->{pid} pty is non-blocking read\n";
+         # $child->{pty}->autoflush(0);    # autoflush(0) is for write. non-blocking write.
+         $child->{pty}->blocking(0);    # blocking(0) is for read. non-blocking read.
       }
 
-      $data .= $sub_data;
+      my $size_by_fh = {};
 
-      $verbose && print STDERR "read $size bytes from child process $child->{pid}\n";
+      for my $fh (@ready) {
+         my $sub_data;
+         # my $sub_size = read( $child->{pty}, $sub_data, 1024000 );
+         my $sub_size = read( $fh, $sub_data, 1024000 );
+
+         # reverse lookup the file handle name, kind awkward.
+         my $fh_name;
+         for my $c (qw(out err)) {
+            if ( $child->{fh}->{$c} == $fh ) {
+               $fh_name = $c;
+               last;
+            }
+         }
+
+         if ($fh_name) {
+            $verbose && print STDERR "read from file_handle=$fh_name, sub_size=$sub_size\n";
+         } else {
+            croak "child pid=$child->{pid} file_handle=$fh is not recognized";
+         }
+
+         if ( !defined($sub_size) ) {
+            my $msg = "child pid=$child->{pid} file_handle=$fh_name is closed";
+            print STDERR "$msg\n";
+            # return $enrich->( { error => $msg, data => $data, matches => $matches } );
+            $closed_fh->{$fh_name} = 1;
+            next;
+         } elsif ( $sub_size == 0 ) {
+            my $msg = "child pid=$child->{pid} file_handle=$fh_name is EOF";
+            print STDERR "$msg\n";
+            # return $enrich->( { error => $msg, data => $data, matches => $matches } );
+            $closed_fh->{$fh_name} = 1;
+            next;
+         }
+
+         $data->{$fh_name}->{raw} .= $sub_data;
+         $size_by_fh->{$fh_name} += $sub_size;
+
+         $verbose && print STDERR "sub_data=$sub_data, last read sub_size=$sub_size\n";
+         $verbose && print STDERR "read from file_handle=$fh_name total_size=$size_by_fh->{$fh_name}\n";
+         # $verbose && print STDERR "data=", Dumper($data), "\n";
+      }
 
       if ( $logic eq 'or' ) {
          my $i = 0;
          for my $r (@$matches) {
-            if ( $data =~ /$r->{compiled}/ ) {
+            # match against the file handle name, default to 'out'
+            my $fh_name = $r->{fh_name} ? $r->{fh_name} : 'out';
+            my $data2   = $data->{$fh_name}->{raw};
+            if ( defined($data2) && $data2 =~ /$r->{compiled}/ ) {
                $r->{matched} = 1;
                return $enrich->( { data => $data, matches => $matches } );
             }
@@ -237,7 +383,13 @@ sub expect_child {
       } elsif ( $logic eq 'and' ) {
          my $all_matched = 1;
          for my $r (@$matches) {
-            if ( $data =~ /$r->{compiled}/ ) {
+            # match against the file handle name, default to 'out'
+            my $fh_name = $r->{fh_name} ? $r->{fh_name} : 'out';
+            my $data2   = $data->{$fh_name}->{raw};
+
+            $verbose && print STDERR "matching '$r->{pattern}' against '$data2'\n";
+
+            if ( defined($data2) && $data2 =~ /$r->{compiled}/ ) {
                $r->{matched} = 1;
             } else {
                $all_matched = 0;
@@ -260,10 +412,10 @@ sub send_to_child {
    my $child   = $opt->{child};
 
    if ( !$child ) {
-      if ( !$default_child ) {
+      if ( !$current_child ) {
          croak "no child process is defined";
       } else {
-         $child = $default_child;
+         $child = $current_child;
       }
    }
 
@@ -272,13 +424,29 @@ sub send_to_child {
 
    for my $r (@$actions) {
       if ( $r->{action} eq 'send' ) {
-         print { $child->{pty} } $r->{data};
+         if ( $child->{method} eq 'pty' ) {
+
+            if ( !defined $child->{pty}->fileno() ) {
+               print STDERR "cannot send because pty is closed\n";
+               return;
+            }
+            return $child->{pty}->print( $r->{data} );
+         } else {
+            return print( { $child->{fh}->{in} } $r->{data} );
+         }
       } elsif ( $r->{action} eq 'close' ) {
-         close $child->{pty};
+         if ( $child->{method} eq 'pty' ) {
+            return $child->{pty}->close();
+         } else {
+            for my $fh ( values %{ $child->{fh} } ) {
+               close($fh);
+            }
+         }
+         return;
       } elsif ( $r->{action} eq 'wait' ) {
-         waitpid( $child->{pid}, 0 );
+         return waitpid( $child->{pid}, 0 );
       } elsif ( $r->{action} eq 'kill' ) {
-         kill 9, $child->{pid};
+         return kill( 9, $child->{pid} );
       } else {
          croak "unsupported action: $r->{action}";
       }
@@ -289,15 +457,24 @@ sub main {
    require TPSUP::TEST;
 
    my $test_code = <<'END';
-   TPSUP::IPC::spawn( "sftp localhost", { verbose => 1 } );
+   TPSUP::IPC::init_child( "sftp localhost", { method=>'pty', verbose => 1 } );
    TPSUP::IPC::expect_child([ { pattern => 'password:' } ], { verbose => 1 } );
-   TPSUP::IPC::send_to_child([ { action => 'send', data => 'password\n' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child([ { action => 'send', data => "password\n" } ], { verbose => 1 } );
    TPSUP::IPC::expect_child([ { pattern => 'password:' } ], { verbose => 1 } );
    TPSUP::IPC::send_to_child([ { action => 'close' } ], { verbose => 1 } );
    sleep 1;
    TPSUP::IPC::send_to_child([ { action => 'kill' } ], { verbose => 1 } );
    sleep 1;
    TPSUP::IPC::send_to_child([ { action => 'wait' } ], { verbose => 1 } );
+
+   TPSUP::IPC::init_child( "tpnc -i 1 localhost 6789", { method => 'open3', verbose => 1 } );
+   TPSUP::IPC::expect_child( [ { pattern => 'ERROR:', fh_name=>'err' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child( [ { action => 'close' } ], { verbose => 1 } );
+   sleep 1;
+   TPSUP::IPC::send_to_child( [ { action => 'kill' } ], { verbose => 1 } );
+   sleep 1;
+   TPSUP::IPC::send_to_child( [ { action => 'wait' } ], { verbose => 1 } );
+
 END
 
    TPSUP::TEST::test_lines($test_code);

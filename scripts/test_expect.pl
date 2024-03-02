@@ -8,10 +8,13 @@ use Getopt::Long;
 use strict;
 use TPSUP::LOCK qw(get_entry_by_key);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
-my $yyyymmdd = `date +%Y%m%d`; chomp $yyyymmdd;
-my $HHMMSS   = `date +%H%M%S`; chomp $HHMMSS;
+my $yyyymmdd = `date +%Y%m%d`;
+chomp $yyyymmdd;
+my $HHMMSS = `date +%H%M%S`;
+chomp $HHMMSS;
 
 sub usage {
    my ($message) = @_;
@@ -37,54 +40,59 @@ END
 
 my $verbose;
 
-GetOptions (
-   "v" => \$verbose,
-) or usage("failed parsing command line arguments: $!\n");
+GetOptions( "v" => \$verbose, )
+  or usage("failed parsing command line arguments: $!\n");
 
 usage("wrong number of args") if @ARGV != 1;
 
-my $sftp_user = "sftpuser";
-my $sftp_host = "sftphost.abc.com";
+# my $sftp_user = "sftpuser";
+# my $sftp_host = "localhost";
 
-my $key = "$sftp_user\@$sftp_host";
+# my $key = "$sftp_user\@$sftp_host";
 
-my $entry = get_entry_by_key($key);
-my $pw = $entry->{decoded};
+# my $entry = get_entry_by_key($key);
+# my $pw = $entry->{decoded};
 
-die "cannot figure out password key=$key" if !$pw;
+# die "cannot figure out password key=$key" if !$pw;
 
-my $cmd = "sftp $sftp_user\@$sftp_host";
+# my $cmd = "sftp $sftp_user\@$sftp_host";
 
+my $cmd = "sftp localhost";
 print "cmd = $cmd\n";
 
 my $exp = Expect->spawn($cmd) or die "Cannot spawn $cmd: $!\n";
 
-my_expect("^Password:", 3);
+my_expect( "password:", 3 );
+print "matched password:\n";
 
+my $pw = "testpass\n";
 $exp->send("$pw\n");
 
-$exp->log_user(1) ;
+my_expect( "password:", 3 );
+print "matched password: again\n";
 
-my_expect("sftp>", 3) ;
+# $exp->log_user(1);
 
-$exp->send("get -p /remotedir/remote_file.txt");
+# my_expect( "sftp>", 3 );
 
-sleep 3;
+# $exp->send("get -p /remotedir/remote_file.txt");
 
-my_expect("Fetching", 3);
+# sleep 3;
+
+# my_expect( "Fetching", 3 );
 
 #################################
 # subs
 #################################
 
 sub my_expect {
-   my ($pattern, $timeout) = @_;
+   my ( $pattern, $timeout ) = @_;
 
-   my ($matched_pattern_position, $error, $successfully_matching_string,
-       $before_match, $after_match) = $exp->expect($timeout, [ qr/$pattern/ ]);
-       
+   my ( $matched_pattern_position, $error, $successfully_matching_string, $before_match, $after_match ) =
+     $exp->expect( $timeout, [qr/$pattern/] );
+
    if ($verbose) {
-      print <<"EOF"
+      print <<"EOF";
 
 pattern='$pattern'
 
@@ -95,7 +103,7 @@ after_match='$after_match'
 EOF
    }
 
-   if (!defined $matched_pattern_position) {
+   if ( !defined $matched_pattern_position ) {
       my $message = "cannot match pattern='$pattern' in $timeout seconds.";
       print $message;
       exit 1;
