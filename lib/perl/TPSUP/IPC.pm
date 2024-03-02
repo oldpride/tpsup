@@ -456,6 +456,27 @@ sub send_to_child {
 sub main {
    require TPSUP::TEST;
 
+   my $test_code2 = <<'END';
+   TPSUP::IPC::init_child( "sftp localhost", { method=>'pty', verbose => 1 } );
+   TPSUP::IPC::expect_child([ { pattern => 'password:' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child([ { action => 'send', data => "password\n" } ], { verbose => 1 } );
+   TPSUP::IPC::expect_child([ { pattern => 'password:' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child([ { action => 'close' } ], { verbose => 1 } );
+   sleep 1;
+   TPSUP::IPC::send_to_child([ { action => 'kill' } ], { verbose => 1 } );
+   sleep 1;
+   TPSUP::IPC::send_to_child([ { action => 'wait' } ], { verbose => 1 } );
+
+   TPSUP::IPC::init_child( "tpnc -i 1 localhost 6789", { method => 'open3', verbose => 1 } );
+   TPSUP::IPC::expect_child( [ { pattern => 'ERROR:', fh_name=>'err' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child( [ { action => 'close' } ], { verbose => 1 } );
+   sleep 1;
+   TPSUP::IPC::send_to_child( [ { action => 'kill' } ], { verbose => 1 } );
+   sleep 1;
+   TPSUP::IPC::send_to_child( [ { action => 'wait' } ], { verbose => 1 } );
+
+END
+
    my $test_code = <<'END';
    TPSUP::IPC::init_child( "sftp localhost", { method=>'pty', verbose => 1 } );
    TPSUP::IPC::expect_child([ { pattern => 'password:' } ], { verbose => 1 } );
