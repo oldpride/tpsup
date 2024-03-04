@@ -478,23 +478,23 @@ sub main {
 END
 
    my $test_code = <<'END';
-   TPSUP::IPC::init_child( "sftp localhost", { method=>'pty', verbose => 1 } );
-   TPSUP::IPC::expect_child([ { pattern => 'password:' } ], { verbose => 1 } );
-   TPSUP::IPC::send_to_child([ { action => 'send', data => "password\n" } ], { verbose => 1 } );
-   TPSUP::IPC::expect_child([ { pattern => 'password:' } ], { verbose => 1 } );
-   TPSUP::IPC::send_to_child([ { action => 'close' } ], { verbose => 1 } );
+   TPSUP::IPC::init_child( "sftp localhost", { method=>'pty',  } );
+   TPSUP::IPC::expect_child([ { pattern => 'password:' } ], {  } );
+   TPSUP::IPC::send_to_child([ { action => 'send', data => "password\n" } ], {  } );
+   TPSUP::IPC::expect_child([ { pattern => 'password:' } ], {  } );
+   TPSUP::IPC::send_to_child([ { action => 'close' } ], {  } );
    sleep 1;
-   TPSUP::IPC::send_to_child([ { action => 'kill' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child([ { action => 'kill' } ], {  } );
    sleep 1;
-   TPSUP::IPC::send_to_child([ { action => 'wait' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child([ { action => 'wait' } ], {  } );
 
-   TPSUP::IPC::init_child( "tpnc -i 1 localhost 6789", { method => 'open3', verbose => 1 } );
-   TPSUP::IPC::expect_child( [ { pattern => 'ERROR:', fh_name=>'err' } ], { verbose => 1 } );
-   TPSUP::IPC::send_to_child( [ { action => 'close' } ], { verbose => 1 } );
+   TPSUP::IPC::init_child( "tpnc -i 1 localhost 6789", { method => 'open3',  } );
+   TPSUP::IPC::expect_child( [ { pattern => 'ERROR:', fh_name=>'err' } ], {  } );
+   TPSUP::IPC::send_to_child( [ { action => 'close' } ], {  } );
    sleep 1;
-   TPSUP::IPC::send_to_child( [ { action => 'kill' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child( [ { action => 'kill' } ], {  } );
    sleep 1;
-   TPSUP::IPC::send_to_child( [ { action => 'wait' } ], { verbose => 1 } );
+   TPSUP::IPC::send_to_child( [ { action => 'wait' } ], {  } );
 
 END
 
