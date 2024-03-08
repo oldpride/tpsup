@@ -160,7 +160,7 @@ sub yyyymmddHHMMSS_to_epoc {
    my $type = ref $yyyymmddHHMMSS;
 
    if ( $type eq 'ARRAY' ) {
-      if ( $opt->{IsUTC} ) {
+      if ( $opt->{fromUTC} ) {
          return timegm(
             $yyyymmddHHMMSS->[5],        # SS
             $yyyymmddHHMMSS->[4],        # MM
@@ -183,7 +183,7 @@ sub yyyymmddHHMMSS_to_epoc {
       if ( "$yyyymmddHHMMSS" =~ /$yyyymmddHHMMSS_pattern/ ) {
          my ( $yyyy, $mm, $dd, $HH, $MM, $SS ) = ( $1, $2, $3, $4, $5, $6 );
 
-         if ( $opt->{IsUTC} ) {
+         if ( $opt->{fromUTC} ) {
             return timegm( $SS, $MM, $HH, $dd, $mm - 1, $yyyy );
          } else {
             return timelocal( $SS, $MM, $HH, $dd, $mm - 1, $yyyy );
@@ -197,7 +197,12 @@ sub yyyymmddHHMMSS_to_epoc {
 sub epoc_to_yyyymmddHHMMSS {
    my ( $epoc, $opt ) = @_;
 
-   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($epoc);
+   my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst );
+   if ( $opt->{toUTC} ) {
+      ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = gmtime($epoc);
+   } else {
+      ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($epoc);
+   }
    my $yyyymmddHHMMSS = sprintf( '%4d%02d%02d%02d%02d%02d', 1900 + $year, $mon + 1, $mday, $hour, $min, $sec, );
 
    return $yyyymmddHHMMSS;
@@ -206,7 +211,7 @@ sub epoc_to_yyyymmddHHMMSS {
 sub get_yyyymmddHHMMSS {
    my ($opt)          = @_;
    my $now_sec        = time();
-   my $yyyymmddHHMMSS = epoc_to_yyyymmddHHMMSS($now_sec);
+   my $yyyymmddHHMMSS = epoc_to_yyyymmddHHMMSS( $now_sec, $opt );
    return $yyyymmddHHMMSS;
 }
 
@@ -276,6 +281,17 @@ sub local_vs_utc {
    }
 }
 
+my $perllib_dir;
+
+sub get_perllib_dir {
+   if ( !$perllib_dir ) {
+      # https://stackoverflow.com/questions/2403343/in-perl-how-do-i-get-the-directory-or-path-of-the-current-executing-code
+      my ( $volume, $directory, $file ) = File::Spec->splitpath(__FILE__);
+      $perllib_dir = File::Spec->rel2abs($directory);
+   }
+   return $perllib_dir;
+}
+
 my $holidays_by_exch;
 my $exists_by_exch_holiday;
 
@@ -296,13 +312,8 @@ sub parse_holiday_csv {
    if ( exists( $opt->{HolidaysCsv} ) and defined( $opt->{HolidaysCsv} ) ) {
       $HolidaysCsv = $opt->{HolidaysCsv};
    } else {
-
-      # https://stackoverflow.com/questions/2403343/in-perl-how-do-i-get-the-directory-or-path-of-the-current-executing-code
-      my ( $volume, $directory, $file ) = File::Spec->splitpath(__FILE__);
-      $directory = File::Spec->rel2abs($directory);
-
-      # print "$volume, $directory, $file\n";
-      $HolidaysCsv = "$directory/holidays.csv";
+      my $directory = get_perllib_dir();
+      $HolidaysCsv = "$directory/DATE_holidays.csv";
    }
 
    croak "$HolidaysCsv is not found" if !-f $HolidaysCsv;
@@ -406,11 +417,32 @@ sub get_tradedays {
    return \@tradedays;
 }
 
-my $tradeday_by_exch_begin_offset;
 my $weekdays;
+
+sub get_weekdays {
+   if ( !$weekdays ) {
+      # use TPSUP::DATE_Weekdays;
+      # $weekdays = $TPSUP::DATE_Weekdays::weekdays;
+      my $directory = get_perllib_dir();
+      my $file      = "$directory/DATE_weekdays.txt";
+      open my $fh, '<', $file or croak "can't open $file: $!";
+      local $/ = undef;      # slurp mode. $/ is the input record separator
+      my $string = <$fh>;    # read entire file
+      close $fh;
+      $weekdays = [ split /\s+/, $string ];
+      # remove the last empty element
+      pop @$weekdays;
+   }
+
+   return $weekdays;
+}
+
+my $tradeday_by_exch_begin_offset = {};
 
 sub get_tradeday_by_exch_begin_offset {
    my ( $exch, $begin, $offset, $opt ) = @_;
+
+   my $verbose = $opt->{verbose} || 0;
 
    return $tradeday_by_exch_begin_offset->{$exch}->{$begin}->{$offset}
      if exists $tradeday_by_exch_begin_offset->{$exch}->{$begin}->{$offset};
@@ -426,26 +458,20 @@ sub get_tradeday_by_exch_begin_offset {
       $is_holiday = parse_holiday_csv( $exch, $opt );
    }
 
-   if ( !$weekdays ) {
-      use TPSUP::DATE_Weekdays;
-      $weekdays = $TPSUP::DATE_Weekdays::weekdays;
-   }
+   my $weekdays = get_weekdays();
 
    # if the binary search falls between two connective trade days, eg, on weekends
-   # my $ChooseBigger = undef;
    my $InBetween = 'low';
    if ( $opt->{OnWeekend} && $opt->{OnWeekend} eq 'next' ) {
-      # $ChooseBigger = 'ChooseBigger';
       $InBetween = 'high';
    }
 
    my $begin_weekday_pos = binary_search_match( $weekdays, $begin, sub { $_[0] <=> $_[1] },
       { InBetween => $InBetween, OutBound => 'Error' } );
-   my $begin_weekday = $weekdays->[$begin_weekday_pos];
-   $opt->{verbose} && print "begin_weekday=$begin_weekday\n";
+
+   $verbose && print STDERR "begin_weekday=$weekdays->[$begin_weekday_pos]\n";
 
    if ($IgnoreHoliday) {
-
       # without taking holiday into account, we basically return a weekday
       return $weekdays->[ $begin_weekday_pos + $offset ];
    }
@@ -467,7 +493,7 @@ sub get_tradeday_by_exch_begin_offset {
 
    # tradeday is a non-holiday weekday
    my $begin_tradeday = $weekdays->[$begin_tradeday_pos];
-   $opt->{verbose} && print "begin_tradeday=$begin_tradeday\n";
+   $opt->{verbose} && print STDERR "begin_tradeday=$begin_tradeday\n";
 
    if ( $offset == 0 ) {
 
@@ -789,9 +815,7 @@ sub get_tradedays_by_exch_begin_end {
 
    my $exists_holiday = parse_holiday_csv( $exch, $opt );
 
-   use TPSUP::DATE_Weekdays;
-
-   my $weekdays = $TPSUP::DATE_Weekdays::weekdays;
+   my $weekdays = get_weekdays();
 
    if ( $begin < $weekdays->[0] || $begin > $weekdays->[-1] ) {
       carp "begin day $begin is out of range: $weekdays->[0] ~ $weekdays->[-1]";
@@ -945,8 +969,38 @@ sub main {
          TPSUP::DATE::yyyymmdd_to_DayOfWeek(TPSUP::DATE::get_yyyymmdd());
          TPSUP::DATE::get_date( {yyyymmdd => '20200901'} )
          TPSUP::DATE::get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) == '20200831';
-         TPSUP::DATE::get_timezone_offset();
+         TPSUP::TEST::in(TPSUP::DATE::get_timezone_offset(), [-4, -5]);
          TPSUP::DATE::is_holiday('NYSE', '20240101') == 1;
+         TPSUP::DATE::yyyymmddHHMMSS_to_epoc('20200901120000');
+         TPSUP::DATE::epoc_to_yyyymmddHHMMSS(1598976000);
+         TPSUP::DATE::yyyymmddHHMMSS_to_epoc('20200901120000', {fromUTC=>1});
+         TPSUP::DATE::epoc_to_yyyymmddHHMMSS(1598961600, {toUTC=>1});
+
+         TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
+         TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1});
+         TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1}) - TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
+
+         TPSUP::DATE::get_yyyymmddHHMMSS();
+         TPSUP::DATE::get_yyyymmddHHMMSS({toUTC=>1});
+
+         # 20200907, Monday, is a holiday, labor day
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3 ) == '20200904';  # within the same week
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3 ) == '20200901';
+
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4 ) == '20200908';  # across the weekend and holiday
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4 ) == '20200901';
+
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0 ) == '20200904'; # 0 offset on a tradeday
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0 ) == '20200904'; # 0 offset on a weekend
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0,) == '20200904'; # 0 offset on a holiday
+
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, {OnWeekend=>'next'}) == '20200908';
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, {OnWeekend=>'next'}) == '20200908';
+
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1 ) == '20200908';
+         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, {OnWeekend=>'next'}) == '20200909';
+
+
 END
 
    TPSUP::TEST::test_lines($test_code);
@@ -958,70 +1012,6 @@ END
      ", expecting 86401\n\n";
 
    my $verbose = 0;
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200901', 3) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3, { verbose => $verbose } ),
-     ", expecting 20200904\n\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200901', 4) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4, { verbose => $verbose } ),
-     ", expecting 20200908\n\n";
-
-   print "get_tradeday_by_exch_begin_offset('WeekDay', '20200901', 4) = ",
-     get_tradeday_by_exch_begin_offset( 'WeekDay', '20200901', 4, { verbose => $verbose } ),
-     ", expecting 20200907\n\n";
-   "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200908', -4) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4, { verbose => $verbose } ),
-     ", expecting 20200901\n\n";
-   "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200904', -3) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3, { verbose => $verbose } ),
-     ", expecting 20200901\n\n";
-   "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200904', 0) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0, { verbose => $verbose } ),
-     ", expecting 20200904\n\n";
-   "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, { verbose => $verbose } ),
-     ", expecting 20200904\n\n";
-   "\n";
-
-   print
-     "get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, {OnWeekend=>'next'}) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, { OnWeekend => 'next', verbose => $verbose } ),
-     ", expecting 20200908\n\n";
-   "\n";
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, { verbose => $verbose } ),
-     ", expecting 20200904\n\n";
-   "\n";
-
-   print
-     "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, {OnWeekend=>'next'}) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, { OnWeekend => 'next', verbose => $verbose } ),
-     ", expecting 20200908\n\n";
-   "\n";
-
-   $verbose && print "\$tradeday_by_exch_begin_offset->{NYSE} = \n";
-   $verbose && print Dumper( $tradeday_by_exch_begin_offset->{NYSE} );
-
-   print "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, { verbose => $verbose } ),
-     ", expecting 20200908\n\n";
-   "\n";
-
-   print
-     "get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1, {OnWeekend=>'next'}) = ",
-     get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, { OnWeekend => 'next', verbose => $verbose } ),
-     ", expecting 20200909\n\n";
-   "\n";
 
    print "get_tradedays_by_exch_begin_end('NYSE', '20200901', '20200907') = ",
      join( ",", @{ get_tradedays_by_exch_begin_end( 'NYSE', '20200901', '20200907', { verbose => $verbose } ) } ),

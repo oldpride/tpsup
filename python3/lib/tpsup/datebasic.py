@@ -7,6 +7,8 @@ import csv
 import datetime
 import sys
 
+from tpsup.searchtools import binary_search_match
+
 # Date and time objects may be categorized as “aware” or “naive” depending on whether or not they include timezone information.
 #     Objects of the "date" type are always naive.
 #     An object of type "time" or "datetime" may be aware or naive.
@@ -34,6 +36,7 @@ tzinfo = None
 
 
 def get_timezone():
+    global tzinfo
     if tzinfo:
         return tzinfo
     else:
@@ -94,9 +97,12 @@ def parse_holiday_csv(exch, HolidayRef: dict = None, HolidaysCsv: str = None, **
         exists_by_exch_holiday[exch] = HolidayRef
         return exists_by_exch_holiday[exch]
 
+    if exists_by_exch_holiday.get(exch, None):
+        return exists_by_exch_holiday[exch]
+
     if not HolidaysCsv:
-        directory = os.path.dirname(os.path.abspath(__file__))
-        HolidaysCsv = os.path.join(directory, '../../../lib/perl/TPSUP/holidays.csv')
+        perllib_dir = get_perllib_dir()
+        HolidaysCsv = os.path.join(perllib_dir, 'DATE_holidays.csv')
 
     if not os.path.isfile(HolidaysCsv):
         raise FileNotFoundError(f"{HolidaysCsv} is not found")
@@ -205,6 +211,119 @@ def get_yyyymmddHHMMSS(**opt):
     return epoc_to_yyyymmddHHMMSS(now_sec, **opt)
 
 
+perllib_dir = None
+
+
+def get_perllib_dir():
+    global perllib_dir
+    if not perllib_dir:
+        directory = os.path.dirname(os.path.abspath(__file__))
+        perllib_dir = os.path.join(directory, '../../../lib/perl/TPSUP')
+    return perllib_dir
+
+
+weekdays = None
+
+
+def get_weekdays():
+    global weekdays
+    if not weekdays:
+        directory = get_perllib_dir()
+        file = os.path.join(directory, 'DATE_weekdays.txt')
+        with open(file, 'r') as fh:
+            string = fh.read()
+            weekdays = string.split()
+            weekdays.pop()  # remove the last empty element
+    return weekdays
+
+
+tradeday_by_exch_begin_offset = {}
+
+
+def get_tradeday_by_exch_begin_offset(exch, begin, offset,
+                                      IgnoreHoliday=False,
+                                      OnWeekend=None,
+                                      # next, prev. 'next' means if the begin is on weekend,
+                                      # then the next trade day is the first trade day
+                                      **opt):
+    global tradeday_by_exch_begin_offset
+
+    verbose = opt.get('verbose', 0)
+
+    if exch not in tradeday_by_exch_begin_offset:
+        tradeday_by_exch_begin_offset[exch] = {}
+
+    if begin not in tradeday_by_exch_begin_offset[exch]:
+        tradeday_by_exch_begin_offset[exch][begin] = {}
+
+    if offset in tradeday_by_exch_begin_offset[exch][begin]:
+        return tradeday_by_exch_begin_offset[exch][begin][offset]
+
+    is_holiday = {}
+
+    # exch == 'WeekDay' is a special case, which means ignore holiday
+    if IgnoreHoliday or exch == 'WeekDay':
+        IgnoreHoliday = True
+    else:
+        is_holiday = parse_holiday_csv(exch, opt=opt)
+
+    weekdays = get_weekdays()
+
+    # if the binary search falls between two connective trade days, eg, on weekends
+    InBetween = 'low'
+    if OnWeekend and OnWeekend == 'next':
+        InBetween = 'high'
+
+    begin_weekday_pos = binary_search_match(weekdays, begin, 'string',
+                                            InBetween=InBetween, OutBound='Error')
+    verbose and print(f"begin_weekday={weekdays[begin_weekday_pos]}", file=sys.stderr)
+
+    if IgnoreHoliday:
+        # without taking holiday into account, we basically return a weekday
+        return weekdays[begin_weekday_pos + offset]
+
+    # we haven't considered holidays yet. now we need to do that
+
+    # first make sure the begin_weekday is not a holiday
+    begin_tradeday_pos = begin_weekday_pos
+
+    while is_holiday.get(weekdays[begin_tradeday_pos]):
+        if OnWeekend == 'next':
+            begin_tradeday_pos += 1
+        else:
+            begin_tradeday_pos -= 1
+
+    # tradeday is a non-holiday weekday
+    begin_tradeday = weekdays[begin_tradeday_pos]
+    verbose and print(f"begin_tradeday={begin_tradeday}", file=sys.stderr)
+
+    if offset == 0:
+        # we only cache offset from a tradeday, as offset from weekend and holiday
+        # can be affected by OnWeekend flag
+        tradeday_by_exch_begin_offset[exch][begin_tradeday][offset] = begin_tradeday
+        return begin_tradeday
+    else:
+        new_pos = begin_tradeday_pos
+
+        if offset > 0:
+            for i in range(1, offset + 1):
+                new_pos += 1
+                while is_holiday.get(weekdays[new_pos], None):
+                    new_pos += 1
+        elif offset < 0:
+            for i in range(-1, offset - 1, -1):
+                new_pos -= 1
+                while is_holiday.get(weekdays[new_pos], None):
+                    new_pos -= 1
+
+        new_tradeday = weekdays[new_pos]
+
+        #  we only cache offset from a tradeday, as offset from weekend and holiday
+        # can be affected by OnWeekend flag
+        tradeday_by_exch_begin_offset[exch][begin_tradeday][offset] = new_tradeday
+        return new_tradeday
+
+
 def main():
     def test_codes():
         get_timezone()
@@ -223,6 +342,23 @@ def main():
         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59])
         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], fromUTC=1)
         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], fromUTC=1) - yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59])
+
+        get_yyyymmddHHMMSS()
+        get_yyyymmddHHMMSS(toUTC=True)
+
+        get_tradeday_by_exch_begin_offset('NYSE', '20200901', 3, ) == '20200904'  # within the same week
+        get_tradeday_by_exch_begin_offset('NYSE', '20200904', -3, ) == '20200901'
+        get_tradeday_by_exch_begin_offset('NYSE', '20200901', 4, ) == '20200908'  # across the weekend and holiday
+        get_tradeday_by_exch_begin_offset('NYSE', '20200908', -4, ) == '20200901'
+
+        get_tradeday_by_exch_begin_offset('NYSE', '20200904', 0, ) == '20200904'  # 0 offset on a trade day
+        get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, ) == '20200904'  # 0 offset on a weekend
+        get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, ) == '20200904'  # 0 offset on a holiday
+
+        get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, OnWeekend='next') == '20200908'
+        get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, OnWeekend='next') == '20200908'
+
+        tradeday_by_exch_begin_offset["NYSE"]
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())

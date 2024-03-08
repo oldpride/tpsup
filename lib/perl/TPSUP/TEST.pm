@@ -4,6 +4,8 @@ use strict;
 use warnings;
 use Carp;
 use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;    # this sorts the Dumper output!
+$Data::Dumper::Terse    = 1;    # print without "$VAR1="
 
 use base qw( Exporter );
 our @EXPORT_OK = qw(
@@ -60,6 +62,25 @@ sub test_lines {
    process_block( $block, $opt );
 }
 
+# perl doesn't have a 'in list' operator
+# we create our own
+sub in {
+   my ( $e, $a, $opt ) = @_;
+
+   my $type = ref($a);
+   if ( !$type || $type ne 'ARRAY' ) {
+      croak "parameter is not a ref to ARRAY: " . Dumper($a);
+   }
+
+   for my $e2 (@$a) {
+      if ( $e2 == $e ) {
+         return 1;
+      }
+   }
+
+   return 0;
+}
+
 sub main {
 
    # suppress "once" warning
@@ -81,7 +102,13 @@ END
 
         # caller is in DUMMY package (namespace), therefore, we just use $array1;
         # don't need to use $DUMMY::array1
-        Data::Dumper::Dumper($array1);
+        $array1;
+
+        {key1=>1, key2=>[3,4]};
+
+        1+1 == 2;
+
+        $TPSUP::DATE::tradeday_by_exch_begin_offset;
 END
 
    test_lines( $test_code, { pre_code => $pre_code } );
