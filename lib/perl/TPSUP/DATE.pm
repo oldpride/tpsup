@@ -14,14 +14,11 @@ our @EXPORT_OK = qw(
   get_tradeday_by_exch_begin_offset
   get_holidays_by_exch_begin_end
   get_tradedays_by_exch_begin_end
-  get_interval_seconds                    # this only supports strict yyyymmddHHMMSS
+  get_interval_seconds
   get_seconds_between_yyyymmddHHMMSS
-
-  # this supports wider format
   get_seconds_between_two_days
   get_Mon_by_number
-  get_mm_by_
-  Mon
+  get_mm_by_Mon
   convert_from_yyyymmdd
   date2any
   yyyymmddHHMMSS_to_epoc
@@ -571,9 +568,9 @@ sub get_holidays_by_exch_begin_end {
    }
 
    if ( !$end_covered ) {
-      warn "end=$end exceeded upper range of '$exch' holidays ($all_holidays->[-1])";
+      warn "end=$end exceeded upper bound of '$exch' holidays ($all_holidays->[-1])";
    } elsif ( !$begin_covered ) {
-      warn "begin=$begin exceeded lower range of '$exch' holidays ($all_holidays->[0])";
+      warn "begin=$begin exceeded lower bound of '$exch' holidays ($all_holidays->[0])";
    }
 
    return \@holidays;
@@ -964,41 +961,44 @@ sub main {
 
    # use 'our' in test code, not 'my'
    my $test_code = <<'END';
-         TPSUP::DATE::get_date();
-         TPSUP::DATE::get_yyyymmdd();
-         TPSUP::DATE::yyyymmdd_to_DayOfWeek(TPSUP::DATE::get_yyyymmdd());
-         TPSUP::DATE::get_date( {yyyymmdd => '20200901'} )
-         TPSUP::DATE::get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) == '20200831';
-         TPSUP::TEST::in(TPSUP::DATE::get_timezone_offset(), [-4, -5]);
-         TPSUP::DATE::is_holiday('NYSE', '20240101') == 1;
-         TPSUP::DATE::yyyymmddHHMMSS_to_epoc('20200901120000');
-         TPSUP::DATE::epoc_to_yyyymmddHHMMSS(1598976000);
-         TPSUP::DATE::yyyymmddHHMMSS_to_epoc('20200901120000', {fromUTC=>1});
-         TPSUP::DATE::epoc_to_yyyymmddHHMMSS(1598961600, {toUTC=>1});
+         get_date();
+         get_yyyymmdd();
+         yyyymmdd_to_DayOfWeek(get_yyyymmdd());
+         get_date( {yyyymmdd => '20200901'} )
+         get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) == '20200831';
+         in(get_timezone_offset(), [-4, -5]);
+         is_holiday('NYSE', '20240101') == 1;
+         yyyymmddHHMMSS_to_epoc('20200901120000');
+         epoc_to_yyyymmddHHMMSS(1598976000);
+         yyyymmddHHMMSS_to_epoc('20200901120000', {fromUTC=>1});
+         epoc_to_yyyymmddHHMMSS(1598961600, {toUTC=>1});
 
-         TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
-         TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1});
-         TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1}) - TPSUP::DATE::yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
+         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
+         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1});
+         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1}) - yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
 
-         TPSUP::DATE::get_yyyymmddHHMMSS();
-         TPSUP::DATE::get_yyyymmddHHMMSS({toUTC=>1});
+         get_yyyymmddHHMMSS();
+         get_yyyymmddHHMMSS({toUTC=>1});
+
+         equal(get_holidays_by_exch_begin_end('NYSE', '20240101', '20240201'), ['20240101', '20240115']);
+            # 2 holidays
 
          # 20200907, Monday, is a holiday, labor day
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3 ) == '20200904';  # within the same week
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3 ) == '20200901';
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3 ) == '20200904';  # within the same week
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3 ) == '20200901';
 
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4 ) == '20200908';  # across the weekend and holiday
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4 ) == '20200901';
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4 ) == '20200908';  # across the weekend and holiday
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4 ) == '20200901';
 
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0 ) == '20200904'; # 0 offset on a tradeday
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0 ) == '20200904'; # 0 offset on a weekend
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0,) == '20200904'; # 0 offset on a holiday
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0 ) == '20200904'; # 0 offset on a tradeday
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0 ) == '20200904'; # 0 offset on a weekend
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0,) == '20200904'; # 0 offset on a holiday
 
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, {OnWeekend=>'next'}) == '20200908';
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, {OnWeekend=>'next'}) == '20200908';
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, {OnWeekend=>'next'}) == '20200908';
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, {OnWeekend=>'next'}) == '20200908';
 
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1 ) == '20200908';
-         TPSUP::DATE::get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, {OnWeekend=>'next'}) == '20200909';
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1 ) == '20200908';
+         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, {OnWeekend=>'next'}) == '20200909';
 
 
 END

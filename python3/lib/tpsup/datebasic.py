@@ -324,6 +324,43 @@ def get_tradeday_by_exch_begin_offset(exch, begin, offset,
         return new_tradeday
 
 
+def get_holidays_by_exch_begin_end(exch, begin, end, opt):
+    parse_holiday_csv(exch, opt)
+
+    if exch not in holidays_by_exch or not holidays_by_exch[exch]:
+        raise Exception(f"no holiday information for exch={exch}")
+
+    all_holidays = holidays_by_exch[exch]
+
+    holidays = []
+    begin_covered = False
+    end_covered = False
+
+    for d in all_holidays:
+        if d >= end:
+            end_covered = True
+
+            if d == end:
+                holidays.append(d)
+
+            break
+
+        if d >= begin:
+            holidays.append(d)
+            if d == begin:
+                begin_covered = True
+        else:
+            begin_covered = True
+
+    if not end_covered:
+        print(f"end={end} exceeded upper range of '{exch}' holidays ({all_holidays[-1]})")
+
+    if not begin_covered:
+        print(f"begin={begin} exceeded lower range of '{exch}' holidays ({all_holidays[0]})")
+
+    return holidays
+
+
 def main():
     def test_codes():
         get_timezone()
@@ -346,6 +383,7 @@ def main():
         get_yyyymmddHHMMSS()
         get_yyyymmddHHMMSS(toUTC=True)
 
+        # 20200907, Monday, is a holiday, labor day
         get_tradeday_by_exch_begin_offset('NYSE', '20200901', 3, ) == '20200904'  # within the same week
         get_tradeday_by_exch_begin_offset('NYSE', '20200904', -3, ) == '20200901'
         get_tradeday_by_exch_begin_offset('NYSE', '20200901', 4, ) == '20200908'  # across the weekend and holiday
@@ -358,7 +396,8 @@ def main():
         get_tradeday_by_exch_begin_offset('NYSE', '20200905', 0, OnWeekend='next') == '20200908'
         get_tradeday_by_exch_begin_offset('NYSE', '20200907', 0, OnWeekend='next') == '20200908'
 
-        tradeday_by_exch_begin_offset["NYSE"]
+        get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1) == '20200908'
+        get_tradeday_by_exch_begin_offset('NYSE', '20200907', 1, OnWeekend='next') == '20200908'
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())
