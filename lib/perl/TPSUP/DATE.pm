@@ -30,6 +30,13 @@ our @EXPORT_OK = qw(
   get_weekday_generator
 );
 
+# get_interval_seconds
+# vs get_seconds_between_yyyymmddHHMMSS
+# vs get_seconds_between_two_days
+#    get_interval_seconds uses strict format
+#    get_seconds_between_yyyymmddHHMMSS supports more formats
+#    get_seconds_between_two_days is to handle DST change
+
 use Carp;
 use Data::Dumper;
 use TPSUP::CSV    qw(parse_csv_file);
@@ -403,11 +410,11 @@ sub get_tradedays {
    my @tradedays;
 
    if ( $count > 0 ) {
-      for ( my $i = 1 ; $i <= $count ; $i++ ) {
+      for ( my $i = 0 ; $i < $count ; $i++ ) {
          push @tradedays, get_tradeday( $i, $opt );
       }
    } elsif ( $count < 0 ) {
-      for ( my $i = $count ; $i <= -1 ; $i++ ) {
+      for ( my $i = $count + 1 ; $i <= 0 ; $i++ ) {
          push @tradedays, get_tradeday( $i, $opt );
       }
    }
@@ -1000,6 +1007,27 @@ sub main {
          get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1 ) == '20200908';
          get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, {OnWeekend=>'next'}) == '20200909';
 
+         equal(get_tradedays_by_exch_begin_end( 'NYSE', '20200903', '20200907'), ['20200903', '20200904']);
+         equal(get_tradedays_by_exch_begin_end( 'NYSE', '20200903', '20200908'), ['20200903', '20200904', '20200908']);
+
+         get_tradeday( -4, { Begin => '20200908' } ) == '20200901';
+         get_tradeday(  4, { Begin => '20200901' } ) == '20200908';
+
+         equal(get_tradedays(  3, {Begin => '20200903'}),['20200903', '20200904', '20200908']);
+         equal(get_tradedays( -3, {Begin => '20200908'}),['20200903', '20200904', '20200908']);
+
+         # 20240310 is DST change day. we use 12:00 PM of each day
+         get_seconds_between_two_days('20240309', '20240310') == 82800;
+         get_seconds_between_two_days('20240311', '20240312') == 86400;
+
+         get_interval_seconds('20240309','120000','20240310','120001') == 82801;
+         get_interval_seconds('20240310','120000','20240311','120001') == 86401;
+
+         get_seconds_between_yyyymmddHHMMSS('2024-03-10 00:00:01.513447', '2024-03-10 03:00:01.000000') == 7200;
+         get_seconds_between_yyyymmddHHMMSS('2024-03-11 00:00:01.513447', '2024-03-11 03:00:01.000000') == 10800;
+
+         
+
 
 END
 
@@ -1007,31 +1035,7 @@ END
 
    exit(0);
 
-   print "get_interval_seconds('20200901', '120000', '20200902', '120001') = ",
-     get_interval_seconds( '20200901', '120000', '20200902', '120001' ),
-     ", expecting 86401\n\n";
-
    my $verbose = 0;
-
-   print "get_tradedays_by_exch_begin_end('NYSE', '20200901', '20200907') = ",
-     join( ",", @{ get_tradedays_by_exch_begin_end( 'NYSE', '20200901', '20200907', { verbose => $verbose } ) } ),
-     ", expecting 4 days\n\n";
-   "\n";
-
-   print "get_tradedays_by_exch_begin_end('NYSE', '20200901', '20200908') = ",
-     join( ",", @{ get_tradedays_by_exch_begin_end( 'NYSE', '20200901', '20200908', { verbose => $verbose } ) } ),
-     ", expecting 5 days\n\n";
-   "\n";
-
-   print "get_tradeday(-4, {Begin=>'20200908'}) = ",
-     get_tradeday( -4, { Begin => '20200908', verbose => $verbose } ),
-     ", expecting 20200901\n\n";
-   "\n";
-
-   print "get_seconds_between_two_days('20210917', '20210918') = ",
-     get_seconds_between_two_days( '20210917', '20210918', { verbose => $verbose } ),
-     ", expecting 86400\n\n";
-   "\n";
 
    print "get_new_yyyymmddHHMMSS('20211021070102', 300) = ",
      get_new_yyyymmddHHMMSS( '20211021070102', 300 ),
