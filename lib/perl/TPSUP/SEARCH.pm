@@ -82,20 +82,20 @@ sub binary_search_match {
          return -1;
       }
    } elsif ( $high < $low0 ) {
-        if ($verbose) {
-             print STDERR "target $target is before the first element in the array\n";
-        }
-        if ( $opt->{OutBound} ) {
-             if ( $opt->{OutBound} eq 'UseClosest' ) {
-                return $low0;
-             } elsif ( $opt->{OutBound} eq 'Error' ) {
-                croak "target $target is before the first element in the array";
-             } else {
-                croak "'OutBound' must be either 'UseClosest' or 'Error'. Yours is '$opt->{OutBound}'";
-             }
-        } else {
-             return -1;
-        }
+      if ($verbose) {
+         print STDERR "target $target is before the first element in the array\n";
+      }
+      if ( $opt->{OutBound} ) {
+         if ( $opt->{OutBound} eq 'UseClosest' ) {
+            return $low0;
+         } elsif ( $opt->{OutBound} eq 'Error' ) {
+            croak "target $target is before the first element in the array";
+         } else {
+            croak "'OutBound' must be either 'UseClosest' or 'Error'. Yours is '$opt->{OutBound}'";
+         }
+      } else {
+         return -1;
+      }
    } else {
       # target is in between 2 elements;
       if ($verbose) {
@@ -144,27 +144,33 @@ sub binary_search_first {
 }
 
 sub main {
-   use TPSUP::TEST qw(test_lines);
+   require TPSUP::TEST;
+
+   # we can also define 'arr' here.
+   # no warnings 'once';
+   # @DUMMY::arr = ( 1, 2, 4, 10, 12 );
 
    my $test_code = <<'END';
         our @arr = (1, 2,  4,  10, 12); # use "our" to make it global. "my" will not work.
-        TPSUP::SEARCH::binary_search_match(\@arr, 10, sub { $_[0] <=> $_[1] });
-        TPSUP::SEARCH::binary_search_match(\@arr, 9, sub { $_[0] <=> $_[1] }, {verbose=>1, InBetween=>'low'});
-        TPSUP::SEARCH::binary_search_match(\@arr, 9, sub { $_[0] <=> $_[1] }, {verbose=>1, InBetween=>'high'});
-        TPSUP::SEARCH::binary_search_match(\@arr, 15, sub { $_[0] <=> $_[1] }, {verbose=>1, OutBound=>'UseClosest'});
-        TPSUP::SEARCH::binary_search_match(\@arr, 0, sub { $_[0] <=> $_[1] }, {verbose=>1, OutBound=>'UseClosest'});
+        binary_search_match(\@arr, 10, sub { $_[0] <=> $_[1] }) == 3;
+        binary_search_match(\@arr, 9, sub { $_[0] <=> $_[1] }, {verbose=>1, InBetween=>'low'}) == 2;
+        binary_search_match(\@arr, 9, sub { $_[0] <=> $_[1] }, {verbose=>1, InBetween=>'high'}) == 3;
+        binary_search_match(\@arr, 15, sub { $_[0] <=> $_[1] }, {verbose=>1, OutBound=>'UseClosest'}) == 4;
+        binary_search_match(\@arr, 0, sub { $_[0] <=> $_[1] }, {verbose=>1, OutBound=>'UseClosest'}) == 0;
         
-        TPSUP::SEARCH::binary_search_match(\@arr, 10, 'numeric');
-        TPSUP::SEARCH::binary_search_match(['a', 'b', 'c', 'd', 'e'], 'd', 'string');
+        binary_search_match(\@arr, 10, 'numeric') == 3;
+        binary_search_match(['a', 'b', 'c', 'd', 'e'], 'd', 'string') == 3;
 
-        TPSUP::SEARCH::binary_search_match(\@arr, 10, 'string'); # not sorted, not working
-        TPSUP::SEARCH::binary_search_match(['1', '2', '4', '10', '12'], '10', 'string'); # not sorted, not working
-        TPSUP::SEARCH::binary_search_match([ sort {$a cmp $b} @arr], 10, 'string'); # sorted, working
+        binary_search_match(\@arr, 10, 'string') == -1; # not sorted, not working
+        binary_search_match(['1', '2', '4', '10', '12'], '10', 'string') == -1; # not sorted, not working
+        binary_search_match([ sort {$a cmp $b} @arr], 10, 'string') == 1; # sorted, working
 
-        TPSUP::SEARCH::binary_search_first(\@arr, sub { $_[0] >= 4 });
+        binary_search_first(\@arr, sub { $_[0] >= 4 }) == 2;
 END
 
-   test_lines($test_code);
+   TPSUP::TEST::test_lines($test_code);
+
+   exit(0);
 
 }
 

@@ -964,7 +964,9 @@ sub date2any {
 }
 
 sub main {
-   require TPSUP::TEST;
+   # require TPSUP::TEST;
+   require TPSUP::NAMESPACE;
+   TPSUP::NAMESPACE::import_EXPECT_OK( "TPSUP::TEST", __PACKAGE__ );
 
    # use 'our' in test code, not 'my'
    my $test_code = <<'END';
@@ -1055,12 +1057,6 @@ END
    print "local_vs_utc('UTC2LOCAL', '2021-10-21 07:01:02.513447') = ",
      local_vs_utc( 'UTC2LOCAL', '2021-10-21 07:01:02.513447' ),
      ", expecting 2021-10-21 03:01:02.513447\n\n";
-   "\n";
-
-   print
-     "get_seconds_between_yyyymmddHHMMSS('2021-10-21 07:01:02.513447', '2021-10-21 03:01:02.000000') = ",
-     get_seconds_between_yyyymmddHHMMSS( '2021-10-21 07:01:02.513447', '2021-10-21 03:01:02.000000' ),
-     ", expecting 600\n\n";
    "\n";
 }
 

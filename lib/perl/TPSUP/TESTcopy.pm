@@ -2,11 +2,13 @@ package TPSUP::TEST;
 
 use strict;
 use warnings;
+no warnings 'redefine';         # this is to suppress the "redefined" warning
+use Carp;
 use Data::Dumper;
 $Data::Dumper::Sortkeys = 1;    # this sorts the Dumper output!
 $Data::Dumper::Terse    = 1;    # print without "$VAR1="
 
-use Carp;
+use TPSUP::TESTDUMMY;
 
 use base qw( Exporter );
 our @EXPORT_OK = qw(
@@ -15,10 +17,58 @@ our @EXPORT_OK = qw(
   equal
 );
 
-sub process_block {
-   my ( $block, $namespace, $opt ) = @_;
-   # namespace is the package name where the test code is running
+# my $prepared_DUMMY = 0;  # this will not work, because it is not a global variable
+$TPSUP::TESTDUMMY::prepared = 0;
 
+sub prepare_DUMMY {
+   my ($opt) = @_;
+   my $verbose = $opt->{verbose};
+
+   # if ($prepared_DUMMY) {
+   #    $verbose && print STDERR "by prepared_DUMMY, DUMMY is already prepared\n";
+   #    return;
+   # }
+
+   if ($TPSUP::TESTDUMMY::prepared) {
+      $verbose && print STDERR "by \$TPSUP::TESTDUMMY::prepared, DUMMY is already prepared\n";
+      return;
+   }
+
+   # $prepared_DUMMY  = 1;
+   $TESTDUMMY::prepared = 1;
+
+   my $code = <<'END';
+package TPSUP::TESTDUMMY;
+no strict;
+# use warnings;
+
+# # no warnings 'redfined';  
+# # this made the 'redefined" warning go away
+# # but it also made below 'use ...' not working.
+# # so I commented it out.
+
+# print STDERR __FILE__, " -1  ", __LINE__, " ", __PACKAGE__, "\n";
+
+$TESTDUMMY::prepared = 1;
+
+# print STDERR __FILE__, " 0  ", __LINE__, " ", __PACKAGE__, "\n";
+
+
+END
+   if ( $opt->{extra_code} ) {
+      $code .= $opt->{extra_code};
+      $code .= "\n";
+   }
+
+   $verbose && print STDERR "eval: $code\n";
+
+   print STDERR __FILE__, " ", __LINE__, " ", __PACKAGE__, "\n";
+   eval $code;
+
+}
+
+sub process_block {
+   my ( $block, $opt ) = @_;
    my $verbose = $opt->{verbose};
 
    my @lines = split /\n/, $block;
@@ -33,14 +83,17 @@ sub process_block {
       $line =~ s/^\s+//;    # remove leading spaces
       print "----------------------------------------\n";
       print "eval: $line\n";
-      my $code = "package $namespace; no strict; $line";
+      # my $code = "package DUMMY; no strict; use TPSUP::TEST qw(in equal); $line";
+      # my $code = "package DUMMY; no strict; $line";
+      my $code = "package TPSUP::TESTDUMMY; no strict; $line";
+      print "eval $code\n" if $verbose;
 
       # the following could convert result type.
       #   my $result = eval $code;
       # for example, if result is an array (0, 1, 2). the $result will be 3.
       # therefore, use [] to preserve original type.
-
       my $result = [ eval $code ];
+
       if ($@) {
          print "eval error: $@\n";
       }
@@ -62,12 +115,34 @@ sub test_lines {
    my $caller_package = caller;
    print "caller_package=$caller_package\n" if $opt->{verbose};
 
-   my $pre_code = $opt->{pre_code};
-   if ($pre_code) {
-      process_block( $pre_code, $caller_package, { %$opt, not_show_result => 1 } );
+   # get current package's name
+   my $current_package = __PACKAGE__;
+
+   my $import_code = '';
+   # get caller's package's EXPORT_OK
+   my $exports = get_EXPORT_OK($caller_package);
+
+   print STDERR __FILE__, " ", __LINE__, "\n";
+
+   if ( $exports && scalar(@$exports) > 0 ) {
+      $import_code = <<END;
+# no warnings;
+use $caller_package qw(@$exports);
+
+END
+      print "import_code=$import_code\n" if $opt->{verbose};
    }
 
-   process_block( $block, $caller_package, $opt );
+   print STDERR __FILE__, " ", __LINE__, "\n";
+   prepare_DUMMY( { extra_code => $import_code, verbose => $opt->{verbose} } );
+   print STDERR __FILE__, " ", __LINE__, "\n";
+
+   my $pre_code = $opt->{pre_code};
+   if ($pre_code) {
+      process_block( $pre_code, { %$opt, not_show_result => 1 } );
+   }
+
+   process_block( $block, $opt );
 }
 
 # perl doesn't have a 'in list' operator
@@ -250,7 +325,78 @@ sub equal_scalar {
    }
 }
 
+# "EXPORT" vs "EXPORT_OK":
+#   "EXPORT" is for default export.
+#   "EXPORT_OK" is on demand export.
+# we are using "EXPORT_OK" in our modules for better control.
+# TPSUP::TEST needs to get all the "EXPORT_OK" from a module.
+# the following tricks only works for "EXPORT", not "EXPORT_OK"
+#    use MY::PACKAGE qw(/./);
+#    use MY::PACKAGE qw(:DEFAULT);
+# Therefore, we have to
+#    1. get the list of all "EXPORT_OK" from a module
+#    2. use "use MY::PACKAGE qw(...)" for each of them.
+# the following function does #1.
+# learned from # https://stackoverflow.com/questions/65349217
+sub get_EXPORT_OK {
+   my ($module) = @_;
+
+   my $class = $module;
+   no warnings;
+   print STDERR __FILE__, " ", __LINE__, "\n";
+
+   # check if the package is already loaded
+   my $need_eval = 0;
+
+   # When Perl sees that's not a reference, it instead uses
+   # the package variable it works out from the string value.
+   # 'strict' disallows this, so you have to turn off that
+   # portion of its checks:
+
+   {
+      no strict 'refs';
+      if ( !%{ $class . '::' } ) {
+         $need_eval = 1;
+      }
+   }
+
+   if ($need_eval) {
+      eval "require $class";
+   }
+
+   print STDERR __FILE__, " ", __LINE__, "\n";
+
+   my @exports = do {
+      no strict 'refs';
+      @{ $class . '::' . 'EXPORT_OK' };
+   };
+
+   return \@exports;
+}
+
+sub delete_EXPORT_OK {
+   my ($module) = @_;
+
+   my $class = $module;
+   no warnings;
+   print STDERR __FILE__, " ", __LINE__, "\n";
+
+   delete ${ $class . '::' }{EXPORT_OK};
+
+   return;
+
+}
+
 sub main {
+   print <<"END";
+   We will see 'redfined' warnings like this
+      Subroutine process_block redefined at ...
+   This is annoying but seems to be harmless. 
+   This only happens for test in this module, TPSUP::TEST.
+   It doesn't happen for test in other modules.
+
+END
+
    # suppress "once" warning
    #   Name "DUMMY::array1" used only once: possible typo at TEST.pm line 63.
    no warnings 'once';
