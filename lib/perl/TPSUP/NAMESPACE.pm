@@ -60,25 +60,38 @@ sub get_EXPORT_OK {
 }
 
 sub import_EXPECT_OK {
-   my ( $module, $namespace, $opt ) = @_;
+   my ( $from_namespace, $to_namespace, $opt ) = @_;
+   # namespace is the package name, eg, TPSUP::DATE
    my $verbose = $opt->{verbose};
 
-   my $exports = get_EXPORT_OK($module);
+   my $exports = get_EXPORT_OK($from_namespace);
    if ( !$exports ) {
-      $verbose && print STDERR "no EXPORT_OK from $module\n";
+      $verbose && print STDERR "no EXPORT_OK from $from_namespace\n";
       return 1;
    }
    my $exports_string = join( " ", @$exports );
 
-   my $code = "package $namespace; use $module qw($exports_string);";
+   my $code = "package $to_namespace; use $from_namespace qw($exports_string);";
    print STDERR "eval code=$code\n" if $verbose;
    eval $code;
    if ($@) {
-      croak "failed to import $exports_string from $module: $@";
+      croak "failed to import $exports_string from $to_namespace: $@";
    } else {
       return 1;
    }
+}
+
+sub main {
+   use TPSUP::TEST qw(:DEFAULT);
+
+   my $test_code = <<'END';
+      import_EXPECT_OK("TPSUP::DATE", __PACKAGE__) == 1;
+END
+
+   test_lines($test_code);
 
 }
+
+main() unless caller();
 
 1

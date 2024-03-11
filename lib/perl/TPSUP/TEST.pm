@@ -9,7 +9,22 @@ $Data::Dumper::Terse    = 1;    # print without "$VAR1="
 use Carp;
 
 use base qw( Exporter );
-our @EXPORT_OK = qw(
+
+# "EXPORT" vs "EXPORT_OK":
+#   "EXPORT" is for default export.
+#   "EXPORT_OK" is on demand export.
+#  we use "EXPORT" in our modules for simiplicity. The caller only
+#  needs to do
+#     use TPSUP::TEST qw(:DEFAULT);
+#  if we used "EXPORT_OK", the caller needs to do
+#     use TPSUP::TEST qw(test_lines in equal);
+#
+# our @EXPORT_OK = qw(
+#   test_lines
+#   in
+#   equal
+# );
+our @EXPORT = qw(
   test_lines
   in
   equal

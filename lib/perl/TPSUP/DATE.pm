@@ -964,9 +964,9 @@ sub date2any {
 }
 
 sub main {
-   # require TPSUP::TEST;
-   require TPSUP::NAMESPACE;
-   TPSUP::NAMESPACE::import_EXPECT_OK( "TPSUP::TEST", __PACKAGE__ );
+   use TPSUP::TEST qw(:DEFAULT);
+   # require TPSUP::NAMESPACE;
+   # TPSUP::NAMESPACE::import_EXPECT_OK( "TPSUP::TEST", __PACKAGE__ );
 
    # use 'our' in test code, not 'my'
    my $test_code = <<'END';
