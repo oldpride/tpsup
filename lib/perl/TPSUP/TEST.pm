@@ -13,11 +13,17 @@ use base qw( Exporter );
 # "EXPORT" vs "EXPORT_OK":
 #   "EXPORT" is for default export.
 #   "EXPORT_OK" is on demand export.
+#
 #  we use "EXPORT" in our modules for simiplicity. The caller only
 #  needs to do
 #     use TPSUP::TEST qw(:DEFAULT);
+#
 #  if we used "EXPORT_OK", the caller needs to do
 #     use TPSUP::TEST qw(test_lines in equal);
+#  or dynamically get the list of "EXPORT_OK" from TPSUP::TEST
+#     require TPSUP::NAMESPACE;
+#     TPSUP::NAMESPACE::import_EXPECT_OK( "TPSUP::TEST", __PACKAGE__ );
+#  neither is convenient.
 #
 # our @EXPORT_OK = qw(
 #   test_lines
@@ -77,6 +83,8 @@ sub test_lines {
    my $caller_package = caller;
    print "caller_package=$caller_package\n" if $opt->{verbose};
 
+   # run test in caller's package (namespace), so that we have access to all subs
+   # and variables in the caller's package.
    my $pre_code = $opt->{pre_code};
    if ($pre_code) {
       process_block( $pre_code, $caller_package, { %$opt, not_show_result => 1 } );
