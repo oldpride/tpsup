@@ -219,6 +219,8 @@ sub get_yyyymmddHHMMSS {
    return $yyyymmddHHMMSS;
 }
 
+# get next yyyymmddHHMMSS by offset seconds.
+# it supports a few formats
 sub get_new_yyyymmddHHMMSS {
    my ( $old_yyyymmddHHMMSS, $offset, $opt ) = @_;
 
@@ -248,6 +250,7 @@ sub get_new_yyyymmddHHMMSS {
    return $new_yyyymmddHHMMSS;
 }
 
+# switch between local and UTC
 sub local_vs_utc {
    my ( $direction, $old_yyyymmddHHMMSS, $opt ) = @_;
 
@@ -271,12 +274,21 @@ sub local_vs_utc {
       confess "unsupported format at old_yyyymmddHHMMSS='$old_yyyymmddHHMMSS'";
    }
 
-   my $OldIsUTC;
-   $OldIsUTC++ if $direction eq 'UTC2LOCAL';
+   my $fromUTC;
+   my $toUTC;
+   if ( $direction eq 'UTC2LOCAL' ) {
+      $fromUTC = 1;
+      $toUTC   = 0;
+   } elsif ( $direction eq 'LOCAL2UTC' ) {
+      $fromUTC = 0;
+      $toUTC   = 1;
+   } else {
+      confess "direction='$direction' is not supported";
+   }
 
-   my $old_sec = yyyymmddHHMMSS_to_epoc( $old_t, { IsUTC => $OldIsUTC } );
+   my $old_sec = yyyymmddHHMMSS_to_epoc( $old_t, { fromUTC => $fromUTC } );
 
-   if ($OldIsUTC) {
+   if ( !$toUTC ) {
       my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($old_sec);
       return sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec );
    } else {
@@ -965,8 +977,6 @@ sub date2any {
 
 sub main {
    use TPSUP::TEST qw(:DEFAULT);
-   # require TPSUP::NAMESPACE;
-   # TPSUP::NAMESPACE::import_EXPECT_OK( "TPSUP::TEST", __PACKAGE__ );
 
    # use 'our' in test code, not 'my'
    my $test_code = <<'END';
@@ -1028,36 +1038,16 @@ sub main {
          get_seconds_between_yyyymmddHHMMSS('2024-03-10 00:00:01.513447', '2024-03-10 03:00:01.000000') == 7200;
          get_seconds_between_yyyymmddHHMMSS('2024-03-11 00:00:01.513447', '2024-03-11 03:00:01.000000') == 10800;
 
-         
+         get_new_yyyymmddHHMMSS( '20211021070102', 300 ) eq '20211021070602';
+         get_new_yyyymmddHHMMSS( '2021-10-21 07:01:02.513447', 300 ) eq '2021-10-21 07:06:02.513447';
 
+         local_vs_utc( 'LOCAL2UTC', '2021-10-21 07:01:02.513447' ) eq '2021-10-21 11:01:02.513447';
+         local_vs_utc( 'UTC2LOCAL', '2021-10-21 07:01:02.513447' ) eq '2021-10-21 03:01:02.513447';
 
 END
 
-   TPSUP::TEST::test_lines($test_code);
+   test_lines($test_code);
 
-   exit(0);
-
-   my $verbose = 0;
-
-   print "get_new_yyyymmddHHMMSS('20211021070102', 300) = ",
-     get_new_yyyymmddHHMMSS( '20211021070102', 300 ),
-     ", expecting 20211021070602\n\n";
-   "\n";
-
-   print "get_new_yyyymmddHHMMSS('2021-10-21 07:01:02.513447', 300) = ",
-     get_new_yyyymmddHHMMSS( '2021-10-21 07:01:02.513447', 300 ),
-     ", expecting 2021-10-21 07:06:02.513447\n\n";
-   "\n";
-
-   print "local_vs_utc('LOCAL2UTC', '2021-10-21 07:01:02.513447') = ",
-     local_vs_utc( 'LOCAL2UTC', '2021-10-21 07:01:02.513447' ),
-     ", expecting 2021-10-21 11:01:02.513447\n\n";
-   "\n";
-
-   print "local_vs_utc('UTC2LOCAL', '2021-10-21 07:01:02.513447') = ",
-     local_vs_utc( 'UTC2LOCAL', '2021-10-21 07:01:02.513447' ),
-     ", expecting 2021-10-21 03:01:02.513447\n\n";
-   "\n";
 }
 
 main() unless caller();

@@ -144,7 +144,7 @@ sub binary_search_first {
 }
 
 sub main {
-   require TPSUP::TEST;
+   use TPSUP::TEST qw(:DEFAULT);
 
    # we can also define 'arr' here.
    # no warnings 'once';
@@ -168,7 +168,7 @@ sub main {
         binary_search_first(\@arr, sub { $_[0] >= 4 }) == 2;
 END
 
-   TPSUP::TEST::test_lines($test_code);
+   test_lines($test_code);
 
    exit(0);
 

@@ -501,31 +501,6 @@ def get_interval_seconds(yyyymmdd1, HHMMSS1, yyyymmdd2, HHMMSS2,
     return seconds
 
 
-'''
-sub get_seconds_between_yyyymmddHHMMSS {
-   my ( $yyyymmddHHMMSS1, $yyyymmddHHMMSS2, $opt ) = @_;
-
-   # this supports a wider format
-
-   my @s;
-   for my $t1 ( ( $yyyymmddHHMMSS1, $yyyymmddHHMMSS2 ) ) {
-      my $t2;
-      if ( $t1 =~ /^([12][09]\d{12})(.*)/ ) {
-         $t2 = $1;
-      } elsif ( my @c = ( $t1 =~ /^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/ ) ) {
-         $t2 = "$c[0]$c[2]$c[4]$c[6]$c[8]$c[10]";
-      } else {
-         confess "unsupported format at '$t1'";
-      }
-
-      my $sec = yyyymmddHHMMSS_to_epoc($t2);
-      push @s, $sec;
-   }
-
-   return $s[1] - $s[0];
-}
-'''
-
 compiled_yyyymmddHHMMSS_pattern = None
 
 
@@ -562,6 +537,112 @@ def get_seconds_between_yyyymmddHHMMSS(yyyymmddHHMMSS1, yyyymmddHHMMSS2, **opt):
         sec = yyyymmddHHMMSS_to_epoc(t2)
         s.append(sec)
     return s[1] - s[0]
+
+
+# get next yyyymmddHHMMSS by offset seconds.
+# it supports a few formats
+def get_new_yyyymmddHHMMSS(old_yyyymmddHHMMSS, offset, **opt):
+    out_format = None
+    old_t = None
+    compiled_yyyymmddHHMMSS_pattern = get_compiled_yyyymmddHHMMSS_pattern()
+    compiled_yyyymmddHHMMSS_sep_pattern = get_compiled_yyyymmddHHMMSS_sep_pattern()
+    if m := compiled_yyyymmddHHMMSS_pattern.match(old_yyyymmddHHMMSS):
+        old_t = m.group(1)
+        tail = m.group(2)
+        # out_format = '%4d%02d%02d%02d%02d%02d' + tail
+        out_format = '%s%s%s%s%s%s' + tail
+    elif m := compiled_yyyymmddHHMMSS_sep_pattern.match(old_yyyymmddHHMMSS):
+        old_t = f"{m.group(1)}{m.group(3)}{m.group(5)}{m.group(7)}{m.group(9)}{m.group(11)}"
+        tail = m.group(12)
+        # out_format = f'%4d{m.group(2)}%02d{m.group(4)}%02d{m.group(6)}%02d{m.group(8)}%02d{m.group(10)}%02d{tail}'
+        out_format = f'%s{m.group(2)}%s{m.group(4)}%s{m.group(6)}%s{m.group(8)}%s{m.group(10)}%s{tail}'
+    else:
+        raise ValueError(f"unsupported format at old_yyyymmddHHMMSS='{old_yyyymmddHHMMSS}'")
+
+    old_sec = yyyymmddHHMMSS_to_epoc(old_t)
+    new_sec = old_sec + offset
+
+    dt = epoc_to_yyyymmddHHMMSS(new_sec)
+    yyyy, mm, dd, HH, MM, SS = dt[:4], dt[4:6], dt[6:8], dt[8:10], dt[10:12], dt[12:14]
+    new_yyyymmddHHMMSS = out_format % (yyyy, mm, dd, HH, MM, SS)
+    return new_yyyymmddHHMMSS
+
+
+'''
+# switch between local and UTC
+sub local_vs_utc {
+   my ( $direction, $old_yyyymmddHHMMSS, $opt ) = @_;
+
+   my $out_format;
+   my $old_t;
+
+   confess "old_yyyymmddHHMMSS is undef" if !defined($old_yyyymmddHHMMSS);
+
+   if ( $old_yyyymmddHHMMSS =~ /^([12][09]\d{12})(.*)/ ) {
+      $old_t = $1;
+      my $tail = defined($2) ? $2 : '';
+      $out_format = '%4d%02d%02d%02d%02d%02d' . $tail;
+   } elsif ( my @c =
+      ( $old_yyyymmddHHMMSS =~ /^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/ ) )
+   {
+      $old_t = "$c[0]$c[2]$c[4]$c[6]$c[8]$c[10]";
+      my $tail = defined( $c[13] ) ? $c[13] : '';
+      $out_format =
+        '%4d' . $c[1] . '%02d' . $c[3] . '%02d' . $c[5] . '%02d' . $c[7] . '%02d' . $c[9] . '%02d' . $c[11] . $tail;
+   } else {
+      confess "unsupported format at old_yyyymmddHHMMSS='$old_yyyymmddHHMMSS'";
+   }
+
+   my $OldIsUTC;
+   $OldIsUTC++ if $direction eq 'UTC2LOCAL';
+
+   my $old_sec = yyyymmddHHMMSS_to_epoc( $old_t, { IsUTC => $OldIsUTC } );
+
+   if ($OldIsUTC) {
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($old_sec);
+      return sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec );
+   } else {
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = gmtime($old_sec);
+      return sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec );
+   }
+}
+'''
+# switch between local and UTC
+
+
+def local_vs_utc(direction, old_yyyymmddHHMMSS, **opt):
+    out_format = None
+    old_t = None
+
+    if m := re.match(get_compiled_yyyymmddHHMMSS_pattern(), old_yyyymmddHHMMSS):
+        old_t = m.group(1)
+        tail = m.group(2)
+        out_format = '%s%s%s%s%s%s' + tail
+    elif m := re.match(get_compiled_yyyymmddHHMMSS_sep_pattern(), old_yyyymmddHHMMSS):
+        old_t = f"{m.group(1)}{m.group(3)}{m.group(5)}{m.group(7)}{m.group(9)}{m.group(11)}"
+        tail = m.group(12)
+        out_format = f'%s{m.group(2)}%s{m.group(4)}%s{m.group(6)}%s{m.group(8)}%s{m.group(10)}%s{tail}'
+    else:
+        raise ValueError(f"unsupported format at old_yyyymmddHHMMSS='{old_yyyymmddHHMMSS}'")
+
+    fromUTC = False
+    toUTC = False
+    if direction == 'UTC2LOCAL':
+        fromUTC = True
+        toUTC = False
+    elif direction == 'LOCAL2UTC':
+        fromUTC = False
+        toUTC = True
+    else:
+        raise ValueError(f"unsupported direction='{direction}'")
+
+    old_sec = yyyymmddHHMMSS_to_epoc(old_t, fromUTC=fromUTC)
+
+    dt = epoc_to_yyyymmddHHMMSS(old_sec, toUTC=toUTC)
+
+    yyyy, mm, dd, HH, MM, SS = dt[:4], dt[4:6], dt[6:8], dt[8:10], dt[10:12], dt[12:14]
+    new_yyyymmddHHMMSS = out_format % (yyyy, mm, dd, HH, MM, SS)
+    return new_yyyymmddHHMMSS
 
 
 def main():
@@ -622,6 +703,12 @@ def main():
 
         get_seconds_between_yyyymmddHHMMSS('2024-03-10 00:00:01.513447', '2024-03-10 03:00:01.000000') == 7200
         get_seconds_between_yyyymmddHHMMSS('2024-03-11 00:00:01.513447', '2024-03-11 03:00:01.000000') == 10800
+
+        get_new_yyyymmddHHMMSS('20211021070102', 300) == '20211021070602'
+        get_new_yyyymmddHHMMSS('2021-10-21 07:01:02.513447', 300) == '2021-10-21 07:06:02.513447'
+
+        local_vs_utc('LOCAL2UTC', '2021-10-21 07:01:02.513447') == '2021-10-21 11:01:02.513447'
+        local_vs_utc('UTC2LOCAL', '2021-10-21 07:01:02.513447') == '2021-10-21 03:01:02.513447'
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())
