@@ -416,7 +416,7 @@ compiled_yyyymmdd_pattern = None
 def get_compiled_yyyymmdd_pattern():
     global compiled_yyyymmdd_pattern
     if compiled_yyyymmdd_pattern == None:
-        yyyymmdd_pattern = r'\d{8}'
+        yyyymmdd_pattern = r'(\d{8})'
         compiled_yyyymmdd_pattern = re.compile(yyyymmdd_pattern)
     return compiled_yyyymmdd_pattern
 
@@ -645,6 +645,134 @@ def local_vs_utc(direction, old_yyyymmddHHMMSS, **opt):
     return new_yyyymmddHHMMSS
 
 
+Mon_by_number = {
+    1: 'Jan',
+    2: 'Feb',
+    3: 'Mar',
+    4: 'Apr',
+    5: 'May',
+    6: 'Jun',
+    7: 'Jul',
+    8: 'Aug',
+    9: 'Sep',
+    10: 'Oct',
+    11: 'Nov',
+    12: 'Dec',
+
+    '01': 'Jan',
+    '02': 'Feb',
+    '03': 'Mar',
+    '04': 'Apr',
+    '05': 'May',
+    '06': 'Jun',
+    '07': 'Jul',
+    '08': 'Aug',
+    '09': 'Sep',
+    '10': 'Oct',
+    '11': 'Nov',
+    '12': 'Dec',
+}
+
+mm_by_Mon = {
+    'Jan': '01',
+    'Feb': '02',
+    'Mar': '03',
+    'Apr': '04',
+    'May': '05',
+    'Jun': '06',
+    'Jul': '07',
+    'Aug': '08',
+    'Sep': '09',
+    'Oct': '10',
+    'Nov': '11',
+    'Dec': '12',
+
+    'JAN': '01',
+    'FEB': '02',
+    'MAR': '03',
+    'APR': '04',
+    'MAY': '05',
+    'JUN': '06',
+    'JUL': '07',
+    'AUG': '08',
+    'SEP': '09',
+    'OCT': '10',
+    'NOV': '11',
+    'DEC': '12',
+
+    'January': '01',
+    'February': '02',
+    'March': '03',
+    'April': '04',
+    'May': '05',
+    'June': '06',
+    'July': '07',
+    'August': '08',
+    'September': '09',
+    'October': '10',
+    'November': '11',
+    'December': '12',
+}
+
+compiled_by_template = {}
+
+
+def compile_template(template, **opt):
+    if compiled_by_template.get(template):
+        return compiled_by_template[template]
+
+    from tpsup.modtools import load_module
+
+    code = f'''
+def convert(r:dict):
+    for k in r:
+        globals()[k] = r[k]
+    return f"{template}"
+'''
+    mod = load_module(code)
+    complied = getattr(mod, 'convert')
+
+    compiled_by_template[template] = complied
+    return complied
+
+
+def convert_from_yyyymmdd(template: str, yyyymmdd: str, **opt):
+    # template is like "{dd} {Mon} {yyyy}"
+    # 20161103 to 03 Nov 2016
+
+    if m := re.match(get_compiled_yyyymmdd_pattern(), yyyymmdd):
+        YY, yy, mm, dd = yyyymmdd[:2], yyyymmdd[2:4], yyyymmdd[4:6], yyyymmdd[6:8]
+
+        Mon = Mon_by_number[mm]
+
+        d = f"{dd}"
+        d = d.lstrip('0')
+
+        m = f"{mm}"
+        m = m.lstrip('0')
+
+        yyyy = f"{YY}{yy}"
+
+        if opt.get('verbose'):
+            print(f"template={template}, YY={YY}, mm={mm}, m={m}, dd={dd}, d={d}, Mon={Mon}, yyyy={yyyy}", file=sys.stderr)
+
+        r = {
+            'YY': YY,
+            'mm': mm,
+            'm': m,
+            'dd': dd,
+            'd': d,
+            'Mon': Mon,
+            'yyyy': yyyy,
+        }
+        # eval "return qq($template)";
+        compiled = compile_template(template, **opt)
+        string = compiled(r)
+        return string
+    else:
+        raise ValueError(f"yyyymmdd='{yyyymmdd}' is in bad format")
+
+
 def main():
     def test_codes():
         get_timezone()
@@ -709,6 +837,8 @@ def main():
 
         local_vs_utc('LOCAL2UTC', '2021-10-21 07:01:02.513447') == '2021-10-21 11:01:02.513447'
         local_vs_utc('UTC2LOCAL', '2021-10-21 07:01:02.513447') == '2021-10-21 03:01:02.513447'
+
+        convert_from_yyyymmdd('{Mon}-{dd}-{yyyy}', '20230901') == 'Sep-01-2023'
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())

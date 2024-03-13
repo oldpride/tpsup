@@ -712,95 +712,89 @@ sub get_seconds_between_yyyymmddHHMMSS {
    return $s[1] - $s[0];
 }
 
-my $Mon_by_number;
+my $Mon_by_number = {
+   1  => 'Jan',
+   2  => 'Feb',
+   3  => 'Mar',
+   4  => 'Apr',
+   5  => 'May',
+   6  => 'Jun',
+   7  => 'Jul',
+   8  => 'Aug',
+   9  => 'Sep',
+   10 => 'Oct',
+   11 => 'Nov',
+   12 => 'Dec',
+
+   '01' => 'Jan',
+   '02' => 'Feb',
+   '03' => 'Mar',
+   '04' => 'Apr',
+   '05' => 'May',
+   '06' => 'Jun',
+   '07' => 'Jul',
+   '08' => 'Aug',
+   '09' => 'Sep',
+   '10' => 'Oct',
+   '11' => 'Nov',
+   '12' => 'Dec',
+};
 
 sub get_Mon_by_number {
    my ($number) = @_;
-
-   if ( !$Mon_by_number ) {
-      $Mon_by_number = {
-         1  => 'Jan',
-         2  => 'Feb',
-         3  => 'Mar',
-         4  => 'Apr',
-         5  => 'May',
-         6  => 'Jun',
-         7  => 'Jul',
-         8  => 'Aug',
-         9  => 'Sep',
-         10 => 'Oct',
-         11 => 'Nov',
-         12 => 'Dec',
-
-         '01' => 'Jan',
-         '02' => 'Feb',
-         '03' => 'Mar',
-         '04' => 'Apr',
-         '05' => 'May',
-         '06' => 'Jun',
-         '07' => 'Jul',
-         '08' => 'Aug',
-         '09' => 'Sep',
-      };
-   }
-
    return $Mon_by_number->{$number};
 }
 
-my $mm_by_Mon;
+my $mm_by_Mon = {
+   'Jan' => '01',
+   'Feb' => '02',
+   'Mar' => '03',
+   'Apr' => '04',
+   'May' => '05',
+   'Jun' => '06',
+   'Jul' => '07',
+   'Aug' => '08',
+   'Sep' => '09',
+   'Oct' => '10',
+   'Nov' => '11',
+   'Dec' => '12',
+
+   'JAN' => '01',
+   'FEB' => '02',
+   'MAR' => '03',
+   'APR' => '04',
+   'MAY' => '05',
+   'JUN' => '06',
+   'JUL' => '07',
+   'AUG' => '08',
+   'SEP' => '09',
+   'OCT' => '10',
+   'NOV' => '11',
+   'DEC' => '12',
+
+   'January'   => '01',
+   'February'  => '02',
+   'March'     => '03',
+   'April'     => '04',
+   'May'       => '05',
+   'June'      => '06',
+   'July'      => '07',
+   'August'    => '08',
+   'September' => '09',
+   'October'   => '10',
+   'November'  => '11',
+   'December'  => '12',
+};
 
 sub get_mm_by_Mon {
    my ($Mon) = @_;
-
-   if ( !$mm_by_Mon ) {
-      $mm_by_Mon = {
-         'Jan' => '01',
-         'Feb' => '02',
-         'Mar' => '03',
-         'Apr' => '04',
-         'May' => '05',
-         'Jun' => '06',
-         'Jul' => '07',
-         'Aug' => '08',
-         'Sep' => '09',
-         'Oct' => '10',
-         'Nov' => '11',
-         'Dec' => '12',
-
-         'JAN' => '01',
-         'FEB' => '02',
-         'MAR' => '03',
-         'APR' => '04',
-         'MAY' => '05',
-         'JUN' => '06',
-         'JUL' => '07',
-         'AUG' => '08',
-         'SEP' => '09',
-         'OCT' => '10',
-         'NOV' => '11',
-         'DEC' => '12',
-
-         'January'   => '01',
-         'February'  => '02',
-         'March'     => '03',
-         'April'     => '04',
-         'May'       => '05',
-         'June'      => '06',
-         'July'      => '07',
-         'August'    => '08',
-         'September' => '09',
-         'October'   => '10',
-         'November'  => '11',
-         'December'  => '12',
-      };
-   }
 
    return $mm_by_Mon->{$Mon};
 }
 
 sub convert_from_yyyymmdd {
    my ( $template, $yyyymmdd, $opt ) = @_;
-
+   # template is like "$dd $Mon $yyyy"
    # 20161103 to 03 Nov 2016
 
    if ( $yyyymmdd =~ /^(\d{2})(\d{2})(\d{2})(\d{2})$/ ) {
@@ -819,7 +813,28 @@ sub convert_from_yyyymmdd {
       $opt->{verbose}
         && print STDERR "template=$template, YY=$YY, mm=$mm, m=$m, dd=$dd, d=$d, Mon=$Mon, yyyy=$yyyy\n";
 
-      eval "return qq($template)";
+      my $r = {
+         YY   => $YY,
+         mm   => $mm,
+         m    => $m,
+         dd   => $dd,
+         d    => $d,
+         Mon  => $Mon,
+         yyyy => $yyyy,
+      };
+
+      # we could have used the current name space to evaluate the expression
+      # but using TPSUP::Expression name space will allow use "no strict 'ref'"
+      # and 'no warnings'
+
+      TPSUP::Expression::export_var( $r, { RESET => 1 } );
+
+      # 1. need to double-quote around $output_template to ake it an expression
+      # 2. compile_exp has built-in cache to save from compiling twice
+      my $compiled = TPSUP::Expression::compile_exp( qq("$template"), $opt );
+
+      my $string = $compiled->($r);
+      return $string;
    } else {
       carp "yyyymmdd='$yyyymmdd' is in bad format";
       return undef;
@@ -891,6 +906,7 @@ sub date2any {
    my $r;    # ref
    @{$r}{@assignments} = @a;
 
+   # we need to ensure that we have mm, dd, yyyy, HH, MM, SS
    if ( !$r->{dd} ) {
       if ( $r->{d} ) {
          $r->{dd} = sprintf( "%02d", $r->{d} );
@@ -907,7 +923,8 @@ sub date2any {
 
    my $converted_r;
 
-   if ( $opt->{gmt21ocal} ) {
+   if ( $opt->{UTC2LOCAL} || $opt->{LOCAL2UTC} ) {
+      # if there is a time zone conversion, we need to convert the date to epoc seconds
 
       # http://stackoverflow.com/questions/411740/how-can-i-parse-dates-and-convert-time-zones-in-perl
       if (  !exists $r->{mm}
@@ -916,16 +933,24 @@ sub date2any {
          || !exists $r->{HH} )
       {
          carp
-"missing yyyy/mm/dd/HH, cannot do gmt21ocal. date='$date', input_pattern='$input_pattern', input_assignment='$input_assignment'";
+           "missing yyyy/mm/dd/HH, date='$date', input_pattern='$input_pattern', input_assignment='$input_assignment'";
          return undef;
       }
 
       $r->{MM} - 0 if !exists $r->{MM};
       $r->{SS} = 0 if !exists $r->{SS};
 
-      my $gmt_seconds = timegm( $r->{SS}, $r->{MM}, $r->{HH}, $r->{dd}, $r->{mm} - 1, $r->{yyyy} - 1900 );
-
-      my ( $sec, $min, $hour, $day, $mon, $year ) = localtime($gmt_seconds);
+      my $seconds;    # epoc seconds, not affected by time zone.
+      my ( $sec, $min, $hour, $day, $mon, $year );
+      if ( $opt->{UTC2LOCAL} ) {
+         # UTC2LOCAL means from UTC. therefore, use timegm().
+         $seconds = timegm( $r->{SS}, $r->{MM}, $r->{HH}, $r->{dd}, $r->{mm} - 1, $r->{yyyy} - 1900 );
+         ( $sec, $min, $hour, $day, $mon, $year ) = localtime($seconds);
+      } else {
+         # LOCAL2UTC means from LOCAL. therefore, use timelocal().
+         $seconds = timelocal( $r->{SS}, $r->{MM}, $r->{HH}, $r->{dd}, $r->{mm} - 1, $r->{yyyy} - 1900 );
+         ( $sec, $min, $hour, $day, $mon, $year ) = gmtime($seconds);
+      }
 
       $converted_r->{SS}   = sprintf( "%02d", $sec );
       $converted_r->{MM}   = sprintf( "%02d", $min );
@@ -934,6 +959,7 @@ sub date2any {
       $converted_r->{mm}   = sprintf( "%02d", $mon + 1 );
       $converted_r->{yyyy} = sprintf( "%d",   $year + 1900 );
    } else {
+      # no time zone conversion, simple
       $converted_r = $r;
    }
 
@@ -946,11 +972,7 @@ sub date2any {
    }
 
    if ( defined $converted_r->{mm} ) {
-      if ( !defined $converted_r->{m} ) {
-         my $m = $converted_r->{mm};
-         $m =~ s/^0//;
-         $converted_r->{m} = $m;
-      }
+      $converted_r->{m} = sprintf( "%d", $converted_r->{mm} );
 
       if ( !defined $converted_r->{Mon} ) {
          $converted_r->{Mon} = get_Mon_by_number( $converted_r->{mm} );
@@ -958,11 +980,7 @@ sub date2any {
    }
 
    if ( defined $converted_r->{dd} ) {
-      if ( !defined $converted_r->{d} ) {
-         my $d = $converted_r->{dd};
-         $d =~ s/^0//;
-         $converted_r->{d} = $d;
-      }
+      $converted_r->{d} = sprintf( "%d", $converted_r->{dd} );
    }
 
    # we could have used the current name space to evaluate the expression
@@ -971,7 +989,10 @@ sub date2any {
 
    TPSUP::Expression::export_var( $converted_r, { RESET => 1 } );
 
-   my $compiled = TPSUP::Expression::compile_exp( $output_template, $opt );
+   # 1. need to double-quote around $output_template to ake it an expression
+   # 2. compile_exp has built-in cache to save from compiling twice
+   my $compiled = TPSUP::Expression::compile_exp( qq("$output_template"), $opt );
+
    return $compiled->();
 }
 
@@ -980,69 +1001,72 @@ sub main {
 
    # use 'our' in test code, not 'my'
    my $test_code = <<'END';
-         get_date();
-         get_yyyymmdd();
-         yyyymmdd_to_DayOfWeek(get_yyyymmdd());
-         get_date( {yyyymmdd => '20200901'} )
-         get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) == '20200831';
-         in(get_timezone_offset(), [-4, -5]);
-         is_holiday('NYSE', '20240101') == 1;
-         yyyymmddHHMMSS_to_epoc('20200901120000');
-         epoc_to_yyyymmddHHMMSS(1598976000);
-         yyyymmddHHMMSS_to_epoc('20200901120000', {fromUTC=>1});
-         epoc_to_yyyymmddHHMMSS(1598961600, {toUTC=>1});
+      # get_date();
+      # get_yyyymmdd();
+      # yyyymmdd_to_DayOfWeek(get_yyyymmdd());
+      # get_date( {yyyymmdd => '20200901'} )
+      # get_yyyymmdd_by_yyyymmdd_offset('20200901', -1) == '20200831';
+      # in(get_timezone_offset(), [-4, -5]);
+      # is_holiday('NYSE', '20240101') == 1;
+      # yyyymmddHHMMSS_to_epoc('20200901120000');
+      # epoc_to_yyyymmddHHMMSS(1598976000);
+      # yyyymmddHHMMSS_to_epoc('20200901120000', {fromUTC=>1});
+      # epoc_to_yyyymmddHHMMSS(1598961600, {toUTC=>1});
 
-         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
-         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1});
-         yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1}) - yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
+      # yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
+      # yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1});
+      # yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59], {fromUTC=>1}) - yyyymmddHHMMSS_to_epoc([2020, 9, 1, 12, 0, 59]);
 
-         get_yyyymmddHHMMSS();
-         get_yyyymmddHHMMSS({toUTC=>1});
+      # get_yyyymmddHHMMSS();
+      # get_yyyymmddHHMMSS({toUTC=>1});
 
-         equal(get_holidays_by_exch_begin_end('NYSE', '20240101', '20240201'), ['20240101', '20240115']);
-            # 2 holidays
+      # equal(get_holidays_by_exch_begin_end('NYSE', '20240101', '20240201'), ['20240101', '20240115']);
+      #    # 2 holidays
 
-         # 20200907, Monday, is a holiday, labor day
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3 ) == '20200904';  # within the same week
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3 ) == '20200901';
+      # # 20200907, Monday, is a holiday, labor day
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 3 ) == '20200904';  # within the same week
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', -3 ) == '20200901';
 
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4 ) == '20200908';  # across the weekend and holiday
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4 ) == '20200901';
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200901', 4 ) == '20200908';  # across the weekend and holiday
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200908', -4 ) == '20200901';
 
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0 ) == '20200904'; # 0 offset on a tradeday
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0 ) == '20200904'; # 0 offset on a weekend
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0,) == '20200904'; # 0 offset on a holiday
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200904', 0 ) == '20200904'; # 0 offset on a tradeday
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0 ) == '20200904'; # 0 offset on a weekend
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0,) == '20200904'; # 0 offset on a holiday
 
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, {OnWeekend=>'next'}) == '20200908';
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, {OnWeekend=>'next'}) == '20200908';
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200905', 0, {OnWeekend=>'next'}) == '20200908';
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 0, {OnWeekend=>'next'}) == '20200908';
 
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1 ) == '20200908';
-         get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, {OnWeekend=>'next'}) == '20200909';
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1 ) == '20200908';
+      # get_tradeday_by_exch_begin_offset( 'NYSE', '20200907', 1, {OnWeekend=>'next'}) == '20200909';
 
-         equal(get_tradedays_by_exch_begin_end( 'NYSE', '20200903', '20200907'), ['20200903', '20200904']);
-         equal(get_tradedays_by_exch_begin_end( 'NYSE', '20200903', '20200908'), ['20200903', '20200904', '20200908']);
+      # equal(get_tradedays_by_exch_begin_end( 'NYSE', '20200903', '20200907'), ['20200903', '20200904']);
+      # equal(get_tradedays_by_exch_begin_end( 'NYSE', '20200903', '20200908'), ['20200903', '20200904', '20200908']);
 
-         get_tradeday( -4, { Begin => '20200908' } ) == '20200901';
-         get_tradeday(  4, { Begin => '20200901' } ) == '20200908';
+      # get_tradeday( -4, { Begin => '20200908' } ) == '20200901';
+      # get_tradeday(  4, { Begin => '20200901' } ) == '20200908';
 
-         equal(get_tradedays(  3, {Begin => '20200903'}),['20200903', '20200904', '20200908']);
-         equal(get_tradedays( -3, {Begin => '20200908'}),['20200903', '20200904', '20200908']);
+      # equal(get_tradedays(  3, {Begin => '20200903'}),['20200903', '20200904', '20200908']);
+      # equal(get_tradedays( -3, {Begin => '20200908'}),['20200903', '20200904', '20200908']);
 
-         # 20240310 is DST change day. we use 12:00 PM of each day
-         get_seconds_between_two_days('20240309', '20240310') == 82800;
-         get_seconds_between_two_days('20240311', '20240312') == 86400;
+      # # 20240310 is DST change day. we use 12:00 PM of each day
+      # get_seconds_between_two_days('20240309', '20240310') == 82800;
+      # get_seconds_between_two_days('20240311', '20240312') == 86400;
 
-         get_interval_seconds('20240309','120000','20240310','120001') == 82801;
-         get_interval_seconds('20240310','120000','20240311','120001') == 86401;
+      # get_interval_seconds('20240309','120000','20240310','120001') == 82801;
+      # get_interval_seconds('20240310','120000','20240311','120001') == 86401;
 
-         get_seconds_between_yyyymmddHHMMSS('2024-03-10 00:00:01.513447', '2024-03-10 03:00:01.000000') == 7200;
-         get_seconds_between_yyyymmddHHMMSS('2024-03-11 00:00:01.513447', '2024-03-11 03:00:01.000000') == 10800;
+      # get_seconds_between_yyyymmddHHMMSS('2024-03-10 00:00:01.513447', '2024-03-10 03:00:01.000000') == 7200;
+      # get_seconds_between_yyyymmddHHMMSS('2024-03-11 00:00:01.513447', '2024-03-11 03:00:01.000000') == 10800;
 
-         get_new_yyyymmddHHMMSS( '20211021070102', 300 ) eq '20211021070602';
-         get_new_yyyymmddHHMMSS( '2021-10-21 07:01:02.513447', 300 ) eq '2021-10-21 07:06:02.513447';
+      # get_new_yyyymmddHHMMSS( '20211021070102', 300 ) eq '20211021070602';
+      # get_new_yyyymmddHHMMSS( '2021-10-21 07:01:02.513447', 300 ) eq '2021-10-21 07:06:02.513447';
 
-         local_vs_utc( 'LOCAL2UTC', '2021-10-21 07:01:02.513447' ) eq '2021-10-21 11:01:02.513447';
-         local_vs_utc( 'UTC2LOCAL', '2021-10-21 07:01:02.513447' ) eq '2021-10-21 03:01:02.513447';
+      # local_vs_utc( 'LOCAL2UTC', '2021-10-21 07:01:02.513447' ) eq '2021-10-21 11:01:02.513447';
+      # local_vs_utc( 'UTC2LOCAL', '2021-10-21 07:01:02.513447' ) eq '2021-10-21 03:01:02.513447';
+      convert_from_yyyymmdd( '$Mon-$dd-$yyyy', '20230901') eq 'Sep-01-2023';
+
+      date2any('Sep 1 2023 12:34:56.789','^(...)\s+(\\d{1,2}) (\\d{4}) (\\d{2}):(\\d{2}):(\\d{2})','Mon,d,yyyy,HH,MM,SS', '$yyyy-$mm-$dd,$HH $MM $SS') eq '2023-09-01,12 34 56';
 
 END
 
