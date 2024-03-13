@@ -209,18 +209,50 @@ def get_non_buildins(dict: Dict):
     return ret
 
 
-def compile_codedict(expdict: dict, is_exp=False, **opt):
+compiled_by_source = {}
+
+
+def compile_code(source: str,
+                 is_exp=False,
+                 signature: str = "",
+                 **opt):
+
+    if (not source in compiled_by_source):
+        # randomize the function name to avoid conflict
+        from random import randint
+        rand = randint(0, 9999)
+
+        mod_source = f'def _exp{rand}({signature}):\n'
+        if is_exp:
+            mod_source += f'    return {source}\n'
+        else:
+            mod_source += f'    {source}\n'
+            # mod_source += f'    return True\n'
+
+        exp_module = load_module(mod_source)
+
+        compiled = getattr(exp_module, f'_exp{rand}')
+        compiled_by_source[source] = compiled
+
+    return compiled_by_source[source]
+
+
+def compile_codedict(sourcedict: dict,
+                     is_exp=False,
+                     code_header: str = None,
+                     signature: str = "",
+                     **opt):
     '''
-    compile a dict of exps (exp strings) into a module,
+    compile a dict of source strings into a module,
     using the dict key as function name
     '''
     mod_source = ''
-    for k, exp in expdict.items():
-        mod_source += f'def {k}(r):\n'
+    for k, source in sourcedict.items():
+        mod_source += f'def {k}({signature}):\n'
         if is_exp:
-            mod_source += f'    return {exp}\n'
+            mod_source += f'    return {source}\n'
         else:
-            mod_source += f'    {exp}\n'
+            mod_source += f'    {source}\n'
             # mod_source += f'    return True\n'
         mod_source += f''
 
@@ -230,19 +262,19 @@ def compile_codedict(expdict: dict, is_exp=False, **opt):
         exp_module = None
 
     retdict = {}
-    for k in expdict.keys():
+    for k in sourcedict.keys():
         retdict[k] = getattr(exp_module, k)
 
     return retdict
 
 
-def compile_codelist(explist: list,
+def compile_codelist(sourcelist: list,
                      is_exp=False,
                      code_header: str = None,
                      signature: str = "",
                      **opt):
     '''
-    compile a list of exps (exp strings) into a module,
+    compile a list of source strings into a module,
     code header can be some import or other pre-defined code
     example:
         code_header = 'import re'
@@ -254,7 +286,7 @@ def compile_codelist(explist: list,
 
     compiledlist = []
 
-    if len(explist) == 0:
+    if len(sourcelist) == 0:
         return compiledlist
 
     if code_header is not None:
@@ -262,13 +294,16 @@ def compile_codelist(explist: list,
     else:
         mod_source = ''
 
-    for i in range(0, len(explist)):
-        mod_source += f'def _exp{i}({signature}):\n'
+    # randomize the function name to avoid conflict
+    from random import randint
+    rand = randint(0, 9999)
+    for i in range(0, len(sourcelist)):
+        mod_source += f'def _exp{rand}_{i}({signature}):\n'
 
         if is_exp:
-            mod_source += f'    return {explist[i]}\n'
+            mod_source += f'    return {sourcelist[i]}\n'
         else:
-            mod_source += f'    {explist[i]}\n'
+            mod_source += f'    {sourcelist[i]}\n'
             # mod_source += f'    return True\n'
         mod_source += f''
 
@@ -277,8 +312,8 @@ def compile_codelist(explist: list,
 
     exp_module = load_module(mod_source, **opt)
 
-    for i in range(0, len(explist)):
-        compiled_func = getattr(exp_module, f'_exp{i}')
+    for i in range(0, len(sourcelist)):
+        compiled_func = getattr(exp_module, f'_exp{rand}_{i}')
         compiledlist.append(compiled_func)
 
     return compiledlist
@@ -315,20 +350,28 @@ test_dict = {'a': {'b': 1}, 'c': 'hello'}
 
     print()
     print("------------------------------------------------")
-    explist = ['r["a"] == 1', 'r["b"] == 2']
-    compiledlist = compile_codelist(explist, is_exp=True, signature="r")
-    print(f'explist = {pformat(explist)}')
-    r2 = {'a': 1, 'b': 2}
-    r3 = {'a': 1, 'b': 3}
-    for exp in compiledlist:
-        print(f'exp({r2}) = {exp(r2)}')
-        print(f'exp({r3}) = {exp(r3)}')
+    source = "r['a'] == 1"
+    print(f'source = {source}')
+    compiled_func = compile_code(source, is_exp=True, signature="r")
+    r = {'a': 1, 'b': 2}
+    print(f'compiled_func({r}) = {compiled_func(r)}')
 
     print()
     print("------------------------------------------------")
-    expdict = {'exp1': 'r["a"] == 1', 'exp2': 'r["b"] == 2'}
-    compileddict = compile_codedict(expdict, is_exp=True, signature="r")
-    print(f'expdict = {pformat(expdict)}')
+    sourcelist = ['r["a"] == 1', 'r["b"] == 2']
+    compiledlist = compile_codelist(sourcelist, is_exp=True, signature="r")
+    print(f'sourcelist = {pformat(sourcelist)}')
+    r2 = {'a': 1, 'b': 2}
+    r3 = {'a': 1, 'b': 3}
+    for compiled_func in compiledlist:
+        print(f'compiled_func({r2}) = {compiled_func(r2)}')
+        print(f'compiled_func({r3}) = {compiled_func(r3)}')
+
+    print()
+    print("------------------------------------------------")
+    sourcedict = {'exp1': 'r["a"] == 1', 'exp2': 'r["b"] == 2'}
+    compileddict = compile_codedict(sourcedict, is_exp=True, signature="r")
+    print(f'sourcedict = {pformat(sourcedict)}')
     r2 = {'a': 1, 'b': 2}
     r3 = {'a': 1, 'b': 3}
     for k, exp in compileddict.items():

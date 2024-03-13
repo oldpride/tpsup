@@ -8,7 +8,6 @@ import datetime
 import sys
 
 from tpsup.searchtools import binary_search_match
-from tpsup.modtools import compile_code
 
 # Date and time objects may be categorized as “aware” or “naive” depending on whether or not they include timezone information.
 #     Objects of the "date" type are always naive.
@@ -569,7 +568,48 @@ def get_new_yyyymmddHHMMSS(old_yyyymmddHHMMSS, offset, **opt):
     return new_yyyymmddHHMMSS
 
 
+'''
 # switch between local and UTC
+sub local_vs_utc {
+   my ( $direction, $old_yyyymmddHHMMSS, $opt ) = @_;
+
+   my $out_format;
+   my $old_t;
+
+   confess "old_yyyymmddHHMMSS is undef" if !defined($old_yyyymmddHHMMSS);
+
+   if ( $old_yyyymmddHHMMSS =~ /^([12][09]\d{12})(.*)/ ) {
+      $old_t = $1;
+      my $tail = defined($2) ? $2 : '';
+      $out_format = '%4d%02d%02d%02d%02d%02d' . $tail;
+   } elsif ( my @c =
+      ( $old_yyyymmddHHMMSS =~ /^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)/ ) )
+   {
+      $old_t = "$c[0]$c[2]$c[4]$c[6]$c[8]$c[10]";
+      my $tail = defined( $c[13] ) ? $c[13] : '';
+      $out_format =
+        '%4d' . $c[1] . '%02d' . $c[3] . '%02d' . $c[5] . '%02d' . $c[7] . '%02d' . $c[9] . '%02d' . $c[11] . $tail;
+   } else {
+      confess "unsupported format at old_yyyymmddHHMMSS='$old_yyyymmddHHMMSS'";
+   }
+
+   my $OldIsUTC;
+   $OldIsUTC++ if $direction eq 'UTC2LOCAL';
+
+   my $old_sec = yyyymmddHHMMSS_to_epoc( $old_t, { IsUTC => $OldIsUTC } );
+
+   if ($OldIsUTC) {
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($old_sec);
+      return sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec );
+   } else {
+      my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = gmtime($old_sec);
+      return sprintf( $out_format, 1900 + $year, $mon + 1, $mday, $hour, $min, $sec );
+   }
+}
+'''
+# switch between local and UTC
+
+
 def local_vs_utc(direction, old_yyyymmddHHMMSS, **opt):
     out_format = None
     old_t = None
@@ -674,6 +714,27 @@ mm_by_Mon = {
     'December': '12',
 }
 
+compiled_by_template = {}
+
+
+def compile_template(template, **opt):
+    if compiled_by_template.get(template):
+        return compiled_by_template[template]
+
+    from tpsup.modtools import load_module
+
+    code = f'''
+def convert(r:dict):
+    for k in r:
+        globals()[k] = r[k]
+    return f"{template}"
+'''
+    mod = load_module(code)
+    complied = getattr(mod, 'convert')
+
+    compiled_by_template[template] = complied
+    return complied
+
 
 def convert_from_yyyymmdd(template: str, yyyymmdd: str, **opt):
     # template is like "{dd} {Mon} {yyyy}"
@@ -704,7 +765,8 @@ def convert_from_yyyymmdd(template: str, yyyymmdd: str, **opt):
             'Mon': Mon,
             'yyyy': yyyy,
         }
-        compiled = compile_code(template, signature='r', **opt)
+        # eval "return qq($template)";
+        compiled = compile_template(template, **opt)
         string = compiled(r)
         return string
     else:
@@ -776,8 +838,7 @@ def main():
         local_vs_utc('LOCAL2UTC', '2021-10-21 07:01:02.513447') == '2021-10-21 11:01:02.513447'
         local_vs_utc('UTC2LOCAL', '2021-10-21 07:01:02.513447') == '2021-10-21 03:01:02.513447'
 
-        convert_from_yyyymmdd('f"{Mon}-{dd}-{yyyy}"', '20230901', verbose=1)
-        # == 'Sep-01-2023'
+        convert_from_yyyymmdd('{Mon}-{dd}-{yyyy}', '20230901') == 'Sep-01-2023'
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())
