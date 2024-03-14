@@ -8,6 +8,7 @@ exectools.py
         test_code = ' 1+1 == 2'
         import tpsup.exectools
         tpsup.exectools.eval_block(test_code, globals(), locals())
+        # the last step pass the caller's namespace (all objects) to the module
     being able to access caller's objects is a double edge sword.
         it is dangerous because the module could pollute the caller's namespace.
         it is convenient because the module can access the caller's objects.
@@ -25,7 +26,7 @@ modtools.py
         from modtools import compile_code
         a = 1
         compiled = compile_code(code)
-        compiled(a)
+        compiled(a)  # pass caller's objects to the compiled code
     not being able to access caller's objects make modtools safe.
         because the module cannot pollute the caller's namespace.
         
@@ -37,9 +38,15 @@ expression.py
     expression.py is similar to tpsup/lib/TPSUP/Expression.pm.
     it provides a static dedicate namespace to the compiled code.
     the caller needs to populate this namespace 
-       or pass caller's objects using function parameters.
+       (or pass caller's objects using function parameters).
     the advantage of keeping the objects (copied from caller) and the compiled code
        in the same namespace makes the code simpler and more readable.
        f"{yyyy} {mm} {dd}" is more readable than f"{r['yyyy']} {r['mm']} {r['dd']}"
+    example,
+        # populate the namespace with caller's objects (selectively)
+        tpsup.expression.export_var(r)   
+        compiled = tpsup.expression.compile_code(template, is_exp=True, **opt)
+        # no need to pass caller's objects to the compiled code
+        converted = compiled()           
 
 

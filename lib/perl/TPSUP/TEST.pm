@@ -42,36 +42,61 @@ sub process_block {
 
    my $verbose = $opt->{verbose};
 
-   my @lines = split /\n/, $block;
+   my @lines     = split /\n/, $block;
+   my $in_test   = 0;
+   my $test_code = '';
    for my $line (@lines) {
-      next if $line =~ /^\s*$/;
-      next if $line =~ /^\s*#/;
+      if ( !$in_test ) {
+         if ( $line =~ /^[\s#]*TEST_BEGIN/ ) {
+            $in_test = 1;
+         } else {
+            next if $line =~ /^\s*$/;
+            next if $line =~ /^\s*#/;
 
-      if ( $line =~ /^\s*my\s+/ ) {
-         print "WARN: 'my' doesn't work in test codes. Use 'our' instead.\n";
+            $line =~ s/^\s+//;    # remove leading spaces
+
+            if ( $line =~ /^my\s+/ ) {
+               print "WARN: single-line 'my' doesn't work in test codes. Use 'our' instead.\n";
+            }
+
+            run_test( $line, $namespace, $opt );
+         }
+      } else {
+         # $in_test == 1
+         if ( $line =~ /^[\s#]*TEST_END/ ) {
+            $in_test = 0;
+            run_test( $test_code, $namespace, $opt );
+            $test_code = '';
+         } else {
+            $test_code .= "$line\n";
+         }
       }
-
-      $line =~ s/^\s+//;    # remove leading spaces
-      print "----------------------------------------\n";
-      print "eval: $line\n";
-      my $code = "package $namespace; no strict; $line";
-
-      # the following could convert result type.
-      #   my $result = eval $code;
-      # for example, if result is an array (0, 1, 2). the $result will be 3.
-      # therefore, use [] to preserve original type.
-
-      my $result = [ eval $code ];
-      if ($@) {
-         print "eval error: $@\n";
-      }
-
-      if ( !$opt->{not_show_result} ) {
-         print "result=", Dumper(@$result), "\n";
-      }
-
-      print "\n";
    }
+}
+
+sub run_test {
+   my ( $test, $namespace, $opt ) = @_;
+
+   print "----------------------------------------\n";
+   print "eval: $test\n";
+   my $code = "package $namespace; no strict; $test";
+
+   # the following could convert result type.
+   #   my $result = eval $code;
+   # for example, if result is an array (0, 1, 2). the $result will be 3.
+   # therefore, use [] to preserve original type.
+
+   my $result = [ eval $code ];
+   if ($@) {
+      print "eval error: $@\n";
+   }
+
+   if ( !$opt->{not_show_result} ) {
+      print "result=", Dumper(@$result), "\n";
+   }
+
+   print "\n";
+
 }
 
 sub test_lines {
@@ -311,8 +336,15 @@ END
       equal([1,2], [1.0, "2"]) == 1;
       equal({a=>-1, b=>2}, {b=>"2", a=>-1.0} ) == 1;
 
+      #TEST_BEGIN
+      my $a = 1;
+      my $b = 2;
+      $a + $b == 3;
+      #TEST_END
 
-
+      #TEST_BEGIN
+      1+1 == 2;
+      #TEST_END
 
 END
 

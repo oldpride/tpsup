@@ -879,8 +879,79 @@ sub get_tradedays_by_exch_begin_end {
    return \@tradedays;
 }
 
+sub enrich_year {
+   my ( $r, $opt ) = @_;
+
+   my $r2 = {%$r};
+   if ( $r->{yyyy} ) {
+      $r2->{yy} = substr( $r->{yyyy}, 2, 2 );
+      $r2->{YY} = substr( $r->{yyyy}, 0, 2 );
+   } elsif ( $r->{YY} && $r->{yy} ) {
+      $r2->{yyyy} = sprintf( "%d%d", $r->{YY}, $r->{yy} );
+   } elsif ( $r->{yy} ) {
+      if ( $r->{yy} >= 70 ) {
+         $r2->{yyyy} = sprintf( "19%d", $r->{yy} );
+         $r2->{YY}   = '19';
+      } else {
+         $r2->{yyyy} = sprintf( "20%d", $r->{yy} );
+         $r2->{YY}   = '20';
+      }
+   } else {
+      croak "no yyyy or yy in r=", Dumper;
+   }
+
+   return $r2;
+}
+
+sub enrich_month {
+   my ( $r, $opt ) = @_;
+
+   my $r2 = {%$r};
+   if ( $r->{mm} ) {
+      $r2->{m}   = $r->{mm};
+      $r2->{Mon} = get_Mon_by_number( $r->{mm} );
+   } elsif ( $r->{m} ) {
+      $r2->{mm}  = sprintf( "%02d", $r->{m} );
+      $r2->{Mon} = get_Mon_by_number( $r->{m} );
+   } elsif ( $r->{Mon} ) {
+      $r2->{mm} = get_mm_by_Mon( $r->{Mon} );
+      $r2->{m}  = $r2->{mm};
+   } else {
+      croak "no mm or Mon in r=", Dumper;
+   }
+
+   return $r2;
+}
+
+sub enrich_day {
+   my ( $r, $opt ) = @_;
+
+   my $r2 = {%$r};
+   if ( $r->{dd} ) {
+      $r2->{d} = $r->{dd};
+   } elsif ( $r->{d} ) {
+      $r2->{dd} = sprintf( "%02d", $r->{d} );
+   } else {
+      croak "no dd or d in r=", Dumper;
+   }
+
+   return $r2;
+}
+
+sub enrich_yyyymmdd {
+   my ( $r, $opt ) = @_;
+
+   my $r2 = enrich_year( $r, $opt );
+   $r2 = { %$r2, %{ enrich_month( $r, $opt ) } };
+   $r2 = { %$r2, %{ enrich_day( $r, $opt ) } };
+
+   return $r2;
+}
+
 sub date2any {
    my ( $date, $input_pattern, $input_assignment, $output_template, $opt ) = @_;
+
+   my $verbose = $opt->{verbose} || 0;
 
    # test winter time, GMT-5=local
    # $ date -u; date; perl -e 'use TPSUP::DATE qw(/./);print date_template('date -u +%Y%m%d%S', "^(\\d{4})(\\d{2})(\\d{2})-(\\d{2}):(\\d{2}):(\\d{2})", "yyyy,mm,dd,HH,MM,SS", "sprintf(\"\$Mon-\$dd-\$yyyy,\$HH:\$MM:\$SS\")", {gmt21ocal=>1}), "\n";'
@@ -906,38 +977,28 @@ sub date2any {
    my $r;    # ref
    @{$r}{@assignments} = @a;
 
-   # we need to ensure that we have mm, dd, yyyy, HH, MM, SS
-   if ( !$r->{dd} ) {
-      if ( $r->{d} ) {
-         $r->{dd} = sprintf( "%02d", $r->{d} );
-      }
-   }
+   # we need to ensure that we have mm, dd, yyyy, HH, MM
+   # it is OK if we don't have SS, because timezone doesn't change it.
+   $r = enrich_yyyymmdd( $r, $opt );
 
-   if ( !$r->{mm} ) {
-      if ( $r->{m} ) {
-         $r->{mm} = sprintf( "%02d", $r->{m} );
-      } elsif ( $r->{Mon} ) {
-         $r->{mm} = get_mm_by_Mon( $r->{Mon} );
-      }
-   }
-
-   my $converted_r;
+   $verbose && print STDERR "r=", Dumper($r);
 
    if ( $opt->{UTC2LOCAL} || $opt->{LOCAL2UTC} ) {
       # if there is a time zone conversion, we need to convert the date to epoc seconds
 
-      # http://stackoverflow.com/questions/411740/how-can-i-parse-dates-and-convert-time-zones-in-perl
+      # how to convert time zone
+      # http://stackoverflow.com/questions/411740/
       if (  !exists $r->{mm}
          || !exists $r->{dd}
          || !exists $r->{yyyy}
-         || !exists $r->{HH} )
+         || !exists $r->{HH}
+         || !exists $r->{MM} )
       {
          carp
-           "missing yyyy/mm/dd/HH, date='$date', input_pattern='$input_pattern', input_assignment='$input_assignment'";
+"missing yyyy/mm/dd/HH/MM, date='$date', input_pattern='$input_pattern', input_assignment='$input_assignment'";
          return undef;
       }
 
-      $r->{MM} - 0 if !exists $r->{MM};
       $r->{SS} = 0 if !exists $r->{SS};
 
       my $seconds;    # epoc seconds, not affected by time zone.
@@ -952,44 +1013,24 @@ sub date2any {
          ( $sec, $min, $hour, $day, $mon, $year ) = gmtime($seconds);
       }
 
-      $converted_r->{SS}   = sprintf( "%02d", $sec );
-      $converted_r->{MM}   = sprintf( "%02d", $min );
-      $converted_r->{HH}   = sprintf( "%02d", $hour );
-      $converted_r->{dd}   = sprintf( "%02d", $day );
-      $converted_r->{mm}   = sprintf( "%02d", $mon + 1 );
-      $converted_r->{yyyy} = sprintf( "%d",   $year + 1900 );
-   } else {
-      # no time zone conversion, simple
-      $converted_r = $r;
-   }
+      $r->{SS}   = sprintf( "%02d", $sec );
+      $r->{MM}   = sprintf( "%02d", $min );
+      $r->{HH}   = sprintf( "%02d", $hour );
+      $r->{dd}   = sprintf( "%02d", $day );
+      $r->{mm}   = sprintf( "%02d", $mon + 1 );
+      $r->{yyyy} = sprintf( "%d",   $year + 1900 );
 
-   if ( defined $converted_r->{yyyy} ) {
-      if ( !defined $converted_r->{yy} ) {
-         if ( "$converted_r->{yyyy}" =~ /^\d{2}(\d{2})/ ) {
-            $converted_r->{yy} = "$1";
-         }
-      }
-   }
-
-   if ( defined $converted_r->{mm} ) {
-      $converted_r->{m} = sprintf( "%d", $converted_r->{mm} );
-
-      if ( !defined $converted_r->{Mon} ) {
-         $converted_r->{Mon} = get_Mon_by_number( $converted_r->{mm} );
-      }
-   }
-
-   if ( defined $converted_r->{dd} ) {
-      $converted_r->{d} = sprintf( "%d", $converted_r->{dd} );
+      # enrich again, as we have changed mm, dd, yyyy, HH, MM, SS
+      $r = enrich_yyyymmdd( $r, $opt );
    }
 
    # we could have used the current name space to evaluate the expression
    # but using TPSUP::Expression name space will allow use "no strict 'ref'"
    # and 'no warnings'
 
-   TPSUP::Expression::export_var( $converted_r, { RESET => 1 } );
+   TPSUP::Expression::export_var( $r, { RESET => 1 } );
 
-   # 1. need to double-quote around $output_template to ake it an expression
+   # 1. need to double-quote around $output_template to make it an expression
    # 2. compile_exp has built-in cache to save from compiling twice
    my $compiled = TPSUP::Expression::compile_exp( qq("$output_template"), $opt );
 
@@ -1066,7 +1107,13 @@ sub main {
       # local_vs_utc( 'UTC2LOCAL', '2021-10-21 07:01:02.513447' ) eq '2021-10-21 03:01:02.513447';
       convert_from_yyyymmdd( '$Mon-$dd-$yyyy', '20230901') eq 'Sep-01-2023';
 
-      date2any('Sep 1 2023 12:34:56.789','^(...)\s+(\\d{1,2}) (\\d{4}) (\\d{2}):(\\d{2}):(\\d{2})','Mon,d,yyyy,HH,MM,SS', '$yyyy-$mm-$dd,$HH $MM $SS') eq '2023-09-01,12 34 56';
+      # TEST_BEGIN
+      date2any('Sep 1 2023 12:34:56.789',
+                '^(...)\s+(\\d{1,2}) (\\d{4}) (\\d{2}):(\\d{2}):(\\d{2})',
+               'Mon,d,yyyy,HH,MM,SS', 
+               '$yyyy-$mm-$dd,$HH $MM $SS'
+      ) eq '2023-09-01,12 34 56';
+      # TEST_END
 
 END
 
