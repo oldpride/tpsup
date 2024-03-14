@@ -186,6 +186,8 @@ def main():
 
         compile_code('a+d', is_exp=True)()
 
+        compile_code('f"a={a}, d={d}"', is_exp=True,)()
+
     from tpsup.exectools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
     # test_codes()

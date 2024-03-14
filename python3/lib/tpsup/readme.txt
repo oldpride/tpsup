@@ -16,7 +16,7 @@ exectools.py
 
 modtools.py
     modtools.py compiles code also compiles code at run time.
-    it dynamically creates a module. 
+    it dynamically creates a module (dynamic dedicate namespace).
     but the caller does not need to pass the namespace, globals(), to the module. 
     Therefore, the module cannot access caller's objects.
     caller has to pass caller's objects using function parameters.
@@ -35,8 +35,11 @@ expression.py
     expression.py is different from exectools.py in that it doesn't access caller's namespace.
 
     expression.py is similar to tpsup/lib/TPSUP/Expression.pm.
-    it provides a dedicate namespace to the compiled code.
+    it provides a static dedicate namespace to the compiled code.
     the caller needs to populate this namespace 
        or pass caller's objects using function parameters.
+    the advantage of keeping the objects (copied from caller) and the compiled code
+       in the same namespace makes the code simpler and more readable.
+       f"{yyyy} {mm} {dd}" is more readable than f"{r['yyyy']} {r['mm']} {r['dd']}"
 
 

@@ -6,9 +6,10 @@ import re
 import csv
 import datetime
 import sys
+import tpsup
 
 from tpsup.searchtools import binary_search_match
-from tpsup.modtools import compile_code
+import tpsup.expression
 
 # Date and time objects may be categorized as “aware” or “naive” depending on whether or not they include timezone information.
 #     Objects of the "date" type are always naive.
@@ -704,8 +705,10 @@ def convert_from_yyyymmdd(template: str, yyyymmdd: str, **opt):
             'Mon': Mon,
             'yyyy': yyyy,
         }
-        compiled = compile_code(template, signature='r', **opt)
-        string = compiled(r)
+
+        tpsup.expression.export_var(r)
+        compiled = tpsup.expression.compile_code(template, is_exp=True, **opt)
+        string = compiled()
         return string
     else:
         raise ValueError(f"yyyymmdd='{yyyymmdd}' is in bad format")
@@ -776,8 +779,7 @@ def main():
         local_vs_utc('LOCAL2UTC', '2021-10-21 07:01:02.513447') == '2021-10-21 11:01:02.513447'
         local_vs_utc('UTC2LOCAL', '2021-10-21 07:01:02.513447') == '2021-10-21 03:01:02.513447'
 
-        convert_from_yyyymmdd('f"{Mon}-{dd}-{yyyy}"', '20230901', verbose=1)
-        # == 'Sep-01-2023'
+        convert_from_yyyymmdd('f"{Mon}-{dd}-{yyyy}"', '20230901') == 'Sep-01-2023'
 
     import tpsup.exectools
     tpsup.exectools.test_lines(test_codes, globals(), locals())
