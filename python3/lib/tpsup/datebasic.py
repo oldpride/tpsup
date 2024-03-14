@@ -765,14 +765,14 @@ def enrich_year(r: dict, **opt):
 def enrich_month(r: dict, **opt):
     r2 = r.copy()
     if r.get('mm'):
-        r2['m'] = r['mm']
+        r2['m'] = r['mm'].lstrip('0')
         r2['Mon'] = Mon_by_number[r['mm']]
     elif r.get('m'):
-        r2['mm'] = f"{r['m']:02d}"
+        r2['mm'] = r['m'].zfill(2)  # padding string  with 0. for int, use f"{r['m']:02}"
         r2['Mon'] = Mon_by_number[r['m']]
     elif r.get('Mon'):
         r2['mm'] = mm_by_Mon[r['Mon']]
-        r2['m'] = r2['mm']
+        r2['m'] = r2['mm'].lstrip('0')
     else:
         raise ValueError(f"no mm or Mon in r={r}")
 
@@ -782,9 +782,11 @@ def enrich_month(r: dict, **opt):
 def enrich_day(r: dict, **opt):
     r2 = r.copy()
     if r.get('dd'):
-        r2['d'] = r['dd']
+        # string 0 padding 0
+        r2['d'] = r['dd'].lstrip('0')
     elif r.get('d'):
-        r2['dd'] = f"{r['d']:02d}"
+        r2['dd'] = r['d'].zfill(2)  # padding string  with 0
+        # r2['dd'] = f"{r['d']:02}" # had r['d'] been int, this would work.
     else:
         raise ValueError(f"no dd or d in r={r}")
 
@@ -924,11 +926,15 @@ def main():
 
         convert_from_yyyymmdd('f"{Mon}-{dd}-{yyyy}"', '20230901') == 'Sep-01-2023'
 
-        date2any('Sep 1 2023 12:34:56.789',
-                 '^(...)\s+(\\d{1,2}) (\\d{4}) (\\d{2}):(\\d{2}):(\\d{2})', 'Mon,d,yyyy,HH,MM,SS', 'f"{yyyy}-{mm}-{dd},{HH}:{MM}:{SS}"')
+        date2any('Nov 1 2023 12:34:56.789',
+                 r'^(...)\s+(\d{1,2}) (\d{4}) (\d{2}):(\d{2}):(\d{2})',
+                 'Mon,d,yyyy,HH,MM,SS',
+                 'f"{yyyy}-{mm}-{dd},{HH}:{MM}:{SS}"',
+                 #  verbose=1,
+                 ) == '2023-11-01,12:34:56'
 
-    import tpsup.exectools
-    tpsup.exectools.test_lines(test_codes, globals(), locals())
+    import tpsup.testtools
+    tpsup.testtools.test_lines(test_codes, globals(), locals())
 
 
 if __name__ == "__main__":

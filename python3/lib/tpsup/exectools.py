@@ -1,6 +1,7 @@
 import types
 import re
 from typing import Literal, Union
+from tpsup.pythontools import add_return, correct_indent, shift_indent
 from tpsup.utilbasic import print_string_with_line_numer
 from pprint import pformat
 from tpsup.logbasic import log_FileFuncLine
@@ -112,7 +113,7 @@ def exec_into_globals(_source: str, _globals, _locals, **opt):
 #     False
 
 # this function should not be called.
-# it is to be overwritten by eval_block().
+# it is to be overwritten inside eval_block().
 # it is here to disable the warning from IDE.
 def tp_exec_func():
     raise RuntimeError("this function should not be called")
@@ -166,211 +167,8 @@ def test_compile(_source: str, _globals, _locals, **opt):
     return _ret
 
 
-def correct_indent(source: str, **opt):
-    # remove indent.
-    # the source my not be correctly indented because it embedded in other
-    # code.
-    # use the first ident as reference
-
-    verbose = opt.get("verbose", False)
-    # verbose = 1
-
-    lines = source.split("\n")
-
-    if verbose:
-        print(f"{len(lines)} lines")
-
-    first_indent = None
-    compiled_first_indent_search = re.compile(r"^(\s*)\S")
-    for i in range(len(lines)):
-        # blank lines are ignored
-        if m := compiled_first_indent_search.match(lines[i]):
-            first_indent, *_ = m.groups()
-            length = len(first_indent)
-            if verbose:
-                print(f"matched first indent {length} chars")
-            if length == 0:
-                # first line has no ident, then no need to shift left.
-                return source
-            break
-    return shift_indent(source, shift_space_count=-length, **opt)
-
-
-def shift_indent(source: str, **opt):
-    # shift left or right
-    shift_tab_count = opt.get("shift_tab_count", 0)
-    shift_space_count = opt.get("shift_space_count", shift_tab_count * 4)
-
-    if shift_space_count == 0:
-        return source
-
-    lines = source.split("\n")
-
-    for i in range(len(lines)):
-        if shift_space_count > 0:
-            lines[i] = " " * shift_space_count + lines[i]
-        else:
-            lines[i] = lines[i][-shift_space_count:]
-
-    return "\n".join(lines)
-
-
-real_line_pattern = None
-
-
-def add_return(source: Union[str, list], ReturnLocation: Literal['LastLine', 'LastFront'] = 'LastFront', **opt):
-    # this function add a return to the last line of the source code.
-    # example, change from
-    #     a=1
-    #     a+3
-    # to
-    #     a=1
-    #     return a+3
-    #
-    # LastLine vs LastFront
-    # example:
-    #     print("hello",      # LastFront
-    #          "world")       # LastLine
-
-    source_type = type(source)
-
-    if source_type is list:
-        lines = source
-    elif source_type is str:
-        lines = source.split("\n")
-    else:
-        raise RuntimeError(f"source type {source_type} not supported")
-
-    global real_line_pattern
-    if real_line_pattern is None:
-        # non-blank, non-comment line
-        real_line_pattern = re.compile(r"^(\s*)([^#\s].*)")
-
-    lastLine = None
-    lastFront = None
-    minimal_indent = None
-
-    for i in range(len(lines)):
-        if m := real_line_pattern.search(lines[i]):
-            indent, real_stuff = m.groups()
-            if minimal_indent is None:
-                minimal_indent = len(indent)
-                lastFront = i
-            elif len(indent) <= minimal_indent:
-                minimal_indent = len(indent)
-                lastFront = i
-            lastLine = i
-    if ReturnLocation == 'LastFront':
-        last = lastFront
-    else:
-        last = lastLine
-    if not re.search(r"^\s*return", lines[last]):
-        lines[last] = re.sub(r"^(\s*)", r"\1return ", lines[last])
-
-    # return type keep the same as source type.
-    if source_type is list:
-        return lines
-    else:
-        return "\n".join(lines)
-
-
-def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print_return=True, **opt):
-    verbose = opt.get("verbose", 0)
-    import inspect
-    # we import here because this is a test function.
-
-    source = inspect.getsource(f)
-    # get the source code of the function, including comments and blank lines.
-
-    if verbose:
-        log_FileFuncLine(f"source = \n{source}")
-
-    if verbose > 1:
-        log_FileFuncLine(f"source_globals = \n{pformat(source_globals)}")
-        log_FileFuncLine(f"source_locals = \n{pformat(source_locals)}")
-
-    lines = source.split('\n')
-
-    skip_pattern = re.compile(r'^\s*#|^\s*$|^\s*def\s')
-    # skip blank lines, comments, and function definition
-
-    lines2 = [l for l in lines if not skip_pattern.match(l)]
-    source2 = '\n'.join(lines2)
-
-    if verbose:
-        log_FileFuncLine(f"source2 = \n{source2}")
-
-    # align code to the left. this way, we can tell line continuation by checking indent.
-    sources3 = correct_indent(source2, **opt)
-
-    if verbose:
-        log_FileFuncLine(f"sources3 = \n{sources3}")
-
-    last_line = None
-    for line in sources3.split('\n'):
-        if line.startswith(' '):  # line.startswith('\s') does not work
-            # this is a continuation of last line
-            if last_line is None:
-                raise RuntimeError(
-                    f"line continuation at the beginning of the code")
-            last_line = last_line + '\n' + line
-            continue
-
-        # now that this line has no indent, therefore, last line is complete.
-        if last_line is None:
-            # this is the first line
-            last_line = line
-            continue
-
-        test_1_line(last_line, source_globals, source_locals, **opt)
-
-        last_line = line
-
-    test_1_line(last_line, source_globals, source_locals, **opt)
-
-
-def test_1_line(line: str, source_globals={}, source_locals={}, print_return=True, print_pformat=True, **opt):
-    print()
-    print("--------------------")
-    print(f"run: {line}")
-
-    combined_globals = {**source_globals, **globals()}
-    combined_locals = {**source_locals, **locals()}
-
-    # exec_into_globals(line, combined_globals, combined_locals)
-    ret = eval_block(line, combined_globals, combined_locals,
-                     **{**opt, 'EvalAddReturn': True})
-    if print_return:
-        if print_pformat:
-            print(f"return with pformat: \n{pformat(ret)}")
-        else:
-            print(f"return without pformat: \n{ret}")
-
-
 def main():
-    print("test correct_indent()")
-    code = """
-           
-    # a blank line above and a comment
-    a = 1
-    if a == 2:
-        a = 3
-    """
-
-    print("--------------------")
-    print(code)
-    print("--------------------")
-
-    def test_code():
-        correct_indent(code, verbose=0)
-        shift_indent(code, shift_space_count=4)
-        shift_indent(code, shift_space_count=-4)
-        shift_indent(code, shift_tab_count=-1)
-        print('multiline test', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, {
-              'a': 1, 'b': 2}, [1, 2, 3], {'hello': 'world'})
-
-    test_lines(test_code, globals(), locals(), pformat=0)
-    print("--------------------")
+    from tpsup.testtools import test_lines
 
     print("test _updated exec_into_globals()")
     code = """

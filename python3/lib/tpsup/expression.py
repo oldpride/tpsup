@@ -176,19 +176,20 @@ def compile_code(source: str,
 def main():
     def test_codes():
         export_var({'a': 1, 'b': 2, 'c': 3})
-        dump_var()
-        a+b
+        # dump_var()
+        a+b == 3
         export_var({'a': 4, 'd': 5}, RESET=True)
-        dump_var()
-        a+d
+        # dump_var()
+        a+d == 9
         export_var({'a': 7, 'b': 8, 'c': 9}, ExpPrefix='tian', RESET=True)
-        dump_var(ExpPrefix='tian')
+        # dump_var(ExpPrefix='tian')
+        tian['a']+tian['b'] == 15
 
-        compile_code('a+d', is_exp=True)()
+        compile_code('a+d', is_exp=True)() == 9
 
-        compile_code('f"a={a}, d={d}"', is_exp=True,)()
+        compile_code('f"a={a}, d={d}"', is_exp=True,)() == 'a=4, d=5'
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
     # test_codes()
 
