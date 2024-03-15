@@ -12,8 +12,10 @@ from tpsup.logparser import get_log_section_headers, get_log_sections
 from tpsup.printtools import render_arrays, string_short
 from tpsup.sqltools import get_dbh, run_sql
 from tpsup.filetools import tpfind, tpglob
-from tpsup.logtools import get_exception_string, log_FileFuncLine, get_stack, print_exception
-from tpsup.utilbasic import arrays_to_hashes, get_first_by_key, get_keys_from_array, get_node_list, get_value_by_key_case_insensitive, hashes_to_arrays, resolve_scalar_var_in_string, unify_array_hash, unify_hash_hash
+from tpsup.logtools import get_exception_string, get_stack, print_exception
+from tpsup.logbasic import log_FileFuncLine
+from tpsup.utilbasic import arrays_to_hashes, get_keys_from_array, get_node_list, hashes_to_arrays, unify_array_hash, unify_hash_hash
+from tpsup.utiltools import get_first_by_key, get_value_by_key_case_insensitive, resolve_scalar_var_in_string
 
 # converted  from ../../../lib/perl/TPSUP/TRACER.pm
 
