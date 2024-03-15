@@ -164,21 +164,14 @@ class Env:
         os.system(f'{self.ls_cmd} "{self.adjpath(path)}"')
 
 
-compiled_cyg_pattern = None
-compiled_win_pattern = None
-
-
 def cygpath(path: str, direction: Literal["win2cyg", "cyg2win"], **opt):
     # /cygdrive/c/Program Files;/cygdrive/c/Users;/cygdrive/d
     # c:/Program Files;c:/Users;d:
     if direction == "win2cyg":
         if opt.get("useRe", False):
-            global compiled_win_pattern
             # use regex, which is not reliable as it can only
             # handle /cygdrive/..., but cannot convert /home/username
-            if compiled_win_pattern is None:
-                compiled_win_pattern = re.compile(r"(.):(.*)(;?)")
-            path2 = compiled_win_pattern.sub(r"/cygdrive/\1/\2\3", path)
+            path2 = re.sub(r"(.):(.*)(;?)", r"/cygdrive/\1/\2\3", path)
             path2.replace("\\", "/")
         else:
             # use cygpath command is more reliable, but slower as it calls
@@ -190,11 +183,7 @@ def cygpath(path: str, direction: Literal["win2cyg", "cyg2win"], **opt):
             ).stdout.strip()
     else:
         if opt.get("useRe", False):
-            global compiled_cyg_pattern
-            if compiled_cyg_pattern is None:
-                compiled_cyg_pattern = re.compile(r"/cygdrive/(.)(.*?)(;?)")
-
-            path2 = compiled_cyg_pattern.sub(r"\1:\2\3", path)
+            path2 = re.sub(r"/cygdrive/(.)(.*?)(;?)", r"\1:\2\3", path)
         else:
             path2 = subprocess.run(
                 ["cygpath", "-m", path], capture_output=True, text=True
@@ -342,11 +331,9 @@ def get_user_firstlast(user: str = None, **opt) -> str:
 re_split = None
 
 
-def path_contains(dir: str, **opt):
+def path_contains(dir: str, regex=False,  **opt):
     verbose = opt.get('verbose', False)
-    if regex := opt.get('regex', False):
-        pattern = re.compile(dir, re.IGNORECASE)
-    else:
+    if not regex:
         native_dir = os.path.normpath(dir)
 
     if not (env_string := opt.get('env_string', None)):
@@ -365,7 +352,7 @@ def path_contains(dir: str, **opt):
         native_p = os.path.normpath(p)
 
         if regex:
-            if pattern.search(native_p) or pattern.search(p):
+            if re.search(dir, native_p) or re.search(dir, p):
                 results.append(p)
         elif native_p == native_dir:
             results.append(p)

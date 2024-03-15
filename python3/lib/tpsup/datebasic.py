@@ -66,17 +66,6 @@ def get_date(yyyymmdd=None, **opt):
     return r
 
 
-# cache the compiled pattern
-compiled_by_pattern = {}
-
-
-def compile_pattern(pattern):
-    global compiled_by_pattern
-    if pattern not in compiled_by_pattern:
-        compiled_by_pattern[pattern] = re.compile(pattern)
-    return compiled_by_pattern[pattern]
-
-
 def get_yyyymmdd(**opt):
     date = get_date(**opt)
     return f"{date['yyyy']}{date['mm']}{date['dd']}"
@@ -133,16 +122,13 @@ def parse_holiday_csv(exch, HolidayRef: dict = None, HolidaysCsv: str = None, **
                 row = line.strip().split(',')
                 holidays = row[1].split()
 
-                yyyymmdd_pattern = r'\d{8}'
-                yyyymmdd_compiled = compile_pattern(yyyymmdd_pattern)
-
                 item_count = 0
                 last_holiday = None
 
                 for yyyymmdd in holidays:
                     item_count += 1
 
-                    if re.match(yyyymmdd_compiled, yyyymmdd):
+                    if re.match(r'\d{8}', yyyymmdd):
                         if last_holiday and yyyymmdd <= last_holiday:
                             raise ValueError(
                                 f"{HolidaysCsv} row {row_count} item {item_count} '{yyyymmdd}' <= last one '{last_holiday}', out of order")
@@ -187,7 +173,7 @@ def yyyymmddHHMMSS_to_epoc(yyyymmddHHMMSS, fromUTC=False, **opt):
         dt = datetime.datetime(*yyyymmddHHMMSS, **settings)
 
     else:
-        if m := re.match(compile_pattern(r'(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})'), yyyymmddHHMMSS):
+        if m := re.match(r'(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})', yyyymmddHHMMSS):
             yyyy, mm, dd, HH, MM, SS = m.groups()
 
             dt = datetime.datetime(int(yyyy), int(mm), int(dd), int(HH), int(MM), int(SS), **settings)
@@ -438,10 +424,9 @@ def get_seconds_between_two_days(yyyymmdd1, yyyymmdd2,
         yyyymmdd2 = str(yyyymmdd2)
 
         # make sure the two days are in correct format
-        compiled_yyyymmdd_pattern = compile_pattern(r'(\d{8})')
-        if not re.match(compiled_yyyymmdd_pattern, yyyymmdd1):
+        if not re.match(r'(\d{8})', yyyymmdd1):
             raise ValueError(f"yyyymmdd1='{yyyymmdd1}' is not in correct format")
-        if not re.match(compiled_yyyymmdd_pattern, yyyymmdd2):
+        if not re.match(r'(\d{8})', yyyymmdd2):
             raise ValueError(f"yyyymmdd2='{yyyymmdd2}' is not in correct format")
 
     if yyyymmdd1 == yyyymmdd2:
@@ -470,9 +455,9 @@ def get_interval_seconds(yyyymmdd1, HHMMSS1, yyyymmdd2, HHMMSS2,
         seconds = get_seconds_between_two_days(yyyymmdd1, yyyymmdd2, opt)
 
     if CheckFormat:
-        if not re.match(compile_pattern(r'^[0-9]{2}[0-9]{2}[0-9]{2}$'), HHMMSS1):
+        if not re.match(r'^[0-9]{2}[0-9]{2}[0-9]{2}$', HHMMSS1):
             raise ValueError(f"HHMMSS1='{HHMMSS1}' is in bad format")
-        if not re.match(compile_pattern(r'^[0-9]{2}[0-9]{2}[0-9]{2}$'), HHMMSS2):
+        if not re.match(r'^[0-9]{2}[0-9]{2}[0-9]{2}$', HHMMSS2):
             raise ValueError(f"HHMMSS2='{HHMMSS2}' is in bad format")
 
     HH1, MM1, SS1 = HHMMSS1[:2], HHMMSS1[2:4], HHMMSS1[4:6]
@@ -487,9 +472,9 @@ def get_seconds_between_yyyymmddHHMMSS(yyyymmddHHMMSS1, yyyymmddHHMMSS2, **opt):
     # this supports a wider format
     s = []
     for t1 in (yyyymmddHHMMSS1, yyyymmddHHMMSS2):
-        if m := re.match(compile_pattern(r'^([12][09]\d{12})(.*)'), t1):
+        if m := re.match(r'^([12][09]\d{12})(.*)', t1):
             t2 = m.group(1)
-        elif m := re.match(compile_pattern(r'^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)'), t1):
+        elif m := re.match(r'^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)', t1):
             t2 = f"{m.group(1)}{m.group(3)}{m.group(5)}{m.group(7)}{m.group(9)}{m.group(11)}"
         else:
             raise ValueError(f"unsupported format at '{t1}'")
@@ -504,12 +489,12 @@ def get_seconds_between_yyyymmddHHMMSS(yyyymmddHHMMSS1, yyyymmddHHMMSS2, **opt):
 def get_new_yyyymmddHHMMSS(old_yyyymmddHHMMSS, offset, **opt):
     out_format = None
     old_t = None
-    if m := re.match(compile_pattern(r'^([12][09]\d{12})(.*)'), old_yyyymmddHHMMSS):
+    if m := re.match(r'^([12][09]\d{12})(.*)', old_yyyymmddHHMMSS):
         old_t = m.group(1)
         tail = m.group(2)
         # out_format = '%4d%02d%02d%02d%02d%02d' + tail
         out_format = '%s%s%s%s%s%s' + tail
-    elif m := re.match(compile_pattern(r'^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)'), old_yyyymmddHHMMSS):
+    elif m := re.match(r'^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)', old_yyyymmddHHMMSS):
         old_t = f"{m.group(1)}{m.group(3)}{m.group(5)}{m.group(7)}{m.group(9)}{m.group(11)}"
         tail = m.group(12)
         # out_format = f'%4d{m.group(2)}%02d{m.group(4)}%02d{m.group(6)}%02d{m.group(8)}%02d{m.group(10)}%02d{tail}'
@@ -531,11 +516,11 @@ def local_vs_utc(direction, old_yyyymmddHHMMSS, **opt):
     out_format = None
     old_t = None
 
-    if m := re.match(compile_pattern(r'^([12][09]\d{12})(.*)'), old_yyyymmddHHMMSS):
+    if m := re.match(r'^([12][09]\d{12})(.*)', old_yyyymmddHHMMSS):
         old_t = m.group(1)
         tail = m.group(2)
         out_format = '%s%s%s%s%s%s' + tail
-    elif m := re.match(compile_pattern(r'^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)'), old_yyyymmddHHMMSS):
+    elif m := re.match(r'^([12][09]\d{2})([^\d])(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.)(\d{2})(.*)', old_yyyymmddHHMMSS):
         old_t = f"{m.group(1)}{m.group(3)}{m.group(5)}{m.group(7)}{m.group(9)}{m.group(11)}"
         tail = m.group(12)
         out_format = f'%s{m.group(2)}%s{m.group(4)}%s{m.group(6)}%s{m.group(8)}%s{m.group(10)}%s{tail}'
@@ -636,7 +621,7 @@ def convert_from_yyyymmdd(template: str, yyyymmdd: str, **opt):
     # template is like "{dd} {Mon} {yyyy}"
     # 20161103 to 03 Nov 2016
 
-    if m := re.match(compile_pattern(r'(\d{8})'), yyyymmdd):
+    if m := re.match(r'(\d{8})', yyyymmdd):
         YY, yy, mm, dd = yyyymmdd[:2], yyyymmdd[2:4], yyyymmdd[4:6], yyyymmdd[6:8]
 
         Mon = Mon_by_number[mm]
@@ -668,78 +653,6 @@ def convert_from_yyyymmdd(template: str, yyyymmdd: str, **opt):
         return converted
     else:
         raise ValueError(f"yyyymmdd='{yyyymmdd}' is in bad format")
-
-
-'''
-sub enrich_year {
-   my ( $r, $opt ) = @_;
-
-   my $r2 = {%$r};
-   if ( $r->{yyyy} ) {
-      $r2->{yy} = substr( $r->{yyyy}, 2, 2 );
-      $r2->{YY} = substr( $r->{yyyy}, 0, 2 );
-   } elsif ( $r->{YY} && $r->{yy} ) {
-      $r2->{yyyy} = sprintf( "%d%d", $r->{YY}, $r->{yy} );
-   } elsif ( $r->{yy} ) {
-      if ( $r->{yy} >= 70 ) {
-         $r2->{yyyy} = sprintf( "19%d", $r->{yy} );
-         $r2->{YY}   = '19';
-      } else {
-         $r2->{yyyy} = sprintf( "20%d", $r->{yy} );
-         $r2->{YY}   = '20';
-      }
-   } else {
-      croak "no yyyy or yy in r=", Dumper;
-   }
-
-   return $r2;
-}
-
-sub enrich_month {
-   my ( $r, $opt ) = @_;
-
-   my $r2 = {%$r};
-   if ( $r->{mm} ) {
-      $r2->{m}   = $r->{mm};
-      $r2->{Mon} = get_Mon_by_number( $r->{mm} );
-   } elsif ( $r->{m} ) {
-      $r2->{mm}  = sprintf( "%02d", $r->{m} );
-      $r2->{Mon} = get_Mon_by_number( $r->{m} );
-   } elsif ( $r->{Mon} ) {
-      $r2->{mm} = get_mm_by_Mon( $r->{Mon} );
-      $r2->{m}  = $r2->{mm};
-   } else {
-      croak "no mm or Mon in r=", Dumper;
-   }
-
-   return $r2;
-}
-
-sub enrich_day {
-   my ( $r, $opt ) = @_;
-
-   my $r2 = {%$r};
-   if ( $r->{dd} ) {
-      $r2->{d} = $r->{dd};
-   } elsif ( $r->{d} ) {
-      $r2->{dd} = sprintf( "%02d", $r->{d} );
-   } else {
-      croak "no dd or d in r=", Dumper;
-   }
-
-   return $r2;
-}
-
-sub enrich_yyyymmdd {
-   my ( $r, $opt ) = @_;
-
-   my $r2 = enrich_year( $r, $opt );
-   $r2 = { %$r2, %{ enrich_month( $r, $opt ) } };
-   $r2 = { %$r2, %{ enrich_day( $r, $opt ) } };
-
-   return $r2;
-}
-'''
 
 
 def enrich_year(r: dict, **opt):
@@ -808,7 +721,7 @@ def date2any(date, input_pattern, input_assignment, output_template,
     assignments = input_assignment.split(',')
 
     r = {}
-    if m := re.match(compile_pattern(input_pattern), date):
+    if m := re.match(input_pattern, date):
         a = m.groups()
         for i in range(len(assignments)):
             r[assignments[i]] = a[i]

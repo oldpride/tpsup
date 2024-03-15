@@ -24,12 +24,7 @@ def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print
 
     lines = source.split('\n')
 
-    # skip_pattern = re.compile(r'^\s*#|^\s*$|^\s*def\s')
-    # skip blank lines, comments, and function definition
-    skip_pattern = re.compile(r'^\s*#|^\s*$')
-
-    def_pattern = re.compile(r'^\s*def\s')
-    if def_pattern.match(lines[0]):
+    if re.match(r'^\s*def\s', lines[0]):
         # skip the first line if it is a function definition
         verbose > 1 and log_FileFuncLine(f"skip the first line: {lines[0]}")
         lines = lines[1:]
@@ -54,7 +49,8 @@ def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print
             if line.startswith('#TEST_BEGIN') or line.startswith('# TEST_BEGIN'):
                 in_test = True
             else:
-                if skip_pattern.match(line):
+                if re.match(r'^\s*#|^\s*$', line):
+                    # skip blank lines, comments, and function definition
                     continue
 
                 # line.startswith('\s') does not work because \s is a regex.

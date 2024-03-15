@@ -10,8 +10,6 @@ def ps_grep(pattern, printOutput=1,  verbose=0):
     if verbose:
         sys.stderr.write(f'Find any running {pattern}\n')
 
-    compiled_pattern = re.compile(pattern, re.IGNORECASE)
-
     env = tpsup.envtools.Env()
 
     # "ps -ef" in GitBash and Cygwin can only see its own processes
@@ -61,7 +59,7 @@ def ps_grep(pattern, printOutput=1,  verbose=0):
     # pattern match
     matched_lines = []
     for line in (output.strip().split('\r\n')):
-        if compiled_pattern.search(line):
+        if re.search(pattern, line, re.IGNORECASE):
             matched_lines.append(line)
 
     if printOutput:

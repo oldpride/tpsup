@@ -28,15 +28,13 @@ def parse_input(input: Union[list, str], **opt):
         raise Exception(
             f'input must be a list or a string, but it is {type(input)}')
 
-    pair_pattern = re.compile(r'(\w+)=(.*)')
-
     ref = {}
 
     for pair in input:
         if re.match(r'any|check', pair, re.IGNORECASE):
             continue
-        elif pair_pattern.match(pair):
-            key, value = pair_pattern.match(pair).groups()
+        elif m := re.match(r'(\w+)=(.*)', pair):
+            key, value = m.groups()
             # convert key to upper case so that user can use both upper case and lower case
             # on command line.
             key = key.upper()
@@ -219,15 +217,14 @@ def resolve_files(cfg: dict, files_k: str, **opt):
     # print(f"files = {pformat(files)}")
     # exit(1)
 
-    path_pattern = re.compile(r'^[\'"]*\/|^.*[\'"]*[a-z]:', re.IGNORECASE)
-    # this is a full path
-    #  /a/app.log
-    #  C:/Program Files/a/app.log
-    #  "/a/app.log"
-    #  '/a/app.log'
     files2 = []
     for f in files:
-        if path_pattern.match(f):
+        if re.match(r'^[\'"]*\/|^.*[\'"]*[a-z]:', f, re.IGNORECASE):
+            # this is a full path
+            #  /a/app.log
+            #  C:/Program Files/a/app.log
+            #  "/a/app.log"
+            #  '/a/app.log'
             files2.append(f)
         else:
             # this is a expression
@@ -712,9 +709,6 @@ def process_section(entity: str, method_cfg: dict, **opt):
     row_count = len(hashes)
 
 
-decommify_pattern = re.compile(r',')
-
-
 def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
     verbose = opt.get('verbose', 0)
     global vars, lines, arrays, headers, hashes, hash1, r, row_count, rc, output
@@ -897,8 +891,7 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
                 if numeric:
                     # decommify.
                     # cast opt_value to string in order to apply string operation
-                    opt_value = decommify_pattern.sub(
-                        '', f"{opt_value}")
+                    opt_value = re.sub(r',', '', f"{opt_value}")
                     string = f"and {column} =  {opt_value}"
                 else:
                     string = f"and {column} = '{opt_value}'"
@@ -1471,8 +1464,6 @@ def parse_cfg(cfg_file: str, **opt):
             r'(condition|code|test|if_fail|if_success|update_knowledge|Exps)$'),
     ]
 
-    temporary_replacement_pattern = re.compile(r'\{\{([0-9a-zA-Z_.-]+)\}\}')
-
     failed = 0  # restart count
 
     while node_pairs:
@@ -1488,8 +1479,7 @@ def parse_cfg(cfg_file: str, **opt):
 
                 # replace all scalar vars {{...}} with 1,
                 # but exclude {{pattern::...} and {{where::...}}
-                clause = temporary_replacement_pattern.sub(
-                    '1', f'{value}', re.MULTILINE)
+                clause = re.sub(r'\{\{([0-9a-zA-Z_.-]+)\}\}', '1', f'{value}', re.MULTILINE)
 
                 if not test_compile(clause,
                                     globals(), locals(),

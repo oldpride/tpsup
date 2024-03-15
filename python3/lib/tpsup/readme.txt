@@ -89,3 +89,6 @@ b.py
 new scheme
    named the basic modules to *basic.py, eg, logbasic.py.
       these basic modules should not import other tpsup.* modules or at least with extra care.
+
+--------------------------------------------------------------------------
+2024/03/19 removed all re.compile cache because python already caches it.

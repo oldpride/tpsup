@@ -25,10 +25,9 @@ def correct_indent(source: Union[str, list], **opt):
         print(f"{len(lines)} lines")
 
     first_indent = None
-    compiled_first_indent_search = re.compile(r"^(\s*)\S")
     for i in range(len(lines)):
         # blank lines are ignored
-        if m := compiled_first_indent_search.match(lines[i]):
+        if m := re.match(r"^(\s*)\S", lines[i]):
             first_indent, *_ = m.groups()
             length = len(first_indent)
             if verbose:
@@ -70,9 +69,6 @@ def shift_indent(source: Union[str, list], **opt):
         return "\n".join(lines)
 
 
-real_line_pattern = None
-
-
 def add_return(source: Union[str, list], ReturnLocation: Literal['LastLine', 'LastFront'] = 'LastFront', **opt):
     # this function add a return to the last line of the source code.
     # example, change from
@@ -96,17 +92,12 @@ def add_return(source: Union[str, list], ReturnLocation: Literal['LastLine', 'La
     else:
         raise RuntimeError(f"source type {source_type} not supported")
 
-    global real_line_pattern
-    if real_line_pattern is None:
-        # non-blank, non-comment line
-        real_line_pattern = re.compile(r"^(\s*)([^#\s].*)")
-
     lastLine = None
     lastFront = None
     minimal_indent = None
 
     for i in range(len(lines)):
-        if m := real_line_pattern.search(lines[i]):
+        if m := re.search(r"^(\s*)([^#\s].*)", lines[i]):
             indent, real_stuff = m.groups()
             if minimal_indent is None:
                 minimal_indent = len(indent)

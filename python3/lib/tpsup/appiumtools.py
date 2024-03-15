@@ -290,21 +290,6 @@ def get_driver(**args) -> webdriver.Remote:
     return driverEnv.get_driver()
 
 
-step_compiled_blockstart = re.compile(r"\s*(while|if)(_not)?=(.+)")
-step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
-step_compiled_action = re.compile(r"action=(Search)")
-step_compiled_string = re.compile(r"string=(.+)", re.MULTILINE | re.DOTALL)
-step_compiled_sleep = re.compile(r"sleep=(\d+)")
-step_compiled_dump = re.compile(r"dump_(page|element)=(.+)")
-step_compiled_context = re.compile(r"context=(native|webview)")
-context_compiled_native = re.compile(r'native', re.IGNORECASE)
-context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
-step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
-step_compiled_key = re.compile(r"key=(.+)", re.IGNORECASE)
-step_compiled_swipe = re.compile(r"swipe=(.+)")
-step_compiled_wait = re.compile(r"wait=(\d+)")
-
-
 def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
     if not list:
         return
@@ -360,12 +345,12 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
         if not interactive and not dryrun and humanlike:
             human_delay()
 
-        if m := step_compiled_blockstart.match(step):
+        if m := re.match(r"\s*(while|if)(_not)?=(.+)", step):
             blockstart = m.group(1)
             negation = m.group(2)
             condition = m.group(3)
 
-            if m := step_compiled_findby.match(condition):
+            if m := re.match(r"\s*(xpath|css|id)=(.+)", condition):
                 tag, value, *_ = m.groups()
                 if tag == 'id':
                     # AppiumBy.ID is the "resource-id" in uiautomator.
@@ -406,7 +391,7 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
                   f"looking for blockend={blockend}")
             continue
 
-        if m := step_compiled_findby.match(step):
+        if m := re.match(r"\s*(xpath|css|id)=(.+)", step):
             tag, value, *_ = m.groups()
             print(f"follow(): {tag}={value}")
             if interactive:
@@ -422,21 +407,21 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
                     element = driver.find_element(AppiumBy.XPATH, value)
                 elif tag == 'css':
                     element = driver.find_element(AppiumBy.CSS_SELECTOR, value)
-        elif m := step_compiled_sleep.match(step):
+        elif m := re.match(r"sleep=(\d+)", step):
             value, *_ = m.groups()
             print(f"follow(): sleep {value} seconds")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 time.sleep(int(value))
-        elif m := step_compiled_wait.match(step):
+        elif m := re.match(r"wait=(\d+)", step):
             value, *_ = m.groups()
             print(f"follow(): set implicit wait {value} seconds")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.implicitly_wait(int(value))
-        elif m := step_compiled_key.match(step):
+        elif m := re.match(r"key=(.+)", step, re.IGNORECASE):
             value, *_ = m.groups()
             value = value.upper()
             print(f"follow(): key={value}")
@@ -457,14 +442,14 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
                     driver.press_keycode(keycode)
                 else:
                     raise RuntimeError(f"key={value} is not supported")
-        elif m := step_compiled_string.match(step):
+        elif m := re.match(r"string=(.+)", step, re.MULTILINE | re.DOTALL):
             value, *_ = m.groups()
             print(f"follow(): string={value}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 element.send_keys(value)
-        elif m := step_compiled_dump.match(step):
+        elif m := re.match(r"dump_(page|element)=(.+)", step):
             scope, path, *_ = m.groups()
             print(f"follow(): dump {scope} to dir={path}")
             if interactive:
@@ -472,7 +457,7 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
             if not dryrun:
                 # print(f"before dump, element.__getattribute__('id') = {element.__getattribute__('id')}")
                 dump(driver, element, scope, path, verbose=verbose)
-        elif m := step_compiled_action.match(step):
+        elif m := re.match(r"action=(Search)", step):
             value, *_ = m.groups()
             print(f"follow(): perform action={value}")
             if interactive:
@@ -480,7 +465,7 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
             if not dryrun:
                 driver.execute_script(
                     'mobile: performEditorAction', {'action': value})
-        elif m := step_compiled_context.match(step):
+        elif m := re.match(r"context=(native|webview)", step):
             value, *_ = m.groups()
             print(f"follow(): switch to context matching {value}")
 
@@ -491,11 +476,11 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
                 context = None
                 for c in contexts:
                     if value == 'native':
-                        if m := context_compiled_native.match(c):
+                        if m := re.match(r'native', c, re.IGNORECASE):
                             context = c
                             break
                     else:
-                        if m := context_compiled_webview.match(c):
+                        if m := re.match(r'webview', c, re.IGNORECASE):
                             context = c
                             break
                 if context:
@@ -537,7 +522,7 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.refresh()
-        elif m := step_compiled_run.match(step):
+        elif m := re.match(r"run=(.+?)/(.+)", step, re.IGNORECASE):
             pkg, activity, *_ = m.groups()
             print(f"follow(): run pkg='{pkg}', activity='{activity}'")
             if interactive:
@@ -548,7 +533,7 @@ def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
                 driver.start_activity(pkg, activity)
                 print("launched activity, waiting for 60 seconds for its ready")
                 driver.wait_activity(activity, timeout=60)
-        elif m := step_compiled_swipe.match(step):
+        elif m := re.match(r"swipe=(.+)", step):
             param, *_ = m.groups()
             print(f"follow(): swipe {param}")
             if interactive:
@@ -622,7 +607,7 @@ def dump(driver: webdriver.Remote, element: WebElement, scope: str, path: str, *
             output_filename = f"{path}/element.txt"
 
         with tpsup.filetools.TpOutput(output_filename) as fh:
-            if context_compiled_webview.match(driver.current_context):
+            if re.match(r'webview', driver.current_context, re.IGNORECASE):
                 html = element.get_attribute('outerHTML')
                 fh.write(html)
                 fh.write('\n')

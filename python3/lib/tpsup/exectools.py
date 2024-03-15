@@ -10,12 +10,10 @@ from tpsup.logbasic import log_FileFuncLine
 def _exec_filter(_dict, **opt):
     pattern = opt.get("pattern", None)
     if pattern:
-        compiled = re.compile(f"{pattern}")
-        return {k: v for k, v in _dict.items() if compiled.match(k)}
+        return {k: v for k, v in _dict.items() if re.match(f"{pattern}", k)}
     else:
         # return _dict
-        compiled_exclude = re.compile(r"_")
-        return {k: v for k, v in _dict.items() if not compiled_exclude.match(k)}
+        return {k: v for k, v in _dict.items() if not re.match(r"_", k)}
 
 
 def exec_into_globals(_source: str, _globals, _locals, **opt):
@@ -130,13 +128,12 @@ def eval_block(_source: str, _globals, _locals, **opt):
         log_FileFuncLine(f"opt = {pformat(opt)}")
 
     if "\\" in _source:
-        raw_string_contains_escape_char = re.compile(r"r'[^']*\\|r\"[^\"]*\\")
         # example: r'C:\Program Files\Python38\lib\site-packages\tpsup\exectools.py'
 
         # check whether this is a raw string.
         # if raw, we don't need to escape the backslash
         # if not raw, we need to escape the backslash
-        if not raw_string_contains_escape_char.search(_source):
+        if not re.search(r"r'[^']*\\|r\"[^\"]*\\", _source):
             _source = _source.replace("\\", "\\\\")
             log_FileFuncLine(
                 f"escaped \\ with \\\\, results _source = \n{_source}")

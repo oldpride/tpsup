@@ -54,10 +54,6 @@ def get_first_by_key(array_of_hash: list, key: str, **opt):
     return opt.get("default", None)
 
 
-compiled_scalar_var_pattern = None
-compiled_yyyymmdd_pattern = None
-
-
 def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
     # in python, both dict and Dict are reserved words.
     # therefore, we use dict1 instead of dict or Dict.
@@ -71,23 +67,17 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
     if verbose > 1:
         log_FileFuncLine(f"clause = {clause}")
 
-    global compiled_scalar_var_pattern
+    # scalar_vars is enclosed by double curlies {{...=default}},
+    # but exclude {{pattern::...} and {{where::...}}.
+    # there are 2 '?':
+    #    the 1st '?' is for ungreedy match
+    #    the 2nd '?' says the (...) is optional
+    # example:
+    #    .... {{VAR1=default1}}|{{VAR2=default2}}
+    # default can be multi-line
+    # default will be undef in the array if not defined.
 
-    # this is an expensive operation. we only do it once.
-    if compiled_scalar_var_pattern is None:
-        # scalar_vars is enclosed by double curlies {{...=default}},
-        # but exclude {{pattern::...} and {{where::...}}.
-        compiled_scalar_var_pattern = re.compile(
-            r"{{([0-9a-zA-Z._-]+)(=.{0,200}?)?}}", re.MULTILINE)
-        # there are 2 '?':
-        #    the 1st '?' is for ungreedy match
-        #    the 2nd '?' says the (...) is optional
-        # example:
-        #    .... {{VAR1=default1}}|{{VAR2=default2}}
-        # default can be multi-line
-        # default will be undef in the array if not defined.
-
-    vars_defaults = compiled_scalar_var_pattern.findall(clause)
+    vars_defaults = re.findall(r"{{([0-9a-zA-Z._-]+)(=.{0,200}?)?}}", clause, re.MULTILINE)
 
     if verbose > 1:
         log_FileFuncLine(f"vars_defaults = {vars_defaults}")
@@ -115,10 +105,7 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
     dict2 = {}  # this is a local dict to avoid polluting caller's dict
 
     if yyyymmdd:
-        global compiled_yyyymmdd_pattern
-        if compiled_yyyymmdd_pattern is None:
-            compiled_yyyymmdd_pattern = re.compile(r"^(\d{4})(\d{2})(\d{2})$")
-        if m := compiled_yyyymmdd_pattern.match(yyyymmdd):
+        if m := re.match(r"^(\d{4})(\d{2})(\d{2})$", yyyymmdd):
             yyyy, mm, dd = m.groups()
             dict2['yyyymmdd'] = yyyymmdd
             dict2['yyyy'] = yyyy
