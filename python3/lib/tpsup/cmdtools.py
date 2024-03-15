@@ -199,10 +199,10 @@ def main():
 
         run_cmd('which java', is_bash=True, print=1)
         run_cmd('which java', is_bash=True, print=1, bash_exe='wsl')
-    import tpsup.exectools
+    from tpsup.testtools import test_lines
     # we import it here because this is for test only
 
-    tpsup.exectools.test_lines(test_code, source_globals=globals())
+    test_lines(test_code, source_globals=globals())
     # we pass globals() so that test_code can see our functions, eg, run_cmd()
 
     import tpsup.tmptools

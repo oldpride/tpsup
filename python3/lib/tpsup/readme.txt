@@ -56,3 +56,36 @@ python vs perl
 
     the reason is perl's eval is more powerful than python3's eval.
     python2 eval was as powerful as perl's eval.
+
+--------------------------------------------------------------------------------------------------
+2024/02/18 break dependency loop, or circular import
+a.py
+  import b
+  ...
+  def a_f:
+    b.b_f
+
+b.py
+  import a
+  ...
+  def b_f:
+    a.a_f
+
+when i run either of the py file, I will get "partitally imported..."
+to fix it
+a.py
+  ...
+  def a_f:
+    import b
+    b.b_f
+
+b.py
+  ...
+  def b_f:
+    import a
+    a.a_f
+
+2024/02/20 i break big module into smaller pieces.
+new scheme
+   named the basic modules to *basic.py, eg, logbasic.py.
+      these basic modules should not import other tpsup.* modules or at least with extra care.

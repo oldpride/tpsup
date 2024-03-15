@@ -676,7 +676,7 @@ def main():
     # os.system(f'ls -l {file_gz}; zcat {file_gz}; /bin/rm -fr {testdir}')
     run_cmd(f"ls -l '{file_gz}'; zcat '{file_gz}'; /bin/rm -fr '{tmpdir}'", is_bash=True, print_output=verbose)
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     TPSUP = os.environ.get('TPSUP')
     libfiles = f'{TPSUP}/python3/lib/tpsup/*tools.py'
     p3scripts = f'{TPSUP}/python3/scripts'

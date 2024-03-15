@@ -342,7 +342,7 @@ def main():
         render_arrays(rows2, Vertical=True)
         render_arrays(rows2, Vertical=True, headers='name,age')
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
 

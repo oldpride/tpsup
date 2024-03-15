@@ -274,7 +274,7 @@ def main():
         tplog("hello world")
         tplog("hello world", prefix="time")
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
     print("\n------ test print_exception")

@@ -482,8 +482,8 @@ def main():
     def test_codes():
         transpose_lists([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
-    import tpsup.exectools
-    tpsup.exectools.test_lines(test_codes, globals(), locals())
+    from tpsup.testtools import test_lines
+    test_lines(test_codes, globals(), locals())
 
 
 if __name__ == "__main__":

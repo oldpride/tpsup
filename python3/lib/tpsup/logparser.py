@@ -274,7 +274,7 @@ def main():
         section_cfg.update({'ItemMatchExp': '"TRD-0002" in r["TradeId"]'})
         get_log_sections(log, section_cfg)
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(),
                source_locals=locals())
 

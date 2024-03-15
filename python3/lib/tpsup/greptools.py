@@ -174,7 +174,7 @@ def main():
         tpgrep(files2, 'bc', FindFirstFile=True)
         tpgrep(files2, 'bc', FindFirstFile=True, sort_name='mtime')
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
 

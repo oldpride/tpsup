@@ -617,7 +617,7 @@ def main():
         add_path("/junk/front", place='prepend')
         add_path("/junk/rear", place='append')
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
     print("")

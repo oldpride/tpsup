@@ -272,8 +272,8 @@ def main():
                         'xpath=//*[@id="prime1"]' 'xpath=//*[@id="prime2"]'
                         ''', 'single')
 
-    import tpsup.exectools
-    tpsup.exectools.test_lines(test_codes, globals(), locals())
+    from tpsup.testtools import test_lines
+    test_lines(test_codes, globals(), locals())
 
 
 if __name__ == '__main__':
