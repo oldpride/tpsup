@@ -163,7 +163,7 @@ def main():
 
         binary_search_first(arr3, grep2)  # 3
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
 

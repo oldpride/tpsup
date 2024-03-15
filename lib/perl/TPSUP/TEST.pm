@@ -59,13 +59,13 @@ sub process_block {
                print "WARN: single-line 'my' doesn't work in test codes. Use 'our' instead.\n";
             }
 
-            run_test( $line, $namespace, $opt );
+            run_1_test( $line, $namespace, $opt );
          }
       } else {
          # $in_test == 1
          if ( $line =~ /^[\s#]*TEST_END/ ) {
             $in_test = 0;
-            run_test( $test_code, $namespace, $opt );
+            run_1_test( $test_code, $namespace, $opt );
             $test_code = '';
          } else {
             $test_code .= "$line\n";
@@ -74,7 +74,7 @@ sub process_block {
    }
 }
 
-sub run_test {
+sub run_1_test {
    my ( $test, $namespace, $opt ) = @_;
 
    print "----------------------------------------\n";

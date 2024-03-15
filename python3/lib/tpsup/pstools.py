@@ -105,7 +105,7 @@ def main():
         pid_alive(bad_pid)
         ps_grep("code.exe|pycharm")
 
-    from tpsup.exectools import test_lines
+    from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
 

@@ -50,3 +50,9 @@ expression.py
         converted = compiled()           
 
 
+python vs perl
+    our python code had 3 different modules to compile code at run time.
+    our perl code had only one module to compile code at run time. Expression.pm.
+
+    the reason is perl's eval is more powerful than python3's eval.
+    python2 eval was as powerful as perl's eval.

@@ -4,16 +4,22 @@ import re
 from typing import Literal, Union
 
 
-def correct_indent(source: str, **opt):
+def correct_indent(source: Union[str, list], **opt):
     # remove indent.
     # the source my not be correctly indented because it embedded in other
     # code.
     # use the first ident as reference
 
-    verbose = opt.get("verbose", False)
+    verbose = opt.get("verbose", 0)
     # verbose = 1
 
-    lines = source.split("\n")
+    if type(source) is list:
+        lines = source
+    elif type(source) is str:
+        lines = source.split("\n")
+    else:
+        raise RuntimeError(
+            f"source type {type(source)} not supported. only support list or str. source={pformat(source)}")
 
     if verbose:
         print(f"{len(lines)} lines")
@@ -34,7 +40,7 @@ def correct_indent(source: str, **opt):
     return shift_indent(source, shift_space_count=-length, **opt)
 
 
-def shift_indent(source: str, **opt):
+def shift_indent(source: Union[str, list], **opt):
     # shift left or right
     shift_tab_count = opt.get("shift_tab_count", 0)
     shift_space_count = opt.get("shift_space_count", shift_tab_count * 4)
@@ -42,7 +48,15 @@ def shift_indent(source: str, **opt):
     if shift_space_count == 0:
         return source
 
-    lines = source.split("\n")
+    is_list = False
+    if type(source) is list:
+        lines = source
+        is_list = True
+    elif type(source) is str:
+        lines = source.split("\n")
+    else:
+        raise RuntimeError(
+            f"source type {type(source)} not supported. only support list or str. source={pformat(source)}")
 
     for i in range(len(lines)):
         if shift_space_count > 0:
@@ -50,7 +64,10 @@ def shift_indent(source: str, **opt):
         else:
             lines[i] = lines[i][-shift_space_count:]
 
-    return "\n".join(lines)
+    if is_list:
+        return lines
+    else:
+        return "\n".join(lines)
 
 
 real_line_pattern = None
