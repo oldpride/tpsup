@@ -740,13 +740,13 @@ class tp_find_element_by_chains:
             for locator in chain:
                 if (locator == "shadow") or (locator == "iframe"):
                     self.chains[i].append([[locator]])
-                elif m1 := get_locator_compiled_path1().match(locator):
+                elif m1 := locator_compiled_path1.match(locator):
                     ptype, paths_string = m1.groups()
                     # default to strip blanks: space, tab, newline ...
                     paths_string = paths_string.strip()
 
                     type_paths = []
-                    while m2 := get_locator_compiled_path2().match(paths_string):
+                    while m2 := locator_compiled_path2.match(paths_string):
                         path, type2 = m2.groups()
                         end_pos = m2.end()
 
@@ -992,18 +992,18 @@ def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
             print("no alert")
 
 
-# we will use the following patterns more than once, therefore,
-# we centralize them into functions, so we can easily change their behavior
-def get_locator_compiled_path1():
-    return re.compile(r"\s*(xpath|css|click_xpath|click_css)=(.+)",
-                      re.MULTILINE | re.DOTALL)
-
-
-def get_locator_compiled_path2():
-    return re.compile(
-        r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*(xpath|css|click_xpath|click_css)=",
-        re.MULTILINE | re.DOTALL)
-
+locator_compiled_url = re.compile(r"(url|url_accept_alert)=(.+)")
+locator_compiled_tab = re.compile(r"tab=(.+)")
+locator_compiled_shifttab = re.compile(r"shifttab=(.+)")
+locator_compiled_path1 = re.compile(
+    r"\s*(xpath|css|click_xpath|click_css)=(.+)", re.MULTILINE | re.DOTALL
+)
+locator_compiled_path2 = re.compile(
+    r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*(xpath|css|click_xpath|click_css)=",
+    re.MULTILINE | re.DOTALL,
+)
+locator_compiled_js = re.compile(r"js=(.+)", re.MULTILINE | re.DOTALL)
+locator_compiled_code = re.compile(r"code=(.+)", re.MULTILINE | re.DOTALL)
 
 locator_driver: webdriver = None
 driver_url = None
@@ -1164,7 +1164,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
     for locator in locator_chain:
         if not locator:  # None, empty, 0
             print(f"locate(): no locator")
-        elif m := re.match(r"(url|url_accept_alert)=(.+)", locator):
+        elif m := locator_compiled_url.match(locator):
             tag, url, *_ = m.groups()
             accept_alert = 0
             if tag == 'url_accept_alert':
@@ -1189,7 +1189,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 #     time.sleep(2)
                 #     driver_url = driver.current_url
                 driver_url = driver.current_url
-        elif m := re.match(r"code=(.+)", locator, re.MULTILINE | re.DOTALL):
+        elif m := locator_compiled_code.match(locator):
             code, *_ = m.groups()
             print(f"action: run python code = {code}")
             if interactive:
@@ -1198,14 +1198,14 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 exec_into_globals(code, globals(), locals())
                 if we_return:
                     return
-        elif m := re.match(r"js=(.+)", locator, re.MULTILINE | re.DOTALL):
+        elif m := locator_compiled_js.match(locator):
             js, *_ = m.groups()
             print(f"locate(): execute js={js}\n")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 element = driver.execute_script(js)
-        elif m := re.match(r"tab=(.+)", locator):
+        elif m := locator_compiled_tab.match(locator):
             count_str, *_ = m.groups()
             count = int(count_str)
             print(f"locate(): tab {count} times")
@@ -1213,7 +1213,7 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.switch_to.active_element.send_keys(Keys.TAB * count)
-        elif m := re.match(r"shifttab=(.+)", locator):
+        elif m := locator_compiled_shifttab.match(locator):
             count_str, *_ = m.groups()
             count = int(count_str)
             print(f"locate(): tab backward (shift+tab) {count} times")
@@ -1251,13 +1251,13 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
                 driver.switch_to.frame(element)
                 locator_driver = driver
                 # once we switch into an iframe, we should use original driver to locate
-        elif m1 := get_locator_compiled_path1().match(locator):
+        elif m1 := locator_compiled_path1.match(locator):
             ptype, paths_string = m1.groups()
             # default to strip blanks: space, tab, newline ...
             paths_string = paths_string.strip()
 
             type_paths = []
-            while m2 := get_locator_compiled_path2().match(paths_string):
+            while m2 := locator_compiled_path2.match(paths_string):
                 path, type2 = m2.groups()
                 end_pos = m2.end()
 
@@ -1325,6 +1325,25 @@ def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
         element = driver.switch_to.active_element
 
     return element
+
+
+input_compiled_code = re.compile(r"code=(.+)", re.MULTILINE | re.DOTALL)
+input_compiled_js = re.compile(r"js=(.+)", re.MULTILINE | re.DOTALL)
+input_compiled_sleep = re.compile(r"sleep=(.+)")
+input_compiled_hover = re.compile(r"hover=(.+)")
+input_compiled_string = re.compile(r"string=(.+)")
+input_compiled_key = re.compile(r"key=(.+?),(.+)")
+input_compiled_clear_attr = re.compile(r"clear_attr=(.+)")
+input_compiled_is_attr_empty = re.compile(r"is_attr_empty=(.+)")
+input_compiled_gone_path1 = re.compile(
+    r"(?:\n|\r\n|\s?)*gone_(xpath|css)=(.+)", re.MULTILINE | re.DOTALL
+)
+input_compiled_gone_path2 = re.compile(
+    r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*gone_(xpath|css)=", re.MULTILINE | re.DOTALL
+)
+input_compiled_select = re.compile(r"select=(value|index|text),(.+)")
+input_compiled_dump = re.compile(r"dump_(element|all)=(.+)")
+input_compiled_we_return = re.compile(r"we_return=(.+)")
 
 
 def send_input(
@@ -1407,7 +1426,7 @@ def send_input(
     for step in steps:
         if step == "debug":
             js_print_debug(driver, element)
-        elif m := re.match(r"code=(.+)", step, re.MULTILINE | re.DOTALL):
+        elif m := input_compiled_code.match(step):
             code, *_ = m.groups()
             print(f"action: run python code = {code}")
             if interactive:
@@ -1416,7 +1435,7 @@ def send_input(
                 exec_into_globals(code, globals(), locals())
                 if we_return:
                     return
-        elif m := re.match(r"js=(.+)", step, re.MULTILINE | re.DOTALL):
+        elif m := input_compiled_js.match(step):
             js, *_ = m.groups()
             print(f"action: run js code = {js}")
             if interactive:
@@ -1424,14 +1443,14 @@ def send_input(
             if not dryrun:
                 # if we need an element from the result, call it from locate()
                 driver.execute_script(js)
-        elif m := re.match(r"sleep=(.+)", step):
+        elif m := input_compiled_sleep.match(step):
             seconds, *_ = m.groups()
             print(f"action: sleep {seconds}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 time.sleep(int(seconds))
-        elif m := re.match(r"hover=(.+)", step):
+        elif m := input_compiled_hover.match(step):
             seconds_str, *_ = m.groups()
             seconds = int(seconds_str)
             print(f"action: hover {seconds} seconds")
@@ -1440,7 +1459,7 @@ def send_input(
             if not dryrun:
                 ActionChains(driver).move_to_element(
                     element).pause(seconds).perform()
-        elif m := re.match(r"string=(.+)", step):
+        elif m := input_compiled_string.match(step):
             # even if only capture group, still add *_; other string would become list, not scalar
             string, *_ = m.groups()
             print(f'action: type string = "{string}"')
@@ -1448,7 +1467,7 @@ def send_input(
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 element.send_keys(string)
-        elif m := re.match(r"clear_attr=(.+)", step):
+        elif m := input_compiled_clear_attr.match(step):
             # even if only capture group, still add *_; other attr would become list, not scalar
             attr, *_ = m.groups()
             print(f"action: clear {attr}")
@@ -1463,7 +1482,7 @@ def send_input(
                     element.send_keys(
                         Keys.__getattribute__((Keys, key.upper())) * length
                     )
-        elif m := re.match(r"is_attr_empty=(.+)", step):
+        elif m := input_compiled_is_attr_empty.match(step):
             attr, *_ = m.groups()
             print(
                 f"action: check whether {attr} is empty. If yes, we will do next step")
@@ -1474,7 +1493,7 @@ def send_input(
                 print(f'{attr} = "{value}"')
                 if not (value is None or value == ""):
                     return
-        elif m := re.match(r"key=(.+?),(.+)", step):
+        elif m := input_compiled_key.match(step):
             key, count_str = m.groups()
             count = int(count_str)
             print(f"action: type {key} {count} times")
@@ -1483,7 +1502,7 @@ def send_input(
             if not dryrun:
                 element.send_keys(Keys.__getattribute__(
                     Keys, key.upper()) * count)
-        elif m := re.match(r"tab=(.+)", step):
+        elif m := locator_compiled_tab.match(step):
             count_str, *_ = m.groups()
             count = int(count_str)
             print(f"action: tab {count} times")
@@ -1497,7 +1516,7 @@ def send_input(
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 tp_click(driver, element)
-        elif m := re.match(r"select=(value|index|text),(.+)", step):
+        elif m := input_compiled_select.match(step):
             attr, string = m.groups()
             print(f'action: select {attr} = "{string}"')
             if interactive:
@@ -1511,13 +1530,11 @@ def send_input(
                 else:
                     # attr == 'text'
                     se.select_by_visible_text(string)
-        elif m1 := re.match(r"(?:\n|\r\n|\s?)*gone_(xpath|css)=(.+)",
-                            step, re.MULTILINE | re.DOTALL):
+        elif m1 := input_compiled_gone_path1.match(step):
             ptype, paths_string = m1.groups()
 
             type_paths = []
-            while m2 := re.match(r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*gone_(xpath|css)=",
-                                 paths_string, re.MULTILINE | re.DOTALL):
+            while m2 := input_compiled_gone_path2.match(paths_string):
                 path, ptype2 = m2.groups()
                 end_pos = m2.end()
 
@@ -1578,7 +1595,7 @@ def send_input(
             if not dryrun:
                 driver.switch_to.default_content()
 
-        elif m := re.match(r"dump_(element|all)=(.+)", step):
+        elif m := input_compiled_dump.match(step):
             scope, output_dir, *_ = m.groups()
             print(f"action: dump {scope} to {output_dir}")
 
@@ -1593,7 +1610,7 @@ def send_input(
                         "dump_element() is called but element is None, we dump_all() instead")
                 dump(driver, element=element, **
                      {**opt, 'output_dir': output_dir})
-        elif m := re.match(r"we_return=(.+)", step):
+        elif m := input_compiled_we_return.match(step):
             we_return, *_ = m.groups()
             print(f"we_return={we_return}")
 
@@ -1884,7 +1901,7 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
 
     js = 'var e = document'
     for locator in locator_chain:
-        if m := get_locator_compiled_path1().match(locator):
+        if m := locator_compiled_path1.match(locator):
             ptype, path = m.groups()
             if ptype == 'xpath':
                 js += f'.evaluate("{path}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue'
@@ -2305,6 +2322,21 @@ def test_actions():
     driver.quit()
 
 
+step_compiled_blockstart = re.compile(r"\s*(while|if)(_not)?=(.+)")
+step_compiled_findby = re.compile(r"\s*(xpath|css|id)=(.+)")
+step_compiled_action = re.compile(r"action=(Search)")
+step_compiled_string = re.compile(r"string=(.+)", re.MULTILINE | re.DOTALL)
+step_compiled_sleep = re.compile(r"sleep=(\d+)")
+step_compiled_dump = re.compile(r"dump_(page|element)=(.+)")
+# step_compiled_context = re.compile(r"context=(native|webview)")
+# context_compiled_native = re.compile(r'native', re.IGNORECASE)
+# context_compiled_webview = re.compile(r'webview', re.IGNORECASE)
+step_compiled_run = re.compile(r"run=(.+?)/(.+)", re.IGNORECASE)
+step_compiled_key = re.compile(r"key=(.+?),(\d+)", re.IGNORECASE)
+# step_compiled_swipe = re.compile(r"swipe=(.+)")
+step_compiled_wait = re.compile(r"wait=(\d+)")  # implicitly_wait
+
+
 def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     if not list:
         return
@@ -2350,12 +2382,12 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                 block.append(step)
                 continue
 
-        if m := re.match(r"\s*(while|if)(_not)?=(.+)", step):
+        if m := step_compiled_blockstart.match(step):
             blockstart = m.group(1)
             negation = m.group(2)
             condition = m.group(3)
 
-            if m := re.match(r"\s*(xpath|css|id)=(.+)", condition):
+            if m := step_compiled_findby.match(condition):
                 tag, value, *_ = m.groups()
                 if tag == 'id':
                     condition = f"driver.find_element(By.ID, '''{value}''')"
@@ -2380,7 +2412,7 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                   f"looking for blockend={blockend}")
             continue
 
-        if m := re.match(r"\s*(xpath|css|id)=(.+)", step):
+        if m := step_compiled_findby.match(step):
             tag, value, *_ = m.groups()
             print(f"follow(): {tag}={value}")
             if interactive:
@@ -2396,22 +2428,21 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                     element = driver.find_element(By.XPATH, value)
                 elif tag == 'css':
                     element = driver.find_element(By.CSS_SELECTOR, value)
-        elif m := re.match(r"sleep=(\d+)", step):
+        elif m := step_compiled_sleep.match(step):
             value, *_ = m.groups()
             print(f"follow(): sleep {value} seconds")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 time.sleep(int(value))
-        elif m := re.match(r"wait=(\d+)", step):
-            # implicit wait
+        elif m := step_compiled_wait.match(step):
             value, *_ = m.groups()
             print(f"follow(): set implicit wait {value} seconds")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.implicitly_wait(int(value))
-        elif m := re.match(r"key=(.+?),(\d+)", step, re.IGNORECASE):
+        elif m := step_compiled_key.match(step):
             key, count_str = m.groups()
             count = int(count_str)
             print(f"follow(): type {key} {count} times")
@@ -2420,19 +2451,19 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
             if not dryrun:
                 element.send_keys(Keys.__getattribute__(
                     Keys, key.upper()) * count)
-        elif m := re.match(r"string=(.+)", step, re.MULTILINE | re.DOTALL):
+        elif m := step_compiled_string.match(step):
             value, *_ = m.groups()
             print(f"follow(): string={value}")
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 element.send_keys(value)
-        elif m := re.match(r"dump_(page|element)=(.+)", step):
+        elif m := step_compiled_dump.match(step):
             scope, path, *_ = m.groups()
             print(f"follow(): dump {scope} to dir={path}")
             # print(f"before dump, element.__getattribute__('id') = {element.__getattribute__('id')}")
             dump(driver, element, scope, path, verbose=verbose)
-        elif m := re.match(r"action=(Search)", step):
+        elif m := step_compiled_action.match(step):
             value, *_ = m.groups()
             print(f"follow(): perform action={value}")
             if interactive:
