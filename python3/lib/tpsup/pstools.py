@@ -6,11 +6,12 @@ import platform
 import re
 
 
-def ps_grep(pattern, printOutput=1,  verbose=0):
+def ps_grep(pattern, printOutput=1, env=None, verbose=0):
     if verbose:
         sys.stderr.write(f'Find any running {pattern}\n')
 
-    env = tpsup.envtools.Env()
+    if env is None:
+        env = tpsup.envtools.Env()
 
     # "ps -ef" in GitBash and Cygwin can only see its own processes
     # if env.isLinux or env.isGitBash or env.isCygwin:
