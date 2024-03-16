@@ -471,7 +471,15 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
                     timestamp, record_string, *_ = line.split(',', 1) + [None]
                     if record_string is None:
                         continue
-                    seen_record[record_string] = timestamp
+
+                    # 1. change existing record string to lower case.
+                    # later new record string will also be changed to lower case.
+                    # this way we can compare case-insensitive.
+                    # we use case-insensitive comparison because in case that user just changes
+                    # the case of record string, we still want to consider it as the same record.
+                    # 2. for the same reason, we also remove spaces.
+                    # 3. note: we didn't change the record in the file; so that the file is readable.
+                    seen_record[record_string.lower().replace(" ", "")] = timestamp
         record_ofh = open(record_file, 'a')
 
     init_resources(all_cfg, **opt2)
@@ -516,11 +524,13 @@ def run_batch(given_cfg: Union[str, dict], batch: list, **opt):
 
         if record:
             record_string = resolve_record_keys(record_keys, known)
-            # change to lower case
-            record_string = record_string.lower()
-            if record_string in seen_record:
+
+            # when comparing with the existing records in the log, we ignore lower case and no space.
+            key = record_string.lower().replace(" ", "")
+            if key in seen_record:
+                timestamp = seen_record[key]
                 print(
-                    f'already seen record at "{seen_record[record_string]},{record_string}". skipped.', file=sys.stderr)
+                    f'already seen record at "{timestamp},{record_string}". skipped.', file=sys.stderr)
                 continue
 
         if pre_batch and not pre_batch_already_done:
