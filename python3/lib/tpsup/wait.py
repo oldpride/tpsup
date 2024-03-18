@@ -1,5 +1,4 @@
 import time
-from pprint import pformat
 from tpsup.logtools import print_exception
 
 

@@ -5,7 +5,7 @@ import os
 import re
 import sys
 from typing import Union
-from tpsup.filetools import TpInput, tpglob, tpfind
+from tpsup.filetools import TpInput, tpfind
 from tpsup.logbasic import log_FileFuncLine
 from tpsup.searchtools import binary_search_first
 

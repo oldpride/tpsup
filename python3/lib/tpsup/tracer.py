@@ -1,9 +1,8 @@
-import inspect
 import os
 import re
 from pprint import pformat
-from time import localtime, strftime, strptime
-from typing import Dict, List, Union, Callable
+from time import localtime, strftime
+from typing import Union
 from tpsup.cmdtools import run_cmd, run_cmd_clean
 from tpsup.csvtools import filter_dicts
 from tpsup.exectools import eval_block, exec_into_globals, test_compile

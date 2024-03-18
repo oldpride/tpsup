@@ -79,7 +79,7 @@ class SeleniumEnv:
 
         self.download_dir = tpsup.tmptools.tptmp(
             base=os.path.join(self.log_base, "Downloads", "selenium")
-        ).get_nowdir(suffix="selenium")
+        ).get_nowdir(suffix="selenium", mkdir_now=False)  # no need to create it now
 
         self.headless = opt.get("headless", False)
         self.driver_exe = opt.get("driver", None)

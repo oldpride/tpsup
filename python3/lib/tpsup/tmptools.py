@@ -39,9 +39,9 @@ class tptmp:
         # self.dailydir = os.path.join(self.base, yyyymmdd)
         self.dailydir = f"{self.base}/{yyyymmdd}"
 
-    def get_dailydir(self, **opt):
+    def get_dailydir(self, mkdir_now=True, **opt):
         if not os.path.exists(self.dailydir):
-            if opt.get('mkdir_now', 1):
+            if mkdir_now:
                 os.makedirs(self.dailydir, exist_ok=True)  # mkdir -p
                 # whenever we make new dailydir also clean old dailydir
                 self.clean_old_tmpdir(**opt)
@@ -55,8 +55,8 @@ class tptmp:
         dailylog = f'{dailydir}/{prefix.replace(".py", ".log")}'
         return dailylog
 
-    def get_nowdir(self, suffix: str = '', **opt):
-        dailydir = self.get_dailydir()
+    def get_nowdir(self, suffix: str = '', mkdir_now=True, **opt):
+        dailydir = self.get_dailydir(mkdir_now=mkdir_now, **opt)
         HHMMSS = strftime("%H%M%S", localtime())
 
         if not suffix:
@@ -69,7 +69,7 @@ class tptmp:
             # nowdir = os.path.join(dailydir, HHMMSS)
             nowdir = f"{dailydir}/{HHMMSS}"
 
-        if opt.get('mkdir_now', 1):
+        if mkdir_now:
             os.makedirs(nowdir, exist_ok=True)
         return nowdir
 

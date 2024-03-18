@@ -4,7 +4,6 @@ import re
 import tpsup.cmdtools
 import tpsup.adbtools
 import tpsup.envtools
-from shutil import which
 import os
 import tpsup.tmptools
 

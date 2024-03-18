@@ -1,9 +1,5 @@
 import unittest
-import io
-import os
-import sys
-import pprint
-import time
+
 
 import tpsup.lock
 

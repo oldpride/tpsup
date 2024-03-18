@@ -3,8 +3,6 @@ import inspect
 import itertools
 from pprint import pformat
 import re
-from time import strftime, gmtime
-from typing import Literal
 import functools
 
 

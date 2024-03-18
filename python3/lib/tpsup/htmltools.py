@@ -1,8 +1,6 @@
 import re
 
 from lxml import html
-import requests
-import tpsup.envtools
 import os
 
 path_pattern = '(css|xpath)=(.+)'

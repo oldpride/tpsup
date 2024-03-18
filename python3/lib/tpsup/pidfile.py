@@ -1,11 +1,11 @@
 import os
-import sys
 import getpass
 import platform
 import tpsup.pstools
 
+
 class pidfile:
-    def __init__(self, prog:str, dir:str = None, ):
+    def __init__(self, prog: str, dir: str = None, ):
         prog = os.path.basename(prog)
         parts = prog.split('.')
         self.prog = parts[0]

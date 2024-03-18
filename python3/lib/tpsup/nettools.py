@@ -1,11 +1,9 @@
-import functools
 import mmap
 import os
 import select
 import socket
 import sys
 import time
-import selectors
 from pprint import pformat
 from tpsup.logtools import tplog
 import tpsup.envtools
