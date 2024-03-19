@@ -129,9 +129,9 @@ def expect_child(patterns, child=None, logic='and', timeout=10, expect_interval=
 
                 verbose > 1 and print(f"err: {clean_data(err_line)}")
 
+            matched = None
             if logic == 'and':
-
-                all_matched = True
+                matched = True
                 for i in range(len(match_results)):
                     pattern = match_results[i]
 
@@ -150,12 +150,37 @@ def expect_child(patterns, child=None, logic='and', timeout=10, expect_interval=
                         match_results[i]['matched'] = True
                         match_results[i]['data'] = data
                     else:
-                        all_matched = False
+                        matched = False
+                if matched:
+                    break
+            else:
+                # logic == 'or'
+                matched = False
+                for i in range(len(match_results)):
+                    pattern = match_results[i]
 
-                if all_matched:
+                    if pattern.get('matched', False):
+                        continue
+
+                    source = pattern.get('source', 'stdout')
+                    if source == 'stdout':
+                        data = out_total
+                    else:
+                        data = err_total
+
+                    # TypeError: cannot use a string pattern on a bytes-like object
+                    # if re.search(pattern['pattern'], data):
+                    if re.search(pattern['pattern'].encode('utf-8'), data):
+                        match_results[i]['matched'] = True
+                        match_results[i]['data'] = data
+                        matched = True
+                        break
+
+                if matched:
                     break
 
         ret = {
+            'matched': matched,
             'out': out_total,
             'err': err_total,
             'match_results': match_results
@@ -203,8 +228,8 @@ def main():
         # when shell=True, 'cmd' will be searched in PATH. therefore,
         # we can use both full path and command name.
         # init_child(r'c:\Users\william\sitebase\github\tpsup\cmd_exe\ps.cmd')
-        # init_child('ps')
-        # expect_child([{'pattern': 'Python'}], timeout=2)
+        init_child('ps')
+        expect_child([{'pattern': 'Python'}], timeout=2)['matched'] == True
 
         # init_child('dir')   # 'dir' is a built-in command; it requires shell=True
         # expect_child([{'pattern': 'nettools.py'}], timeout=2)
@@ -216,12 +241,12 @@ def main():
         # /C     Close: Run Command and then terminate and close.
         # /K     Keep:  Run Command and then keep the window open at the CMD prompt.
         #               This is useful for testing, e.g. to examine variables.
-        # init_child('cmd.exe /k')
-        # send_to_child()
-        # expect_child([{'pattern': '>'}], timeout=2)
-        # send_to_child('dir')
-        # expect_child([{'pattern': 'nettools.py'}], timeout=2)
-        # close_child()
+        init_child('cmd.exe /k')
+        send_to_child()
+        expect_child([{'pattern': '>'}], timeout=2)['matched'] == True
+        send_to_child('dir')
+        expect_child([{'pattern': 'nettools.py'}], timeout=2)['matched'] == True
+        close_child() == 0
 
         # init_child('cmd.exe /k')
         init_child('gitbash')
@@ -231,8 +256,8 @@ def main():
         # send_to_child('sftp localhost')
         # expect_child([{'pattern': 'password:'}], timeout=5)
         send_to_child('uname -a')
-        expect_child([{'pattern': 'MINGW64'}], timeout=2)
-        close_child()
+        expect_child([{'pattern': 'MINGW64'}], timeout=2)['matched'] == True
+        close_child() == 0
     from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
