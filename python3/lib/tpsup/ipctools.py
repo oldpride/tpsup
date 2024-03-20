@@ -37,8 +37,8 @@ def init_child(cmd, method='subprocess', **opt):
                                    shell=True,
                                    **opt)
 
-        queue = Queue()
-        out_thread = Thread(target=enqueue_output, args=(process.stdout, queue))
+        out_queue = Queue()
+        out_thread = Thread(target=enqueue_output, args=(process.stdout, out_queue))
         out_thread.daemon = True  # thread dies with the program
         out_thread.start()
 
@@ -53,7 +53,7 @@ def init_child(cmd, method='subprocess', **opt):
     child = {
         'method': method,
         'process': process,
-        'out_queue': queue,
+        'out_queue': out_queue,
         'err_queue': err_queue
     }
 
@@ -93,11 +93,36 @@ def expect_child(patterns, child=None, logic='and', timeout=10, expect_interval=
         err_total = b''
         total_wait = 0
 
+        ret = {
+            'matched': False,
+            'timeout': False,
+            'match_results': match_results,
+        }
+
         while True:
             # https://github.com/xloem/nonblocking_stream_queue
             out_line = None
             err_line = None
 
+            # https://docs.python.org/3/library/queue.html
+            # Queue.get(block=True, timeout=None)
+            #     Remove and return an item from the queue.
+            #     If optional args block is true and timeout is None (the default), block
+            #     if necessary until an item is available.
+            #     If timeout is a positive number, it blocks at most timeout seconds and
+            #     raises the Empty exception if no item was available within that time.
+            #     Otherwise (block is false), return an item if one is immediately
+            #     available, else raise the Empty exception (timeout is ignored in that
+            #     case).
+            #
+            #     Prior to 3.0 on POSIX systems, and for all versions on Windows, if
+            #     block is true and timeout is None, this operation goes into an
+            #     uninterruptible wait on an underlying lock. This means that no
+            #     exceptions can occur, and in particular a SIGINT will not trigger
+            #     a KeyboardInterrupt.
+            #
+            # Queue.get_nowait()
+            #     Equivalent to get(False)
             try:
                 out_line = out_queue.get_nowait()
             except Empty:
@@ -110,9 +135,12 @@ def expect_child(patterns, child=None, logic='and', timeout=10, expect_interval=
                 verbose and print("stderr, no data ready")
                 pass
 
+            matched = False
+
             if not out_line and not err_line:
                 if total_wait > timeout:
                     print(f"timeout after {timeout} seconds", file=sys.stderr)
+                    ret['timeout'] = True
                     break
 
                 time.sleep(expect_interval)
@@ -129,7 +157,6 @@ def expect_child(patterns, child=None, logic='and', timeout=10, expect_interval=
 
                 verbose > 1 and print(f"err: {clean_data(err_line)}")
 
-            matched = None
             if logic == 'and':
                 matched = True
                 for i in range(len(match_results)):
@@ -179,12 +206,11 @@ def expect_child(patterns, child=None, logic='and', timeout=10, expect_interval=
                 if matched:
                     break
 
-        ret = {
+        ret.update({
             'matched': matched,
             'out': out_total,
             'err': err_total,
-            'match_results': match_results
-        }
+        })
 
         return ret
 
@@ -220,10 +246,12 @@ def close_child(child=None, **opt):
 def main():
 
     def test_codes():
-        # password prompt is not using either stdout or stderr.
-        # so it will not be captured by expect_child
-        # init_child('sftp localhost')
-        # expect_child([{'pattern': 'password:'}], timeout=2)
+        # ssh/sftp password prompt is not using either stdout or stderr.
+        # but our subprocess.popen only capture stdout and stderr.
+        # therefore, we cannot use subprocess.popen to capture ssh/sftp password prompt.
+        # and hence, neither will expect_child capture the password prompt.
+        init_child('sftp localhost')
+        expect_child([{'pattern': 'password:'}], timeout=2)['timeout'] == True
 
         # when shell=True, 'cmd' will be searched in PATH. therefore,
         # we can use both full path and command name.
@@ -248,7 +276,7 @@ def main():
         expect_child([{'pattern': 'nettools.py'}], timeout=2)['matched'] == True
         close_child() == 0
 
-        # init_child('cmd.exe /k')
+        # BEGIN_TEST
         init_child('gitbash')
         # no prompt during subprocess call
         # send_to_child()
@@ -258,6 +286,7 @@ def main():
         send_to_child('uname -a')
         expect_child([{'pattern': 'MINGW64'}], timeout=2)['matched'] == True
         close_child() == 0
+
     from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
