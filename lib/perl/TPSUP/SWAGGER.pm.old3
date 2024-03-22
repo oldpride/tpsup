@@ -1,18 +1,11 @@
 package TPSUP::SWAGGER;
 
-# swagger is web interface for RESTful API (web service)
-# swagger calls curl to connect to the RESTful API
-# therefore, without swagger, you can still use curl to connect to the RESTful API.
-# swagger is just a wrapper around curl.
-# in this module, only "sub_ui" part is for swagger.
-# the rest is for curl. therefore, this module is mainly for curl.
-
 use strict;
 use base qw( Exporter );
-
-# we don't export anything because this module is called by TPSUP::BATCH.
 our @EXPORT_OK = qw(
+
 );
+
 
 use Carp;
 $SIG{__DIE__} = \&Carp::confess;    # this stack-trace on all fatal error !!!
@@ -117,19 +110,9 @@ sub swagger {
 
       my $flag_string = join( " ", @flags );
 
-      #  entry     => 'swagger-tian',
-      # entry_func => \&TPSUP::SWAGGER::get_swagger_entry,
-      # entry_func overrides entry. entry_func is a subroutine reference.
-
       my $entry_name = $cfg->{entry};
-      my $entry_func = $cfg->{entry_func};
       my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
       my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
-
-      # if entry_func overrides entry.
-      if ($entry_func) {
-         $entry_name = $entry_func->( $cfg, $dict, $opt );
-      }
 
       # there are two places mentioning json
       #    --header 'Content-Type: application/json'
@@ -209,10 +192,9 @@ my $swagger_syntax = {
    },
 
    base => {
-      base_urls  => { type => 'ARRAY', required => 1 },
-      op         => { type => 'HASH',  required => 1 },
-      entry      => { type => 'SCALAR' },
-      entry_func => { type => 'CODE' },
+      base_urls => { type => 'ARRAY', required => 1 },
+      op        => { type => 'HASH',  required => 1 },
+      entry     => { type => 'SCALAR' },
    },
    op => {
       sub_url   => { type => 'SCALAR', required => 1 },
@@ -226,6 +208,7 @@ my $swagger_syntax = {
       test_str  => { type => 'ARRAY' },
    },
 };
+
 
 sub tpbatch_parse_hash_cfg {
    my ( $hash_cfg, $opt ) = @_;
@@ -334,7 +317,6 @@ END
 }
 
 our %known;    # global var for TPSUP::BATCH
-
 sub tpbatch_parse_input {
    my ( $input, $all_cfg, $opt ) = @_;
 
@@ -396,7 +378,7 @@ sub tpbatch_code {
    }
 
    # push down upper level config to lower level
-   my @upper_keys = qw(base_urls entry entry_func);
+   my @upper_keys = qw(base_urls entry);
    @{$cfg}{@upper_keys} = @{ $all_cfg->{cfg}->{$base} }{@upper_keys};
    $cfg->{op} = $op;
 
@@ -404,6 +386,7 @@ sub tpbatch_code {
 
    TPSUP::SWAGGER::swagger( $cfg, $known->{args}, $opt );
 }
+
 
 sub main {
    print "------------ test swagger -----------------------------\n";
