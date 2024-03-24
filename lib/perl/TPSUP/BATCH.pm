@@ -66,9 +66,9 @@ sub parse_cfg {
    #    eval `cat cfg.pl`
    #       only eval keeps the current lexical scope.
 
- # use 'our' here to allow us use it again in the cfg file and make the cfg file
- # capable of a standlone perl file, so that we can check the cfg file's syntax
- # by its own.
+   # use 'our' here to allow us use it again in the cfg file and make the cfg file
+   # capable of a standlone perl file, so that we can check the cfg file's syntax
+   # by its own.
 
    our $our_cfg;
    eval $cfg_string;
@@ -81,6 +81,10 @@ sub parse_cfg {
       return;
    }
 
+   $our_cfg->{meta}->{cfg_abs_path} = $cfg_abs_path;
+   $our_cfg->{meta}->{cfgdir}       = $cfgdir;
+   $our_cfg->{meta}->{cfgname}      = $cfgname;
+
    # extra_args => {
    #    test_switch  => 'tw',
    #    test_value   => 'to=s',
@@ -88,15 +92,15 @@ sub parse_cfg {
    #    test_hash    => { spec=>'th=s',  type=>'HASH',  help=>'set a hash'   },
    # },
 
-# this will create another two attr in $our_cfg
-#   extra_getopts
-#      this is parameter, will feed into tpbatch script's GetOptions()
-#   extra_options
-#      this will store what tpbatch script's GetOptions() got from command line.
-#      then the data will be stored in $opt to pass forward.
-# NOTE:
-#   make sure keys on both sides not using the reserved words, eg
-#      b, batch, s, suite, ...
+   # this will create another two attr in $our_cfg
+   #   extra_getopts
+   #      this is parameter, will feed into tpbatch script's GetOptions()
+   #   extra_options
+   #      this will store what tpbatch script's GetOptions() got from command line.
+   #      then the data will be stored in $opt to pass forward.
+   # NOTE:
+   #   make sure keys on both sides not using the reserved words, eg
+   #      b, batch, s, suite, ...
 
    if ( exists $our_cfg->{extra_args} ) {
       my $extra_args = $our_cfg->{extra_args};
@@ -130,14 +134,11 @@ sub parse_cfg {
          my $opt_help = $v->{help};
 
          if ( $opt_type eq 'SCALAR' ) {
-            push @{ $our_cfg->{extra_getopts} },
-              ( $opt_spec => \$our_cfg->{extra_options}->{$k} );
+            push @{ $our_cfg->{extra_getopts} }, ( $opt_spec => \$our_cfg->{extra_options}->{$k} );
          } elsif ( $opt_type eq 'ARRAY' ) {
-            push @{ $our_cfg->{extra_getopts} },
-              ( $opt_spec => \@{ $our_cfg->{extra_options}->{$k} } );
+            push @{ $our_cfg->{extra_getopts} }, ( $opt_spec => \@{ $our_cfg->{extra_options}->{$k} } );
          } elsif ( $type eq 'HASH' ) {
-            push @{ $our_cfg->{extra_getopts} },
-              ( $opt_spec => \%{ $our_cfg->{extra_options}->{$k} } );
+            push @{ $our_cfg->{extra_getopts} }, ( $opt_spec => \%{ $our_cfg->{extra_options}->{$k} } );
          } else {
             confess
               "unsupported opt_type='$opt_type' at key=$k in extra_args = ",
@@ -158,7 +159,7 @@ sub parse_cfg {
          $verbose && print "require $package\n";
       }
 
-# https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
+      # https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
       my $package_sub = $package . "::tpbatch_parse_hash_cfg";
       if ( exists(&$package_sub) ) {
          $verbose && print STDERR "will use $package_sub to parse hash cfg\n";
@@ -187,8 +188,7 @@ sub parse_hash_cfg {
    }
    for my $attr (qw(aliases keychains)) {
       if ( exists $hash_cfg->{$attr} ) {
-         $hash_cfg->{$attr} = convert_to_uppercase( $hash_cfg->{$attr},
-            { ConvertKey => 1, ConvertValue => 1 } );
+         $hash_cfg->{$attr} = convert_to_uppercase( $hash_cfg->{$attr}, { ConvertKey => 1, ConvertValue => 1 } );
       }
    }
 
@@ -200,8 +200,7 @@ sub parse_hash_cfg {
          my $suit    = $suits->{$name};
          my $section = "      $name\n";
          for my $k ( sort ( keys %$suit ) ) {
-            $section .= "         $k => "
-              . ( defined( $suit->{$k} ) ? $suit->{$k} : 'undef' ) . "\n";
+            $section .= "         $k => " . ( defined( $suit->{$k} ) ? $suit->{$k} : 'undef' ) . "\n";
          }
 
          $suits_string .= $section;
@@ -248,9 +247,7 @@ sub set_all_cfg {
    } elsif ( $cfg_type eq 'HASH' ) {
       $my_cfg = $given_cfg;
    } else {
-      croak
-"unknown cfg type=$cfg_type, expecting filename (string) or HASH. given_cfg = "
-        . Dumper($given_cfg);
+      croak "unknown cfg type=$cfg_type, expecting filename (string) or HASH. given_cfg = " . Dumper($given_cfg);
    }
 }
 
@@ -321,8 +318,8 @@ sub parse_input_default_way {
       } elsif ( $pair =~ /^(.+?)=(.+)$/ ) {
          my ( $key, $value ) = ( uc($1), $2 );
 
- # convert key to upper case so that user can use both upper case and lower case
- # on command line.
+         # convert key to upper case so that user can use both upper case and lower case
+         # on command line.
 
          if ( $key eq 'S' || $key eq 'SUIT' ) {
             my $suitname = uc($value);
@@ -496,8 +493,8 @@ sub parse_batch {
 
       # $input is array
 
-# just validate input syntax, trying to avoid aborting in the middle of a batch.
-# therefore, we don't keep the result
+      # just validate input syntax, trying to avoid aborting in the middle of a batch.
+      # therefore, we don't keep the result
       my $discarded = parse_input( $input, $all_cfg, { verbose => $verbose } );
    }
 
@@ -522,15 +519,14 @@ sub init_resources {
 
       if ( exists( $res->{init_resource} ) && !$res->{init_resource} ) {
 
-        # if not initiate it now, we pass back function name and params, so that
-        # caller can initiate it at another time
+         # if not initiate it now, we pass back function name and params, so that
+         # caller can initiate it at another time
          $resources->{$k}->{driver_call} = {
             method => $res->{method},
             kwargs => { %$opt, driver_cfg => $res->{cfg} },
          };
       } else {
-         $res->{driver} =
-           $res->{method}->( { %$opt, driver_cfg => $res->{cfg} } )
+         $res->{driver} = $res->{method}->( { %$opt, driver_cfg => $res->{cfg} } )
            if !$dryrun;
       }
    }
@@ -562,9 +558,8 @@ sub run_batch {
    $verbose > 1 && print " all_cfg = ", Dumper($all_cfg);
    $verbose > 1 && print " opt2 = ",    Dumper($opt2);
 
-   $verbose && print "all_cfg->{optional_args} = ",
-     Dumper( $all_cfg->{optional_args} );
-   $verbose && print "all_cfg->{option} = ", Dumper( $all_cfg->{option} );
+   $verbose && print "all_cfg->{optional_args} = ", Dumper( $all_cfg->{optional_args} );
+   $verbose && print "all_cfg->{option} = ",        Dumper( $all_cfg->{option} );
 
    my @pre_checks = $all_cfg->{pre_checks} ? @{ $all_cfg->{pre_checks} } : ();
    for my $pc (@pre_checks) {
@@ -581,11 +576,7 @@ sub run_batch {
       }
    }
 
-   my $show_progress = get_first_by_key(
-      [ $opt, $all_cfg ],
-      'show_progress',
-      { CaseSensitive => 1 }
-   );
+   my $show_progress = get_first_by_key( [ $opt, $all_cfg ], 'show_progress', { CaseSensitive => 1 } );
 
    my $total      = scalar(@$parsed_batch);
    my $i          = 0;
@@ -604,8 +595,7 @@ sub run_batch {
 
       $known = parse_input( $input, $all_cfg, { verbose => $verbose } );
 
-      $verbose && print __FILE__ . " " . __LINE__ . " after parse input\n",
-        "we known = ", Dumper($known);
+      $verbose && print __FILE__ . " " . __LINE__ . " after parse input\n", "we known = ", Dumper($known);
 
       my $code_sub;
 
@@ -616,19 +606,18 @@ sub run_batch {
          my $package = $all_cfg->{package};
          if ($package) {
 
-# https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
+            # https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
             my $package_sub = $package . "::tpbatch_code";
             if ( exists(&$package_sub) ) {
                $verbose
-                 && print STDERR
-"code() is not defined in cfg but $package_sub is defined, using it.\n";
+                 && print STDERR "code() is not defined in cfg but $package_sub is defined, using it.\n";
                $code_sub = \&$package_sub;
             }
          }
       }
 
       if ( defined $code_sub ) {
-         $code_sub->( $all_cfg, $known, $opt2 ); # code could update $known too.
+         $code_sub->( $all_cfg, $known, $opt2 );    # code could update $known too.
       } else {
          print STDERR "code() is not defined anywhere, therefore, not run\n";
       }
@@ -640,8 +629,7 @@ sub run_batch {
          $total_time += $duration;
          my $average = $total_time / $i;
 
-         print STDERR
-           "round $i duration=$duration, total=$total_time, avg=$average\n";
+         print STDERR "round $i duration=$duration, total=$total_time, avg=$average\n";
       }
    }
 
@@ -649,10 +637,10 @@ sub run_batch {
       print STDERR "\n----------------- batch ends ---------------------\n";
    }
 
-# https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
+   # https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
    if ( exists(&post_batch) && !$no_post ) {
       my $s = \&post_batch;
-      $s->( $all_cfg, $known, $opt2 );   # post_batch() could update $known too.
+      $s->( $all_cfg, $known, $opt2 );    # post_batch() could update $known too.
    }
 }
 
@@ -676,7 +664,7 @@ sub main {
 
    print "----------------- test run_batch() -------------------\n";
 
-# to silence this error: Subroutine TPSUP::BATCH::code redefined at BATCH.pm line 365
+   # to silence this error: Subroutine TPSUP::BATCH::code redefined at BATCH.pm line 365
    no warnings "redefine";
 
    # the following 3 ways all work, to override an existing sub code()

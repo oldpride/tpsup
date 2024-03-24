@@ -398,7 +398,8 @@ sub tpbatch_code {
    # push down upper level config to lower level
    my @upper_keys = qw(base_urls entry entry_func);
    @{$cfg}{@upper_keys} = @{ $all_cfg->{cfg}->{$base} }{@upper_keys};
-   $cfg->{op} = $op;
+   $cfg->{op}   = $op;
+   $cfg->{meta} = $all_cfg->{meta};
 
    $verbose && print __FILE__ . " " . __LINE__ . " base=$base, op=$op, cfg = ", Dumper($cfg);
 
