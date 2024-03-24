@@ -3,17 +3,15 @@ package TPSUP::HTML;
 use strict;
 use base qw( Exporter );
 our @EXPORT_OK = qw(
-   parse_table
+  parse_table
 );
-
 
 use Carp;
 #$SIG{ __DIE__ } = \&Carp::confess; # this stack-trace on all fatal error !!!
 
 use Data::Dumper;
-$Data::Dumper::Terse = 1;     # print without "$VAR1="
-$Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
-
+$Data::Dumper::Terse    = 1;    # print without "$VAR1="
+$Data::Dumper::Sortkeys = 1;    # this sorts the Dumper output!
 
 #BEGIN {
 #   # XML::LibXML is much more reliable and faster than XML::Simple, but XML::Simple's
@@ -39,12 +37,12 @@ $Data::Dumper::Sortkeys = 1;  # this sorts the Dumper output!
 #   if (!$use_LibXML) {
 #      # XML::Simple is a secondary choice as it is said not reliable
 #      eval { use XML::Simple };
-#   
+#
 #      if ($@) {
 #         croak "use XML::Simple failed: $@";
 #      } else {
 #         $verbose && print STDERR "use XML::Simple\n";
-#   
+#
 #         # direct XML::Simple to try XML::Parser first. otherwise, it uses SAX which is not very stable
 #         $XML::Simple::PREFERRED_PARSER = 'XML::Parser';
 #      }
@@ -55,13 +53,13 @@ use XML::Simple;
 $XML::Simple::PREFERRED_PARSER = 'XML::Parser';
 
 sub parse_table {
-   my ($table_string, $opt) = @_;
+   my ( $table_string, $opt ) = @_;
 
    # $table is either of the following
    #   <tr>...</tr><tr></tr>
    #   <thead>...</thead><tr></tr>
-   #   one of the above wrapped in <tbody>...</tbody> 
-   #   one of the above wrapped in <table>...</table> 
+   #   one of the above wrapped in <tbody>...</tbody>
+   #   one of the above wrapped in <table>...</table>
 
    my $verbose = $opt->{verbose} ? $opt->{verbose} : 0;
 
@@ -85,31 +83,31 @@ sub parse_table {
 
    $table_string =~ s/&(?![a-z][a-z][a-z];)/&amp;/g;
 
-   $verbose>1 && print "table_string = ", $table_string, "\n";
+   $verbose > 1 && print "table_string = ", $table_string, "\n";
 
-   my $result = XMLin($table_string, 
-      KeyAttr     => {},
-      ForceArray  => [ 'tr', 'td', 'th'],
+   my $result = XMLin(
+      $table_string,
+      KeyAttr       => {},
+      ForceArray    => [ 'tr', 'td', 'th' ],
       SuppressEmpty => '',
    );
 
-   $verbose>1 && print "result = ", Dumper($result);
+   $verbose > 1 && print "result = ", Dumper($result);
 
    my $ret;
    if ($result) {
-      if ($result->{thead}->{tr}->[0]->{th}) {
-         $ret->{columns} = $result->{thead}->{tr}->[0]->{th}; 
+      if ( $result->{thead}->{tr}->[0]->{th} ) {
+         $ret->{columns} = $result->{thead}->{tr}->[0]->{th};
       }
-      if ($result->{tr}) {
-         for my $r (@{$result->{tr}}) {
-            push @{$ret->{rows}}, $r->{td}; 
+      if ( $result->{tr} ) {
+         for my $r ( @{ $result->{tr} } ) {
+            push @{ $ret->{rows} }, $r->{td};
          }
       }
    }
 
    return $ret;
 }
-
 
 sub main {
    my $string = <<'END';
@@ -157,12 +155,14 @@ END
    my $result = parse_table($string);
    print "result = ", Dumper($result);
 
-   require TPSUP::CSV;
-   TPSUP::CSV::render_csv($result->{rows}, $result->{columns}, {ROW_TYPE=>'ARRAY'});
+   # require TPSUP::CSV;
+   # TPSUP::CSV::render_csv($result->{rows}, $result->{columns}, {ROW_TYPE=>'ARRAY'});
+   require TPSUP::PRINT;
+   TPSUP::PRINT::render_arrays( $result->{rows}, { headers => $result->{columns} } );
 
-   print join(",", @{$result->{columns}}), "\n";
-   for my $r (@{$result->{rows}}) {
-      print join(",", @$r), "\n";
+   print join( ",", @{ $result->{columns} } ), "\n";
+   for my $r ( @{ $result->{rows} } ) {
+      print join( ",", @$r ), "\n";
    }
 }
 

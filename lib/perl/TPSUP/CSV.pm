@@ -2291,6 +2291,7 @@ sub write_keys_to_file {
    close $out_fh;
 }
 
+# replaced with render_arrays
 sub render_csv_deco {
    my ( $rows, $fields, $opt ) = @_;
 

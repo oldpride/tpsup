@@ -4,9 +4,9 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::FILE qw(get_in_fh);
-use TPSUP::LOG  qw(parse_PatternCfg);
-use TPSUP::CSV  qw(render_csv);
+use TPSUP::FILE  qw(get_in_fh);
+use TPSUP::LOG   qw(parse_PatternCfg);
+use TPSUP::PRINT qw(render_arrays);
 
 my $prog = $0;
 $prog =~ s:.*/::;
@@ -60,9 +60,8 @@ EOF
 }
 
 our (
-   $exclude_pattern, $match_pattern, $verbose,
-   $App,             $pattern_file,  $TimePattern,
-   $TimeKey,         $Assignment,    $ExpressionKey
+   $exclude_pattern, $match_pattern, $verbose,    $App, $pattern_file,
+   $TimePattern,     $TimeKey,       $Assignment, $ExpressionKey
 );
 
 GetOptions(
@@ -80,8 +79,7 @@ GetOptions(
 usage("wrong number of args") if !@ARGV;
 
 if ( $ExpressionKey && $TimeKey ) {
-   print STDERR
-"WARN: both TimeKey and Expression Key are specified. TimeKey will be ignored.\n";
+   print STDERR "WARN: both TimeKey and Expression Key are specified. TimeKey will be ignored.\n";
 }
 
 if ( $ARGV[0] eq '_list_pattern' ) {
@@ -102,8 +100,7 @@ if ( $ARGV[0] eq '_list_pattern' ) {
       }
    }
 
-   render_csv( \@rows,
-      [ 'App', 'Example', 'TimePattern', 'Assignment', 'TimeKey', 'Comment' ] );
+   render_arrays( \@rows, { headers => [ 'App', 'Example', 'TimePattern', 'Assignment', 'TimeKey', 'Comment' ] } );
    exit 0;
 }
 
@@ -129,8 +126,7 @@ my $compiledKey;
 my $warn = $verbose ? 'use' : 'no';
 
 if ($ExpressionKey) {
-   $compiledKey = eval
-"$warn warnings; no strict; package TPSUP::Expression; sub { $ExpressionKey }";
+   $compiledKey = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $ExpressionKey }";
    $@ && die "Bad expression '$ExpressionKey' : $@";
 }
 

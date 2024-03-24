@@ -81,13 +81,11 @@ for my $pkg ( sort( keys %$info_by_pkg ) ) {
    print STDERR "print $pkgfile\n";
 
    if ($pkg) {
-      print {$ofh}
-        "#################################################################\n";
+      print {$ofh} "#################################################################\n";
       print {$ofh} "#\n";
       print {$ofh} "# $pkgfile\n";
       print {$ofh} "#\n";
-      print {$ofh}
-        "#################################################################\n";
+      print {$ofh} "#################################################################\n";
    }
 
    my $ifh = get_in_fh($pkgfile);
@@ -210,7 +208,7 @@ sub parse_pkg {
       #                   compile_perl_array
       #                  );
       #
-      #use TPSUP::CSV qw(render_csv);
+      #use TPSUP::PRINT qw(render_arrays);
 
       if ($new_pkg) {
 
@@ -238,8 +236,7 @@ sub parse_pkg {
          my $result = parse_pkg($new_pkg);
 
          if ( !$result ) {
-            print STDERR
-"failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
+            print STDERR "failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
             return undef;
          }
 
@@ -270,8 +267,7 @@ sub parse_pkg {
          my $result = parse_pkg($new_pkg);
 
          if ( !$result ) {
-            print STDERR
-"failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
+            print STDERR "failed to parse new_pkg=$new_pkg (in $file at line: $orig_line)\n";
             return undef;
          }
 
@@ -289,13 +285,11 @@ sub parse_pkg {
          eval "use $other_pkg; \$path = \$INC{'$other_pkg_file'}";
 
          if ( !$path ) {
-            push @{ $dependency->{$other_pkg} },
-              "cannot find file $other_pkg_file, used by $file";
+            push @{ $dependency->{$other_pkg} }, "cannot find file $other_pkg_file, used by $file";
          } elsif ( $path =~ /tpsup/ ) {
 
-          # these are non-homemade, non-OS-build-in packages, requiring download
-            push @{ $dependency->{$other_pkg} },
-              "need to download pkg $path used by $file";
+            # these are non-homemade, non-OS-build-in packages, requiring download
+            push @{ $dependency->{$other_pkg} }, "need to download pkg $path used by $file";
          }
       }
    }
