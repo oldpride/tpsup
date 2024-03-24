@@ -406,6 +406,79 @@ sub tpbatch_code {
    TPSUP::SWAGGER::swagger( $cfg, $known->{args}, $opt );
 }
 
+my $parsed_entry_decide_file = {};
+
+sub parse_login_by_method_pattern_file {
+   my ( $pattern_file, $opt ) = @_;
+
+   if ( !exists( $parsed_entry_decide_file->{$pattern_file} ) ) {
+      my $ref = {};
+
+      # pattern file format:
+      #   login1:pattern1
+      #   login2:pattern2
+      open my $fh, "<", $pattern_file or croak "cannot open $pattern_file: $!";
+      while ( my $line = <$fh> ) {
+         next if $line =~ /^\s*#/;    # skip comment
+         next if $line =~ /^\s*$/;    # skip empty line
+         chomp $line;
+
+         # remove dos ^M
+         $line =~ s/\r//g;
+
+         my ( $login, $method, $pattern ) = split /,/, $line, 3;
+         $ref->{$method}->{$login} = $pattern;
+      }
+
+      close $fh;
+
+      $parsed_entry_decide_file->{$pattern_file} = $ref;
+      # print "parsed_pattern_file=", Data::Dumper::Dumper($TPSUP::SWAGGER::parsed_pattern_file), "\n";
+   }
+
+   return $parsed_entry_decide_file->{$pattern_file};
+}
+
+sub get_entry_by_method_suburl {
+   my ( $cfg, $dict, $opt ) = @_;
+
+   # print "cfg=", Data::Dumper->Dump([$cfg], ['cfg']), "\n";
+   # print "dict=", Data::Dumper->Dump([$dict], ['dict']), "\n";
+
+   my $entry_decide_file;    # this is not the password file. this is the file to decide which entry to use
+   if ( $cfg->{entry_decide_file} ) {
+      $entry_decide_file = $cfg->{entry_decide_file};
+   } else {
+      $entry_decide_file = $cfg->{meta}->{cfg_abs_path};
+      $entry_decide_file =~ s/_batch.cfg/_pattern.cfg/;
+   }
+   my $pattern_file = $entry_decide_file;
+   #    print "pattern_file=$pattern_file\n";
+   my $pattern_cfg = parse_login_by_method_pattern_file( $pattern_file, $opt );
+   #    print "pattern_by_login=", Data::Dumper::Dumper($pattern_by_login), "\n";
+
+   my $method = $cfg->{method} || 'GET';
+
+   if ( !exists $pattern_cfg->{$method} ) {
+      croak "cannot find method $method in $pattern_file";
+   }
+
+   for my $login ( keys %{ $pattern_cfg->{$method} } ) {
+      my $pattern = $pattern_cfg->{$method}->{$login};
+      # print "login=$login, pattern=$pattern, sub_url=$cfg->{sub_url}\n";
+
+      if (
+         $cfg->{sub_url} =~ /$pattern/
+         || "/$cfg->{sub_url}" =~ /$pattern/    # in case the the pattern requires the leading slash
+        )
+      {
+         return $login;
+      }
+   }
+
+   croak "cannot find login for method=$method, sub_url=$cfg->{sub_url} in $pattern_file";
+}
+
 sub main {
    print "------------ test swagger -----------------------------\n";
 }
