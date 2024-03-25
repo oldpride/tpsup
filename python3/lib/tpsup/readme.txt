@@ -18,9 +18,10 @@ exectools.py
 modtools.py
     modtools.py compiles code also compiles code at run time.
     it dynamically creates a module (dynamic dedicate namespace).
-    but the caller does not need to pass the namespace, globals(), to the module. 
+    but the caller does not pass the namespace, globals(), to the module. 
     Therefore, the module cannot access caller's objects.
-    caller has to pass caller's objects using function parameters.
+    If the new module needs the caller's objects (namespace), the caller has
+    to pass caller's objects using function parameters.
     eg, 
 
         from modtools import compile_code
@@ -49,6 +50,16 @@ expression.py
         # no need to pass caller's objects to the compiled code
         converted = compiled()           
 
+which to choose?
+    if you need to access caller's objects, use exectools.py. this is why
+        tpsup.testtools uses exectools.py.
+    if you need to access caller's objects, but you don't want to pollute
+        caller's namespace, use expression.py or modtools.py
+        between expression.py and modtools.py, 
+            - if you don't want multiple calls interfere with each other, use modtools.py
+            because modtools.py creates a dedicate namespace for each compiled code.
+            - if you do want multiple calls to share the same namespace, use expression.py
+            because expression.py uses the same namespace for all compiled code.
 
 python vs perl
     our python code had 3 different modules to compile code at run time.

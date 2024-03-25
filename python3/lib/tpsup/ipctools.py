@@ -254,7 +254,8 @@ def main():
         expect_child([{'pattern': 'password:'}], timeout=2)['timeout'] == True
 
         # when shell=True, 'cmd' will be searched in PATH. therefore,
-        # we can use both full path and command name.
+        # we can use both full path and command name.\
+
         # init_child(r'c:\Users\william\sitebase\github\tpsup\cmd_exe\ps.cmd')
         init_child('ps')
         expect_child([{'pattern': 'Python'}], timeout=2)['matched'] == True

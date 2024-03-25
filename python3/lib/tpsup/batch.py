@@ -106,13 +106,14 @@ def parse_cfg(cfg_file: str = None, **opt):
             imported_tpbatch = imported.tpbatch
             our_cfg['imported_tpbatch'] = imported_tpbatch
 
-    if parse_dict_cfg_sub := imported_tpbatch.get('parse_dict_cfg'):
+    if parse_hash_cfg_sub := imported_tpbatch.get('tpbatch_parse_hash_cfg'):
+        # tpbatch_.* in the imported will be called if it is defined in the imported
         pass
     else:
         # default is defined int this file
-        parse_dict_cfg_sub = parse_dict_cfg
+        parse_hash_cfg_sub = parse_hash_cfg
 
-    our_cfg = parse_dict_cfg_sub(our_cfg, **opt)
+    our_cfg = parse_hash_cfg_sub(our_cfg, **opt)
 
     # unify all configs under our_cfg (later becomes all_cfg),
     # make it include functions of app_cfg.py (pre_batch, post_batch, ...).
@@ -165,7 +166,7 @@ def parse_cfg(cfg_file: str = None, **opt):
     # values or functions from 3 places: cfg file, module, this file.
     default_by_key = {
         'parse_input_sub': parse_input_default_way,
-        'parse_dict_cfg': parse_dict_cfg,  # this function is only used in this funciton
+        'parse_hash_cfg': parse_hash_cfg,  # this function is only used in this funciton
     }
 
     for f in [
@@ -173,7 +174,7 @@ def parse_cfg(cfg_file: str = None, **opt):
         'post_batch',  # can be in 2 places: cfg file, module
         'code',  # can be in 2 places: cfg file, module
         'parse_input_sub',  # can be in 3 places: cfg file, module, this file.
-        'parse_dict_cfg',  # can be in 3 places: cfg file, module, this file.
+        'parse_hash_cfg',  # can be in 3 places: cfg file, module, this file.
     ]:
         if f in globals():
             our_cfg[f] = globals()[f]
@@ -185,7 +186,7 @@ def parse_cfg(cfg_file: str = None, **opt):
     return our_cfg
 
 
-def parse_dict_cfg(dict_cfg: type = dict, **opt):
+def parse_hash_cfg(dict_cfg: type = dict, **opt):
     # convert keys to uppercase
     for attr in ['keys', 'suits']:
         if dict_cfg.get(attr, None) is not None:
@@ -647,7 +648,7 @@ def main():
     print(f"after exec, our_cfg = {pformat(our_cfg)}{os.linesep}")
     # print(f"locals = {pformat(locals())}{os.linesep}")
 
-    dict_cfg = parse_dict_cfg(our_cfg)
+    dict_cfg = parse_hash_cfg(our_cfg)
     print(f"dict_cfg = {pformat(dict_cfg)}{os.linesep}")
 
     input = "s=PERL lines='test line'"

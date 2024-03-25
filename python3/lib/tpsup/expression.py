@@ -81,76 +81,30 @@ def dump_var(DumpFH=None, ExpPrefix=None, FIX=False):
             print(f"{k} => {pformat(globals()[k])}", file=DumpFH)
 
 
-'''
-sub compile_exp {
-   my ($exp, $opt) = @_;
-   #print STDERR "compile_exp opt =", Data::Dumper::Dumper($opt);
-   
-   if (exists $compiled_by_exp->{$exp}) {
-      return $compiled_by_exp->{$exp};
-   }
-
-   print STDERR "compile exp='$exp'\n" if $opt->{verbose} || $verbose;
-
-   my $workaround_exp;
-
-   if ($opt->{FIX} || $FIX) {
-      # This is a workaround to modify $1, $2, ..., eg, ${35} = D
-      # The following don't work
-      # $ perl -e '${"35"} = "D"'
-      # $ perl -e '${35} = "D"'
-      # Modification of a read-only value attempted at -e line 1.
-      #
-      # The following work
-      # $ perl -e '$fix{35} = "D"'
-      # $ perl -e '$fix{"35"} = "D"'
-   
-      $workaround_exp = convert_to_fix_expression($exp);
-   
-      ($opt->{verbose} || $verbose) && print STDERR "converted '$exp' to '$workaround_exp'\n";
-   } else {
-      $workaround_exp = $exp;
-   }
-   
-   my $warn = ($opt->{verbose}||$verbose) ? 'use' : 'no';
-   
-   my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $workaround_exp } ";
-
-   if ($@) {
-      if ($opt->{FIX} || $FIX) {
-         die "Bad match expression '$workaround_exp', converted from '$exp': $@";
-      } else {
-         die "Bad match expression '$workaround_exp': $@";
-      }
-   }
-   
-   $compiled_by_exp->{$exp} = $compiled;
-   
-   return $compiled;
-   
-}
-'''
-
 compiled_by_source = {}
 
 
-def compile_code(source: str,
-                 is_exp=False,  # whether the source is an expression, exp needs return statement
-                 **opt):
+def run_code(source: str,
+             function_wrap=False,
+             is_exp=False,  # whether the source is an expression, exp needs return statement
+             **opt):
 
     verbose = opt.get('verbose', False)
 
     if source in compiled_by_source:
         return compiled_by_source[source]
 
-    source2 = 'def f():\n'
+    if function_wrap:
+        source2 = 'def f():\n'
 
-    if is_exp:
-        # this is an expression
-        # we need to add a return statement
-        source2 += f"    return {source}\n"
+        if is_exp:
+            # this is an expression
+            # we need to add a return statement
+            source2 += f"    return {source}\n"
+        else:
+            source2 += f"    {source}\n"
     else:
-        source2 += f"    {source}\n"
+        source2 = source
 
     if verbose:
         print(f"compile source=\n'\n{source2}'")
@@ -160,34 +114,47 @@ def compile_code(source: str,
     except Exception as e:
         raise Exception(f"failed to compile source='{source2}': {e}")
 
+    ret = None
     try:
-        exec(compiled, globals())
+        ret = exec(compiled, globals())
     except Exception as e:
         raise Exception(f"failed to execute compiled source='{source2}': {e}")
-
-    compiled_by_source[source] = f
 
     if verbose:
         print(f'globals={pformat(globals())}')
 
-    return compiled_by_source[source]
+    if function_wrap:
+        compiled_by_source[source] = globals()['f']
+        # compiled_by_source[source] = f # this will work too! but vscode will complain.
+        return compiled_by_source[source]
+    else:
+        return ret
+
+
+def compile_code(source: str, **opt):
+    return run_code(source, function_wrap=True, **opt)
 
 
 def main():
     def test_codes():
-        export_var({'a': 1, 'b': 2, 'c': 3})
+        export_var({'a': 1, 'b': 2, 'c': 3}) == None
         # dump_var()
         a+b == 3
-        export_var({'a': 4, 'd': 5}, RESET=True)
+        export_var({'a': 4, 'd': 5}, RESET=True) == None
         # dump_var()
         a+d == 9
-        export_var({'a': 7, 'b': 8, 'c': 9}, ExpPrefix='tian', RESET=True)
+
+        export_var({'a': 7, 'b': 8, 'c': 9}, ExpPrefix='tian', RESET=True) == None
         # dump_var(ExpPrefix='tian')
         tian['a']+tian['b'] == 15
 
         compile_code('a+d', is_exp=True)() == 9
 
         compile_code('f"a={a}, d={d}"', is_exp=True,)() == 'a=4, d=5'
+
+        # no (), ie, no execution here!!!
+        run_code('myvar=a+d') == None
+        myvar == 9
 
     from tpsup.testtools import test_lines
     test_lines(test_codes, source_globals=globals(), source_locals=locals())

@@ -48,6 +48,7 @@ def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print
         if not in_test:
             if line.startswith('#TEST_BEGIN') or line.startswith('# TEST_BEGIN'):
                 in_test = True
+                test_code = []
             else:
                 if re.match(r'^\s*#|^\s*$', line):
                     # skip blank lines, comments, and function definition
