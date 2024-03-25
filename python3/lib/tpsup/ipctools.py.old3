@@ -255,7 +255,6 @@ def main():
 
         # when shell=True, 'cmd' will be searched in PATH. therefore,
         # we can use both full path and command name.
-
         # init_child(r'c:\Users\william\sitebase\github\tpsup\cmd_exe\ps.cmd')
         init_child('ps')
         expect_child([{'pattern': 'Python'}], timeout=2)['matched'] == True
