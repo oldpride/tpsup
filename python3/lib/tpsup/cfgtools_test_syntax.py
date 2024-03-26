@@ -9,6 +9,8 @@ our_syntax = {
         'minimal_args': {'type': int},
     },
 
+    # non-greedy match
+    # note: don't use ^/cfg/(.+?)/$, because it will match /cfg/abc/def/ghi/, not only /cfg/abc/
     '^/cfg/([^/]+?)/$': {
         'base_urls': {'type': list, 'required': 1},
         'op': {'type': dict, 'required': 1},

@@ -11,6 +11,7 @@ use base qw( Exporter );
 our @EXPORT_OK = qw(
   get_EXPORT_OK
   import_EXPECT_OK
+  getattr
 );
 
 # "EXPORT" vs "EXPORT_OK":
@@ -51,6 +52,8 @@ sub get_EXPORT_OK {
       eval "require $class";
    }
 
+   # access a namespace's variable by variable name
+   # python can do this by using getattr(module, attribute)
    my @exports = do {
       no strict 'refs';
       @{ $class . '::' . 'EXPORT_OK' };
@@ -81,11 +84,46 @@ sub import_EXPECT_OK {
    }
 }
 
+# python can do this by using getattr(module, attribute), much easier
+sub getattr {
+   my ( $module, $attribute, $opt ) = @_;
+
+   if ( !$opt->{type} ) {
+      # this can be a scalar or a reference
+      my $var = do {
+         no strict 'refs';
+         ${"${module}::${attribute}"};
+      };
+      return $var;
+   } elsif ( $opt->{type} eq 'ARRAY' ) {
+      my @var = do {
+         no strict 'refs';
+         @{"${module}::${attribute}"};
+      };
+      return \@var;
+   } elsif ( $opt->{type} eq 'HASH' ) {
+      my %var = do {
+         no strict 'refs';
+         %{"${module}::${attribute}"};
+      };
+      return \%var;
+   } elsif ( $opt->{type} eq 'CODE' ) {
+      my $var = do {
+         no strict 'refs';
+         \&{"${module}::${attribute}"};
+      };
+      return $var;
+   } else {
+      croak "unsupported type=$opt->{type}";
+   }
+}
+
 sub main {
    use TPSUP::TEST qw(:DEFAULT);
 
    my $test_code = <<'END';
       import_EXPECT_OK("TPSUP::DATE", __PACKAGE__) == 1;
+      equal(getattr("TPSUP::UTIL", "sort_unique", { type => 'CODE' })->([[3,2],[2,1]]), [1,2,3]);
 END
 
    test_lines($test_code);

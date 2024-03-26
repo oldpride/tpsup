@@ -648,7 +648,7 @@ def convert_from_yyyymmdd(template: str, yyyymmdd: str, **opt):
         }
 
         tpsup.expression.export_var(r)
-        compiled = tpsup.expression.compile_code(template, is_exp=True, **opt)
+        compiled = tpsup.expression.compile_exp(template, is_exp=True, **opt)
         converted = compiled()
         return converted
     else:
@@ -767,7 +767,7 @@ def date2any(date, input_pattern, input_assignment, output_template,
         r = enrich_yyyymmdd(r, **opt)
 
     tpsup.expression.export_var(r)
-    compiled = tpsup.expression.compile_code(output_template, is_exp=True, **opt)
+    compiled = tpsup.expression.compile_exp(output_template, is_exp=True, **opt)
     converted = compiled()
     return converted
 

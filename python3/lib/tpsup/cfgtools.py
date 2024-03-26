@@ -17,7 +17,7 @@ def check_syntax(node: dict, syntax: dict, path: str = '/', *opt):
         message += result['message']
 
         for k in node.keys():
-            print(f"{path}{k}/")
+            # print(f"{path}{k}/")
             result = check_syntax(node[k], syntax, f'{path}{k}/')
             error += result['error']
             checked += result['checked']
@@ -88,7 +88,7 @@ def check_syntax_1_node(node: dict, syntax: dict, path: str, **opt):
     return {'error': error, 'message': message, 'checked': checked}
 
 
-def source_py_string_to_dict(py_string: str, varnames: list[str]):
+def source_python_string_to_dict(py_string: str, varnames: list[str]):
     import tpsup.expression
     tpsup.expression.run_code(py_string)
     # our_cfg2 = tpsup.expression.our_cfg
@@ -101,11 +101,11 @@ def source_py_string_to_dict(py_string: str, varnames: list[str]):
     return ret
 
 
-def source_py_file_to_dict(py_file: str, varnames: list[str]):
+def source_python_file_to_dict(py_file: str, varnames: list[str]):
     # read the file into a string
     with open(py_file) as f:
         py_string = f.read()
-    return source_py_string_to_dict(py_string, varnames)
+    return source_python_string_to_dict(py_string, varnames)
 
 
 def main():
@@ -130,9 +130,9 @@ def main():
     # our_cfg2 = getattr(tpsup.expression, 'our_cfg')
     # print(f"our_cfg2={pformat(our_cfg2)}")
 
-    our_cfg = source_py_file_to_dict(test_cfg_file, ['our_cfg'])['our_cfg']
+    our_cfg = source_python_file_to_dict(test_cfg_file, ['our_cfg'])['our_cfg']
     print(f"our_cfg={pformat(our_cfg)}")
-    our_syntax = source_py_file_to_dict(test_syntax_file, ['our_syntax'])['our_syntax']
+    our_syntax = source_python_file_to_dict(test_syntax_file, ['our_syntax'])['our_syntax']
     print(f"our_syntax={pformat(our_syntax)}")
 
     check_result = check_syntax(our_cfg, our_syntax)

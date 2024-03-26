@@ -131,7 +131,7 @@ def run_code(source: str,
         return ret
 
 
-def compile_code(source: str, **opt):
+def compile_exp(source: str, **opt):
     return run_code(source, function_wrap=True, **opt)
 
 
@@ -148,11 +148,12 @@ def main():
         # dump_var(ExpPrefix='tian')
         tian['a']+tian['b'] == 15
 
-        compile_code('a+d', is_exp=True)() == 9
+        compile_exp('a+d', is_exp=True)() == 9
 
-        compile_code('f"a={a}, d={d}"', is_exp=True,)() == 'a=4, d=5'
+        # test string expression
+        compile_exp('f"a={a}, d={d}"', is_exp=True,)() == 'a=4, d=5'
 
-        # no (), ie, no execution here!!!
+        # no (), ie, no execution of function here!!! only run code.
         run_code('myvar=a+d') == None
         myvar == 9
 

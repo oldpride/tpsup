@@ -5,7 +5,7 @@ package TPSUP::Expression;
 
 # http://www.softpanorama.org/Scripting/Perlorama/perl_namespaces.shtml
 
-# "eval '...' statements, as well as regular expressions with deferred evaluation
+# "eval '...' statements, as well as regular expressions with deferred evaluation 
 # (like s///e operators or $(${ }) expressions), re-establish the namespace environment
 # for the duration of the expression compilation."
 
@@ -32,7 +32,7 @@ package TPSUP::Expression;
 #    $TPSUP::Expression::myhash{firstname} = 'jack';
 
 use strict;
-no strict 'refs';
+no strict 'refs' ;
 no strict 'vars';
 
 # This is old Charlie Huckle's version. It assumes the same set of variables.
@@ -41,7 +41,7 @@ no strict 'vars';
 
 sub export {
    while (@_) {
-      my ( $k, $v ) = splice( @_, 0, 2 );
+      my ($k, $v) = splice(@_, 0, 2);
       next unless defined $k;
       ${$k} = $v;
    }
@@ -55,33 +55,32 @@ sub export {
 my %_exist;
 
 sub export_var {
-   my ( $ref, $opt ) = @_;
+   my ($ref, $opt) = @_;
 
-   my $prefix =
-       defined( $opt->{ExpPrefix} ) ? $opt->{ExpPrefix}
-     : defined($Prefix)             ? $Prefix
-     :                                undef;
+   my $prefix = defined($opt->{ExpPrefix}) ? $opt->{ExpPrefix} :
+                defined($Prefix)           ? $Prefix           :
+                                             undef             ;
 
-   if ( $opt->{RESET} || $RESET ) {
+   if ($opt->{RESET} || $RESET) {
       if ($prefix) {
-         for my $k ( keys %{ ${$prefix} } ) {
+         for my $k (keys %{${$prefix}}) { 
             if ( $opt->{Hash} ) {
                # this is nested
-               for my $k2 ( keys %{ ${$prefix}{$k} } ) {
+               for my $k2 (keys %{${$prefix}{$k}}) {
                   delete ${$prefix}{$k}{$k2};
                }
             }
 
-            undef ${$prefix}{$k};
+            undef ${$prefix}{$k}; 
             delete ${$prefix}{$k};
          }
-      } elsif ( $opt->{FIX} || $FIX ) {
+      } elsif ($opt->{FIX} || $FIX ) {
          %fix = ();
       } else {
-         for my $k ( keys %_exist ) {
+         for my $k (keys %_exist) {
             if ( $opt->{Hash} ) {
                # this is nested
-               for my $k2 ( keys %{$k} ) {
+               for my $k2 (keys %{$k}) {
                   delete ${$k}{$k2};
                }
             }
@@ -101,22 +100,22 @@ sub export_var {
    # The following work
    # $ perl -e '$fix{35} = "D"'
    # $ perl -e '$fix{"35"} = "D"'
-
+   
    if ($prefix) {
-      for my $k ( keys %$ref ) {
-         if ( $opt->{Hash} ) {
-            # this is nested
-            for my $k2 ( keys %{ $ref->{$k} } ) {
-               ${$prefix}{$k}{$k2} = $ref->{$k}->{$k2};
-            }
-         } else {
-            ${$prefix}{$k} = $ref->{$k};
-         }
-      }
-   } elsif ( $opt->{FIX} || $FIX ) {
-      for my $k ( keys %$ref ) {
-         if ( $opt->{Hash} ) {
-            for my $k2 ( keys %{ $ref->{$k} } ) {
+      for my $k (keys %$ref) {
+        if ($opt->{Hash}) {
+           # this is nested
+           for my $k2 (keys %{$ref->{$k}}) {
+              ${$prefix}{$k}{$k2} = $ref->{$k}->{$k2};
+           }
+        } else {
+          ${$prefix}{$k} = $ref->{$k};
+        }
+     }
+   } elsif ($opt->{FIX}||$FIX) {
+      for my $k (keys %$ref) {
+         if ($opt->{Hash}) {
+            for my $k2 (keys %{$ref->{$k}}) {
                $fix{$k}{$k2} = $ref->{$k}->{$k2};
             }
          } else {
@@ -124,9 +123,9 @@ sub export_var {
          }
       }
    } else {
-      for my $k ( keys %$ref ) {
-         if ( $opt->{Hash} ) {
-            for my $k2 ( keys %{ $ref->{$k} } ) {
+      for my $k (keys %$ref) { 
+         if ($opt->{Hash}) {
+            for my $k2 (keys %{$ref->{$k}}) {
                ${$k}{$k2} = $ref->{$k}->{$k2};
                $_exist{$k} = 1;
             }
@@ -141,66 +140,67 @@ sub export_var {
 sub dump_var {
    my ($opt) = @_;
 
-   my $DumpFH = defined( $opt->{DumpFH} ) ? $opt->{DumpFH} : \*STDERR;
+   my $DumpFH = defined($opt->{DumpFH}) ? $opt->{DumpFH} : \*STDERR;
 
-   if ( $opt->{FIX} || $FIX ) {
+   if ($opt->{FIX}||$FIX) {
       print {$DumpFH} "\%fix =\n";
 
-      for my $k ( sort { $a <=> $b } ( keys %fix ) ) {
-         if ( $opt->{Hash} ) {
-            for my $k2 ( sort keys( %{ $fix{$k} } ) ) {
-               printf {$DumpFH} "%30s => %s\n", "\$fix{$k}{$k2}", "$fix{$k}{$k2}";
+      for my $k (sort {$a<=>$b} (keys %fix)) {
+         if ($opt->{Hash}) {
+            for my $k2 (sort keys(%{$fix{$k}}) ) {
+               printf {$DumpFH} "%30s => %s\n", "\$fix{$k}{$k2}", "$fix{$k}{$k2}"; 
             }
          } else {
             printf {$DumpFH} "%30s => %s\n", "\$fix{$k}", "$fix{$k}";
          }
       }
-   } else {
+   } else { 
       print {$DumpFH} "vars =\n";
 
-      for my $k ( sort { $a <=> $b } ( keys %_exist ) ) {
-         if ( $opt->{Hash} ) {
-            for my $k2 ( sort keys( %{$k} ) ) {
+      for my $k (sort {$a<=>$b} (keys %_exist)) {
+         if ($opt->{Hash}) {
+            for my $k2 (sort keys(%{$k}) ) {
                printf {$DumpFH} "%20s => %s\n", "\${$k}{$k2}", "${$k}{$k2}";
             }
          } else {
-            printf {$DumpFH} "%10s => %s\n", "\$$k", "${$k}";
+               printf {$DumpFH} "%10s => %s\n", "\$$k", "${$k}";
          }
       }
    }
-}
+}   
 
 sub get_value {
-   my ( $k, $opt ) = @_;
+    my ($k, $opt) = @_;
 
-   if ( $opt->{FIX} || $FIX ) {
-      return $fix{$k};
-   } else {
-      return ${$k};
-   }
+    if ($opt->{FIX}||$FIX) {
+        return $fix{$k};
+    } else {
+       return ${$k};
+    }
 }
 
 sub get_all {
-   my ( $k, $opt ) = @_;
+   my ($k, $opt) = @_;
 
-   if ( $opt->{FIX} || $FIX ) {
+   if ($opt->{FIX}||$FIX) {
       return {%fix};
    } else {
       my $r;
-      for my $k ( keys %_exist ) {
+      for my $k (keys %_exist) {
          $r->{$k} = ${$k};
       }
       return $r;
    }
 }
 
+
 sub get_fix_value {
-   my ($k) = @_;
-   return $fix{$k};
+    my ($k) = @_;
+    return $fix{$k} ;
 }
 
 sub convert_to_fix_expression {
-   my ( $exp, $opt ) = @_;
+   my ($exp, $opt) = @_;
 
    # This is a workaround to modify $1, $2, ..., eg, ${35} = D
    # The following don't work
@@ -211,22 +211,20 @@ sub convert_to_fix_expression {
    # The following work
    # $ perl -e '$fix{35} = "D"'
    # $ perl -e '$fix{"35"} = "D"'
-
+   
    my $workaround_exp = $exp;
    $workaround_exp =~ s:\$\{:\$fix{:g;
-
+   
    return $workaround_exp;
 }
-
-my $compiled_by_exp = {};
-
-sub run_code {
-   my ( $exp, $opt ) = @_;
+   
+my $ compiled_by_exp;
+   
+sub compile_exp {
+   my ($exp, $opt) = @_;
    #print STDERR "compile_exp opt =", Data::Dumper::Dumper($opt);
-
-   my $function_wrap = $opt->{function_wrap} || 0;
-
-   if ( exists $compiled_by_exp->{$exp} ) {
+   
+   if (exists $compiled_by_exp->{$exp}) {
       return $compiled_by_exp->{$exp};
    }
 
@@ -234,7 +232,7 @@ sub run_code {
 
    my $workaround_exp;
 
-   if ( $opt->{FIX} || $FIX ) {
+   if ($opt->{FIX} || $FIX) {
       # This is a workaround to modify $1, $2, ..., eg, ${35} = D
       # The following don't work
       # $ perl -e '${"35"} = "D"'
@@ -244,71 +242,60 @@ sub run_code {
       # The following work
       # $ perl -e '$fix{35} = "D"'
       # $ perl -e '$fix{"35"} = "D"'
-
+   
       $workaround_exp = convert_to_fix_expression($exp);
-
-      ( $opt->{verbose} || $verbose ) && print STDERR "converted '$exp' to '$workaround_exp'\n";
+   
+      ($opt->{verbose} || $verbose) && print STDERR "converted '$exp' to '$workaround_exp'\n";
    } else {
       $workaround_exp = $exp;
    }
+   
+   my $warn = ($opt->{verbose}||$verbose) ? 'use' : 'no';
+   
+   my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $workaround_exp } ";
 
-   my $warn = ( $opt->{verbose} || $verbose ) ? 'use' : 'no';
-
-   if ($function_wrap) {
-      # with function wrap, we run the code to create (compile) a function
-      my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $workaround_exp } ";
-
-      if ($@) {
-         if ( $opt->{FIX} || $FIX ) {
-            die "Bad match expression '$workaround_exp', converted from '$exp': $@";
-         } else {
-            die "Bad match expression '$workaround_exp': $@";
-         }
+   if ($@) {
+      if ($opt->{FIX} || $FIX) {
+         die "Bad match expression '$workaround_exp', converted from '$exp': $@";
+      } else {
+         die "Bad match expression '$workaround_exp': $@";
       }
-
-      $compiled_by_exp->{$exp} = $compiled;
-
-      return $compiled;
-   } else {
-      # without function wrap, we run the code to get the result
-      return eval "$warn warnings; no strict; package TPSUP::Expression; $workaround_exp";
    }
+   
+   $compiled_by_exp->{$exp} = $compiled;
+   
+   return $compiled;
+   
 }
-
-sub compile_exp {
-   my ( $exp, $opt ) = @_;
-   $opt = {} unless $opt;
-   return run_code( $exp, { %$opt, function_wrap => 1 } );
-}
-
+   
 sub strcat {
-   return join( "", @_ );
+   return join ("", @_);
 }
-
+   
 sub indexof {
-   my ( $string, $substring ) = @_;
-   return index( $string, $substring );
+   my ($string, $substring) = @_;
+   return index($string, $substring);
 }
-
+   
 sub lindexof {
-   my ( $string, $substring ) = @_;
-   return rindex( $string, $substring );
+   my ($string, $substring) = @_;
+   return rindex($string, $substring);
 }
 
 sub regexp {
-   my ( $string, $pattern ) = @_;
+   my ($string, $pattern) = @_;
 
    return $string =~ /$pattern/;
 }
 
 sub regsub {
-   my ( $string, $sub ) = @_;
+   my ($string, $sub) = @_;
    eval "\$string =~ $sub";
    return $string;
 }
 
 sub cond {
-   my ( $bool, $ValueIfTrue, $ValueIfFalse ) = @_;
+   my ($bool, $ValueIfTrue, $ValueIfFalse) = @_;
    return $bool ? $ValueIfTrue : $ValueIfFalse;
 }
 
@@ -317,9 +304,9 @@ sub get_desc_by_tag_value {
 }
 
 sub fixdesc {
-   my ( $tag, $opt ) = @_;
+   my ($tag, $opt) = @_;
    #return TPSUP::FIX::get_desc_by_tag_value($tag, get_fix_value($tag));
-   return TPSUP::FIX::get_desc_by_tag_value( $tag, $TPSUP::Expression::fix{$tag} );
+   return TPSUP::FIX::get_desc_by_tag_value($tag, $TPSUP::Expression::fix{$tag});
 }
 
 ###########################################################################
@@ -343,44 +330,12 @@ sub fixdesc {
 # # the following 2 are the same.
 # #return TPSUP::FIX::get_desc_by_tag_value($tag, get_fix_value($tag));
 # return TPSUP::FIX::get_desc_by_tag_value($tag, $TPSUP::Expression::fix{$tag});
-# }
+# } 
 #
 # 1
 #
 # Note: you have to announce the name space with "package TPSUP::Expression"
 # and end the name space with "1".
 ###########################################################################
-
-sub main {
-   require TPSUP::TEST;
-
-   # use 'our' in test code, not 'my'
-   my $test_code = <<'END';
-        export_var({a => 1, b => 2, c => 3})
-        # dump_var()
-        $a+$b == 3
-        export_var({a => 4, d => 5}, {RESET=>1})
-        # dump_var()
-        $a+$d == 9
-
-        export_var({a=> 7, b => 8, c => 9}, {ExpPrefix=>'tian', RESET=>1})
-        # dump_var(ExpPrefix='tian')
-        $tian{a}+$tian{b} == 15
-
-        compile_exp('$a+$d', {is_exp=>1})->() == 9
-
-        # test string expression
-        compile_exp('"a=$a, d=$d"', {is_exp=>1})->() eq 'a=4, d=5' 
-
-        # 1. no (), ie, execution of function here!!! only run code.
-        # 2. use 'our', not 'my', likely because of the eval.
-        run_code('our $myvar=$a+$d')
-        $myvar == 9
-END
-
-   TPSUP::TEST::test_lines($test_code);
-}
-
-main() unless caller();
 
 1
