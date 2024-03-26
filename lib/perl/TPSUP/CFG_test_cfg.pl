@@ -2,6 +2,18 @@ our $our_cfg = {
    # position_args => [ 'base', 'op' ],
    'minimal_args' => 2,
 
+   extra_args => {
+      'nojson' => 'nojson',    # -nojson
+   },
+
+   pre_checks => [
+      # you need this in corporate network
+      #{
+      #   check      => 'exists($ENV{HTTPS_CA_DIR})',
+      #   suggestion => 'run: export HTTPS_CA_DIR=/etc/ssl/certs',
+      #},
+   ],
+
    'cfg' => {
       'mybase1' => {
          'base_urls' => ['https://myhost1.abc.com:9100'],

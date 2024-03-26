@@ -3,6 +3,8 @@ our $our_syntax = {
       'cfg'          => { 'type' => 'HASH', 'required' => 1 },
       'package'      => { 'type' => 'SCALAR' },
       'minimal_args' => { 'type' => 'SCALAR' },
+      'extra_args'   => { 'type' => 'HASH' },
+      'pre_checks'   => { 'type' => 'ARRAY' },
    },
 
    # non-greedy match
@@ -11,7 +13,7 @@ our $our_syntax = {
       'base_urls'  => { 'type' => 'ARRAY', 'required' => 1 },
       'op'         => { 'type' => 'HASH',  'required' => 1 },
       'entry'      => { 'type' => 'SCALAR' },
-      'entry_func' => { 'type' => 'Union[str, types.CodeType, types.FunctionType]' },
+      'entry_func' => { 'type' => 'CODE' },
    },
    '^/cfg/([^/]+?)/op/([^/]+?)/$' => {
       'sub_url'   => { 'type' => 'SCALAR', 'required' => 1 },
