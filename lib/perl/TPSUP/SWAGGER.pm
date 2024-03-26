@@ -27,7 +27,7 @@ use TPSUP::UTIL qw(
   add_line_number_to_code
 );
 
-use TPSUP::CFG qw(check_hash_cfg_syntax);
+use TPSUP::CFG qw(check_syntax);
 
 sub swagger_eval_code {
    my ( $code, $opt ) = @_;
@@ -201,20 +201,48 @@ sub swagger {
    }
 }
 
+# my $swagger_syntax = {
+#    top => {
+#       cfg          => { type => 'HASH', required => 1 },
+#       package      => { type => 'SCALAR' },
+#       minimal_args => { type => 'SCALAR' },
+#    },
+
+#    base => {
+#       base_urls  => { type => 'ARRAY', required => 1 },
+#       op         => { type => 'HASH',  required => 1 },
+#       entry      => { type => 'SCALAR' },
+#       entry_func => { type => 'CODE' },
+#    },
+#    op => {
+#       sub_url   => { type => 'SCALAR', required => 1 },
+#       num_args  => { type => 'SCALAR', pattern  => qr/^\d+$/ },
+#       json      => { type => 'SCALAR', pattern  => qr/^\d+$/ },
+#       method    => { type => 'SCALAR', pattern  => qr/^(GET|POST|DELETE)$/ },
+#       Accept    => { type => 'SCALAR' },
+#       comment   => { type => 'SCALAR' },
+#       validator => { type => 'SCALAR' },
+#       post_data => { type => 'SCALAR' },
+#       test_str  => { type => 'ARRAY' },
+#    },
+# };
+
 my $swagger_syntax = {
-   top => {
+   '^/$' => {
       cfg          => { type => 'HASH', required => 1 },
       package      => { type => 'SCALAR' },
       minimal_args => { type => 'SCALAR' },
    },
 
-   base => {
+   # non-greedy match
+   # note: don't use ^/cfg/(.+?)/$, because it will match /cfg/abc/def/ghi/, not only /cfg/abc/
+   '^/cfg/([^/]+?)/$' => {
       base_urls  => { type => 'ARRAY', required => 1 },
       op         => { type => 'HASH',  required => 1 },
       entry      => { type => 'SCALAR' },
       entry_func => { type => 'CODE' },
    },
-   op => {
+   '^/cfg/([^/]+?)/op/([^/]+?)/$' => {
       sub_url   => { type => 'SCALAR', required => 1 },
       num_args  => { type => 'SCALAR', pattern  => qr/^\d+$/ },
       json      => { type => 'SCALAR', pattern  => qr/^\d+$/ },
@@ -233,23 +261,24 @@ sub tpbatch_parse_hash_cfg {
    # overwrite the default TPSUP::BATCH::parse_hash_cfg
 
    # verify syntax
-   for my $k ( keys %{ $hash_cfg->{cfg} } ) {
-      my $base_cfg = $hash_cfg->{cfg}->{$k};
-      my $result   = check_hash_cfg_syntax( $base_cfg, $swagger_syntax->{base} );
-      if ( $result->{error} ) {
-         print STDERR "syntax error at base=$k, $result->{message}", Dumper($base_cfg);
-         exit 1;
-      }
+   # for my $k ( keys %{ $hash_cfg->{cfg} } ) {
+   #    my $base_cfg = $hash_cfg->{cfg}->{$k};
+   #    my $result   = check_hash_cfg_syntax( $base_cfg, $swagger_syntax->{base} );
+   #    if ( $result->{error} ) {
+   #       print STDERR "syntax error at base=$k, $result->{message}", Dumper($base_cfg);
+   #       exit 1;
+   #    }
 
-      for my $k2 ( keys %{ $base_cfg->{op} } ) {
-         my $op_cfg  = $base_cfg->{op}->{$k2};
-         my $result2 = check_hash_cfg_syntax( $op_cfg, $swagger_syntax->{op} );
-         if ( $result2->{error} ) {
-            print STDERR "syntax error at op=$k, $result2->{message}", Dumper($op_cfg);
-            exit 1;
-         }
-      }
-   }
+   #    for my $k2 ( keys %{ $base_cfg->{op} } ) {
+   #       my $op_cfg  = $base_cfg->{op}->{$k2};
+   #       my $result2 = check_hash_cfg_syntax( $op_cfg, $swagger_syntax->{op} );
+   #       if ( $result2->{error} ) {
+   #          print STDERR "syntax error at op=$k, $result2->{message}", Dumper($op_cfg);
+   #          exit 1;
+   #       }
+   #    }
+   # }
+   check_syntax( $hash_cfg, $swagger_syntax );
 
    if ( !$hash_cfg->{usage_example} ) {
       my $example = "\n";
