@@ -117,6 +117,8 @@ sub check_syntax_1_node {
 sub check_syntax_1_node_1_syntax {
    my ( $node, $node_syntax, $path, $opt ) = @_;
 
+   my $allowUnkownKey = $opt->{allowUnkownKey} || 0;
+
    my $error   = 0;
    my $checked = "";
    my $message = "";
@@ -129,8 +131,10 @@ sub check_syntax_1_node_1_syntax {
       my $v = $node->{$k};
 
       if ( !exists $node_syntax->{$k} ) {
-         $message .= "$path key=$k is not allowed\n";
-         $error++;
+         if ( !$allowUnkownKey ) {
+            $message .= "$path key=$k is not allowed\n";
+            $error++;
+         }
          next;
       }
 

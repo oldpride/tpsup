@@ -336,6 +336,9 @@ sub tpbatch_parse_input {
 
    # this overrides the default TPSUP::BATCH::parse_input_default_way
 
+   # command line like: tpswagger_test  mybase2 myop2_1 arg0 arg1
+   #                                    base    op      args ...
+
    my @copied = @$input;
    my $base   = shift @copied;
    my $op     = shift @copied;
