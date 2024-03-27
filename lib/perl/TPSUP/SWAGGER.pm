@@ -90,11 +90,23 @@ sub swagger {
    my $validator = $cfg->{validator};
    if ( defined $validator ) {
       $verbose && print STDERR "test validator: $validator\n";
-      if ( swagger_eval_code( $validator, { %$opt, dict => $dict } ) ) {
-         $verbose && print STDERR "validator test passed\n";
+      if ( !ref($validator) ) {
+         # if it is not a reference, it is a scalar
+         if ( swagger_eval_code( $validator, { %$opt, dict => $dict } ) ) {
+            $verbose && print STDERR "validator test passed\n";
+         } else {
+            print STDERR "validator test failed: $validator\n";
+            exit 1;
+         }
+      } elsif ( ref($validator) eq 'CODE' ) {
+         if ( $validator->( $args, $opt ) ) {
+            $verbose && print STDERR "validator test passed\n";
+         } else {
+            print STDERR "validator test failed: $validator\n";
+            exit 1;
+         }
       } else {
-         print STDERR "validator test failed: $validator\n";
-         exit 1;
+         croak "unsupported validator type: ", ref($validator);
       }
    }
 
@@ -121,14 +133,18 @@ sub swagger {
       # entry_func => \&TPSUP::SWAGGER::get_swagger_entry,
       # entry_func overrides entry. entry_func is a subroutine reference.
 
-      my $entry_name = $cfg->{entry};
-      my $entry_func = $cfg->{entry_func};
+      my $entry      = $cfg->{entry};
+      my $entry_type = ref($entry);
       my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
       my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
 
-      # if entry_func overrides entry.
-      if ($entry_func) {
-         $entry_name = $entry_func->( $cfg, $dict, $opt );
+      my $entry_name;
+      if ( !$entry_type ) {
+         $entry_name = $entry;
+      } elsif ( $entry_type eq 'CODE' ) {
+         $entry_name = $entry->( $cfg, $dict, $opt );
+      } else {
+         croak "unsupported entry type: $entry_type";
       }
 
       # there are two places mentioning json
@@ -228,7 +244,7 @@ my $swagger_syntax = {
       method    => { type => 'SCALAR', pattern  => qr/^(GET|POST|DELETE)$/ },
       Accept    => { type => 'SCALAR' },
       comment   => { type => 'SCALAR' },
-      validator => { type => 'SCALAR' },
+      validator => { type => [qw(SCALAR CODE)] },
       post_data => { type => 'SCALAR' },
       test_str  => { type => 'ARRAY' },
    },
@@ -338,7 +354,6 @@ sub tpbatch_parse_input {
 
    # command line like: tpswagger_test  mybase2 myop2_1 arg0 arg1
    #                                    base    op      args ...
-
    my @copied = @$input;
    my $base   = shift @copied;
    my $op     = shift @copied;
@@ -479,6 +494,7 @@ sub get_entry_by_method_suburl {
 }
 
 sub main {
+   # we don't export anything because this module is called by TPSUP::BATCH.
    print "------------ test swagger -----------------------------\n";
 }
 

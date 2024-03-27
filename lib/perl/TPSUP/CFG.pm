@@ -142,10 +142,32 @@ sub check_syntax_1_node_1_syntax {
       my $actual_type   = ref $v || 'SCALAR';
 
       if ( defined $expected_type ) {
-         if ( $expected_type ne $actual_type ) {
-            $message .= "$path key=$k type mismatch: expected=$expected_type vs actual=$actual_type\n";
-            $error++;
-            next;
+         my $type_of_expected_type = ref $expected_type;
+         if ( !$type_of_expected_type ) {
+            # this is a scalar
+
+            if ( $expected_type ne $actual_type ) {
+               $message .= "$path key=$k type mismatch: expected=$expected_type vs actual=$actual_type\n";
+               $error++;
+               next;
+            }
+         } elsif ( $type_of_expected_type eq 'ARRAY' ) {
+            # this is an array
+            my $found = 0;
+            foreach my $t ( @{$expected_type} ) {
+               if ( $t eq $actual_type ) {
+                  $found = 1;
+                  last;
+               }
+            }
+
+            if ( !$found ) {
+               $message .= "$path key=$k type mismatch: expected=@$expected_type vs actual=$actual_type\n";
+               $error++;
+               next;
+            }
+         } else {
+            croak "unsupported expected_type=$expected_type";
          }
       }
 

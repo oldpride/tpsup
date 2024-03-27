@@ -12,7 +12,7 @@ our $our_syntax = {
    '^/cfg/([^/]+?)/$' => {
       'base_urls'  => { 'type' => 'ARRAY', 'required' => 1 },
       'op'         => { 'type' => 'HASH',  'required' => 1 },
-      'entry'      => { 'type' => 'SCALAR' },
+      'entry'      => { 'type' => [ 'SCALAR', 'CODE' ] },
       'entry_func' => { 'type' => 'CODE' },
    },
    '^/cfg/([^/]+?)/op/([^/]+?)/$' => {
@@ -22,7 +22,7 @@ our $our_syntax = {
       'method'    => { 'type' => 'SCALAR', 'pattern'  => qr/^(GET|POST|DELETE)$/ },
       'Accept'    => { 'type' => 'SCALAR' },
       'comment'   => { 'type' => 'SCALAR' },
-      'validator' => { 'type' => 'SCALAR' },
+      'validator' => { 'type' => [ 'SCALAR', 'CODE' ] },
       'post_data' => { 'type' => 'SCALAR' },
       'test_str'  => { 'type' => 'ARRAY' },
    },

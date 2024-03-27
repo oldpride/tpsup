@@ -104,13 +104,22 @@ def check_syntax_1_node_1_syntax(node: dict, node_syntax: dict, path: str, **opt
             continue
 
         expected_type = node_syntax[k].get('type', None)
+        type_of_expected_type = type(expected_type)
         actual_type = type(v)
 
-        if expected_type is not None:
-            if expected_type != actual_type:
+        if type_of_expected_type == list:
+            if actual_type not in expected_type:
                 message += f"{path} key={k} type mismatch: expected={expected_type} vs actual={actual_type}\n"
                 error += 1
                 continue
+        elif type_of_expected_type == str:
+            if expected_type is not None:
+                if expected_type != actual_type:
+                    message += f"{path} key={k} type mismatch: expected={expected_type} vs actual={actual_type}\n"
+                    error += 1
+                    continue
+        else:
+            raise RuntimeError(f"expected_type={expected_type} should be either list or str")
 
         pattern = node_syntax[k].get('pattern', None)
         if pattern is not None:

@@ -14,8 +14,7 @@ our_syntax = {
     '^/cfg/([^/]+?)/$': {
         'base_urls': {'type': list, 'required': 1},
         'op': {'type': dict, 'required': 1},
-        'entry': {'type': str},
-        'entry_func': {'type': Union[str, types.CodeType, types.FunctionType]},
+        'entry': {'type': [str, types.CodeType, types.FunctionType]},
     },
     '^/cfg/([^/]+?)/op/([^/]+?)/$': {
         'sub_url': {'type': str, 'required': 1},
@@ -24,7 +23,7 @@ our_syntax = {
         'method': {'type': str, 'pattern': r'^(GET|POST|DELETE)$'},
         'Accept': {'type': str},
         'comment': {'type': str},
-        'validator': {'type': str},
+        'validator': {'type': [str, types.CodeType, types.FunctionType]},
         'post_data': {'type': str},
         'test_str': {'type': list},
     },

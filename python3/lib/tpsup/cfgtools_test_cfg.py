@@ -1,4 +1,5 @@
 
+import tpsup.swaggertools
 our_cfg = {
     # position_args => [ 'base', 'op' ],
     'minimal_args': 2,
@@ -32,8 +33,7 @@ our_cfg = {
 
         'mybase2': {
             'base_urls': ['https://myhost1.abc.com:9102', 'https://myhost2.abc.com:9102'],
-            'entry': 'swagger-tian',
-            # 'entry_func': tpsup.swaggertools.get_entry,
+            'entry': tpsup.swaggertools.get_entry_by_method_suburl,
             'op': {
                 'myop2_1': {
                     'num_args': 2,
