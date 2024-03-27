@@ -120,7 +120,9 @@ sub check_syntax_1_node_1_syntax {
    my $error   = 0;
    my $checked = "";
    my $message = "";
-   # my $matched = "";   # this function does not update 'matched'
+
+   # this function does not do "matching", therefore doesn't update 'matched'
+   # my $matched = "";
 
    foreach my $k ( keys %$node ) {
       $checked .= "checked path=$path key=$k\n";
@@ -168,21 +170,31 @@ sub check_syntax_1_node_1_syntax {
    return { error => $error, message => $message, checked => $checked };
 }
 
-# convert above to perl
+# note: TPSUP::BATCH doesn't use this function, because TPSUP::BATCH needs to source
+# the code into its own namespace, not TPSUP::Expression's.
+# this function sources the code into TPSUP::Expression's namespace.
 sub source_perl_string_to_dict {
-   my ( $perl_string, $varnames ) = @_;
+   my ( $perl_string, $varname, $opt ) = @_;
 
    require TPSUP::Expression;
    TPSUP::Expression::run_code($perl_string);
 
-   my $ret = {};
-   for my $varname (@$varnames) {
+   my $varname_type = ref $varname;
+   if ( !$varname_type ) {
       # access a namespace's variable by variable name
       # python can do this by using getattr(module, attribute), much easier
-      my $var = TPSUP::NAMESPACE::getattr( "TPSUP::Expression", $varname );
-      $ret->{$varname} = $var;
+      my $var = TPSUP::NAMESPACE::getattr( "TPSUP::Expression", $varname, $opt );
+      return $var;
+   } elsif ( $varname_type ne 'ARRAY' ) {
+      my $ret = {};
+      for my $varname2 (@$varname) {
+         my $var = TPSUP::NAMESPACE::getattr( "TPSUP::Expression", $varname2, $opt );
+         $ret->{$varname2} = $var;
+      }
+      return $ret;
+   } else {
+      croak "varname must be a scalar or an array reference";
    }
-   return $ret;
 }
 
 sub source_perl_file_to_dict {
@@ -267,9 +279,9 @@ END
    my $test_cfg_file    = "$module_dir/CFG_test_cfg.pl";
    my $test_syntax_file = "$module_dir/CFG_test_syntax.pl";
 
-   my $our_cfg = source_perl_file_to_dict( $test_cfg_file, ['our_cfg'] )->{our_cfg};
+   my $our_cfg = source_perl_file_to_dict( $test_cfg_file, 'our_cfg' );
    print "our_cfg=", Dumper($our_cfg);
-   my $our_syntax = source_perl_file_to_dict( $test_syntax_file, ['our_syntax'] )->{our_syntax};
+   my $our_syntax = source_perl_file_to_dict( $test_syntax_file, 'our_syntax' );
    print "our_syntax=", Dumper($our_syntax);
 
    my $result = check_syntax( $our_cfg, $our_syntax, );

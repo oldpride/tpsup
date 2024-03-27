@@ -1,45 +1,67 @@
 import os
 from pprint import pformat
 import re
+from typing import Union
 
 
-def check_syntax(node: dict, syntax: dict, path: str = '/', *opt):
+def check_syntax(node: dict,
+                 syntax: dict,
+                 path: str = '/',
+
+                 # if 'fatal' is True, raise exception when error.
+                 # true 'fatal' should be used only on top level call.
+                 # therefore, we don't need to pass it down.
+                 fatal: bool = False,
+                 **opt):
     # recursively walk through hash and build each hash node's path.
     error = 0
     checked = ""
     message = ""
-    node_type = type(node)
+    matched = ""
 
+    node_type = type(node)
     if node_type == dict:
-        result = check_syntax_1_node(node, syntax, path)
+        result = check_syntax_1_node(node, syntax, path, **opt)
         error += result['error']
         checked += result['checked']
         message += result['message']
+        matched += result['matched']
 
         for k in node.keys():
             # print(f"{path}{k}/")
-            result = check_syntax(node[k], syntax, f'{path}{k}/')
+            result = check_syntax(node[k], syntax, f'{path}{k}/', **opt)
             error += result['error']
             checked += result['checked']
             message += result['message']
+            matched += result['matched']
     elif node_type == list:
         for i in range(len(node)):
             print(f"{path}{i}/")
-            result = check_syntax(node[i], syntax, f'{path}{i}/')
+            result = check_syntax(node[i], syntax, f'{path}{i}/', **opt)
             error += result['error']
             checked += result['checked']
             message += result['message']
+            matched += result['matched']
     else:
         # do nothing for other types.
         pass
 
-    return {'error': error, 'message': message, 'checked': checked}
+    if fatal:
+        if error > 0:
+            raise RuntimeError(f"error={error} message={message}")
+        if checked == "":
+            raise RuntimeError(f"nothing was checked.")
+        if matched == "":
+            raise RuntimeError(f"nothing was matched.")
+
+    return {'error': error, 'message': message, 'checked': checked, 'matched': matched}
 
 
 def check_syntax_1_node(node: dict, syntax: dict, path: str, **opt):
     error = 0
     checked = ""
     message = ""
+    matched = ""
     node_type = type(node)
 
     if node_type != dict:
@@ -48,57 +70,88 @@ def check_syntax_1_node(node: dict, syntax: dict, path: str, **opt):
     for p in syntax.keys():
         if re.search(p, path):
             node_syntax = syntax[p]
+            matched += f"pattern={p} matched path={path}\n"
 
             # print(f"path={path} pattern={p} node_syntax={pformat(node_syntax)}")
 
-            for k in node.keys():
-                checked += f"pattern={p} path={path} key={k}\n"
-                v = node[k]
+            result = check_syntax_1_node_1_syntax(node, node_syntax, path)
+            error += result['error']
+            checked += result['checked']
+            message += result['message']
 
-                if k not in node_syntax.keys():
-                    message += f"{path} key={k} is not allowed\n"
-                    error += 1
-                    continue
+    return {'error': error, 'message': message, 'checked': checked, 'matched': matched}
 
-                expected_type = node_syntax[k].get('type', None)
-                actual_type = type(v)
 
-                if expected_type is not None:
-                    if expected_type != actual_type:
-                        message += f"{path} key={k} type mismatch: expected={expected_type} vs actual={actual_type}\n"
-                        error += 1
-                        continue
+def check_syntax_1_node_1_syntax(node: dict, node_syntax: dict, path: str, **opt):
+    error = 0
+    checked = ""
+    message = ""
 
-                pattern = node_syntax[k].get('pattern', None)
-                if pattern is not None:
-                    if not re.match(pattern, f"{v}"):
-                        message += f"{path} key={k} value={v} not matching expected pattern\n"
-                        error += 1
-                        continue
+    # this function doesn't match patterns, so no need to return matched
+    # matched = ""
 
-            for k in node_syntax.keys():
-                checked += f"pattern={p} path={path} required key={k}\n"
-                v = node_syntax[k]
-                required = v.get('required', False)
-                if required and k not in node:
-                    message += f"{path} required key={k} is missing\n"
-                    error += 1
-                    continue
+    node_type = type(node)
+    if node_type != dict:
+        raise RuntimeError(f"node_type={node_type} is not dict. should never be here. node={pformat(node)}")
+
+    for k in node.keys():
+        checked += f"path={path} key={k}\n"
+        v = node[k]
+
+        if k not in node_syntax.keys():
+            message += f"{path} key={k} is not allowed\n"
+            error += 1
+            continue
+
+        expected_type = node_syntax[k].get('type', None)
+        actual_type = type(v)
+
+        if expected_type is not None:
+            if expected_type != actual_type:
+                message += f"{path} key={k} type mismatch: expected={expected_type} vs actual={actual_type}\n"
+                error += 1
+                continue
+
+        pattern = node_syntax[k].get('pattern', None)
+        if pattern is not None:
+            if not re.match(pattern, f"{v}"):
+                message += f"{path} key={k} value={v} not matching expected pattern\n"
+                error += 1
+                continue
+
+    for k in node_syntax.keys():
+        checked += f"path={path} required key={k}\n"
+        v = node_syntax[k]
+        required = v.get('required', False)
+        if required and k not in node:
+            message += f"{path} required key={k} is missing\n"
+            error += 1
+            continue
 
     return {'error': error, 'message': message, 'checked': checked}
 
 
-def source_python_string_to_dict(py_string: str, varnames: list[str]):
+def source_python_string_to_dict(py_string: str, varnames: Union[list[str], str]):
+    # tpsup.batch does use this function to source cfg code because
+    # tpsup.batch needs the cfg code in it own namespace.
+    # this function source the code into tpsup.expression namespace.
     import tpsup.expression
     tpsup.expression.run_code(py_string)
     # our_cfg2 = tpsup.expression.our_cfg
     # use get attribute to avoid pylint warning
     # our_cfg2 = getattr(tpsup.expression, 'our_cfg')
-    ret = {}
-    for varname in varnames:
-        var = getattr(tpsup.expression, varname)
-        ret[varname] = var
-    return ret
+
+    if type(varnames) == str:
+        varname = varnames
+        return getattr(tpsup.expression, varname)
+    elif type(varnames) == list:
+        ret = {}
+        for varname in varnames:
+            var = getattr(tpsup.expression, varname)
+            ret[varname] = var
+        return ret
+    else:
+        raise RuntimeError(f"varnames={varnames} should be either str or list")
 
 
 def source_python_file_to_dict(py_file: str, varnames: list[str]):
@@ -130,12 +183,12 @@ def main():
     # our_cfg2 = getattr(tpsup.expression, 'our_cfg')
     # print(f"our_cfg2={pformat(our_cfg2)}")
 
-    our_cfg = source_python_file_to_dict(test_cfg_file, ['our_cfg'])['our_cfg']
+    our_cfg = source_python_file_to_dict(test_cfg_file, 'our_cfg')
     print(f"our_cfg={pformat(our_cfg)}")
-    our_syntax = source_python_file_to_dict(test_syntax_file, ['our_syntax'])['our_syntax']
+    our_syntax = source_python_file_to_dict(test_syntax_file, 'our_syntax')
     print(f"our_syntax={pformat(our_syntax)}")
 
-    check_result = check_syntax(our_cfg, our_syntax)
+    check_result = check_syntax(our_cfg, our_syntax, fatal=True)
     print(f"check_result={pformat(check_result)}")
 
 
