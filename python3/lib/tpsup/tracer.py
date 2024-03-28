@@ -1292,7 +1292,7 @@ def parse_cfg(cfg_file: str, **opt):
 
     global our_cfg
     # exec will set our_cfg
-    exec_simple(cfg_string, source_filename=cfg_file)
+    exec_into_globals(cfg_string, source_filename=cfg_file)
 
     # make data structure consistent
     for k in ['trace_route']:
@@ -1500,8 +1500,8 @@ def parse_cfg(cfg_file: str, **opt):
     return our_cfg
 
 
-def exec_simple(source: str, **opt):
-    exec_into_globals(source, globals(), locals(), **opt)
+# def exec_simple(source: str, **opt):
+#     exec_into_globals(source, globals(), locals(), **opt)
 
 
 def check_cfg_keys(cfg: dict, syntax: dict, **opt):
@@ -2283,7 +2283,7 @@ def main():
     print('----------------------------------------')
     import os
     TPSUP = os.environ.get('TPSUP')
-    cfg_file = f'{TPSUP}/python3/scripts/tptrace_test_cfg_trace.py'
+    cfg_file = f'{TPSUP}/python3/scripts/pttrace_test_cfg_trace.py'
     # print(f'parse_cfg(cfg_file) = {pformat(parse_cfg(cfg_file))}')
     trace(cfg_file, ['sec=IBM.N', 'yyyymmdd=20211129'], verbose=0)
 

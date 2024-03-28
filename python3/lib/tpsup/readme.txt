@@ -1,3 +1,42 @@
+
+python stack frame vs namespace
+    https://stackoverflow.com/questions/71646713
+    Scope (namespace) is just one of the LEGB: Local, Enclosing, Global and Built-in.
+    They are namespaces that Python uses to look up names. 
+    LEGB is the order in which that lookup is performed, 
+        first the local scope is checked for a names, 
+        then the enclosing scope, 
+        then global, 
+        built-in 
+        and if it's never found, you end up with an exception.
+
+    This ordering is the reason for 'shadowing': if you define something in local scope,
+    it shadows global, because local scope is checked before global scope. 
+    The definition doesn't overwrite the previous one, it shadows it. 
+    
+    If you redefine a variable in the same scope, it overwrites the previous variable
+    and you can't get it back.
+
+    A stack frame is created every time a function is called (and
+    a global frame every time a module is loaded). 
+    
+    The stack frame handles the local variables for the function. 
+    Every time another function is called, a new stack frame is created, creating a new local scope. 
+    This allows every call to a function to have its own set of local variables, without access to
+    the local scope of previous calls. Every time a function returns, that stack frame is destroyed,
+    and you end back up in the previous stack frame (so, it's a 'stack').
+
+    So 'stack frame' is related to 'scope' in that the local scope is on the top-most stack frame. 
+    A stack frame contains the local scope for a function call, and a global frame contains the
+    global scope for a module.
+
+    Roughly speaking, "stack frame" is to "scope" as "instance" is to "class".
+
+python's stack frame can be accessed through "inspect" module.
+    https://docs.python.org/3/library/inspect.html
+    
+------------------------------------------------------------------------
+
 exectools.py vs modtools.py vs expression.py
 
 exectools.py

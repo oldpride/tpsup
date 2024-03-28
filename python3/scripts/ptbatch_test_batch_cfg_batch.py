@@ -45,14 +45,14 @@ our_cfg = {
     - this test script doesn't run selenium at all. it just shows how to use cfg.
     {{prog}} auto s=user
     {{prog}} auto any
-    {{prog}} auto -b tpbatch_test_batch.txt
+    {{prog}} auto -b ptbatch_test_batch.txt
 
     - run again to test record log
-    {{prog}} auto -b tpbatch_test_batch.txt
+    {{prog}} auto -b ptbatch_test_batch.txt
 
     - compare show_progress value
-    {{prog}} auto -b tpbatch_test_batch.txt --record ""
-    {{prog}} auto -b tpbatch_test_batch.txt --record "" -hide_progress
+    {{prog}} auto -b ptbatch_test_batch.txt --record ""
+    {{prog}} auto -b ptbatch_test_batch.txt --record "" -hide_progress
     ''',
 
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase

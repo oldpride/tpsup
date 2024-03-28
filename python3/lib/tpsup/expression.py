@@ -158,7 +158,7 @@ def main():
         myvar == 9
 
     from tpsup.testtools import test_lines
-    test_lines(test_codes, source_globals=globals(), source_locals=locals())
+    test_lines(test_codes)
     # test_codes()
 
 

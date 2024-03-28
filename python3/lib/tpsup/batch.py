@@ -33,10 +33,10 @@ from typing import Union, List, Dict
 from tpsup.exectools import exec_into_globals
 
 
-# because globals() and locals() are all relative to batch.py, therefore
-# we cannot move exec_simple() to tpsup.exectools.
-def exec_simple(source, **opt):
-    return exec_into_globals(source, globals(), locals(), **opt)
+# # because globals() and locals() are all relative to batch.py, therefore
+# # we cannot move exec_simple() to tpsup.exectools.
+# def exec_simple(source, **opt):
+#     return exec_into_globals(source, globals(), locals(), **opt)
 
 
 # extra_args is a dict of dict instead of a list of dict,
@@ -87,7 +87,7 @@ def parse_cfg(cfg_file: str = None, **opt):
     with open(cfg_file, 'r') as f:
         source = f.read()
 
-    exec_simple(source, source_filename=cfg_file)
+    exec_into_globals(source, source_filename=cfg_file)
 
     if verbose:
         print(f'after exec, our_cfg = {pformat(our_cfg)}')

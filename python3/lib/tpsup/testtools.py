@@ -4,16 +4,24 @@ import types
 from tpsup.exectools import eval_block
 from tpsup.logbasic import log_FileFuncLine
 from tpsup.pythontools import correct_indent
+import inspect
 
 
-def test_lines(f: types.FunctionType, source_globals={}, source_locals={}, print_return=True, **opt):
+def test_lines(f: types.FunctionType,
+               source_globals=None,
+               source_locals=None,
+               **opt):
     verbose = opt.get("verbose", 0)
-
-    import inspect
-    # we import here because this is a test function.
 
     source = inspect.getsource(f)
     # get the source code of the function, including comments and blank lines.
+
+    # source_globals and source_locals are default to the caller's globals() and locals()
+    if (source_globals is None):
+        source_globals = inspect.currentframe().f_back.f_globals
+
+    if (source_locals is None):
+        source_locals = inspect.currentframe().f_back.f_locals
 
     if verbose > 1:
         log_FileFuncLine(f"source = \n{source}")
@@ -144,7 +152,8 @@ def main():
         a3+b3 == 'helloworld'
         # TEST_END
 
-    test_lines(test_codes, source_globals=locals(), source_locals=locals())
+    # test_lines(test_codes, source_globals=locals(), source_locals=locals())
+    test_lines(test_codes)
 
 
 if __name__ == "__main__":

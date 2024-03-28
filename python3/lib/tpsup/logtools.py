@@ -168,10 +168,10 @@ def get_logs(logs, LogLastCount=None, **opt):
             return all_logs[-LogLastCount:]
 
 
-# because globals() and locals() are all relative to batch.py, therefore
-# we cannot move exec_simple() to tpsup.exectools.
-def exec_simple(source, **opt):
-    return exec_into_globals(source, globals(), locals(), **opt)
+# # because globals() and locals() are all relative to batch.py, therefore
+# # we cannot move exec_simple() to tpsup.exectools.
+# def exec_simple(source, **opt):
+#     return exec_into_globals(source, globals(), locals(), **opt)
 
 
 def get_logname_cfg(cfg_file: str, **opt):
@@ -200,7 +200,7 @@ def get_logname_cfg(cfg_file: str, **opt):
     string2 = resolve_scalar_var_in_string(cfg_string, {yyyymmdd: yyyymmdd, user: user})
 
     our_logname_cfg = {}
-    exec_simple(string2, source_filename=cfg_file)
+    exec_into_globals(string2, source_filename=cfg_file)
     if verbose:
         print(f"our_logname_cfg={our_logname_cfg}")
 

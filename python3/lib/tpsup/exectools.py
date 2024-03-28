@@ -16,9 +16,22 @@ def _exec_filter(_dict, **opt):
         return {k: v for k, v in _dict.items() if not re.match(r"_", k)}
 
 
-def exec_into_globals(_source: str, _globals, _locals, **opt):
+def exec_into_globals(_source: str,
+                      # _globals and _locals are default to the caller's globals() and locals()
+                      # use {} to start with empty.
+                      _globals=None,
+                      _locals=None,
+                      **opt):
     # for variables that won't be passed back to caller, we use _ prefix.
     _verbose = opt.get("verbose", 0)
+
+    if (_globals is None) or (_locals is None):
+        import inspect
+        if _globals is None:
+            _globals = inspect.currentframe().f_back.f_globals
+        if _locals is None:
+            _locals = inspect.currentframe().f_back.f_locals
+
     if BeginCode := opt.get("BeginCode", None):
         _source2 = BeginCode + "\n" + correct_indent(_source)
     else:

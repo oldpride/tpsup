@@ -847,7 +847,7 @@ def main():
                  ) == '2023-11-01,12:34:56'
 
     import tpsup.testtools
-    tpsup.testtools.test_lines(test_codes, globals(), locals())
+    tpsup.testtools.test_lines(test_codes)
 
 
 if __name__ == "__main__":
