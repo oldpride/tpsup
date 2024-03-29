@@ -213,7 +213,7 @@ sub swagger {
          } else {
             # my $status_line = pop @lines;
             my $status_line = "unknown status line";
-            if ( $lines[-1] =~ /^(http_code: \d+?);(.*)/ ) {
+            if ( $lines[-1] =~ /^(.*)(http_code: \d+)$/ ) {
                $status_line = $1;
                $lines[-1] = $2;
             }
