@@ -160,8 +160,8 @@ sub swagger {
       #    1. single quote grouping is not supported - we have to use double quote.
       #    2. line continuation is tricky, uses ^; we avoid line continuation.
 
-      # my $command = qq($flag_string -w 'http_code: \%{http_code}\n' -X $method --header "Accept: $Accept");
-      # ideally we should use -w '\n' to print http code into a separate line,
+      # my $command = qq($flag_string -w '\nhttp_code: \%{http_code}\n' -X $method --header "Accept: $Accept");
+      # ideally we should use -w '\n' to print http code into a separate line - the last line,
       # but windows cmd.exe cannot handle line continuation.
       my $command = qq($flag_string -w "http_code: \%{http_code}" -X $method --header "Accept: $Accept");
 
@@ -213,9 +213,9 @@ sub swagger {
          } else {
             # my $status_line = pop @lines;
             my $status_line = "unknown status line";
-            if ( $lines[0] =~ /^(http_code: \d+?);(.*)/ ) {
+            if ( $lines[-1] =~ /^(http_code: \d+?);(.*)/ ) {
                $status_line = $1;
-               $lines[0] = $2;
+               $lines[-1] = $2;
             }
 
             if ( $Accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
