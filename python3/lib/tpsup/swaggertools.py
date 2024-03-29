@@ -7,7 +7,7 @@ from typing import Union
 
 from tpsup.cfgtools import check_syntax
 from tpsup.cmdtools import run_cmd
-from tpsup.exectools import exec_into_globals
+from tpsup.exectools import eval_block, exec_into_globals
 import tpsup.envtools
 from tpsup.utiltools import resolve_scalar_var_in_string
 
@@ -213,7 +213,7 @@ def parse_login_by_method_pattern_file(pattern_file, **opt):
     return parsed_entry_decide_file[pattern_file]
 
 
-def get_entry_by_method_suburl(cfg: dict, kv_dict, **opt):
+def get_entry_by_method_suburl(cfg: dict, kvp: dict, **opt):
     # print "cfg=", Data::Dumper->Dump([$cfg], ['cfg']), "\n";
     # print "dict=", Data::Dumper->Dump([$dict], ['dict']), "\n";
 
@@ -271,7 +271,7 @@ def swagger(cfg, args,
         if type(validator) is str:
             # it is a scalar
             validator = resolve_scalar_var_in_string(validator, kvp, **opt)
-            if exec_into_globals(validator):
+            if eval_block(validator, EvalAddReturn=1, **opt):
                 verbose and print("validator test passed")
             else:
                 print(f"validator test failed: {validator}")
@@ -304,10 +304,12 @@ def swagger(cfg, args,
         entry = cfg.get('entry')
         entry_type = type(entry)
 
-        if type(entry_type) is str:
+        verbose and print(f"entry = {entry}, entry_type = {entry_type}")
+
+        if entry_type is str:
             entry_name = entry
         else:
-            entry_name = entry(cfg, dict, **opt)
+            entry_name = entry(cfg, kvp, **opt)
 
         # curl = '/usr/bin/curl'
         # myenv = tpsup.envtools.Env()
@@ -328,7 +330,7 @@ def swagger(cfg, args,
             if post_data is not None:
                 # sometimes curl's POST method doesn't want -d at all.
                 # therefore don't use -d '' when it is not defined.
-                post_data = post_data.format(**dict)
+                post_data = post_data.format(**kvp)
                 command += f" --header 'Content-Type: application/json' -d '{post_data}'"
 
         command += f" {base_url}/{sub_url}"

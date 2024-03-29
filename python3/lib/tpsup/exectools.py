@@ -162,7 +162,7 @@ def eval_block(_source: str, _globals=None, _locals=None, **opt):
     # see above for explanation.
     # add indent
     func_code = shift_indent(correct_indent(_source), shift_space_count=4,)
-    if EvalAddReturn := opt.get("EvalAddReturn", False):
+    if opt.get("EvalAddReturn", False):
         func_code = add_return(func_code, **opt)
     _source2 = f'def tp_exec_func():\n{func_code}'
     if verbose:
