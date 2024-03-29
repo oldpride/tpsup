@@ -47,11 +47,11 @@ def usage(message: str = None, **opt):
     example = all_cfg.get('usage_example', None)
 
     if detail:
-        detail = resolve_scalar_var_in_string(detail, {'prog': usage_caller})
+        detail = resolve_scalar_var_in_string(detail, {'prog': usage_caller}, **opt)
 
     if example:
         example = resolve_scalar_var_in_string(
-            example, {'prog': example_caller})
+            example, {'prog': example_caller}, **opt)
     else:
         example = f'''
     on linux:
@@ -128,7 +128,7 @@ if args[0] == '-v':
     verbose = verbose + 1
     args = args[1:]  # shift away -v
     if len(args) == 0:
-        usage("missing args", caller=f'{prog} config.py')
+        usage("missing args", caller=f'{prog} config.py', verbose=verbose)
 
 all_cfg = parse_cfg(args[0])
 all_cfg['cfg_file'] = args[0]
@@ -254,7 +254,7 @@ caller = a['caller']
 
 if (len(position_args) > len(remainingArgs)):
     usage(f'missing positional args, expecting {len(position_args)}, '
-          f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
+          f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg, verbose=verbose)
 for pa in position_args:
     opt[pa] = remainingArgs[0]
     remainingArgs = remainingArgs[1:]  # shift
@@ -270,7 +270,7 @@ else:
 batch = a['batch']
 if len(remainingArgs) < minimal_args and batch is None:
     usage(f'missing args, expecting {minimal_args}, '
-          f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg)
+          f'actual {len(remainingArgs)}', caller=caller, all_cfg=all_cfg, verbose=verbose)
 
 a.pop('batch')  # remove batch from a
 

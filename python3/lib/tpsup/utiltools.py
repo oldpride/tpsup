@@ -87,6 +87,12 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
         # return when no variable found, because nothing will change.
         return clause
 
+    if verbose > 1:
+        log_FileFuncLine(f"vars_defaults = {vars_defaults}")
+        # vars_defaults may have dup.
+        # when there is no default defined, default is ''.
+        # vars_defaults = [('prog', ''), ('A0', ''), ('A1', ''), ('prog', '')]
+
     defaults_by_var = {}
     scalar_vars = []
     for vd in vars_defaults:
@@ -98,6 +104,10 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
             defaults_by_var[var].append(default)
         else:
             defaults_by_var[var] = [default]
+
+    if verbose > 1:
+        log_FileFuncLine(f"defaults_by_var = {defaults_by_var}")
+        log_FileFuncLine(f"scalar_vars = {scalar_vars}")
 
     if not scalar_vars:
         return clause  # return when no variable found
@@ -129,13 +139,14 @@ def resolve_scalar_var_in_string(clause: str, dict1: dict, **opt):
             if verbose > 1:
                 log_FileFuncLine(
                     f"var={var} is not in combined_dict={combined_dict}. checking default")
-            if (default := defaults_by_var[var][idx]) is None:
+            if (default := defaults_by_var[var][idx]):
+                # default is always defined, even if it is ''. but '' will be treated as False
+                value = default
+            else:
                 if verbose:
                     log_FileFuncLine(
                         f"var={var} default is undefined. not resolving {var}")
                 continue
-            else:
-                value = default
 
         if value is None:
             continue
