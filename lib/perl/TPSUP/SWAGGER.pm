@@ -226,7 +226,7 @@ sub swagger {
                open my $ofh, "|$json_cmd" or die "cmd=$json_cmd failed: $!";
                print $ofh @lines;
                close $ofh;
-               print STDERR $status_line;
+               print STDERR $status_line, "\n";
             } else {
                print @lines;
                STDOUT->autoflush(1);    # flush STDOUT so that we can see the status line on bottom
