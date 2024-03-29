@@ -156,7 +156,15 @@ sub swagger {
       #   Make curl display information on stdout after a completed transfer.
       # we use -w to get http status code.
 
-      my $command = "$flag_string -w '\nhttp_code: \%{http_code}\n' -X $method --header 'Accept: $Accept'";
+      # windows cmd.exe command line has the following challenges:
+      #    1. single quote grouping is not supported - we have to use double quote.
+      #    2. line continuation is tricky, uses ^; we avoid line continuation.
+
+      # my $command = qq($flag_string -w 'http_code: \%{http_code}\n' -X $method --header "Accept: $Accept");
+      # ideally we should use -w '\n' to print http code into a separate line,
+      # but windows cmd.exe cannot handle line continuation.
+      my $command = qq($flag_string -w "http_code: \%{http_code}" -X $method --header "Accept: $Accept");
+
       if ($entry_name) {
          $command = "tpentry -- /usr/bin/curl -u tpentry{$entry_name}{user}:tpentry{$entry_name}{decoded} $command";
       } else {
@@ -171,11 +179,12 @@ sub swagger {
             # therefore don't use -d '' when it is not defined.
 
             $post_data = resolve_scalar_var_in_string( $post_data, $dict, $opt );
-            $command .= " --header 'Content-Type: application/json' -d '$post_data'";
+            $post_data =~ s/"/\\"/g;    # escape double quote for windows cmd.exe
+            $command .= qq( --header "Content-Type: application/json" -d "$post_data");
          }
       }
 
-      $command .= " '$base_url/$sub_url'";
+      $command .= qq( "$base_url/$sub_url");
 
       # if ( $Accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
       #    # 'Accept' is from caller of cfg
@@ -191,12 +200,23 @@ sub swagger {
          # system($command);
          my @lines = `$command`;
          my $rc    = parse_rc($?)->{rc};
+         # if ( $verbose || $rc ) {
+         #    print STDERR "rc=$rc\n";
+         #    print STDERR "lines = ", Dumper(@lines);
+         # }
+
          if ($rc) {
             print @lines;
             print STDERR "ERROR: command failed: rc=$rc\n";
+            print "\n";
             exit 1;
          } else {
-            my $status_line = pop @lines;
+            # my $status_line = pop @lines;
+            my $status_line = "unknown status line";
+            if ( $lines[0] =~ /^(http_code: \d+?);(.*)/ ) {
+               $status_line = $1;
+               $lines[0] = $2;
+            }
 
             if ( $Accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
                # 'Accept' is from caller of cfg
