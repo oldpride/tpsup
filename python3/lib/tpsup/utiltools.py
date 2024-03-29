@@ -259,6 +259,9 @@ def main():
                         'xpath=//*[@id="prime1"]' 'xpath=//*[@id="prime2"]'
                         ''', 'single')
 
+        # we escape {{var}} in f"", double up
+        resolve_scalar_var_in_string(f"{{{{prog}}}} is {1+1}", {'prog': 2})
+
     from tpsup.testtools import test_lines
     test_lines(test_codes, globals(), locals())
 

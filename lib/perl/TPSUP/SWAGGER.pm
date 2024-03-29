@@ -232,10 +232,9 @@ my $swagger_syntax = {
    # non-greedy match
    # note: don't use ^/cfg/(.+?)/$, because it will match /cfg/abc/def/ghi/, not only /cfg/abc/
    '^/cfg/([^/]+?)/$' => {
-      base_urls  => { type => 'ARRAY', required => 1 },
-      op         => { type => 'HASH',  required => 1 },
-      entry      => { type => 'SCALAR' },
-      entry_func => { type => 'CODE' },
+      base_urls => { type => 'ARRAY', required => 1 },
+      op        => { type => 'HASH',  required => 1 },
+      entry     => { type => [ 'SCALAR', 'CODE' ] },
    },
    '^/cfg/([^/]+?)/op/([^/]+?)/$' => {
       sub_url   => { type => 'SCALAR', required => 1 },
@@ -244,7 +243,7 @@ my $swagger_syntax = {
       method    => { type => 'SCALAR', pattern  => qr/^(GET|POST|DELETE)$/ },
       Accept    => { type => 'SCALAR' },
       comment   => { type => 'SCALAR' },
-      validator => { type => [qw(SCALAR CODE)] },
+      validator => { type => [ 'SCALAR', 'CODE' ] },
       post_data => { type => 'SCALAR' },
       test_str  => { type => 'ARRAY' },
    },

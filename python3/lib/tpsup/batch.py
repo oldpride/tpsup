@@ -89,6 +89,14 @@ def parse_cfg(cfg_file: str = None, **opt):
 
     exec_into_globals(source, source_filename=cfg_file)
 
+    our_cfg.update({
+        'meta': {
+            'cfg_abs_path': cfg_file,
+            'cfgdir': os.path.dirname(cfg_file),
+            'cfgname': os.path.basename(cfg_file),
+        }
+    })
+
     if verbose:
         print(f'after exec, our_cfg = {pformat(our_cfg)}')
 
@@ -106,7 +114,7 @@ def parse_cfg(cfg_file: str = None, **opt):
             imported_tpbatch = imported.tpbatch
             our_cfg['imported_tpbatch'] = imported_tpbatch
 
-    if parse_hash_cfg_sub := imported_tpbatch.get('tpbatch_parse_hash_cfg'):
+    if parse_hash_cfg_sub := imported_tpbatch.get('parse_hash_cfg'):
         # tpbatch_.* in the imported will be called if it is defined in the imported
         pass
     else:
@@ -174,7 +182,7 @@ def parse_cfg(cfg_file: str = None, **opt):
         'post_batch',  # can be in 2 places: cfg file, module
         'code',  # can be in 2 places: cfg file, module
         'parse_input_sub',  # can be in 3 places: cfg file, module, this file.
-        'parse_hash_cfg',  # can be in 3 places: cfg file, module, this file.
+        'parse_hash_cfg',  # can be in 3 places: cfg file, module, this file. we already used it in above.
     ]:
         if f in globals():
             our_cfg[f] = globals()[f]

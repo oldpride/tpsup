@@ -107,6 +107,7 @@ def usage(message: str = None, **opt):
    eg.
       ptslnm_test.py   -> ptbatch.py -> tpsup.batch ->   ptslnm_test_cfg.py -> tpsup.seleniumtools
 '''
+    usage_top = resolve_scalar_var_in_string(usage_top, {'prog': usage_caller})
     print(f'''
     usage:
 {usage_top}

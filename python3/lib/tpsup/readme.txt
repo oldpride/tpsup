@@ -32,8 +32,12 @@ python stack frame vs namespace
 
     Roughly speaking, "stack frame" is to "scope" as "instance" is to "class".
 
-python's stack frame can be accessed through "inspect" module.
+python's stack frame and namespace can be accessed through "inspect" module.
     https://docs.python.org/3/library/inspect.html
+
+perl's stack frame can be accessed through caller() function.
+    https://perldoc.perl.org/functions/caller
+perl's namespace is accessed through module_name::variable_name.
     
 ------------------------------------------------------------------------
 
@@ -41,22 +45,22 @@ exectools.py vs modtools.py vs expression.py
 
 exectools.py
     exectools.py compiles code at run time.
-    the caller need to pass the namespace, globals(), to the module; 
-    so that when the compiled code is executed, it can access the caller's objects.
+    this module runs in the caller's namespace (frame), globals() and locals(), by default; 
+    so that when the compiled code is executed, it can access the caller's namespace.
     eg, 
         test_code = ' 1+1 == 2'
         import tpsup.exectools
-        tpsup.exectools.eval_block(test_code, globals(), locals())
+        tpsup.exectools.eval_block(test_code)
         # the last step pass the caller's namespace (all objects) to the module
     being able to access caller's objects is a double edge sword.
-        it is dangerous because the module could pollute the caller's namespace.
+        it is dangerous because the module could pollute the caller's namespace: only globals(), not locals().
         it is convenient because the module can access the caller's objects.
-    for this reason, we mainly use it for testing purpose, 
+    for this reason, we mainly use it for testing purpose (wrapped in tpsup.testtools),
         only in the caller module's main() function.
 
 modtools.py
     modtools.py compiles code also compiles code at run time.
-    it dynamically creates a module (dynamic dedicate namespace).
+    it dynamically creates a module (a dynamic dedicate namespace).
     but the caller does not pass the namespace, globals(), to the module. 
     Therefore, the module cannot access caller's objects.
     If the new module needs the caller's objects (namespace), the caller has
@@ -67,7 +71,7 @@ modtools.py
         a = 1
         compiled = compile_code(code)
         compiled(a)  # pass caller's objects to the compiled code
-    not being able to access caller's objects make modtools safe.
+    not being able to access caller's objects make modtools safe to the caller,
         because the module cannot pollute the caller's namespace.
         
 expression.py
@@ -105,7 +109,11 @@ python vs perl
     our perl code had only one module to compile code at run time. Expression.pm.
 
     the reason is perl's eval is more powerful than python3's eval.
-    python2 eval was as powerful as perl's eval.
+    python3's eval can affect caller's globals() but not locals().
+    python2 eval was as powerful as perl's eval: it can affect caller's both globals() and locals().
+
+    our perl's equivalent to exectools.py is perl's eval.
+    our perl's equivalent to modtools.py is not needed.
 
 --------------------------------------------------------------------------------------------------
 2024/02/18 break dependency loop, or circular import

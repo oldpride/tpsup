@@ -36,7 +36,7 @@ def check_syntax(node: dict,
             matched += result['matched']
     elif node_type == list:
         for i in range(len(node)):
-            print(f"{path}{i}/")
+            # print(f"{path}{i}/")
             result = check_syntax(node[i], syntax, f'{path}{i}/', **opt)
             error += result['error']
             checked += result['checked']
@@ -57,7 +57,11 @@ def check_syntax(node: dict,
     return {'error': error, 'message': message, 'checked': checked, 'matched': matched}
 
 
-def check_syntax_1_node(node: dict, syntax: dict, path: str, **opt):
+def check_syntax_1_node(node: dict,
+                        syntax: dict,
+                        path: str,
+                        skip_paths: list[str] = [],  # skip paths that match these patterns
+                        **opt):
     error = 0
     checked = ""
     message = ""
@@ -67,6 +71,10 @@ def check_syntax_1_node(node: dict, syntax: dict, path: str, **opt):
     if node_type != dict:
         raise RuntimeError(f"node_type={node_type} is not dict. should never be here. node={pformat(node)}")
 
+    for p in skip_paths:
+        if re.search(p, path):
+            return {'error': 0, 'message': '', 'checked': '', 'matched': ''}
+
     for p in syntax.keys():
         if re.search(p, path):
             node_syntax = syntax[p]
@@ -74,7 +82,7 @@ def check_syntax_1_node(node: dict, syntax: dict, path: str, **opt):
 
             # print(f"path={path} pattern={p} node_syntax={pformat(node_syntax)}")
 
-            result = check_syntax_1_node_1_syntax(node, node_syntax, path)
+            result = check_syntax_1_node_1_syntax(node, node_syntax, path, **opt)
             error += result['error']
             checked += result['checked']
             message += result['message']
@@ -82,7 +90,13 @@ def check_syntax_1_node(node: dict, syntax: dict, path: str, **opt):
     return {'error': error, 'message': message, 'checked': checked, 'matched': matched}
 
 
-def check_syntax_1_node_1_syntax(node: dict, node_syntax: dict, path: str, **opt):
+def check_syntax_1_node_1_syntax(node: dict,
+                                 node_syntax: dict,
+                                 path: str,
+                                 skip_keys: list[str] = [],  # skip keys that match these patterns
+                                 **opt):
+    verbose = opt.get('verbose', 0)
+
     error = 0
     checked = ""
     message = ""
@@ -95,6 +109,16 @@ def check_syntax_1_node_1_syntax(node: dict, node_syntax: dict, path: str, **opt
         raise RuntimeError(f"node_type={node_type} is not dict. should never be here. node={pformat(node)}")
 
     for k in node.keys():
+        skip = False
+        for p in skip_keys:
+            verbose > 1 and print(f"checking key={k} against skip_key pattern={p}")
+            if re.search(p, k):
+                verbose and print(f"skip key={k} because it matches pattern={p}")
+                skip = True
+                break
+        if skip:
+            continue
+
         checked += f"path={path} key={k}\n"
         v = node[k]
 
@@ -104,22 +128,26 @@ def check_syntax_1_node_1_syntax(node: dict, node_syntax: dict, path: str, **opt
             continue
 
         expected_type = node_syntax[k].get('type', None)
-        type_of_expected_type = type(expected_type)
-        actual_type = type(v)
+        if expected_type:
+            type_of_expected_type = type(expected_type)
+            actual_type = type(v)
 
-        if type_of_expected_type == list:
-            if actual_type not in expected_type:
-                message += f"{path} key={k} type mismatch: expected={expected_type} vs actual={actual_type}\n"
-                error += 1
-                continue
-        elif type_of_expected_type == str:
-            if expected_type is not None:
-                if expected_type != actual_type:
+            verbose and print(f"path={path} key={k} expected_type={expected_type} actual_type={actual_type} ")
+            if type_of_expected_type == list:
+                if actual_type not in expected_type:
                     message += f"{path} key={k} type mismatch: expected={expected_type} vs actual={actual_type}\n"
                     error += 1
                     continue
-        else:
-            raise RuntimeError(f"expected_type={expected_type} should be either list or str")
+            elif type_of_expected_type == type:
+                if expected_type is not None:
+                    if expected_type != actual_type:
+                        message += f"{path} key={k} type mismatch: expected={expected_type} vs actual={actual_type}\n"
+                        error += 1
+                        continue
+            else:
+                raise RuntimeError(
+                    f"type_of_expected_type={expected_type} is {type_of_expected_type} should be either list or str,"
+                    f"at path={path} key={k}, node_syntax={pformat(node_syntax)} ")
 
         pattern = node_syntax[k].get('pattern', None)
         if pattern is not None:

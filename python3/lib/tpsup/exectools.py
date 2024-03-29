@@ -130,8 +130,8 @@ def tp_exec_func():
     raise RuntimeError("this function should not be called")
 
 
-def eval_block(_source: str, _globals, _locals, **opt):
-    # _globals and _locals are the caller's globals() and locals()
+def eval_block(_source: str, _globals=None, _locals=None, **opt):
+    # _globals and _locals default to the caller's globals() and locals()
 
     verbose = opt.get("verbose", 0)
 
@@ -139,6 +139,13 @@ def eval_block(_source: str, _globals, _locals, **opt):
         log_FileFuncLine(f"_globals = {pformat(_globals)}")
         log_FileFuncLine(f"_locals = {pformat(_locals)}")
         log_FileFuncLine(f"opt = {pformat(opt)}")
+
+    if (_globals is None) or (_locals is None):
+        import inspect
+        if _globals is None:
+            _globals = inspect.currentframe().f_back.f_globals
+        if _locals is None:
+            _locals = inspect.currentframe().f_back.f_locals
 
     if "\\" in _source:
         # example: r'C:\Program Files\Python38\lib\site-packages\tpsup\exectools.py'
