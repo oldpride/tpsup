@@ -230,7 +230,7 @@ sub swagger {
             } else {
                print @lines;
                STDOUT->autoflush(1);    # flush STDOUT so that we can see the status line on bottom
-               print STDERR $status_line;
+               print STDERR $status_line, "\n";
             }
          }
       }
