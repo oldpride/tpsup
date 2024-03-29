@@ -214,8 +214,8 @@ sub swagger {
             # my $status_line = pop @lines;
             my $status_line = "unknown status line";
             if ( $lines[-1] =~ /^(.*)(http_code: \d+)$/ ) {
-               $status_line = $1;
-               $lines[-1] = $2;
+               $status_line = $2;
+               $lines[-1] = $1;
             }
 
             if ( $Accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
