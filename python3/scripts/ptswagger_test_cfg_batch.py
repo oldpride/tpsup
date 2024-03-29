@@ -32,7 +32,7 @@ our_cfg = {
                     'post_data': '{{A0}}',
                     # json requires double string for its strings. therefore, we use single
                     # quote below.
-                    'validator': "re.search('{{A0}}', 'hello')",
+                    'validator': "re.search('hello', '{{A0}}')",
                     'comment': 'run myop1_1',
                     'test_str': ["abc",  '{"hello world"}'],  # two tests here
                 },
