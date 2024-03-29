@@ -87,8 +87,11 @@ def tpbatch_parse_hash_cfg(hash_cfg: dict, nojson=False, **opt):
 
                 if cfg.get('test_str'):
                     for test_str in cfg['test_str']:
+                        # escape double quotes for windows cmd.exe
+                        test_str = test_str.replace('"', '\\"')
+
                         # when escape {{var}} in f"", double them up
-                        example += f"      e.g. {{{{prog}}}} {base} {op} {test_str}\n"
+                        example += f"      e.g. {{{{prog}}}} {base} {op} \"{test_str}\"\n"
 
                 sub_url = cfg['sub_url']
 
@@ -311,12 +314,19 @@ def swagger(cfg, args,
         else:
             entry_name = entry(cfg, kvp, **opt)
 
+        # windows cmd.exe command line has the following challenges:
+        #    1. single quote grouping is not supported - we have to use double quote.
+        #    2. line continuation is tricky, uses ^; we avoid line continuation.
+
         # curl = '/usr/bin/curl'
         # myenv = tpsup.envtools.Env()
         # if myenv.isWindows():
         #     curl = "C:\\Windows\\System32\\curl.exe"
         curl = "curl"
 
+        # command = f'{flag_string} -w "\nhttp_code: %{{http_code}}\n" -X {method} --header "Accept: {Accept}"'
+        # ideally we should use -w '\n' to print http code into a separate line - the last line,
+        # but windows cmd.exe cannot handle line continuation.
         command = f'{flag_string} -w "http_code: %{{http_code}}" -X {method} --header "Accept: {Accept}"'
 
         if entry_name:
@@ -327,11 +337,13 @@ def swagger(cfg, args,
         if method == 'POST':
             post_data = cfg.get('post_data')
 
-            if post_data is not None:
+            if post_data:
                 # sometimes curl's POST method doesn't want -d at all.
-                # therefore don't use -d '' when it is not defined.
-                post_data = post_data.format(**kvp)
-                command += f" --header 'Content-Type: application/json' -d '{post_data}'"
+                # therefore don't use -d "" when it is not defined.
+
+                # escape double quote in post_data
+                post_data = post_data.replace('"', '\\"')
+                command += f" --header \"Content-Type: application/json\" -d \"{post_data}\""
 
         command += f" {base_url}/{sub_url}"
 
@@ -349,7 +361,11 @@ def swagger(cfg, args,
                 exit(1)
             else:
                 lines = result['stdout'].splitlines()
-                status_line = lines.pop()
+                status_line = "unknown status line"
+                if len(lines) > 0:
+                    if m := re.search(r'^(.*?)http_code: (\d+)$', lines[-1]):
+                        status_line = m.group(2)
+                        lines[-1] = m.group(1)
 
                 if Accept.find('json') >= 0 and cfg.get('json') and not nojson:
                     # 'Accept' is from caller of cfg

@@ -34,20 +34,25 @@ our_cfg = {
                     # quote below.
                     'validator': "re.search('hello', '{{A0}}')",
                     'comment': 'run myop1_1',
-                    'test_str': ["abc",  '{"hello world"}'],  # two tests here
+                    'test_str': ['{"hello world"}'],  # two tests here
                 },
                 'myop1_2': {
+                    'num_args': 1,
                     'sub_url': 'app1/api/run_myop1_2',
                     'json': 1,
                     'method': 'POST',
                     'post_data': '["hard coded"]',
+                    'validator': "is_Cusip('{{A0}}')",
                     'comment': 'run myop1',
+                    'test_str': ['123456789', '12345'],  # two tests here
                 },
             },
         },
 
         'mybase2': {
             'base_urls': ['https://myhost1.abc.com:9102', 'https://myhost2.abc.com:9102'],
+            # functions mentioned here are called by tpsup.batch, therefore,
+            # if the function is defined elsewhere, we need to import module and mention the module.
             'entry': tpsup.swaggertools.get_entry_by_method_suburl,
             'op': {
                 'myop2_1': {
@@ -63,10 +68,21 @@ our_cfg = {
 }
 
 
+# functions mentioned here are called by tpsup.batch, therefore,
+# if the function is defined elsewhere, we need to import module and mention the module.
 def swagger_test_validator(a, cfg):
     if 'hello' in a:
         print(f'validating {a}: matched hello')
         return 1
     else:
         print(f'validating {a}: not matched hello')
+        return 0
+
+
+def is_Cusip(a):
+    if len(a) == 9:
+        print(f'validating {a}: matched Cusip')
+        return 1
+    else:
+        print(f'validating {a}: not matched Cusip')
         return 0

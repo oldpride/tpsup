@@ -313,7 +313,9 @@ sub tpbatch_parse_hash_cfg {
               if defined $cfg->{validator};
             if ( defined $cfg->{test_str} ) {
                for my $test_str ( @{ $cfg->{test_str} } ) {
-                  $example .= "      e.g. {{prog}} $base $op $test_str\n";
+                  # escape double quote for windows cmd.exe
+                  $test_str =~ s/"/\\"/g;
+                  $example .= "      e.g. {{prog}} $base $op \"$test_str\"\n";
                }
             }
 
