@@ -330,7 +330,7 @@ def swagger(cfg, args,
         command = f'{flag_string} -w "http_code: %{{http_code}}" -X {method} --header "Accept: {Accept}"'
 
         if entry_name:
-            command = f"ptentry -- {curl} -u tpentry{entry_name}user:tpentry{entry_name}decoded {command}"
+            command = f"ptentry -- {curl} -u tpentry{{{entry_name}}}{{user}}:tpentry{{{entry_name}}}{{decoded}} {command}"
         else:
             command = f"{curl} {command}"
 
