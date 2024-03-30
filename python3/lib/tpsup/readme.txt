@@ -120,7 +120,7 @@ python vs perl
 
 to dynamically add a function into a module
     python: in tpsup.batch namespace, add a function is_Cusip() into tpsup.swaggertools
-        in tpsup.batch namespace
+        if done in tpsup.batch namespace
             import tpsup.swaggertools
             def is_Cusip():
                 ...

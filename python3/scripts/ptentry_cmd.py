@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import re
 import sys
 import argparse
 import textwrap
@@ -65,4 +66,14 @@ if len(cmdAndArgs) == 0:
 
 entryBook = EntryBook(**args)
 
-sys.exit(entryBook.run_cmd(cmdAndArgs, verbose=args['verbose']))
+result = entryBook.run_cmd(cmdAndArgs, verbose=args['verbose'])
+
+if args['verbose']:
+
+    result_string = pformat(result)
+    # result = CompletedProcess(args=['curl', '-u', 'sys.admin:abc123', '-v', '-w', ...]...)
+    # remove the password from the output
+    result_string = re.sub(r"('-u',\s+\S+?):(\S+)", r"\1:***", result_string)
+    sys.stderr.write(f"result = {result_string}\n")
+
+sys.exit(result.returncode)

@@ -353,8 +353,8 @@ def swagger(cfg, args,
             result = run_cmd(command)
             rc = result['rc']
             if rc:
-                print(result['stdout'])
-                print(result['stderr'], file=sys.stderr)
+                print(f"stdout={result['stdout']}")
+                print(f"stderr={result['stderr']}", file=sys.stderr)
                 print(f"ERROR: command failed: rc={rc}", file=sys.stderr)
                 exit(1)
             else:
@@ -375,6 +375,7 @@ def swagger(cfg, args,
                     print(status_line)
                 else:
                     print('\n'.join(lines))
+                    print('\n')
                     print(status_line)
 
 
