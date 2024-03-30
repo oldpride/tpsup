@@ -37,8 +37,8 @@ if '%2' == '' (
 )
 
 if '%3' == '' (
-   : no sleep_seconds, use default 5 second
-    set "sleep_seconds=5"
+   : no sleep_seconds, use default 7 second
+    set "sleep_seconds=7"
 ) else (
    set "sleep_seconds=%3"
 )
@@ -107,7 +107,7 @@ exit /b 0
    echo    -d               debug mode. besically turn on ECHO.   
    echo.
    echo    sleep_seconds    sleep seconds between each putty start.
-   echo                     default is 5 seconds.   
+   echo                     default is 7 seconds.   
    echo.
    echo example:
    echo.
