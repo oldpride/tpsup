@@ -795,7 +795,7 @@ site() { cd "$SITESPEC/scripts"; }
 sitecmd() { cd "$SITESPEC/cmd_exe"; }
 siteps1() { cd "$SITESPEC/ps1"; }
 sitelib() { cd "$SITESPEC/lib/perl/${SPECNAME^^}"; } # ${x,,} lower case, ${x^^} upper case
-sitep3() { cd "$SITESPEC/python3"; }
+sitep3() { cd "$SITESPEC/python3/scripts"; }
 sitep3lib() { cd "$SITESPEC/python3/lib/tpsup"; }
 
 if [ "X$MYBASE" = "X" ]; then
@@ -826,7 +826,7 @@ mysite() { cd "$MYBASE/github/$SPECNAME/scripts"; }
 mysitecmd() { cd "$MYBASE/github/$SPECNAME/cmd_exe"; }
 mysiteps1() { cd "$MYBASE/github/$SPECNAME/ps1"; }
 mysitelib() { cd "$MYBASE/github/$SPECNAME/lib/perl/${SPECNAME^^}"; } # ${x,,} lc, ${x^^} uc
-mysitep3() { cd "$MYBASE/github/$SPECNAME/python3"; }
+mysitep3() { cd "$MYBASE/github/$SPECNAME/python3/scripts"; }
 mysitep3lib() { cd "$MYBASE/github/$SPECNAME/python3/lib/tpsup"; }
 
 myandroid() {
