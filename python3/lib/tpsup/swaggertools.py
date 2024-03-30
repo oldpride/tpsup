@@ -361,7 +361,7 @@ def swagger(cfg, args,
                 lines = result['stdout'].splitlines()
                 status_line = "unknown status line"
                 if len(lines) > 0:
-                    if m := re.search(r'^(.*?)http_code: (\d+)$', lines[-1]):
+                    if m := re.search(r'^(.*?)(http_code: \d+)$', lines[-1]):
                         status_line = m.group(2)
                         lines[-1] = m.group(1)
 
