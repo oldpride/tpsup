@@ -87,11 +87,8 @@ def tpbatch_parse_hash_cfg(hash_cfg: dict, nojson=False, **opt):
 
                 if cfg.get('test_str'):
                     for test_str in cfg['test_str']:
-                        # escape double quotes for windows cmd.exe
-                        test_str = test_str.replace('"', '\\"')
-
                         # when escape {{var}} in f"", double them up
-                        example += f"      e.g. {{{{prog}}}} {base} {op} \"{test_str}\"\n"
+                        example += f"      e.g. {{{{prog}}}} {base} {op} {test_str}\n"
 
                 sub_url = cfg['sub_url']
 
@@ -274,13 +271,14 @@ def swagger(cfg, args,
         if type(validator) is str:
             # it is a scalar
             validator = resolve_scalar_var_in_string(validator, kvp, **opt)
+
             if eval_block(validator, EvalAddReturn=1, **opt):
                 verbose and print("validator test passed")
             else:
                 print(f"validator test failed: {validator}")
                 exit(1)
         else:
-            if validator(args, cfg, opt):
+            if validator(args, cfg, **opt):
                 verbose and print("validator test passed")
             else:
                 print(f"validator test failed: {validator}")

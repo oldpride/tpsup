@@ -32,6 +32,9 @@ python stack frame vs namespace
 
     Roughly speaking, "stack frame" is to "scope" as "instance" is to "class".
 
+    this may be the reason why eval (of both python and perl) can only change global variables
+    (namespace/modules), not local variables (stack-frame-specific).
+
 python's stack frame and namespace can be accessed through "inspect" module.
     https://docs.python.org/3/library/inspect.html
 

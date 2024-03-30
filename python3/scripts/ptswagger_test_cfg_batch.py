@@ -7,6 +7,31 @@ import tpsup.seleniumtools
 import tpsup.pstools
 import tpsup.swaggertools
 
+# functions mentioned here are called by tpsup.batch, therefore,
+# if the function is defined elsewhere, we need to import module and mention the module.
+
+
+def swagger_test_validator(a: list, cfg: dict, **opt):
+    if 'hello' in a[0]:
+        print(f'validating {a[0]}: matched hello')
+        return 1
+    else:
+        print(f'validating {a[0]}: not matched hello')
+        return 0
+
+
+def is_Cusip(a):
+    if len(a) == 9:
+        print(f'validating {a}: matched Cusip')
+        return 1
+    else:
+        print(f'validating {a}: not matched Cusip')
+        return 0
+
+
+# add this function to tpsup.swaggertools namespace because it is will be called
+# by tpsup.swaggertools.swagger() function.
+tpsup.swaggertools.is_Cusip = is_Cusip
 
 our_cfg = {
     'module': 'tpsup.swaggertools',
@@ -30,8 +55,7 @@ our_cfg = {
                     'json': 1,
                     'method': 'POST',
                     'post_data': '{{A0}}',
-                    # json requires double string for its strings. therefore, we use single
-                    # quote below.
+                    # eval a funtion defined in another module, just prefix it.
                     'validator': "re.search('hello', '{{A0}}')",
                     'comment': 'run myop1_1',
                     'test_str': ['{"hello world"}'],  # two tests here
@@ -42,9 +66,25 @@ our_cfg = {
                     'json': 1,
                     'method': 'POST',
                     'post_data': '["hard coded"]',
+                    # eval a function defined in this module.
+                    # because eval() is called from tpsup.swaggertools.swagger(), therefore,
+                    # it is in tpsup.swaggertools namespace.
+                    # is_Cusip() is defined in this module, therefore, it is in
+                    # tpsup.batch namespace.
+                    # So we need to prefix is_Cusip() with tpsup.batch, so that eval() can find it.
+                    # 'validator': "tpsup.batch.is_Cusip('{{A0}}')",
+                    # after we did tpsup.swaggertools.is_Cusip = is_Cusip, we can use
                     'validator': "is_Cusip('{{A0}}')",
                     'comment': 'run myop1',
                     'test_str': ['123456789', '12345'],  # two tests here
+                },
+                'myop1_3': {
+                    'num_args': 1,
+                    'sub_url': 'app1/api/run_myop1_3/{{A0}}',
+                    'json': 1,
+                    'validator': swagger_test_validator,
+                    'comment': 'run myop1_3',
+                    'test_str': ['hello', 'world'],  # two tests here
                 },
             },
         },
@@ -60,29 +100,9 @@ our_cfg = {
                     'sub_url': 'app2/api/run_myop2/{{A0}}/{{A1}}',
                     'Accept': 'text/xml',
                     'comment': 'run myop2_1',
-                    'test_str': ['my_arg0 my_arg1', 'your_arg0 your_arg1'],
+                    'test_str': ['hello world', '''"don't" answer'''],
                 },
             },
         },
     },
 }
-
-
-# functions mentioned here are called by tpsup.batch, therefore,
-# if the function is defined elsewhere, we need to import module and mention the module.
-def swagger_test_validator(a, cfg):
-    if 'hello' in a:
-        print(f'validating {a}: matched hello')
-        return 1
-    else:
-        print(f'validating {a}: not matched hello')
-        return 0
-
-
-def is_Cusip(a):
-    if len(a) == 9:
-        print(f'validating {a}: matched Cusip')
-        return 1
-    else:
-        print(f'validating {a}: not matched Cusip')
-        return 0
