@@ -16,7 +16,7 @@ swagger_syntax = {
     '^/$': {
         'cfg': {'type': dict, 'required': 1},
         'package': {'type': str},
-        'minimal_args': {'type': str},
+        'minimal_args': {'type': int},
         'extra_args': {'type': dict},
     },
 

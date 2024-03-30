@@ -118,6 +118,25 @@ python vs perl
     our perl's equivalent to exectools.py is perl's eval.
     our perl's equivalent to modtools.py is not needed.
 
+to dynamically add a function into a module
+    python: in tpsup.batch namespace, add a function is_Cusip() into tpsup.swaggertools
+        in tpsup.batch namespace
+            import tpsup.swaggertools
+            def is_Cusip():
+                ...
+            tpsup.swaggertools.is_Cusip = is_Cusip
+        
+    perl: in TPSUP::Batch, add a function into TPSUP::SWAGGER
+        in TPSUP::Batch
+            sub is_Cusip {
+                ...
+            }
+            *TPSUP::SWAGGER::is_Cusip = \&is_Cusip;
+            # or simply 
+            sub TPSUP::SWAGGER::is_Cusip {
+                ...
+            }
+
 --------------------------------------------------------------------------------------------------
 2024/02/18 break dependency loop, or circular import
 a.py

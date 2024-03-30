@@ -34,6 +34,8 @@ def is_Cusip(a):
 tpsup.swaggertools.is_Cusip = is_Cusip
 
 our_cfg = {
+    'minimal_args': 2,
+
     'module': 'tpsup.swaggertools',
 
     'extra_args': {
