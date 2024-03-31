@@ -8,13 +8,16 @@ usage:
 
    $prog path1 path2 ...
 
-   add execute permission to the given files
+   for scripts written in windows to be executable in UNIX, we need to add execute
+   permission to the file. This script does that. It is a wrapper around git:
       git update-index --chmod=+x path/to/file
 
    note:
       1. check in the file if it is not checked in before
       2. then run this script
       3. then check in the change again
+
+   -c               check only
 
 examples:
 
@@ -25,15 +28,38 @@ EOF
    exit 1
 }
 
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+check_only=N
+while getopts c o; do
+   case "$o" in
+   c) check_only=Y ;;
+   # f) force=Y;;
+   # v) verbose=Y;;
+   # m) commit_message=$OPTARG;;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
 if [ $# -eq 0 ]; then
    echo "wrong number of args"
    usage
 fi
 
-# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
-unset LD_LIBRARY_PATH
-export PATH=/usr/bin:$PATH
-
-# https://stackoverflow.com/questions/40978921
-set -x
-git update-index --chmod=+x "$@"
+if [ $check_only = Y ]; then
+   set -x
+   git ls-files --stage "$@"
+else
+   # https://stackoverflow.com/questions/40978921
+   set -x
+   git ls-files --stage "$@"
+   git update-index --chmod=+x "$@"
+   git ls-files --stage "$@"
+fi
