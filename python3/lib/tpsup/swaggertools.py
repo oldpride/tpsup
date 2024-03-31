@@ -353,30 +353,46 @@ def swagger(cfg, args,
             result = run_cmd(command)
             rc = result['rc']
             if rc:
-                print(f"stdout={result['stdout']}")
-                print(f"stderr={result['stderr']}", file=sys.stderr)
-                print(f"ERROR: command failed: rc={rc}", file=sys.stderr)
+                print(f"{result['stdout']}\n")
+                print(f"{result['stderr']}\n", file=sys.stderr)
+                print(f"ERROR: command failed: rc={rc}\n", file=sys.stderr)
                 exit(1)
             else:
-                lines = result['stdout'].splitlines()
+                stdout_string = result['stdout']
                 status_line = "unknown status line"
-                if len(lines) > 0:
-                    if m := re.search(r'^(.*?)(http_code: \d+)$', lines[-1]):
-                        status_line = m.group(2)
-                        lines[-1] = m.group(1)
-
+                if m := re.search(r'^(.*?)(http_code: \d+)$', stdout_string):
+                    stdout_string = m.group(1)
+                    status_line = m.group(2)
                 if Accept.find('json') >= 0 and cfg.get('json') and not nojson:
                     # 'Accept' is from caller of cfg
                     # 'json' is from cfg
                     # 'nojson' is from caller - likely from command line
-                    json_cmd = "python -m json.tool"
-                    result = run_cmd(f"echo '{lines}' | {json_cmd}")
-                    print(result['stdout'])
-                    print(status_line)
+                    import json
+                    # format stdout_string as json
+                    print(json.dumps(json.loads(stdout_string), indent=4, sort_keys=True))
                 else:
-                    print('\n'.join(lines))
-                    print('\n')
-                    print(status_line)
+                    print(stdout_string)
+                print(status_line)
+
+                # lines = result['stdout'].splitlines()
+                # status_line = "unknown status line"
+                # if len(lines) > 0:
+                #     if m := re.search(r'^(.*?)(http_code: \d+)$', lines[-1]):
+                #         status_line = m.group(2)
+                #         lines[-1] = m.group(1)
+
+                # if Accept.find('json') >= 0 and cfg.get('json') and not nojson:
+                #     # 'Accept' is from caller of cfg
+                #     # 'json' is from cfg
+                #     # 'nojson' is from caller - likely from command line
+                #     json_cmd = "python -m json.tool"
+                #     result = run_cmd(f"echo '{lines}' | {json_cmd}")
+                #     print(result['stdout'])
+                #     print(status_line)
+                # else:
+                #     print('\n'.join(lines))
+                #     print('\n')
+                #     print(status_line)
 
 
 tpbatch = {
