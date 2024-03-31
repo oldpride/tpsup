@@ -11,7 +11,11 @@ usage:
    add execute permission to the given files
       git update-index --chmod=+x path/to/file
 
-   
+   note:
+      1. check in the file if it is not checked in before
+      2. then run this script
+      3. then check in the change again
+
 examples:
 
    $prog  gitchmod
@@ -30,5 +34,6 @@ fi
 unset LD_LIBRARY_PATH
 export PATH=/usr/bin:$PATH
 
+# https://stackoverflow.com/questions/40978921
 set -x
 git update-index --chmod=+x "$@"
