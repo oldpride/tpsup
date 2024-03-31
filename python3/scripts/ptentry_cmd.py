@@ -69,11 +69,13 @@ entryBook = EntryBook(**args)
 result = entryBook.run_cmd(cmdAndArgs, verbose=args['verbose'])
 
 if args['verbose']:
-
     result_string = pformat(result)
     # result = CompletedProcess(args=['curl', '-u', 'sys.admin:abc123', '-v', '-w', ...]...)
     # remove the password from the output
     result_string = re.sub(r"('-u',\s+\S+?):(\S+)", r"\1:***", result_string)
     sys.stderr.write(f"result = {result_string}\n")
+
+print(result.stdout)
+print(result.stderr, file=sys.stderr)
 
 sys.exit(result.returncode)

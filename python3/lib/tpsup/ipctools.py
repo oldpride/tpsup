@@ -289,7 +289,8 @@ def main():
         close_child() == 0
 
     from tpsup.testtools import test_lines
-    test_lines(test_codes, source_globals=globals(), source_locals=locals())
+    # test_lines(test_codes, source_globals=globals(), source_locals=locals())
+    test_lines(test_codes)
 
 
 if __name__ == '__main__':
