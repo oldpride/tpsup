@@ -18,6 +18,7 @@ usage:
       3. then check in the change again
 
    -c               check only
+   -r               revert
 
 examples:
 
@@ -33,9 +34,11 @@ unset LD_LIBRARY_PATH
 export PATH=/usr/bin:$PATH
 
 check_only=N
-while getopts c o; do
+revert=N
+while getopts cr o; do
    case "$o" in
    c) check_only=Y ;;
+   r) revert=Y ;;
    # f) force=Y;;
    # v) verbose=Y;;
    # m) commit_message=$OPTARG;;
@@ -57,9 +60,14 @@ if [ $check_only = Y ]; then
    set -x
    git ls-files --stage "$@"
 else
+   if [ $revert = Y ]; then
+      flag=-x
+   else
+      flag=+x
+   fi
    # https://stackoverflow.com/questions/40978921
    set -x
    git ls-files --stage "$@"
-   git update-index --chmod=+x "$@"
+   git update-index --chmod=$flag "$@"
    git ls-files --stage "$@"
 fi
