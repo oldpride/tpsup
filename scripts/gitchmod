@@ -1,0 +1,34 @@
+#!/bin/bash
+
+prog=$(basename $0)
+
+usage() {
+   cat <<EOF
+usage:
+
+   $prog path1 path2 ...
+
+   add execute permission to the given files
+      git update-index --chmod=+x path/to/file
+
+   
+examples:
+
+   $prog  gitchmod
+
+EOF
+
+   exit 1
+}
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+set -x
+git update-index --chmod=+x "$@"
