@@ -75,7 +75,9 @@ if args['verbose']:
     result_string = re.sub(r"('-u',\s+\S+?):(\S+)", r"\1:***", result_string)
     sys.stderr.write(f"result = {result_string}\n")
 
-print(result.stdout)
-print(result.stderr, file=sys.stderr)
+if result.stdout:
+    print(result.stdout)
+if result.stderr:
+    print(result.stderr, file=sys.stderr)
 
 sys.exit(result.returncode)
