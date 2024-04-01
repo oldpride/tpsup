@@ -1,0 +1,69 @@
+#!/bin/bash
+
+prog=$(basename $0)
+
+usage() {
+   cat <<EOF
+usage:
+
+   $prog path
+   $prog all
+
+   untrack file. this reverses "git add".
+   "all" means to untrack all files. we normally do this before "gituncommit"
+
+   -v        verbose
+
+examples:
+
+   $prog all
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+while getopts v o; do
+   case "$o" in
+   v) verbose=Y ;;
+   #s) site_dir="$OPTARG";;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+echo ""
+
+cmd="git rev-parse --show-toplevel"
+echo "cmd = $cmd"
+top_level=$($cmd)
+
+if [ "X$top_level" = "X" ]; then
+   echo "cannot find top_level of $dir"
+   exit 1
+else
+   echo "top_level=$top_level"
+   echo ""
+fi
+
+echo "cd $top_level"
+cd $top_level || exit 1
+
+echo ""
+if [ $1 = all ]; then
+   set -x
+   git rm -r --cached .
+else
+   set -x
+   git rm -r --cached "$@"
+fi
