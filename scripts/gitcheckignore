@@ -1,0 +1,74 @@
+#!/bin/bash
+
+prog=$(basename $0)
+
+usage() {
+   cat <<EOF
+usage:
+
+   $prog path
+   $prog all
+
+   check gitignore rules
+   "all" means to check all files in the current repo.
+
+   -v        verbose
+
+   if the output is unexpected, try
+       git_uncommit
+       git_untrack
+   and then run the script again.
+
+examples:
+
+   $prog all
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+while getopts v o; do
+   case "$o" in
+   v) verbose=Y ;;
+   #s) site_dir="$OPTARG";;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+echo ""
+
+cmd="git rev-parse --show-toplevel"
+echo "cmd = $cmd"
+top_level=$($cmd)
+
+if [ "X$top_level" = "X" ]; then
+   echo "cannot find top_level of $dir"
+   exit 1
+else
+   echo "top_level=$top_level"
+   echo ""
+fi
+
+echo "cd $top_level"
+cd $top_level || exit 1
+
+echo ""
+if [ $1 = all ]; then
+   set -x
+   find . -name .git -prune -o -print | git check-ignore --stdin --verbose --non-matching
+else
+   set -x
+   echo "$1" | git check-ignore --stdin --verbose --non-matching
+fi

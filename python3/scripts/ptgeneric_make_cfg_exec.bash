@@ -21,7 +21,7 @@ usage:
    
    'all' covers: $all_targets.
 
-   create a wrapper script for *_cfg.py, 
+   create a wrapper script for _cfg_(batch|trace).py, 
       bash - for bash on linux/cygwin/gitbash. 
             target will be launched from inside venv.
       bat - for batch on windows, 

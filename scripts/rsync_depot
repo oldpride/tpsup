@@ -1,9 +1,9 @@
 #!/bin/bash
 
-depot_dir=~/depot
-site_dir=~/github
+depot_dir=$MYBASE/depot
+site_dir=$MYBASE/github
 
-usage () {
+usage() {
    cat <<EOF
 usage:
 
@@ -27,17 +27,19 @@ EOF
 
 local_only=N
 
-while getopts s:d:l o;
-do
+while getopts s:d:l o; do
    case "$o" in
-      d) depot_dir="$OPTARG";;
-      s) site_dir="$OPTARG";;
-      l) local_only=Y;;
-      *) echo "unknow switch '$o'"; usage;;
+   d) depot_dir="$OPTARG" ;;
+   s) site_dir="$OPTARG" ;;
+   l) local_only=Y ;;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
    esac
 done
 
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 if [ $# -ne 1 ]; then
    echo "wrong number of args"
@@ -51,7 +53,10 @@ cd $depot_dir/tpsup || exit 1
 # use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
 unset LD_LIBRARY_PATH
 if [ $local_only = N ]; then
-   (set -x; gitpull)  # gitpull is a wrapper of "git pull"
+   (
+      set -x
+      gitpull
+   ) # gitpull is a wrapper of "git pull"
 fi
 echo ""
 
@@ -72,18 +77,21 @@ fi
 # -i                   to print item to be changed, ie, --itemize-changes
 # --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
 # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
-files=`(set -x;rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/)`
+files=$( (
+   set -x
+   rsync $flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
+))
 
 echo ""
 echo "$files"
 
 if [ $action = diff ]; then
    # skip dir
-   for f in `echo "$files"|egrep -v '/$'`
-   do
+   for f in $(echo "$files" | egrep -v '/$'); do
       echo ""
-      (set -x; diff $depot_dir/$f $site_dir/$f)
+      (
+         set -x
+         diff $depot_dir/$f $site_dir/$f
+      )
    done
 fi
-
-
