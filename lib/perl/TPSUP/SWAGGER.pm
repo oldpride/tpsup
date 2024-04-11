@@ -142,7 +142,14 @@ sub swagger {
       if ( !$entry_type ) {
          $entry_name = $entry;
       } elsif ( $entry_type eq 'CODE' ) {
-         $entry_name = $entry->( $cfg, $dict, $opt );
+         $entry_name = $entry->(
+            {
+               %$cfg,
+               base_url => $base_url,    # add base_url to cfg, so that the entry function can use it
+            },
+            $dict,
+            $opt
+         );
       } else {
          croak "unsupported entry type: $entry_type";
       }
