@@ -1,3 +1,24 @@
+# for vs code
+local usage prog BIN_DIRS NPM_DIRS DIR
+
+prog=${FUNCNAME[1]}
+
+usage="
+usage:
+
+   $prog check
+   $prog set
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+action=$1
+
 # npm installation folder when running
 #    $ npm install --global yarn
 # files go to
@@ -10,17 +31,60 @@
 #  files goes to
 #     C:\Users\william\AppData\Local\Yarn\bin
 
-if [[ $UNAME =~ Cygwin ]]; then
-   export PATH="/cygdrive/c/Program Files/nodjs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin:$PATH"
-elif [[ $UNAME =~ Msys ]]; then
-   export PATH="/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin:$PATH"
+if [[ $UNAME =~ CYGWIN ]]; then
+   BIN_DIRS="/cygdrive/c/Program Files/nodjs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
+elif [[ $UNAME =~ MINGW64_NT ]]; then
+   BIN_DIRS="/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
+elif [[ $UNAME =~ Linux ]]; then
+   BIN_DIRS=/snap/bin
+elif [[ $UNAME =~ Darwin ]]; then
+   BIN_DIRS="/usr/local/bin"
+   NPM_DIRS="/usr/local/lib/node_modules"
+else
+   echo "unsupported UNAME='$UNAME'"
+   return
 fi
 
-mynpm () {
+if [ $action = check ]; then
+   echo ""
+   echo "current installations: "
+   #split DIRS by :
+   echo "$BIN_DIRS" | tr ":" "\n" | while read DIR; do
+      # $DIR may contain space, so we need to quote it
+      ls -ld "$DIR"
+   done
+
+   echo "NDM_DIRS" | tr ":" "\n" | while read DIR; do
+      ls -ld "$DIR"
+   done
+
+   for cmd in node npm yarn npx; do
+      which $cmd || echo "  $cmd not found"
+   done
+elif [ $action = set ]; then
+   export PATH="$BIN_DIRS:$PATH"
+   reduce PATH
+
+   if [ -n "$NPM_DIRS" ]; then
+      export NODE_PATH="$NPM_DIRS:$NODE_PATH"
+      reduce NODE_PATH
+   else
+      echo "$prog: NODE_DIRS is not set for $UNAME"
+   fi
+else
+   echo "$prog: unknown action=$action"
+   echo "$usage"
+   return
+fi
+
+mynpm() {
    if [[ $UNAME =~ Cygwin ]]; then
       cd "$WINHOME/AppData/Roaming/npm/node_modules"
    elif [[ $UNAME =~ Msys ]]; then
       cd "$WINHOME/AppData/Roaming/npm/node_modules"
+   elif [[ $UNAME =~ Darwin ]]; then
+      cd "/usr/local/lib/node_modules"
+   else
+      echo "$prog: unknown uname=$UNAME"
    fi
 }
-
