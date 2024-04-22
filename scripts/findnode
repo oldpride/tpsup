@@ -1,0 +1,44 @@
+!/bin/bash
+
+prog=$(basename $0)
+
+usage() {
+   cat <<END
+usage:
+
+   $prog module
+
+   Find whether a node module is a built-in module or not.
+   If it is not a built-in module, then find the path to the module.
+   The installation could be global or local.
+   
+examples:
+   
+      $prog http     # built-in module
+      $prog ganache  # not a built-in module
+   END
+
+   exit 1
+}
+
+if [ $# -ne 1 ]; then
+   echo "ERROR: wrong number of arguments"
+   usage
+fi
+
+module=$1
+
+echo "check if '$module' is a built-in module"
+result=`node -e "console.log(require.resolve.paths('$module'))"`
+if [ "$result" == "null" ]; then
+   echo "$module is a built-in module"
+else
+   echo "$module is not a built-in module"
+   echo "path to $module: $result"
+fi
+
+echo "check if'$module' is a global module"
+(set -x; npm list -g $module)
+
+echo "check if '$module' is a local module"
+(set -x; npm list $module)
