@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 prog=$(basename $0)
 
@@ -16,7 +16,9 @@ examples:
    
       $prog http     # built-in module
       $prog ganache  # not a built-in module
-   END
+      $prog tianjunk # none-exist module
+
+END
 
    exit 1
 }
@@ -28,17 +30,27 @@ fi
 
 module=$1
 
-echo "check if '$module' is a built-in module"
-result=`node -e "console.log(require.resolve.paths('$module'))"`
+echo "check whether '$module' is a built-in module"
+result=$(
+   set -x
+   node -e "console.log(require.resolve.paths('$module'))"
+)
 if [ "$result" == "null" ]; then
    echo "$module is a built-in module"
 else
    echo "$module is not a built-in module"
-   echo "path to $module: $result"
 fi
 
-echo "check if'$module' is a global module"
-(set -x; npm list -g $module)
+echo ""
+echo "check whether '$module' is a global module"
+(
+   set -x
+   npm list -g $module
+)
 
-echo "check if '$module' is a local module"
-(set -x; npm list $module)
+echo ""
+echo "check whether '$module' is a local module"
+(
+   set -x
+   npm list $module
+)
