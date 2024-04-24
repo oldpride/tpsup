@@ -42,6 +42,13 @@ else
 fi
 
 echo ""
+echo "check whether '$module' is a local module"
+(
+   set -x
+   npm list $module
+)
+
+echo ""
 echo "check whether '$module' is a global module"
 (
    set -x
@@ -49,8 +56,12 @@ echo "check whether '$module' is a global module"
 )
 
 echo ""
-echo "check whether '$module' is a local module"
+echo "check whether '$module' in registry"
 (
    set -x
-   npm list $module
+   npm search $module | grep "^$module\b"
+   # npm view $module
 )
+
+echo ""
+echo "for detail of registry: npm view $module"

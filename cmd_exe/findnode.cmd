@@ -27,12 +27,17 @@ if "%result%"=="null" (
 )
 
 echo.
+echo check whether '%module%' is a local module
+call npm list %module%
+
+echo.
 echo check whether '%module%' is a global module
 call npm list -g %module%
 
+
 echo.
-echo check whether '%module%' is a local module
-call npm list %module%
+echo search for '%module%' in npm registry
+call npm search %module% | findstr /b "%module%"
 
 exit /b 0
 

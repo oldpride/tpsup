@@ -69,7 +69,25 @@ if [ $action = check ]; then
       which $cmd || echo "  $cmd not found"
    done
 elif [ $action = set ]; then
-   export PATH="$BIN_DIRS:$PATH"
+   export PATH="$PATH:node_modules/.bin:$BIN_DIRS"
+
+   # node_modules/.bin is for local npm installations
+   # see https://docs.npmjs.com/cli/v10/using-npm/scripts
+   # If you depend on modules that define executable scripts, like test suites,
+   # then those executables will be added to the PATH for executing the scripts.
+   # So, if your package.json has this:
+   # {
+   #   "name": "foo",
+   #   "dependencies": {
+   #     "bar": "0.1.x"
+   #   },
+   #   "scripts": {
+   #     "start": "bar ./test"
+   #   }
+   # }
+   # then you could run npm start to execute the bar script, which is exported
+   #  into the node_modules/.bin directory on npm install.
+
    reduce PATH
 
    if [ -n "$NPM_DIRS" ]; then
