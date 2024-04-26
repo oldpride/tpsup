@@ -14,8 +14,9 @@ usage:
    it likely means we have some local changes.
    If we don't need to save the local changes, we can do this gitreset. 
 
-   -n       dryrun mode
-   -f       force without asking for confrimation
+   -n         dryrun mode
+   -f         force without asking for confrimation
+   -b branch  default to 'master'
 
 
 examples:
@@ -32,12 +33,13 @@ EOF
 
 dryrun=N
 force=N
-while getopts nf o;
+branch=master
+while getopts nfb: o;
 do
    case "$o" in
       n) dryrun=Y;;
       f) force=Y;;
-      #s) site_dir="$OPTARG";;
+      b) branch="$OPTARG";;
       *) echo "unknow switch '$o'"; usage;;
    esac
 done
@@ -64,8 +66,13 @@ echo ""
 
 commands="
    git fetch --all
-   git reset --hard origin/master
+   git reset --hard origin/$branch
 "
+
+# git reset --hard HEAD 
+# this actually only resets to the last committed state. 
+# In this case HEAD refers to the HEAD of your branch.
+# If you have several commits, this won't work..
 
 if [ $dryrun = Y ]; then
    echo "dryrun $commands"

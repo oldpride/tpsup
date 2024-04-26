@@ -6,21 +6,26 @@ usage="usage: $prog [-q] 2|3"
 
 quiet=N
 
-while getopts q o;
-do  
+while getopts q o; do
    case "$o" in
-      q) quiet=Y; flag="-q";;
-      *) echo "unknow switch. $usage">&2; return 1;; 
+   q)
+      quiet=Y
+      flag="-q"
+      ;;
+   *)
+      echo "unknow switch. $usage" >&2
+      return 1
+      ;;
    esac
 done
 
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 if [ $# -ne 1 ]; then
    echo "wrong number of args: expected 1, actual $#"
    echo $usage
    return
-fi  
+fi
 
 # remove old versions
 delpath $flag "Program Files/Python$expected_version"
@@ -32,18 +37,21 @@ if [ $expected_version = 3 ]; then
       export PATH="$TP_P3_PATH:$PATH"
       export PYTHONIOENCODING=utf8
    fi
-   function p3c { python3 -m py_compile $@; };
+   function p3c { python3 -m py_compile $@; }
 elif [ $expected_version = 2 ]; then
    if ! [ "X$TP_P2_PATH" = "X" ]; then
       export PATH="$TP_P2_PATH:$PATH"
    fi
-   function p2c { python2 -m py_compile $@; };
-else 
+   function p2c { python2 -m py_compile $@; }
+else
    echo "$expected_version is not supported python major versions (2,3)"
    return
 fi
 
-[ $quiet = Y ] || (echo""; echo "PATH=$PATH")
+[ $quiet = Y ] || (
+   echo""
+   echo "PATH=$PATH"
+)
 
 binaries=python
 if [ $expected_version = 3 ]; then
@@ -51,15 +59,17 @@ if [ $expected_version = 3 ]; then
 fi
 
 found_binary=N
-for binary in `echo $binaries`
-do
-   python=`which $binary`
+for binary in $(echo $binaries); do
+   python=$(which $binary)
    if [ $? != 0 ]; then
-      continue;
+      continue
    fi
 
-   actual_version=`"$python" --version 2>&1`
-   [ $quiet = Y ] || (echo ""; echo "'$python' is $actual_version")
+   actual_version=$("$python" --version 2>&1)
+   [ $quiet = Y ] || (
+      echo ""
+      echo "'$python' is $actual_version"
+   )
 
    if [[ $actual_version =~ "Python $expected_version" ]]; then
       found_binary=Y
@@ -77,17 +87,17 @@ if [[ $UNAME =~ Cygwin ]]; then
    # Note: use semi-colon ; as separator
    d2=';'
 
-   # cygwin converts PYTHONPATH's /cygdrive/c/users/$USERNAME/sitebase/github/... 
-   # into sys.path C:/cygdrive/c/users/$USERNAME/sitebase/github/... 
+   # cygwin converts PYTHONPATH's /cygdrive/c/users/$USERNAME/sitebase/github/...
+   # into sys.path C:/cygdrive/c/users/$USERNAME/sitebase/github/...
    # therefore, we drop the front two parts: /cygdrive/c
    # it basically converted /cygdrive/c/Program Files/... to /Program Files
-   # this works. 
+   # this works.
    #tmpvar=`echo "$SITESPEC/python$expected_version/lib${d2}$TPSUP/python$expected_version/lib" |sed -e "s:/cygdrive/c::g"`
 
    # the following two also work
    # -m  mixed   mode. windows path with  forward slashes, eg. C:/Program Files/ ...
    # -w  windows mode. windows path with backward slashes, eg.  C:\Program Files\ ...
-    tmpvar=`cygpath -m "$SITESPEC/python$expected_version/lib"`${d2}`cygpath -m "$TPSUP/python$expected_version/lib"`
+   tmpvar=$(cygpath -m "$SITESPEC/python$expected_version/lib")${d2}$(cygpath -m "$TPSUP/python$expected_version/lib")
    #tmpvar=`cygpath -w "$SITESPEC/python$expected_version/lib"`${d2}`cygpath -w "$TPSUP/python$expected_version/lib"`
 
 else
@@ -105,10 +115,16 @@ export PATH="$SITESPEC/python$expected_version/scripts:$TPSUP/python$expected_ve
 
 reduce PATH PYTHONPATH
 
-[ $quiet = Y ] || (echo ""; echo "PATH=$PATH")
-[ $quiet = Y ] || (echo ""; echo PYTHONPATH=$PYTHONPATH)
+[ $quiet = Y ] || (
+   echo ""
+   echo "PATH=$PATH"
+)
+[ $quiet = Y ] || (
+   echo ""
+   echo PYTHONPATH=$PYTHONPATH
+)
 
-sitevenv () {
+sitevenv() {
    if [ "X$SITEVENV" = "X" ]; then
       echo "SITEVENV is not defined. it should be defined in site-spec/profile"
       return 1
@@ -118,41 +134,47 @@ sitevenv () {
    fi
 }
 
-svenv () {
-   if ! sitevenv; then
-      return;
-   fi
+svenv() {
+   suffix=$1
 
-   # add path to Chrome.exe and chromedriver.exe
-   export PATH="$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/Chrome/Application:$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/chromedriver:$PATH"
+   if [ "X$suffix" = "X" ]; then
+      if ! sitevenv; then
+         return
+      fi
+
+      # add path to Chrome.exe and chromedriver.exe
+      export PATH="$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/Chrome/Application:$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/chromedriver:$PATH"
+      VENV_DIR="$SITEVENV"
+   else
+      VENV_DIR="$SITEVENV-$suffix"
+      cd "$VENV_DIR" || return
+   fi
 
    # unset OLD_VIRTUAL_PATH  # see notes/vscode.txt
 
    if [[ $UNAME =~ CYGWIN ]]; then
       # this is cygwin. the activate bash script needs removing ^M, ie, dos2unix. ^M doesn't affect gitbash
-      . "$SITEVENV/Scripts/activate"
-   elif [[ $UNAME =~  Msys ]]; then
+      . "$VENV_DIR/Scripts/activate"
+   elif [[ $UNAME =~ Msys ]]; then
       # this is gitbash or vscode bash
       # MINGW64_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
       # MSYS_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
-      . "$SITEVENV/Scripts/activate"
+      . "$VENV_DIR/Scripts/activate"
    elif [[ $UNAME =~ ^(Linux|Darwin) ]]; then
       # linux or WSL
-      . "$SITEVENV/bin/activate"
+      . "$VENV_DIR/bin/activate"
    else
       echo "psup/profile.d/pythonenv:svenv(): unsupported UNAME=$UNAME"
       return 1
    fi
 }
 
-dvenv () {
+dvenv() {
    deactivate
 }
 
-
-
 if [[ $UNAME =~ Cygwin && $quiet = N ]]; then
-cat <<END
+   cat <<END
 On Cygwin, use relative path or windows path. eg,
                                                       ./tpcsv.py
 python                                                ./tpcsv.py

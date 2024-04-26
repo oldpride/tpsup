@@ -1,8 +1,8 @@
 #!/bin/bash
 
-prog=`basename $0`
+prog=$(basename $0)
 
-usage () {
+usage() {
    cat <<EOF
 usage:
 
@@ -12,6 +12,10 @@ usage:
 
    if its our own user, use ssh to clone, so that we can check in right away.
    otherwise, use https to clone.
+
+   -s       force to use ssh to clone.
+            this is useful when clone other people's private repo that
+            shared to us but not to public.
 
 examples:
 
@@ -23,16 +27,20 @@ EOF
 }
 
 dryrun=N
-while getopts n o;
-do
+use_ssh=N
+while getopts ns o; do
    case "$o" in
-      n) dryrun=Y;;
-      #s) site_dir="$OPTARG";;
-      *) echo "unknow switch '$o'"; usage;;
+   n) dryrun=Y ;;
+   s) use_ssh=Y ;;
+   #s) site_dir="$OPTARG";;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
    esac
 done
 
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 if [ $# -ne 2 ]; then
    echo "wrong number of args"
@@ -46,7 +54,7 @@ proj=$2
 unset LD_LIBRARY_PATH
 export PATH=/usr/bin:$PATH
 
-if [ "$user" = "oldpride" ]; then
+if [ "$user" = "oldpride" -o $use_ssh = Y ]; then
    command="git clone git@github.com:$user/$proj.git"
 else
    command="git clone https://github.com/$user/${proj}.git"
@@ -59,5 +67,3 @@ else
 
    $command
 fi
-
-

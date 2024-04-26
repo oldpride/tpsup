@@ -1,0 +1,61 @@
+local OPTIND OPTARG o quiet usage prog old new value var exact
+
+prog=${FUNCNAME[1]}
+
+usage="
+usage:
+   $prog pattern
+
+   go to local teammate's dir
+
+   -e     exact name. default is a pattern.
+   -l     list
+
+example:
+   $prog emily
+   $prog -e emily1011
+
+"
+
+exact=N
+
+while getopts el o; do
+   case "$o" in
+   e) exact=Y ;;
+   l)
+      ls -d "$MYTEAM"
+      return
+      ;;
+   *)
+      echo "unknown switch. $usage" >&2
+      return
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args: expected 1, actual $#"
+   echo "$usage"
+   return
+fi
+
+# if MYTEAM is not set, return
+if [ -z "$MYTEAM" ]; then
+   echo "ERROR: env var MYTEAM is not set"
+   return
+fi
+
+if [ $exact = Y ]; then
+   cd "$MYTEAM"/$1
+else
+   count=$(/bin/ls -1 -d "$MYTEAM"/$1* | wc -l)
+   if [ $count -gt 1 ]; then
+      /bin/ls -1l -d "$MYTEAM"/$1*
+      echo "ERROR: $prog: more than 1 matched. use '-e' to select one"
+      return
+   fi
+
+   cd "$MYTEAM"/$1*
+fi

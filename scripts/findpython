@@ -1,6 +1,6 @@
 #!/bin/bash
 
-usage () {
+usage() {
    cat <<EOF
 usage:
 
@@ -37,16 +37,15 @@ EOF
    exit 1
 }
 
-
-find_python_module () {
+find_python_module() {
    local PYTHON module
    PYTHON="$1"
    module=$2
 
-   module=`echo $module|sed -e 's://*:.:g; s/::*/./g; s/[.]py$//'`
-   
+   module=$(echo $module | sed -e 's://*:.:g; s/::*/./g; s/[.]py$//')
+
    echo "normalized module: $module"
-   
+
    echo ""
    # 'which' will not report function. 'type' will report both function and binary path
    type "$PYTHON"
@@ -54,7 +53,7 @@ find_python_module () {
    # declare -F
    "$PYTHON" --version
    echo ""
-   
+
    echo "
 import sys
 print('search path: ')
@@ -67,29 +66,30 @@ import $module
 print(inspect.getfile($module))
 print('\n')
    " | "$PYTHON"
-   
+
    if [ $? -eq 0 ]; then
       echo "trying to find $module package"
       # pip binary will deprecated. use pip module instead
-      "$PYTHON" -m pip freeze |grep $module
+      "$PYTHON" -m pip freeze | grep $module
       echo ""
    fi
 }
 
-
 PYTHON=python
 
-while getopts p:a o;
-do
+while getopts p:a o; do
    case "$o" in
-     #d) debug=Y;;
-      p) PYTHON="$OPTARG";;
-      a) PYTHON="ALL";;
-      *) echo "unknow switch '$o'"; usage;;
+   #d) debug=Y;;
+   p) PYTHON="$OPTARG" ;;
+   a) PYTHON="ALL" ;;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
    esac
 done
 
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 if [ $# -ne 1 ]; then
    echo "wrong number of args"
@@ -99,40 +99,38 @@ fi
 module=$1
 
 if [ $PYTHON = ALL ]; then
-   UNAME=`uname -a`
-   if [[ $UNAME =~ Msys ]] || [[ $UNAME =~ Cygwin ]] ; then
-      # GitBash or Cygwin 
+   UNAME=$(uname -a)
+   if [[ $UNAME =~ Msys ]] || [[ $UNAME =~ Cygwin ]]; then
+      # GitBash or Cygwin
 
       # $ where python
       # C:\Program Files\Python37\python.exe
       # C:\Users\william\AppData\Local\Microsoft\WindowsApps\python.exe
 
-      # 1. convert \ to /. 
-      # 2. must remove "\r" at the end. 
-      where python |sed -e 's:\\:/:g;s:\r::g' | while read p
-      do
-          echo ""
-          echo -- "-------------- testing $p -----------------"
-          find_python_module "$p" "$module"
+      # 1. convert \ to /.
+      # 2. must remove "\r" at the end.
+      where python | sed -e 's:\\:/:g;s:\r::g' | while read p; do
+         echo ""
+         echo -- "-------------- testing $p -----------------"
+         find_python_module "$p" "$module"
       done
    elif [[ $UNAME =~ Linux ]]; then
       # $ whereis python
-      # python: /usr/bin/python2.7-config /usr/bin/python3.8 /usr/bin/python 
-      # /usr/bin/python2.7 /usr/bin/python3.6-config /usr/bin/python3.6m-config 
-      # /usr/bin/python3.6m /usr/bin/python3.6 /usr/lib/python3.8 
+      # python: /usr/bin/python2.7-config /usr/bin/python3.8 /usr/bin/python
+      # /usr/bin/python2.7 /usr/bin/python3.6-config /usr/bin/python3.6m-config
+      # /usr/bin/python3.6m /usr/bin/python3.6 /usr/lib/python3.8
       # /usr/lib/python3.7 /usr/lib/python2.7 /usr/lib/python3.6 /etc/python3.8
-      # /etc/python /etc/python2.7 /etc/python3.6 /usr/local/lib/python3.8 
-      # /usr/local/lib/python2.7 /usr/local/lib/python3.6 /usr/include/python2.7 
-      # /usr/include/python3.6m /usr/include/python3.6 /usr/share/python 
+      # /etc/python /etc/python2.7 /etc/python3.6 /usr/local/lib/python3.8
+      # /usr/local/lib/python2.7 /usr/local/lib/python3.6 /usr/include/python2.7
+      # /usr/include/python3.6m /usr/include/python3.6 /usr/share/python
       # /usr/share/man/man1/python.1.gz
 
-      for p in `whereis python`
-      do
-          if [[ $p =~ bin/python[^/]*$ ]]; then
-             echo ""
-             echo "--------------  testing $p -----------------"
-             find_python_module "$p" "$module"
-          fi
+      for p in $(whereis python); do
+         if [[ $p =~ bin/python[^/]*$ ]]; then
+            echo ""
+            echo "--------------  testing $p -----------------"
+            find_python_module "$p" "$module"
+         fi
       done
    else
       echo >&2 "unsupported OS=$UNAME"
@@ -141,3 +139,19 @@ if [ $PYTHON = ALL ]; then
 else
    find_python_module "$PYTHON" "$module"
 fi
+
+echo ""
+echo "find the package in registry using wget"
+target_url="https://pypi.org/project/$module"
+
+if ! which wget >/dev/null 2>&1; then
+   echo "ERROR: wget not found. please manually check $target_url in browser"
+   exit 0
+fi
+
+if wget -qO- $target_url >/dev/null; then
+   echo "found $module at $target_url"
+else
+   echo "not found $module in registry. $target_url not found"
+fi
+echo ""
