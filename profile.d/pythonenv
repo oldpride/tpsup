@@ -145,6 +145,9 @@ svenv() {
       # add path to Chrome.exe and chromedriver.exe
       export PATH="$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/Chrome/Application:$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/chromedriver:$PATH"
       VENV_DIR="$SITEVENV"
+   elif [ $suffix = "list" ]; then
+      ls -d $SITEVENV*
+      return
    else
       VENV_DIR="$SITEVENV-$suffix"
       cd "$VENV_DIR" || return
