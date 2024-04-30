@@ -274,7 +274,7 @@ def main():
         resolve_scalar_var_in_string(f"{{{{prog}}}} is {1+1}", {'prog': 2})
 
     from tpsup.testtools import test_lines
-    test_lines(test_codes, globals(), locals())
+    test_lines(test_codes)
 
 
 if __name__ == '__main__':

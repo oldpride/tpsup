@@ -37,6 +37,29 @@ def extract_from_html(html_str: str, template: dict, **opt) -> dict:
     return ret
 
 
+def is_string_html(s: str, strict=0, **opt) -> bool:
+    # https://stackoverflow.com/questions/24856035
+    # this is not accurate at all
+    if strict:
+        return html.fromstring(s).find('html/body') is not None
+    else:
+        return html.fromstring(s).find('.//*') is not None
+
+
+def is_file_html(file: str, **opt) -> bool:
+    # make sure the file can be read as text
+    s: str = None
+    try:
+        f = open(file, 'rb')
+        s = f.read().decode('utf-8')
+    except Exception as e:
+        if opt.get('verbose', False):
+            print(f"cannot read file {file} {e}")
+        return False
+
+    return is_string_html(s, **opt)
+
+
 def main():
     template = [
         ['user_id_input_id', 'xpath=//*[@id="user id"]/@id'],
@@ -57,6 +80,27 @@ def main():
         html_str = file.read()
         result = extract_from_html(html_str, template)
         print(f"result = {result}")
+
+    import tpsup.testtools
+
+    def test_codes():
+        is_string_html("Hello, <b>world</b>") == True
+        is_string_html("Hello, world") == False
+        is_string_html("<ht fldf d>") == False
+
+        # border between strict and non-strict
+        is_string_html("%<D3><EB><E9><E1>") == True
+        is_string_html("%<D3><EB><E9><E1>", strict=1) == False
+
+        is_string_html("<html><body><p>hello</p></body></html>", strict=1) == True
+
+        is_file_html(f"{os.path.normpath(os.environ.get('TPSUP'))}/python3/lib/tpsup/htmltools_test.html", verbose=1) == True
+        is_file_html(
+            f"{os.path.normpath(os.environ.get('TPSUP'))}/python3/lib/tpsup/htmltools_test_from_text.pdf", verbose=1) == False
+        is_file_html(
+            f"{os.path.normpath(os.environ.get('TPSUP'))}/python3/lib/tpsup/htmltools_test_from_image.txt", verbose=1) == False
+
+    tpsup.testtools.test_lines(test_codes)
 
 
 if __name__ == "__main__":

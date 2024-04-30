@@ -1,14 +1,11 @@
-import requests
-import pandas as pd
+#!/usr/bin/env python
 import os
-import re
+
 import sys
 import argparse
 import textwrap
 from pprint import pformat
-from lxml import html
-
-import tpsup.tmptools
+import tpsup.crawlertools
 
 
 prog = os.path.basename(sys.argv[0])
@@ -29,15 +26,20 @@ usage:
     -maxpage int    max number of pages to crawl, default 50
 
     -maxsize int    max size of the file to download, default 10 (MB).
+    
+    --download_dir dir
+    -dd str         directory for downloading
 
-    -dir str        directory to download
-
+    --processed_dir dir
+    -pd str         directory for processing.
+                    this is the folder that we run local web server.
+    
     -v              verbose mode. -v -v for more verbose
 
     """)
 
 examples = textwrap.dedent(f"""
-    examples:
+examples:
     
     {prog} http://quotes.toscrape.com "xpath=//li[@class='next']/a" 
 
@@ -51,6 +53,9 @@ examples = textwrap.dedent(f"""
     to get href
         "xpath=//li[@class='next']/a"
         "css=li.next > a"
+
+    {prog} -dd dd -pd pd -maxdepth 1 sitebase/github/schoolproj/nyu_ds_java/course_slides.html "xpath=//ul/li/a" "xpath=//link[@rel='stylesheet']"
+
     """)
 
 parser = argparse.ArgumentParser(
@@ -76,8 +81,12 @@ parser.add_argument(
     help="xpath to match. default is None")
 
 parser.add_argument(
-    '-dir', '--dir', dest="dir", action='store', type=str, default=None,
-    help="directory to download")
+    '-dd', '--download_dir', dest="download_dir", action='store', type=str, default=None,
+    help="directory for downloading")
+
+parser.add_argument(
+    '-pd', '--processed_dir', dest="processed_dir", action='store', type=str, default=None,
+    help="directory for processing")
 
 parser.add_argument(
     '-v', '--verbose', dest="verbose", action='count', default=0,
@@ -100,7 +109,7 @@ if len(remainingArgs) < 2:
     sys.stderr.write(examples)
     sys.exit(1)
 
-url = remainingArgs[0]
+start_url = remainingArgs[0]
 paths = remainingArgs[1:]
 
 maxpage = args['maxpage']
@@ -108,30 +117,9 @@ maxdepth = args['maxdepth']
 maxsize = args['maxsize']
 verbose = args['verbose']
 
-if args['dir'] is not None:
-    dir = args['dir']
-else:
-    dir = tpsup.tmptools.get_dailydir()
 
-
-# def request_page(url: str, dir: str, maxsizeMB: int = 10):
-#     # https://python-docs.readthedocs.io/en/latest/scenarios/scrape.html
-
-#     page_content = ""
-
-#     if re.match(r'^https?://', url):
-#         page = requests.get(url)
-#         if page.status_code == 200:
-#             page_cotent = page.content
-#         else:
-#             raise RuntimeError(f'The url {url} returned a status of {page.status_code}')
-#     else:
-#         # assume it is a file
-#         with open(url) as f:
-#             page_content = f.read()
-
-#     return page_content
-
-
-crawler = Crawler(url, paths, maxpage, maxdepth, maxsize, dir, verbose)
+crawler = tpsup.crawlertools.Crawler(
+    start_url,
+    paths,
+    **args)
 crawler.crawl()
