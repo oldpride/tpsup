@@ -21,7 +21,7 @@ usage:
 
     -h              print help
 
-    -maxdepth int   max depth of the crawl, default 1
+    -maxdepth int   max depth of the crawl, default 3
 
     -maxpage int    max number of pages to crawl, default 50
 
@@ -54,8 +54,13 @@ examples:
         "xpath=//li[@class='next']/a"
         "css=li.next > a"
 
-    {prog} -dd dd -pd pd -maxdepth 1 sitebase/github/schoolproj/nyu_ds_java/course_slides.html "xpath=//ul/li/a" "xpath=//link[@rel='stylesheet']"
-
+    {prog} -dd dd -pd pd -maxdepth 1 sitebase/github/schoolproj/nyu_ds_java/course_slides.html "xpath=//ul/li/a"
+    <script src="js/remark.js" type="text/javascript">
+    </script>
+    <script src="js/remark_conf.js" type="text/javascript">
+    </script>
+   
+    
     """)
 
 parser = argparse.ArgumentParser(
@@ -65,8 +70,8 @@ parser = argparse.ArgumentParser(
     epilog=examples)
 
 parser.add_argument(
-    '-maxdepth', '--maxdepth', dest="maxdepth", action='store', type=int, default=1,
-    help="depth of the crawl. default is 1")
+    '-maxdepth', '--maxdepth', dest="maxdepth", action='store', type=int, default=3,
+    help="depth of the crawl. default is 3")
 
 parser.add_argument(
     '-maxpage', '--maxpage', dest="maxpage", action='store', type=int, default=50,
@@ -116,7 +121,6 @@ maxpage = args['maxpage']
 maxdepth = args['maxdepth']
 maxsize = args['maxsize']
 verbose = args['verbose']
-
 
 crawler = tpsup.crawlertools.Crawler(
     start_url,

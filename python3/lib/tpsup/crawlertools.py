@@ -10,14 +10,23 @@ from tpsup.logbasic import log_FileFuncLine
 import tpsup.human
 
 
-def get_host_url(url: str):
-    if m := re.match(r'^(https?://[^/]+)', url, re.IGNORECASE):
-        return m.group(1)
+def get_url_base(url: str):
+    # https://test.abc.com/def/ghi -> https://test.abc.com
+    # https://test.abc.com/~johnsmith/def/ghi -> https://test.abc.com/~johnsmith
+
+    if m := re.match(r'^(https?://[^/]+)(/.*)', url, re.IGNORECASE):
+        host_url = m.group(1)
+        rest = m.group(2)
+
+        if m2 := re.match(r'^(/~[^/]+)', rest, re.IGNORECASE):
+            return f"{host_url}/{m2.group(1)}"
+        else:
+            return host_url
     else:
-        return None
+        raise RuntimeError(f"can't parse url {url}")
 
 
-def get_url_dir(url: str):
+def get_url_dirname(url: str):
     # https://test.abc.com/~johnsmith/cs102/slides/css/slides.css
     # to https://test.abc.com/~johnsmith/cs102/slides/css
     # https://test.abc.com
@@ -28,12 +37,23 @@ def get_url_dir(url: str):
         return url
 
 
+linkAttribute_by_type = {
+    'stylesheet': 'href',
+    'script': 'src',
+    'default': 'href',
+    # <img width="220px" alt="general tree" src="img/10/tree-2.jpg">
+    'img': 'src',
+}
+
+
 class Crawler:
     def __init__(self,
                  start_url: str,
                  paths: list[str],    # xpath=... css=... id=...
+                 stylesheet_paths: list = ["xpath=//link[@rel='stylesheet']"],
+                 script_paths: list = ["xpath=//script[@src]"],
                  maxpage: int = 50,   # max number of pages to download
-                 maxdepth: int = 1,   # max depth of the pages to search
+                 maxdepth: int = 3,   # max depth of the pages to search
                  maxsize: int = 10,   # max size MB of the file to download
                  download_dir: str = None,
                  processed_dir: str = None,
@@ -55,7 +75,7 @@ class Crawler:
         # this list can be used as a queue or a stack
         #   if breath_first is True, it is a queue
         #   if breath_first is False, it is a stack
-        self.to_crawl_list = [start_url]
+        self.to_crawl_list = [{'todo_link_full': start_url, 'depth': 0}]
 
         # cache the downloaded files
         self.url_by_local = {}
@@ -75,6 +95,13 @@ class Crawler:
             self.processed_dir = tpsup.tmptools.get_dailydir() + "/processed"
             os.makedirs(self.processed_dir, exist_ok=True)
         log_FileFuncLine(f"processed_dir = {self.processed_dir}")
+
+        # organize the paths
+        self.paths_by_type = {
+            'stylesheet': stylesheet_paths,
+            'script': script_paths,
+            'default': paths,
+        }
 
     def get_local_relative_path(self, url: str):
         # map http://example.com/abc/def to abc/def
@@ -103,6 +130,10 @@ class Crawler:
                 else:
                     # remove the leading '/'
                     local_relative = path[1:]
+
+                    # ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS_HTML&delayStartupUntil=configured
+                    # change wierd characters to '-'
+                    local_relative = re.sub(r'[^a-zA-Z0-9=.-]', '-', local_relative)
             else:
                 raise RuntimeError(f"can't parse url {url}")
 
@@ -150,7 +181,8 @@ class Crawler:
         if url in self.local_by_url:
             abs_local = self.local_by_url[url]
             if verbose:
-                log_FileFuncLine(f"skip downloading {url} to {abs_local} because it is already downloaded")
+                log_FileFuncLine(
+                    f"skip downloading {url} to {abs_local} because it is already downloaded and processed")
             ret['abs_local'] = abs_local
             ret['need_process'] = 0
             return ret
@@ -233,8 +265,17 @@ class Crawler:
         ret['new_download'] = 1
         return ret
 
-    def parse_url(self, url: str, **opt):
+    def parse_url(self, item: dict, **opt):
         verbose = opt.get('verbose', self.verbose)
+
+        url = item['todo_link_full']
+        depth = item['depth']
+        link_type = item.get('todo_link_type', 'default')
+
+        ret = {
+            'items': [],
+            'parsed': 0,
+        }
 
         if verbose:
             log_FileFuncLine(f"download_url {url}")
@@ -243,92 +284,9 @@ class Crawler:
         if result['need_process'] == 0:
             if verbose:
                 log_FileFuncLine(f"skip processing {url} because it is already processed")
-            return {
-                'items': [],
-            }
+            return ret
 
         abs_local = result['abs_local']
-
-        tree = None
-        try:
-            # pdf file would fail here
-            with open(abs_local, 'rb') as f:  # Open the file in binary mode
-                page_content = f.read().decode('utf-8')  # Decode the binary content using UTF-8 encoding
-                tree = html.fromstring(page_content)
-        except Exception as e:
-            if verbose:
-                log_FileFuncLine(f"cannot parse {abs_local} {e}")
-            return {
-                'items': [],
-            }
-
-        items = []
-
-        # get all the links
-        for path in self.paths:
-            if m := re.match(r"\s*(xpath|css|id)=(.+)", path):
-                path_type = m.group(1)
-                path_value = m.group(2)
-            else:
-                raise RuntimeError(f"unknown path format {path}")
-
-            elements = []
-            if path_type == 'xpath':
-                elements = tree.xpath(path_value)
-            elif path_type == 'css':
-                elements = tree.cssselect(path_value)
-            elif path_type == 'id':
-                elements = tree.xpath(f"//*[@id='{path_value}']")
-            else:
-                raise RuntimeError(f"unknown path_type {path_type}")
-
-            if verbose:
-                log_FileFuncLine(f"path={path}, elements={elements}")
-
-            for e in elements:
-                # get the href attribute
-                href_raw = e.get('href')
-                if href_raw is not None:
-                    if verbose:
-                        log_FileFuncLine(f"found href={href_raw} in {url}")
-                    # download the file
-
-                    if re.match(r'^https?://', href_raw, re.IGNORECASE):
-                        href_full = href_raw
-                    else:
-                        # we need to convert it to an absolute path
-                        # so that we can download it.
-                        if re.search(r'stylesheet', path_value):
-                            # if path is for css stylesheet, the href is a relative path
-                            # this href is a relative path, relative to the current url
-                            href_full = f"{get_url_dir(url)}/{href_raw}"
-                        else:
-                            # this href is a relative path, relative to url's host part.
-
-                            host_url = get_host_url(url)
-                            if host_url is None:
-                                raise RuntimeError(f"can't get host url from {url}")
-                            href_full = f"{get_host_url(url)}/{href_raw}"
-
-                    # change the href to "/local_relative_path" because we are going to download it
-                    # and run it with local server
-                    local_relative_path = self.get_local_relative_path(href_full)
-
-                    # replace href_raw with local_basename.
-                    # this way, when we start a local web server, we can serve the local files
-                    e.set('href', f"/{local_relative_path}")
-
-                    item = {
-                        'url': url,
-                        'relative_path': local_relative_path,
-                        'href_full': href_full,
-                        'href_raw': href_raw,
-                    }
-
-                    items.append(item)
-
-        # update the page content tree
-        processed_page_content = html.tostring(tree, pretty_print=True)
 
         local_relative_path = self.get_local_relative_path(url)
 
@@ -340,47 +298,157 @@ class Crawler:
             log_FileFuncLine(f"creating parent directory {parent_dir}")
             os.makedirs(os.path.dirname(processed_file))
 
-        with open(processed_file, 'wb') as f:
-            f.write(processed_page_content)
+        tree = None
+        cannot_parse = 0
+        try:
+            # pdf file would fail here
+            with open(abs_local, 'rb') as f:  # Open the file in binary mode
+                page_content = f.read().decode('utf-8')  # Decode the binary content using UTF-8 encoding
+                tree = html.fromstring(page_content)
+        except Exception as e:
+            if verbose:
+                log_FileFuncLine(f"cannot parse {abs_local} {e}")
+            cannot_parse = 1
 
-        return {
-            'items': items,
-        }
+        if link_type in ['stylesheet', 'script'] or cannot_parse:
+            # For css and script, we just copy downloaded file to processed_dir.
+            # Ff we load the css or script file into html tree and then write out to a file,
+            # the file will be different from the original file.
+            # The new file will be an html file, with tags added.
+            # The added tag will cause javascript to fail.
+            log_FileFuncLine(f"copy {abs_local} to {processed_file}")
+
+            with open(abs_local, 'rb') as f:  # Open the file in binary mode
+                with open(processed_file, 'wb') as f2:
+                    f2.write(f.read())
+
+            # for now we don't process css and script further
+            ret['parsed'] = 1
+            return ret
+
+        ret['parsed'] = 1
+        for link_type2, paths in self.paths_by_type.items():
+            attribute = linkAttribute_by_type[link_type2]
+            for path in paths:
+                if m := re.match(r"\s*(xpath|css|id)=(.+)", path):
+                    path_type = m.group(1)
+                    path_value = m.group(2)
+                else:
+                    raise RuntimeError(f"unknown path format {path}")
+
+                elements = []
+                if path_type == 'xpath':
+                    elements = tree.xpath(path_value)
+                elif path_type == 'css':
+                    elements = tree.cssselect(path_value)
+                elif path_type == 'id':
+                    elements = tree.xpath(f"//*[@id='{path_value}']")
+                else:
+                    raise RuntimeError(f"unknown path_type {path_type}")
+
+                if verbose:
+                    log_FileFuncLine(f"path={path}, elements={pformat(elements, width=1)}")
+
+                for e in elements:
+                    # get the href attribute
+                    link_raw = e.get(attribute)
+                    if link_raw is not None:
+                        if verbose:
+                            log_FileFuncLine(f"found {attribute}={link_raw} in {url}")
+                        # download the file
+
+                        if re.match(r'^https?://', link_raw, re.IGNORECASE):
+                            link_full = link_raw
+                        elif link_raw.startswith('/'):
+                            # absolute path
+                            link_full = get_url_base(url) + link_raw
+                        else:
+                            # relative path
+                            link_full = get_url_dirname(url) + '/' + link_raw
+
+                        # change the href to "/local_relative_path" because we are going to download it
+                        # and run it with local server
+                        local_relative_path = self.get_local_relative_path(link_full)
+
+                        # replace link_raw with local_basename.
+                        # this way, when we start a local web server, we can serve the local files
+                        log_FileFuncLine(
+                            f"link_type2={link_type2}, link_raw={link_raw}, link_full={link_full}, local_relative_path={local_relative_path}")
+                        if link_type2 in ['stylesheet', 'script']:
+                            # for css and script, I only see relative path so far; and it is relative to
+                            # the current directory, not base directory. So I don't need to change the link.
+                            if verbose:
+                                log_FileFuncLine(
+                                    f"skip changing {attribute} because link_type={link_type2}")
+                        else:
+                            e.set(attribute, f"{local_relative_path}")
+                            if verbose:
+                                log_FileFuncLine(
+                                    f"set link {attribute} in processed page: link_raw={link_raw} -> link_full={link_full} -> local_relative_path={local_relative_path}")
+
+                        if depth < self.maxdepth:
+                            item = {
+                                'parent_url': url,
+                                'parent_relative_path': local_relative_path,
+                                'todo_link_full': link_full,
+                                'todo_link_raw': link_raw,
+                                'todo_link_type': link_type2,
+                                'depth': depth + 1,
+                            }
+
+                            if verbose:
+                                log_FileFuncLine(f"append item={pformat(item, width=1)} to ret['items']")
+                            ret['items'].append(item)
+                        else:
+                            if verbose:
+                                log_FileFuncLine(
+                                    f"skip crawling {link_full} because depth={depth} >= maxdepth={self.maxdepth}")
+
+        else:
+            processed_page_content = html.tostring(tree, pretty_print=True)
+
+            # update the page content tree
+            with open(processed_file, 'wb') as f:
+                f.write(processed_page_content)
+
+        return ret
 
     def crawl(self, **opt):
         verbose = opt.get('verbose', self.verbose)
         page_count = 0
 
-        while page_count < self.maxpage and len(self.to_crawl_list) > 0:
+        while len(self.to_crawl_list) > 0:
+
             if self.breath_first:
                 # now to_crawl_list is a queue
                 # we pop the first element
                 try:
-                    url2 = self.to_crawl_list.pop(0)
+                    item = self.to_crawl_list.pop(0)
                 except:
                     return
             else:
                 # now to_crawl_list is a stack
                 # we pop the last element
                 try:
-                    url2 = self.to_crawl_list.pop()
+                    item = self.to_crawl_list.pop()
                 except:
                     return
 
-            page_count += 1
-
             if verbose:
-                log_FileFuncLine(f"crawl {url2}, page_count={page_count}")
+                log_FileFuncLine(f"crawl {pformat(item, width=1)}, page_count={page_count}")
 
             # download and parse the page
 
-            result = self.parse_url(url2, **opt)
+            result = self.parse_url(item, **opt)
+            if result['parsed'] == 1:
+                page_count += 1
+            if page_count >= self.maxpage:
+                log_FileFuncLine(f"reached maxpage={self.maxpage}")
+                break
 
-            for item in result['items']:
-                href_full = item['href_full']
-                self.to_crawl_list.append(href_full)
-
-        #
+            # add all items to to_crawl_list
+            self.to_crawl_list.extend(result['items'])
+            log_FileFuncLine(f"to_crawl_list = {pformat(self.to_crawl_list, width=1)}")
 
         start_relative_path = self.get_local_relative_path(self.start_url)
 
@@ -388,10 +456,10 @@ class Crawler:
         To run a local server to view the processed files, you can run the following command:
 
             $ python -m http.server 8000 -d "{self.processed_dir}"
-        
-        Then from browser, go to 
-        
-            http://localhost:8000 
+
+        Then from browser, go to
+
+            http://localhost:8000
             or
             http://localhost:8000/{start_relative_path}
 
