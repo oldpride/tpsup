@@ -33,6 +33,8 @@ usage:
     --processed_dir dir
     -pd str         directory for processing.
                     this is the folder that we run local web server.
+
+    --inhuman       inhuman mode. don't add delay between requests
     
     -v              verbose mode. -v -v for more verbose
 
@@ -41,24 +43,12 @@ usage:
 examples = textwrap.dedent(f"""
 examples:
     
-    {prog} http://quotes.toscrape.com "xpath=//li[@class='next']/a" 
+    {prog} -inhuman -dd dd -pd pd http://quotes.toscrape.com "xpath=//li[@class='next']/a" 
 
-    <li class="next">
-        <a href="/page/2/">
-        Next
-        <span aria-hidden="true">→</span>
-        </a>
-    </li>
+    {prog} -dd dd -pd pd sitebase/github/schoolproj/nyu_ds_java/course_slides.html "xpath=//ul/li/a"
 
-    to get href
-        "xpath=//li[@class='next']/a"
-        "css=li.next > a"
-
-    {prog} -dd dd -pd pd -maxdepth 1 sitebase/github/schoolproj/nyu_ds_java/course_slides.html "xpath=//ul/li/a"
-    <script src="js/remark.js" type="text/javascript">
-    </script>
-    <script src="js/remark_conf.js" type="text/javascript">
-    </script>
+    to run with local server
+    python -m http.server 8000 --directory pd
    
     
     """)
@@ -96,6 +86,10 @@ parser.add_argument(
 parser.add_argument(
     '-v', '--verbose', dest="verbose", action='count', default=0,
     help="verbose mode. -v -v for more verbose")
+
+parser.add_argument(
+    '-inh', '--inhuman', dest="humanlike", action='store_false', default=True,
+    help="inhuman mode. don't add delay between requests")
 
 parser.add_argument(
     'remainingArgs', default=None, nargs=argparse.REMAINDER,

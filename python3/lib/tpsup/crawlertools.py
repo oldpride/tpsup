@@ -30,6 +30,8 @@ def get_url_base(url: str):
             return f"{host_url}/{m2.group(1)}"
         else:
             return host_url
+    elif re.match(r'^(https?://.+)', url, re.IGNORECASE):
+        return url
     else:
         raise RuntimeError(f"can't parse url {url}")
 
@@ -46,12 +48,24 @@ def get_url_dirname(url: str):
 
 
 linkAttribute_by_type = {
+    # this is in the <header> section
+    # <link rel="stylesheet" href="/static/bootstrap.min.css">
     'stylesheet': 'href',
+
+    # <script src="js/remark.js" type="text/javascript"></script>
     'script': 'src',
-    'default': 'href',
+
     # <img width="220px" alt="general tree" src="img/10/tree-2.jpg">
-    # todo handle image and more
     'img': 'src',
+
+    # <a href="http://test.abc.com/~johnsmith/cs102/slides/01-course_intro.html#1">
+    # <li class="next">
+    #     <a href="/page/2/">
+    #     Next
+    #     <span aria-hidden="true">→</span>
+    #     </a>
+    # </li>
+    'default': 'href',
 }
 
 
@@ -76,6 +90,7 @@ class Crawler:
                  breath_first: bool = True,
                  dryrun: bool = False,
                  download_favicon: bool = True,
+                 humanlike: bool = True,
                  **opt):
         # trim the ending '/' so that we can add it back later
         self.start_url = start_url.rstrip('/')
@@ -87,6 +102,7 @@ class Crawler:
         self.processed_dir = processed_dir
         self.breath_first = breath_first
         self.verbose = opt.get('verbose', 0)
+        self.humanlike = humanlike
         # self.dryrun = dryrun
 
         # this list can be used as a queue or a stack
@@ -151,7 +167,7 @@ class Crawler:
 
                     # ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS_HTML&delayStartupUntil=configured
                     # change wierd characters to '-'
-                    local_relative = re.sub(r'[^a-zA-Z0-9=.-]', '-', local_relative)
+                    local_relative = re.sub(r'[^a-zA-Z0-9=./-]', '-', local_relative)
             else:
                 raise RuntimeError(f"can't parse url {url}")
 
@@ -178,7 +194,6 @@ class Crawler:
             self,
             url: str,
             maxsizeMB: int = 10,
-            humanlike: bool = True,
             **opt) -> str:
 
         verbose = opt.get('verbose', self.verbose)
@@ -256,7 +271,7 @@ class Crawler:
 
         if re.match(r'^https?://', url):
             # add some delay to make it more human like
-            if humanlike:
+            if self.humanlike:
                 tpsup.human.human_delay()
 
             # https://stackoverflow.com/questions/7243750/download-file-from-web-in-python-3
@@ -442,8 +457,9 @@ class Crawler:
 
                         # replace link_raw with local_basename.
                         # this way, when we start a local web server, we can serve the local files
-                        log_FileFuncLine(
-                            f"link_type2={link_type2}, link_raw={link_raw}, link_full={link_full}, local_relative_path={local_relative_path}")
+                        if verbose:
+                            log_FileFuncLine(
+                                f"link_type2={link_type2}, link_raw={link_raw}, link_full={link_full}, local_relative_path={local_relative_path}")
                         if link_type2 != 'default':
                             # for css and script, I only see relative path so far; and it is relative to
                             # the current directory, not base directory. So I don't need to change the link.
@@ -498,9 +514,7 @@ class Crawler:
         host_url = get_url_host(self.start_url)
 
         if host_url is None:
-            if verbose:
-                log_FileFuncLine(f"skip downloading favicon because start_url={self.start_url} is not a valid url")
-            return
+            raise RuntimeError(f"skip downloading favicon because start_url={self.start_url} is not a valid url")
 
         favicon_url = f"{host_url}/favicon.ico"
         favicon_local = os.path.join(self.processed_dir, "favicon.ico")
@@ -521,7 +535,10 @@ class Crawler:
         page_count = 0
 
         if self.download_favicon:
-            self.download_favicon(**opt)
+            try:
+                self.download_favicon(**opt)
+            except Exception as e:
+                log_FileFuncLine(f"failed to download favicon {e}")
             page_count += 1
 
         while len(self.to_crawl_list) > 0:
