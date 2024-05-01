@@ -1,3 +1,4 @@
+from pprint import pformat
 import re
 
 from lxml import html
@@ -60,6 +61,47 @@ def is_file_html(file: str, **opt) -> bool:
     return is_string_html(s, **opt)
 
 
+def parse_css(string: str):
+    # if url is a file, we need to read the file
+    # if url is a http url, we need to get the content
+    # if url is a css string, we just use it
+    if string.startswith('http://') or string.startswith('https://'):
+        import requests
+        page = requests.get(string)
+        css_str = page.content
+    elif len(string) < 1000 and os.path.isfile(string):
+        with open(string) as file:
+            css_str = file.read()
+    else:
+        css_str = string
+
+    # https://pypi.org/project/cssutils/
+
+    import cssutils
+
+    sheet = cssutils.parseString(css_str)
+
+    d = {}
+    for rule in sheet:
+        if rule.typeString not in d:
+            d[rule.typeString] = {}
+        d2 = {}
+        if rule.type == rule.STYLE_RULE:
+
+            for property in rule.style:
+                d2[property.name] = property.value
+
+            selector = rule.selectorText
+
+            d[rule.typeString][selector] = d2
+        else:
+            d[rule.typeString] = {
+                'cssText': rule.cssText
+            }
+
+    return d
+
+
 def main():
     template = [
         ['user_id_input_id', 'xpath=//*[@id="user id"]/@id'],
@@ -83,6 +125,8 @@ def main():
 
     import tpsup.testtools
 
+    p3lib = f"{os.path.normpath(os.environ.get('TPSUP'))}/python3/lib/tpsup"
+
     def test_codes():
         is_string_html("Hello, <b>world</b>") == True
         is_string_html("Hello, world") == False
@@ -94,13 +138,18 @@ def main():
 
         is_string_html("<html><body><p>hello</p></body></html>", strict=1) == True
 
-        is_file_html(f"{os.path.normpath(os.environ.get('TPSUP'))}/python3/lib/tpsup/htmltools_test.html", verbose=1) == True
-        is_file_html(
-            f"{os.path.normpath(os.environ.get('TPSUP'))}/python3/lib/tpsup/htmltools_test_from_text.pdf", verbose=1) == False
-        is_file_html(
-            f"{os.path.normpath(os.environ.get('TPSUP'))}/python3/lib/tpsup/htmltools_test_from_image.txt", verbose=1) == False
+        is_file_html(f"{p3lib}/htmltools_test.html", verbose=1) == True
+        is_file_html(f"{p3lib}/htmltools_test_from_text.pdf", verbose=1) == False
+        is_file_html(f"{p3lib}/htmltools_test_from_image.txt", verbose=1) == False
+
+        re.match(r'^url', parse_css(f"{p3lib}/htmltools_test_css.css")
+                 ['STYLE_RULE']['.title-slide']['background-image']) is not None
 
     tpsup.testtools.test_lines(test_codes)
+
+    # sheet = parse_css(f"{p3lib}/htmltools_test_css.css")
+    # # print(f"sheet = {sheet.cssText}")
+    # print(f"sheet = {pformat(sheet, width=1)}")
 
 
 if __name__ == "__main__":

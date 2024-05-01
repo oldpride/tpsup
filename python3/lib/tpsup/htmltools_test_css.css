@@ -1,0 +1,384 @@
+
+
+@import url('https://fonts.googleapis.com/css?family=Droid+Sans');
+@import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+
+table {
+    /*font-family: arial, sans-serif;*/
+    border-collapse: collapse;
+    width: 100%;
+}
+
+td, th {
+    border: 1px solid #dddddd;
+    text-align: center;
+    padding: 2px;
+}
+/*
+tr:nth-child(odd), td {
+    border: 1px solid #ffffff;
+    background-color: #eeeeee;
+}*/
+
+p, pre{
+    margin: 0.5em 0 0.5em 0;
+}
+
+
+
+.title-slide {
+    background-image: url("../img/back1.jpg");
+    color:hsl(201, 100%, 28%);
+    background-size: cover;
+}
+.slide{
+    background-color:hsl(208, 39%, 97%);
+    color: hsl(201, 98%, 19%);
+}
+.slide h1, .slide h2, .slide h3, .slide h4{
+    color: hsl(201, 100%, 28%);
+}
+
+.inverse {
+    background-color: hsl(201, 36%, 62%);
+    color: hsl(208, 39%, 94%);
+    text-shadow: 0 0 20px #333;
+}
+.inverse h1, .inverse h2, .inverse h3, .inverse h4{
+    color: hsl(208, 39%, 94%);
+}
+
+.full-height {
+    height:100%;
+    padding:0px;
+}
+
+.remark-slide>.breakout{
+    border: 50px;
+    border-color: hsl(201, 36%, 62%);
+    border-style: solid;
+    background-color:hsl(208, 39%, 94%);
+    color: hsl(201, 100%, 28%);
+}
+
+body {
+    /*font-family: 'Droid Sans', sans-serif;*/
+    font-family: "Times","Times New Roman", serif;
+    margin:0;
+    padding:0;
+}
+h1, h2, h3 {
+    /*font-family: 'Droid Sans', sans-serif;*/
+    font-weight: bolder;
+    padding:0;
+    margin:0;
+}
+h1{
+  font-size: .5em;
+}
+
+.remark-slide-content > h2:first-of-type {
+  margin-top: 0.0ex;
+  padding-top:0.0px;
+  line-height: 1;
+}
+
+
+.author {
+    position: absolute;
+    left: 50%;
+    -webkit-transform: translateX(-50%);
+    transform: translateX(-50%);
+    bottom: 3em
+}
+
+.bottom-left {
+    position: absolute;
+    bottom: 0.6em;
+    font-size: 70%;
+    text-align: left;
+    color:hsl(201, 100%, 28%);
+}
+
+
+.license {
+    position: absolute;
+    bottom: 0em;
+    font-size: 70%;
+    text-align: left;
+}
+
+.footnote {
+    position: absolute;
+    bottom: 0em;
+    font-size: 70%;
+}
+
+.float_bottom {
+    position: absolute;
+    bottom: 2em;
+}
+
+.remark-code, .remark-inline-code {
+    font-family: 'Ubuntu Mono';
+    line-height: 1.15;
+}
+
+.small .hljs{
+    font-size: 70%;
+}
+
+.smaller .hljs{
+    font-size: 85%;
+}
+
+
+
+.small .remark-code{
+    font-size: 70%;
+}
+
+.smaller .remark-code{
+    font-size: 85%;
+}
+
+
+
+/*remove extra space from top of the slide
+and set the background color*/
+.remark-slide-content {
+  padding-top: 0;
+}
+
+
+.tiny { font-size: 50%; }
+.small { font-size: 70%; }
+.smaller { font-size: 85%; }
+.big { font-size: 140%; }
+.large { font-size: 200%; }
+.huge { font-size: 300%; }
+.code{font-family: 'Ubuntu Mono'; }
+.pseudocode{font-family: "cursive"; font-size: 75%; color:white; background-color: hsl(201, 100%, 18%);}
+.pseudocode strong {color:pink}
+.center { text-align: center; }
+.left { text-align: left; }
+.right { text-align: right; }
+.red {color: red;}
+.blue {color: blue;}
+.green {color: green;}
+.center80 {
+    width: 80%;
+    margin:auto;
+}
+.center70 {
+    width: 70%;
+    margin:auto;
+}
+.center50 {
+    width: 50%;
+    margin:auto;
+}
+.highlight{
+    background-color: #FECA3F;
+}
+.heavy{
+  font-weight: bold;
+}
+
+
+.section {
+    background-color: #CABFDC;
+    padding: 5em;
+}
+
+.center_slide {
+    background-color: #CABFDC;
+    padding: 5em;
+}
+
+/* code output formatting */
+.output {
+  margin: 1px;
+  padding: 0 0 0 0.5em;
+  /*border-style: solid; border-color: #AAA; border-width:1px;*/
+  background-color: #CCC;
+}
+
+/* code output formatting */
+.box {
+  margin: 0 0.5em 0 0.5em;
+  padding: 0.5em;
+  border-style: solid; border-color: #AAA; border-width:3px;
+  background-color: #ABBBC2;
+}
+
+.important{
+    margin: 0 0em 0 0.0em;
+    padding: 1px 5px  1px  5px;
+    border-style: solid;
+    border-color: #002b80; border-width:4px;
+    background-color: rgb(255, 255, 128);
+}
+
+.aside{
+
+      margin: 0 0em 0 0.0em;
+      padding: 1px 5px  1px  5px;
+      color:  #737373;
+      border-style: double;
+      border-color: #737373; border-width:3px;
+      background-color: #f2f2f8;
+}
+
+
+.yellow {
+  background-color: rgb(255, 255, 128);
+}
+
+.gray {
+  background-color: rgb(200, 200, 200);
+}
+
+.yellowbox  {
+  margin: 0 0em 0 0.0em;
+  padding: 1px 5px  1px  5px;
+  border-style: solid;
+  border-color: #AAA; border-width:1px;
+  background-color: rgb(255, 255, 128);
+}
+
+.clearbox  {
+  margin: 0 0em 0 0.0em;
+  padding: 1px 5px  1px  5px;
+  border-style: solid;
+  border-color: #AAA; border-width:2px;
+}
+
+.yellowbox .hljs {
+  background-color: rgb(255, 255, 128);
+}
+
+
+.yellowbox pre {
+  margin: 0;
+}
+.clearbox pre {
+  margin: 0;
+}
+
+
+
+.centered_80{
+    width: 80%;
+    margin:auto;
+}
+
+.centered_80_hanging p {
+    padding-left: 2em ;
+    text-indent: -2em ;
+}
+.zero_list {
+  counter-reset: zero-counter -1;
+  text-indent: -2ex;
+}
+.zero_list ol {
+    list-style: none;
+}
+.zero_list li::before {
+    counter-increment: zero-counter;
+    content: counter(zero-counter) ". " ;
+}
+
+/* Two-column layout */
+.left-column2 {
+width: 44%;
+float: left;
+padding:1% 5% 1% 1%;
+}
+
+.right-column2 {
+width: 44%;
+float: right;
+padding:1% 1% 1% 5%;
+}
+
+.below-column2 {
+  clear: both;
+}
+
+.continue-column{
+  clear: both;
+}
+
+.continue-column .left-column2{
+  padding:0px;
+}
+.continue-column .right-column2{
+  padding:0px;
+}
+.continue-column .below-column2{
+  margin:0px;
+}
+.continue-column ul{
+  margin:0px;
+}
+.continue-column p{
+  margin:0px;
+}
+
+
+/* Two-column layout */
+.left-column2-small {
+width: 24%;
+float: left;
+padding:1% 5% 1% 1%;
+}
+
+.right-column2-large {
+width: 64%;
+float: right;
+padding:1% 1% 1% 5%;
+}
+
+
+
+
+/* Two-column layout */
+.left-column2-smaller {
+width: 36%;
+float: left;
+padding:1% 5% 1% 1%;
+}
+
+.right-column2-larger {
+width: 52%;
+float: right;
+padding:1% 1% 1% 5%;
+}
+
+
+/* Two-column layout */
+.left-column2-large {
+width: 64%;
+float: left;
+padding:1% 5% 1% 1%;
+}
+
+.right-column2-small {
+width: 24%;
+float: right;
+padding:1% 1% 1% 5%;
+}
+
+
+
+@media print {
+  .remark-slide-scaler {
+    width: 100% !important;
+    height: 100% !important;
+    transform: scale(1) !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+}

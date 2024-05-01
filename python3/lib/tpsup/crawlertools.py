@@ -5,9 +5,17 @@ import re
 import requests
 import sys
 import re
+import tpsup.htmltools
 import tpsup.tmptools
 from tpsup.logbasic import log_FileFuncLine
 import tpsup.human
+
+
+def get_url_host(url: str):
+    # https://test.abc.com:8000/def/ghi -> https://test.abc.com
+    # https://test.abc.com/~johnsmith/def/ghi -> https://test.abc.com
+    if m := re.match(r'^(https?://[^/]+)', url, re.IGNORECASE):
+        return m.group(1)
 
 
 def get_url_base(url: str):
@@ -42,6 +50,7 @@ linkAttribute_by_type = {
     'script': 'src',
     'default': 'href',
     # <img width="220px" alt="general tree" src="img/10/tree-2.jpg">
+    # todo handle image and more
     'img': 'src',
 }
 
@@ -50,8 +59,15 @@ class Crawler:
     def __init__(self,
                  start_url: str,
                  paths: list[str],    # xpath=... css=... id=...
-                 stylesheet_paths: list = ["xpath=//link[@rel='stylesheet']"],
-                 script_paths: list = ["xpath=//script[@src]"],
+
+                 # paths for stylesheet, script, img, only take local path, ie, no https?://
+                 #  stylesheet_paths: list = ["xpath=//link[@rel='stylesheet']"],
+                 #  script_paths: list = ["xpath=//script[@src]"],
+                 #  img_paths: list = ["xpath=//img[@src]"],
+                 stylesheet_paths: list = ["xpath=//link[@rel='stylesheet' and not(starts-with(@href, 'http'))]"],
+                 script_paths: list = ["xpath=//script[@src and not(starts-with(@src, 'http'))]"],
+                 img_paths: list = ["xpath=//img[@src and not(starts-with(@src, 'http'))]"],
+
                  maxpage: int = 50,   # max number of pages to download
                  maxdepth: int = 3,   # max depth of the pages to search
                  maxsize: int = 10,   # max size MB of the file to download
@@ -59,6 +75,7 @@ class Crawler:
                  processed_dir: str = None,
                  breath_first: bool = True,
                  dryrun: bool = False,
+                 download_favicon: bool = True,
                  **opt):
         # trim the ending '/' so that we can add it back later
         self.start_url = start_url.rstrip('/')
@@ -100,6 +117,7 @@ class Crawler:
         self.paths_by_type = {
             'stylesheet': stylesheet_paths,
             'script': script_paths,
+            'img': img_paths,
             'default': paths,
         }
 
@@ -310,7 +328,7 @@ class Crawler:
                 log_FileFuncLine(f"cannot parse {abs_local} {e}")
             cannot_parse = 1
 
-        if link_type in ['stylesheet', 'script'] or cannot_parse:
+        if link_type != 'default' or cannot_parse:
             # For css and script, we just copy downloaded file to processed_dir.
             # Ff we load the css or script file into html tree and then write out to a file,
             # the file will be different from the original file.
@@ -324,6 +342,58 @@ class Crawler:
 
             # for now we don't process css and script further
             ret['parsed'] = 1
+
+            # parse stylesheet for more url to download but no need to update current processed file
+            # because we only use the relative url.
+            if link_type == 'stylesheet':
+                # for css, we don't parse it
+                log_FileFuncLine(f"copy {abs_local} to {processed_file}")
+
+                with open(abs_local, 'rb') as f:
+                    css_string = f.read().decode('utf-8')
+
+                sheet = tpsup.htmltools.parse_css(css_string)
+                style_rule = sheet.get('STYLE_RULE', {})
+                # '.title-slide': {'background-image': 'url(../img/back1.jpg)',
+                #                  'background-size': 'cover',
+
+                for selector, prop in style_rule.items():
+                    for prop_name, prop_value in prop.items():
+                        if m := re.match(r'url\((.*)\)', prop_value):
+                            url2 = m.group(1)
+                            if re.match(r'^https?://', url2):
+                                # don't download external url
+                                if verbose:
+                                    log_FileFuncLine(f"skip downloading external url {url2} in {prop}")
+                            else:
+                                # will download the file
+                                if verbose:
+                                    log_FileFuncLine(f"need to download {url2} in {abs_local} to {processed_file}")
+
+                                # assume
+                                # url = http://test.abc.com/~johnsmith/cs102/slides/css/slides.css
+                                # url2 = ../img/back1.jpg
+                                # local_relative_path = cs102/slides/css/slides.css
+                                # url_dir = http://test.abc.com/~johnsmith/cs102/slides/css
+                                # todo_link_full = http://test.abc.com/~johnsmith/cs102/slides/css/../img/back1.jpg
+                                # todo_link_raw = ../img/back1.jpg
+
+                                url_dir = get_url_dirname(url)
+                                todo_link_full = url_dir + '/' + url2
+
+                                item = {
+                                    'parent_url': url,
+                                    'parent_relative_path': local_relative_path,
+                                    'todo_link_full': todo_link_full,
+                                    'todo_link_raw': url2,
+                                    'todo_link_type': 'default',
+                                    'depth': depth + 1,
+                                }
+
+                                # if verbose:
+                                log_FileFuncLine(f"append item={pformat(item, width=1)} to ret['items']")
+
+                                ret['items'].append(item)
             return ret
 
         ret['parsed'] = 1
@@ -374,7 +444,7 @@ class Crawler:
                         # this way, when we start a local web server, we can serve the local files
                         log_FileFuncLine(
                             f"link_type2={link_type2}, link_raw={link_raw}, link_full={link_full}, local_relative_path={local_relative_path}")
-                        if link_type2 in ['stylesheet', 'script']:
+                        if link_type2 != 'default':
                             # for css and script, I only see relative path so far; and it is relative to
                             # the current directory, not base directory. So I don't need to change the link.
                             if verbose:
@@ -413,9 +483,46 @@ class Crawler:
 
         return ret
 
+    def download_favicon(self, **opt):
+        # favicon is at /favicon.ico
+        # we download it to the root of the processed_dir
+        verbose = opt.get('verbose', self.verbose)
+
+        # if the start_url is http://test.abc.com/def/ghi, the favicon is at http://test.abc.com/favicon.ico
+        if not re.match(r'^https?://', self.start_url):
+            # if the start_url is a local file, we don't download the favicon
+            if verbose:
+                log_FileFuncLine(f"skip downloading favicon because start_url={self.start_url} is a local file")
+            return
+
+        host_url = get_url_host(self.start_url)
+
+        if host_url is None:
+            if verbose:
+                log_FileFuncLine(f"skip downloading favicon because start_url={self.start_url} is not a valid url")
+            return
+
+        favicon_url = f"{host_url}/favicon.ico"
+        favicon_local = os.path.join(self.processed_dir, "favicon.ico")
+
+        if verbose:
+            log_FileFuncLine(f"downloading favicon {favicon_url} to {favicon_local}")
+
+        # use requests to download the favicon
+        with requests.get(favicon_url, stream=True) as r:
+            r.raise_for_status()
+            with open(favicon_local, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
     def crawl(self, **opt):
         verbose = opt.get('verbose', self.verbose)
+
         page_count = 0
+
+        if self.download_favicon:
+            self.download_favicon(**opt)
+            page_count += 1
 
         while len(self.to_crawl_list) > 0:
 
@@ -448,7 +555,7 @@ class Crawler:
 
             # add all items to to_crawl_list
             self.to_crawl_list.extend(result['items'])
-            log_FileFuncLine(f"to_crawl_list = {pformat(self.to_crawl_list, width=1)}")
+            # log_FileFuncLine(f"to_crawl_list = {pformat(self.to_crawl_list, width=1)}")
 
         start_relative_path = self.get_local_relative_path(self.start_url)
 
