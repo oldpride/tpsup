@@ -56,7 +56,7 @@ export TPSUP=$(
 
 umask 022
 
-export HOSTNAME=$(hostname|cut -d. -f1)
+export HOSTNAME=$(hostname | cut -d. -f1)
 
 export UNAME=$(uname -a)
 # cygwin
@@ -356,7 +356,7 @@ elif [[ $UNAME =~ Cygwin ]]; then
    export OS_MINOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f2)
 
    export PATH="$PATH:$TPSUP/cmd_exe"
-elif [[ $UNAME =~ Linux|Darwin  ]]; then
+elif [[ $UNAME =~ Linux|Darwin ]]; then
    export Linux=$(uname -a | cut -d" " -f3 | cut -d. -f1,2)
    # Linux linux1 4.15.0-112-generic #113-Ubuntu SMP Thu Jul 9 23:41:39 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
    # Linux should be set to 4.15
@@ -538,7 +538,7 @@ winhome() {
    cd "$HOMEDRIVE/$HOMEPATH"
 }
 
-chome () {
+chome() {
    # this works in cygwin and gitbash
    #
    # "C:/USERS/$USERNAME" is $USERPROFILE not always windows' home dir, but is the most active folder
@@ -741,14 +741,18 @@ if [[ $TERM =~ ^xterm|^vt ]]; then
    # on GitBash/Cygwin or home linux host, we normally don't ssh. therefore, no need for
    # ${USER}@${HOSTNAME}
 
-   if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} = linux1 ]]; then
+   if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} =~ linux1 ]]; then
+      # bash head string ${MYVAR::3}
+      # bas tail string  ${MYVAR: -3} # must have a space !!!
+      # PROMPT_COMMAND only controls the terminal frame title.
+      # we shorten the PWD part so that we can see the important part in task bar.
       if [[ $(sfc 2>&1 | tr -d '\0') =~ SCANNOW ]]; then
-         PROMPT_COMMAND='echo -ne "\033]0;admin:${PWD}\007"'
+         PROMPT_COMMAND='echo -ne "\033]0;admin:${PWD: -15}\007"'
       else
-         PROMPT_COMMAND='echo -ne "\033]0;${PWD}\007"'
+         PROMPT_COMMAND='echo -ne "\033]0;${PWD: -15}\007"'
       fi
    else
-      PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}: ${PWD}\007"'
+      PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME::10}:${PWD: -15}\007"'
    fi
 
    export PROMPT_COMMAND
@@ -841,7 +845,7 @@ clear() {
 
    if [[ $UNAME =~ MINGW ]]; then
       # this gitbash
-      if [ "X$TERM_PROGRAM" = "Xvscode" ]; then 
+      if [ "X$TERM_PROGRAM" = "Xvscode" ]; then
          echo "click control+k to clear"
       fi
    fi
