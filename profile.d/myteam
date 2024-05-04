@@ -50,12 +50,12 @@ fi
 if [ $exact = Y ]; then
    cd "$MYTEAM"/$1
 else
-   count=$(/bin/ls -1 -d "$MYTEAM"/$1* | wc -l)
+   count=$(/bin/ls -1 -d "$MYTEAM"/*$1* | wc -l)
    if [ $count -gt 1 ]; then
-      /bin/ls -1l -d "$MYTEAM"/$1*
+      /bin/ls -1l -d "$MYTEAM"/*$1*
       echo "ERROR: $prog: more than 1 matched. use '-e' to select one"
       return
    fi
 
-   cd "$MYTEAM"/$1*
+   cd "$MYTEAM"/*$1*
 fi

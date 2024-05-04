@@ -20,10 +20,12 @@ exact=N
 while getopts el o; do
    case "$o" in
    e) exact=Y ;;
-   l) ls -d "$MYBASE"/github/*
+   l)
+      ls -d "$MYBASE"/github/*
       return
       ;;
-   *) echo "unknown switch. $usage" >&2
+   *)
+      echo "unknown switch. $usage" >&2
       return
       ;;
    esac
@@ -34,18 +36,18 @@ shift $((OPTIND - 1))
 if [ $# -ne 1 ]; then
    echo "wrong number of args: expected 1, actual $#"
    echo "$usage"
-   return 
+   return
 fi
 
 if [ $exact = Y ]; then
    cd "$MYBASE"/github/$1
 else
-   count=`/bin/ls -1 -d "$MYBASE"/github/$1*|wc -l`
+   count=$(/bin/ls -1 -d "$MYBASE"/github/*$1* | wc -l)
    if [ $count -gt 1 ]; then
-      /bin/ls -1l -d "$MYBASE"/github/$1*
+      /bin/ls -1l -d "$MYBASE"/github/*$1*
       echo "ERROR: $prog: more than 1 matched. use '-e' to select one"
       return
    fi
 
-   cd "$MYBASE"/github/$1*
+   cd "$MYBASE"/github/*$1*
 fi
