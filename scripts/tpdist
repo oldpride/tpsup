@@ -779,17 +779,7 @@ sub build_dir_tree {
          }
       }
 
-      # resolve * when filename has space.
-      # note: if we wrapped * in quotes, it would not be a wildcard anymore.
-      # example:
-      #    ls -1d  /cygdrive/c/users/william/My\ Documents/*txt     # works
-      #    ls -1d  /cygdrive/c/users/william/'My Documents'/*txt    # works
-      #    ls -1d  /cygdrive/c/users/william/My' 'Documents/*txt    # works
-      #    ls -1d '/cygdrive/c/users/william/My Documents/*txt'     # doesn't work
-
-      # either escape space or wrap space
-      # $path =~ s/(\s)/\\$1/g;   # escape the space
-      $path =~ s/(\s)/'$1'/g;    # wrap space
+      $path = handle_special_chars($path);
 
       my @globs = `/bin/ls -1d $path`;
       if ( $? || !@globs ) {
@@ -1834,12 +1824,7 @@ sub create_puller_local_tree {
 
       my $local_path = "$local_dir/$back";
 
-      # wrap space with quotes.
-      # from:
-      #    /cygdrive/c/Program Files/cygwin64/home/tian
-      # to
-      #    /cygdrive/c/Program' 'Files/cygwin64/home/tian
-      $local_path =~ s:(\s+):'$1':g;
+      $local_path = handle_special_chars($local_path);
 
       # resolve dir/*csv to dir/a.csv, a/b.csv, ...
       #    example:
@@ -1886,6 +1871,44 @@ sub create_puller_local_tree {
 
    return $ret;
 
+}
+
+sub handle_special_chars {
+   my ($path1) = @_;
+
+   # resolve * when filename has space.
+   # note: if we wrapped * in quotes, it would not be a wildcard anymore.
+   # example:
+   #    ls -1d  /cygdrive/c/users/william/My\ Documents/*txt     # works
+   #    ls -1d  /cygdrive/c/users/william/'My Documents'/*txt    # works
+   #    ls -1d  /cygdrive/c/users/william/My' 'Documents/*txt    # works
+   #    ls -1d '/cygdrive/c/users/william/My Documents/*txt'     # doesn't work
+
+   # wrap space with quotes.
+   # from:
+   #    /cygdrive/c/Program Files/cygwin64/home/tian
+   # to
+   #    /cygdrive/c/Program' 'Files/cygwin64/home/tian
+   my $path2 = $path1;
+   $path2 =~ s:(\s+):'$1':g;
+
+   if ( $verbose && $path1 ne $path2 ) {
+      print get_timestamp(), "wrapped space char: $path1 -> $path2\n";
+   }
+
+   # escape dollar sign. this happens in java files.
+   # from:
+   #   BST$Itr.class
+   # to:
+   #   BST\$Itr.class
+   my $path3 = $path2;
+   $path3 =~ s:([\$]):\\$1:g;
+
+   if ( $verbose && $path2 ne $path3 ) {
+      print get_timestamp(), "escaped dollar sign: $path2 -> $path3\n";
+   }
+
+   return $path3;
 }
 
 sub take_action_before_tar {
