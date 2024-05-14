@@ -51,6 +51,9 @@ description:
 
    -J                  args are jobnames. default to filenames
 
+   -i interval         initial interval, default to $interval.
+                       it will increase by 10 seconds every round, up to 60 seconds.
+
 examples:
 
    $prog abatch_test.txt    # take from file
@@ -82,6 +85,7 @@ GetOptions(
    'x=s'       => \$ExcludePattern,
    'df=s'      => \$DetailFiles,
    'sf=s'      => \$StatusFiles,
+   'i=s'       => \$interval,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -164,8 +168,7 @@ while (1) {
    }
 
    last if !$need_next_round;
-   print
-"$need_next_round jobs not completed. $failed failed so far. sleep for $sub_interval\n";
+   print "$need_next_round jobs not completed. $failed failed so far. sleep for $sub_interval\n";
    sleep $sub_interval;
    $sub_interval += 10;
    $sub_interval = $interval_limit if $sub_interval > $interval_limit;
