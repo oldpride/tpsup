@@ -89,8 +89,8 @@ print(rats.ndim)
 #
 #Note that strings are loaded as ‘object’ datatypes, because technically, the DataFrame holds a pointer to the string data elsewhere in memory. This behaviour is expected, and can be ignored.
 #
-#to change datatype from bool to int32
-#rats.astype({'DUPLICATE': 'int32'}).dtypes
+# to change datatype from bool to int32
+# rats.astype({'DUPLICATE': 'int32'}).dtypes
 #...
 #DUPLICATE                     int32
 #...
