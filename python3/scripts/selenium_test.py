@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
+from shutil import which
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.chrome.service import Service as ChromeDriverService
 # find_element_by_name('q') is replaced with find_element(By.NAME, 'q')
 from selenium.webdriver.common.by import By
 from urllib.parse import urlparse
@@ -143,7 +145,11 @@ if args['verbose']:
     sys.stderr.write(pformat(args) + "\n")
 
 headless = args['headless']
-driver_exe = args['driver']
+driver = args['driver']
+driver_exe = which(driver)
+if not driver_exe:
+    sys.stderr.write(f"cannot find {driver} in PATH\n")
+    sys.exit(1)
 
 if args['verbose']:
     cmd = 'ps -ef|grep chromedriver|grep -v grep'
@@ -170,7 +176,8 @@ if args['host_port'] == 'auto':
     if re.search("Windows", system, re.IGNORECASE):
         # Windows auto upgrade chrome.exe version, making it incompatible with chromedriver. therefore, we save a
         # static version of chrome.exe under C:\Users\%USERNAME%
-        browser_options.binary_location = f'C:\\Users\\{os.environ["USERNAME"]}\\Chrome\\Application\chrome.exe'
+        # browser_options.binary_location = f'C:\\Users\\{os.environ["USERNAME"]}\\Chrome\\Application\chrome.exe'
+        browser_options.binary_location = which('chrome')
 
     print('we will start a chromedriver which will start a browser')
     if headless:
@@ -203,7 +210,8 @@ if args['host_port'] == 'auto':
         if re.search('cygwin|cygdrive', home_dir, re.IGNORECASE):
             # because cygwin's home dir is C:\cygwin64\home\<username>, likely not the normal windows's home
             # dir C:/users/<username>. use C:/users/<username> instead
-            os.environ["PATH"] = os.pathsep.join([f'C:/Users/{os.environ["USERNAME"]}']) + os.pathsep + os.environ["PATH"]
+            os.environ["PATH"] = os.pathsep.join(
+                [f'C:/Users/{os.environ["USERNAME"]}']) + os.pathsep + os.environ["PATH"]
             # PATH is only for chromedriver, not for chrome.exe. therefore, we don't add chrome path
             # os.environ["PATH"] += os.pathsep + os.pathsep.join(
             #     [f'C:/Users/{os.environ["USER"]}', f'C:/Users/{os.environ["USER"]}/Chrome/Application', r'C:\Program Files (x86)\Google\Chrome\Application'])
@@ -253,14 +261,31 @@ else:
     #    netpipe 9333 localhost:9222
     # then have chromedriver pointing to pc_address:9333
 
+# logbase is homedir
+home_dir = os.path.expanduser("~")
+driverlog = home_dir + '/selenium_driver.log'
+
 # driver = webdriver.Chrome(driver_name,  # make sure chromedriver is in the PATH
 #                           options=browser_options,  # for chrome browser
 #                           service_args=driver_args,  # for chromedriver
 #                           )
 
-driver = webdriver.Chrome(driver_exe, options=browser_options, service_args=driver_args)
+# driver = webdriver.Chrome(driver_exe, options=browser_options, service_args=driver_args)
 
-# driver = webdriver.Chrome(driver_name, service_args=driver_args)
+# make sure chromedriver is in the PATH
+# selenium 4.10+ need to wrap executable_path into Service
+# https://stackoverflow.com/questions/76428561
+driver_service = ChromeDriverService(
+    # Service decides how driver starts and stops
+    executable_path=driver_exe,
+    log_path=driverlog,
+    service_args=driver_args,  # for chromedriver
+)
+
+driver = webdriver.Chrome(
+    service=driver_service,
+    options=browser_options,
+)
 
 time.sleep(1)  # give 1 sec to let the tail set up and also to throttle the headless mode
 
@@ -290,7 +315,7 @@ else:
     if not headless:
         time.sleep(2)  # Let the user actually see something!
 
-#for tag_a in driver.find_elements_by_tag_name('a'):
+# for tag_a in driver.find_elements_by_tag_name('a'):
 for tag_a in driver.find_elements(By.TAG_NAME, 'a'):
     link = None
     try:
