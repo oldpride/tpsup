@@ -22,6 +22,51 @@ our_cfg = {
       the following is tested working in linux, windows cygwin/gitbash/cmd.exe.
     $ {{prog}} s=henry
     
+    
+    Three ways to run the browser
+
+    1. let selenium to start a local browser automatically. like above example.
+
+    2. start Chrome (c1) on localhost with debug port 9222.
+    From Linux,
+        /usr/bin/chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
+        --user-data-dir=~/chrome_test --remote-debugging-port=9222 
+        or 
+        /opt/google/chrome/chrome --no-sandbox --disable-dev-shm-usage --window-size=960,540 \
+        --user-data-dir=~/chrome_test --remote-debugging-port=9222
+    From Cygwin or GitBash,
+        "C:/Users/$USERNAME/sitebase/Windows/10.0/Chrome/Application/chrome.exe" --window-size=960,540 \
+        --user-data-dir=C:/users/$USERNAME/chrome_test --remote-debugging-port=9222
+
+    From cmd.exe, (have to use double quotes)
+        "C:/Users/$USERNAME/sitebase/Windows/10.0/Chrome/Application/chrome.exe" --window-size=960,540 \
+        --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=9222
+
+   {prog} -hp localhost:9222 s=henry
+
+   3. start Chrome (c1) on remote PC with debug port 9222.
+
+    +------------------+       +---------------------+
+    | +---------+      |       |  +---------------+  |
+    | |selenium |      |       |  |chrome browser |------->internet
+    | +---+-----+      |       |  +----+----------+  |
+    |     |            |       |       ^             |
+    |     |            |       |       |             |
+    |     v            |       |       |             |
+    | +---+---------+  |       |  +----+---+         |
+    | |chromedriver |------------>|netpipe |         |
+    | +-------------+  |       |  +--------+         |
+    |                  |       |                     |
+    |                  |       |                     |
+    |  Linux           |       |   PC                |
+    |                  |       |                     |
+    +------------------+       +---------------------+
+
+    PC> "C:/Users/%USERNAME%/Chrome/Application/chrome.exe" \
+    --remote-debugging-port=9222 --user-data-dir=%USERPROFILE%\\ChromeTest
+    on the same remote PC, launch cygwin, in cygwin term: netpipe 9333 localhost:9222
+   {prog} -hp remote_PC:9333 s=-henry
+
     """,
     # all keys in keys, suits and aliases (keys and values) will be converted in uppercase
     # this way so that user can use case-insensitive keys on command line

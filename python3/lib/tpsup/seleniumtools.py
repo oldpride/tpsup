@@ -188,12 +188,6 @@ class SeleniumEnv:
         # chrome_options will be used on chrome browser's command line not chromedriver's commandline
         self.browser_options = ChromeOptions()
 
-        # https://stackoverflow.com/questions/65080685
-        # disables USB: usb_device_handle_win.cc:
-        #     1048 Failed to read descriptor from node connection
-        self.browser_options.add_experimental_option(
-            'excludeSwitches', ['enable-logging'])
-
         if host_port != "auto":
             # try to connect the browser in case already exists.
             # by setting this, we tell chromedriver not to start a browser
@@ -205,37 +199,8 @@ class SeleniumEnv:
             if is_tcp_open(host, port):
                 sys.stderr.write(
                     f"{host_port} is open. let chromedriver to connect to it\n")
-                if self.dryrun:
-                    sys.stderr.write(
-                        f"this is dryrun; we will not start chromedriver\n")
-                else:
-                    # rotate the log file if it is bigger than the size.
-                    tpsup.logtools.rotate_log(
-                        self.driverlog, size=1024 * 1024 * 10, count=1)
-                    try:
-                        self.driver = webdriver.Chrome(
-                            self.driver_exe,
-                            options=self.browser_options,
-                            service_args=self.driver_args,
-                            desired_capabilities=self.desiredCapbilities,  # to get js console log
-                        )
-                        sys.stderr.write(
-                            f"chromedriver has connected to chrome at {host_port}\n")
-                        self.connected_existing_browser = True
-                    except Exception as e:
-                        print(e)
             else:
-                sys.stderr.write(f"{host_port} is not open.\n")
-
-        if self.driver:
-            return
-
-        # by doing one of the following, we tell chromedriver to start a browser
-        # self.browser_options.debugger_address = None
-
-        # https://stackoverflow.com/questions/65080685
-        self.browser_options.add_experimental_option(
-            'excludeSwitches', ['enable-logging'])
+                raise RuntimeError(f"browser host_port={host_port} is not open.\n")
 
         if host_port == "auto":
             sys.stderr.write(
@@ -314,34 +279,6 @@ class SeleniumEnv:
         self.browser_options.add_argument("enable-automation")
         self.browser_options.add_argument("--disable-browser-side-navigation")
 
-        # for file download
-        self.browser_options.add_experimental_option(
-            "prefs",
-            {
-                "download.default_directory": self.download_dir,
-                "download.prompt_for_download": False,
-                "download.directory_upgrade": True,
-                "safebrowsing.enabled": True,
-            },
-        )
-        # I got this error and later download failed
-        #     DevTools listening on ws://127.0.0.1:19999/devtools/browser/...
-        #     [28432:12376:0817/154016.816:ERROR:CONSOLE(1)] "Refused to execute inline event
-        #     handler because it violates the following Content Security Policy directive:
-        #     "script-src 'strict-dynamic'
-        #     'sha256-1+GSDjMMklBjZY0QiWq+tGupCvajw4Xbn46ect2mZgM='
-        #     'sha256-2mX1M62Fd0u8q0dQY2mRsK5S1NS9jJuQAvyE8tD0dkQ='
-        #     'sha256-EtIKSV82ixJHE3AzqhoiVbUGKG+Kd8XS0fFToow29o0='
-        #     'sha256-QSyFltV9X3gkyBrg+SMfKvZNXmqPQc6K4B6OYhTuXmw='
-        #     'sha256-4M0jdrILwm/h3mCRbjIF07jAlCbI0ZbyLjQL/9HVhwE='
-        #     'sha256-CbH+xPsBKQxVw5d9blISLDeuMSe1M+dJ4xfArFynIfw='
-        #     'sha256-C9ctze2LhHtwL+fcPVPkmVRYjQgXTGs4xfBAzlQwGWk='
-        #     'sha256-yVmlm9txUAL9c9wAcTXYqdk4zxtPoJO/pyl4aKclgK8='". Either the 'unsafe-inline' keyword,
-        #     a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. ",
-        #     source: chrome-search://local-ntp/local-ntp.html (1)
-
-        # https://stackoverflow.com/questions/36324333
-
         for arg in opt.get("browserArgs", []):
             self.browser_options.add_argument(f"--{arg}")
             # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
@@ -367,15 +304,6 @@ class SeleniumEnv:
                 log_path=self.driverlog,
                 service_args=self.driver_args,  # for chromedriver
             )
-
-            # to get js console log
-            # https://stackoverflow.com/questions/20907180
-            # self.desiredCapbilities = webdriver.DesiredCapabilities.CHROME.copy()
-            # self.desiredCapbilities['goog:loggingPrefs'] = {'browser': 'ALL'}
-            # above code is deprecated by selenium 4.10
-            # https://www.selenium.dev/documentation/webdriver/getting_started/upgrade_to_selenium_4/#capabilities
-            # self.browser_options.set_capability(
-            #     'goog:loggingPrefs', {'browser': 'ALL'})
 
             log_FileFuncLine()
 

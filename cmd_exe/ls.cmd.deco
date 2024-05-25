@@ -1,3 +1,0 @@
-@echo off
-@REM ls is moved into a doskey in tpsup.cmd
-dir %*

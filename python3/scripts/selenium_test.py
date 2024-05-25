@@ -73,6 +73,8 @@ examples:
     From Cygwin or GitBash,
         "C:/users/$USERNAME/Chrome/Application/chrome.exe" --window-size=960,540 \
         --user-data-dir=C:/users/$USERNAME/chrome_test --remote-debugging-port=9222
+
+        chrome could also be at c:/Users/$USERNAME/sitebase/Windows/10.0/Chrome/Application/chrome.exe
     From cmd.exe, (have to use double quotes)
         "C:/Users/%USERNAME%/Chrome/Application/chrome.exe" --window-size=960,540 \
         --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=9222
@@ -89,7 +91,7 @@ examples:
     |     |            |       |       |             |
     |     v            |       |       |             |
     | +---+---------+  |       |  +----+---+         |
-    | |chromedriver +------------>+netpipe |         |
+    | |chromedriver |------------>|netpipe |         |
     | +-------------+  |       |  +--------+         |
     |                  |       |                     |
     |                  |       |                     |
@@ -329,4 +331,4 @@ for tag_a in driver.find_elements(By.TAG_NAME, 'a'):
 driver.quit()
 
 # list all the log files for debug purpose
-os.system("ls -ld /tmp/selenium_*")
+# os.system('ls -ld "/tmp/selenium_*"')
