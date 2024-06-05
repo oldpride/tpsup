@@ -77,7 +77,10 @@ else
 fi
 
 for t in $(echo $targets); do
-   for f in *_cfg_batch.pl *_cfg_trace.pl; do
+   # for f in *_cfg_batch.pl *_cfg_trace.pl; do
+   for f in `\ls *_cfg_batch.pl *_cfg_trace.pl 2>/dev/null`; do 
+      # because glob will return the original pattern if no file is found, we use ls instead.
+      # use \ls to avoid alias
       if [ "X$pattern" != "X" ]; then
          if ! echo $f | egrep -q "$pattern"; then
             continue
