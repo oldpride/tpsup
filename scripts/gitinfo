@@ -88,6 +88,13 @@ fi
 
 cd $top_level || exit 1
 
+
+
+echo ""
+cmd="git branch"
+echo "cmd = $cmd"
+$cmd
+
 echo ""
 cmd="git log -n 3"
 echo "cmd = $cmd"
