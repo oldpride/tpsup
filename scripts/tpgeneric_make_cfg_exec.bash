@@ -5,7 +5,7 @@
 
 prog=$(basename $0)
 
-all_targets='bash bat'
+all_targets='bash' # exclude 'bat' from default because it is not used often.
 # i didn't include taskbash and taskbat in all_targets because they are not used often.
 
 usage() {
@@ -21,7 +21,7 @@ usage:
    
    'all' covers: $all_targets.
 
-   create a wrapper script for *.cfg, 
+   create a wrapper script for _cfg_(batch|trace).pl files.
       bash - for bash on linux/cygwin/gitbash. 
             target will be launched from inside venv.
       bat - for batch on windows, 
@@ -77,7 +77,7 @@ else
 fi
 
 for t in $(echo $targets); do
-   for f in *_batch.cfg *_trace.cfg; do
+   for f in *_cfg_batch.pl *_cfg_trace.pl; do
       if [ "X$pattern" != "X" ]; then
          if ! echo $f | egrep -q "$pattern"; then
             continue
@@ -87,8 +87,8 @@ for t in $(echo $targets); do
       # https://unix.stackexchange.com/questions/145402
       # sed -e would not work.
       # sed -E is extended regular expression, which is similar to perl's regex.
-      target_type=$(  echo $f | sed -E 's:^.*_(batch|trace).cfg:\1:')
-      target_prefix=$(echo $f | sed -E 's:_(batch|trace).cfg::')
+      target_type=$(echo $f | sed -E 's:^.*_cfg_(batch|trace).pl:\1:')
+      target_prefix=$(echo $f | sed -E 's:_cfg_(batch|trace).pl::')
       [ $verbose = Y ] && echo "target_type=$target_type, target_prefix=$target_prefix"
 
       if [ $t = bat ]; then

@@ -20,7 +20,7 @@ UNAME=$(uname -a)
 
 types="batch trace"
 for type in $types; do
-   if [ -f "$dir/${prog}_${type}.cfg" ]; then
+   if [ -f "$dir/${prog}_cfg_${type}.pl" ]; then
       if [ "X$seen_type" != "X" ]; then
          echo "ERROR: found multiple cfg files for $prog: $seen_type and $type"
          exit 1
@@ -33,11 +33,11 @@ done
 type=$seen_type
 
 if [[ "$UNAME" =~ Cygwin ]]; then
-   cfg=$(cygpath --windows "$dir/${prog}_${type}.cfg")
+   cfg=$(cygpath --windows "$dir/${prog}_cfg_${type}.pl")
    cmd=$(which tp${type})
    cmd=$(cygpath --windows "$cmd")
    perl "$cmd" "$cfg" -c $prog "$@"
 else
-   cfg="$dir/${prog}_${type}.cfg"
+   cfg="$dir/${prog}_cfg_${type}.pl"
    tp${type} "$cfg" -c $prog "$@"
 fi
