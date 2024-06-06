@@ -490,14 +490,17 @@ sub get_entry_by_method_suburl {
       $entry_decide_file = $cfg->{entry_decide_file};
    } else {
       $entry_decide_file = $cfg->{meta}->{cfg_abs_path};
-      $entry_decide_file =~ s/_batch.cfg/_pattern.cfg/;
+      $entry_decide_file =~ s/_cfg_batch.pl/_pattern.cfg/;
    }
    my $pattern_file = $entry_decide_file;
-   #    print "pattern_file=$pattern_file\n";
    my $pattern_cfg = parse_login_by_method_pattern_file( $pattern_file, $opt );
-   #    print "pattern_by_login=", Data::Dumper::Dumper($pattern_by_login), "\n";
 
    my $method = $cfg->{method} || 'GET';
+
+   if ($opt->{verbose}) {
+      print STDERR "pattern_file=$pattern_file\n";
+      print STDERR "pattern_cfg=", Data::Dumper::Dumper($pattern_cfg), "\n";
+   }
 
    if ( !exists $pattern_cfg->{$method} ) {
       croak "cannot find method $method in $pattern_file";
