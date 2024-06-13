@@ -72,7 +72,7 @@ linkAttribute_by_type = {
 class Crawler:
     def __init__(self,
                  start_url: str,
-                 paths: list[str],    # xpath=... css=... id=...
+                 paths: list[str] = [],    # xpath=... css=... id=...
 
                  # paths for stylesheet, script, img, only take local path, ie, no https?://
                  #  stylesheet_paths: list = ["xpath=//link[@rel='stylesheet']"],
@@ -91,6 +91,7 @@ class Crawler:
                  dryrun: bool = False,
                  download_favicon: bool = True,
                  humanlike: bool = True,
+                 ignoreHttpError: bool = False,
                  **opt):
         # trim the ending '/' so that we can add it back later
         self.start_url = start_url.rstrip('/')
@@ -102,6 +103,7 @@ class Crawler:
         self.processed_dir = processed_dir
         self.breath_first = breath_first
         self.verbose = opt.get('verbose', 0)
+        self.ignoreHttpError = ignoreHttpError
         self.humanlike = humanlike
         # self.dryrun = dryrun
 
@@ -166,7 +168,7 @@ class Crawler:
                     local_relative = path[1:]
 
                     # ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS_HTML&delayStartupUntil=configured
-                    # change wierd characters to '-'
+                    # change weird characters to '-'
                     local_relative = re.sub(r'[^a-zA-Z0-9=./-]', '-', local_relative)
             else:
                 raise RuntimeError(f"can't parse url {url}")
@@ -277,7 +279,17 @@ class Crawler:
             # https://stackoverflow.com/questions/7243750/download-file-from-web-in-python-3
             # https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
             with requests.get(url, stream=True) as r:
-                r.raise_for_status()
+                try:  # If the server doesn't return a success code, raise an exception
+                    r.raise_for_status()
+                except requests.exceptions.HTTPError as e:
+                    # print(f"self.ignoreHttpError={self.ignoreHttpError}")
+
+                    if self.ignoreHttpError:
+                        log_FileFuncLine(f"failed to download {url} {e}")
+                        ret['need_process'] = 0
+                        return ret
+                    else:
+                        raise e
                 with open(abs_local, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         total_size += len(chunk)

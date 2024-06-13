@@ -38,6 +38,9 @@ usage:
     
     -v              verbose mode. -v -v for more verbose
 
+    --ignoreHttpError
+    -ih             ignore http error. default is False
+
     """)
 
 examples = textwrap.dedent(f"""
@@ -92,6 +95,10 @@ parser.add_argument(
     help="inhuman mode. don't add delay between requests")
 
 parser.add_argument(
+    '-ih', '--ignoreHttpError', dest="ignoreHttpError", action='store_true', default=False,
+    help="ignore http error. default is False")
+
+parser.add_argument(
     'remainingArgs', default=None, nargs=argparse.REMAINDER,
     help='url and xpath')
 
@@ -102,7 +109,7 @@ if args['verbose']:
     sys.stderr.write(f"args =\n{pformat(args)}\n")
 
 remainingArgs = args['remainingArgs']
-if len(remainingArgs) < 2:
+if len(remainingArgs) < 1:
     sys.stderr.write("missing args\n")
     sys.stderr.write(usage)
     sys.stderr.write(examples)
@@ -111,10 +118,10 @@ if len(remainingArgs) < 2:
 start_url = remainingArgs[0]
 paths = remainingArgs[1:]
 
-maxpage = args['maxpage']
-maxdepth = args['maxdepth']
-maxsize = args['maxsize']
-verbose = args['verbose']
+# maxpage = args['maxpage']
+# maxdepth = args['maxdepth']
+# maxsize = args['maxsize']
+# verbose = args['verbose']
 
 crawler = tpsup.crawlertools.Crawler(
     start_url,
