@@ -366,6 +366,11 @@ sub resolve_files {
    if ( !$type ) {
       # if user used string, try to split by space.
       my $resolved = resolve_scalar_var_in_string( $files_v, { %known, %vars } );
+      
+      # trim leading and trailing spaces
+      $resolved =~ s/^\s+//;
+      $resolved =~ s/\s+$//;
+      
       @files = split /\s+/, $resolved;
    } elsif ( $type eq 'ARRAY' ) {
       # if user used ARRAY, don't split it by space.
