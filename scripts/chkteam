@@ -1,0 +1,147 @@
+#!/bin/bash
+
+check_only=N
+
+usage() {
+   cat <<EOF
+usage:
+
+   $prog 
+   $prog -n
+
+   -n     check only 
+
+   check for my team's repos, and do git pull if needed.
+   no push is done.
+
+EOF
+
+   exit 1
+}
+
+while getopts n o; do
+   case "$o" in
+   #d) depot_dir="$OPTARG";;
+   n) check_only=Y ;;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+. $TPSUP/profile
+
+for url in $(cat $SITESPEC/cfg/repos_team.txt); do
+   # filter out comments
+   if echo $url | grep '^#' >/dev/null; then
+      continue
+   fi
+   
+   echo ""
+   echo "------ $url -------"
+   echo ""
+
+   # $ basename https://github.com/buffetenjoyer/java.git .git
+   # javas
+   repo=$(basename $url .git)
+
+   # get the owner of the repo
+   owner=$(echo $url | awk -F/ '{print $4}')
+
+   if ! cd $HOME/team/$owner; then
+      mkdir -p $HOME/team/$owner || exit 1
+   fi
+
+   if ! cd $HOME/team/$owner/$repo; then
+      cd $HOME/team/$owner
+      git clone $url
+      continue
+   fi
+
+   # pwd is $HOME/team/$owner/$repo
+   fetch=$(git fetch --dry-run 2>&1)
+   need_pull=N
+   if [ -n "$fetch" ]; then
+      need_pull=Y
+      (
+         set -x
+         git fetch --dry-run
+      )
+   fi
+
+   # $ git status --show-stash
+   # On branch master
+   # Your branch and 'origin/master' have diverged,
+   # and have 3 and 3 different commits each, respectively.
+   #   (use "git pull" to merge the remote branch into yours)
+   #
+   # nothing to commit, working tree clean
+
+   if git status | grep 'use "git pull"' >/dev/null; then
+      need_pull=Y
+      (
+         set -x
+         git status
+      )
+   fi
+
+   if [ $need_pull = Y ]; then
+      if [ $check_only = N ]; then
+         echo ""
+         echo "git pull? Y|N ? [N]"
+         read answer
+
+         if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+            echo "Answer is "$answer". Not done"
+         else
+            (
+               set -x
+               gitpull
+            ) # gitpull is a wrapper for "git pull"
+         fi
+      fi
+   fi
+
+   status=$(git status --porcelain)
+   diff=$(git diff --stat --cached origin/master)
+   if [ -n "$status" -o -n "$diff" ]; then
+      (
+         set -x
+         git status
+      )
+      (
+         set -x
+         git diff --stat --cached origin/master
+      )
+      # if [ $check_only = N ]; then
+      #    echo ""
+      #    echo "git push? Y|N ? [N]"
+      #    read answer
+
+      #    if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
+      #       echo "Answer is "$answer". Not done"
+      #    else
+      #       (
+      #          set -x
+      #          git add -A
+      #       )
+      #       (
+      #          set -x
+      #          git commit -m update
+      #       )
+      #       (
+      #          set -x
+      #          git push
+      #       )
+      #    fi
+      # fi
+   fi
+done
