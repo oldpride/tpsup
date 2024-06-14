@@ -49,7 +49,8 @@ do
 
    if ! cd $MYBASE/github/$repo; then
       cd $MYBASE/github || exit 1;
-      gitclone oldpride $repo
+      # gitclone oldpride $repo
+      git clone https://github.com/oldpride/$repo.git
       continue
    fi
 
