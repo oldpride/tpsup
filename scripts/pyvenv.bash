@@ -108,12 +108,17 @@ if [ $action = check ]; then
 elif [ $action = make ]; then
    echo "this may take a minute ..."
    if [ "X$suffix" = "X" ]; then
-      set -x
-      "$python" -m venv "$SITEVENV"
+      venv_path="$SITEVENV"
    else
-      set -x
-      "$python" -m venv "$suffix_venv"
+      venv_path="$suffix_venv"
    fi
+   # cygwin args must be windows path
+   if [[ $uname =~ CYGWIN ]]; then
+      venv_path=$(cygpath -w "$venv_path")
+   fi
+
+   set -x
+   "$python" -m venv "$venv_path"
 else
    echo "unknown action='$action'" >&2
    usage
