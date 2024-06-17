@@ -23,7 +23,7 @@ call "%CMD_DIR%\addpath.cmd" -q PATH "%CMD_DIR%"
 
 REM now we should have addpath in PATH
 call addpath -q PATH "%TPSUP%\vbs"
-call addpath -q PATH "%SITESPEC%\cmd_exe"
+call addpath -q PATH "%SITESPEC%\bat"
 call addpath -q PATH "%SITESPEC%\vbs"
 
 :: blank line

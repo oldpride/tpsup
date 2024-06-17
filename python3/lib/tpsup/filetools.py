@@ -687,7 +687,7 @@ def main():
         tpglob(searchfiles)
         tpglob(searchfiles, sort_name='mtime')
         get_latest_files([libfiles])[:2]  # get the latest 2 files
-        tpfind(TPSUP, FlowExps=['r["short"] in ["scripts", "lib", "python3", "cmd_exe"]'],
+        tpfind(TPSUP, FlowExps=['r["short"] in ["scripts", "lib", "python3", "bat"]'],
                FlowDirs=['prune'],
                MaxCount=5)
 

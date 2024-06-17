@@ -39,15 +39,37 @@ fi
 
 . $TPSUP/profile
 
-for url in $(cat $SITESPEC/cfg/repos_team.txt); do
-   # filter out comments
-   if echo $url | grep '^#' >/dev/null; then
+# file format:
+#     url,branch
+#     https://github.com/emilyh1011/DataStructures,
+#     https://github.com/weip2008/LearnTorch.git,master
+
+# use "cat |while read" to read line by line, which not split at space.
+# however, "cat | while read" mess up stdin. so we have to use
+# for loop.
+# cat "$SITESPEC/cfg/repos_team.txt" | while read line; do
+for line in $(cat "$SITESPEC/cfg/repos_team.txt"); do
+   # skip the first line
+   if echo $line | egrep '^url' >/dev/null; then
       continue
    fi
-   
+
+   # filter out comments
+   if echo $line | egrep '^[ ]*#' >/dev/null; then
+      continue
+   fi
+
+   # filter out empty lines
+   if echo $line | egrep '^[ ]*$' >/dev/null; then
+      continue
+   fi
+
    echo ""
-   echo "------ $url -------"
+   echo "------ $line -------"
    echo ""
+
+   url=$(echo $line | cut -d, -f1)
+   branch=$(echo $line | cut -d, -f2)
 
    # $ basename https://github.com/buffetenjoyer/java.git .git
    # javas
@@ -56,13 +78,26 @@ for url in $(cat $SITESPEC/cfg/repos_team.txt); do
    # get the owner of the repo
    owner=$(echo $url | awk -F/ '{print $4}')
 
-   if ! cd $HOME/team/$owner; then
-      mkdir -p $HOME/team/$owner || exit 1
+   if ! cd $HOME/team/$owner 2>/dev/null; then
+      (set -x; mkdir -p $HOME/team/$owner) || exit 1
    fi
 
-   if ! cd $HOME/team/$owner/$repo; then
+   if ! cd $HOME/team/$owner/$repo 2>/dev/null; then
       cd $HOME/team/$owner
-      git clone $url
+
+      # if branch is not specified, then clone the repo.
+      if [ -z "$branch" ]; then
+         (
+            set -x
+            git clone $url
+         )
+      else 
+         (
+            set -x
+            git clone -b $branch $url
+         )
+      fi
+
       continue
    fi
 
@@ -108,40 +143,5 @@ for url in $(cat $SITESPEC/cfg/repos_team.txt); do
             ) # gitpull is a wrapper for "git pull"
          fi
       fi
-   fi
-
-   status=$(git status --porcelain)
-   diff=$(git diff --stat --cached origin/master)
-   if [ -n "$status" -o -n "$diff" ]; then
-      (
-         set -x
-         git status
-      )
-      (
-         set -x
-         git diff --stat --cached origin/master
-      )
-      # if [ $check_only = N ]; then
-      #    echo ""
-      #    echo "git push? Y|N ? [N]"
-      #    read answer
-
-      #    if [ "X$answer" != "XY" -a "X$answer" != "Xy" ]; then
-      #       echo "Answer is "$answer". Not done"
-      #    else
-      #       (
-      #          set -x
-      #          git add -A
-      #       )
-      #       (
-      #          set -x
-      #          git commit -m update
-      #       )
-      #       (
-      #          set -x
-      #          git push
-      #       )
-      #    fi
-      # fi
    fi
 done

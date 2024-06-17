@@ -3,7 +3,7 @@ REM @echo off
 
 set yyyymmdd=%date:~10,4%%date:~4,2%%date:~7,2%
 
-call "c:/users/william/sitebase/github/site-spec/cmd_exe/siteenv.cmd"
+call "c:/users/william/sitebase/github/site-spec/bat/siteenv.cmd"
 
 set "source=%SITEBASE%\github"
 
@@ -16,7 +16,7 @@ set "backup_log=%backup_base%\%yyyymmdd%\github.log"
 echo "copy files to archive"
 mkdir "%backup_base%\%yyyymmdd%" || goto :error
 
-xcopy "%source%" "%backup_dir%" /s /e /y /exclude:%TPSUP%\cmd_exe\backup_github_locally_ex.txt >> %backup_log% 2>&1 || goto :error
+xcopy "%source%" "%backup_dir%" /s /e /y /exclude:%TPSUP%\bat\backup_github_locally_ex.txt >> %backup_log% 2>&1 || goto :error
 
 echo "delete old files"
 cd /D "%backup_base%" || goto :error

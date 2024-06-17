@@ -3,6 +3,9 @@ REM is for comment
 REM @ is to turn off echo
 REM echo. is to print a new line
 
+REM TP_P3_PATH vs TP_P3_PYTHONPATH
+REM TP_P3_PATH       is for the PATH,       ie, for executables
+REM TP_P3_PYTHONPATH is for the PYTHONPATH  ie, for python modules
 call addpath -q PYTHONPATH "%TPSUP%\python3\lib"
 call addpath -q PYTHONPATH "%SITESPEC%\python3\lib"
 if defined TP_P3_PYTHONPATH (

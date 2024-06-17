@@ -49,8 +49,8 @@ examples = textwrap.dedent(f"""
         {prog} -maxcount 5 -m 'r["size"] > 50000 and r["type"] != "dir"' $TPSUP -ls
 
         # flow control
-        {prog} -fe 'r["short"] in ["scripts", "lib", "python3", "cmd_exe"]' -fd prune $TPSUP
-        {prog} -fe 'r["short"] in ["scripts", "lib", "python3", "cmd_exe"]' -fd exit  $TPSUP
+        {prog} -fe 'r["short"] in ["scripts", "lib", "python3", "bat"]' -fd prune $TPSUP
+        {prog} -fe 'r["short"] in ["scripts", "lib", "python3", "bat"]' -fd exit  $TPSUP
 
         # use handlers, note: be careful with the using of quotes. i used str() here instead of f"..."
         {prog} -maxcount 5 -he '"python" in r["path"]' -ha 'os.system("ls -ld " + str(r["path"]))' $TPSUP

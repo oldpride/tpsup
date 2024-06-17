@@ -323,7 +323,7 @@ if [[ $UNAME =~ Msys ]]; then
    export OS_MAJOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f1)
    export OS_MINOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f2)
 
-   export PATH="$PATH:$TPSUP/cmd_exe"
+   export PATH="$PATH:$TPSUP/bat"
 elif [[ $UNAME =~ Cygwin ]]; then
    export WINHOME=$(
       cd $USERPROFILE
@@ -355,7 +355,7 @@ elif [[ $UNAME =~ Cygwin ]]; then
    export OS_MAJOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f1)
    export OS_MINOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f2)
 
-   export PATH="$PATH:$TPSUP/cmd_exe"
+   export PATH="$PATH:$TPSUP/bat"
 elif [[ $UNAME =~ Linux|Darwin ]]; then
    export Linux=$(uname -a | cut -d" " -f3 | cut -d. -f1,2)
    # Linux linux1 4.15.0-112-generic #113-Ubuntu SMP Thu Jul 9 23:41:39 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
@@ -789,14 +789,14 @@ sitebase() { cd "$SITEBASE"; }
 export SPECNAME=$(basename "$SITESPEC")
 
 tp() { cd "$TPSUP/scripts"; }
-tpcmd() { cd "$TPSUP/cmd_exe"; }
+tpcmd() { cd "$TPSUP/bat"; }
 tpps1() { cd "$TPSUP/ps1"; }
 tplib() { cd "$TPSUP/lib/perl/TPSUP"; }
 tpp3() { cd "$TPSUP/python3/scripts"; }
 tpp3lib() { cd "$TPSUP/python3/lib/tpsup"; }
 
 site() { cd "$SITESPEC/scripts"; }
-sitecmd() { cd "$SITESPEC/cmd_exe"; }
+sitecmd() { cd "$SITESPEC/bat"; }
 siteps1() { cd "$SITESPEC/ps1"; }
 sitelib() { cd "$SITESPEC/lib/perl/${SPECNAME^^}"; } # ${x,,} lower case, ${x^^} upper case
 sitep3() { cd "$SITESPEC/python3/scripts"; }
@@ -814,20 +814,20 @@ if [ "X$MYBASE" = "X" ]; then
 fi
 
 mytp() { cd "$MYBASE/github/tpsup/scripts"; }
-mytpcmd() { cd "$MYBASE/github/tpsup/cmd_exe"; }
+mytpcmd() { cd "$MYBASE/github/tpsup/bat"; }
 mytpps1() { cd "$MYBASE/github/tpsup/ps1"; }
 mytplib() { cd "$MYBASE/github/tpsup/lib/perl/TPSUP"; }
 mytpp3() { cd "$MYBASE/github/tpsup/python3"; }
 mytpp3lib() { cd "$MYBASE/github/tpsup/python3/lib/tpsup"; }
 
-mycmd() { cd "$MYBASE/github/tpsup/cmd_exe"; }
+mycmd() { cd "$MYBASE/github/tpsup/bat"; }
 myps1() { cd "$MYBASE/github/tpsup/ps1"; }
 mylib() { cd "$MYBASE/github/tpsup/lib/perl/TPSUP"; }
 myp3() { cd "$MYBASE/github/tpsup/python3"; }
 myp3lib() { cd "$MYBASE/github/tpsup/python3/lib/tpsup"; }
 
 mysite() { cd "$MYBASE/github/$SPECNAME/scripts"; }
-mysitecmd() { cd "$MYBASE/github/$SPECNAME/cmd_exe"; }
+mysitecmd() { cd "$MYBASE/github/$SPECNAME/bat"; }
 mysiteps1() { cd "$MYBASE/github/$SPECNAME/ps1"; }
 mysitelib() { cd "$MYBASE/github/$SPECNAME/lib/perl/${SPECNAME^^}"; } # ${x,,} lc, ${x^^} uc
 mysitep3() { cd "$MYBASE/github/$SPECNAME/python3/scripts"; }
