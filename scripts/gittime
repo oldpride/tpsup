@@ -1,0 +1,95 @@
+#!/bin/bash
+
+prog=`basename $0`
+dir=`dirname $0`
+
+usage () {
+   cat <<EOF
+usage:
+
+   $prog path1 path2 ...
+
+   restore time stamp according to the remote repo's time stamp.
+
+   background:
+   when I "git clone" a repo, the time stamp of the files are
+   set to the time of the "git clone" command. I want to restore
+   the time stamp to the time of the last commit.
+   
+   https://stackoverflow.com/questions/2179722/
+
+   "the only timestamps recorded in the Git database are the 
+   author and commit timestamps. I don't see an option for Git
+    to modify the file's timestamp to match the most recent
+     commit, and it makes sense that this wouldn't be the
+      default behavior (because if it were, Makefiles wouldn't
+       work correctly).
+
+   You could write a script to set the modification date of
+    your files to the the time of the most recent commit. 
+   "
+
+   -n           dryrun
+   -v           versbose
+
+example:
+
+   $prog .
+
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+dryrun=''
+
+while getopts fnvm: o;
+do
+   case "$o" in
+      n) dryrun='--dry-run';;
+      v) verbose=Y;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac 
+done
+
+shift $((OPTIND-1))
+
+if [ $# -eq 0 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+old_pwd=`pwd`
+
+for p in "$@"; 
+do
+   cd $old_pwd
+
+   if [ ! -d "$p" ]; then
+      echo "path '$p' is not a directory"
+      exit 1
+   fi
+
+   cd $p || exit 1
+
+   for file in `git ls-files`; do
+      echo "$path $file" 
+
+      time="$(git log --pretty=format:%cd -n 1 \
+            --date=format:%Y%m%d%H%M.%S --date-order -- "$file")";
+      if [ -z "$time" ]; then
+         echo "ERROR: skipping '$file' -- no git log found" >&2;
+         continue;   
+      fi;   
+      touch -m -t "$time" "$file"; 
+   done
+done
+
+   
+   
+
+
+
+   
