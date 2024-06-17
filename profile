@@ -851,6 +851,24 @@ clear() {
    fi
 }
 
+gittop() {
+   # first arg is a path, optional
+   if [ "X$1" = "X" ]; then
+      cd "$1" || return
+   fi
+
+   # go to the top of the git repo
+   local gitdir
+   gitdir=$(git rev-parse --show-toplevel)
+   if [ "X$gitdir" = "X" ]; then
+      echo "not in a git repo"
+      return
+   fi
+
+   echo "$gitdir"
+   cd "$gitdir"
+}
+
 if ! [ "X$SSH_CLIENT" = "X" ]; then
    # $ env |grep SSH
    # SSH_CONNECTION=192.168.1.62 50334 192.168.1.191 22

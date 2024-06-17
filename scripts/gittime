@@ -15,7 +15,7 @@ usage:
    when I "git clone" a repo, the time stamp of the files are
    set to the time of the "git clone" command. I want to restore
    the time stamp to the time of the last commit.
-   
+
    https://stackoverflow.com/questions/2179722/
 
    "the only timestamps recorded in the Git database are the 
@@ -29,8 +29,15 @@ usage:
     your files to the the time of the most recent commit. 
    "
 
-   -n           dryrun
-   -v           versbose
+   -n          dryrun
+
+   -v          versbose
+
+   -a          means all files in the current repo that contains
+               the path. Basically, the script will do 
+                   "git rev-parse --show-toplevel" 
+               to get the root of the repo, and then do "git ls-files"
+               to get all files in the repo.
 
 example:
 
@@ -44,12 +51,14 @@ EOF
 
 verbose=N
 dryrun=''
+all=N
 
-while getopts fnvm: o;
+while getopts nva o;
 do
    case "$o" in
       n) dryrun='--dry-run';;
       v) verbose=Y;;
+      a) all=Y;;
       *) echo "unknow switch '$o'"; usage;;
    esac 
 done
@@ -74,7 +83,18 @@ do
 
    cd $p || exit 1
 
-   for file in `git ls-files`; do
+   if [ $all = Y ]; then
+      git_root=`git rev-parse --show-toplevel`
+      cd $git_root || exit 1
+   fi
+   # "for loop" vs "while read"
+   # "for loop" is better when element has no space char inside.
+   #            it won't mess up stdin.
+   # "while read" is better when element has space char inside. 
+   #            but it mess up stdin.
+   # Because file names may have space char inside, we use "while read".
+   # Also, we don't read stdin inside while loop, so we are safe.
+   git ls-files | while read file; do
       echo "$path $file" 
 
       time="$(git log --pretty=format:%cd -n 1 \
