@@ -3,7 +3,7 @@ REM @echo off
 
 set yyyymmdd=%date:~10,4%%date:~4,2%%date:~7,2%
 
-call "c:/users/william/sitebase/github/site-spec/bat/siteenv.cmd"
+call "c:/users/tian/sitebase/github/site-spec/bat/siteenv.cmd"
 
 set "source=%SITEBASE%\github"
 

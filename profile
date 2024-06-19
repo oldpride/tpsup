@@ -821,6 +821,7 @@ mytpp3() { cd "$MYBASE/github/tpsup/python3"; }
 mytpp3lib() { cd "$MYBASE/github/tpsup/python3/lib/tpsup"; }
 
 mycmd() { cd "$MYBASE/github/tpsup/bat"; }
+mybat() { cd "$MYBASE/github/tpsup/bat"; }
 myps1() { cd "$MYBASE/github/tpsup/ps1"; }
 mylib() { cd "$MYBASE/github/tpsup/lib/perl/TPSUP"; }
 myp3() { cd "$MYBASE/github/tpsup/python3"; }
