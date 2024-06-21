@@ -814,20 +814,20 @@ if [ "X$MYBASE" = "X" ]; then
 fi
 
 mytp() { cd "$MYBASE/github/tpsup/scripts"; }
-mytpcmd() { cd "$MYBASE/github/tpsup/bat"; }
 mytpps1() { cd "$MYBASE/github/tpsup/ps1"; }
 mytplib() { cd "$MYBASE/github/tpsup/lib/perl/TPSUP"; }
 mytpp3() { cd "$MYBASE/github/tpsup/python3"; }
 mytpp3lib() { cd "$MYBASE/github/tpsup/python3/lib/tpsup"; }
 
-mycmd() { cd "$MYBASE/github/tpsup/bat"; }
 mybat() { cd "$MYBASE/github/tpsup/bat"; }
+mycmd() { cd "$MYBASE/github/tpsup/bat"; }
 myps1() { cd "$MYBASE/github/tpsup/ps1"; }
 mylib() { cd "$MYBASE/github/tpsup/lib/perl/TPSUP"; }
 myp3() { cd "$MYBASE/github/tpsup/python3"; }
 myp3lib() { cd "$MYBASE/github/tpsup/python3/lib/tpsup"; }
 
 mysite() { cd "$MYBASE/github/$SPECNAME/scripts"; }
+mysitebat() { cd "$MYBASE/github/$SPECNAME/bat"; }
 mysitecmd() { cd "$MYBASE/github/$SPECNAME/bat"; }
 mysiteps1() { cd "$MYBASE/github/$SPECNAME/ps1"; }
 mysitelib() { cd "$MYBASE/github/$SPECNAME/lib/perl/${SPECNAME^^}"; } # ${x,,} lc, ${x^^} uc
