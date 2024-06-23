@@ -185,7 +185,17 @@ sub swagger {
             # sometimes curl's POST method doesn't want -d at all.
             # therefore don't use -d '' when it is not defined.
 
-            $post_data = resolve_scalar_var_in_string( $post_data, $dict, $opt );
+            if ($post_data eq 'json_array_number') {
+               # argv list are numbers, we want to convert them to json array
+               $post_data = join( ',', @$args );
+               $post_data = "[$post_data]";
+            } elsif ($post_data eq 'json_array_string') {
+               # argv list are strings, we want to convert them to json array
+               $post_data = join( ',', map { qq("$_") } @$args );
+               $post_data = "[$post_data]";
+            } else {
+               $post_data = resolve_scalar_var_in_string( $post_data, $dict, $opt );
+            }
             $post_data =~ s/"/\\"/g;    # escape double quote for windows cmd.exe
             $command .= qq( --header "Content-Type: application/json" -d "$post_data");
          }
@@ -265,7 +275,7 @@ my $swagger_syntax = {
    },
    '^/cfg/([^/]+?)/op/([^/]+?)/$' => {
       sub_url   => { type => 'SCALAR', required => 1 },
-      num_args  => { type => 'SCALAR', pattern  => qr/^\d+$/ },
+      num_args  => { type => 'SCALAR', pattern  => qr/^(\d+|[+*])$/ },
       json      => { type => 'SCALAR', pattern  => qr/^\d+$/ },
       method    => { type => 'SCALAR', pattern  => qr/^(GET|POST|DELETE)$/ },
       Accept    => { type => 'SCALAR' },
@@ -300,8 +310,14 @@ sub tpbatch_parse_hash_cfg {
             $example .= "   {{prog}} $base $op";
 
             my $num_args = $cfg->{num_args} ? $cfg->{num_args} : 0;
-            for ( my $i = 0 ; $i < $num_args ; $i++ ) {
-               $example .= " arg$i";
+            if ( "$num_args" eq '+' ) {
+               $example .= " arg0 [arg1 arg2 ...]\n";
+            } elsif ( "$num_args" eq '*' ) {
+               $example .= " [arg0 arg1 arg2 ...]\n";
+            } else {
+               for ( my $i = 0 ; $i < $num_args ; $i++ ) {
+                  $example .= " arg$i";
+               }
             }
 
             $example .= "\n";
@@ -400,11 +416,24 @@ sub tpbatch_parse_input {
 
    my $num_input = scalar(@copied);
 
-   if ( $num_args != $num_input ) {
-      print
-        "ERROR: wrong number of args, expecting $num_args but got $num_input, input=",
-        Dumper( \@copied );
-      exit 1;
+   if ( $num_args eq '+' ) {
+      # at least num_args
+      if ( $num_input < 1 ) {
+         print
+           "ERROR: wrong number of args, expecting at least $num_args but got $num_input, input=",
+           Dumper( \@copied );
+         exit 1;
+      }
+   } elsif ( $num_args eq '*' ) {
+      # 0 or more args
+      1;
+   } else {
+      if ( $num_args != $num_input ) {
+         print
+         "ERROR: wrong number of args, expecting $num_args but got $num_input, input=",
+         Dumper( \@copied );
+         exit 1;
+      }
    }
 
    my $known = { base => $base, op => $op, args => $args };

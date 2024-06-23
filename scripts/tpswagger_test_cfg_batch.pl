@@ -119,9 +119,9 @@ our $our_cfg = {
 
       mybase2 => {
          base_urls => ['https://myhost1.abc.com:9102', 'https://myhost2.abc.com:9102'],
-        # this file is sourced by TPSUP::BATCH, so the working namespace is TPSUP::BATCH.
-        # therefore, we need to specify TPSUP::SWAGGER explicitly.
-        entry => \&TPSUP::SWAGGER::get_entry_by_method_suburl,
+         # this file is sourced by TPSUP::BATCH, so the working namespace is TPSUP::BATCH.
+         # therefore, we need to specify TPSUP::SWAGGER explicitly.
+         entry => \&TPSUP::SWAGGER::get_entry_by_method_suburl,
          op        => {
             myop2_1 => {
                num_args => 2,
@@ -129,6 +129,13 @@ our $our_cfg = {
                Accept   => 'text/xml',
                comment  => 'run myop2_1',
                test_str  => ['hello world', qq("donn't" answer)],
+            },
+            myop2_2 => {
+               num_args => '*',
+               sub_url  => 'app3/api/run_myop2/',
+               method    => 'POST',
+               post_data => 'json_array_string',
+               test_str  => ['hard coded'],
             },
          },
       },
