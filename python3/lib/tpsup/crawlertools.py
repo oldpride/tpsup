@@ -285,7 +285,7 @@ class Crawler:
                     # print(f"self.ignoreHttpError={self.ignoreHttpError}")
 
                     if self.ignoreHttpError:
-                        log_FileFuncLine(f"failed to download {url} {e}")
+                        log_FileFuncLine(f"failed to download {url} {e}. ignored.")
                         ret['need_process'] = 0
                         return ret
                     else:

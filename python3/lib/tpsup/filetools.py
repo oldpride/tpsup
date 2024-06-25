@@ -685,6 +685,7 @@ def main():
     def test_codes():
         sort_files([libfiles], sort_name='mtime')
         tpglob(searchfiles)
+        tpglob(["C://Program Files (x86)/Windows*"])
         tpglob(searchfiles, sort_name='mtime')
         get_latest_files([libfiles])[:2]  # get the latest 2 files
         tpfind(TPSUP, FlowExps=['r["short"] in ["scripts", "lib", "python3", "bat"]'],
