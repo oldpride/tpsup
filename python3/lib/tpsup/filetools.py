@@ -676,8 +676,20 @@ def main():
     # os.system(f'ls -l {file_gz}; zcat {file_gz}; /bin/rm -fr {testdir}')
     run_cmd(f"ls -l '{file_gz}'; zcat '{file_gz}'; /bin/rm -fr '{tmpdir}'", is_bash=True, print_output=verbose)
 
+    
     from tpsup.testtools import test_lines
-    TPSUP = os.environ.get('TPSUP')
+    import platform
+
+    # if on windows, run this
+    if (platform.uname().system == 'Windows'):
+        def test_codes():
+            tpglob(["C://Program Files (x86)/Windows*"])
+
+        test_lines(test_codes, source_globals=globals(), source_locals=locals())
+            
+
+    # TPSUP = os.environ.get('TPSUP')
+    TPSUP = f'../../..'
     libfiles = f'{TPSUP}/python3/lib/tpsup/*tools.py'
     p3scripts = f'{TPSUP}/python3/scripts'
     searchfiles = f'{TPSUP}/python3/lib/tpsup/searchtools_test*.txt'
@@ -685,8 +697,8 @@ def main():
     def test_codes():
         sort_files([libfiles], sort_name='mtime')
         tpglob([searchfiles])
-        tpglob(["C://Program Files (x86)/Windows*"])
-        tpglob(searchfiles, sort_name='mtime')
+        
+        tpglob([searchfiles], sort_name='mtime')
         get_latest_files([libfiles])[:2]  # get the latest 2 files
         tpfind(TPSUP, FlowExps=['r["short"] in ["scripts", "lib", "python3", "bat"]'],
                FlowDirs=['prune'],
