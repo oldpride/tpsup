@@ -1,0 +1,60 @@
+#!/bin/bash
+
+timeout=5
+prog=`basename $0`
+
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog start_index end_index
+
+   awk from start_index to end_index.
+   index starts from 1, like it in awk command.
+
+   background:
+      "cut -f3-7" only works with single char delimiter.
+      "awk" is more flexible and can handle multi-char delimiter.
+
+   -v          verbose mode
+
+example:
+ 
+   echo \$(seq 1 5) | $prog 2 4     # 2nd to 4th field
+   echo \$(seq 1 5) | $prog 2 NF    # 2nd till last field
+   echo \$(seq 1 5) | $prog 2 99    # end index can be larger than NF
+   
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+
+
+while getopts v o;
+do
+   case "$o" in
+      # c) conn="-conn $OPTARG";;
+      v) verbose=Y; set -x;;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -lt 2 ]; then
+   echo "ERROR: wrong number of args" >&2
+   usage
+fi
+
+start=$1
+end=$2
+shift 2
+
+
+# "printf $i FS;" is to avoid splitting output into lines
+# print "" is to add a newline at the end
+awk "{for(i=$start;i<=$end;i++) printf \$i FS; print \"\"}" $@
