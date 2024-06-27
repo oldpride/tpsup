@@ -5,7 +5,8 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 my $delimiter = '\s+';
 
 sub usage {
@@ -23,24 +24,27 @@ Usage:
    index starts from 1, like it in awk command.
 
    background:
-      "cut -f3-7" only works with single char delimiter.
-      "awk" is more flexible and can handle multi-char delimiter.
+      "cut -f2-4" only works with single char delimiter.
+      "awkfields 2 4" is more flexible and can handle multi-char delimiter.
          but "awk" cannot keep the original delimiters.
          for example, if the original delimiter is two spaces,
          awk will convert it to one space in output.
-      we try to keep the original delimiters in this script.
+      "$prog 2 4" can keep the original delimiters in this script.
 
    -v          verbose mode
    -d delim    delimiter, default is '$delimiter'
 
 Examples:
 
-   echo \$(seq 1 5) | $prog 2 4     # 2nd to 4th field
-   echo \$(seq 1 5) | $prog 2 NF    # 2nd till last field
-   echo \$(seq 1 5) | $prog 2 99    # end index can be larger than NF
+   echo \$(seq 1 5)   | $prog 2 4   # 2nd to 4th field
+   echo \$(seq 1 5)   | $prog 2 NF  # 2nd till last field
+   echo \$(seq 1 5)   | $prog 2 99  # end index can be larger than NF
    echo "1 2   3 4 5" | $prog 2 4   # output should keep the two spaces between 2 and 3
 
-
+   # multi-line
+   (echo "1 2 3 4 5";
+    echo ""; # empty line should be preserved
+    echo " 1 2   3 4 5") | $prog 2 4
 END
 
    exit 1;
@@ -49,13 +53,13 @@ END
 my $verbose;
 
 GetOptions(
-   'v|verbose' => \$verbose,
+   'v|verbose'     => \$verbose,
    'd|delimiter=s' => \$delimiter,
-   ) || usage ("cannot parse command line: $!");
+) || usage("cannot parse command line: $!");
 usage("wrong number of args") if @ARGV < 2;
 
 my $start_index = shift;
-my $end_index = shift;
+my $end_index   = shift;
 
 my $in_fh;
 if (@ARGV) {
@@ -67,38 +71,38 @@ if (@ARGV) {
 
 for my $line (<$in_fh>) {
    chomp $line;
-   
-   
+
    # skip the delimiters at the beginning
    $line =~ s/^\s*$delimiter//;
 
-   # we cannot use split here, because we want to keep the 
-   # original delimiters. therefore, we need to use regex 
+   # we cannot use split here, because we want to keep the
+   # original delimiters. therefore, we need to use regex
    # and while loop.
    my $i = 1;
-   while ($line =~ /\G(.+?)($delimiter)/gc) {
+   while ( $line =~ /\G(.+?)($delimiter)/gc ) {
+
       # 'c' - keep the current position during repeated matching
       # 'g' - globally match the pattern repeatedly in the string
-      my $field = $1;
-      my $separator = $2; 
-      if ($i >= $start_index 
-         && ($end_index eq 'NF' || $i <= $end_index)) {
+      my $field     = $1;
+      my $separator = $2;
+      if ( $i >= $start_index
+         && ( $end_index eq 'NF' || $i <= $end_index ) )
+      {
          print "$field$separator";
       }
       $i++;
    }
 
    # check if we have reached the end of the line
-   if ($line =~ /\G(.+)$/gc) {
+   if ( $line =~ /\G(.+)$/gc ) {
       my $field = $1;
-      if ($i >= $start_index 
-          && ($end_index eq 'NF' || $i <= $end_index)) {
+      if ( $i >= $start_index
+         && ( $end_index eq 'NF' || $i <= $end_index ) )
+      {
          print "$field";
       }
    }
 
    print "\n";
 }
-
-
 
