@@ -15,16 +15,20 @@ use TPSUP::FILE qw(
 );
 
 use TPSUP::UTIL qw(
-  get_tmp_file
   get_user
   get_homedir
   resolve_scalar_var_in_string
   eval_perl
 );
+
+use TPSUP::TMP qw(get_tmp_file);
+
 use TPSUP::ENV qw(get_uname);
 
 my $prog = $0;
 $prog =~ s:.*/::;
+
+my @env_vars = qw(SITEBASE SITESPEC TPSUP HOME);
 
 sub usage {
    my ($message) = @_;
@@ -35,7 +39,7 @@ sub usage {
 usage:
 
    $prog list                  - list configuration
-   $prog pkg_name  target_dir  - create package in target dir
+   $prog pkg_name  target_basedir  - create package in target dir
 
    deploy using tpdist.
 
@@ -45,6 +49,8 @@ usage:
 
    -c cfg_dir        default to \$SITESPEC/cfg/pkgs/pkg_name. 
                      there should be a pkg.cfg file under there.
+
+                     cfg supports env vars: @env_vars
 
 examples:
 
@@ -76,7 +82,12 @@ if ( $ARGV[0] eq 'list' ) {
 
 usage("wrong number of args") if @ARGV != 2;
 
-my ( $pkg_name, $target_dir ) = @ARGV;
+my ( $pkg_name, $target_basedir ) = @ARGV;
+
+# change target_basedir to full path
+if ( $target_basedir !~ m:^/: ) {
+   $target_basedir = "$ENV{PWD}/$target_basedir";
+}
 
 my $flag = "";
 if ($dryrun) {
@@ -88,13 +99,13 @@ if ( !$cfg_dir ) {
    my $sitedir = $ENV{SITESPEC};
    die "\$SITESPEC is not defined" if !defined $sitedir;
 
-   $cfg_dir = "$sitedir/cfg/pkgs/${pkg_name}";
+   $cfg_dir = "$sitedir/cfg/pkgs";
    die "default cfg dir $cfg_dir not found" if !-d $cfg_dir;
 } else {
    die "specified cfg dir $cfg_dir not found" if !-d $cfg_dir;
 }
 
-my $cfg_file = "$cfg_dir/pkg.cfg";
+my $cfg_file = "$cfg_dir/$pkg_name/pkg.cfg";
 
 my $string = `cat $cfg_file`;
 die "cannot read $cfg_file" if $?;
@@ -110,7 +121,6 @@ my $dict = get_uname();
 $dict->{USER} = get_user();
 $dict->{HOME} = get_homedir();
 
-my @env_vars = qw(SITEBASE SITESPEC TPSUP);
 for my $ev (@env_vars) {
    die "$ev is not defined in env." if !$ENV{$ev};
    $dict->{$ev} = $ENV{$ev};
@@ -123,13 +133,22 @@ $verbose && print "dict = ", Dumper($dict);
 # don't use /var/tmp as it may not exists in gitbash
 my $tmp_file = get_tmp_file( "/tmp", $prog );
 
+my $copy_cmd;
+# check whether rsync is available
+my $rsync = `which rsync`;
+if ( $? == 0 ) {
+   $copy_cmd = "rsync";
+} else {
+   $copy_cmd = "tpdist";
+}
+
 my $i = 0;
 for my $r ( @{ $cfg->{rsyncs} } ) {
    $i++;
    print "\n";
 
-   my ( $source, $condition, $files ) =
-     @{$r}{qw(source   condition   files)};
+   my ( $source, $target_subdir, $condition, $files ) =
+     @{$r}{qw(source target_subdir condition   files)};
 
    #remove leading spaces, and comments
    #  convert
@@ -176,26 +195,55 @@ for my $r ( @{ $cfg->{rsyncs} } ) {
    }
 
    print "section #$i processing\n";
-   my $ofh = get_out_fh($tmp_file);
-   print {$ofh} $files;
-   close_out_fh($ofh);
 
-# note: --files-from changed rsync default behavior
-#    https://stackoverflow.com/questions/16647476/how-to-rsync-only-a-specific-list-of-files
-#
-# -a                   archive mode, equals -rlptgoD
-# -r                   recursive.                       had to explicitly specify when --files-from
-# --delete             delete files not in source side. had to explicitly specify when --files-from
-#                      because we need to run rsync multiple time, we disable this to prevent later run
-#                      delete earlier run
-# --exclude='*[.]site' to skips site-specific files
-# --exclude='[.]git*'  to skip .git/ and .gitignore
-# -i                   to print item to be changed, ie, --itemize-changes
-# --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
-# [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
+   my $target_dir = defined $target_subdir ? "$target_basedir/$target_subdir" :
+                                              $target_basedir;
 
-   my $cmd =
+   # create target dir if not exists
+   if ( !-d $target_dir ) {
+      print "creating target dir $target_dir\n";
+      my $cmd = "mkdir -p '$target_dir'";
+      if ( !$dryrun ) {
+         print "cmd = $cmd\n";
+         system($cmd);
+         if ( $? != 0 ) {
+            print "cmd=$cmd failed\n";
+            exit 1;
+         }
+      } else {
+         print "dryrun: cmd = $cmd\n";
+      }
+   }
+
+   my $cmd;
+   if ( $copy_cmd eq "rsync" ) {
+      my $ofh = get_out_fh($tmp_file);
+      print {$ofh} $files;
+      close_out_fh($ofh);
+
+      # note: --files-from changed rsync default behavior
+      #    https://stackoverflow.com/questions/16647476/how-to-rsync-only-a-specific-list-of-files
+      #
+      # -a                   archive mode, equals -rlptgoD
+      # -r                   recursive.                       had to explicitly specify when --files-from
+      # --delete             delete files not in source side. had to explicitly specify when --files-from
+      #                      because we need to run rsync multiple time, we disable this to prevent later run
+      #                      delete earlier run
+      # --exclude='*[.]site' to skips site-specific files
+      # --exclude='[.]git*'  to skip .git/ and .gitignore
+      # -i                   to print item to be changed, ie, --itemize-changes
+      # --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
+      # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
+
+      $cmd =
 qq(rsync -ar $flag -exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" --files-from='$tmp_file' '$source' '$target_dir');
+
+   } else {
+      # $copy_cmd eq "tpdist"
+
+      my $files_string = join( "' '", split( /\n/, $files ) );
+      $cmd = "cd $source; tpdist $flag local  '$files_string' $target_dir";
+   }
 
    print "cmd = $cmd\n";
 
