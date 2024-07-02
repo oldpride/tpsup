@@ -9,7 +9,7 @@ usage:
    $prog path
 
    this does
-      git rm --cached -r path
+      git restore --staged path
 
    it is useful when
       if I mistakenly added/committed unneeded files, .pyc for example, 
@@ -34,6 +34,6 @@ path=$1
 unset LD_LIBRARY_PATH
 export PATH=/usr/bin:$PATH
 
-echo "git rm --cached -r $path"
-git rm --cached -r $path
+set -x
+git restore --staged $path
 
