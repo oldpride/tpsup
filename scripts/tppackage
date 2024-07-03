@@ -10,8 +10,9 @@ use Getopt::Long;
 use Carp;
 use File::Basename;
 use TPSUP::FILE qw(
-  get_out_fh
-  close_out_fh
+   get_out_fh
+   close_out_fh
+   tpglob
 );
 
 use TPSUP::UTIL qw(
@@ -52,6 +53,8 @@ usage:
 
                      cfg supports env vars: @env_vars
 
+   -tpdist           use tpdist instead of rsync
+
 examples:
 
    $prog list
@@ -66,11 +69,13 @@ END
 my $verbose;
 my $cfg_dir;
 my $dryrun;
+my $tpdist;
 
 GetOptions(
    'verbose'  => \$verbose,
    'c=s'      => \$cfg_dir,
    'n|dryrun' => \$dryrun,
+   'tpdist'   => \$tpdist,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1 && @ARGV != 2;
@@ -134,12 +139,16 @@ $verbose && print "dict = ", Dumper($dict);
 my $tmp_file = get_tmp_file( "/tmp", $prog );
 
 my $copy_cmd;
-# check whether rsync is available
-my $rsync = `which rsync`;
-if ( $? == 0 ) {
-   $copy_cmd = "rsync";
-} else {
+if ($tpdist) {
    $copy_cmd = "tpdist";
+} else {
+   # check whether rsync is available
+   my $rsync = `which rsync`;
+   if ( $? == 0 ) {
+      $copy_cmd = "rsync";
+   } else {
+      $copy_cmd = "tpdist";
+   }
 }
 
 my $i = 0;
@@ -170,19 +179,24 @@ for my $r ( @{ $cfg->{rsyncs} } ) {
       $f =~ s:^\s+::;           # remove leading spaces
       $f =~ s:\s+$::;           # remove ending spaces
 
+      $f = resolve_scalar_var_in_string( $f,  $dict );
+
       push @list2, $f;
    }
+
+   $verbose && print "list2 = ", Dumper(\@list2);
 
    if ( !@list2 ) {
       print "section #$i is skipped because it is empty\n";
       next;
    }
 
-   $files = join( "\n", @list2 );
-
    $source    = resolve_scalar_var_in_string( $source,    $dict );
    $condition = resolve_scalar_var_in_string( $condition, $dict );
-   $files     = resolve_scalar_var_in_string( $files,     $dict );
+   # $files     = resolve_scalar_var_in_string( $files,     $dict );
+
+   # apply glob
+   my @list3 = tpglob(\@list2, {base => $source});
 
    if ( defined $condition ) {
       print "checking condition: $condition\n";
@@ -196,8 +210,10 @@ for my $r ( @{ $cfg->{rsyncs} } ) {
 
    print "section #$i processing\n";
 
-   my $target_dir = defined $target_subdir ? "$target_basedir/$target_subdir" :
-                                              $target_basedir;
+   my $target_dir =
+     defined $target_subdir
+     ? "$target_basedir/$target_subdir"
+     : $target_basedir;
 
    # create target dir if not exists
    if ( !-d $target_dir ) {
@@ -215,8 +231,9 @@ for my $r ( @{ $cfg->{rsyncs} } ) {
       }
    }
 
-   my $cmd;
    if ( $copy_cmd eq "rsync" ) {
+      my $files = join( "\n", @list3 );
+
       my $ofh = get_out_fh($tmp_file);
       print {$ofh} $files;
       close_out_fh($ofh);
@@ -235,19 +252,31 @@ for my $r ( @{ $cfg->{rsyncs} } ) {
       # --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
       # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
 
-      $cmd =
+      my $cmd =
 qq(rsync -ar $flag -exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" --files-from='$tmp_file' '$source' '$target_dir');
-
+   
+      print "cmd = $cmd\n";
+      system($cmd);
+  
    } else {
       # $copy_cmd eq "tpdist"
 
-      my $files_string = join( "' '", split( /\n/, $files ) );
-      $cmd = "cd $source; tpdist $flag local  '$files_string' $target_dir";
+      # group files by folders to save tpdist times
+      my $files_by_folder = {};
+      for my $f (@list3) {
+         my $dir = dirname($f);
+         push @{ $files_by_folder->{$dir} }, $f;
+      }
+
+      my @dirs = sort(keys %$files_by_folder);
+      for my $dir (@dirs) {
+         my @files = @{ $files_by_folder->{$dir} };
+         my $files_string = join( "' '", @files );
+         my $cmd = "cd $source; tpdist $flag -q local  '$files_string' $target_dir/$dir";
+         print "cmd = $cmd\n";
+         system($cmd);
+      }
    }
-
-   print "cmd = $cmd\n";
-
-   system($cmd);
 }
 
 exit 0;

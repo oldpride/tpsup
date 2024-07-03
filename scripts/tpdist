@@ -588,7 +588,10 @@ sub tar_file_list {
 
 sub get_timestamp {
    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime(time);
-   return sprintf( "%04d%02d%02d %02d:%02d:%02d [$prog_mode] ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
+   
+   # get calling line number
+   my $caller_line = (caller(0))[2];
+   return sprintf( "%04d%02d%02d %02d:%02d:%02d [$prog_mode,%d] ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec, $caller_line);
 }
 
 sub read_security_file {
@@ -770,7 +773,7 @@ sub build_dir_tree {
 
       if ( $opt->{RelativeBase} && $path !~ m:^/: ) {
          # RelativeBase is from command line and only on the to-pull side.
-         print get_timestamp(), "cd '$opt->{RelativeBase}'\n";
+         $quiet || print get_timestamp(), "cd '$opt->{RelativeBase}'\n";
          if ( !chdir( $opt->{RelativeBase} ) ) {
             # if there is an error, we just print locally, not to send to remote side.
             # therefore, we won't add the error into $tree.

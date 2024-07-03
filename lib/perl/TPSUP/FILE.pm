@@ -156,6 +156,7 @@ sub tpglob {
    my $sort_name = $opt->{sort_name};
    my $sort_func = $opt->{sort_func};
    my $reverse   = $opt->{reverse};
+   my $base = $opt->{base};
 
    my @patterns;
    my $type = ref($pattern);
@@ -173,7 +174,18 @@ sub tpglob {
 
    my @files;
    for my $p (@patterns) {
+      my $prepended_base = 0;
+      if ($base && $p !~ m:^/:) {
+         $p = "$base/$p";
+         $prepended_base = 1;
+      }
       my @files2 = grep { -e $_ } glob($p);
+
+      # if we prepended base, we should remove it from the result
+      if ($prepended_base) {
+         @files2 = map { s:^$base/::; $_ } @files2;
+      }
+      
       if (@files2) {
          push @files, @files2;
       } else {
