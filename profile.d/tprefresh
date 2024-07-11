@@ -1,25 +1,46 @@
 #!/bin/bash
 
-local OPTIND OPTARG verbose check_only
+local OPTIND OPTARG verbose check_only usage
 
-verbose=N
-check_only=N
+prog=${FUNCNAME[1]}
+
+usage="
+usage:
+   $prog set   # set today
+   $prog +1    # set next tradeday
+   $prog -1    # set previous tradeday
+   $prog check # check only
+"
+
+# verbose=N
+# check_only=N
 
 # don't forget to localize OPTIND OPTARG
-while getopts cv o;
-do
-   case "$o" in
-      c) check_only=Y;;
-      v) verbose=Y;;
-      *) echo "unknow switch. $usage">&2; return 1;;
-   esac
-done
+# while getopts cv o;
+# do
+#    case "$o" in
+#       c) check_only=Y;;
+#       v) verbose=Y;;
+#       *) echo "unknow switch. $usage">&2; return 1;;
+#    esac
+# done
 
-shift $((OPTIND-1))
+# shift $((OPTIND-1))
 
-if [ $check_only = N ]; then
+if ! [ "X$1" = "check" ]; then
+   if [ "X$1" = "X-1" ]; then
+      export yyyymmdd=`tradeday -1`
+   elif [ "X$1" = "X+1" ]; then
+      export yyyymmdd=`tradeday +1`
+   elif [ "X$1" = "Xset" ]; then
+      export yyyymmdd=`date +%Y%m%d`
+   else
+      echo "unknow switch. $usage">&2; 
+      return 1
+   fi
+
    # today
-   export yyyymmdd=`date +%Y%m%d`
+   # export yyyymmdd=`date +%Y%m%d`
    export YYYYMMDD=$YYYYMMDD
    export yyyy=`echo $yyyymmdd|cut -c1-4`
    export   mm=`echo $yyyymmdd|cut -c5-6`
@@ -28,14 +49,14 @@ if [ $check_only = N ]; then
    export YYMD=$yyyymmdd
 
    # tradeday yesterday
-   export pyyyymmdd=`tradeday -1`
+   export pyyyymmdd=`tradeday -d $yyyymmdd -1`
    export PYYYYMMDD=$pyyyymmdd
    export pyyyy=`echo $pyyyymmdd|cut -c1-4`
    export   pmm=`echo $pyyyymmdd|cut -c5-6`
    export   pdd=`echo $pyyyymmdd|cut -c7-8`
 
    # tradeday tomorrow
-   export tyyyymmdd=`tradeday +1`
+   export tyyyymmdd=`tradeday -d $yyyymmdd +1`
    export tyyyy=`echo $tyyyymmdd|cut -c1-4`
    export   tmm=`echo $tyyyymmdd|cut -c5-6`
                                                      
@@ -62,7 +83,3 @@ echo "
    HHMMSS HH MM SS = $HHMMSS $HH $MM $SS
    hhmmss          = $hhmmss
 "
-
-
-
-
