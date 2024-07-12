@@ -299,7 +299,7 @@ my $method_syntax = {
       required => [qw(db db_type)],
       optional => [
          qw(table template where_clause order_clause example_clause
-           extra_clause header)
+           extra_clause header top)
       ],
    },
    cmd => {
@@ -366,11 +366,11 @@ sub resolve_files {
    if ( !$type ) {
       # if user used string, try to split by space.
       my $resolved = resolve_scalar_var_in_string( $files_v, { %known, %vars } );
-      
+
       # trim leading and trailing spaces
       $resolved =~ s/^\s+//;
       $resolved =~ s/\s+$//;
-      
+
       @files = split /\s+/, $resolved;
    } elsif ( $type eq 'ARRAY' ) {
       # if user used ARRAY, don't split it by space.
@@ -1042,6 +1042,7 @@ sub craft_sql {
    my $footer = "";
 
    my $MaxExtracts = $opt->{MaxExtracts};
+   my $top         = $method_cfg->{top} ? $method_cfg->{top} : $MaxExtracts;
 
    my $template = $method_cfg->{template};
    if ($template) {
@@ -1117,12 +1118,12 @@ sub craft_sql {
          if ( $db_type =~ /mssql/i ) {
             $is_mssql = 1;
 
-            $mssql_specific1 = "top $MaxExtracts";
+            $mssql_specific1 = "top $top";
             $mssql_specific2 = 'with (nolock)';
          } elsif ( $db_type =~ /mysql/i ) {
             $is_mysql = 1;
 
-            $mysql_specific1 = "LIMIT $MaxExtracts;";
+            $mysql_specific1 = "LIMIT $top;";
          }
       }
 
@@ -1549,7 +1550,7 @@ EOF
       #    - sometime the code forgot updating it
       #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
       my $count = scalar(@lines);
-      
+
       if ($Tail) {
          if ( $count > $Tail ) {
             print "(Truncated. Total $count, only displayed tail $Tail.)\n";
