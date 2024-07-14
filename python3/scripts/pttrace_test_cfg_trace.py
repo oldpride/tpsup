@@ -186,6 +186,7 @@ our_cfg = {
             'method_cfg': {
                 'db': 'tptest@tpdbmssql',
                 'db_type': 'mssql',
+                'top': 30,
                 'where_clause': {
                     # one order can have multiple trades
                     'TRADEID': 'tradeid',

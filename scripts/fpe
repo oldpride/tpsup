@@ -7,7 +7,8 @@ use Getopt::Long;
 use Carp;
 # use Carp::Always;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 sub usage {
    my ($message) = @_;
@@ -20,7 +21,9 @@ usage:
  
 description:
 
-   formula = 1/2*M*V*V = velcoity (fps) x velocity (fps) x weight (grains) / 450240
+   fpe formula = 1/2*M*V*V = velcoity (fps) x velocity (fps) x weight (grains) / 450240
+   
+   1 pfe = 1.356 joule
 
 examples:
 
@@ -33,12 +36,15 @@ END
 
 my $verbose;
 
-GetOptions(
-   'v|verbose'     => \$verbose,
-) || usage("cannot parse command line: $!");
+GetOptions( 'v|verbose' => \$verbose, ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 2;
 
-my ($grain, $fps) = @ARGV;
+my ( $grain, $fps ) = @ARGV;
 
-print $grain*$fps*$fps/450240, "\n";
+my $fpe = $grain * $fps * $fps / 450240;
+# round to 3 decimal places
+printf "%.3f fpe\n", $fpe;
+
+my $joule = $fpe * 1.356;
+printf "%.3f joule\n", $joule;

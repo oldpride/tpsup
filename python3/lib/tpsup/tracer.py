@@ -724,6 +724,9 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
 
     footer = ""
     MaxExtracts = opt.get('MaxExtracts', None)
+    top = method_cfg.get('top', None)
+    if top is None:
+        top = MaxExtracts
     template = method_cfg.get('template', None)
 
     if template:
@@ -798,12 +801,12 @@ def craft_sql(entity: str, method_cfg: dict, dict1: dict, **opt):
             if re.search('mssql', db_type, re.IGNORECASE):
                 is_mssql = True
 
-                mssql_specific1 = f"top {MaxExtracts}"
+                mssql_specific1 = f"top {top}"
                 mssql_specific2 = 'with (nolock)'
             elif re.search('mysql', db_type, re.IGNORECASE):
                 is_mysql = True
 
-                mysql_specific1 = f"LIMIT {MaxExtracts};"
+                mysql_specific1 = f"LIMIT {top};"
 
         header = method_cfg.get('header', '*')
         # header's function can be replaced by template
@@ -1062,11 +1065,13 @@ method_syntax = {
     },
     'db': {
         'required': ['db', 'db_type'],
-        'optional': ['table', 'template', 'where_clause', 'order_clause', 'example_clause', 'extra_clause', 'header'],
+        'optional': ['table', 'template', 'where_clause', 'order_clause', 
+                     'example_clause', 'extra_clause', 'header', 'top'],
     },
     'cmd': {
         'required': ['type', 'value'],
-        'optional': ['example', 'file', 'grep', 'logic', 'MatchPattern', 'ExcludePattern', 'extract'],
+        'optional': ['example', 'file', 'grep', 'logic', 'MatchPattern', 
+                     'ExcludePattern', 'extract'],
     },
     'log': {
         'required': ['log', 'extract'],
@@ -1074,7 +1079,8 @@ method_syntax = {
     },
     'section': {
         'required': ['log', 'ExtractPatterns'],
-        'optional': ['PreMatch', 'PreExclude', 'PostMatch', 'PostExclude', 'BeginPattern', 'EndPattern', 'KeyType', 'KeyDefault'],
+        'optional': ['PreMatch', 'PreExclude', 'PostMatch', 'PostExclude', 
+                     'BeginPattern', 'EndPattern', 'KeyType', 'KeyDefault'],
     },
     'path': {
         'required': ['paths'],
