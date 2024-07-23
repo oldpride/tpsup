@@ -1,0 +1,457 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use TPSUP::UTIL qw(get_user top_array);
+# import basename() from File::Basename
+use File::Basename qw(basename);
+use TPSUP::PRINT   qw(commify);
+
+my $prog = basename($0);
+$prog =~ s:[.].*::;    # dufind.new =>> dufind
+
+my $dir = $0;
+$dir =~ s:[^/]+$::;
+
+my $username = get_user();
+my $yyyymmdd = `date +%Y%m%d`;
+chomp $yyyymmdd;
+my $store_file = "/tmp/$prog.$username.$yyyymmdd.txt";
+
+my $exclude_pattern;
+my $max_depth        = 10;
+my $expiration_hours = 120;    # hours
+
+# stop searching other items under a folder if we already searched this percent of parent
+my $stop_percent = 70;
+
+my @no_du_dirs = (
+   '.zfs',         # cannot du. will cause dead loop
+   '.snapshot',    # cannot count this into du
+);
+my $du_cmd = "du";
+my $no_du;
+for my $dir (@no_du_dirs) {
+   $du_cmd .= " --exclude=$dir";
+   $no_du->{$dir} = 1;
+}
+
+# cannot or no need to drill into these dirs
+# my $no_drill_in_pattern  = '^[._]';
+my $no_drill_in_compiled = qr/^[._-]/;
+
+# my @no_drill_in_dirs = ( '.', '..', '.zfs', '.snapshot', '.git', '.vscode', '__pycache__', 'log', 'logs' );
+my @no_drill_in_dirs = ( 'log', 'logs', 'tmp' );
+my $no_drill_in;
+for my $dir (@no_drill_in_dirs) {
+   $no_drill_in->{$dir} = 1;
+}
+
+sub usage {
+   my ($msg) = @_;
+
+   print STDERR "$msg\n" if $msg;
+
+   print STDERR << "EOF";
+usage:
+
+   $prog mount_point
+
+description:
+   
+   find big disk usage under mount_point
+
+   -v                     verbose mode
+
+   -x exclude_pattern     Perl RegEx style, exclude.
+
+   -stop percent          stop checking the current folder further after
+                          this percent of size is investigated.
+                          default to $stop_percent
+
+   -reset pattern         reset du store's files that match this pattern.
+                          default to no reset.
+                          to reset all, use 'all' or '.*'.
+
+   -e expiration_hours    in hours. default to $expiration_hours
+
+   -f store_file          default to $store_file
+
+   -depth int             max depth (level) to drill in. default to $max_depth.
+                          command line level is 0.
+
+   -hist                  compare with historical size
+
+   The following dirs are not drilled in: @no_drill_in_dirs
+
+   When 'du', 'du' excludes these dirs: @no_du_dirs.
+
+examples:
+
+   $prog .
+
+EOF
+
+   # -k count in kilobytes
+
+   exit 1;
+}
+
+my ( $verbose, $unit, $reset, $hist );
+
+GetOptions(
+   "x=s"     => \$exclude_pattern,
+   "v"       => \$verbose,
+   "reset=s" => \$reset,
+   "e=s"     => \$expiration_hours,
+   "stop=s"  => \$stop_percent,
+   "depth=s" => \$max_depth,
+   "hist"    => \$hist,
+
+) or usage("Could not parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my $base = $ARGV[0];
+my $abs  = `cd $base; pwd`;
+chomp $abs;
+$base = $abs;
+
+my $now_sec        = time();
+my $expiration_sec = $expiration_hours * 3600;
+my $cutoff_sec     = $now_sec - $expiration_sec;
+
+my $exclude_compiled = $exclude_pattern ? qr/$exclude_pattern/ : undef;
+
+my $top = 2;
+my $size_by_path;
+# my $unit_divsor = $k ? 1024 : 1;
+# my $unit_name   = $k ? 'k'  : 'byte';
+# my $unit_flag   = $k ? '-k' : '';
+
+# get df usage
+my $os = 'uname -a';
+
+my $cmd = $os =~ /^Linux/ ? "df -kP $base" : "df -k $base";
+
+my @DF = `$cmd`;
+
+if ( !$DF[1] ) {
+   croak "cmd='$cmd' failed" . return undef;
+}
+
+chomp @DF;
+
+# Filesystem     1K-blocks      Used Available Use% Mounted on
+# C:             498687252 238734208 259953044  48% /cygdrive/c
+
+my @a = split /\s+/, $DF[1];
+
+my $used        = $a[2];
+my $mount_point = $a[5];
+
+print "mount_point=$mount_point, used=${used}k\n";
+
+# to protect against cross over mount points, we use 'find' command to make sure
+# that we stay within the same mount point.
+# mount points is normally near root level, therefore, we only drill in 2 levels
+my $find_depth        = $max_depth > 2 ? 2 : $max_depth;
+my @find_prune_dirs   = ( ".zfs", "snapshot", ".git", ".vscode", "__pycache__" );
+my $find_prune_clause = "-name " . join( " -o -name ", @find_prune_dirs );
+my $find_cmd = "find $base -mount -maxdepth $find_depth \\( $find_prune_clause \\) -print -prune -o -type d -print";
+$verbose && print "find_cmd=$find_cmd\n";
+my @find_dirs = `$find_cmd`;
+
+$verbose && print "dirs within this mount =\n @find_dirs\n\n";
+chomp @find_dirs;
+
+my $within_mount_point = {};
+for my $dir (@find_dirs) {
+   $within_mount_point->{$dir} = 1;
+}
+
+my $print_format = '%11sk %s %s' . "\n";    # right-align size %13s, left-align path %-13s
+
+# my @todos = ( [ $base, $used, 0 ] );
+my @todos;
+if ( $base eq $mount_point ) {
+   @todos = ( [ $base, $used, 0 ] );
+} else {
+   my $size = du_1_node($base);
+   @todos = ( [ $base, $size, 0 ] );
+}
+
+while (@todos) {
+   my $todo = shift @todos;
+   my ( $path, $size, $level ) = @$todo;
+   print "\n";
+   printf $print_format, commify($size), $path, "level=$level";
+
+   my $short2 = basename($path);
+   if ( -d $path && !$no_drill_in->{$short2} && $short2 !~ $no_drill_in_compiled ) {
+      my @fulls;
+      opendir( DIR, $path ) or die "Cannot open $path\n";
+      my @shorts = readdir(DIR);
+      closedir(DIR);
+
+      for my $short (@shorts) {
+         next if $short eq '.' or $short eq '..' or $no_du->{$short};
+
+         my $full = "$path/$short";    # full path is not necessarily absolute path
+         if ($exclude_compiled) {
+            if ( $short =~ $exclude_compiled ) {
+               $verbose && print "skip $short, exclude_pattern=$exclude_pattern\n";
+               next;
+            }
+            if ( $full =~ $exclude_compiled ) {
+               $verbose && print "skip $full, exclude_pattern=$exclude_pattern\n";
+               next;
+            }
+         }
+         if ( -d $full && $level < $find_depth && !$within_mount_point->{$full} ) {
+            print "skip $full, not within the same mount point\n";
+            next;
+         }
+
+         push @fulls, $full;
+      }
+
+      my @big_ones = find_the_big_ones( \@fulls, { parent_size => $size } );
+      for my $path (@big_ones) {
+         my $size       = $size_by_path->{$path};
+         my $next_level = $level + 1;
+         printf $print_format, commify($size), $path, "level=$next_level";
+      }
+
+      if ( $level < $max_depth ) {
+         push @todos, map { [ $_, $size_by_path->{$_}, $level + 1 ] } @big_ones;
+      } else {
+         for my $path (@big_ones) {
+            printf $print_format, $size_by_path->{$path}, $path, "reached max_depth=$max_depth";
+         }
+      }
+   }
+}
+
+if ($hist) {
+   # compare historical files to see where the big change came from
+
+   my $threshold_percent = 10;
+   my $threshold_size    = 10 * 1024;    # unit is k, ie, 1024
+
+   my $hist_format = '%11sk %s' . "\n";  # right-align size %13s, left-align path %-13s
+
+   my $du_by_yyyymmdd_abs = get_du_history();
+
+   my @days = sort( keys %$du_by_yyyymmdd_abs );
+
+   if ( @days < 2 ) {
+      print "cannot compare history because we have less than 2 days data";
+   } else {
+      # take the last two days
+      my $day1 = $days[-2];
+      my $day2 = $days[-1];
+
+      my $du1 = $du_by_yyyymmdd_abs->{$day1};
+      my $du2 = $du_by_yyyymmdd_abs->{$day2};
+
+      for my $abs ( keys %$du2 ) {
+         my $size2 = $du2->{$abs};
+         my $size1 = $du1->{$abs};
+
+         my $diff;
+
+         if ( defined $size1 ) {
+            $diff = $size2 - $size1;
+         } else {
+            $diff = $size2;
+         }
+
+         if ( abs($diff) > $threshold_size ) {
+            printf $hist_format, $diff, $abs;
+            next;
+         }
+
+         # get parent
+         my $parent2      = dirname($abs);
+         my $parent2_size = $du2->{$parent2};
+         my $parent1_size = $du1->{$parent2};
+         if ($parent1_size) {
+            # find the max size of parents
+            my $parent_max   = max( $parent1_size, $parent2_size );
+            my $diff_percent = 100 * int( 1.0 * abs($diff) / $parent_max );
+            if ( $diff_percent > $threshold_percent ) {
+               print $hist_format, $diff, $abs;
+            }
+         }
+      }
+   }
+}
+
+exit 0;
+
+#############################################
+# subroutines
+#############################################
+sub find_the_big_ones {
+   my ( $paths, $opt ) = @_;
+
+   my $parent_size = $opt->{parent_size};
+   my $stop_size;
+   if ($parent_size) {
+      $stop_size = $parent_size * $stop_percent;
+   }
+
+   my $sub_total_size = 0;
+   for my $path (@$paths) {
+      my $size;
+      if ( -d $path ) {
+         $size = du_1_node($path);
+         $verbose && print "dir=$path, size=${size}k\n";
+      } elsif ( -f $path ) {
+         $size = -s $path;
+         $size = int( $size / 1024 );
+         $verbose && print "file=$path, size=${size}k\n";
+      } else {
+         $verbose && print "path=$path is not a file or directory\n";
+         next;
+      }
+      $size_by_path->{$path} = $size;
+      $sub_total_size += $size;
+      if ( $sub_total_size > $stop_size ) {
+         last;
+      }
+   }
+
+   # somme $size_by_path->{} may not be defined. but as we only pick the biggest ones, it should be ok.
+   my @sized_paths = grep { exists( $size_by_path->{$_} ) } @$paths;
+
+   # $b is before $a because we want to sort in reverse order
+   my @sorted = sort { $size_by_path->{$b} <=> $size_by_path->{$a} } @sized_paths;
+
+   # perl slice will insert undef if ending index is beyond
+   return @{ top_array( \@sorted, $top ) };
+}
+
+my $du_by_abs = {};
+my $du_store_ofh;
+
+sub du_1_node {
+   my ( $abs, $opt ) = @_;
+
+   if ( !$du_store_ofh ) {
+      $du_store_ofh = init_du_store($opt);    # this also init $du_by_abs
+   }
+
+   if ( exists $du_by_abs->{$abs} ) {
+      my $size = $du_by_abs->{$abs};
+      $verbose && print "found du in store file: $size $abs\n";
+      return $size;
+   }
+
+   my $cmd = "$du_cmd -sk $abs";
+   $verbose && print "cmd=$cmd\n";
+
+   my $output = `$cmd`;
+   return undef if $?;
+
+   #    $ du -sk Linux
+   # 12      Linux
+   chomp $output;
+   my ( $size, $path2 ) = split /\s+/, $output, 2;
+   $du_by_abs->{$abs} = $size;
+   print $du_store_ofh "$size $now_sec $abs\n";
+
+   return $size;
+}
+
+sub init_du_store {
+   my ($opt) = @_;
+
+   my @to_keep;
+   my $file_need_change;
+
+   my $reset_compiled;
+   if ( $reset && $reset ne 'all' ) {
+      $reset_compiled = qr/$reset/;
+   }
+
+   if ( -f $store_file && ( !$reset or $reset ne 'all' ) ) {
+      open my $ifh, "<$store_file" or croak "cannot read $store_file: $!";
+      while ( my $line = <$ifh> ) {
+         chomp $line;
+         next if !$line;
+
+         if ($reset_compiled) {
+            if ( $line =~ $reset_compiled ) {
+               $verbose && print "reset pattern matched $line in store, will refresh\n";
+               $file_need_change++;
+               next;
+            }
+         }
+
+         my ( $size, $sec_stamp, $abs ) = split /\s+/, $line, 3;
+         if ( $sec_stamp < $cutoff_sec ) {
+            $verbose && print "skip $abs, old_time=$sec_stamp < cutoff_time=$cutoff_sec\n";
+            $file_need_change++;
+            next;
+         }
+         $du_by_abs->{$abs} = $size;
+         push @to_keep, $line;
+      }
+      close $ifh;
+   }
+
+   my $ofh;
+   if ( $file_need_change or ( $reset and $reset eq 'all' ) ) {
+      $verbose && print "rewrite store file: $store_file\n";
+      open $ofh, ">$store_file" or croak "cannot write to $store_file: $!";
+      print $ofh "$_\n" for @to_keep;
+   } else {
+      $verbose && print "append to store file: $store_file\n";
+      open $ofh, ">>$store_file" or croak "cannot append to $store_file: $!";
+   }
+
+   return $ofh;
+}
+
+sub get_du_history {
+   my ($opt) = @_;
+
+   # my $store_file = "/tmp/$prog.$username.$yyyymmdd.txt";
+
+   my @files = `ls /tmp/$prog.$username.*.txt`;
+   chomp @files;
+
+   # # exclude today's file
+   # @files = grep { $_ !~ /$yyyymmdd/ } @files;
+
+   my $du_by_yyyymmdd_abs = {};
+
+   for my $f (@files) {
+      # my $store_file = "/tmp/$prog.$username.$yyyymmdd.txt";
+
+      # extract yyyymmdd from file name
+      my @a = split /[.]/, $f;
+      my $yyyymmdd = $a[2];
+
+      open my $ifh, "<$f" or die "cannot read $f: $!";
+
+      my $r = {};
+      while ( my $line = <$ifh> ) {
+         chomp $line;
+         next if !$line;
+
+         my ( $size, $sec_stamp, $abs ) = split /\s+/, $line, 3;
+         $r->{$abs} = $size;
+      }
+
+      close $ifh;
+
+      $du_by_yyyymmdd_abs->{$yyyymmdd} = $r;
+   }
+
+   return $du_by_yyyymmdd_abs;
+}
