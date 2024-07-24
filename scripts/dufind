@@ -6,7 +6,7 @@ use Getopt::Long;
 use Carp;
 use TPSUP::UTIL qw(get_user top_array);
 # import basename() from File::Basename
-use File::Basename qw(basename);
+use File::Basename qw(basename dirname);
 use TPSUP::PRINT   qw(commify);
 
 my $prog = basename($0);
@@ -21,8 +21,10 @@ chomp $yyyymmdd;
 my $store_file = "/tmp/$prog.$username.$yyyymmdd.txt";
 
 my $exclude_pattern;
-my $max_depth        = 10;
-my $expiration_hours = 120;    # hours
+my $max_depth = 10;
+
+my $expiration_hours = 12;    # hours.
+# as we use daily store file, expiration hour should be less than 24
 
 # stop searching other items under a folder if we already searched this percent of parent
 my $stop_percent = 70;
@@ -237,11 +239,12 @@ while (@todos) {
 
 if ($hist) {
    # compare historical files to see where the big change came from
+   print "\n";
 
-   my $threshold_percent = 10;
-   my $threshold_size    = 10 * 1024;    # unit is k, ie, 1024
+   # my $threshold_percent = 10;
+   my $threshold_size = 1 * 1024;    # unit is k, ie, 1024
 
-   my $hist_format = '%11sk %s' . "\n";  # right-align size %13s, left-align path %-13s
+   my $hist_format = '%11sk %s' . "\n";    # right-align size %13s, left-align path %-13s
 
    my $du_by_yyyymmdd_abs = get_du_history();
 
@@ -254,38 +257,50 @@ if ($hist) {
       my $day1 = $days[-2];
       my $day2 = $days[-1];
 
+      print "compare with historical size between $day1 and $day2\n";
+
       my $du1 = $du_by_yyyymmdd_abs->{$day1};
       my $du2 = $du_by_yyyymmdd_abs->{$day2};
 
-      for my $abs ( keys %$du2 ) {
-         my $size2 = $du2->{$abs};
-         my $size1 = $du1->{$abs};
+      # print "du1=", Dumper($du1);
+      # print "du2=", Dumper($du2);
+
+      for my $abs ( sort( keys %$du2 ) ) {
+         # print "abs=$abs\n";
+
+         my ( $size2, $type2 ) = @{ $du2->{$abs} };
 
          my $diff;
-
-         if ( defined $size1 ) {
+         if ( $du1->{$abs} ) {
+            my ( $size1, $type1 ) = @{ $du1->{$abs} };
             $diff = $size2 - $size1;
          } else {
             $diff = $size2;
          }
 
          if ( abs($diff) > $threshold_size ) {
-            printf $hist_format, $diff, $abs;
+            printf $hist_format, commify($diff), $abs;
             next;
          }
 
-         # get parent
-         my $parent2      = dirname($abs);
-         my $parent2_size = $du2->{$parent2};
-         my $parent1_size = $du1->{$parent2};
-         if ($parent1_size) {
-            # find the max size of parents
-            my $parent_max   = max( $parent1_size, $parent2_size );
-            my $diff_percent = 100 * int( 1.0 * abs($diff) / $parent_max );
-            if ( $diff_percent > $threshold_percent ) {
-               print $hist_format, $diff, $abs;
-            }
-         }
+         # # get parent
+         # # my $parent2 = $abs;
+         # # $parent2 =~ s:/[^/]+$::;    # dirname
+         # my $parent2    = dirname($abs);
+         # my $parent2_du = $du2->{$parent2};
+         # my $parent1_du = $du1->{$parent2};
+         # if ($parent1_du) {
+         #    # find the max size of parents
+         #    my ( $parent1_size, $parent1_type ) = @$parent1_du;
+         #    my ( $parent2_size, $parent2_type ) = @$parent2_du;
+
+         #    my $parent_max   = $parent1_size > $parent2_size ? $parent1_size : $parent2_size;
+         #    my $diff_percent = 100 * int( 1.0 * abs($diff) / $parent_max );
+         #    print "parent_max=$parent_max, diff_percent=$diff_percent, $abs\n";
+         #    if ( $diff_percent > $threshold_percent ) {
+         #       print $hist_format, $diff, $abs;
+         #    }
+         # }
       }
    }
 }
@@ -337,6 +352,8 @@ sub du_1_node {
       $du_store_ofh = init_du_store($opt);    # this also init $du_by_abs
    }
 
+   my $store_format = '%s %7s %10s %s' . "\n";    # right-align size %13s, left-align path %-13s
+
    if ( -d $abs ) {
       if ( exists $du_by_abs->{$abs} ) {
          my ( $size, $type ) = @{ $du_by_abs->{$abs} };
@@ -355,7 +372,7 @@ sub du_1_node {
       chomp $output;
       my ( $size, $path2 ) = split /\s+/, $output, 2;
       $du_by_abs->{$abs} = [ $size, 'd' ];
-      print $du_store_ofh "$size $now_sec d $abs\n";
+      printf $du_store_ofh $store_format, 'd', $size, $now_sec, $abs;
       return $size;
    } elsif ( -f $abs ) {
       my $size = -s $abs;
@@ -363,7 +380,7 @@ sub du_1_node {
       $du_by_abs->{$abs} = [ $size, 'f' ];
       if ( $size > 1024 ) {
          # only store big files
-         print $du_store_ofh "$size $now_sec f $abs\n";
+         printf $du_store_ofh $store_format, 'f', $size, $now_sec, $abs;
       }
       return $size;
    } else {
@@ -439,7 +456,7 @@ sub get_du_history {
          chomp $line;
          next if !$line;
 
-         my ( $size, $sec_stamp, $type, $abs ) = split /\s+/, $line, 3;
+         my ( $type, $size, $sec_stamp, $abs ) = split /\s+/, $line, 4;
          $r->{$abs} = [ $size, $type ];
       }
 
