@@ -306,18 +306,10 @@ sub find_the_big_ones {
 
    my $sub_total_size = 0;
    for my $path (@$paths) {
-      my $size;
-      if ( -d $path ) {
-         $size = du_1_node($path);
-         $verbose && print "dir=$path, size=${size}k\n";
-      } elsif ( -f $path ) {
-         $size = -s $path;
-         $size = int( $size / 1024 );
-         $verbose && print "file=$path, size=${size}k\n";
-      } else {
-         $verbose && print "path=$path is not a file or directory\n";
-         next;
-      }
+      my $size = du_1_node($path);
+
+      next if !defined $size;
+
       $size_by_path->{$path} = $size;
       $sub_total_size += $size;
       if ( $sub_total_size > $stop_size ) {
@@ -345,33 +337,45 @@ sub du_1_node {
       $du_store_ofh = init_du_store($opt);    # this also init $du_by_abs
    }
 
-   if ( exists $du_by_abs->{$abs} ) {
-      my $size = $du_by_abs->{$abs};
-      $verbose && print "found du in store file: $size $abs\n";
+   if ( -d $abs ) {
+      if ( exists $du_by_abs->{$abs} ) {
+         my ( $size, $type ) = @{ $du_by_abs->{$abs} };
+         $verbose && print "found du in store file: $size $abs\n";
+         return $size;
+      }
+
+      my $cmd = "$du_cmd -sk $abs";
+      $verbose && print "cmd=$cmd\n";
+
+      my $output = `$cmd`;
+      return undef if $?;
+
+      #    $ du -sk Linux
+      # 12      Linux
+      chomp $output;
+      my ( $size, $path2 ) = split /\s+/, $output, 2;
+      $du_by_abs->{$abs} = [ $size, 'd' ];
+      print $du_store_ofh "$size $now_sec d $abs\n";
       return $size;
+   } elsif ( -f $abs ) {
+      my $size = -s $abs;
+      $size = int( $size / 1024 );
+      $du_by_abs->{$abs} = [ $size, 'f' ];
+      if ( $size > 1024 ) {
+         # only store big files
+         print $du_store_ofh "$size $now_sec f $abs\n";
+      }
+      return $size;
+   } else {
+      $verbose && print "path=$abs is not a file or directory\n";
+      return undef;
    }
-
-   my $cmd = "$du_cmd -sk $abs";
-   $verbose && print "cmd=$cmd\n";
-
-   my $output = `$cmd`;
-   return undef if $?;
-
-   #    $ du -sk Linux
-   # 12      Linux
-   chomp $output;
-   my ( $size, $path2 ) = split /\s+/, $output, 2;
-   $du_by_abs->{$abs} = $size;
-   print $du_store_ofh "$size $now_sec $abs\n";
-
-   return $size;
 }
 
 sub init_du_store {
    my ($opt) = @_;
 
    my @to_keep;
-   my $file_need_change;
 
    my $reset_compiled;
    if ( $reset && $reset ne 'all' ) {
@@ -387,32 +391,23 @@ sub init_du_store {
          if ($reset_compiled) {
             if ( $line =~ $reset_compiled ) {
                $verbose && print "reset pattern matched $line in store, will refresh\n";
-               $file_need_change++;
                next;
             }
          }
 
-         my ( $size, $sec_stamp, $abs ) = split /\s+/, $line, 3;
+         my ( $size, $sec_stamp, $type, $abs ) = split /\s+/, $line, 4;
          if ( $sec_stamp < $cutoff_sec ) {
             $verbose && print "skip $abs, old_time=$sec_stamp < cutoff_time=$cutoff_sec\n";
-            $file_need_change++;
             next;
          }
-         $du_by_abs->{$abs} = $size;
+         $du_by_abs->{$abs} = [ $size, $type ];
          push @to_keep, $line;
       }
       close $ifh;
    }
 
-   my $ofh;
-   if ( $file_need_change or ( $reset and $reset eq 'all' ) ) {
-      $verbose && print "rewrite store file: $store_file\n";
-      open $ofh, ">$store_file" or croak "cannot write to $store_file: $!";
-      print $ofh "$_\n" for @to_keep;
-   } else {
-      $verbose && print "append to store file: $store_file\n";
-      open $ofh, ">>$store_file" or croak "cannot append to $store_file: $!";
-   }
+   open my $ofh, ">$store_file" or croak "cannot write to $store_file: $!";
+   print $ofh "$_\n" for @to_keep;
 
    return $ofh;
 }
@@ -444,8 +439,8 @@ sub get_du_history {
          chomp $line;
          next if !$line;
 
-         my ( $size, $sec_stamp, $abs ) = split /\s+/, $line, 3;
-         $r->{$abs} = $size;
+         my ( $size, $sec_stamp, $type, $abs ) = split /\s+/, $line, 3;
+         $r->{$abs} = [ $size, $type ];
       }
 
       close $ifh;
