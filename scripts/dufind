@@ -412,7 +412,7 @@ sub init_du_store {
             }
          }
 
-         my ( $size, $sec_stamp, $type, $abs ) = split /\s+/, $line, 4;
+         my ( $type, $size, $sec_stamp, $abs ) = split /\s+/, $line, 4;
          if ( $sec_stamp < $cutoff_sec ) {
             $verbose && print "skip $abs, old_time=$sec_stamp < cutoff_time=$cutoff_sec\n";
             next;
