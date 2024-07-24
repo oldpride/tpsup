@@ -352,7 +352,7 @@ sub du_1_node {
       $du_store_ofh = init_du_store($opt);    # this also init $du_by_abs
    }
 
-   my $store_format = '%s %7s %10s %s' . "\n";    # right-align size %13s, left-align path %-13s
+   my $store_format = '%s %10s %10s %s' . "\n";    # right-align size %13s, left-align path %-13s
 
    if ( -d $abs ) {
       if ( exists $du_by_abs->{$abs} ) {
