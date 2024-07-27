@@ -697,16 +697,25 @@ functions() {
    echo "to see detail: typeset -f"
 }
 
-cd "$TPSUP"/profile.d/
-for f in *; do
-   if [[ $f =~ [.~] ]]; then # regex
-      # skip .sav, .deco, .yyyymmdd
-      continue
-   fi
 
-   eval "function $f { . '$TPSUP/profile.d/$f'; }"
-done
-cd - >/dev/null
+load_profile_d() {
+   local f dir
+   dir=$1
+
+   cd "$dir" || return
+   for f in *; do
+      # skip .sav, .deco, .yyyymmdd and backup files '~'
+      if [[ $f =~ [.~] ]]; then # regex
+         continue
+      fi
+
+      eval "function $f { . '$dir/$f'; }"
+   done
+
+   cd - >/dev/null
+}
+
+load_profile_d "$TPSUP/profile.d"
 
 wbar() {
    # window bar
