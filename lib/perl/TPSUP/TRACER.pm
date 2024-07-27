@@ -1553,7 +1553,7 @@ EOF
       #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
       my $count = scalar(@lines);
 
-      print_top_tail_info( $count, $Top, $Tail );
+      print_count_top_tail( $count, $Top, $Tail );
    }
 
    if (@headers) {
@@ -1583,7 +1583,7 @@ EOF
       print Dumper( top_array( \@hashes, $Top ) );
       print "\n";
       my $count = scalar(@hashes);
-      print_top_tail_info( $count, $Top, $Tail );
+      print_count_top_tail( $count, $Top, $Tail );
    }
 
    if ( !$opt->{isExample} ) {
@@ -1646,13 +1646,17 @@ EOF
    return \%r;
 }
 
-sub print_top_tail_info {
+sub print_count_top_tail {
    my ( $count, $Top, $Tail ) = @_;
 
-   if ( $count > $Top ) {
-      print "(Truncated. Total $count, only displayed top $Top.)\n";
-   } elsif ( $Tail && $count > $Tail ) {
-      print "(Truncated. Total $count, only displayed tail $Tail.)\n";
+   if ($Tail) {
+      if ( $count > $Tail ) {
+         print "Truncated. Total $count, only displayed tail $Tail.\n";
+      }
+   } else {
+      if ( $count > $Top ) {
+         print "Truncated. Total $count, only displayed top $Top.\n";
+      }
    }
 }
 

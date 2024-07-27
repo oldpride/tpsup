@@ -1766,7 +1766,6 @@ process {entity}
         [opt, entity_cfg], 'tail', default=None)
     Top = get_first_by_key(
         [opt, entity_cfg], 'top', default=5)
-    MaxRows = None
 
     log_FileFuncLine(f"\nprint result")
     # display the top results
@@ -1786,22 +1785,16 @@ process {entity}
         #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
         count = len(lines)
 
-        if Tail:
-            if count > Tail:
-                print(
-                    f"(Truncated. Total {count}, only displayed tail {Tail}.)\n")
-                MaxRows = Tail
-        else:
-            if count > Top:
-                print(
-                    f"(Truncated. Total {count}, only displayed top  {Top}.)\n")
-                MaxRows = Top
+        print_count_top_tail(count, Top, Tail)
 
     if headers:
         MaxColumnWidth = entity_cfg.get('MaxColumnWidth', None)
         print(f"MaxColumnWidth = {MaxColumnWidth}") if MaxColumnWidth else None
 
-        print(f"top {Top} of hashes")
+        if Tail:
+            MaxRows = Tail
+        else:
+            MaxRows = Top
         render_arrays(hashes,
                       MaxColumnWidth=MaxColumnWidth,
                       MaxRows=MaxRows,
@@ -1810,8 +1803,7 @@ process {entity}
                       )
         print("\n")
         count = len(hashes)
-        if count > Top:
-            print(f"(Truncated. Total {count}, only displayed top {Top}.)\n")
+        print_count_top_tail(count, Top, Tail)
 
     if hashes and (verbose or not headers):
         # we print this only when we didn't print render_csv() or verbose mode
@@ -1870,6 +1862,15 @@ process {entity}
 
     return r
 
+def print_count_top_tail(count, Top, Tail):
+    if Tail:
+        if count > Tail:
+            print(
+                f"(Truncated. Total {count}, only displayed tail {Tail}.)\n")
+    else:
+        if count > Top:
+            print(
+                f"(Truncated. Total {count}, only displayed top  {Top}.)\n")
 
 def apply_csv_filters(filters: list, **opt):
     verbose = opt.get('verbose', 0)
