@@ -251,7 +251,7 @@ if ($hist) {
    my @days = sort( keys %$du_by_yyyymmdd_abs );
 
    if ( @days < 2 ) {
-      print "cannot compare history because we have less than 2 days data";
+      print "cannot compare history because we have less than 2 days data\n";
    } else {
       # take the last two days
       my $day1 = $days[-2];

@@ -42,6 +42,7 @@ use TPSUP::UTIL  qw(
   unique_array
   top_array
   tail_array
+  truncate_strings
   resolve_scalar_var_in_string
   tp_quote_wrap
 );
@@ -1531,17 +1532,18 @@ EOF
    my $Tail =
      get_first_by_key( [ $opt, $entity_cfg ], 'tail', { default => undef } );
    my $Top = get_first_by_key( [ $opt, $entity_cfg ], 'top', { default => 5 } );
-   my $MaxRows;
 
    # display the top results
    if (@lines) {
       print "----- lines begin ------\n";
 
+      my $max_line_len = 2000;    # max line length to display
+
       #print @lines[0..$Top];  # array slice will insert undef element if beyond range.
       if ($Tail) {
-         print @{ tail_array( \@lines, $Tail ) };
+         print @{ truncate_strings( tail_array( \@lines, $Tail ), $max_line_len, { AddNewLine => 1 } ) };
       } else {
-         print @{ top_array( \@lines, $Top ) };
+         print @{ truncate_strings( top_array( \@lines, $Top ), $max_line_len, { AddNewLine => 1 } ) };
       }
       print "----- lines end ------\n";
       print "\n";
@@ -1551,17 +1553,7 @@ EOF
       #    - it is ambiguous: scalar(@lines) and scalar(@hashes) may not be the same.
       my $count = scalar(@lines);
 
-      if ($Tail) {
-         if ( $count > $Tail ) {
-            print "(Truncated. Total $count, only displayed tail $Tail.)\n";
-            $MaxRows = $Tail;
-         }
-      } else {
-         if ( $count > $Top ) {
-            print "(Truncated. Total $count, only displayed top  $Top.)\n";
-            $MaxRows = $Top;
-         }
-      }
+      print_top_tail_info( $count, $Top, $Tail );
    }
 
    if (@headers) {
@@ -1573,7 +1565,7 @@ EOF
          {
             %$opt,
             MaxColumnWidth => $MaxColumnWidth,
-            MaxRows        => $MaxRows,
+            MaxRows        => $Tail ? $Tail : $Top,
             TakeTail       => $Tail,
             headers        => \@headers,
             RenderHeader   => 1,
@@ -1591,8 +1583,7 @@ EOF
       print Dumper( top_array( \@hashes, $Top ) );
       print "\n";
       my $count = scalar(@hashes);
-      print "(Truncated. Total $count, only displayed top $Top.)\n"
-        if $count > $Top;
+      print_top_tail_info( $count, $Top, $Tail );
    }
 
    if ( !$opt->{isExample} ) {
@@ -1653,6 +1644,16 @@ EOF
    print "knowledge = ", Dumper( \%known );
 
    return \%r;
+}
+
+sub print_top_tail_info {
+   my ( $count, $Top, $Tail ) = @_;
+
+   if ( $count > $Top ) {
+      print "(Truncated. Total $count, only displayed top $Top.)\n";
+   } elsif ( $Tail && $count > $Tail ) {
+      print "(Truncated. Total $count, only displayed tail $Tail.)\n";
+   }
 }
 
 sub update_knowledge_from_rows {

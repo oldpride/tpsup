@@ -50,6 +50,7 @@ our @EXPORT_OK = qw(
   hashes_to_arrays
   top_array
   tail_array
+  truncate_strings
   parse_rc
   resolve_scalar_var_in_string
   convert_to_uppercase
@@ -1670,6 +1671,35 @@ sub tail_array {
    return \@output;
 }
 
+sub truncate_strings {
+   my ( $aref, $max, $opt ) = @_;
+
+   my $AddNewLine = $opt->{AddNewLine} ? 1 : 0;
+
+   my @output;
+
+   return \@output if !$aref || !@$aref;
+
+   for my $s (@$aref) {
+      my $len = length($s);
+
+      if ( $len > $max ) {
+         $s = substr( $s, 0, $max );
+
+         if ($AddNewLine) {
+            $s .= "...\n";
+         } else {
+            $s .= "...";
+         }
+      }
+
+      push @output, $s;
+   }
+
+   return \@output;
+
+}
+
 sub parse_rc {
    my ( $code, $opt ) = @_;
 
@@ -2037,16 +2067,15 @@ sub main {
 
    # for multiple lines of a declaration, do it outside of the test code; and put it into DUMMY namespace.
    $DUMMY::h = {
-         a => "hello",
-         b => {
-            c => "world",
-            d => 1,
-         },
-         e => [qw(kingdom comes)],
-         f => [ { g => 'galois' } ],
-         j => sub { sleep 1 },
-      };
-
+      a => "hello",
+      b => {
+         c => "world",
+         d => 1,
+      },
+      e => [qw(kingdom comes)],
+      f => [ { g => 'galois' } ],
+      j => sub { sleep 1 },
+   };
 
    my $test_code = <<'END';
       TPSUP::UTIL::convert_to_uppercase( $h, { ConvertKey   => 1 } );
