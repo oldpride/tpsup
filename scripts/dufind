@@ -155,7 +155,7 @@ for my $base (@ARGV) {
       # my $threshold_percent = 10;
       my $threshold_size = 1 * 1024;    # unit is k, ie, 1024
 
-      my $hist_format = '%11sk %s' . "\n";    # right-align size %13s, left-align path %-13s
+      my $hist_format = '%11sk %s %s' . "\n";    # right-align size %13s, left-align path %-13s
 
       my $du_by_yyyymmdd_abs = get_du_history($base);
 
@@ -180,13 +180,16 @@ for my $base (@ARGV) {
          my $diff;
          if ( $du1->{$abs} ) {
             my ( $size1, $type1 ) = @{ $du1->{$abs} };
+            if ( $type1 ne $type2 ) {
+               print "INFO: file type changed from $type1 to $type2, $abs\n";
+            }
             $diff = $size2 - $size1;
          } else {
             $diff = $size2;
          }
 
          if ( abs($diff) > $threshold_size ) {
-            printf $hist_format, commify($diff), $abs;
+            printf $hist_format, commify($diff), $type2, $abs;
             next;
          }
 
@@ -299,6 +302,7 @@ for my $base (@ARGV) {
 
    # this is a breadth first search.
    # to speed up search:
+
    #    1. we cache the result of 'du' command.
    #    2. we stop searching further if we already found 70% of the parent folder.
    #    3. we stop searching further if we reached the max_depth.
