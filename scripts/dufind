@@ -319,10 +319,14 @@ for my $base (@ARGV) {
       my $todo = shift @todos;
       my ( $path, $size, $type, $level ) = @$todo;
       print "\n";
-      printf $print_format, commify($size), $type, $path, "level=$level";
 
       my $short2 = basename($path);
-      if ( -d $path && !$no_drill_in->{$short2} && $short2 !~ $no_drill_in_compiled ) {
+      if ( $type eq 'd' ) {
+         if ( $no_drill_in->{$short2} || $short2 =~ $no_drill_in_compiled ) {
+            printf $print_format, commify($size), $type, $path, "level=$level, no drill in";
+            next;
+         }
+
          my @fulls;
          opendir( DIR, $path ) or die "Cannot open $path\n";
          my @shorts = readdir(DIR);
@@ -364,6 +368,9 @@ for my $base (@ARGV) {
                push @todos, [ $path, $size, $type, $level + 1 ] if $type eq 'd';
             }
          }
+      } else {
+         # this is file: $type eq 'f'
+         printf $print_format, commify($size), $type, $path, "level=$level";
       }
    }
 }
