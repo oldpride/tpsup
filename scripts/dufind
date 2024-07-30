@@ -323,7 +323,10 @@ for my $base (@ARGV) {
       my $short2 = basename($path);
       if ( $type eq 'd' ) {
          if ( $no_drill_in->{$short2} || $short2 =~ $no_drill_in_compiled ) {
-            printf $print_format, commify($size), $type, $path, "level=$level, no drill in";
+            if ( $level == 0 || $verbose ) {
+               # we only print no-drill-in paths on level 0;
+               printf $print_format, commify($size), $type, $path, "level=$level, no drill in";
+            }
             next;
          }
 
