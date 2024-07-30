@@ -329,6 +329,7 @@ for my $base (@ARGV) {
             }
             next;
          }
+         printf $print_format, commify($size), $type, $path, "level=$level";
 
          my @fulls;
          opendir( DIR, $path ) or die "Cannot open $path\n";
