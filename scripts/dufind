@@ -291,10 +291,10 @@ for my $base (@ARGV) {
    # my @todos = ( [ $base, $used, 0 ] );
    my @todos;
    if ( $base eq $mount_point ) {
-      @todos = ( [ $base, 'd', $used, 0 ] );
+      @todos = ( [ $base, $used, 'd', 0 ] );
    } else {
       my ( $size, $type ) = du_1_node($base);
-      @todos = ( [ $base, $type, $size, 0 ] );
+      @todos = ( [ $base, $size, $type, 0 ] );
    }
 
    # this is a breadth first search.
