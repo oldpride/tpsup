@@ -18,13 +18,15 @@ $dir =~ s:[^/]+$::;
 my $username = get_user();
 my $yyyymmdd = `date +%Y%m%d`;
 chomp $yyyymmdd;
-my $store_file = "/tmp/$prog.$username.$yyyymmdd.txt";
+
+my $histpref = "/tmp/$prog.$username";
+my $histfile = "$histpref.$yyyymmdd.txt";
 
 my $exclude_pattern;
 my $max_depth = 10;
 
-my $expiration_hours = 12;    # hours.
-# as we use daily store file, expiration hour should be less than 24
+my $expiration = "12h";    # h: hours, m: minutes, s: seconds
+# as we use daily histfile file, expiration hour should be less than 24
 
 # stop searching other items under a folder if we already searched this percent of parent
 my $stop_percent = 70;
@@ -59,7 +61,7 @@ sub usage {
    print STDERR << "EOF";
 usage:
 
-   $prog mount_point
+   $prog base1 base2 ...
 
 description:
    
@@ -73,18 +75,28 @@ description:
                           this percent of size is investigated.
                           default to $stop_percent
 
-   -reset pattern         reset du store's files that match this pattern.
+   -reset pattern         reset du histfile's files that match this pattern.
                           default to no reset.
                           to reset all, use 'all' or '.*'.
 
-   -e expiration_hours    in hours. default to $expiration_hours
+   -e expiration_time    eg, 1h, 10m, 15s. default to $expiration
+                         h: hours, m: minutes, s: seconds.
 
-   -f store_file          default to $store_file
+   -f histfile          default to $histfile
 
-   -depth int             max depth (level) to drill in. default to $max_depth.
-                          command line level is 0.
+   -depth int           max depth (level) to drill in. default to $max_depth.
+                        command line level is 0.
 
-   -hist                  compare with historical size
+   -histlist            list available history files
+   -hl
+   
+   -histcomp            compare with historical size
+   -hc
+   
+   -histdays yyyymmdd1,yyyymmdd2     compare these two days of history. format: yyyymmdd1,yyyymmdd2. 
+   -hd                  default to last two days.
+   
+
 
    The following dirs are not drilled in: @no_drill_in_dirs
 
@@ -101,163 +113,58 @@ EOF
    exit 1;
 }
 
-my ( $verbose, $unit, $reset, $hist );
+my ( $verbose, $unit, $reset, $histlist, $histcomp, $histdays );
 
 GetOptions(
-   "x=s"     => \$exclude_pattern,
-   "v"       => \$verbose,
-   "reset=s" => \$reset,
-   "e=s"     => \$expiration_hours,
-   "stop=s"  => \$stop_percent,
-   "depth=s" => \$max_depth,
-   "hist"    => \$hist,
+   "x=s"        => \$exclude_pattern,
+   "v"          => \$verbose,
+   "reset=s"    => \$reset,
+   "e=s"        => \$expiration,
+   "stop=s"     => \$stop_percent,
+   "depth=s"    => \$max_depth,
+   "histlist"   => \$histlist,
+   "hl"         => \$histlist,
+   "histcomp"   => \$histcomp,
+   "hc"         => \$histcomp,
+   "histdays=s" => \$histdays,
+   "hd=s"       => \$histdays,
 
 ) or usage("Could not parse command line: $!");
 
-usage("wrong number of args") if @ARGV != 1;
+if ($histlist) {
+   system("ls -1l $histpref.*.txt");
+   exit 0;
+}
 
-my $base = $ARGV[0];
-my $abs  = `cd $base; pwd`;
-chomp $abs;
-$base = $abs;
+usage("wrong number of args") if !@ARGV;
 
-my $now_sec        = time();
-my $expiration_sec = $expiration_hours * 3600;
-my $cutoff_sec     = $now_sec - $expiration_sec;
-
-my $exclude_compiled = $exclude_pattern ? qr/$exclude_pattern/ : undef;
-
+my $cache_by_path;
 my $top = 2;
-my $size_by_path;
-# my $unit_divsor = $k ? 1024 : 1;
-# my $unit_name   = $k ? 'k'  : 'byte';
-# my $unit_flag   = $k ? '-k' : '';
+my $now_sec;
+my $cutoff_sec;
 
-# get df usage
-my $os = 'uname -a';
+for my $base (@ARGV) {
+   my $abs = `cd $base; pwd`;
+   chomp $abs;
+   $base = $abs;
 
-my $cmd = $os =~ /^Linux/ ? "df -kP $base" : "df -k $base";
+   if ($histcomp) {
+      # compare historical files to see where the big change came from
+      print "\n";
 
-my @DF = `$cmd`;
+      # my $threshold_percent = 10;
+      my $threshold_size = 1 * 1024;    # unit is k, ie, 1024
 
-if ( !$DF[1] ) {
-   croak "cmd='$cmd' failed" . return undef;
-}
+      my $hist_format = '%11sk %s' . "\n";    # right-align size %13s, left-align path %-13s
 
-chomp @DF;
+      my $du_by_yyyymmdd_abs = get_du_history($base);
 
-# Filesystem     1K-blocks      Used Available Use% Mounted on
-# C:             498687252 238734208 259953044  48% /cygdrive/c
+      my @days = sort( keys %$du_by_yyyymmdd_abs );
 
-my @a = split /\s+/, $DF[1];
+      my $day1 = $days[0];
+      my $day2 = $days[1];
 
-my $used        = $a[2];
-my $mount_point = $a[5];
-
-print "mount_point=$mount_point, used=${used}k\n";
-
-# to protect against cross over mount points, we use 'find' command to make sure
-# that we stay within the same mount point.
-# mount points is normally near root level, therefore, we only drill in 2 levels
-my $find_depth        = $max_depth > 2 ? 2 : $max_depth;
-my @find_prune_dirs   = ( ".zfs", "snapshot", ".git", ".vscode", "__pycache__" );
-my $find_prune_clause = "-name " . join( " -o -name ", @find_prune_dirs );
-my $find_cmd = "find $base -mount -maxdepth $find_depth \\( $find_prune_clause \\) -print -prune -o -type d -print";
-$verbose && print "find_cmd=$find_cmd\n";
-my @find_dirs = `$find_cmd`;
-
-$verbose && print "dirs within this mount =\n @find_dirs\n\n";
-chomp @find_dirs;
-
-my $within_mount_point = {};
-for my $dir (@find_dirs) {
-   $within_mount_point->{$dir} = 1;
-}
-
-my $print_format = '%11sk %s %s' . "\n";    # right-align size %13s, left-align path %-13s
-
-# my @todos = ( [ $base, $used, 0 ] );
-my @todos;
-if ( $base eq $mount_point ) {
-   @todos = ( [ $base, $used, 0 ] );
-} else {
-   my $size = du_1_node($base);
-   @todos = ( [ $base, $size, 0 ] );
-}
-
-while (@todos) {
-   my $todo = shift @todos;
-   my ( $path, $size, $level ) = @$todo;
-   print "\n";
-   printf $print_format, commify($size), $path, "level=$level";
-
-   my $short2 = basename($path);
-   if ( -d $path && !$no_drill_in->{$short2} && $short2 !~ $no_drill_in_compiled ) {
-      my @fulls;
-      opendir( DIR, $path ) or die "Cannot open $path\n";
-      my @shorts = readdir(DIR);
-      closedir(DIR);
-
-      for my $short (@shorts) {
-         next if $short eq '.' or $short eq '..' or $no_du->{$short};
-
-         my $full = "$path/$short";    # full path is not necessarily absolute path
-         if ($exclude_compiled) {
-            if ( $short =~ $exclude_compiled ) {
-               $verbose && print "skip $short, exclude_pattern=$exclude_pattern\n";
-               next;
-            }
-            if ( $full =~ $exclude_compiled ) {
-               $verbose && print "skip $full, exclude_pattern=$exclude_pattern\n";
-               next;
-            }
-         }
-         if ( -d $full && $level < $find_depth && !$within_mount_point->{$full} ) {
-            print "skip $full, not within the same mount point\n";
-            next;
-         }
-
-         push @fulls, $full;
-      }
-
-      my @big_ones = find_the_big_ones( \@fulls, { parent_size => $size } );
-      for my $path (@big_ones) {
-         my $size       = $size_by_path->{$path};
-         my $next_level = $level + 1;
-         printf $print_format, commify($size), $path, "level=$next_level";
-      }
-
-      if ( $level < $max_depth ) {
-         push @todos, map { [ $_, $size_by_path->{$_}, $level + 1 ] } @big_ones;
-      } else {
-         for my $path (@big_ones) {
-            printf $print_format, $size_by_path->{$path}, $path, "reached max_depth=$max_depth";
-         }
-      }
-   }
-}
-
-if ($hist) {
-   # compare historical files to see where the big change came from
-   print "\n";
-
-   # my $threshold_percent = 10;
-   my $threshold_size = 1 * 1024;    # unit is k, ie, 1024
-
-   my $hist_format = '%11sk %s' . "\n";    # right-align size %13s, left-align path %-13s
-
-   my $du_by_yyyymmdd_abs = get_du_history();
-
-   my @days = sort( keys %$du_by_yyyymmdd_abs );
-
-   if ( @days < 2 ) {
-      print "cannot compare history because we have less than 2 days data\n";
-   } else {
-      # take the last two days
-      my $day1 = $days[-2];
-      my $day2 = $days[-1];
-
-      print "compare with historical size between $day1 and $day2\n";
+      print "compare base=$base historical sizes between $day1 and $day2\n";
 
       my $du1 = $du_by_yyyymmdd_abs->{$day1};
       my $du2 = $du_by_yyyymmdd_abs->{$day2};
@@ -302,6 +209,158 @@ if ($hist) {
          #    }
          # }
       }
+
+      exit 0;
+   }
+
+   my $expiration_sec;
+   if ( $expiration =~ /^(\d+)([hms])$/ ) {
+      my $num  = $1;
+      my $unit = $2;
+
+      if ( $unit eq 'h' ) {
+         $expiration_sec = $num * 3600;
+      } elsif ( $unit eq 'm' ) {
+         $expiration_sec = $num * 60;
+      } elsif ( $unit eq 's' ) {
+         $expiration_sec = $num;
+      } else {
+         usage("wrong expiration unit=$unit");
+      }
+   } else {
+      usage("wrong expiration format=$expiration");
+   }
+
+   $now_sec    = time();
+   $cutoff_sec = $now_sec - $expiration_sec;
+
+   my $exclude_compiled = $exclude_pattern ? qr/$exclude_pattern/ : undef;
+
+   # my $unit_divsor = $k ? 1024 : 1;
+   # my $unit_name   = $k ? 'k'  : 'byte';
+   # my $unit_flag   = $k ? '-k' : '';
+
+   # get df usage
+   my $os = 'uname -a';
+
+   my $cmd = $os =~ /^Linux/ ? "df -kP $base" : "df -k $base";
+
+   my @DF = `$cmd`;
+
+   if ( !$DF[1] ) {
+      croak "cmd='$cmd' failed" . return undef;
+   }
+
+   chomp @DF;
+
+   # Filesystem     1K-blocks      Used Available Use% Mounted on
+   # C:             498687252 238734208 259953044  48% /cygdrive/c
+
+   my @a = split /\s+/, $DF[1];
+
+   my $used        = $a[2];
+   my $mount_point = $a[5];
+
+   print "mount_point=$mount_point, used=${used}k\n";
+
+   # to protect against cross over mount points, we use 'find' command to make sure
+   # that we stay within the same mount point.
+   # mount points is normally near root level, therefore, we only drill in 2 levels
+   my $find_depth = $max_depth > 2 ? 2 : $max_depth;
+
+   # my @find_prune_dirs   = ( ".zfs", ".snapshot", ".git", ".vscode", "__pycache__" );
+   # it is better to prune all hidden dirs (and files)
+   # find . -name .[^.]\* -prune  -o -ls
+   my @find_prune_dirs = ( '.[^.]\*', '__pycache__' );
+
+   my $find_prune_clause = "-name " . join( " -o -name ", @find_prune_dirs );
+   my $find_cmd = "find $base -mount -maxdepth $find_depth \\( $find_prune_clause \\) -print -prune -o -type d -print";
+   $verbose && print "find_cmd=$find_cmd\n";
+   my @find_dirs = `$find_cmd`;
+
+   $verbose && print "dirs within this mount =\n @find_dirs\n\n";
+   chomp @find_dirs;
+
+   my $within_mount_point = {};
+   for my $dir (@find_dirs) {
+      $within_mount_point->{$dir} = 1;
+   }
+
+   my $print_format = '%11sk %s %s %s' . "\n";    # right-align size %13s, left-align path %-13s
+
+   # my @todos = ( [ $base, $used, 0 ] );
+   my @todos;
+   if ( $base eq $mount_point ) {
+      @todos = ( [ $base, 'd', $used, 0 ] );
+   } else {
+      my ( $size, $type ) = du_1_node($base);
+      @todos = ( [ $base, $type, $size, 0 ] );
+   }
+
+   # this is a breadth first search.
+   # to speed up search:
+   #    1. we cache the result of 'du' command.
+   #    2. we stop searching further if we already found 70% of the parent folder.
+   #    3. we stop searching further if we reached the max_depth.
+   #    4. we skip some dirs that we know we don't want to drill in.
+   #    5. we skip some dirs that we know we don't want to 'du'.
+   # note:
+   #    if we run this script again, the script will still search again the searched folders.
+   #    But we won't run 'du' command again for the same folder.
+   # The reason that we search again is for
+   #    1. to find the new files
+   #    2. to be able to change the stop_percent and max_depth on the fly.
+   #    3. in case a previus run failed in the middle.
+   while (@todos) {
+      my $todo = shift @todos;
+      my ( $path, $size, $type, $level ) = @$todo;
+      print "\n";
+      printf $print_format, commify($size), $type, $path, "level=$level";
+
+      my $short2 = basename($path);
+      if ( -d $path && !$no_drill_in->{$short2} && $short2 !~ $no_drill_in_compiled ) {
+         my @fulls;
+         opendir( DIR, $path ) or die "Cannot open $path\n";
+         my @shorts = readdir(DIR);
+         closedir(DIR);
+
+         for my $short (@shorts) {
+            next if $short eq '.' or $short eq '..' or $no_du->{$short};
+
+            my $full = "$path/$short";    # full path is not necessarily absolute path
+            if ($exclude_compiled) {
+               if ( $short =~ $exclude_compiled ) {
+                  $verbose && print "skip $short, exclude_pattern=$exclude_pattern\n";
+                  next;
+               }
+               if ( $full =~ $exclude_compiled ) {
+                  $verbose && print "skip $full, exclude_pattern=$exclude_pattern\n";
+                  next;
+               }
+            }
+            if ( -d $full && $level < $find_depth && !$within_mount_point->{$full} ) {
+               print "skip $full, not within the same mount point\n";
+               next;
+            }
+
+            push @fulls, $full;
+         }
+
+         my @big_ones = find_the_big_ones( \@fulls, { parent_size => $size } );
+         for my $path (@big_ones) {
+            my ( $size, $type ) = @{ $cache_by_path->{$path} };
+            my $next_level = $level + 1;
+            printf $print_format, commify($size), $type, $path, "level=$next_level";
+         }
+
+         if ( $level < $max_depth ) {
+            # only dirs are pushed into @todos
+            for my $path (@big_ones) {
+               my ( $size, $type ) = @{ $cache_by_path->{$path} };
+               push @todos, [ $path, $size, $type, $level + 1 ] if $type eq 'd';
+            }
+         }
+      }
    }
 }
 
@@ -321,75 +380,81 @@ sub find_the_big_ones {
 
    my $sub_total_size = 0;
    for my $path (@$paths) {
-      my $size = du_1_node($path);
+      my ( $size, $type ) = du_1_node($path);    # du_1_node() will store result into file.
 
       next if !defined $size;
 
-      $size_by_path->{$path} = $size;
+      $cache_by_path->{$path} = [ $size, $type ];
       $sub_total_size += $size;
       if ( $sub_total_size > $stop_size ) {
          last;
       }
    }
 
-   # somme $size_by_path->{} may not be defined. but as we only pick the biggest ones, it should be ok.
-   my @sized_paths = grep { exists( $size_by_path->{$_} ) } @$paths;
+   # somme $cache_by_path->{} may not be defined. but as we only pick the biggest ones, it should be ok.
+   my @sized_paths = grep { exists( $cache_by_path->{$_} ) } @$paths;
 
    # $b is before $a because we want to sort in reverse order
-   my @sorted = sort { $size_by_path->{$b} <=> $size_by_path->{$a} } @sized_paths;
+   my @sorted = sort { $cache_by_path->{$b}->[0] <=> $cache_by_path->{$a}->[0] } @sized_paths;
 
    # perl slice will insert undef if ending index is beyond
    return @{ top_array( \@sorted, $top ) };
 }
 
-my $du_by_abs = {};
-my $du_store_ofh;
+my $histfile_ofh;
 
 sub du_1_node {
    my ( $abs, $opt ) = @_;
 
-   if ( !$du_store_ofh ) {
-      $du_store_ofh = init_du_store($opt);    # this also init $du_by_abs
+   # du command is slow, so we cache the result to speed up.
+
+   if ( !$histfile_ofh ) {
+      $histfile_ofh = init_histfile($opt);    # this also init $cache_by_path
    }
 
-   my $store_format = '%s %10s %10s %s' . "\n";    # right-align size %13s, left-align path %-13s
+   my $histfile_format = '%s %10s %10s %s' . "\n";    # right-align size %13s, left-align path %-13s
 
    if ( -d $abs ) {
-      if ( exists $du_by_abs->{$abs} ) {
-         my ( $size, $type ) = @{ $du_by_abs->{$abs} };
-         $verbose && print "found du in store file: $size $abs\n";
-         return $size;
+      if ( exists $cache_by_path->{$abs} ) {
+         my ( $size, $type ) = @{ $cache_by_path->{$abs} };
+         $verbose && print "found du in histfile file: $size $type $abs\n";
+
+         if ( $type eq 'd' ) {
+            return ( $size, 'd' );
+         } else {
+            print "INFO: $abs was a file but now is a dir. will rerun 'du'\n";
+         }
       }
 
       my $cmd = "$du_cmd -sk $abs";
       $verbose && print "cmd=$cmd\n";
 
       my $output = `$cmd`;
-      return undef if $?;
+      return () if $?;
 
       #    $ du -sk Linux
       # 12      Linux
       chomp $output;
       my ( $size, $path2 ) = split /\s+/, $output, 2;
-      $du_by_abs->{$abs} = [ $size, 'd' ];
-      printf $du_store_ofh $store_format, 'd', $size, $now_sec, $abs;
-      return $size;
+      $cache_by_path->{$abs} = [ $size, 'd' ];
+      printf $histfile_ofh $histfile_format, 'd', $size, $now_sec, $abs;
+      return ( $size, 'd' );
    } elsif ( -f $abs ) {
       my $size = -s $abs;
       $size = int( $size / 1024 );
-      $du_by_abs->{$abs} = [ $size, 'f' ];
+      $cache_by_path->{$abs} = [ $size, 'f' ];
       if ( $size > 1024 ) {
-         # only store big files
-         printf $du_store_ofh $store_format, 'f', $size, $now_sec, $abs;
+         # only cache big file's size - not for speed, but for comparing history.
+         printf $histfile_ofh $histfile_format, 'f', $size, $now_sec, $abs;
       }
-      return $size;
+      return ( $size, 'f' );
    } else {
       $verbose && print "path=$abs is not a file or directory\n";
-      return undef;
+      return ();
    }
 }
 
-sub init_du_store {
+sub init_histfile {
    my ($opt) = @_;
 
    my @to_keep;
@@ -399,15 +464,15 @@ sub init_du_store {
       $reset_compiled = qr/$reset/;
    }
 
-   if ( -f $store_file && ( !$reset or $reset ne 'all' ) ) {
-      open my $ifh, "<$store_file" or croak "cannot read $store_file: $!";
+   if ( -f $histfile && ( !$reset or $reset ne 'all' ) ) {
+      open my $ifh, "<$histfile" or croak "cannot read $histfile: $!";
       while ( my $line = <$ifh> ) {
          chomp $line;
          next if !$line;
 
          if ($reset_compiled) {
             if ( $line =~ $reset_compiled ) {
-               $verbose && print "reset pattern matched $line in store, will refresh\n";
+               $verbose && print "reset pattern matched $line in histfile, will refresh\n";
                next;
             }
          }
@@ -417,37 +482,69 @@ sub init_du_store {
             $verbose && print "skip $abs, old_time=$sec_stamp < cutoff_time=$cutoff_sec\n";
             next;
          }
-         $du_by_abs->{$abs} = [ $size, $type ];
+         $cache_by_path->{$abs} = [ $size, $type ];
          push @to_keep, $line;
       }
       close $ifh;
    }
 
-   open my $ofh, ">$store_file" or croak "cannot write to $store_file: $!";
+   open my $ofh, ">$histfile" or croak "cannot write to $histfile: $!";
    print $ofh "$_\n" for @to_keep;
 
    return $ofh;
 }
 
 sub get_du_history {
-   my ($opt) = @_;
+   my ( $abs_base, $opt ) = @_;
 
-   # my $store_file = "/tmp/$prog.$username.$yyyymmdd.txt";
+   my @days;
 
-   my @files = `ls /tmp/$prog.$username.*.txt`;
-   chomp @files;
+   if ($histdays) {
+      @days = split /,/, $histdays;
 
-   # # exclude today's file
-   # @files = grep { $_ !~ /$yyyymmdd/ } @files;
+      if ( @days != 2 ) {
+         usage("wrong number of days in -histdays=$histdays");
+      }
+   } else {
+      my $cmd = "ls -1 $histpref.*.txt";
+
+      my @files = `$cmd`;
+
+      if ($?) {
+         die "cmd=$cmd failed\n";
+      }
+
+      if ( @files < 2 ) {
+         print "files:\n@files";
+         print "ERROR: not enough files to compare history\n";
+         exit 1;
+      }
+
+      # pick the last twe files
+      for my $i ( ( -2, -1 ) ) {
+         my $f   = $files[$i];
+         my @a   = split /[.]/, $f;
+         my $day = $a[2];
+         push @days, $day;
+      }
+   }
+
+   # make sure days are in yyyymmdd format
+   for my $d (@days) {
+      if ( $d !~ /^(19|20)\d{6}$/ ) {
+         die "day='$d' is not in 'yyyymmdd' format\n";
+      }
+   }
 
    my $du_by_yyyymmdd_abs = {};
 
-   for my $f (@files) {
-      # my $store_file = "/tmp/$prog.$username.$yyyymmdd.txt";
+   # length of the abs_base
+   my $base_len = length($abs_base);
 
-      # extract yyyymmdd from file name
-      my @a = split /[.]/, $f;
-      my $yyyymmdd = $a[2];
+   for my $yyyymmdd (@days) {
+      my $f = "$histpref.$yyyymmdd.txt";
+
+      die "file=$f not found\n" if !-f $f;
 
       open my $ifh, "<$f" or die "cannot read $f: $!";
 
@@ -457,6 +554,13 @@ sub get_du_history {
          next if !$line;
 
          my ( $type, $size, $sec_stamp, $abs ) = split /\s+/, $line, 4;
+
+         # skip if $abs not starting with $abs_base
+         if ( substr( $abs, 0, $base_len ) ne $abs_base ) {
+            $verbose && print "skip $abs, not under $abs_base\n";
+            next;
+         }
+
          $r->{$abs} = [ $size, $type ];
       }
 
