@@ -588,10 +588,14 @@ sub tar_file_list {
 
 sub get_timestamp {
    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime(time);
-   
+
    # get calling line number
-   my $caller_line = (caller(0))[2];
-   return sprintf( "%04d%02d%02d %02d:%02d:%02d [$prog_mode,%d] ", $year + 1900, $mon + 1, $mday, $hour, $min, $sec, $caller_line);
+   my $caller_line = ( caller(0) )[2];
+   return sprintf(
+      "%04d%02d%02d %02d:%02d:%02d [$prog_mode,%d] ",
+      $year + 1900,
+      $mon + 1, $mday, $hour, $min, $sec, $caller_line
+   );
 }
 
 sub read_security_file {
@@ -1627,7 +1631,7 @@ sub to_be_pulled {
    # unblock socket when reading
    $socket->blocking(0);
 
-   print get_timestamp(), "waiting remote cksum results.\n";
+   print get_timestamp(), "waiting for remote cksum results.\n";
 
    $captures = expect_socket(
       $socket,
@@ -1649,6 +1653,11 @@ sub to_be_pulled {
          }
       }
    }
+
+   # because we will pass the hash by refereence, we need to prelocate the storage
+   $change_by_file   = {} if !defined $change_by_file;
+   $diff_by_file     = {} if !defined $diff_by_file;
+   $need_mtime_reset = {} if !defined $need_mtime_reset;
 
    # based on cksum between remote and local, we decide what to do
    decide_after_cksum(
@@ -1728,7 +1737,11 @@ sub to_be_pulled {
 
    $socket->flush();    # flush data when writes are done.
 
-   if ( !$change_by_file ) {
+   if (
+      !$change_by_file        # check hash ref is defined
+      || !%$change_by_file    # check hash is empty
+     )
+   {
       print get_timestamp(), "remote doesn't need to add/update any new files\n";
       return;
    }
@@ -2434,6 +2447,11 @@ sub local_sync {
 
    print get_timestamp(), "collecting source cksums: ", scalar(@need_cksums), " items.\n";
    my $source_cksum_by_file = get_cksums( \@need_cksums, $source_tree, { verbose => $verbose } );
+
+   # because we will pass the hash by refereence, we need to prelocate the storage
+   $change_by_file   = {} if !defined $change_by_file;
+   $diff_by_file     = {} if !defined $diff_by_file;
+   $need_mtime_reset = {} if !defined $need_mtime_reset;
 
    # based on cksum between remote and local, we decide what to do
    decide_after_cksum(
