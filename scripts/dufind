@@ -289,7 +289,7 @@ for my $base (@ARGV) {
       $within_mount_point->{$dir} = 1;
    }
 
-   my $print_format = '%11sk %s %s %s' . "\n";    # right-align size %13s, left-align path %-13s
+   my $print_format = '%13sk %s %s %s' . "\n";    # right-align size %13s, left-align path %-13s
 
    # my @todos = ( [ $base, $used, 0 ] );
    my @todos;
