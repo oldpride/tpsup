@@ -366,10 +366,18 @@ for my $base (@ARGV) {
          }
 
          if ( $level < $max_depth ) {
-            # only dirs are pushed into @todos
+            # only dirs with big size are pushed into @todos
+            my $min_dir_size = 1024;    # 1M
             for my $path (@big_ones) {
                my ( $size, $type ) = @{ $cache_by_path->{$path} };
-               push @todos, [ $path, $size, $type, $level + 1 ] if $type eq 'd';
+               # push @todos, [ $path, $size, $type, $level + 1 ] if $type eq 'd' && $size > $min_dir_size;
+               if ( $type eq 'd' ) {
+                  if ( $size > $min_dir_size ) {
+                     push @todos, [ $path, $size, $type, $level + 1 ];
+                  } elsif ($verbose) {
+                     print "skip $path because size=$size k < min_dir_size=$min_dir_size k\n";
+                  }
+               }
             }
          }
       } else {
