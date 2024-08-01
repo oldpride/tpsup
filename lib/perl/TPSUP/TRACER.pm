@@ -47,7 +47,7 @@ use TPSUP::UTIL  qw(
   tp_quote_wrap
 );
 
-use TPSUP::FILE qw(get_in_fh close_in_fh tpfind);
+use TPSUP::FILE qw(get_in_fh close_in_fh tpfind treat_filename);
 use TPSUP::LOG  qw(
   get_log_sections
   get_log_section_headers
@@ -401,7 +401,9 @@ sub resolve_files {
       }
    }
 
-   my $files_str = '"' . join( '" "', @files2 ) . '"';
+   # my $files_str = '"' . join( '" "', @files2 ) . '"';
+   # we need to handle space and wildcard in file name
+   my $files_str = join( ' ', map { treat_filename($_) } @files2 );
 
    croak "attr='file' is not resolved to any files at cfg=" . Dumper($cfg) if !$files_str;
 

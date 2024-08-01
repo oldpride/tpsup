@@ -16,6 +16,7 @@ our @EXPORT_OK = qw(
   tpfind
   convert_filemode
   get_mtime
+  treat_filename
 );
 
 use Carp;
@@ -31,8 +32,7 @@ sub get_in_fh {
    if ( !defined($input) || $input eq '-' ) {
       $in_fh = \*STDIN;
       if ( -t STDIN ) {    # test tty
-         print STDERR
-           "hit Enter and then Control+D to finish input on commmand line\n";
+         print STDERR "hit Enter and then Control+D to finish input on commmand line\n";
       }
       $verbose && print STDERR "get_in_fh() opened STDIN\n";
    } else {
@@ -45,8 +45,7 @@ sub get_in_fh {
          # user@hostname:tpsup/profile
          ( $host, $path ) = ( $1, $2 );
 
-         $ssh_host =
-"ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes $host";
+         $ssh_host = "ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes $host";
       } else {
          $ssh_host = "";
          $path     = $input;
@@ -79,13 +78,12 @@ sub get_in_fh {
 
       if ( defined $SkipHead ) {
          $cmd = "$cmd|sed 1,${SkipHead}d";
-         $cmd =~
-           s/cat $path|sed 1,${SkipHead}d/sed 1,${SkipHead}d $path/;  # optimize
+         $cmd =~ s/cat $path|sed 1,${SkipHead}d/sed 1,${SkipHead}d $path/;    # optimize
       }
 
       if ( $opt->{Backward} ) {
          $cmd = "$cmd|tac";
-         $cmd =~ s/cat $path|tac/tac $path/;                          # optimize
+         $cmd =~ s/cat $path|tac/tac $path/;                                  # optimize
       }
 
       if ($ssh_host) {
@@ -156,7 +154,7 @@ sub tpglob {
    my $sort_name = $opt->{sort_name};
    my $sort_func = $opt->{sort_func};
    my $reverse   = $opt->{reverse};
-   my $base = $opt->{base};
+   my $base      = $opt->{base};
 
    my @patterns;
    my $type = ref($pattern);
@@ -175,8 +173,8 @@ sub tpglob {
    my @files;
    for my $p (@patterns) {
       my $prepended_base = 0;
-      if ($base && $p !~ m:^/:) {
-         $p = "$base/$p";
+      if ( $base && $p !~ m:^/: ) {
+         $p              = "$base/$p";
          $prepended_base = 1;
       }
       my @files2 = grep { -e $_ } glob($p);
@@ -185,7 +183,7 @@ sub tpglob {
       if ($prepended_base) {
          @files2 = map { s:^$base/::; $_ } @files2;
       }
-      
+
       if (@files2) {
          push @files, @files2;
       } else {
@@ -211,8 +209,7 @@ sub tpglob {
 sub sort_files {
    my ( $files, $opt ) = @_;
 
-   my $globbed =
-     $opt->{globbed};    # sort_files() uses this to avoid infinite loop
+   my $globbed   = $opt->{globbed};     # sort_files() uses this to avoid infinite loop
    my $reverse   = $opt->{reverse};
    my $sort_name = $opt->{sort_name};
    my $sort_func = $opt->{sort_func};
@@ -224,10 +221,10 @@ sub sort_files {
       @files2 = @$files;
    }
 
-# python's sorted() is different from perl's sort()
-#    sorted() takes a key arg, which converts a list item to a comparable object
-#    sort() takes a cmp arg, which compares 2 list items
-# therefore, their sort_func are very different
+   # python's sorted() is different from perl's sort()
+   #    sorted() takes a key arg, which converts a list item to a comparable object
+   #    sort() takes a cmp arg, which compares 2 list items
+   # therefore, their sort_func are very different
 
    if ( !$sort_func ) {
       if ($sort_name) {
@@ -317,9 +314,8 @@ sub convert_filemode {
 sub get_latest_files {
    my ( $files, $opt ) = @_;
 
-   my $opt2 = $opt ? $opt : {};
-   my @sorted_files =
-     sort_files( $files, { %$opt2, sort_name => 'mtime', reverse => 1 } );
+   my $opt2         = $opt ? $opt : {};
+   my @sorted_files = sort_files( $files, { %$opt2, sort_name => 'mtime', reverse => 1 } );
    return \@sorted_files;
 }
 
@@ -363,8 +359,7 @@ sub tpfind {
       my $exps = TPSUP::UTIL::compile_perl_array( $opt->{HandleExps} );
       my $acts = TPSUP::UTIL::compile_perl_array( $opt->{HandleActs} );
 
-      $Handlers = TPSUP::UTIL::transpose_arrays(
-         [ $exps, $acts, $opt->{HandleExps}, $opt->{HandleActs} ], $opt );
+      $Handlers = TPSUP::UTIL::transpose_arrays( [ $exps, $acts, $opt->{HandleExps}, $opt->{HandleActs} ], $opt );
    }
 
    my $FlowControl;
@@ -377,9 +372,7 @@ sub tpfind {
       my $exps = TPSUP::UTIL::compile_perl_array( $opt->{FlowExps} );
       my $dirs = $opt->{FlowDirs};
 
-      $FlowControl =
-        TPSUP::UTIL::transpose_arrays(
-         [ $exps, $dirs, $opt->{FlowExps}, $opt->{FlowDirs} ], $opt );
+      $FlowControl = TPSUP::UTIL::transpose_arrays( [ $exps, $dirs, $opt->{FlowExps}, $opt->{FlowDirs} ], $opt );
    }
 
    # no_print is used to suppress printing the path, for example,
@@ -403,8 +396,7 @@ sub tpfind {
       if ($find_dump) {
          print Dumper($r);
       } elsif ($find_ls) {
-         print
-"$r->{mode_oct} $r->{owner} $r->{group} $r->{size} $r->{mt_string} $r->{path}\n";
+         print "$r->{mode_oct} $r->{owner} $r->{group} $r->{size} $r->{mt_string} $r->{path}\n";
       } elsif ($find_print) {
          print "$r->{path}\n";
       }
@@ -427,10 +419,8 @@ sub tpfind {
         : ( -l $path ) ? 'link'
         :                'unknown';
 
-      my (
-         $dev,  $ino,   $mode,  $nlink, $uid,     $gid, $rdev,
-         $size, $atime, $mtime, $ctime, $blksize, $blocks
-      ) = lstat($path);
+      my ( $dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks ) =
+        lstat($path);
 
       my $user = TPSUP::UTIL::get_user_by_uid($uid);
       $user = $uid if !$user;
@@ -443,32 +433,22 @@ sub tpfind {
 
       my $r;
 
-   # mystery: for some reason, 'user' cannot be used in the expresssion. changed
-   # to use 'owner' instead
-   # @{$r}{qw(path type mode uid gid size mtime user group now)}
-   #  = ($path, $type, $mode, $uid, $gid, $size, $mtime, $user, $group, $now);
+      # mystery: for some reason, 'user' cannot be used in the expresssion. changed
+      # to use 'owner' instead
+      # @{$r}{qw(path type mode uid gid size mtime user group now)}
+      #  = ($path, $type, $mode, $uid, $gid, $size, $mtime, $user, $group, $now);
 
-      @{$r}{
-         qw(path    type   mode   uid   gid   size   mtime   owner  group   now   short)
-        } = (
-         $path,  $type, $mode,  $uid, $gid, $size,
-         $mtime, $user, $group, $now, $short
-        );
+      @{$r}{qw(path    type   mode   uid   gid   size   mtime   owner  group   now   short)} =
+        ( $path, $type, $mode, $uid, $gid, $size, $mtime, $user, $group, $now, $short );
 
       $r->{mode_oct} = sprintf(
          "%04o", $mode    #& 07777
       );
 
       if ($Enrich) {
-         my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) =
-           localtime($mtime);
-         $r->{mt_string} = sprintf(
-            "%04d%02d%02d-%02d:%02d:%02d",
-            $year + 1900,
-            $mon + 1, $mday, $hour, $min, $sec
-         );
-         $r->{mt_yyyymmdd} =
-           sprintf( "%04d%02d%02d", $year + 1900, $mon + 1, $mday );
+         my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime($mtime);
+         $r->{mt_string}   = sprintf( "%04d%02d%02d-%02d:%02d:%02d", $year + 1900, $mon + 1, $mday, $hour, $min, $sec );
+         $r->{mt_yyyymmdd} = sprintf( "%04d%02d%02d", $year + 1900, $mon + 1, $mday );
       }
 
       print "r=", Dumper($r) if $verbose > 1;
@@ -477,7 +457,7 @@ sub tpfind {
 
          TPSUP::Expression::export_var( $r, { RESET => 1 } );
 
-#TPSUP::Expression::dump_var(); # I can see 'user' was populated even at this step
+         #TPSUP::Expression::dump_var(); # I can see 'user' was populated even at this step
 
          # if ($verbose) {
          #    $TPSUP::Expression::verbose = 1;
@@ -490,8 +470,7 @@ sub tpfind {
 
             if ( $match->() ) {
                if ($verbose) {
-                  print STDERR "flow exp matched: $match_code\n",
-                    "flow direction: $direction_code\n";
+                  print STDERR "flow exp matched: $match_code\n", "flow direction: $direction_code\n";
                }
 
                if ( $direction eq 'prune' ) {
@@ -518,8 +497,7 @@ sub tpfind {
             if ( $match->() ) {
                $count_path = 1;
                if ($verbose) {
-                  print STDERR "handler exp matched: $match_code\n",
-                    "handler action:  $action_code\n";
+                  print STDERR "handler exp matched: $match_code\n", "handler action:  $action_code\n";
                }
             } else {
                next ROW;
@@ -633,6 +611,28 @@ sub tpfind {
    return $ret;
 }
 
+sub treat_filename {
+   my ( $filename, $opt ) = @_;
+   my $quote = $opt->{quote} || '"';
+
+   # handle space and wildcard in filename
+   if ( $filename !~ / / && $filename !~ /[*?]/ ) {
+      # no space or wildcard in filename. we don't need to do anything
+      return $filename;
+   } elsif ( $filename =~ / / && $filename =~ /[*?]/ ) {
+      # both space and wildcard in filename, we cannot wrap it with quote because
+      # quote would disable wildcard. We have to escape space
+      $filename =~ s/ /\\ /g;
+      return $filename;
+   } elsif ( $filename =~ / / ) {
+      # only space in filename
+      return $quote . $filename . $quote;
+   } else {
+      # only wildcard in filename
+      return $filename;
+   }
+}
+
 sub main {
    require TPSUP::TEST;
 
@@ -649,6 +649,17 @@ sub main {
 END
 
    TPSUP::TEST::test_lines($test_code);
+
+   # test treat_filename
+   my @filenames = ( "FILE_test*", "FILE_test space.txt", "FILE_test space*.txt", "FILE_test space?.txt", );
+
+   for my $filename (@filenames) {
+      my $treated = treat_filename($filename);
+      my $cmd     = "ls -1 $treated";
+      print "cmd=$cmd\n";
+      system($cmd);
+      print "\n";
+   }
 }
 
 main() unless caller();
