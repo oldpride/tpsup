@@ -358,7 +358,7 @@ for my $base (@ARGV) {
             push @fulls, $full;
          }
 
-         my @big_ones = find_the_big_ones( \@fulls, { parent_size => $size } );
+         my @big_ones = find_the_big_ones( \@fulls, $size );
          for my $path (@big_ones) {
             my ( $size, $type ) = @{ $cache_by_path->{$path} };
             my $next_level = $level + 1;
@@ -393,13 +393,11 @@ exit 0;
 # subroutines
 #############################################
 sub find_the_big_ones {
-   my ( $paths, $opt ) = @_;
+   my ( $paths, $parent_size, $opt ) = @_;
 
-   my $parent_size = $opt->{parent_size};
-   my $stop_size;
-   if ($parent_size) {
-      $stop_size = $parent_size * $stop_percent;
-   }
+   # to save time, we only find the folders that add up to $stop_percent of the parent folder.
+
+   my $stop_size = $parent_size * $stop_percent;
 
    my $sub_total_size = 0;
    for my $path (@$paths) {
@@ -409,6 +407,11 @@ sub find_the_big_ones {
 
       $cache_by_path->{$path} = [ $size, $type ];
       $sub_total_size += $size;
+      if ( $sub_total_size > $parent_size ) {
+         print "ERROR: sub_total_size=$sub_total_size > parent_size=$parent_size. need to re-du $path or its parent\n";
+         last;
+      }
+
       if ( $sub_total_size > $stop_size ) {
          last;
       }
