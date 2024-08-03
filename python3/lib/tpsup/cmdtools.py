@@ -11,13 +11,6 @@ def run_cmd(cmd: str,
             bash_exe='gitbash',  # 'gitbash' or 'wsl'
             return_type='split', 
             print_output=0,
-
-            # # change directory. mainly for windows bash (wsl or gitbash).
-            # # because when windows calls bash, the current directory is not
-            # # passed to bash. so we need to change directory in the command.
-            # # linux bash and windows cmd.exe do not have this issue.
-            # cd=None, 
-
             **opt):
     verbose = opt.get('verbose', 0)
     if verbose:
@@ -44,17 +37,11 @@ def run_cmd(cmd: str,
     #     (win10-python3.10) william@tianpc2:/c/Users/william$ bash -c 'var1=abc; [[ $var1 =~ ^a ]] && echo yes; [[ $var1 =~ ^b ]]; echo $?'
     #     yes
     #     1
-    
 
     extra_opt = {}
     myenv = tpsup.envtools.Env()
     if myenv.isWindows:
         if is_bash:
-            # if cd:
-            #     cmd3 = f'cd {cd}; {cmd}'
-            # else:
-            #     cmd3 = cmd
-
             if bash_exe == 'wsl':
                 bash = 'C:/Windows/System32/bash.exe'  # this is WSL bash
                 # wsl has its complete subsystem, for example, totally separate
