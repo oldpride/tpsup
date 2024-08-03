@@ -641,6 +641,21 @@ def ls_l(files, **opt):
     return ls(files, **opt, ls_args='-l')
 
 
+def treat_filename(filename, quote='"'):
+    if ' ' not in filename and not re.search(r'[*?]', filename):
+        # no space or wildcard in filename. we don't need to do anything
+        return filename
+    elif ' ' in filename and re.search(r'[*?]', filename):
+        # both space and wildcard in filename, we cannot wrap it with quote
+        # because quote would disable wildcard. We have to escape space
+        return re.sub(r' ', r'\\ ', filename)
+    elif ' ' in filename:
+        # only space in filename
+        return f'{quote}{filename}{quote}'
+    else:
+        # only wildcard in filename
+        return filename
+
 def main():
     verbose = 1
 
@@ -728,7 +743,18 @@ def main():
         ls_l([f'{p3scripts}/ptgrep*'])
 
     test_lines(test_codes, source_globals=globals(), source_locals=locals())
-
+    
+    filenames = ["filetools_test*", 
+                 "filetools_test space.txt", 
+                 "filetools_test space*.txt", 
+                 "filetools_test space?.txt"
+                 ]
+    
+    for filename in filenames:
+        treated = treat_filename(filename)
+        cmd = f"ls -1 {treated}"
+        print(f'cmd={cmd}')
+        run_cmd(cmd, is_bash=True, print_output=1)
 
 if __name__ == '__main__':
     main()
