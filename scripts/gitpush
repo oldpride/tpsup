@@ -55,9 +55,17 @@ else
 fi
 
 echo ""
-   
-( set -x; git diff --cached --name-only )
-echo ""
+
+# run git diff only if the remote repo is not empty - it had commits
+# if the repo is empty, there is no commit.
+# if we run git diff against empty remote repo, we get error:
+# fatal: ambiguous argument 'origin/master': unknown revision or path not in the working tree.
+# https://stackoverflow.com/questions/5491832
+if git rev-parse HEAD 1>/dev/null 2>&1; then
+   # remoterepo is not empty - it had commits
+   ( set -x; git diff --cached --name-only )
+   echo ""
+fi
 
 ( set -x; git commit $dryrun -m "$commit_message" )
 rc=$?

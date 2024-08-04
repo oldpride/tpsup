@@ -68,5 +68,5 @@ if [ $dryrun = Y ]; then
 else
    echo "$command"
 
-   $command
+   $command || exit 1
 fi
