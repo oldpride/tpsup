@@ -224,10 +224,17 @@ def main():
         # bash script on windows must run with bash.exe
         # apkanalyzer is a bat script on windows. 
         # "which apkanalyzer" will not work in bash. Therefore, don't set is_bash=True.
+        # "which" works for exe files in windows, but not for bat files.
         run_cmd('which apkanalyzer', print=1)
 
+        # apkanalyzer is a bat script on windows, calling java.exe.
+        # therefore, "which java" will work in bash.
         run_cmd('which java', is_bash=True, print=1)
         run_cmd('which java', is_bash=True, print=1, bash_exe='wsl')
+
+        # adb.exe
+        run_cmd('which adb', print=1)
+        run_cmd('which adb', is_bash=True, print=1)
     from tpsup.testtools import test_lines
     # we import it here because this is for test only
 
