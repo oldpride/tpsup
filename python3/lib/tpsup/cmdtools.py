@@ -222,8 +222,9 @@ def main():
     def test_code():
         # from tpsup.cmdtools import run_cmd
         # bash script on windows must run with bash.exe
-        # apkanalyzer is a bash script
-        run_cmd('apkanalyzer --version', is_bash=True, print=1)
+        # apkanalyzer is a bat script on windows. 
+        # "which apkanalyzer" will not work in bash. Therefore, don't set is_bash=True.
+        run_cmd('which apkanalyzer', print=1)
 
         run_cmd('which java', is_bash=True, print=1)
         run_cmd('which java', is_bash=True, print=1, bash_exe='wsl')

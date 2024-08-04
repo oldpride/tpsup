@@ -8,7 +8,6 @@ from pprint import pformat, pprint
 import time
 import types
 from typing import Union
-from tpsup.cmdtools import run_cmd
 from tpsup.modtools import compile_codelist, strings_to_compilable_patterns, load_module
 from tpsup.logbasic import log_FileFuncLine
 from tpsup.utilbasic import silence_BrokenPipeError
@@ -631,6 +630,9 @@ def ls(files: Union[list, str], ls_args: str = "", print_ls=1, **opt):
     if verbose > 1:
         print(f'cmd = {cmd}')
 
+    # we import run_cmd() here instead of in the header to avoid circular import
+    from tpsup.cmdtools import run_cmd
+
     # run with bash so that it works in windows
     result = run_cmd(cmd, is_bash=True, print_output=print_ls)
 
@@ -679,6 +681,8 @@ def main():
         for row in reader:
             pprint(row)
 
+    # we import run_cmd() here instead of in the header to avoid circular import
+    from tpsup.cmdtools import run_cmd
     print('test3')
     # os.system(f'/bin/rm -fr {testdir}')
     run_cmd(f"/bin/rm -fr '{tmpdir}'", is_bash=True, print_output=verbose)

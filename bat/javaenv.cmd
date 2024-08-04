@@ -12,11 +12,13 @@ if NOT %argC% == 1 (
    echo ERROR:   wrong number of args. got %argC%, expected 1. args=%*
    echo usage:   %prog%  check
    echo          %prog%  version
+   echo          %prog%  list
    echo.
    echo          set java/jdk JAVA_HOME
    echo.
    echo example: %prog%  check
    echo          %prog%  1.8
+   echo          %prog%  list
    exit /b
 )
 
@@ -26,6 +28,12 @@ set "JAVABASE=C:\Program Files\Java"
 
 if %var% == check (
    echo checking java version
+   dir /b /ad "%JAVABASE%\*"
+   exit /b
+)
+
+if %var% == list (
+   echo listing java version
    dir /b /ad "%JAVABASE%\*"
    exit /b
 )
@@ -75,4 +83,3 @@ echo.
 call which javac
 echo.
 call which jar
-
