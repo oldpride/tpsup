@@ -190,12 +190,20 @@ def main():
         'echo $HOME',
         'var1=abc; [[ $var1 =~ ^a ]] && echo yes; [[ $var1 =~ ^b ]]; echo $?',
         'pwd', # when python calling external bash, the current directory is preserved.
+
+        # check $BASH_SOURCE. 
+        #    $BASH_SOURCE only exists in the sourced script.
+        'source cmdtools_test_bash_source.bash', 
+        'source $HOME/sitebase/github/tpsup/python3/lib/tpsup/cmdtools_test_bash_source.bash',
+        'source $HOME/sitebase/github/site-spec/profile; set -o posix; echo BASH_SOURCE=$BASH_SOURCE; echo TPSUP=$TPSUP',
     ]
         
     for cmd in cmds:
         print(
             f"run_cmd('{cmd}', is_bash=True) = {pformat(run_cmd(cmd, is_bash=True))}")
         print('')
+
+    exit(0)
 
     for cmd in cmds:
         print(

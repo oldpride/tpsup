@@ -413,12 +413,21 @@ def run_env_cmd(env_cmd: str, **opt):
     import tpsup.cmdtools
     sourced_env = {}
 
-    # we source the file in a subshell. We then pick up the environment variables
-    # from the subshell, and set them in the current shell.
+    # we cannot really run env cmd in the current shell, but we can run it in a subshell.
+    # then we find out the effect of the cmd in the subshell, which is the change of
+    # environment variables and values. we then update the current shell.
+
+    # 1st, run the env_cmd in a subshell. Here we used bash as the subshell.
+    # using bash as subshell requires us to use bash syntax.
+    # but later the update to the current shell can be used by batch shell as well.
     cmd_stdout = tpsup.cmdtools.run_cmd_clean(
         # https://unix.stackexchange.com/questions/3510/
         # print only variables, not functions
         f"{env_cmd}; set -o posix; set", is_bash=True, **opt)
+    
+    # 2nd, parse the output of the subshell and find out what changed - the
+    # difference between subshell's environment and current shell's environment.
+    # if there is a difference, update the current shell's environment.
     for line in cmd_stdout.splitlines():
         # a variable is in form of key=value: no space before =. no space at front.
         if not line or re.match(r'^\s', line) or not re.search(r'=', line):
@@ -432,10 +441,15 @@ def run_env_cmd(env_cmd: str, **opt):
         if not key:
             continue
         value2 = value.strip()
+        # env value from windows is wrapped in single quotes. we need to remove it
+        value2 = re.sub(r"^'", "", value2)
+        value2 = re.sub(r"'$", "", value2)
+        if verbose > 1:
+            print(f'new {key}={value2}')
         if verbose > 1:
             if old_value := os.environ.get(key, None):
-                if old_value != value:
-                    print(f"overwrite {key}='{old_value}' with '{value}'")
+                if old_value != value2:
+                    print(f"overwrite {key}='{old_value}' with '{value2}'")
         try:
             os.environ[key] = value2
             #  ValueError: illegal environment variable name
@@ -453,6 +467,9 @@ def source_env_file(file: str, **opt):
     #     raise RuntimeError(f"file={file} does not exist")
     file2 = file.replace('\\', '/')
 
+    if opt.get('verbose', 0):
+        print(f"file2={file2}")
+
     return run_env_cmd(f"source {file2}", **opt)
 
 
@@ -465,7 +482,9 @@ def source_siteenv(SITESPEC: str = None, **opt):
 
     SITESPEC2 = SITESPEC.replace('\\', '/')
 
-    return source_env_file(f"{SITESPEC2}/profile", **opt)
+    print(f'SITESPEC2={SITESPEC2}')
+
+    return source_env_file(SITESPEC2, **opt)
 
 
 def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = False,
@@ -565,58 +584,92 @@ def main():
     tpsup = os.environ.get('TPSUP')
     tpsup_python3_scripts = os.path.join(tpsup, 'python3', 'scripts')
 
-    def test_codes():
-        myenv.__dict__
-        myenv.adjpath("/a/b/c")
-        myenv.adjpath(r"\a\b\c")
-        os.path.normpath('/u/b/c')
-        os.path.normpath(r'a\b\c')
-        os.path.normpath('C:/users/william')
-        print(f"native_url=file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html")
+    # def test_codes():
+    #     myenv.__dict__
+    #     myenv.adjpath("/a/b/c")
+    #     myenv.adjpath(r"\a\b\c")
+    #     os.path.normpath('/u/b/c')
+    #     os.path.normpath(r'a\b\c')
+    #     os.path.normpath('C:/users/william')
+    #     print(f"native_url=file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html")
 
-        get_tmp_dir()
-        get_home_dir()
-        get_user()
-        get_user(secure=True)
-        get_user_fullname(verbose=True)
-        get_user_firstlast()
+    #     get_tmp_dir()
+    #     get_home_dir()
+    #     get_user()
+    #     get_user(secure=True)
+    #     get_user_fullname(verbose=True)
+    #     get_user_firstlast()
 
-        path_contains(tpsup_python3_scripts)
-        path_contains('python', regex=True)
-        add_path(tpsup_python3_scripts)
-        add_path("/junk/front", place='prepend')
-        add_path("/junk/rear", place='append')
+    #     path_contains(tpsup_python3_scripts)
+    #     path_contains('python', regex=True)
+    #     add_path(tpsup_python3_scripts)
+    #     add_path("/junk/front", place='prepend')
+    #     add_path("/junk/rear", place='append')
 
-    from tpsup.testtools import test_lines
-    test_lines(test_codes, source_globals=globals(), source_locals=locals())
+    # from tpsup.testtools import test_lines
+    # test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
     print("")
     print("--------------------")
     print("test run_env_cmd()")
     print(f"before TEST_TIME={os.environ.get('TEST_TIME', None)}")
-    run_env_cmd('export TEST_TIME=$(date +%H:%M:%S)')
+    run_env_cmd('export TEST_TIME=$(date +%H:%M:%S)',
+                # verbose=2
+                )
     print(f"after TEST_TIME={os.environ.get('TEST_TIME', None)}")
 
 
-    print("")
-    print("--------------------")
-    print("test source_siteenv()")
-    print(f"before TPSUP={os.environ.get('TPSUP', None)}")
-    source_siteenv(f"{myenv.home_dir}/sitebase/github/site-spec",
-                   # verbose=2,
+    import cmdtools
+    import pprint
+    ret = cmdtools.run_cmd("source $HOME/sitebase/github/tpsup/python3/lib/tpsup/cmdtools_test_bash_source.bash",
+                           is_bash=True)
+    pprint.pprint(ret)
+    
+    print("here")
+    source_env_file(f"$HOME/sitebase/github/tpsup/python3/lib/tpsup/cmdtools_test_bash_source.bash",
+                verbose=1,
                    )
-    print(f"after TPSUP={os.environ.get('TPSUP', None)}")
+    
+    print("tested test file")
+    # source_env_file(f"{myenv.home_dir}/sitebase/github/tpsup/python3/lib/tpsup/cmdtools_test_bash_source.bash",
+    #             # verbose=2,
+    #                )
 
-    if myenv.isWindows:
-        def test_code2():
-            convert_path('/cygdrive/c/Program Files', target_type='batch')
-            convert_path('/cygdrive/c/Program Files', target_type='gitbash')
-            convert_path('/cygdrive/c/Program Files', verbose=2)
-            convert_path('TPSUP', is_env_var=True, change_env=True)
+    # source_env_file(f"$HOME/sitebase/github/tpsup/profile",
+    #             # verbose=2,
+    #                )
+    # print("tested tpsup file")
 
-        test_lines(
-            test_code2, source_globals=globals(), print_return=True, add_return=True)
+    # source_env_file(f"$HOME/sitebase/github/site-spec/profile",
+    #             # verbose=2,
+    #                )
+    # print("tested site file")
+
+
+    # print("")
+    # print("--------------------")
+    # print("test source_siteenv()")
+    # print(f"before TPSUP={os.environ.get('TPSUP', None)}")
+    # # source_siteenv(f"{myenv.home_dir}/sitebase/github/site-spec",
+    # #             verbose=2,
+    # #                )
+    
+    # source_siteenv(f"$HOME/sitebase/github/site-spec/profile",
+    #             verbose=2,
+    #                )
+    # print(f"after TPSUP={os.environ.get('TPSUP', None)}")
+
+    # if myenv.isWindows:
+    #     def test_code2():
+    #         convert_path('/cygdrive/c/Program Files', target_type='batch')
+    #         convert_path('/cygdrive/c/Program Files', target_type='gitbash')
+    #         convert_path('/cygdrive/c/Program Files', verbose=2)
+    #         convert_path('TPSUP', is_env_var=True, change_env=True)
+
+    #     test_lines(
+    #         test_code2, source_globals=globals(), print_return=True, add_return=True)
 
 
 if __name__ == "__main__":
+
     main()

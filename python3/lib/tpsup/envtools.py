@@ -582,30 +582,30 @@ def main():
     tpsup = os.environ.get('TPSUP')
     tpsup_python3_scripts = os.path.join(tpsup, 'python3', 'scripts')
 
-    def test_codes():
-        myenv.__dict__
-        myenv.adjpath("/a/b/c")
-        myenv.adjpath(r"\a\b\c")
-        os.path.normpath('/u/b/c')
-        os.path.normpath(r'a\b\c')
-        os.path.normpath('C:/users/william')
-        print(f"native_url=file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html")
+    # def test_codes():
+    #     myenv.__dict__
+    #     myenv.adjpath("/a/b/c")
+    #     myenv.adjpath(r"\a\b\c")
+    #     os.path.normpath('/u/b/c')
+    #     os.path.normpath(r'a\b\c')
+    #     os.path.normpath('C:/users/william')
+    #     print(f"native_url=file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html")
 
-        get_tmp_dir()
-        get_home_dir()
-        get_user()
-        get_user(secure=True)
-        get_user_fullname(verbose=True)
-        get_user_firstlast()
+    #     get_tmp_dir()
+    #     get_home_dir()
+    #     get_user()
+    #     get_user(secure=True)
+    #     get_user_fullname(verbose=True)
+    #     get_user_firstlast()
 
-        path_contains(tpsup_python3_scripts)
-        path_contains('python', regex=True)
-        add_path(tpsup_python3_scripts)
-        add_path("/junk/front", place='prepend')
-        add_path("/junk/rear", place='append')
+    #     path_contains(tpsup_python3_scripts)
+    #     path_contains('python', regex=True)
+    #     add_path(tpsup_python3_scripts)
+    #     add_path("/junk/front", place='prepend')
+    #     add_path("/junk/rear", place='append')
 
-    from tpsup.testtools import test_lines
-    test_lines(test_codes, source_globals=globals(), source_locals=locals())
+    # from tpsup.testtools import test_lines
+    # test_lines(test_codes, source_globals=globals(), source_locals=locals())
 
     print("")
     print("--------------------")
@@ -617,15 +617,15 @@ def main():
                    )
     print(f"after TPSUP={os.environ.get('TPSUP', None)}")
 
-    if myenv.isWindows:
-        def test_code2():
-            convert_path('/cygdrive/c/Program Files', target_type='batch')
-            convert_path('/cygdrive/c/Program Files', target_type='gitbash')
-            convert_path('/cygdrive/c/Program Files', verbose=2)
-            convert_path('TPSUP', is_env_var=True, change_env=True)
+    # if myenv.isWindows:
+    #     def test_code2():
+    #         convert_path('/cygdrive/c/Program Files', target_type='batch')
+    #         convert_path('/cygdrive/c/Program Files', target_type='gitbash')
+    #         convert_path('/cygdrive/c/Program Files', verbose=2)
+    #         convert_path('TPSUP', is_env_var=True, change_env=True)
 
-        test_lines(
-            test_code2, source_globals=globals(), print_return=True, add_return=True)
+    #     test_lines(
+    #         test_code2, source_globals=globals(), print_return=True, add_return=True)
 
 
 if __name__ == "__main__":
