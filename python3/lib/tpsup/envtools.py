@@ -406,46 +406,33 @@ def add_path(dir: str, **opt) -> str:
     return new_env_string
 
 
-def source_env_file_bad(file: str, clean_env=False, **opt):
+
+def run_env_cmd(env_cmd: str, **opt):
+    # this command returns the whole env variables after running the env_cmd, 
+    # not just the changed ones.
     verbose = opt.get('verbose', 0)
-
-    # if not os.path.isfile(file):
-    #     raise RuntimeError(f"file={file} does not exist")
-    file2 = file.replace('\\', '/')
-    import subprocess
-    import shlex
-    if clean_env:
-        command = shlex.split(f"env -i bash -c 'source {file2} && env'")
-    else:
-        command = shlex.split(f"bash -c 'source {file2} && env'")
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE)
-    sourced_env = {}
-    for line in proc.stdout:
-        (key, _, value) = line.partition("=")
-        sourced_env[key] = value.strip()
-        if verbose > 1:
-            if old_value := os.environ.get(key, None):
-                if old_value != value:
-                    print(f"overwrite {key}='{old_value}' with '{value}'")
-        os.environ[key] = value
-    proc.communicate()
-    return sourced_env
-
-
-def source_env_file(file: str, clean_env=False, **opt):
-    verbose = opt.get('verbose', 0)
-    # if not os.path.isfile(file):
-    #     raise RuntimeError(f"file={file} does not exist")
-    file2 = file.replace('\\', '/')
 
     import tpsup.cmdtools
     sourced_env = {}
+
+    # we cannot really run env cmd in the current shell, but we can run it in a subshell.
+    # then we find out the effect of the cmd in the subshell, which is the change of
+    # environment variables and values. we then update the current shell.
+
+    # 1st, run the env_cmd in a subshell. Here we used bash as the subshell.
+    # using bash as subshell requires us to use bash syntax.
+    # but later the update to the current shell can be used by batch shell as well.
     cmd_stdout = tpsup.cmdtools.run_cmd_clean(
         # https://unix.stackexchange.com/questions/3510/
         # print only variables, not functions
-        f"source {file2}; set -o posix; set", is_bash=True, **opt)
+        f"{env_cmd}; set -o posix; set", is_bash=True, **opt)
+    
+    # 2nd, parse the output of the subshell and find out what changed - the
+    # difference between subshell's environment and current shell's environment.
+    # if there is a difference, update the current shell's environment.
     for line in cmd_stdout.splitlines():
-        if "=" not in line:
+        # a variable is in form of key=value: no space before =. no space at front.
+        if not line or re.match(r'^\s', line) or not re.search(r'=', line):
             continue
 
         # python partition vs split
@@ -455,22 +442,64 @@ def source_env_file(file: str, clean_env=False, **opt):
         (key, value) = line.split("=", 1)  # split only at the first occurrence
         if not key:
             continue
+
         value2 = value.strip()
-        if verbose > 1:
-            if old_value := os.environ.get(key, None):
-                if old_value != value:
-                    print(f"overwrite {key}='{old_value}' with '{value}'")
+        # env value from windows is wrapped in single quotes. we need to remove it
+        value2 = re.sub(r"^'", "", value2)
+        value2 = re.sub(r"'$", "", value2)
+
+        sourced_env[key] = value2 # this will be updated for certain conditions
+
+        # don't touch BASH_SOURCE; otherwise, it makes sourced script's BASH_SOURCE not working.
+        # better to leave all BASH_* and BASH* variables alone.
+        if re.search(r'^BASH', key):
+            if verbose > 1:
+                print(f"skip {key}='{value2}' because changing BASH_SOURCE may break sourced script")
+            continue
+            # 'BASH_SOURCE' will be returned in sourced_env but not updated in os.environ
+
+        if old_value := os.environ.get(key, None):
+            if old_value == value2:
+                if verbose > 1:
+                    print(f"skip key={key} because old '{old_value}' == new '{value2}'")
+                continue
+
+            # if this is windows and value containing /, it is likely a path, then we need to convert
+            # it to native path and compare it with the current environment variable value.
+            if os.name == 'nt' and '/' in value2:
+                try:
+                    native_path = convert_path(value2, target_type='batch')
+                except Exception as e:
+                    if verbose:
+                        print(f'failed to convert {key}={value2} to native path: {e}. skip converting')
+                    native_path = value2
+                if old_value == native_path:
+                    if verbose > 1:
+                        print(f"skip key={key} because old '{old_value}' == new '{native_path}' from '{value2}'")
+                    continue
+                value2 = native_path
+        if verbose:
+            print(f"overwrite {key}='{old_value}' with '{value2}'")
+        
         try:
             os.environ[key] = value2
             #  ValueError: illegal environment variable name
         except ValueError as e:
-            if verbose > 1:
-                print(e)
-                print(f"skip {key}='{value2}'")
-            pass
-
+            print(e)
+            print(f"skip {key}='{value2}'")
+            
         sourced_env[key] = value2
     return sourced_env
+
+def source_env_file(file: str, **opt):
+    # if not os.path.isfile(file):
+    #     raise RuntimeError(f"file={file} does not exist")
+    file2 = file.replace('\\', '/')
+
+    if opt.get('verbose', 0):
+        print(f"file2={file2}")
+
+    return run_env_cmd(f"source {file2}", **opt)
 
 
 def source_siteenv(SITESPEC: str = None, **opt):
@@ -482,8 +511,26 @@ def source_siteenv(SITESPEC: str = None, **opt):
 
     SITESPEC2 = SITESPEC.replace('\\', '/')
 
-    return source_env_file(f"{SITESPEC2}/profile", **opt)
+    print(f'SITESPEC2={SITESPEC2}')
 
+    return source_env_file(f'{SITESPEC2}/profile', **opt)
+
+def find_path_type(path: str, **opt):
+    verbose = opt.get('verbose', 0)
+
+    path = path.lower()
+
+    if re.search(r'/cygdrive/', path):
+        # /cygdrive/c/Program Files:/cygdrive/c/Users
+        return 'cygwin'
+    elif re.search(r'^/[a-z]/|:/[a-z]/|^/usr/bin|:/usr/bin', path):
+        # /c/Program Files:/c/Users/tian/bin:/usr/bin
+        return 'gitbash'
+    elif re.search(r'^[a-z]:[/\\]|;[a-z]:[/\\]|^//[a-z]|;//[a-z]', path):
+        # C:/Program Files;C:/Users;//server/share
+        return 'batch'
+    else:
+        raise RuntimeError(f"cannot determine path type for path={path}")
 
 def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = False,
                  source_type: Literal['cygwin', 'gitbash', 'batch'] = None,
@@ -491,7 +538,7 @@ def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = 
                  **opt):
     verbose = opt.get('verbose', 0)
 
-    source_path = source_path.replace('\\', '/')  # posix style
+    # source_path = source_path.replace('\\', '/')  # posix style
     if is_env_var:
         env_var = source_path
         if env_var in os.environ:
@@ -500,65 +547,67 @@ def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = 
             print(f"{env_var} is not an environment variable")
             return None
 
-    source_delimiter = ':'
     if source_type is None:
-        if source_path.lower().startswith('/cygdrive/'):
-            source_type = 'cygwin'
-        elif re.search(r'^/[a-z]/', source_path, re.IGNORECASE):
-            source_type = 'gitbash'
-        elif re.search(r'^[a-z]:/', source_path, re.IGNORECASE):
-            source_type = 'batch'
-            source_delimiter = ';'
-        else:
-            raise RuntimeError(
-                f"cannot determine source_type from source_path={source_path}")
+        source_type = find_path_type(source_path, verbose=verbose)
 
-        if verbose:
-            print(f"source_type={source_type}")
+    if verbose:
+        print(f"source_type={source_type}")
 
     if target_type is None:
         myenv = Env()
         if term := myenv.term.get('term', None):
             if term in ('cygwin', 'gitbash', 'batch'):
                 target_type = term
-                if verbose:
-                    print(f"target_type={target_type}")
+
+    if verbose:
+        print(f"target_type={target_type}")
 
     if target_type is None:
         raise RuntimeError(
             f"cannot determine target_type from source_path={source_path}")
-    elif target_type == 'batch':
-        target_delimiter = ';'
-    else:
-        target_delimiter = ':'
+    
+    delimiter = {
+        'cygwin': ':',
+        'gitbash': ':',
+        'batch': ';'
+    }
 
     if source_type == target_type:
-        target_path = source_path
-    elif source_type == 'cygwin':
+        return source_path
+        # no need to convert, no need to change environment variable
+
+    pieces = source_path.split(delimiter[source_type]) # split by source delimiter
+    if verbose >1:
+        print(f"pieces={pformat(pieces)}")
+
+    if source_type == 'cygwin':
         if target_type == 'batch':
-            target_path = re.sub(
-                r'/cygdrive/([a-z])/', r'\1:/', source_path, re.IGNORECASE)
+            pieces2 = [re.sub(r'^/cygdrive/([a-z])/', r'\1:/', p)
+                       for p in pieces]
         elif target_type == 'gitbash':
-            target_path = re.sub(r'/cygdrive/', r'/',
-                                 source_path, re.IGNORECASE)
+            pieces2 = [re.sub(r'^/cygdrive/([a-z])/', r'/\1/', p)
+                       for p in pieces]
     elif source_type == 'gitbash':
-        pieces = source_path.split(source_delimiter)
         if target_type == 'batch':
-            pieces2 = [re.sub(r'^/cygdrive/([a-z])/', r'\1:/',
+            pieces2 = [re.sub(r'^/([a-z])/', r'\1:/',
                               p, re.IGNORECASE) for p in pieces]
         elif target_type == 'cygwin':
-            pieces2 = [re.sub(r'^/cygdrive/', r'/', p, re.IGNORECASE)
+            pieces2 = [re.sub(r'^/([a-zA-Z])/',  r'/cygdrive/\1/', p)
                        for p in pieces]
-        target_path = target_delimiter.join(pieces2)
     elif source_type == 'batch':
-        pieces = source_path.split(source_delimiter)
+        # convert \ to /
+        pieces2 = [p.replace('\\', '/') for p in pieces]
         if target_type == 'cygwin':
-            pieces2 = [re.sub(r'^([a-z]):/', r'/cygdrive/\1/',
-                              p, re.IGNORECASE) for p in pieces]
+            # replace C:/Program Files with /cygdrive/c/Program Files, ignore case
+            pieces2 = [re.sub(r'^([A-Z]):[/\\]', r'/cygdrive/\1/', p, flags=re.IGNORECASE)
+                        for p in pieces2]
         elif target_type == 'gitbash':
-            pieces2 = [re.sub(r'^([a-z]):/', r'/\1/', p, re.IGNORECASE)
-                       for p in pieces]
-        target_path = target_delimiter.join(pieces2)
+            pieces2 = [re.sub(r'^([A-Z]):[/\\]', r'/\1/', p, flags=re.IGNORECASE)
+                       for p in pieces2]
+    if verbose > 1:
+        print(f"pieces2={pformat(pieces2)}")
+    
+    target_path = delimiter[target_type].join(pieces2)
 
     if is_env_var and change_env:
         os.environ[env_var] = target_path
@@ -576,57 +625,110 @@ def get_native_path(path: str, **opt):
 
 
 def main():
+    from tpsup.testtools import test_lines
     myenv = Env()
     myenv.adapt()  # don't block output in gitbash and cygwin
 
     tpsup = os.environ.get('TPSUP')
     tpsup_python3_scripts = os.path.join(tpsup, 'python3', 'scripts')
 
-    # def test_codes():
-    #     myenv.__dict__
-    #     myenv.adjpath("/a/b/c")
-    #     myenv.adjpath(r"\a\b\c")
-    #     os.path.normpath('/u/b/c')
-    #     os.path.normpath(r'a\b\c')
-    #     os.path.normpath('C:/users/william')
-    #     print(f"native_url=file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html")
+    def test_codes():
+        myenv.__dict__
 
-    #     get_tmp_dir()
-    #     get_home_dir()
-    #     get_user()
-    #     get_user(secure=True)
-    #     get_user_fullname(verbose=True)
-    #     get_user_firstlast()
+        # adjpath, normpath, and convert_path
+        #     adjpath: convert / to \ on windows, and \ to / on linux
+        #     normpath: convert /a/b/c to /a/b/c, a\b\c to a\b\c, C:/users/william to C:/users/william
+        #     convert_path: convert /a/b/c to a:/b/c on windows, and a:/b/c to /a/b/c on linux
 
-    #     path_contains(tpsup_python3_scripts)
-    #     path_contains('python', regex=True)
-    #     add_path(tpsup_python3_scripts)
-    #     add_path("/junk/front", place='prepend')
-    #     add_path("/junk/rear", place='append')
+        myenv.adjpath("/a/b/c")
+        myenv.adjpath(r"\a\b\c")
+        os.path.normpath('/u/b/c')
+        os.path.normpath(r'a\b\c')
+        os.path.normpath('C:/users/william')
+        print(f"native_url=file:///{os.path.normpath(os.environ.get('TPSUP'))}/scripts/tpslnm_test_input.html")
 
-    # from tpsup.testtools import test_lines
+        get_tmp_dir()
+        get_home_dir()
+        get_user()
+        get_user(secure=True)
+        get_user_fullname(verbose=True)
+        get_user_firstlast()
+
+        path_contains(tpsup_python3_scripts)
+        path_contains('python', regex=True)
+        add_path(tpsup_python3_scripts)
+        add_path("/junk/front", place='prepend')
+        add_path("/junk/rear", place='append')
+
+
     # test_lines(test_codes, source_globals=globals(), source_locals=locals())
+    test_lines(test_codes)
+
+    print("")
+    print("--------------------")
+    print("test run_env_cmd()")
+    print(f"before TEST_TIME={os.environ.get('TEST_TIME', None)}")
+    run_env_cmd('export TEST_TIME=$(date +%H:%M:%S)',
+                # verbose=2
+                )
+    print(f"after TEST_TIME={os.environ.get('TEST_TIME', None)}")
+
+    print("")
+    print("--------------------")
+    print(f"before BASH_SOURCE={os.environ.get('BASH_SOURCE', None)}")
+    source_env_file(f"$HOME/sitebase/github/tpsup/python3/lib/tpsup/cmdtools_test_bash_source.bash",
+                verbose=1,
+                   )
+    print(f"after BASH_SOURCE={os.environ.get('BASH_SOURCE', None)}")
 
     print("")
     print("--------------------")
     print("test source_siteenv()")
     print(f"before TPSUP={os.environ.get('TPSUP', None)}")
     source_siteenv(f"{myenv.home_dir}/sitebase/github/site-spec",
-                   clean_env=1,
-                   # verbose=2,
+                # verbose=2,
                    )
+    
+    # source_env_file(f"$HOME/sitebase/github/site-spec/profile",
+    #             verbose=2,
+    #                )
+    # run_env_cmd(f"source $HOME/sitebase/github/site-spec/profile",
+    #             verbose=2,
+    #                )
+
     print(f"after TPSUP={os.environ.get('TPSUP', None)}")
 
-    # if myenv.isWindows:
-    #     def test_code2():
-    #         convert_path('/cygdrive/c/Program Files', target_type='batch')
-    #         convert_path('/cygdrive/c/Program Files', target_type='gitbash')
-    #         convert_path('/cygdrive/c/Program Files', verbose=2)
-    #         convert_path('TPSUP', is_env_var=True, change_env=True)
+    print("")
+    print("--------------------")
+    def test_code1():
+        # from cygwin 
+        convert_path('/cygdrive/c/Program Files:/cygdrive/c/users/tian/bin:/usr/bin', target_type='batch')
+        convert_path('/cygdrive/c/Program Files:/cygdrive/c/users/tian/bin:/usr/bin', target_type='gitbash')
+        convert_path('/cygdrive/c/Program Files:/cygdrive/c/users/tian/bin:/usr/bin', target_type='cygwin')
 
-    #     test_lines(
-    #         test_code2, source_globals=globals(), print_return=True, add_return=True)
+        # from batch
+        convert_path(r'C:\Program Files;C:\Users\tian\bin;//myhost/bin', target_type='cygwin')
+        convert_path(r'C:\Program Files;C:\Users\tian\bin;//myhost/bin', target_type='gitbash')
+        convert_path(r'C:\Program Files;C:\Users\tian\bin;//myhost/bin', target_type='batch')
+
+        # from gitbash
+        convert_path('/c/Program Files:/c/users/tian/bin:/usr/bin', target_type='batch')
+        convert_path('/c/Program Files:/c/users/tian/bin:/usr/bin', target_type='gitbash')
+        convert_path('/c/Program Files:/c/users/tian/bin:/usr/bin', target_type='cygwin')
+
+    test_lines(test_code1)
+
+    if myenv.isWindows:
+        def test_code2():
+            convert_path('/cygdrive/c/Program Files', target_type='batch')
+            convert_path('/cygdrive/c/Program Files', target_type='gitbash')
+            convert_path('/cygdrive/c/Program Files', verbose=2)
+            convert_path('TPSUP', is_env_var=True, change_env=True)
+
+        test_lines(
+            test_code2, source_globals=globals(), print_return=True, add_return=True)
 
 
 if __name__ == "__main__":
+
     main()

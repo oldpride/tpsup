@@ -703,7 +703,7 @@ load_profile_d() {
    dir=$1
 
    cd "$dir" || return
-   for f in *; do
+   for f in `\ls * 2>/dev/null`; do
       # skip .sav, .deco, .yyyymmdd and backup files '~'
       if [[ $f =~ [.~] ]]; then # regex
          continue

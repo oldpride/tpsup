@@ -203,17 +203,14 @@ def main():
             f"run_cmd('{cmd}', is_bash=True) = {pformat(run_cmd(cmd, is_bash=True))}")
         print('')
 
-    exit(0)
+        # print(
+        #     f"run_cmd_clean('{cmd}', is_bash=True) = {pformat(run_cmd_clean(cmd, is_bash=True))}")
+        # print('')
 
     for cmd in cmds:
         print(
             f"run_cmd('{cmd}', is_bash=True, bash_exe='wsl') = {pformat(run_cmd(cmd, is_bash=True, bash_exe='wsl'))}")
         print('')
-    
-
-    # print(f"run_cmd('pwd', is_bash=True) = {pformat(run_cmd('pwd', is_bash=True))}")
-    # print(f"run_cmd('pwd', is_bash=True, bash_exe='wsl') = {pformat(run_cmd('pwd', is_bash=True, bash_exe='wsl'))}")      
-
 
     import tpsup.androidtools
     import shutil
