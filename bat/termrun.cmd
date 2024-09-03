@@ -32,6 +32,10 @@ set number=%2
 @REM see test_if_set.cmd
 setlocal ENABLEDELAYEDEXPANSION
 
+@REM git or gitbash
+if "%type%" == "gitbash" (
+    set "type=git"
+)
 if "%type%" == "git" (
     if exist "C:\Program Files\Git\usr\bin\mintty.exe" (
         set "git_path=C:\Program Files\Git\usr\bin\mintty.exe"
@@ -51,7 +55,10 @@ if "%type%" == "git" (
     exit /b 0
 )
 
-
+@REM cyg or cygwin
+if "%type%" == "cygwin" (
+    set "type=cyg"
+)
 if "%type%" == "cyg" (
     if exist "C:\cygwin64\bin\mintty.exe"  (
         set "cygwin_path=C:\cygwin64\bin\mintty.exe"
@@ -87,6 +94,13 @@ if "%type%" == "cyg" (
     exit /b 0
 )
 
+@REM cmd or bat or batch
+if "%type%" == "bat" (
+    set "type=cmd"
+)
+if "%type%" == "batch" (
+    set "type=cmd"
+)
 if "%type%" == "cmd" (
     @REM run cmd.exe number of times
     for /l %%x in (1, 1, %number%) do (
@@ -106,9 +120,9 @@ endlocal
    echo    %prog% [flags] "cyg|git|cmd" number
    echo.
    echo.   launch a number of cygwin terminals
-   echo.       'cyg' is the cygwin terminals
-   echo.       'git' is the git-bash terminals
-   echo.       'cmd' is the cmd.exe terminals
+   echo.       'cyg' is the cygwin terminals. same as 'cygwin'.
+   echo.       'git' is the git-bash terminals. same as 'gitbash'.
+   echo.       'cmd' is the cmd.exe terminals. same as 'bat' or 'batch'.
    echo.
    echo.       -d              debug flag
    echo.
@@ -121,5 +135,3 @@ endlocal
    @REM this is function return; it doesn't exit the script.
    @REM no good way to exit script from inside a function
    exit /b 0
-
-
