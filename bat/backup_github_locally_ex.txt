@@ -52,7 +52,8 @@ solmate\
 # blockchain scaffold
 packages\
 
-
+# torch data
+data\
 
 
 
