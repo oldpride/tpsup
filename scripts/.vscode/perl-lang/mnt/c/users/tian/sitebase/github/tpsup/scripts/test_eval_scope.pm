@@ -1,0 +1,1 @@
+{"version":5,"vars":[{"name":"%h","kind":13,"localvar":"my","line":5,"definition":"my","containerName":null},{"kind":2,"name":"warnings","line":5,"containerName":""},{"children":[],"kind":12,"containerName":"main::","range":{"end":{"line":12,"character":9999},"start":{"line":7,"character":0}},"line":7,"definition":"sub","name":"f1"}]}

@@ -185,11 +185,11 @@ sub swagger {
             # sometimes curl's POST method doesn't want -d at all.
             # therefore don't use -d '' when it is not defined.
 
-            if ($post_data eq 'json_array_number') {
+            if ( $post_data eq 'json_array_number' ) {
                # argv list are numbers, we want to convert them to json array
                $post_data = join( ',', @$args );
                $post_data = "[$post_data]";
-            } elsif ($post_data eq 'json_array_string') {
+            } elsif ( $post_data eq 'json_array_string' ) {
                # argv list are strings, we want to convert them to json array
                $post_data = join( ',', map { qq("$_") } @$args );
                $post_data = "[$post_data]";
@@ -311,9 +311,9 @@ sub tpbatch_parse_hash_cfg {
 
             my $num_args = $cfg->{num_args} ? $cfg->{num_args} : 0;
             if ( "$num_args" eq '+' ) {
-               $example .= " arg0 [arg1 arg2 ...]\n";
+               $example .= " arg0 [arg1 arg2 ...]";
             } elsif ( "$num_args" eq '*' ) {
-               $example .= " [arg0 arg1 arg2 ...]\n";
+               $example .= " [arg0 arg1 arg2 ...]";
             } else {
                for ( my $i = 0 ; $i < $num_args ; $i++ ) {
                   $example .= " arg$i";
@@ -430,8 +430,8 @@ sub tpbatch_parse_input {
    } else {
       if ( $num_args != $num_input ) {
          print
-         "ERROR: wrong number of args, expecting $num_args but got $num_input, input=",
-         Dumper( \@copied );
+           "ERROR: wrong number of args, expecting $num_args but got $num_input, input=",
+           Dumper( \@copied );
          exit 1;
       }
    }
@@ -522,11 +522,11 @@ sub get_entry_by_method_suburl {
       $entry_decide_file =~ s/_cfg_batch.pl/_pattern.cfg/;
    }
    my $pattern_file = $entry_decide_file;
-   my $pattern_cfg = parse_login_by_method_pattern_file( $pattern_file, $opt );
+   my $pattern_cfg  = parse_login_by_method_pattern_file( $pattern_file, $opt );
 
    my $method = $cfg->{method} || 'GET';
 
-   if ($opt->{verbose}) {
+   if ( $opt->{verbose} ) {
       print STDERR "pattern_file=$pattern_file\n";
       print STDERR "pattern_cfg=", Data::Dumper::Dumper($pattern_cfg), "\n";
    }
