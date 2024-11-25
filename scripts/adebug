@@ -151,9 +151,9 @@ print $info->{$job}->{defination};
 print "\n";
 
 # if this is a box job, we stop here.
-# actually, any non-CMD job, we stop here.
-if ( $info->{$job}->{job_type} ne 'CMD' ) {
-   print "job_type=$info->{$job}->{job_type}, not CMD, stop here.\n";
+# actually, any non-CMD/FW job, we stop here.
+if ( $info->{$job}->{job_type} ne 'CMD' && $info->{$job}->{job_type} ne 'FW' ) {
+   print "job_type=$info->{$job}->{job_type}, not CMD/FW, stop here.\n";
    exit 0;
 }
 
