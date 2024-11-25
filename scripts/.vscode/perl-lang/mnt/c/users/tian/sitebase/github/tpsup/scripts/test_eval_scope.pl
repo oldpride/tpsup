@@ -1,1 +1,0 @@
-{"vars":[{"line":5,"kind":12,"name":"dirname"},{"kind":2,"name":"lib","line":5,"containerName":""},{"line":8,"containerName":"test_eval_scope::test_eval_scope","kind":2,"name":"f1"}],"version":5}
