@@ -5,24 +5,25 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 use Carp;
-use TPSUP::AUTOSYS qw( 
-   query_jobs_superset 
-   print_autorep_J_header
-   get_autorep_J_format
-   print_autorep_J_job
-   autorep_J
-   autorep_q_J
+use TPSUP::AUTOSYS qw(
+  query_jobs_superset
+  print_autorep_J_header
+  get_autorep_J_format
+  print_autorep_J_job
+  autorep_J
+  autorep_q_J
 );
 use TPSUP::UTIL qw(
-   source_profile
-   resolve_string_in_env
+  source_profile
+  resolve_string_in_env
 );
 # use Carp::Always;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
-my $DetailExpire = 24*3600;
-my $StatusExpire = 10;  
+my $DetailExpire = 24 * 3600;
+my $StatusExpire = 10;
 
 sub usage {
    my ($message) = @_;
@@ -71,10 +72,10 @@ my $arg_is_job;
 my $pattern;
 
 GetOptions(
-   'v|verbose'     => \$verbose,
-   'df=s'          => \$DetailFiles,
-   'sf=s'          => \$StatusFiles,
-   'm=s'           => \$pattern,
+   'v|verbose' => \$verbose,
+   'df=s'      => \$DetailFiles,
+   'sf=s'      => \$StatusFiles,
+   'm=s'       => \$pattern,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -82,7 +83,7 @@ usage("wrong number of args") if @ARGV != 1;
 my ($job) = @ARGV;
 
 my $opt = {
-   StatusExpire => $StatusExpire,  # always need the latest info
+   StatusExpire => $StatusExpire,    # always need the latest info
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
    verbose      => $verbose,
@@ -90,47 +91,48 @@ my $opt = {
 
 my $info;
 
-if ($StatusFiles || $DetailFiles) { 
-   $info = query_jobs_superset($job, $opt);
+if ( $StatusFiles || $DetailFiles ) {
+   $info = query_jobs_superset( $job, $opt );
 } else {
-   my $status_ref = autorep_J($job, $opt);
-   my $detail_ref = autorep_q_J($job, $opt);
+   my $status_ref = autorep_J( $job, $opt );
+   my $detail_ref = autorep_q_J( $job, $opt );
 
-   die "cannot find job detail for $job\n" if ! $detail_ref->{$job};
-   die "cannot find job status for $job\n" if ! $status_ref->{$job};
+   die "cannot find job detail for $job\n" if !$detail_ref->{$job};
+   die "cannot find job status for $job\n" if !$status_ref->{$job};
 
-   $info->{$job} = {%{$status_ref->{$job}}, %{$detail_ref->{$job}}};
+   $info->{$job} = { %{ $status_ref->{$job} }, %{ $detail_ref->{$job} } };
 }
 
 my $error = 0;
-if (!exists $info->{$job}) {
+if ( !exists $info->{$job} ) {
    die "$job not found.\n";
 }
 
-if (!exists $info->{$job}->{Status}) {
+if ( !exists $info->{$job}->{Status} ) {
    die "$job status not found. just deleted?\n";
 }
 
 print_autorep_J_header();
-print_autorep_J_job($info, $job, "", $opt);
+print_autorep_J_job( $info, $job, "", $opt );
 print "\n";
 
-if ($info->{$job}->{Status} =~ /^(OH|OI)$/) {
+if ( $info->{$job}->{Status} =~ /^(OH|OI)$/ ) {
    print "ERROR: $job is in $info->{$job}->{Status} mode.\n";
    print "\n";
-   $error ++;
+   $error++;
 }
 
-my $yyyymmdd = `date +%Y%m%d`; chomp $yyyymmdd;
-my ($yyyy, $mm, $dd) = ( $yyyymmdd =~ m:^(\d{4})(\d{2})(\d{2})$: );
+my $yyyymmdd = `date +%Y%m%d`;
+chomp $yyyymmdd;
+my ( $yyyy, $mm, $dd ) = ( $yyyymmdd =~ m:^(\d{4})(\d{2})(\d{2})$: );
 
 my $LastStart = $info->{$job}->{LastStart};
 
 # 01/17/2023 18:00:31
 
-my ($yyyy2, $mm2, $dd2, $yyyymmdd2);
-if ($LastStart =~ m:^(\d{2})/(\d{2})/(\d{4}):) {
-   ($mm2, $dd2, $yyyy2) = ($1, $2, $3);
+my ( $yyyy2, $mm2, $dd2, $yyyymmdd2 );
+if ( $LastStart =~ m:^(\d{2})/(\d{2})/(\d{4}): ) {
+   ( $mm2, $dd2, $yyyy2 ) = ( $1, $2, $3 );
 
    $yyyymmdd2 = "$yyyy2$mm2$dd2";
 } else {
@@ -140,18 +142,26 @@ if ($LastStart =~ m:^(\d{2})/(\d{2})/(\d{4}):) {
 print "yyyyymmdd  = $yyyymmdd\n";
 print "yyyyymmdd2 = $yyyymmdd2\n";
 
-if (!$info->{$job}->{defination}) {
-   print "\$info->{$job} = ", Dumper($info->{$job});
+if ( !$info->{$job}->{defination} ) {
+   print "\$info->{$job} = ", Dumper( $info->{$job} );
    die "$job missing defination. just deleted?\n";
 }
 
 print $info->{$job}->{defination};
 print "\n";
 
+# if this is a box job, we stop here.
+# actually, any non-CMD job, we stop here.
+if ( $info->{$job}->{job_type} ne 'CMD' ) {
+   print "job_type=$info->{$job}->{job_type}, not CMD, stop here.\n";
+   exit 0;
+}
+
 my $machine = $info->{$job}->{machine};
 my $owner   = $info->{$job}->{owner};
 
-my $local_cmd_file = `get_tmp /var/tmp $prog`; chomp $local_cmd_file;
+my $local_cmd_file = `get_tmp /var/tmp $prog`;
+chomp $local_cmd_file;
 
 my $fh_cmd = "sed 's/\\\$AUTO_JOB_NAME/$job/g' >$local_cmd_file";
 open my $cfh, "|$fh_cmd" or die "$fh_cmd failed";
@@ -208,8 +218,8 @@ print "\n";
 print {$cfh} ". $info->{$job}->{profile};\n\n"        if $info->{$job}->{profile};
 print {$cfh} "ls -l $info->{$job}->{watch_file};\n\n" if $info->{$job}->{watch_file};
 
-if ($info->{$job}->{command}) {
-   my ($exe, $args) = split /[\s&|]/, $info->{$job}->{command}, 2;
+if ( $info->{$job}->{command} ) {
+   my ( $exe, $args ) = split /[\s&|]/, $info->{$job}->{command}, 2;
    print {$cfh} "which $exe; echo \"\";\n\n";
 }
 
@@ -222,10 +232,10 @@ for my $attr (qw(std_out_file std_err_file)) {
       #    std_err_file: ">/tmp/test.err"
       # remove the >
       $file =~ s/[>]+//g;
-   
+
       print {$cfh} "$attr=$file\n";
 
-      if ($yyyymmdd2 && $yyyymmdd2 ne $yyyymmdd) {
+      if ( $yyyymmdd2 && $yyyymmdd2 ne $yyyymmdd ) {
          # the last run is not today.
          print "LastStart was $yyyymmdd2, not today=$yyyymmdd, may change $attr\n";
 
@@ -241,16 +251,16 @@ END
       }
 
       print {$cfh} "ls -l \$$attr;\n";
-      
-      if (defined $pattern) {
+
+      if ( defined $pattern ) {
          print {$cfh} "egrep '$pattern' \$$attr;\n";
       } else {
          print {$cfh} "tail \$$attr;\n";
-      } 
+      }
       print {$cfh} "echo \"\";\n\n";
 
-      if ($attr eq 'std_out_file') {
-         if (defined $pattern) {
+      if ( $attr eq 'std_out_file' ) {
+         if ( defined $pattern ) {
             print {$cfh} "dig_app_log \$$attr '$pattern';\n\n";
          } else {
             print {$cfh} "dig_app_log \$$attr;\n\n";
@@ -261,7 +271,7 @@ END
 
 close $cfh;
 
-{ 
+{
    my $cmd = "chmod 744 $local_cmd_file";
    system($cmd);
    die "cmd = $cmd failed" if $? != 0;
@@ -269,14 +279,14 @@ close $cfh;
 
 my $run_with_ssh;
 if ($machine) {
-   my $ssh = "ssh -n -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
+   my $ssh      = "ssh -n -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes";
    my $test_cmd = "$ssh $owner\@$machine hostname >/dev/null";
    print "test_cmd = $test_cmd\n";
    system($test_cmd);
-   if ($?==0) {
+   if ( $? == 0 ) {
       # we can ssh to the machine, then run the script remotely
       print "ssh worked. we will run debug script using ssh.\n";
-      $run_with_ssh ++;
+      $run_with_ssh++;
    } else {
       print "ssh didn't work. we will run debug script locally.\n";
    }
@@ -295,4 +305,3 @@ print "local_cmd_file=$local_cmd_file\n";
 system("cat $local_cmd_file");
 print "cmd = $cmd\n\n";
 system($cmd);
-
