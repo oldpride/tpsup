@@ -218,7 +218,12 @@ class SeleniumEnv:
                 self.browser_options.binary_location = get_browser_path()
 
             if self.headless:
-                self.browser_options.add_argument("--headless")
+                # self.browser_options.add_argument("--headless")
+
+                # this is for chromedriver 129 only
+                #   https://stackoverflow.com/questions/78996364
+                #   we will remove it when we upgrade to chromedriver 130
+                self.browser_options.add_argument("--headless --window-position=-2400,-2400")
                 sys.stderr.write(" in headless mode\n")
         else:
             host, port = host_port.split(":", 1)
