@@ -81,7 +81,7 @@ our_cfg = {
             "userid": "henry",
             "username": "Henry King",
             "password": "dummy",
-            "dob": "11222001",
+            "dob": "01222023",
         },
     },
     "aliases": {"i": "userid", "n": "username", "p": "password"},
@@ -143,6 +143,7 @@ def code(all_cfg: dict, known: dict, **opt):
                 # test getting element id
                 """code=print(f'element id = {element.get_attribute("id")}, expecting DateOfBirth')""",
                 """sleep=2""",
+                f'string={known["DOB"]}',
             ],
             "go to Date of Birth",
         ],
