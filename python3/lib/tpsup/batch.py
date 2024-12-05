@@ -153,6 +153,19 @@ def parse_cfg(cfg_file: str = None, **opt):
         'extra_args',  # can be in 3 places: cfg file, module, this file.
         'resources',  # can be in 2 places: cfg file, module
     ]:
+        # make sure each item is a dict
+        #    globals().get(k, {}),
+        #    imported_tpbatch.get(k, {}),
+        #    our_cfg.get(k, {}),
+        if type(globals().get(k, {})) != dict:
+            raise RuntimeError(f'{k} in globals() is not a dict')
+        
+        if type(imported_tpbatch.get(k, {})) != dict:
+            raise RuntimeError(f'{k} in imported_tpbatch is not a dict')
+        
+        if type(our_cfg.get(k, {})) != dict:
+            raise RuntimeError(f'{k} in our_cfg is not a dict')
+
         our_cfg[k] = {
             **globals().get(k, {}),
             **imported_tpbatch.get(k, {}),

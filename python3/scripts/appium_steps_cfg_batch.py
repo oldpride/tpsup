@@ -105,6 +105,8 @@ our_cfg = {
     - the above can be done in one command assuming knowing pkg and activity beforehand
     {{{{prog}}}} -np -v -app "%TPSUP%/python3/scripts/test02.apk" run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
+    - block (if/while/not) examples see notes/wechat.txt
+    
 ''',
 
 

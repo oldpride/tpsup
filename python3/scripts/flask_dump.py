@@ -24,7 +24,7 @@ to test:
 
 Send queries like: curl -i http://localhost:5000/?q=q
 or 
-from browser: file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/flask_dump_test.html
+from browser: file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/action="http://localhost:5000".html
 
 
 """

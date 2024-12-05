@@ -2239,9 +2239,6 @@ def test_actions():
 
 
 def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
-    if not list:
-        return
-
     dryrun = opt.get("dryrun", 0)
     interactive = opt.get("interactive", 0)
     debug = opt.get("debug", 0)
@@ -2249,8 +2246,10 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     checkonly = opt.get("checkonly", 0)
     if checkonly:
         dryrun = 1
-    global we_return
-    global action_data
+    # global we_return
+    # global action_data
+    global locator_driver
+    global driver_url
 
     element: WebElement = None
 
@@ -2264,7 +2263,14 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     blockstart = None
     negation = False
 
+    if not steps:
+        if debug or verbose:
+            print(f'steps are empty. return')
+        return
+
     for step in steps:
+        if debug:
+            print(f"step={pformat(step)}")
         # check blockstack empty
         if blockend:
             if step == blockend:
@@ -2313,7 +2319,32 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                   f"looking for blockend={blockend}")
             continue
 
-        if m := re.match(r"\s*(xpath|css|id)=(.+)", step):
+        if m := re.match(r"(url|url_accept_alert)=(.+)", step):
+            tag, url, *_ = m.groups()
+            accept_alert = 0
+            if tag == 'url_accept_alert':
+                accept_alert = 1
+            print(f"locate(): go to url={url}, accept_alert={accept_alert}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                tp_get_url(driver, url, accept_alert=accept_alert,
+                           interactive=interactive)
+                locator_driver = driver
+                # the following doesn't work. i had to move it into tp_get_url()
+                # try:
+                #     driver_url = driver.current_url
+                # except UnexpectedAlertPresentException as ex:
+                #     # selenium.common.exceptions.UnexpectedAlertPresentException: Alert Text: {Alert text :
+                #     # Message: unexpected alert open: {Alert text : }
+                #     tpsup.tplog.print_exception(ex)
+                #     alert = driver.switch_to.alert
+                #     alert.accept()
+                #     print("alert accepted")
+                #     time.sleep(2)
+                #     driver_url = driver.current_url
+                driver_url = driver.current_url
+        elif m := re.match(r"\s*(xpath|css|id)=(.+)", step):
             tag, value, *_ = m.groups()
             print(f"follow(): {tag}={value}")
             if interactive:
@@ -2385,6 +2416,19 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
                 driver.refresh()
+        elif step == "iframe":
+            print(f"locate(): switch into iframe")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                # we cannot use locator_driver to swith iframe when locator_driver is a shadow root.
+                #   locator_driver.switch_to.frame(element)
+                #   AttributeError: 'ShadowRoot' object has no attribute 'switch_to'
+                # Therefore, we use (original) driver
+
+                driver.switch_to.frame(element)
+                locator_driver = driver
+                # once we switch into an iframe, we should use original driver to locate
         else:
             raise RuntimeError(f"unsupported 'step={step}'")
 

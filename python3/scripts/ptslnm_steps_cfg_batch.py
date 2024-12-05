@@ -5,7 +5,6 @@ import time
 from typing import Union
 
 import tpsup.envtools
-import json
 import tpsup.csvtools
 import tpsup.htmltools
 import tpsup.seleniumtools
@@ -28,61 +27,53 @@ our_cfg = {
     },
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args': ['host_port', 'url', 'output_dir'],
+    'position_args': ['url', 'output_dir'],
 
-    'extra_args': [
-        # argparse's args
-        {
-            'dest': 'headless',
-            'default': False,
-            'action': 'store_true',
-            'help': 'run in headless mode',
-        },
-        {
-            'dest': 'js',
-            'default': False,
-            'action': 'store_true',
-            'help': 'run js'
-        },
-        {
-            'dest': 'trap',
+    'extra_args': {
+        'js': {'switches': ['-js', '--js'],
+               'default': False,
+               'action': 'store_true',
+               'help': 'run js'
+               },
+        'trap': {
+            'switches': ['-trap', '--trap'],
             'default': False,
             'action': 'store_true',
             'help': 'used with -js, to add try{...}catch{...}',
         },
-        {
-            'dest': 'full',
+        'full': {
+            'switches': ['-full', '--full'],
             'default': False,
             'action': 'store_true',
             'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
         },
-        {
-            'dest': 'print_console_log',
+        'print_console_log': {
+            'switches': ['-ps', '--print_console_log'],
             'default': False,
             'action': 'store_true',
             'help': 'print js console log',
         },
-        {
-            'dest': 'limit_depth',
+        'limit_depth': {
+            'switches': ['--limit_depth'],
             'default': 5,
             'action': 'store',
             'type': int,
             'help': 'limit scan depth',
         },
-    ],
+    },
 
     'usage_example': f'''
     - test a static page with nested iframes, same origin
-    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
-    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
     
     - test a static page with nested iframes, cross origin
-    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
-    {{{{prog}}}} auto "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
     
     - this will dump out dynamically generated html too
     
-    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
     
     # iframe001: id("backgroundImage")
     # shadow001: /html[@class="focus-outline-visible"]/body[1]/ntp-app[1]
@@ -97,25 +88,25 @@ our_cfg = {
     #   double quotes cannot be escaped, 
     #   single quote is just a letter, cannot do grkouping. 
     # therefore, xpath=//div[@class="gb_Id"] will not work on cmd.exe
-    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
     
     # from bash
-    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html ~/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html ~/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
     
     # use -js
-    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
     
-    {{{{prog}}}} auto chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= %USERPROFILE%/dumpdir2 xpath=//div[3] -js
+    {{{{prog}}}} chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= %USERPROFILE%/dumpdir2 xpath=//div[3] -js
     
     # test a cross domain iframe
-    {{{{prog}}}} auto https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1]
-    {{{{prog}}}} auto https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1] -js
+    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1]
+    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1] -js
     
     # dump whole page, print xpath shortcut, eg id("mycontainer")
-    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html
     
     # dump whole page, print full xpath
-    {{{{prog}}}} auto chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
     ''',
 
     # use -js
@@ -154,24 +145,12 @@ def code(all_cfg, known, **opt):
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
         driver = method(**{**kwargs, "dryrun": 0})  # overwrite kwargs
 
-    actions = [
-        [f'url={url}', 'sleep=2', 'go to url'],
-    ]
+    steps = [f'url={url}', 'sleep=2']
 
-    locator_chain = known['REMAININGARGS']
-    if run_js:
-        js_list = tpsup.seleniumtools.locator_chain_to_js_list(
-            locator_chain, trap=trap)
-        locator_chain2 = tpsup.seleniumtools.js_list_to_locator_chain(
-            js_list)
-        actions.append(
-            [locator_chain2, f'dump_element={output_dir}', f'dump element to {output_dir}'])
-    else:
-        actions.append(
-            [locator_chain, f'dump_element={output_dir}', f'dump element to {output_dir}'])
+    steps.extend(known['REMAININGARGS'])        
 
-    print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.follow(driver, actions, **opt)
+    print(f'steps = {pformat(steps)}')
+    result = tpsup.seleniumtools.follow(driver, steps, **opt)
 
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
