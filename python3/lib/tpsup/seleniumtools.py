@@ -49,7 +49,42 @@ from tpsup.cmdtools import run_cmd_clean
 # | selenium +----->+ chromedriver +---->+ chrome browser +---->internet
 # +----------+      +--------------+     +----------------+
 
+########### start of global variables ###########
+# because we use a lot of eval(), therefore, we use many global variables.
+# note: global var is only global within the same module, ie, same file.
+
+# locator_driver is different from driver (aka. session)
+# when we enter a shadow, the shadow root is a new driver; we have to use
+# this new driver to run find_element_by_css. 
+# if we enter an iframe, even if it is a iframe within a shadow, we go
+# back to the original driver.
+# therefore, we use locator_driver to differentiate from original driver.
+# if driver's url changes, we reset the locator_driver to original driver.
+# therefore, we keep track of driver url too.
+locator_driver: webdriver = None
+driver_url = None
+
+# we use this to retrieve the effect after we eval code.
+action_data = {}
+
+# '1' return 1 layer, '2' return 2 layers, ....
+# we start with 0, meaning we are outside of any layer, no layer to return
+# everytime we break out a layer (while loop), we decrease return_levels by 1
+return_levels = 0 
+
+# we use this to control both explicit and implicit wait. 
+# more detail about explicit and implicit wait, see other comments in this file.
 wait_seconds = 10 # seconds
+
+# "last_element" is the last element we concerned.
+# note: this may not be the active element. For example, if the previous step
+# used xpath to find an element, the element is the "last_element", but only
+# if we click on it, it become active.
+# however, if we just want to get attribute or dump the element, we can just
+# use the "last_element".
+last_element = None
+
+########### end of global variables ###########
 
 class SeleniumEnv:
     def __init__(self, host_port: str = 'auto', page_load_timeout: int = 15, **opt):
@@ -148,8 +183,8 @@ class SeleniumEnv:
 
         if self.verbose:
             # print(sys.path)
-            sys.stderr.write(f"pwd={os.getcwd()}\n")
-            sys.stderr.write(f'PATH={os.environ["PATH"]}\n')
+            sys.stderr.write(f"SeleniumEnv.__init__: pwd={os.getcwd()}\n")
+            sys.stderr.write(f'SeleniumEnv.__init__:PATH={os.environ["PATH"]}\n')
 
             self.print_running_drivers()
 
@@ -164,7 +199,7 @@ class SeleniumEnv:
                     # --pid PID  exits when PID is gone
                     # -F         retry file if it doesn't exist
                     cmd = f"tail --pid {os.getpid()} -F -f {self.driverlog} &"
-                    sys.stderr.write(f"cmd={cmd}\n")
+                    sys.stderr.write(f"SeleniumEnv.__init__: cmd={cmd}\n")
                     os.system(cmd)
                 elif self.env.isWindows:
                     # windows doesn't have a way to do "tail -f file &"
@@ -194,18 +229,18 @@ class SeleniumEnv:
             # by setting this, we tell chromedriver not to start a browser
             self.browser_options.debugger_address = f"{host_port}"
 
-            sys.stderr.write(f"check browser port at {host_port}\n")
+            sys.stderr.write(f"SeleniumEnv.__init__: check browser port at {host_port}\n") 
             self.connected_existing_browser = False
             (host, port) = host_port.split(":", 1)
             if is_tcp_open(host, port):
                 sys.stderr.write(
-                    f"{host_port} is open. let chromedriver to connect to it\n")
+                    f"SeleniumEnv.__init__: {host_port} is open. let chromedriver to connect to it\n")
             else:
                 raise RuntimeError(f"browser host_port={host_port} is not open.\n")
 
         if host_port == "auto":
             sys.stderr.write(
-                "chromedriver will auto start a browser and pick a port\n")
+                "SeleniumEnv.__init__: chromedriver will auto start a browser and pick a port\n")
 
             if self.env.isLinux:
                 # 2023/09/09,
@@ -235,18 +270,18 @@ class SeleniumEnv:
             if host.lower() != "localhost" and host != "127.0.0.1" and host != "":
                 if self.dryrun:
                     sys.stderr.write(
-                        "cannot connect to remote browser, but this is dryrun, so we continue\n"
+                        "SeleniumEnv.__init__: cannot connect to remote browser, but this is dryrun, so we continue\n"
                     )
                 else:
                     raise RuntimeError("cannot connect to remote browser.")
             else:
                 sys.stderr.write(
-                    "cannot connect to an existing local browser. we will start up one.\n")
+                    "SeleniumEnv.__init__: cannot connect to an existing local browser. we will start up one.\n")
                 self.browser_options.binary_location = get_browser_path()
 
                 if self.headless:
                     self.browser_options.add_argument("--headless")
-                    sys.stderr.write(" in headless mode\n")
+                    sys.stderr.write("SeleniumEnv.__init__: in headless mode\n")
                 else:
                     sys.stderr.write("\n")
 
@@ -291,11 +326,11 @@ class SeleniumEnv:
             # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
 
         print(
-            f"browser_options.arguments = {pformat(self.browser_options.arguments)}")
+            f"SeleniumEnv.__init__: browser_options.arguments = {pformat(self.browser_options.arguments)}")
 
         if self.dryrun:
             sys.stderr.write(
-                "this is dryrun, therefore, we don't start a webdriver, nor a browser\n"
+                "SeleniumEnv.__init__: this is dryrun, therefore, we don't start a webdriver, nor a browser\n"
             )
         else:
             # rotate the log file if it is bigger than the size.
@@ -318,7 +353,7 @@ class SeleniumEnv:
                 service=driver_service,
                 options=self.browser_options,
             )
-            sys.stderr.write("started\n")
+            sys.stderr.write("SeleniumEnv.__init__: started\n")
             # if self.headless:
             #    time.sleep(1)  # throttle for the headless mode
 
@@ -490,12 +525,12 @@ def check_setup(**opt):
         static_path = None
         if exec in static_setup:
             static_path = static_setup[exec]
-            print(f"static setup configured {exec}={static_path}")
+            print(f"check_setup: static setup configured {exec}={static_path}")
             if os.path.isfile(static_path):
                 path = static_setup[exec]
-                print(f"static setup's {exec}={static_path} exists.")
+                print(f"check_setup: static setup's {exec}={static_path} exists.")
             else:
-                print(f"static setup's {exec}={static_path} doesn't exist.")
+                print(f"check_setup: static setup's {exec}={static_path} doesn't exist.")
 
         if path:
             found_path[exec] = path
@@ -511,10 +546,10 @@ def check_setup(**opt):
 
         path = search_exec_in_path(execList)
         if path:
-            print(f"found {exec}={path} in PATH")
+            print(f"check_setup: found {exec}={path} in PATH")
             found_path[exec] = path
         else:
-            print(f"cannot find {exec} in PATH={os.environ['PATH']}")
+            print(f"check_setup: cannot find {exec} in PATH={os.environ['PATH']}")
 
     if opt.get('compareVersion', 0):
         print("")
@@ -534,11 +569,11 @@ def check_setup(**opt):
 
             # use str() to convert bytes to string
 
-            print(f"chrome version={chrome_vesion}")
+            print(f"check_setup: chrome version={chrome_vesion}")
 
             chrome_major = chrome_vesion.split('.')[0]
 
-            print(f"chrome major={chrome_major}")
+            print(f"check_setup: chrome major={chrome_major}")
 
         if found_path.get('chromedriver'):
             chromedriver_vesion = str(subprocess.check_output(
@@ -547,27 +582,27 @@ def check_setup(**opt):
 
             # use str() to convert bytes to string
 
-            print(f"chromedriver version={chromedriver_vesion}")
+            print(f"check_setup: chromedriver version={chromedriver_vesion}")
 
             chromedriver_vesion = chromedriver_vesion.split()[1]
             # 99.0.4844.74
 
-            print(f"chromedriver version={chromedriver_vesion}")
+            print(f"check_setup: chromedriver version={chromedriver_vesion}")
 
             chromedriver_major = chromedriver_vesion.split('.')[0]
             chromedriver_major = chromedriver_major
 
-            print(f"chromedriver version={chromedriver_vesion}")
+            print(f"check_setup: chromedriver version={chromedriver_vesion}")
 
         if chrome_vesion and chromedriver_vesion:
             if chrome_major != chromedriver_major:
                 print(
-                    f"chrome major version {chrome_major} doesn't match chromedriver major version {chromedriver_major}")
+                    f"check_setup: chrome major version {chrome_major} doesn't match chromedriver major version {chromedriver_major}")
                 raise RuntimeError(
                     f"chrome major version {chrome_major} doesn't match chromedriver major version {chromedriver_major}")
             else:
                 print(
-                    f"chrome major version {chrome_major} matches chromedriver major version {chromedriver_major}")
+                    f"check_setup: chrome major version {chrome_major} matches chromedriver major version {chromedriver_major}")
     return found_path
 
 
@@ -629,7 +664,7 @@ class tp_find_element_by_paths:
                 # e.click()
                 tp_click(driver, e)
 
-            print(f'found {ptype}="{path}"')
+            print(f'tp_find_element_by_paths: found {ptype}="{path}"')
 
             # monkey-patch some self-identification info for convenience
             e.tpdata = {
@@ -642,7 +677,6 @@ class tp_find_element_by_paths:
         return e
     
     # defind an exit function
-
 
 
 class tp_find_element_by_chains:
@@ -884,25 +918,6 @@ def get_locator_compiled_path2():
     return re.compile(
         r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*(xpath|css|click_xpath|click_css)=",
         re.MULTILINE | re.DOTALL)
-
-
-# because we use a lot of eval(), therefore, we use many global variables.
-# note: global var is only global within the same module, ie, same file.
-locator_driver: webdriver = None
-driver_url = None
-
-action_data = {}
-
-# '1' return 1 layer, '2' return 2 layers, ....
-# we start with 0, meaning we are outside of any layer, no layer to return
-# everytime we break out a layer (while loop), we decrease return_levels by 1
-return_levels = 0 
-
-# no global var for element because 
-#   - there could be multiple elements in action
-#   - we can always use element = driver.switch_to.active_element
-#     to get the active element
-#   - locate() call will pass back the element in the return value.
 
 
 def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, **opt):
@@ -1560,6 +1575,8 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     '''
     global locator_driver
     global driver_url
+    global last_element
+    global return_levels
 
     if (not locator_driver) or (not driver_url) or (driver_url != driver.current_url):
         locator_driver = driver
@@ -1578,7 +1595,7 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     #         end_while # while block depth = 0, if block depth = 1
     #     end_if      # if block depth = 0
 
-    block_depth = 0 
+    block_depth = 0 # this needs to be a local var as follow() is recursive.
 
     condition = None
     blockstart = None
@@ -1587,7 +1604,7 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     debug = opt.get("debug", 0)
     verbose = opt.get("verbose", 0)
 
-    ret = {'Success': False, 'element': None}
+    ret = {'Success': False}
 
     if not steps:
         if debug or verbose:
@@ -1610,10 +1627,11 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
 
                 if block_depth == 0:
                     # the outermost block is done
-                    print(
-                    f"matched expected_blockend={expected_blockend}, running block={block}, condition={condition}")
+                    if debug:
+                        print(f"follow: matched expected_blockend={expected_blockend}")
                     expected_blockend = None
 
+                    print(f"follow: run block={block}, condition={condition}, block_depth={block_depth}")
                     if not block:
                         raise RuntimeError(f"block is empty")
                 
@@ -1622,7 +1640,8 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                                 condition, block, **opt)
                 else:
                     # we only encountered a nested block end
-                    print(f"matched expected_blockend={expected_blockend}, but still in block_depth={block_depth}")
+                    if debug:
+                        print(f"follow: matched expected_blockend={expected_blockend}, but still in block_depth={block_depth}")
 
                     # we keep the nested block end in the block, so that we can recursively call run_block()
                     block.append(step)
@@ -1665,8 +1684,9 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
                 else:
                     expected_blockend = f"end_{blockstart}"
                 block = []
-                print(f"blockstart={blockstart}, negation={negation}, condition={condition}, "
-                    f"expected_blockend={expected_blockend}, block_depth={block_depth}")
+                if debug:
+                    print(f"follow: blockstart={blockstart}, negation={negation}, condition={condition}, "
+                        f"expected_blockend={expected_blockend}, block_depth={block_depth}")
                 continue
         # now we are done with control block handling
 
@@ -1778,11 +1798,11 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
         else:
             raise RuntimeError(f"unsupported step type={step_type}, step={pformat(step)}")
         
-        print(f"follow: result={pformat(result)}")
+        if debug:
+            print(f"follow: result={pformat(result)}")
 
         # copy result to ret
-        ret['Success'] = result['Success']
-        ret['element'] = result['element']  
+        ret['Success'] = result['Success'] 
 
         if return_levels:
             break
@@ -1801,22 +1821,30 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
     debug = opt.get("debug", 0)
     verbose = opt.get("verbose", 0)
     checkonly = opt.get("checkonly", 0)
-    helper = opt.get("helper", {})
-
+    
     global driver_url
     global locator_driver
+    global return_levels
+    global last_element
 
     if (not locator_driver) or (not driver_url) or (driver_url != driver.current_url):
         locator_driver = driver
         driver_url = driver.current_url
     
     if debug:
-        print(f"step={pformat(step)}")
+        print(f"locate_dict: step={pformat(step)}")
 
-    ret = {
-        'Success': False,
-        'element': None,
-    }
+    helper = {}  # interactivity helper
+    if interactive:
+        helper = {
+            'd': ['dump page', dump,
+                  {'driver': driver,
+                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+                  # we delay mkdir, till we really need it
+                  ],
+        }
+
+    ret = {'Success': False}
 
     locator_type = step.get('type', None)
     action = step.get('action', None)
@@ -1832,7 +1860,7 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
         if result['Success']:
             # we found the element
             if 'Success' in action:
-                locate(driver, action['Success'], **opt) # we don'tuse follow() here, because we don't want to be recursive.
+                locate(driver, action['Success'], **opt) # we don't use follow() here, because we don't want to be recursive.
             ret['Success'] = True
         else:
             # we didn't find the element
@@ -1855,15 +1883,13 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
 
         # copy result to ret
         ret['Success'] = result['Success']
-        ret['element'] = result['element']
 
         if return_levels:
             return ret
 
         if result['Success']:
             # we found the element, the corresponing locator is in result['element'].tpdata
-            element = result['element']
-            tpdata = getattr(element, 'tpdata', None)
+            tpdata = getattr(last_element, 'tpdata', None)
             path_index = tpdata['position']
 
             path = paths[path_index]
@@ -1912,6 +1938,8 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
             
             finder = tp_find_element_by_chains(chains, **opt)
 
+            element = None
+
             try:
                 # wait.until() takes the object.
                 # note: here we used finder, not finder(driver).
@@ -1925,6 +1953,7 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
 
             if element:
                 ret['Success'] = True
+                last_element = element
 
                 # Found. then find which path found the element
                 tpdata = getattr(element, 'tpdata', None)
@@ -1939,6 +1968,7 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
                     result = locate(driver, action['Success'], **opt)             
             else:
                 element = driver.switch_to.active_element
+                last_element = element
 
                 if 'Failure' in action:
                     # action-level NotFound
@@ -1948,7 +1978,6 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
     else:
         raise RuntimeError(f"unsupported locator_type={locator_type}, step={pformat(step)}")
     
-    print(f"follow: this step is done")
     return ret
 
 
@@ -1958,13 +1987,13 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
     debug = opt.get("debug", 0)
     verbose = opt.get("verbose", 0)
     checkonly = opt.get("checkonly", 0)
-    helper = opt.get("helper", {})
     isExpression = opt.get("isExpression", 0) # for condtion test, we set isExpression=1, so that we get True/False.
 
     global locator_driver
     global driver_url
     global wait_seconds
     global return_levels
+    global last_element
 
     # we don't have a global var for active element, because
     #    - we can always get it from driver.switch_to.active_element
@@ -1972,10 +2001,37 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
     #      it needs to wait to update active element. Therefore, it is better to get it 
     #      from driver.switch_to.active_element in the next step (of locate()).
 
-    ret = {
-        'Success': False, # for xpath, css, 'Success' means found the element.
-        'element': None,
-    }
+    ret = {'Success': False}
+
+    helper = {}  # interactivity helper
+    if interactive:
+        helper = {
+            'd': ['dump page', dump,
+                  {'driver': driver,
+                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+                  # we delay mkdir, till we really need it
+                  ],
+        }
+
+    # locator_driver vs original 'driver'
+    #    - we introduce locator_driver because shadow_host.shadow_root is also a driver,
+    #      we can call it shadow driver, but its locator can only see the shadow DOM,
+    #      and only css locator is supported as of 2022/09/09.
+    #    - locator_driver started as the original driver.
+    #    - locator_driver will be shadow driver when we are in a shadow root.
+    #    - locator_driver will be (original) driver after we switch_to an iframe, even if
+    #      the iframe is under a shadow root.
+    #    - every time driver_url changes, we should reset locator_driver to driver.
+    #      driver_url can be changed not only by get(url), but also by click()
+    # shadow driver only has a few attributes, just to support the separate DOM, the shadow DOM.
+    #     - find_element
+    #     - find_elements
+    # pycharm hint also only shows the above two attributes from a shadow driver.
+    # for example, shadow_host.shadow_root cannot
+    #      - get(url)
+    #      - switch_to
+    #      - click()
+    # therefore, we don't need to pass 'locator_driver' to send_input().
 
     if (not locator_driver) or (not driver_url) or (driver_url != driver.current_url):
         locator_driver = driver
@@ -2032,6 +2088,7 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             element = driver.execute_script(js)
+            last_element = element
             ret['Success'] = True
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
@@ -2041,6 +2098,8 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             driver.switch_to.active_element.send_keys(Keys.TAB * count)
+            last_element = driver.switch_to.active_element
+            ret['Success'] = True
     elif m := re.match(r"shifttab=(.+)", locator):
         count_str, *_ = m.groups()
         count = int(count_str)
@@ -2054,6 +2113,8 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
                 ac.send_keys(Keys.TAB)
             ac.key_up(Keys.SHIFT)
             ac.perform()
+            last_element = driver.switch_to.active_element
+            ret['Success'] = True
     elif locator == "shadow":
         print(f"locate: switch into shadow_root")
         element = driver.switch_to.active_element
@@ -2061,14 +2122,15 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             if element.shadow_root:
                 pass
         except NoSuchShadowRootException:
-            print(f'no shadow root under this element')
+            print(f'locate: no shadow root under this element')
             return
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
+            last_element = None # after entering shadow, we need to search element again.
+            ret['Success'] = True
     elif locator == "iframe":
-        ret['Success'] = True # hard code to True for now
         print(f"locate: switch into iframe")
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2083,7 +2145,8 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             driver.switch_to.frame(element)
             locator_driver = driver
             # once we switch into an iframe, we should use original driver to locate
-
+            last_element = None # after entering iframe, we need to search element again.
+            ret['Success'] = True
     elif m1 := get_locator_compiled_path1().match(locator):
         ptype, paths_string = m1.groups()
         # default to strip blanks: space, tab, newline ...
@@ -2140,6 +2203,7 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
                 # https://selenium-python.readthedocs.io/waits.html
                 element = driverwait.until(finder)
                 # element = driverwait.until(find_element_by_xpath('//input[@name="q"]'))
+                last_element = element
                 ret['Success'] = True
 
                 # which path found the element is saved in element.tpdata
@@ -2162,13 +2226,17 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
         seconds_str, *_ = m.groups()
         seconds = int(seconds_str)
         print(f"locate: hover {seconds} seconds")
+
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
+            if not last_element:
+                raise RuntimeError("no element to hover")
             ActionChains(driver).move_to_element(
-                element).pause(seconds).perform()
+                last_element).pause(seconds).perform()
+            # this action should not change the active element
+            ret['Success'] = True
     elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL):
-        ret['Success'] = True # hard code to True for now
         value, *_ = m.groups()
         print(f"locate: string={value}")
         if interactive:
@@ -2176,6 +2244,8 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
         if not dryrun:
             element = driver.switch_to.active_element
             element.send_keys(value)
+            last_element = element
+            ret['Success'] = True
     elif m := re.match(r"clear_attr=(.+)", locator):
         # even if only capture group, still add *_; other attr would become list, not scalar
         attr, *_ = m.groups()
@@ -2192,6 +2262,8 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
                 element.send_keys(
                     Keys.__getattribute__((Keys, key.upper())) * length
                 )
+            last_element = element
+            ret['Success'] = True
     elif m := re.match(r"is_attr_empty=(.+)", locator):
         attr, *_ = m.groups()
         print(
@@ -2199,13 +2271,16 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            element = driver.switch_to.active_element
-            value = element.get_attribute(attr)
+            # the checked element may not be the active element.
+            # element = driver.switch_to.active_element
+            if not last_element:
+                raise RuntimeError("no element to check")
+            value = last_element.get_attribute(attr)
             print(f'{attr} = "{value}"')
             if not (value is None or value == ""):
                 raise RuntimeError(f"{attr} is not empty")
+            ret['Success'] = True
     elif m := re.match(r"key=(.+?),(\d+)", locator, re.IGNORECASE):
-        ret['Success'] = True # hard code to True for now
         key, count_str = m.groups()
         count = int(count_str)
         print(f"locate: type {key} {count} times")
@@ -2216,23 +2291,38 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             element = driver.switch_to.active_element
             element.send_keys(Keys.__getattribute__(
                 Keys, key.upper()) * count)
+            last_element = element
+            ret['Success'] = True
     elif locator == 'click':
-        ret['Success'] = True # hard code to True for now
         print(f"locate: click")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            element = driver.switch_to.active_element
+            # the clicked element may not be the active element, for
+            # example, we just found a element by find_element_by_xpath(),
+            # that element is not the active element.
+            # but after we click it, it will be active.
+            # element = driver.switch_to.active_element
             # element.click()
-            tp_click(driver, element)
+            if not last_element:
+                raise RuntimeError("no element to click")
+            tp_click(driver, last_element)
+            ret['Success'] = True
     elif m := re.match(r"select=(value|index|text),(.+)", locator):
             attr, string = m.groups()
             print(f'locate: select {attr} = "{string}"')
             if interactive:
                 hit_enter_to_continue(helper=helper)
             if not dryrun:
-                element = driver.switch_to.active_element
-                se = Select(element)
+                # the selected element may not be the active element.
+                # for example, we just found a element by find_element_by_xpath(),
+                # that element is not the active element.
+                # but after we select it, it will be active.
+                # element = driver.switch_to.active_element
+
+                if not last_element:
+                    raise RuntimeError("no element to select")
+                se = Select(last_element)
                 if attr == "value":
                     se.select_by_value(string)
                 elif attr == "index":
@@ -2240,6 +2330,8 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
                 else:
                     # attr == 'text'
                     se.select_by_visible_text(string)
+                last_element = se # todo: or keep old last_element?
+                ret['Success'] = True      
     elif m1 := re.match(r"(?:\n|\r\n|\s?)*gone_(xpath|css)=(.+)",
                         locator, re.MULTILINE | re.DOTALL):
         ptype, paths_string = m1.groups()
@@ -2256,10 +2348,8 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
 
         type_paths.append([ptype, paths_string])
 
-        interval = opt.get("gone_interval", 60)
-
         print(
-            f"locate: wait {interval} seconds for elements gone, paths = {pformat(type_paths)}")
+            f"locate: wait {wait_seconds} seconds for elements gone, paths = {pformat(type_paths)}")
 
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2267,7 +2357,10 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             e = None
             i = 0
 
-            while i < interval:
+            # temporarily set implicit wait to 0, so that find_element() will not wait
+            driver.implicitly_wait(0)
+
+            while i < wait_seconds:
                 i = i + 1
                 # wait at least a second to let the element show up
                 time.sleep(1)
@@ -2295,16 +2388,21 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             if e:
                 js_print_debug(driver, e)
                 raise RuntimeError(f"not all paths gone in {i} seconds")
+            
+            # restore implicit wait
+            driver.implicitly_wait(wait_seconds)
 
+            # don't change last_element
     elif (locator == "default_iframe"):
-        ret['Success'] = True # hard code to True for now
         print(f"locate: switch back to default iframe")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             driver.switch_to.default_content()
+            locator_driver = driver
+            last_element = None # after entering iframe, we need to search element again.
+            ret['Success'] = True
     elif m := re.match(r"dump_(element|all)=(.+)", locator):
-        ret['Success'] = True # hard code to True for now
         scope, output_dir, *_ = m.groups()
         print(f"locate: dump {scope} to {output_dir}")
 
@@ -2315,16 +2413,18 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             dump(driver, **{**opt, 'output_dir': output_dir})
         else:
             # scope == 'element'
-            element = driver.switch_to.active_element
-            if element is None:
+            # element = driver.switch_to.active_element
+            # if element is None:
+            if last_element is None:
                 print(
                     "dump_element() is called but element is None, we dump_all() instead")
-            dump(driver, element=element, **
+            dump(driver, element=last_element, **
                     {**opt, 'output_dir': output_dir})
+        ret['Success'] = True
     elif m := re.match(r"we_return()$|we_return=(\d+)", locator):
         ret['Success'] = True # hard code to True for now
 
-        we_return, *_ = m.groups()  # this updates the global variable
+        we_return, *_ = m.groups()
 
         # default return levels is 999, ie, return all levels
         if we_return == "":
@@ -2332,7 +2432,7 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
         else:
             return_levels = int(we_return)
 
-        print(f"return_levels={return_levels}")
+        print(f"locate: we_return={we_return}, return_levels={return_levels}")
 
     # end of old send_input()
 
@@ -2359,12 +2459,13 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             driver.implicitly_wait(wait_seconds)
 
     elif locator == 'refresh':
-        ret['Success'] = True # hard code to True for now
         print(f"locate: refresh driver")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             driver.refresh()
+            locator_driver = driver
+            last_element = None
 
     elif m := re.match(r"comment=(.+)", locator, re.MULTILINE | re.DOTALL):
         ret['Success'] = True # hard code to True for now
@@ -2389,10 +2490,14 @@ def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  conditi
         while True:
             result = if_block(driver, negation, condition, block, **opt)
             if debug:
-                print(f"run_block(): result={result}")
+                print(f"run_block: result={result}")
             if not result['executed']:
                 break
+
+            # only while-loop can be broken.
             if return_levels:
+                if debug:
+                    print(f"run_block: return_levels={return_levels}, break the while loop")
                 # reduce return_levels by 1
                 return_levels = return_levels - 1
                 break
@@ -2401,7 +2506,6 @@ def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  conditi
 
     ret['Success'] = result['Success']
     ret['executed'] = result['executed']
-    ret['element'] = result['element']
 
     return ret
 
@@ -2413,7 +2517,7 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
     verbose = opt.get('verbose', False)
     checkonly = opt.get('checkonly', False)
 
-    ret = {'Success': False, 'executed': False, 'element': None}
+    ret = {'Success': False, 'executed': False}
 
     # try:
     #     result['Success'] = eval(condition)
@@ -2446,7 +2550,6 @@ def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: li
     
             if result:
                 ret['Success'] = result['Success']
-                ret['element'] = result['element']
 
     return ret
 
@@ -2560,7 +2663,7 @@ tpbatch = {
 
 def main():
     # test_basic()
-    test_actions()
+    pass
 
 
 if __name__ == "__main__":

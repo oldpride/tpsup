@@ -36,12 +36,12 @@ our_cfg = {
         https://www.google.com and https://google.com are the same in the Chrome browser: no iframe nor shadow.
         however, Chrome's new tab default to a search page lookalike: has both iframes and shadow.
     {{{{prog}}}} https://www.google.com ~/dumpdir -np
-    {{{{prog}}}} https://www.google.com %USERPROFILE%/dumpdir -np kqq
+    {{{{prog}}}} https://www.google.com %USERPROFILE%/dumpdir -np
     {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir -np # this is the new tab url
     
     - has shadows, no iframes, simple pages to test shadows
     {{{{prog}}}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np
-    {{{{prog}}}} http://watir.com/examples/shadow_dom.html %USERPROFILE%/dumpdir -np
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_dump_test_shadow_main.html" %USERPROFILE%/dumpdir -np
     
     - has both iframes and shadows
     {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir -np
@@ -83,16 +83,13 @@ def code(all_cfg, known, **opt):
 
     driver = all_cfg["resources"]["selenium"]["driver"]
 
-    actions = [
-        [f'url={url}', 'sleep=2', 'go to url'],
-    ]
+    steps = [f'url={url}', 'sleep=2']
 
     if xpath:
-        actions.append(
-            [f'xpath={xpath}', f'dump_element={dir}', f'dump {xpath} to {dir}'])
+        steps.extend(
+            [f'xpath={xpath}', f'dump_element={dir}', f'comment=dumped {xpath} to {dir}'])
     else:
-        actions.append([None, f'dump_all={dir}', f'dump all to {dir}'])
+        steps.extend([f'dump_all={dir}', f'comment=dump all to {dir}'])
 
-    print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.run_actions(
-        driver, actions, **opt)
+    print(f'actions = {pformat(steps)}')
+    result = tpsup.seleniumtools.follow(driver, steps, **opt)
