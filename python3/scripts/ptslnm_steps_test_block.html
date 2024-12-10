@@ -1,0 +1,39 @@
+<!-- an html with a javascript function that 
+ generates a random number between a minimum and maximum value 
+ Math.random() cannot set seed
+ 
+ -->
+
+<html>
+
+<head>
+    <title>Random Number Generator</title>
+    <link rel="stylesheet" href="ptslnm_steps_test_block.css">
+    <script type="text/javascript">
+        var seed = 1;
+        function generateRandomNumber() {
+            var min = parseInt(document.getElementById("min").value);
+            var max = parseInt(document.getElementById("max").value);
+
+            // Math.random() cannot set seed.
+            // https://stackoverflow.com/questions/521295/
+            // var random = Math.floor(Math.random() * (max - min + 1)) + min;
+
+            // we can use a seedable random number generator
+            var x = Math.sin(seed++) * 10000;
+            var random = Math.floor((x - Math.floor(x)) * (max - min + 1)) + min;
+            document.getElementById("random").innerHTML = random;
+        }
+    </script>
+</head>
+
+<body>
+    <h1>Random Number Generator</h1>
+    <p>Enter the minimum and maximum values to generate a random number between them.</p>
+    <label for="min">Minimum:</label>
+    <input type="number" id="min" name="min" value="0">
+    <label for="max">Maximum:</label>
+    <input type="number" id="max" name="max" value="10">
+
+    <button onclick="generateRandomNumber()">Generate Random Number</button>
+    <p>Random Number: <span id="random"></span></p>

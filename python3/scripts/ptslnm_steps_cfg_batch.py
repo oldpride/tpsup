@@ -27,7 +27,7 @@ our_cfg = {
     },
 
     # position_args will be inserted into $opt hash to pass forward
-    'position_args': ['url', 'output_dir'],
+    'position_args': ['url'],
 
     'extra_args': {
         'js': {'switches': ['-js', '--js'],
@@ -64,16 +64,23 @@ our_cfg = {
 
     'usage_example': f'''
     - test a static page with nested iframes, same origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
     
     - test a static page with nested iframes, cross origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" %USERPROFILE%/dumpdir2 xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
     
+    - block example
+    {{{{prog}}}} "about:blank" code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
+
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_steps_test_block.html" click_xpath=/html/body/button sleep=3
+
+    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_steps_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" we_return end_if end_while
+
+    #//*[@id="random" and not(text() = "5"]
+
     - this will dump out dynamically generated html too
     
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html xpath=/html/body/ntp-app shadow css=ntp-realbox shadow css=input 
     
     # iframe001: id("backgroundImage")
     # shadow001: /html[@class="focus-outline-visible"]/body[1]/ntp-app[1]
@@ -88,25 +95,25 @@ our_cfg = {
     #   double quotes cannot be escaped, 
     #   single quote is just a letter, cannot do grkouping. 
     # therefore, xpath=//div[@class="gb_Id"] will not work on cmd.exe
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3]
     
     # from bash
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html ~/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe 'xpath=//div[@class="gb_Id"]'
     
     # use -js
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html xpath=/html/body/ntp-app shadow css=ntp-iframe shadow "css=#iframe" iframe xpath=//div[3] -js
     
-    {{{{prog}}}} chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= %USERPROFILE%/dumpdir2 xpath=//div[3] -js
+    {{{{prog}}}} chrome-untrusted://new-tab-page/one-google-bar?paramsencoded= xpath=//div[3] -js
     
     # test a cross domain iframe
-    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1]
-    {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir2 xpath=//iframe[4] iframe xpath=//script[1] -js
+    {{{{prog}}}} https://www.dice.com xpath=//iframe[4] iframe xpath=//script[1]
+    {{{{prog}}}} https://www.dice.com xpath=//iframe[4] iframe xpath=//script[1] -js
     
     # dump whole page, print xpath shortcut, eg id("mycontainer")
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html xpath=/html
     
     # dump whole page, print full xpath
-    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html %USERPROFILE%/dumpdir2 xpath=/html -full
+    {{{{prog}}}} chrome-search://local-ntp/local-ntp.html xpath=/html -full
     ''',
 
     # use -js
@@ -133,12 +140,8 @@ def code(all_cfg, known, **opt):
 
     dryrun = opt.get('dryrun', 0)
     url = opt.get('url')
-    output_dir = opt.get('output_dir')
     run_js = opt.get('js', 0)
     trap = opt.get('trap', 0)
-
-    yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
-    os.makedirs(output_dir, exist_ok=True)  # this does "mkdir -p"
 
     if driver is None:
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']

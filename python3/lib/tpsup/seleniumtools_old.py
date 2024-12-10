@@ -49,7 +49,6 @@ from tpsup.cmdtools import run_cmd_clean
 # | selenium +----->+ chromedriver +---->+ chrome browser +---->internet
 # +----------+      +--------------+     +----------------+
 
-wait_seconds = 10 # seconds
 
 class SeleniumEnv:
     def __init__(self, host_port: str = 'auto', page_load_timeout: int = 15, **opt):
@@ -284,7 +283,6 @@ class SeleniumEnv:
         # self.browser_options.add_argument("--headless");
         self.browser_options.add_argument("enable-automation")
         self.browser_options.add_argument("--disable-browser-side-navigation")
-        # self.browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
         for arg in opt.get("browserArgs", []):
             self.browser_options.add_argument(f"--{arg}")
@@ -573,18 +571,7 @@ def check_setup(**opt):
 
 # https://stackoverflow.com/questions/47420957/create-custom-wait-until-condition-in-python
 
-'''
-Explicit Waits vs Implicit Waits
-https://selenium-python.readthedocs.io/waits.html
 
-WebDriverWait(driver, 10) is an example of explicit wait; it calls the the class defined below.
-driver.find_element(By.XPATH, path) is an example of implicit wait; implicit wait is controlled by driver.implicitly_wait(10).
-Therefore, in our code, we use explicit wait call to call a function that uses implicit wait.
-
-Because explicit wait is the total wait time, which cover all iterations of implicit wait, 
-we need to temporarily set implicit wait to 0 when we call WebDriverWait(driver, 10).until(...)
-for below functions.
-'''
 class tp_find_element_by_paths:
     def __init__(self, type_paths: list, **opt):
         self.type_paths = type_paths
@@ -640,9 +627,6 @@ class tp_find_element_by_paths:
             break
 
         return e
-    
-    # defind an exit function
-
 
 
 class tp_find_element_by_chains:
@@ -828,6 +812,74 @@ class tp_find_element_by_chains:
         return None
 
 
+we_return = 0  # global var, note: only global to this filewe_return
+action_data = {}  # global var
+
+
+def run_actions(driver: webdriver.Chrome, actions: List, **opt):
+    dryrun = opt.get("dryrun", 0)
+    interactive = opt.get("interactive", 0)
+    print_console_log = opt.get("print_console_log", 0)
+    debug = opt.get("debug", 0)
+
+    # we don't need these in python as we pass driver and element in function. when we exec(),
+    #     global we_return, driver, element
+    #     driver = _driver
+
+    global we_return  # global var, note: only global to this file
+    global action_data
+
+    we_return = 0
+    if not opt.get('keep_action_data', 0):
+        action_data = {}
+
+    element: WebElement = None
+
+    # for row in actions:
+    for i in range(0, len(actions)):
+        row = actions[i]
+        sys.stdout.flush()
+
+        #   locator                             input         comment
+        # [ 'xpath=//botton[@id="Submit"',     'click',       'Submit' ]
+        locator, input, comment, *rest = row + [None] * 3
+
+        if comment is not None:
+            print(f"{comment}")
+
+        if locator is not None:
+            element = locate(driver, locator, **opt)
+            # we will pass back element for caller's convenience. In theory, the caller could also
+            # use the following to get it.
+            #      element = driver.switch_to.active_element
+            # but if we didn't do
+            #      element.click()
+            # then it may not be active element. In this case, caller can use below to get the element.
+            globals()['element'] = element
+            # we don't need to do the same for driver. As Python function uses pass-by-reference,therefore
+            # driver stays the same.
+            # globals()['driver'] = driver
+
+            if print_console_log:
+                print_js_console_log(driver)
+
+        if debug:
+            js_print_debug(driver, element)
+
+        if we_return:
+            # we return globals() here because exec()'s effect are only in globals().
+            # globals() are only from to this module file, not the caller's globals().
+            return globals()
+
+        send_input(driver, element, input, **opt)
+
+        if print_console_log:
+            print_js_console_log(driver)
+
+        if we_return:
+            return globals()
+
+    return globals()
 
 
 def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
@@ -862,7 +914,7 @@ def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
 
         # https://stackoverflow.com/questions/19003003/check-if-any-alert-exists-using-selenium-with-python
         try:
-            WebDriverWait(driver, wait_seconds).until(EC.alert_is_present(),
+            WebDriverWait(driver, 3).until(EC.alert_is_present(),
                                            'Timed out waiting for PA creation ' +
                                            'confirmation popup to appear.')
 
@@ -886,23 +938,602 @@ def get_locator_compiled_path2():
         re.MULTILINE | re.DOTALL)
 
 
-# because we use a lot of eval(), therefore, we use many global variables.
-# note: global var is only global within the same module, ie, same file.
 locator_driver: webdriver = None
 driver_url = None
 
-action_data = {}
 
-# '1' return 1 layer, '2' return 2 layers, ....
-# we start with 0, meaning we are outside of any layer, no layer to return
-# everytime we break out a layer (while loop), we decrease return_levels by 1
-return_levels = 0 
+def locate(driver: webdriver.Chrome, locator2: Union[str, dict], **opt):
+    dryrun = opt.get("dryrun", 0)
+    interactive = opt.get("interactive", 0)
+    debug = opt.get("debug", 0)
 
-# no global var for element because 
-#   - there could be multiple elements in action
-#   - we can always use element = driver.switch_to.active_element
-#     to get the active element
-#   - locate() call will pass back the element in the return value.
+    helper = {}  # interactivity helper
+    if interactive:
+        helper = {
+            'd': ['dump page', dump,
+                  {'driver': driver,
+                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+                  # we delay mkdir, till we really need it
+                  ],
+        }
+
+    global we_return
+    global action_data
+
+    element = None
+    #
+    # example of actions:
+    #
+    #     actions = [
+    #         [ 'xpath=/a/b,xpath=/a/c', 'click', 'string locator' ],
+    #         [ ['xpath=/a/b', 'shadow', 'css=d'], 'click', 'chain locator'],
+    #         [
+    #             {
+    #                 'locator' : 'xpath=/a/b,xpath=/a/c',
+    #                 'NotFound' : 'print("not found")',
+    #             },
+    #             'click',
+    #             'use hash for the most flexibility'
+    #         ],
+    #         [
+    #             '''
+    #                 xpath=//dhi-wc-apply-button[@applystatus="true"],
+    #                 xpath=//dhi-wc-apply-button[@applystatus="false"],
+    #             ''',
+    #             {
+    #                 0: 'code=' + '''
+    #                                     action_data['error'] = "applied previously"
+    #                                     we_return=1
+    #                                     ''',
+    #                 1: None,
+    #             },
+    #             'find applied or not. If applied, return'
+    #         ],
+    #         [
+    #             {
+    #                 'chains': [
+    #                     # branch in the beginning
+    #                     [
+    #                         'xpath=/html/body[1]/ntp-app[1]', 'shadow',
+    #                         'css=#mostVisited', 'shadow',
+    #                         'css=#removeButton2',  # correct on ewould be 'css=#removeButton'. we purposefully typoed
+    #                     ],
+    #                     [
+    #                         'xpath=/html/body[1]/ntp-app[1]', 'shadow',
+    #                         'css=#mostVisited', 'shadow',
+    #                         'css=#actionMenuButton'
+    #                     ],
+    #                 ],
+    #             },
+    #             {
+    #                 # first number is the chain number, followed by locator number
+    #                 '0.0.0.0.0.0': 'code=print("found remove button")',
+    #                 '1.0.0.0.0.0': 'code=print("found action button")',
+    #             },
+    #             "test chains",
+    #         ],
+    #     ],
+
+    if (type(locator2) == dict) and ('chains' in locator2):
+        h = locator2
+        print(f"locate(): search for chains = {pformat(h['chains'])}")
+
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            # https://selenium-python.readthedocs.io/waits.html
+            wait = WebDriverWait(driver, 10)
+            finder = tp_find_element_by_chains(h['chains'], **opt)
+
+            try:
+                # wait.until() takes the object.
+                # note: here we used finder, not finder(driver).
+                element = wait.until(finder)
+            except Exception as ex:
+                print(f"locate failed. {ex}")
+                print(f"matched_paths = {pformat(finder.matched_paths)}")
+
+            if element is None:
+                code = h.get("NotFound", None)
+                if code is not None:
+                    print(f"NotFound code: {code}")
+                    if code == 'pass':
+                        # try to reduce exec() times
+                        pass
+                    else:
+                        exec_into_globals(code, globals(), locals())
+                else:
+                    raise RuntimeError(f"none of paths found")
+            if element is None:
+                element = driver.switch_to.active_element
+
+            if tpdata := getattr(element, 'tpdata', None):
+                print(f"tpdata = {pformat(tpdata)}")
+        return element
+
+    h = {}  # hash
+    if (not locator2) or (type(locator2) == str):
+        h["locator"] = [locator2]
+    elif type(locator2) == list:
+        h["locator"] = locator2
+    elif type(locator2) == dict:
+        h = locator2
+        if type(h["locator"]) == str:
+            h["locator"] = [h["locator"]]
+    else:
+        raise RuntimeError(
+            f"unsupported locator data type {pformat(locator2)}")
+
+    print(f"h={pformat(h)}")
+
+    locator_chain = h["locator"]
+
+    # locator_driver vs original 'driver'
+    #    - we introduce locator_driver because shadow_host.shadow_root is also a driver,
+    #      we can call it shadow driver, but its locator can only see the shadow DOM,
+    #      and only css locator is supported as of 2022/09/09.
+    #    - locator_driver started as the original driver.
+    #    - locator_driver will be shadow driver when we are in a shadow root.
+    #    - locator_driver will be (original) driver after we switch_to an iframe, even if
+    #      the iframe is under a shadow root.
+    #    - every time driver_url changes, we should reset locator_driver to driver.
+    #      driver_url can be changed not only by get(url), but also by click()
+    # shadow driver only has a few attributes, just to support the separate DOM, the shadow DOM.
+    #     - find_element
+    #     - find_elements
+    # pycharm hint also only shows the above two attributes from a shadow driver.
+    # for example, shadow_host.shadow_root cannot
+    #      - get(url)
+    #      - switch_to
+    #      - click()
+    # therefore, we don't need to pass 'locator_driver' to send_input().
+    global locator_driver
+    global driver_url
+    if (not locator_driver) or (not driver_url) or (driver_url != driver.current_url):
+        locator_driver = driver
+        driver_url = driver.current_url
+
+    # https://selenium-python.readthedocs.io/locating-elements.html
+    for locator in locator_chain:
+        if not locator:  # None, empty, 0
+            print(f"locate(): no locator")
+        elif m := re.match(r"(url|url_accept_alert)=(.+)", locator):
+            tag, url, *_ = m.groups()
+            accept_alert = 0
+            if tag == 'url_accept_alert':
+                accept_alert = 1
+            print(f"locate(): go to url={url}, accept_alert={accept_alert}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                tp_get_url(driver, url, accept_alert=accept_alert,
+                           interactive=interactive)
+                locator_driver = driver
+                # the following doesn't work. i had to move it into tp_get_url()
+                # try:
+                #     driver_url = driver.current_url
+                # except UnexpectedAlertPresentException as ex:
+                #     # selenium.common.exceptions.UnexpectedAlertPresentException: Alert Text: {Alert text :
+                #     # Message: unexpected alert open: {Alert text : }
+                #     tpsup.tplog.print_exception(ex)
+                #     alert = driver.switch_to.alert
+                #     alert.accept()
+                #     print("alert accepted")
+                #     time.sleep(2)
+                #     driver_url = driver.current_url
+                driver_url = driver.current_url
+        elif m := re.match(r"code=(.+)", locator, re.MULTILINE | re.DOTALL):
+            code, *_ = m.groups()
+            print(f"action: run python code = {code}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                exec_into_globals(code, globals(), locals())
+                if we_return:
+                    return
+        elif m := re.match(r"js=(.+)", locator, re.MULTILINE | re.DOTALL):
+            js, *_ = m.groups()
+            print(f"locate(): execute js={js}\n")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                element = driver.execute_script(js)
+        elif m := re.match(r"tab=(.+)", locator):
+            count_str, *_ = m.groups()
+            count = int(count_str)
+            print(f"locate(): tab {count} times")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.switch_to.active_element.send_keys(Keys.TAB * count)
+        elif m := re.match(r"shifttab=(.+)", locator):
+            count_str, *_ = m.groups()
+            count = int(count_str)
+            print(f"locate(): tab backward (shift+tab) {count} times")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                ac = ActionChains(driver)
+                ac.key_down(Keys.SHIFT)
+                for i in range(0, count):
+                    ac.send_keys(Keys.TAB)
+                ac.key_up(Keys.SHIFT)
+                ac.perform()
+        elif locator == "shadow":
+            print(f"locate(): switch into shadow_root")
+            try:
+                if element.shadow_root:
+                    pass
+            except NoSuchShadowRootException:
+                print(f'no shadow root under this element')
+                return
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                locator_driver = element.shadow_root  # shadow_driver is a webdriver type
+        elif locator == "iframe":
+            print(f"locate(): switch into iframe")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                # we cannot use locator_driver to swith iframe when locator_driver is a shadow root.
+                #   locator_driver.switch_to.frame(element)
+                #   AttributeError: 'ShadowRoot' object has no attribute 'switch_to'
+                # Therefore, we use (original) driver
+
+                driver.switch_to.frame(element)
+                locator_driver = driver
+                # once we switch into an iframe, we should use original driver to locate
+        elif m1 := get_locator_compiled_path1().match(locator):
+            ptype, paths_string = m1.groups()
+            # default to strip blanks: space, tab, newline ...
+            paths_string = paths_string.strip()
+
+            type_paths = []
+            while m2 := get_locator_compiled_path2().match(paths_string):
+                path, type2 = m2.groups()
+                end_pos = m2.end()
+
+                # rstrip():  right (rear) strip();
+                # lstrip: left (leading) strip;
+                # strip(): both.
+                # default to strip blanks: space, tab, newline ...
+                # here we also strip the ending comma.
+                # todo: find a better way to strip endinng space and comma
+                # print(f'path1={pformat(path)}')
+                path = path.rstrip().rstrip(",").rstrip()
+                # print(f'path2={pformat(path)}')
+
+                type_paths.append([ptype, path])
+
+                ptype = type2  # to be used in next round
+                paths_string = paths_string[end_pos:]
+
+            path = paths_string  # leftover is a path
+            # todo: find a better way to strip endinng space and comma
+            # print(f'path1={pformat(path)}')
+            path = path.rstrip().rstrip(",").rstrip()
+            # print(f'path2={pformat(path)}')
+
+            type_paths.append([ptype, path])
+
+            print(f"locate(): search for paths = {pformat(type_paths)}")
+
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                # here we use 'locator_driver' so that we are in the correct DOM
+                wait = WebDriverWait(locator_driver, 10)  # seconds
+
+                element = None
+                # this is needed; otherwise, if element is defined, a failed 'try' below
+                # will not set element to None.
+
+                finder = tp_find_element_by_paths(type_paths, **opt)
+
+                try:
+                    # https://selenium-python.readthedocs.io/waits.html
+                    element = wait.until(finder)
+                    # element = wait.until(find_element_by_xpath('//input[@name="q"]'))
+                except:
+                    print(f"locate failed")
+
+                if element is None:
+                    code = h.get("NotFound", None)
+                    if code is not None:
+                        print(f"NotFound code: {code}")
+                        if code == 'pass':
+                            # try to reduce exec() times
+                            pass
+                        else:
+                            exec_into_globals(code, globals(), locals())
+                    else:
+                        raise RuntimeError(f"none of paths found")
+                    break
+        else:
+            raise RuntimeError(f"unsupported 'locator={locator}'")
+
+    if element is None:
+        # some locators don't explicitly return an element, therefore, we set it here.
+        element = driver.switch_to.active_element
+
+    return element
+
+
+def send_input(
+    driver: webdriver.Chrome,
+    element: WebElement,
+    input: Union[str, List[str], None],
+    **opt,
+):  # list vs List[int] or List[str]
+    dryrun = opt.get("dryrun", 0)
+    interactive = opt.get("interactive", 0)
+    humanlike = opt.get("humanlike", 0)
+    debug = opt.get("debug", 0)
+
+    global we_return
+    global action_data
+    if we_return:
+        # this could be set by locator's NotFound code
+        return
+
+    if input is None or input == "":
+        print(f"action: no input")
+        return
+
+    steps = []
+
+    if debug:
+        print(f"input={pformat(input)}")
+
+    input_type = type(input)
+
+    if input_type == str:
+        steps.append(input)
+    elif input_type == list:
+        steps.extend(input)
+    elif input_type == dict:
+        # input = {
+        #     0:  'click',
+        #     1: ['click', 'sleep=1'],
+        #     2: 'code=pass',
+        # }
+        tpdata = getattr(element, 'tpdata', None)
+        if tpdata:
+            position = tpdata['position']
+            if position in input:
+                input2 = input[position]
+
+                if input2 is None or input2 == "":
+                    print(f"action: no input")
+                    return
+
+                if type(input2) == str:
+                    steps.append(input2)
+                elif type(input2) == list:
+                    steps.extend(input2)
+                else:
+                    raise RuntimeError(f"input[{position}] type={type(input2)} is not supported. "
+                                       f"input={pformat(input)}")
+            else:
+                raise RuntimeError(
+                    f"position={position} is not defined in input={pformat(input)}")
+        else:
+            raise RuntimeError(f"tpdata is not available from element")
+    else:
+        raise RuntimeError(
+            f"send_input type={input_type} is not supported. input={pformat(input)}")
+
+    if not interactive and humanlike:
+        human_delay()
+
+    helper = {}  # interactivity helper
+    if interactive:
+        helper = {
+            'd': ['dump page', dump,
+                  {'driver': driver,
+                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+                  # we delay mkdir, till we really need it
+                  ],
+        }
+
+    for step in steps:
+        if step == "debug":
+            js_print_debug(driver, element)
+        elif m := re.match(r"code=(.+)", step, re.MULTILINE | re.DOTALL):
+            code, *_ = m.groups()
+            print(f"action: run python code = {code}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                exec_into_globals(code, globals(), locals())
+                if we_return:
+                    return
+        elif m := re.match(r"js=(.+)", step, re.MULTILINE | re.DOTALL):
+            js, *_ = m.groups()
+            print(f"action: run js code = {js}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                # if we need an element from the result, call it from locate()
+                driver.execute_script(js)
+        elif m := re.match(r"sleep=(.+)", step):
+            seconds, *_ = m.groups()
+            print(f"action: sleep {seconds}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                time.sleep(int(seconds))
+        elif m := re.match(r"hover=(.+)", step):
+            seconds_str, *_ = m.groups()
+            seconds = int(seconds_str)
+            print(f"action: hover {seconds} seconds")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                ActionChains(driver).move_to_element(
+                    element).pause(seconds).perform()
+        elif m := re.match(r"string=(.+)", step):
+            # even if only capture group, still add *_; other string would become list, not scalar
+            string, *_ = m.groups()
+            print(f'action: type string = "{string}"')
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                element.send_keys(string)
+        elif m := re.match(r"clear_attr=(.+)", step):
+            # even if only capture group, still add *_; other attr would become list, not scalar
+            attr, *_ = m.groups()
+            print(f"action: clear {attr}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                value = element.get_attribute(attr)
+                if not value is None:
+                    length = len(value)
+                    key = "backspace"
+                    print(f"typing {key} {length} times")
+                    element.send_keys(
+                        Keys.__getattribute__((Keys, key.upper())) * length
+                    )
+        elif m := re.match(r"is_attr_empty=(.+)", step):
+            attr, *_ = m.groups()
+            print(
+                f"action: check whether {attr} is empty. If yes, we will do next step")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                value = element.get_attribute(attr)
+                print(f'{attr} = "{value}"')
+                if not (value is None or value == ""):
+                    return
+        elif m := re.match(r"key=(.+?),(.+)", step):
+            key, count_str = m.groups()
+            count = int(count_str)
+            print(f"action: type {key} {count} times")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                element.send_keys(Keys.__getattribute__(
+                    Keys, key.upper()) * count)
+        elif m := re.match(r"tab=(.+)", step):
+            count_str, *_ = m.groups()
+            count = int(count_str)
+            print(f"action: tab {count} times")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.switch_to.active_element.send_keys(Keys.TAB * count)
+        elif step == "click":
+            print(f"action: {step}")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                tp_click(driver, element)
+        elif m := re.match(r"select=(value|index|text),(.+)", step):
+            attr, string = m.groups()
+            print(f'action: select {attr} = "{string}"')
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                se = Select(element)
+                if attr == "value":
+                    se.select_by_value(string)
+                elif attr == "index":
+                    se.select_by_index(int(string))
+                else:
+                    # attr == 'text'
+                    se.select_by_visible_text(string)
+        elif m1 := re.match(r"(?:\n|\r\n|\s?)*gone_(xpath|css)=(.+)",
+                            step, re.MULTILINE | re.DOTALL):
+            ptype, paths_string = m1.groups()
+
+            type_paths = []
+            while m2 := re.match(r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*gone_(xpath|css)=",
+                                 paths_string, re.MULTILINE | re.DOTALL):
+                path, ptype2 = m2.groups()
+                end_pos = m2.end()
+
+                type_paths.append([ptype, path])
+                ptype = ptype2  # to be used in next round
+                paths_string = paths_string[end_pos:]
+
+            type_paths.append([ptype, paths_string])
+
+            interval = opt.get("gone_interval", 60)
+
+            print(
+                f"action: wait {interval} seconds for elements gone, paths = {pformat(type_paths)}")
+
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                e = None
+                i = 0
+
+                while i < interval:
+                    i = i + 1
+                    # wait at least a second to let the element show up
+                    time.sleep(1)
+                    for ptype, path in type_paths:
+                        e = None
+                        if ptype == "xpath":
+                            try:
+                                e = driver.find_element(By.XPATH, path)
+                                break
+                            except Exception:
+                                pass
+                        else:
+                            # ptype == 'css'
+                            try:
+                                e = driver.find_element(By.CSS_SELECTOR, path)
+                                break
+                            except Exception:
+                                pass
+                    else:
+                        if i > 1:
+                            # this is the normal exit point from the for loop
+                            print(f"all paths gone in {i} seconds")
+                            break
+                if e:
+                    js_print_debug(driver, e)
+                    raise RuntimeError(f"not all paths gone in {i} seconds")
+        elif (step == "iframe"):
+            print(f"action: switch iframe")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.switch_to.frame(element)
+        elif (step == "default_iframe"):
+            print(f"action: switch back to default iframe")
+            if interactive:
+                hit_enter_to_continue(helper=helper)
+            if not dryrun:
+                driver.switch_to.default_content()
+
+        elif m := re.match(r"dump_(element|all)=(.+)", step):
+            scope, output_dir, *_ = m.groups()
+            print(f"action: dump {scope} to {output_dir}")
+
+            # output_dir can be from both **opt and step, to avoid the multiple-values error,
+            # we group output_dir into **opt, allowing override kwargs
+            #
+            if scope == 'all':
+                dump(driver, **{**opt, 'output_dir': output_dir})
+            else:
+                if element is None:
+                    print(
+                        "dump_element() is called but element is None, we dump_all() instead")
+                dump(driver, element=element, **
+                     {**opt, 'output_dir': output_dir})
+        elif m := re.match(r"we_return=(.+)", step):
+            we_return, *_ = m.groups()
+            print(f"we_return={we_return}")
+
+            if we_return:
+                return globals()
+        else:
+            raise RuntimeError(f'unsupported input step="{step}"')
 
 
 def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, **opt):
@@ -919,8 +1550,8 @@ def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, 
 
     if element is None:
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
-        # driverwait = WebDriverWait(driver, 20)
-        # iframe_list = driverwait.until(EC.presence_of_all_elements_located((By.XPATH, '//iframe')))
+        # wait = WebDriverWait(driver, 20)
+        # iframe_list = wait.until(EC.presence_of_all_elements_located((By.XPATH, '//iframe')))
     else:
         iframe_list = element.find_elements(By.XPATH, './/iframe')
 
@@ -1550,905 +2181,61 @@ def test_basic():
     os.system(cmd)
 
 
-def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
-    '''
-    follow() is a recursive. it basic flow is: if ... then if ... then if ... then ...
-    for example: [ 'click_xpath=/a/b', 'iframe', 'click_xpath=/c/d', 'string="hello world"', 'dump' ]
-    By default, if any 'if' failed, we stop. For example, if 'click_xpath=/a/b' failed, we stop.
-    If any 'then if' failed, we stop. For example, if 'iframe' failed, we stop.
+def test_actions():
+    my_env = tpsup.envtools.Env()
+    url = None
+    if my_env.isLinux:
+        url = f'file:///{os.environ["TPSUP"]}/scripts/tpslnm_test_input.html'
+    elif my_env.isWindows:
+        url = f'file:///{os.environ["TPSUP"]}/scripts/tpslnm_test_input.html'
+    else:
+        raise RuntimeError("unsupport env")
 
-    '''
-    global locator_driver
-    global driver_url
-
-    if (not locator_driver) or (not driver_url) or (driver_url != driver.current_url):
-        locator_driver = driver
-        driver_url = driver.current_url
-
-    # we support single-level block, just for convenience when testing using appium_steps
-    # we don't support nested blocks; for nested block, use python directly
-    block = []
-    expected_blockend = None
-
-    # use this to detect nested block of the same type, for example
-    #     if      # if block depth = 1
-    #         if      # if block depth = 2
-    #         end_if  # if block depth = 1
-    #         while   # while block depth = 1, if block depth = 1
-    #         end_while # while block depth = 0, if block depth = 1
-    #     end_if      # if block depth = 0
-
-    block_depth = 0 
-
-    condition = None
-    blockstart = None
-    negation = False
-
-    debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", 0)
-
-    ret = {'Success': False, 'element': None}
-
-    if not steps:
-        if debug or verbose:
-            print(f'steps are empty. return')
-        return
-
-    for step in steps:
-        if debug:
-            print(f"step={pformat(step)}")
-
-        step_type = type(step)
-
-        # first handle control block. block start and block end are strings only.
-        if block_depth > 0:
-            # we are in a block
-            
-            if step_type == str and step == expected_blockend:
-                # step matches the expected blockend
-                block_depth -= 1
-
-                if block_depth == 0:
-                    # the outermost block is done
-                    print(
-                    f"matched expected_blockend={expected_blockend}, running block={block}, condition={condition}")
-                    expected_blockend = None
-
-                    if not block:
-                        raise RuntimeError(f"block is empty")
-                
-                    # run_block() recursively calls follow()
-                    run_block(driver, blockstart, negation,
-                                condition, block, **opt)
-                else:
-                    # we only encountered a nested block end
-                    print(f"matched expected_blockend={expected_blockend}, but still in block_depth={block_depth}")
-
-                    # we keep the nested block end in the block, so that we can recursively call run_block()
-                    block.append(step)
-            else:
-                # this is not the expected blockend, we keep it in the block.
-                block.append(step)
-
-            # we are still in a block; we continue until we find the expected blockend.
-            # we only build the block, we don't run it.
-            # we will run the block after we find the expected blockend.
-            continue
-        
-        # now that we are not in a block, we check whether this step is a start of a block
-        if step_type == str:
-            if m := re.match(r"\s*(while|if)(_not)?=(.+)", step):
-                # we are starting a new block
-                block_depth += 1
-                blockstart = m.group(1)
-                negation = m.group(2)
-                condition = m.group(3)
-
-                # if m := re.match(r"\s*(xpath|css|id)=(.+)", condition):
-                #     tag, value, *_ = m.groups()
-                #     if tag == 'id':
-                #         condition = f"driver.find_element(By.ID, '''{value}''')"
-                #     elif tag == 'xpath':
-                #         if checkonly:
-                #             print(f"check xpath={value}")
-                #             try:
-                #                 lxml.etree.XPath(value)
-                #             except lxml.etree.XPathSyntaxError as e:
-                #                 raise RuntimeError(
-                #                     f"XPath syntax error in step={step}: {e}")
-                #         condition = f"driver.find_element(By.XPATH, '''{value}''')"
-                #     elif tag == 'css':
-                #         condition = f"driver.find_element(By.CSS_SELECTOR, '''{value}''')"
-
-                if negation:
-                    expected_blockend = f"end_{blockstart}{negation}"
-                else:
-                    expected_blockend = f"end_{blockstart}"
-                block = []
-                print(f"blockstart={blockstart}, negation={negation}, condition={condition}, "
-                    f"expected_blockend={expected_blockend}, block_depth={block_depth}")
-                continue
-        # now we are done with control block handling
-
-        """
-        non-control-block step can be a string or a more complex structure     
-
-        complexity: string < dict (simple) < dict (parallel) < dict (chains)
-        flexibility: string < dict (simple) < dict (parallel) < dict (chains)
-    
-        string 
-            # string of a single locator, or multiple xpath/css/id separated by comma (searched in parallel).
-                xpath=/a/b, 
-                xpath=/a/c, 
-                'xpath=/a/b,xpath=/a/c' # search in parallel, if either one is found, we are good. 
-                click, 
-                dump, ...
-                note: only xpath/css/id can be in parallel (multiple locators separated by comma).
-
-        # we could have also introduced 'list' for sequence flow, but sequence is already handled by follow() interface.
-        #     ['click_xpath=/a/b,click_xpath=/c/d', 'string="hello world"', 'dump']
-
-        dict
-            # dict are mainly for real locators, eg, xpath/css/id/iframe/shadow/tab. 
-            # we use dict to introduce parallelism.
-            # other 'locators', eg, sleep, dump, wait, ... can be easily handled by string directly.
-            {
-                'type': 'simple',
-                'action': {
-                    'locator' : 'xpath=/a/b,xpath=/a/c', # 'simple' parallel, like the example on the left.
-                                                         # 'simple' only means that syntax is simple.
-                    #'Success' : 'code=print("found")', # optional. If either one is found, Do this. default is None
-                    #'Failure' : 'print("not found")', # optional. If neither one is found, do this. default is RuntimeError
-                }
-            },
-
-            {
-                'type': 'parallel',
-                'action': {
-                    'paths' : [
-                        # 'parallel' allows you to handle individual path differently - define 'Success' and 'Failure' for each path.
-                        {
-                            'locator' : 'xpath=//dhi-wc-apply-button[@applystatus="true"]',
-                            'Success': 'code=' + '''action_data['error'] = "applied previously"''', # optional. default is None
-                        },
-                        {
-                            'locator' : 'xpath=//dhi-wc-apply-button[@applystatus="false"]',
-                            'Success': 'click',
-                        },
-                    ],
-                    # 'action' level 'Success' and 'Failure' are optional.
-                    #'Success' : 'code=print("found")', # optional. If either one is found, Do this. default is None
-                    #'Failure' : 'print("not found")', # optional. If neither one is found, do this. default is RuntimeError
-                }
-            },
-            
-            {
-                # chain is a list of list of locators in parallel.
-                #     locators are in parallel, but the chain in each locator is in sequence.
-                'type': 'chains',          
-                'action': {
-                    'paths' : [
-                        {
-                            'locator': [
-                                'xpath=/html/body[1]/ntp-app[1]', 'shadow',
-                                'css=#mostVisited', 'shadow',
-                                'css=#removeButton2',  # correct on ewould be 'css=#removeButton'. we purposefully typoed
-                            ],
-                            'Success': 'code=print("found remove button")',
-                        },
-                        {
-                            'locator': [
-                                'xpath=/html/body[1]/ntp-app[1]', 'shadow',
-                                'css=#mostVisited', 'shadow',
-                                'css=#actionMenuButton'
-                            ],
-                            'Success': 'code=print("found action button")',
-                        },
-                        # 'action' level 'Success' and 'Failure' are optional.
-                        # 'Success': 'code=print("found")',
-                        # 'Failure': 'print("not found")',
-                    ],
-                },
-            },
+    actions = [
+        # ['url=https://google.com', 'tab=5'],
+        # ['url=https://www.google.com'],
+        # ['xpath=//input[@name="q"]', 'string=perl selenim'],
+        [f"url={url}"],
+        [
+            'xpath=//input[@id="user id"],'
+            "css=#user\ id,"
+            'xpath=//tr[class="non exist"]',
+            ["click", "debug", "sleep=3"],
+            "go to user id",
         ],
+        [
+            "tab=4",
+            ["debug", "sleep=3"],
+            "go to Date of Birth",
+        ],
+        [
+            "shifttab=3",
+            ["click", "debug", "sleep=3"],
+            "go back to password",
+        ],
+    ]
 
-        'parallel' with a single path is the same as 'simple'.
-        'chains' with a single path can be used to implement a 'sequence' of locators.
+    print(f"test actions = {pformat(actions)}")
 
-        'Success' and 'Failure' are optional. If not found, we raise RuntimeError by default.
-        Therefore, define 'Failure' if you want to continue when not found.
+    driver = get_driver(host_port="localhost:19999")
+    run_actions(driver, actions)
 
-        In 'parallel' and 'chains', we can define 'Success' and 'Failure' at 'action' level, but 
-        we only define 'Success' at 'path' level, because the find...() function returns the first found element
-        only. Therefore, we are not sure whether the other paths are found or not.
-
-        we can make recurisve call of follow() at 'Success' and 'Failure' to handle the next step; but
-        that could make 'locator_driver' and 'driver_url' confusing.
-
-        The design of non-control-block flow is: if...then if ... then if ... then ....
-
-        """
-
-        result = []
-
-        if step_type == str:
-            result = locate(driver, step, **opt)
-        elif step_type == dict:
-            result = locate_dict(driver, step, **opt)
-        else:
-            raise RuntimeError(f"unsupported step type={step_type}, step={pformat(step)}")
-        
-        print(f"follow: result={pformat(result)}")
-
-        # copy result to ret
-        ret['Success'] = result['Success']
-        ret['element'] = result['element']  
-
-        if return_levels:
-            break
-    
-    return ret
-
-''' 
-    locate() and locate_dict() are designed to be non-recursive, for reasons:
-    - they are using global variables, therefore, recursive call would be confusing.
-    - they are designed to be called by follow(), which is recursive.
-    this is the reason why when we handle 'Success' and 'Failure', we call locate(), not call follow().
-'''
-def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
-    dryrun = opt.get("dryrun", 0)
-    interactive = opt.get("interactive", 0)
-    debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", 0)
-    checkonly = opt.get("checkonly", 0)
-    helper = opt.get("helper", {})
-
-    global driver_url
-    global locator_driver
-
-    if (not locator_driver) or (not driver_url) or (driver_url != driver.current_url):
-        locator_driver = driver
-        driver_url = driver.current_url
-    
-    if debug:
-        print(f"step={pformat(step)}")
-
-    ret = {
-        'Success': False,
-        'element': None,
-    }
-
-    locator_type = step.get('type', None)
-    action = step.get('action', None)
-
-    if locator_type == 'simple':
-        # locator must be a string
-        locator = action.get('locator', None)
-        if type(locator) != str:
-            raise RuntimeError(f"simple step locator must be a string, but got {type(locator)}, step={pformat(step)}")
-        
-        result = locate(driver, locator, **opt)
-
-        if result['Success']:
-            # we found the element
-            if 'Success' in action:
-                locate(driver, action['Success'], **opt) # we don'tuse follow() here, because we don't want to be recursive.
-            ret['Success'] = True
-        else:
-            # we didn't find the element
-            if 'Failure' in action:
-                locate(driver, action['Failure'], **opt)
-            else:
-                raise RuntimeError(f"element not found, step={pformat(step)}")
-    elif locator_type == 'parallel':
-        # paths must be a list
-        paths = action.get('paths', None)
-        if type(paths) != list:
-            raise RuntimeError(f"parallel step paths must be a list, but got {type(paths)}, step={pformat(step)}")
-
-        # concatenate all paths' locators into a single string so that we can call locate()
-        # which take a string of locators, separated by comma.
-        # locate() calls tp_find_element_by_paths() which can take multiple locators in parallel.
-        locators_string = ",".join([path['locator'] for path in paths])
-
-        result = locate(driver, locators_string, **opt)
-
-        # copy result to ret
-        ret['Success'] = result['Success']
-        ret['element'] = result['element']
-
-        if return_levels:
-            return ret
-
-        if result['Success']:
-            # we found the element, the corresponing locator is in result['element'].tpdata
-            element = result['element']
-            tpdata = getattr(element, 'tpdata', None)
-            path_index = tpdata['position']
-
-            path = paths[path_index]
-            if 'Success' in path:
-                # path-level Found
-                locate(driver, path['Success'], **opt)
-            if 'Success' in action:
-                # action-level Found
-                locate(driver, action['Success'], **opt)
-        else:
-            # we didn't find the element
-            if 'Failure' in action:
-                # action-level NotFound
-                locate(driver, action['Failure'], **opt)
-            else:
-                raise RuntimeError(f"element not found, step={pformat(step)}")
-    elif locator_type == 'chains':
-        # paths must be a list
-        paths = action.get('paths', None)
-        if type(paths) != list:
-            raise RuntimeError(f"chains step paths must be a list, but got {type(paths)}, step={pformat(step)}")
-
-        # collect all the locators in all paths in a list and then call tp_find_element_by_chains()
-        chains = []
-        for path in paths:
-            locator = path.get('locator', None)
-            if type(locator) != list:
-                raise RuntimeError(f"chains step locator must be a list, but got {type(locator)}, step={pformat(step)}")
-            
-            chains.append(locator)
-        
-        print(f"search for chains = {pformat(chains)}")
-
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # https://selenium-python.readthedocs.io/waits.html
-
-            # for chains, we use "driver" instead of "locator_driver" because
-            # tp_find_element_by_chains() adjust "locator_driver" internally.
-            driverwait = WebDriverWait(driver, wait_seconds)
-
-            # because we are using explicit wait call (WebDriverWait), 
-            # we temporarily disable implicit wait in the tp_find_element_by_chains()
-            locator_driver.implicitly_wait(0)
-            
-            finder = tp_find_element_by_chains(chains, **opt)
-
-            try:
-                # wait.until() takes the object.
-                # note: here we used finder, not finder(driver).
-                element = driverwait.until(finder)
-            except Exception as ex:
-                print(f"locate failed. {ex}")
-                print(f"matched_paths = {pformat(finder.matched_paths)}")
-
-            # restore implicit wait
-            driver.implicitly_wait(wait_seconds)
-
-            if element:
-                ret['Success'] = True
-
-                # Found. then find which path found the element
-                tpdata = getattr(element, 'tpdata', None)
-                path_index = tpdata['position']
-                path = paths[path_index]
-
-                if 'Success' in path:
-                    # path-level Found
-                    result = locate(driver, path['Success'], **opt)
-                if 'Success' in action:
-                    # action-level Found
-                    result = locate(driver, action['Success'], **opt)             
-            else:
-                element = driver.switch_to.active_element
-
-                if 'Failure' in action:
-                    # action-level NotFound
-                    result = locate(driver, action['Failure'], **opt)
-                else:
-                    raise RuntimeError(f"element not found, step={pformat(step)}")
-    else:
-        raise RuntimeError(f"unsupported locator_type={locator_type}, step={pformat(step)}")
-    
-    print(f"follow: this step is done")
-    return ret
-
-
-def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
-    dryrun = opt.get("dryrun", 0)
-    interactive = opt.get("interactive", 0)
-    debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", 0)
-    checkonly = opt.get("checkonly", 0)
-    helper = opt.get("helper", {})
-    isExpression = opt.get("isExpression", 0) # for condtion test, we set isExpression=1, so that we get True/False.
-
-    global locator_driver
-    global driver_url
-    global wait_seconds
-    global return_levels
-
-    # we don't have a global var for active element, because
-    #    - we can always get it from driver.switch_to.active_element
-    #    - after we some action, eg, when 'click' is done, the active element is changed; 
-    #      it needs to wait to update active element. Therefore, it is better to get it 
-    #      from driver.switch_to.active_element in the next step (of locate()).
-
-    ret = {
-        'Success': False, # for xpath, css, 'Success' means found the element.
-        'element': None,
-    }
-
-    if (not locator_driver) or (not driver_url) or (driver_url != driver.current_url):
-        locator_driver = driver
-        driver_url = driver.current_url
-    
-    # copied from old locate()
-    if m := re.match(r"(url|url_accept_alert)=(.+)", locator):
-        tag, url, *_ = m.groups()
-        accept_alert = 0
-        if tag == 'url_accept_alert':
-            accept_alert = 1
-        print(f"locate: go to url={url}, accept_alert={accept_alert}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            tp_get_url(driver, url, accept_alert=accept_alert,
-                    interactive=interactive)
-            locator_driver = driver
-            # the following doesn't work. i had to move it into tp_get_url()
-            # try:
-            #     driver_url = driver.current_url
-            # except UnexpectedAlertPresentException as ex:
-            #     # selenium.common.exceptions.UnexpectedAlertPresentException: Alert Text: {Alert text :
-            #     # Message: unexpected alert open: {Alert text : }
-            #     tpsup.tplog.print_exception(ex)
-            #     alert = driver.switch_to.alert
-            #     alert.accept()
-            #     print("alert accepted")
-            #     time.sleep(2)
-            #     driver_url = driver.current_url
-            driver_url = driver.current_url
-            ret['Success'] = True
-    elif m := re.match(r"code=(.+)", locator, re.MULTILINE | re.DOTALL):
-        code, *_ = m.groups()
-        print(f"locate: run python code = {code}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # exec_into_globals(code, globals(), locals())
-            if isExpression:
-                # we are testing condition, we want to know True/False
-                try:
-                    ret['Success'] = eval(code)
-                except Exception as e:
-                    print(f"eval failed with exception={e}")
-                    ret['Success'] = False
-            else:
-                exec_into_globals(code, globals(), locals())
-                ret['Success'] = True # hard code to True for now
-    elif m := re.match(r"js=(.+)", locator, re.MULTILINE | re.DOTALL):
-        js, *_ = m.groups()
-        print(f"locate: execute js={js}\n")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            element = driver.execute_script(js)
-            ret['Success'] = True
-    elif m := re.match(r"tab=(.+)", locator):
-        count_str, *_ = m.groups()
-        count = int(count_str)
-        print(f"locate: tab {count} times")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver.switch_to.active_element.send_keys(Keys.TAB * count)
-    elif m := re.match(r"shifttab=(.+)", locator):
-        count_str, *_ = m.groups()
-        count = int(count_str)
-        print(f"locate: tab backward (shift+tab) {count} times")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            ac = ActionChains(driver)
-            ac.key_down(Keys.SHIFT)
-            for i in range(0, count):
-                ac.send_keys(Keys.TAB)
-            ac.key_up(Keys.SHIFT)
-            ac.perform()
-    elif locator == "shadow":
-        print(f"locate: switch into shadow_root")
-        element = driver.switch_to.active_element
+    for tag_a in driver.find_elements(by=By.TAG_NAME, value="a"):
+        link = None
         try:
-            if element.shadow_root:
-                pass
-        except NoSuchShadowRootException:
-            print(f'no shadow root under this element')
-            return
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            locator_driver = element.shadow_root  # shadow_driver is a webdriver type
-    elif locator == "iframe":
-        ret['Success'] = True # hard code to True for now
-        print(f"locate: switch into iframe")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            element = driver.switch_to.active_element
-
-            # we cannot use locator_driver to swith iframe when locator_driver is a shadow root.
-            #   locator_driver.switch_to.frame(element)
-            #   AttributeError: 'ShadowRoot' object has no attribute 'switch_to'
-            # Therefore, we use (original) driver
-
-            driver.switch_to.frame(element)
-            locator_driver = driver
-            # once we switch into an iframe, we should use original driver to locate
-
-    elif m1 := get_locator_compiled_path1().match(locator):
-        ptype, paths_string = m1.groups()
-        # default to strip blanks: space, tab, newline ...
-        paths_string = paths_string.strip()
-
-        type_paths = []
-        while m2 := get_locator_compiled_path2().match(paths_string):
-            path, type2 = m2.groups()
-            end_pos = m2.end()
-
-            # rstrip():  right (rear) strip();
-            # lstrip: left (leading) strip;
-            # strip(): both.
-            # default to strip blanks: space, tab, newline ...
-            # here we also strip the ending comma.
-            # todo: find a better way to strip endinng space and comma
-            # print(f'path1={pformat(path)}')
-            path = path.rstrip().rstrip(",").rstrip()
-            # print(f'path2={pformat(path)}')
-
-            type_paths.append([ptype, path])
-
-            ptype = type2  # to be used in next round
-            paths_string = paths_string[end_pos:]
-
-        path = paths_string  # leftover is a path
-        # todo: find a better way to strip endinng space and comma
-        # print(f'path1={pformat(path)}')
-        path = path.rstrip().rstrip(",").rstrip()
-        # print(f'path2={pformat(path)}')
-
-        type_paths.append([ptype, path])
-
-        print(f"locate: search for paths = {pformat(type_paths)}")
-
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # here we use locator_driver, because tp_find_element_by_paths() 
-            # will call find_element_by ... directly which needs a locator_driver.
-            driverwait = WebDriverWait(locator_driver, wait_seconds)  # seconds
-
-            finder = tp_find_element_by_paths(type_paths, **opt)
-
-            # because we are using explicit wait call (WebDriverWait), 
-            # we temporarily disable implicit wait in the tp_find_element_by_paths()
-            locator_driver.implicitly_wait(0)
-
-            element = None
-            # this is needed; otherwise, if element is defined, a failed 'try' below
-            # will not set element to None.
-
-            try:
-                # https://selenium-python.readthedocs.io/waits.html
-                element = driverwait.until(finder)
-                # element = driverwait.until(find_element_by_xpath('//input[@name="q"]'))
-                ret['Success'] = True
-
-                # which path found the element is saved in element.tpdata
-            except Exception as ex:
-                print(f"locate failed: {pformat(ex)}")
-
-            # restore implicit wait
-            locator_driver.implicitly_wait(wait_seconds)
-    # end of old locate()
-    # the following are from old send_input()
-    elif m := re.match(r"sleep=(\d+)", locator):
-        ret['Success'] = True # hard code to True
-        value, *_ = m.groups()
-        print(f"locate: sleep {value} seconds")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            time.sleep(int(value))
-    elif m := re.match(r"hover=(.+)", locator):
-        seconds_str, *_ = m.groups()
-        seconds = int(seconds_str)
-        print(f"locate: hover {seconds} seconds")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            ActionChains(driver).move_to_element(
-                element).pause(seconds).perform()
-    elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL):
-        ret['Success'] = True # hard code to True for now
-        value, *_ = m.groups()
-        print(f"locate: string={value}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            element = driver.switch_to.active_element
-            element.send_keys(value)
-    elif m := re.match(r"clear_attr=(.+)", locator):
-        # even if only capture group, still add *_; other attr would become list, not scalar
-        attr, *_ = m.groups()
-        print(f"locate: clear {attr}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            element = driver.switch_to.active_element
-            value = element.get_attribute(attr)
-            if not value is None:
-                length = len(value)
-                key = "backspace"
-                print(f"typing {key} {length} times")
-                element.send_keys(
-                    Keys.__getattribute__((Keys, key.upper())) * length
-                )
-    elif m := re.match(r"is_attr_empty=(.+)", locator):
-        attr, *_ = m.groups()
-        print(
-            f"locate: check whether {attr} is empty.")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            element = driver.switch_to.active_element
-            value = element.get_attribute(attr)
-            print(f'{attr} = "{value}"')
-            if not (value is None or value == ""):
-                raise RuntimeError(f"{attr} is not empty")
-    elif m := re.match(r"key=(.+?),(\d+)", locator, re.IGNORECASE):
-        ret['Success'] = True # hard code to True for now
-        key, count_str = m.groups()
-        count = int(count_str)
-        print(f"locate: type {key} {count} times")
-
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            element = driver.switch_to.active_element
-            element.send_keys(Keys.__getattribute__(
-                Keys, key.upper()) * count)
-    elif locator == 'click':
-        ret['Success'] = True # hard code to True for now
-        print(f"locate: click")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            element = driver.switch_to.active_element
-            # element.click()
-            tp_click(driver, element)
-    elif m := re.match(r"select=(value|index|text),(.+)", locator):
-            attr, string = m.groups()
-            print(f'locate: select {attr} = "{string}"')
-            if interactive:
-                hit_enter_to_continue(helper=helper)
-            if not dryrun:
-                element = driver.switch_to.active_element
-                se = Select(element)
-                if attr == "value":
-                    se.select_by_value(string)
-                elif attr == "index":
-                    se.select_by_index(int(string))
-                else:
-                    # attr == 'text'
-                    se.select_by_visible_text(string)
-    elif m1 := re.match(r"(?:\n|\r\n|\s?)*gone_(xpath|css)=(.+)",
-                        locator, re.MULTILINE | re.DOTALL):
-        ptype, paths_string = m1.groups()
-
-        type_paths = []
-        while m2 := re.match(r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*gone_(xpath|css)=",
-                                paths_string, re.MULTILINE | re.DOTALL):
-            path, ptype2 = m2.groups()
-            end_pos = m2.end()
-
-            type_paths.append([ptype, path])
-            ptype = ptype2  # to be used in next round
-            paths_string = paths_string[end_pos:]
-
-        type_paths.append([ptype, paths_string])
-
-        interval = opt.get("gone_interval", 60)
-
-        print(
-            f"locate: wait {interval} seconds for elements gone, paths = {pformat(type_paths)}")
-
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            e = None
-            i = 0
-
-            while i < interval:
-                i = i + 1
-                # wait at least a second to let the element show up
-                time.sleep(1)
-                for ptype, path in type_paths:
-                    e = None
-                    if ptype == "xpath":
-                        try:
-                            e = driver.find_element(By.XPATH, path)
-                            break
-                        except Exception:
-                            pass
-                    else:
-                        # ptype == 'css'
-                        try:
-                            e = driver.find_element(By.CSS_SELECTOR, path)
-                            break
-                        except Exception:
-                            pass
-                else:
-                    if i > 1:
-                        # this is the normal exit point from the for loop
-                        print(f"locate: all paths gone in {i} seconds")
-                        ret['Success'] = True
-                        break
-            if e:
-                js_print_debug(driver, e)
-                raise RuntimeError(f"not all paths gone in {i} seconds")
-
-    elif (locator == "default_iframe"):
-        ret['Success'] = True # hard code to True for now
-        print(f"locate: switch back to default iframe")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver.switch_to.default_content()
-    elif m := re.match(r"dump_(element|all)=(.+)", locator):
-        ret['Success'] = True # hard code to True for now
-        scope, output_dir, *_ = m.groups()
-        print(f"locate: dump {scope} to {output_dir}")
-
-        # output_dir can be from both **opt and step, to avoid the multiple-values error,
-        # we group output_dir into **opt, allowing override kwargs
-        #
-        if scope == 'all':
-            dump(driver, **{**opt, 'output_dir': output_dir})
+            url = tag_a.get_attribute("href")
+        # except NoSuchElementException as e:
+        except NoSuchElementException:
+            pass
         else:
-            # scope == 'element'
-            element = driver.switch_to.active_element
-            if element is None:
-                print(
-                    "dump_element() is called but element is None, we dump_all() instead")
-            dump(driver, element=element, **
-                    {**opt, 'output_dir': output_dir})
-    elif m := re.match(r"we_return()$|we_return=(\d+)", locator):
-        ret['Success'] = True # hard code to True for now
+            # print(f'url={url}')
+            print(f"hostname = {urlparse(url).hostname}")
 
-        we_return, *_ = m.groups()  # this updates the global variable
+    interval = 5
+    print(f"sleep {interval} seconds in case you want to Control-C")
+    time.sleep(interval)
 
-        # default return levels is 999, ie, return all levels
-        if we_return == "":
-            return_levels = 999
-        else:
-            return_levels = int(we_return)
-
-        print(f"return_levels={return_levels}")
-
-    # end of old send_input()
-
-    # the following are new
-    elif m := re.match(r"wait=(\d+)", locator):
-        ret['Success'] = True # hard code to True
-
-        # implicit wait
-        value, *_ = m.groups()
-        print(f"locate: set wait {value} seconds for both implicit and explicit wait")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
-            # explicit wait is done per call (WebDriverWait()).
-            # As we are not calling WebDriverWait() here, we only set the global variable,
-            # so that it can be used when we call WebDriverWait() in the future.
-            wait_seconds = int(value)
-
-            # driver.implicitly_wait() only set the implicit wait for the driver, 
-            # affect all find_element() calls right away.
-            # implicit wait is done once per session (driver), not per call.
-            # selenium's default implicit wait is 0, meaning no wait.
-            driver.implicitly_wait(wait_seconds)
-
-    elif locator == 'refresh':
-        ret['Success'] = True # hard code to True for now
-        print(f"locate: refresh driver")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver.refresh()
-
-    elif m := re.match(r"comment=(.+)", locator, re.MULTILINE | re.DOTALL):
-        ret['Success'] = True # hard code to True for now
-        commnet, *_ = m.groups()
-        print(f"locate: comment = {commnet}")
-    else:
-        raise RuntimeError(f"unsupported 'locator={locator}'")
-    
-    return ret
-
-
-def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  condition: str, block: list, **opt):
-    # we separate condition and negation because condition test may fail with exception, which is
-    # neither True or False.  In this case, we want to know the condition test failed.
-    verbose = opt.get('verbose', False)
-    debug = opt.get('debug', False)
-    ret = {'Success': False, 'executed': False, 'element': None}
-
-    global return_levels
-
-    if blockstart == 'while':
-        while True:
-            result = if_block(driver, negation, condition, block, **opt)
-            if debug:
-                print(f"run_block(): result={result}")
-            if not result['executed']:
-                break
-            if return_levels:
-                # reduce return_levels by 1
-                return_levels = return_levels - 1
-                break
-    elif blockstart == 'if':
-        result=if_block(driver, negation, condition, block, **opt)
-
-    ret['Success'] = result['Success']
-    ret['executed'] = result['executed']
-    ret['element'] = result['element']
-
-    return ret
-
-
-def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: list, **opt):
-    # we separate condition and negation because condition test may fail with exception, which is
-    # neither True or False.  In this case, we want to know the condition test failed.
-
-    verbose = opt.get('verbose', False)
-    checkonly = opt.get('checkonly', False)
-
-    ret = {'Success': False, 'executed': False, 'element': None}
-
-    # try:
-    #     result['Success'] = eval(condition)
-    # except Exception as e:
-    #     # if verbose:
-    #     print(f"if_block(): condition test failed with exception={e}")
-    #     result['Success'] = False
-    result = locate(driver, condition, isExpression=True, **opt)
-
-    if result['Success'] and negation:
-        print(
-            f"if_not_block: condition '{condition}' is true, but negated, block is not executed")
-        executed = False
-    elif not result['Success'] and not negation:
-        print(f"if_block: condition '{condition}' is not true, block is not executed")
-        executed = False
-    else:
-        executed = True
-
-    ret['executed'] = executed
-
-    if executed:
-        if not checkonly:
-            # recursively calling follow() to run the block
-            try:
-                result = follow(driver, block, **opt)
-            except Exception as e:
-                print(f"if_block: follow() failed with exception={pformat(e)}")
-                return ret
-    
-            if result:
-                ret['Success'] = result['Success']
-                ret['element'] = result['element']
-
-    return ret
+    driver.quit()
 
 # pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
 # known is only available in post_batch, not in pre_batch.
@@ -2538,7 +2325,7 @@ tpbatch = {
             "For slow app like Service Now, we need set 30 or more. "
             "Even after page is loaded, it took more time for page to render fully; "
             "therefore, we need to add extra sleep time after page is loaded. "
-            "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
+            "implicitly_wait is set in 'wait=int' keyvaule",
         },
         'log_base': {
             "switches": ["-log_base"],
