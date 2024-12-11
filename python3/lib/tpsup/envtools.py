@@ -220,7 +220,12 @@ def get_tmp_dir(**opt) -> str:
 
 
 def get_home_dir(**opt) -> str:
-    return Env(**opt).home_dir
+    home_dir = Env(**opt).home_dir
+    term_type = get_term_type(**opt)
+    if term_type != 'batch':
+        # change backslash to forward slash
+        home_dir = home_dir.replace('\\', '/')
+    return home_dir
 
 
 def get_user(secure: bool = False, **opt):
@@ -622,6 +627,35 @@ def get_native_path(path: str, **opt):
     else:
         native_path = path
     return native_path
+
+def get_term_type(**opt):
+    # All the following depends on 'tpsup' env to set UNAME var in the environment.
+    # This dependency should not be a concern because tpsup is always set in the environment
+    # before we run tpsup scripts.
+    # This is more relaible than Env().term['term'].
+    # I used tpsup/python3/scripts/win_env to test this function.
+    env_uname = os.environ.get('UNAME', None)
+    if env_uname is None:
+        raise RuntimeError("UNAME is not defined in environment")
+    
+    # UNAME=MINGW64_NT-10.0-19045 tianpc2 3.4.10-87d57229.x86_64 2024-02-14 20:17 UTC x86_64 Msys
+    # UNAME=CYGWIN_NT-10.0-19045 tianpc2 3.5.3-1.x86_64 2024-04-03 17:25 UTC x86_64 Cygwin
+    # UNAME=Linux tianpc2 5.15.167.4-microsoft-standard-WSL2 #1 SMP Tue Nov 5 00:21:55 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+
+    if re.search(r'MINGW64', env_uname):
+        return 'gitbash'
+    elif re.search(r'CYGWIN', env_uname):
+        return 'cygwin'
+    elif re.search(r'Linux', env_uname):
+        return 'linux'
+    elif re.search(r'Darwin', env_uname):
+        return 'mac'
+    else:
+        env_os = os.environ.get('OS', None)
+        if env_os is not None:
+            if env_os == 'Windows_NT':
+                return 'batch'
+        raise RuntimeError(f"cannot determine term type from UNAME={env_uname}. run python3/scripts/win_env to test it")
 
 
 def main():

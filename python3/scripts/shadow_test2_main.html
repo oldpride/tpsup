@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    <title>Shadow DOM</title>
+</head>
+
+<!-- 
+using template + javascript to reuse markup structure, inclulding create shadow DOM.
+This is Client-Side Rendering (CSR).
+https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_shadow_DOM
+
+Declarative Shadow DOM (DSD)
+this is Server-Side Rendering (SSR) of shadow DOM, using <slot> to pass content to shadow DOM
+https://web.dev/articles/declarative-shadow-dom
+https://www.w3schools.com/tags/tag_template.asp
+https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_templates_and_slots
+
+
+
+
+-->
+
+<body>
+    <div id="non_host"></div>
+    <div id="shadow_host">
+        <p>not to be overwriten</p>
+
+        <!-- template is the declarative. js (below) will create a 
+         shadow root and overwrite this.
+
+         this is SSR(Server-Side Rendering) + CSR (Client-Side Rendering).
+         when user just load this html, he can see the shadow root static
+         content which is from SSR. then js runs and overwrite the shadow root
+         content, which is CSR.
+         
+         this way user won't see a blank page while js is loading.
+         -->
+        <template shadowrootmode="open">
+            <span class="info">text to be overwritten by shadow</span>
+            <slot name="my-text">my paragraph</slot>
+        </template>
+    </div>
+    <div id="shadow_host2">
+        <!-- without template, the shadow root is just added here by js.
+        this is CSR (Client-Side Rendering).
+        without js, there will be no shadow root here.
+          -->
+        <p>not to be overwriten2</p>
+    </div>
+    <div id="shadow_host3">
+        <p>not to be overwriten</p>
+
+        <!-- no js for this template, it will still create a shadow root.
+         this is SSD (Server-Side Rendering), pure html, no js
+         -->
+        <template shadowrootmode="open">
+            <span class="info">text to be overwritten by shadow</span>
+            <slot name="my-text">my paragraph</slot>
+        </template>
+    </div>
+    <a href="shadow_test2_scroll.html">scroll.html2</a>
+    <script>
+        let shadowRoot = document.getElementById('shadow_host').attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = `
+              <span class="wrapper" id="shadow_content"><span class="info">some text</span></span>
+              <div id="nested_shadow_host"></div>
+              <a href="shadow_test2_scroll.html">scroll.html3</a>
+              <input type="text" />
+              <input type="checkbox" />
+              <input type="file" />
+            `;
+
+        let nestedShadowRoot = shadowRoot.getElementById('nested_shadow_host').attachShadow({ mode: 'open' });
+        nestedShadowRoot.innerHTML = `
+              <div id="nested_shadow_content3"><div>nested text in shadow</div></div>
+            `;
+
+        let shadowRoot2 = document.getElementById('shadow_host2').attachShadow({ mode: 'open' });
+        shadowRoot2.innerHTML = `
+              <span class="wrapper" id="shadow_content2"><span class="info">some text 2</span></span>
+            `;
+
+    </script>
+
+
+</body>
+
+</html>

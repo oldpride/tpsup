@@ -1,0 +1,76 @@
+<!-- example of a shadow dom over an iframe -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Shadow DOM over an iframe</title>
+    <style>
+        #shadow_host {
+            border: 1px solid black;
+            padding: 10px;
+        }
+
+        #shadow_content {
+            background-color: lightblue;
+            padding: 10px;
+        }
+
+        #nested_shadow_host {
+            border: 1px solid black;
+            padding: 10px;
+        }
+
+        #nested_shadow_content {
+            background-color: lightgreen;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="shadow_host">
+        <!-- two ways to set up shadow dom: # or template -->
+        <!-- #shadow-root (open) -->
+        <template shadowrootmode="open">
+            <span class="wrapper" id="shadow_content">
+                <span class="info">some text</span>
+            </span>
+            <iframe>
+                <span class="info">iframe inside shadow</span>
+            </iframe>
+            <div id="nested_shadow_host">
+                <template shadowrootmode="open">
+                    <div id="nested_shadow_content">
+                        <div>nested text in shadow</div>
+                    </div>
+                </template>
+
+                <!-- <iframe src="shadow_over_iframe_test_child.html" width="100%" height="200"> -->
+
+
+            </div>
+        </template>
+
+    </div>
+    <iframe src="shadow_over_iframe_test_child.html" width="100%" height="200">
+        <span class="info">iframe outside shadow</span>
+    </iframe>
+    <script>
+        let shadowRoot = document.getElementById('shadow_host').attachShadow({ mode: 'open' });
+        shadowRoot.innerHTML = `
+                <span class="wrapper" id="shadow_content2">
+                    <span class="info">some text 2</span>
+                </span>
+                <div id="nested_shadow_host2"></div>
+            `;
+
+        let nestedShadowRoot = shadowRoot.getElementById('nested_shadow_host2').attachShadow({ mode: 'open' });
+        nestedShadowRoot.innerHTML = `
+                <div id="nested_shadow_content2">
+                    <div>nested text in shadow 2</div>
+                </div>
+            `;
+    </script>
+
+</html>

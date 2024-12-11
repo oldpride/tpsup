@@ -11,6 +11,8 @@ import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
 
+homedir = tpsup.envtools.get_home_dir()
+tpsupdir = os.environ['TPSUP']
 
 our_cfg = {
     'module': 'tpsup.seleniumtools',
@@ -41,7 +43,10 @@ our_cfg = {
     
     - has shadows, no iframes, simple pages to test shadows
     {{{{prog}}}} https://iltacon2022.expofp.com %USERPROFILE%/dumpdir -np
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_dump_test_shadow_main.html" %USERPROFILE%/dumpdir -np
+    {{{{prog}}}} "file:///{tpsupdir}/python3/scripts/shadow_test2_main.html" "{homedir}/dumpdir" -np
+
+    - has iframes, no shadows
+    {{{{prog}}}} "file:///{tpsupdir}/python3/scripts/iframe_test1.html" "{homedir}/dumpdir" -np
     
     - has both iframes and shadows
     {{{{prog}}}} https://www.dice.com %USERPROFILE%/dumpdir -np

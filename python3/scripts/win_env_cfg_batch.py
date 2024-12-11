@@ -28,5 +28,10 @@ def code(all_cfg, known, **opt):
 
 
     env_var = opt['env_var']
-    value = os.environ[env_var]
-    print(f"{env_var}={value}")
+
+    if env_var != 'all':
+        value = os.environ[env_var]
+        print(f"{env_var}={value}")
+    else:
+        for key, value in os.environ.items():
+            print(f"{key}={value}")
