@@ -1,4 +1,4 @@
-<!-- example of a shadow dom over an iframe -->
+<!-- iframe over shadow example -->
 
 <!DOCTYPE html>
 <html>
@@ -44,6 +44,7 @@
             height: 200px;
             background-color: lightgray;
             padding: 10px;
+            border: black 1px solid;
         }
 
         .info {
@@ -55,28 +56,8 @@
 </head>
 
 <body>
-    <div id="shadow_host">
-        <!-- use template without JS to create static shadow root -->
-        <template shadowrootmode="open">
-            <span class="wrapper" id="shadow_content">
-                <span class="info">some text</span>
-            </span>
-            <iframe>
-                <span class="info">iframe inside shadow</span>
-            </iframe>
-            <div id="nested_shadow_host">
-                <template shadowrootmode="open">
-                    <div id="nested_shadow_content">
-                        <div>nested text in shadow</div>
-                    </div>
-                </template>
-            </div>
-        </template>
-
-    </div>
-    <iframe src="shadow_over_iframe_test_child.html" width="100%" height="200">
-        <span class="info">iframe outside shadow</span>
+    <h1>iframe over shadow example</h1>
+    <iframe src="iframe_over_shadow_test_child.html" title="Iframe Example"></iframe>
     </iframe>
-</body>
 
 </html>

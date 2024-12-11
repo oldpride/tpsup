@@ -1,0 +1,24 @@
+<!-- this will be child html for an iframe. this html has a static shadow root -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>child page</title>
+</head>
+
+<body>
+    <!-- <h1>iframe content</h1> -->
+    <p>some text in iframe</p>
+    <div id="shadow_host">
+        <!-- use template without JS to create static shadow root -->
+        <template shadowrootmode="open">
+            <span class="info">some text in shadow</span>
+            <div id="nested_shadow_host">
+                <template shadowrootmode="open">
+                    <span class="info">some text in nested shadow</span>
+                </template>
+            </div>
+</body>
+
+</html>

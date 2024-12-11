@@ -1,0 +1,50 @@
+<!-- iframe using inplace source -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>iframe using inplace source</title>
+    <style>
+        iframe {
+            display: block;
+            width: 100%;
+            height: 50px;
+            background-color: lightgray;
+            padding: 10px;
+            border: black 1px solid;
+        }
+    </style>
+</head>
+
+<body>
+    <p>some text outside iframe</p>
+
+    <!-- https://stackoverflow.com/questions/6102636/html-code-as-iframe-source-rather-than-a-url -->
+
+    <h1>Iframe Example using srcdoc</h1>
+    <iframe srcdoc="<p>some text in iframe using srcdoc</p>" title="Iframe Example"></iframe>
+
+    <h1>Iframe Example using js</h1>
+    <iframe id="iframe_by_js"></iframe>
+
+    <h1>Iframe Example using src url</h1>
+    <iframe src="iframe_inplace_src_test_child.html" title="Iframe Example"></iframe>
+
+    <h1>Iframe Example using data url</h1>
+    <iframe
+        src="data:text/html;charset=utf-8;base64,PGh0bWw+PGJvZHk+PHA+c29tZSBkYXRhIGZyb20gZGF0YSB1cmw8L3A+PC9ib2R5PjwvaHRtbD4="
+        title="Iframe Example">
+        <!-- <html><body><p>some data from data url</p></body></html> -->
+    </iframe>
+
+
+    <script>
+        var iframe = document.getElementById('iframe_by_js');
+        iframedoc = iframe.contentDocument || iframe.contentWindow.document;
+
+        iframedoc.body.innerHTML = '<p>some text in iframe using js</p>';
+    </script>
+</body>
+
+</html>
