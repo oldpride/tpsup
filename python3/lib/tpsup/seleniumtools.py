@@ -1789,7 +1789,7 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
 
         """
 
-        result = []
+        result = {'Success': False}
 
         if step_type == str:
             result = locate(driver, step, **opt)
@@ -1801,8 +1801,15 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
         if debug:
             print(f"follow: result={pformat(result)}")
 
+        if result is None:
+            ret['Success'] = False
+            break
+
         # copy result to ret
-        ret['Success'] = result['Success'] 
+        ret['Success'] = result['Success']
+
+        if not result['Success']:
+            break
 
         if return_levels:
             break
@@ -1921,7 +1928,7 @@ def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
             
             chains.append(locator)
         
-        print(f"search for chains = {pformat(chains)}")
+        print(f"locate_dict: search for chains = {pformat(chains)}")
 
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2117,7 +2124,10 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             ret['Success'] = True
     elif locator == "shadow":
         print(f"locate: switch into shadow_root")
-        element = driver.switch_to.active_element
+        # if the element is found by finde_element_by_xpath/css/id, it
+        # may not be the active element. therefore, we use last_element.
+        # element = driver.switch_to.active_element
+        element = last_element
         try:
             if element.shadow_root:
                 pass
@@ -2128,14 +2138,17 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
-            last_element = None # after entering shadow, we need to search element again.
+            # last_element = element # last element is unchanged
             ret['Success'] = True
     elif locator == "iframe":
         print(f"locate: switch into iframe")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            element = driver.switch_to.active_element
+            # the element may not be the active element. It could just be the element 
+            # found from find_element_by_xpath(). therefore, we use last_element
+            # element = driver.switch_to.active_element
+            element = last_element
 
             # we cannot use locator_driver to swith iframe when locator_driver is a shadow root.
             #   locator_driver.switch_to.frame(element)
@@ -2143,9 +2156,14 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             # Therefore, we use (original) driver
 
             driver.switch_to.frame(element)
+
+            # once we switch into an iframe, we should use original driver to locate    
             locator_driver = driver
-            # once we switch into an iframe, we should use original driver to locate
-            last_element = None # after entering iframe, we need to search element again.
+            
+            # switch info iframe change the last element to active element.
+            # this is different from when we switch into shadow root.
+            last_element = driver.switch_to.active_element
+
             ret['Success'] = True
     elif m1 := get_locator_compiled_path1().match(locator):
         ptype, paths_string = m1.groups()
@@ -2193,7 +2211,10 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
 
             # because we are using explicit wait call (WebDriverWait), 
             # we temporarily disable implicit wait in the tp_find_element_by_paths()
-            locator_driver.implicitly_wait(0)
+            driver.implicitly_wait(0)
+            # don't use locator_driver above, because implicit_wait() is not available
+            # in shadow_root (driver).
+            # locator_driver.implicitly_wait(0)
 
             element = None
             # this is needed; otherwise, if element is defined, a failed 'try' below
@@ -2210,8 +2231,11 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             except Exception as ex:
                 print(f"locate failed: {pformat(ex)}")
 
-            # restore implicit wait
-            locator_driver.implicitly_wait(wait_seconds)
+            # restore implicit wait but
+            # don't use locator_driver here, because implicit_wait() is not available
+            # in shadow_root (driver).
+            # locator_driver.implicitly_wait(0)
+            driver.implicitly_wait(wait_seconds)
     # end of old locate()
     # the following are from old send_input()
     elif m := re.match(r"sleep=(\d+)", locator):

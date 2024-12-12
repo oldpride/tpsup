@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import os
+import shutil
 import time
 from typing import Union
 
@@ -13,7 +14,8 @@ import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
 
-HOME = os.environ['HOME'].replace('\\', '/')
+HOME = tpsup.envtools.get_home_dir()
+TPSUP = os.environ['TPSUP']
 
 our_cfg = {
     'module': 'tpsup.seleniumtools',
@@ -51,16 +53,31 @@ our_cfg = {
             'type': int,
             'help': 'limit scan depth',
         },
+        'rm': {
+            # remove the output directory before start
+            'switches': ['-rm', '--rm'],
+            'default': False,
+            'action': 'store_true',
+            'help': 'remove the output directory before start',
+        },
+        'dump_element': {
+            # default is dump_all
+            'switches': ['-de', '--dump_element'],
+            'default': False,
+            'action': 'store_true',
+            'help': 'dump the element only',
+        }
     },
 
     'usage_example': f'''
+
     - test a static page with nested iframes, same origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
+    {{{{prog}}}} "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
+    {{{{prog}}}} "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]
     
-    - test a static page with nested iframes, cross origin
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
+    - test a static page with nested iframes, cross origin (has dice.com iframe)
+    {{{{prog}}}} "file:///{TPSUP}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]  -js
+    {{{{prog}}}} "file:///{TPSUP}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1]
     
     - this will dump out dynamically generated html too
       note:
@@ -107,13 +124,13 @@ our_cfg = {
 
     # dump whole page to find target locator chain and then dump nested shadow
     1. dump the whole page
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" "{HOME}/dumpdir2"
+    {{{{prog}}}} "file:///{TPSUP}/python3/scripts/ptslnm_locate_test_shadow.html" "{HOME}/dumpdir2"
     
     2. in dumpdir2/locator_chain_map.txt, find the locator chain for the target element
     shadow001.shadow002.shadow003: "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     3. use the locator chain to dump the target element
-    {{{{prog}}}} "file:///{os.environ['TPSUP']}/python3/scripts/ptslnm_locate_test_shadow.html" "{HOME}/dumpdir2" "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
+    {{{{prog}}}} "file:///{TPSUP}/python3/scripts/ptslnm_locate_test_shadow.html" "{HOME}/dumpdir2" "xpath=id('div1')" "shadow" "css=#div2" "shadow" "css=#div3" "shadow"
     
     
     ''',
@@ -144,13 +161,16 @@ def code(all_cfg, known, **opt):
     trap = opt.get('trap', 0)
 
     yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
-    os.makedirs(output_dir, exist_ok=True)  # this does "mkdir -p"
+
+    if opt.get('rm', False):
+        # remove the output directory before start
+        shutil.rmtree(output_dir, ignore_errors=True)
+    else:
+        os.makedirs(output_dir, exist_ok=True)  # this does "mkdir -p"
 
     driver = all_cfg["resources"]["selenium"]["driver"]
 
-    actions = [
-        [f'url={url}', 'sleep=2', 'go to url'],
-    ]
+    steps = [f'url={url}', 'sleep=2']
 
     locator_chain = known['REMAININGARGS']
     if run_js:
@@ -158,14 +178,19 @@ def code(all_cfg, known, **opt):
             locator_chain, trap=trap)
         locator_chain2 = tpsup.seleniumtools.js_list_to_locator_chain(
             js_list)
-        actions.append(
-            [locator_chain2, f'dump_element={output_dir}', f'dump element to {output_dir}'])
+        steps.extend(locator_chain2)
     else:
-        actions.append(
-            [locator_chain, f'dump_element={output_dir}', f'dump element to {output_dir}'])
+        steps.extend(locator_chain)
+    
+    if opt.get('dump_element', False):
+        steps.append(f'dump_element={output_dir}')
+    else:
+        steps.append(f'dump_all={output_dir}')
+                      
+    steps.append(f'comment=dumped to {output_dir}')
 
-    print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    print(f'actions = {pformat(steps)}')
+    result = tpsup.seleniumtools.follow(driver, steps, **opt)
 
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
