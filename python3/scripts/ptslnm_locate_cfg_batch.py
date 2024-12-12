@@ -71,6 +71,16 @@ our_cfg = {
 
     'usage_example': f'''
 
+    - has shadows, no iframes, simple pages to test shadows
+    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/shadow_test2_main.html" "{HOME}/dumpdir"
+
+    - has iframes, no shadows
+    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/iframe_test1.html" "{HOME}/dumpdir"
+
+    - has shadows and iframes: iframe over shadow, shadow over iframe
+    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" "{HOME}/dumpdir"
+    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/shadow_over_iframe_test_main.html" "{HOME}/dumpdir"
+
     - test a static page with nested iframes, same origin
     {{{{prog}}}} "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]  -js
     {{{{prog}}}} "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" "{HOME}/dumpdir2" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1]

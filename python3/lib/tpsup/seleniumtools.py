@@ -919,11 +919,82 @@ def get_locator_compiled_path2():
         r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*(xpath|css|click_xpath|click_css)=",
         re.MULTILINE | re.DOTALL)
 
+dump_readme = '''
+iframe*.html
+    the iframe html of the page (dump all) or specified element (dump element)
+    note that when there is a shadow dom, the iframe*.html doesn't show the shadow dom;
+    you need to look at shadow*.html for that.
+
+locator_chain_list.txt
+    the locator chain on command line format
+    eg
+        "xpath=id('shadow_host')" "shadow"
+        "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow"
+
+locator_chain_map.txt
+    the locator chain to shadow/iframe mapping. this shows how to reach to 
+    each shadow or iframe from the root or the specified element.
+    you can run ptslnm_locate with the chain on command line to locate the element.
+    eg
+        iframe001: "xpath=/html[1]/body[1]/iframe[1]" "iframe"
+        iframe001.shadow001: "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow"
+        iframe001.shadow001.shadow002: "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow"
+    this is probably the most useful file !!!
+
+shadow*.html
+    the shadow dom of the page or specific element
+
+source.html
+    the source html of the page or specific element
+    note that when there is a shadow dom, the source.html doesn't show the shadow dom's full content.
+    you need to look at shadow*.html for that.
+
+xpath_chain_list.txt
+    similar to locator_chain_list.txt, but only xpath
+    eg
+        /html[1]/body[1]/iframe[1] iframe
+        /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow
+        /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow /div[@id='nested_shadow_host'] shadow
+    note: xpath* file is less useful than locator* file, because xpath is not useable in shadow dom
+
+xpath_chain_map.txt
+    similar to locator_chain_map.txt, but only xpath
+    eg
+        iframe001: /html[1]/body[1]/iframe[1] iframe
+        iframe001.shadow001: /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow
+        iframe001.shadow001.shadow002: /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow /div[@id='nested_shadow_host'] shadow
+    note: xpath* file is less useful than locator* file, because xpath is not useable in shadow dom
+
+ xpath_list.txt
+    all xpaths of shadow/iframe.
+    This is a single xpath, not a chain as in xpath_chain_list.txt
+    eg
+        /html[1]/body[1]/iframe[1]
+        id('shadow_host')
+        /iframe[1]
+        /div[@id='nested_shadow_host']
+
+ xpath_map.txt
+    map between xpath and shadow/iframe. 
+    This is a single xpath, not a chain as in xpath_chain_map.txt
+    eg
+        iframe001: /html[1]/body[1]/iframe[1]
+        shadow001: id('shadow_host')
+        shadow001.iframe002: /iframe[1]
+        shadow001.shadow002: /div[@id='nested_shadow_host']
+    
+
+
+    
+
+'''
 
 def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, **opt):
     verbose = opt.get('verbose', 0)
 
     source_file = f"{output_dir}/source.html"
+    readme_file = f"{output_dir}/README.txt"
+
     os.makedirs(output_dir, exist_ok=True)  # this is mkdir -p
     with open(source_file, "w", encoding="utf-8") as source_fh:
         if element:
@@ -931,6 +1002,10 @@ def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, 
         else:
             source_fh.write(driver.page_source)
         source_fh.close()
+
+    with open(readme_file, "w", encoding="utf-8") as readme_fh:
+        readme_fh.write(dump_readme)
+        readme_fh.close()
 
     if element is None:
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
@@ -2138,7 +2213,7 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
-            # last_element = element # last element is unchanged
+            # last_element = element # last element is unchanged. this is different from iframe.
             ret['Success'] = True
     elif locator == "iframe":
         print(f"locate: switch into iframe")

@@ -4,7 +4,7 @@
 <html>
 
 <head>
-    <title>Shadow DOM over an iframe</title>
+    <title>Shadow over iframe</title>
     <style>
         #shadow_host {
             display: block;
@@ -55,13 +55,14 @@
 </head>
 
 <body>
+    <h1>shadow over iframe example</h1>
     <div id="shadow_host">
         <!-- use template without JS to create static shadow root -->
         <template shadowrootmode="open">
             <span class="wrapper" id="shadow_content">
                 <span class="info">some text</span>
             </span>
-            <iframe srcdoc="<p>some text in shadow->iframe using srcdoc</p>"></iframe>
+            <iframe srcdoc="<p>some text in iframe using srcdoc</p>"></iframe>
             <div id="nested_shadow_host">
                 <template shadowrootmode="open">
                     <div id="nested_shadow_content">
