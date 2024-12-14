@@ -96,8 +96,8 @@ our_cfg = {
     - test js. js is much faster.
         in shadow, we can only use css selector to locate
         but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
-    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" -dump "{HOME}/dumpdir" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span
-    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" -dump "{HOME}/dumpdir" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -js
+    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" -dump "{HOME}/dumpdir" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span
+    {{{{prog}}}} -rm "file:///{TPSUP}/python3/scripts/iframe_over_shadow_test_main.html" -dump "{HOME}/dumpdir" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -js
     diff -r dumpdir dumpdir2 # should be the same
     
     - test dump scope: element, dom, all
@@ -167,10 +167,7 @@ def code(all_cfg, known, **opt):
 
     locator_chain = known['REMAININGARGS']
     if run_js:
-        js_list = tpsup.seleniumtools.locator_chain_to_js_list(
-            locator_chain, trap=trap, debug=debug)
-        locator_chain2 = tpsup.seleniumtools.js_list_to_locator_chain(
-            js_list)
+        locator_chain2 = tpsup.seleniumtools.locator_chain_to_locator_chain_using_js(locator_chain, trap=trap, debug=debug)
         steps.extend(locator_chain2)
     else:
         steps.extend(locator_chain)

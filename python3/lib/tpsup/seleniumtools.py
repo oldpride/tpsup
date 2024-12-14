@@ -1461,6 +1461,55 @@ try {
 
     return js_list
 
+def locator_chain_to_locator_chain_using_js(locator_chain: list, **opt) -> list:
+    # because only xpath/css/iframe/shadow in a locator chain can be converted to js, we often
+    # cannot convert the whole locator chain to js. Therefore, we only convert the first part
+    # of xpath/css/iframe/shadow chain to js, and leave the rest as is.
+    # for example, if the locator_chain is
+    #    sleep=2 xpath=/a/b shadow css=c comment=done css=d
+    # we will convert "xpath=/a/b shadow css=c" to js, and leave the rest as is.
+
+    debug = opt.get('debug', 0)
+    
+    locator_chain_before_js = []
+    locator_chain_after_js = []
+    
+    # first we find the first part of locator_chain that can be converted to js
+    to_be_converted = []
+    to_be_converted_started = False
+    to_be_converted_ended = False
+    for locator in locator_chain:
+        if to_be_converted_ended:
+            locator_chain_after_js.append(locator)
+        else:
+            if re.match(r"\s*(xpath|css|iframe|shadow)", locator):
+                to_be_converted.append(locator)
+                to_be_converted_started = True
+            else:
+                if to_be_converted_started:
+                    to_be_converted_ended = True
+                else:
+                    # we haven't started the first part of js yet
+                    locator_chain_before_js.append(locator)
+
+    if debug:
+        print(f"locator_chain_before_js={pformat(locator_chain_before_js)}")
+        print(f"to_be_converted={pformat(to_be_converted)}")
+        print(f"locator_chain_after_js={pformat(locator_chain_after_js)}")
+
+    locator_chain2 = locator_chain_before_js.copy()
+
+    if to_be_converted:
+        js_list = locator_chain_to_js_list(to_be_converted, **opt)
+        js_locator_chain = js_list_to_locator_chain(js_list, **opt)
+        locator_chain2.extend(js_locator_chain)
+
+    locator_chain2.extend(locator_chain_after_js)
+
+    if debug:
+        print(f"locator_chain2={pformat(locator_chain2)}")
+
+    return locator_chain2
 
 def wrap_js_in_trap(js: str) -> str:
     js2 = f'''
