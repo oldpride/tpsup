@@ -14,6 +14,8 @@ import tpsup.pstools
 from pprint import pformat
 from selenium import webdriver
 
+HOME = tpsup.envtools.get_home_dir()
+TPSUP = os.environ['TPSUP']
 
 our_cfg = {
     'module': 'tpsup.seleniumtools',
@@ -31,14 +33,11 @@ our_cfg = {
         },
     },
 
-    'usage_example': '''
+    'usage_example': f'''
     - run java script
     
-    from cmd.exe
-    {{prog}} chrome-search://local-ntp/local-ntp.html "%TPSUP%"\\python3\\scripts\\locator_chain_test*.js
+    {{{{prog}}}} chrome://new-tab-page {TPSUP}/python3/scripts/locator_chain_test*.js
 
-    from bash
-    {{prog}} chrome-search://local-ntp/local-ntp.html "$TPSUP"/python3/scripts/locator_chain_test*.js 
     ''',
 
     'show_progress': 1,
@@ -59,10 +58,7 @@ def code(all_cfg, known, **opt):
 
     driver = all_cfg["resources"]["selenium"]["driver"]
 
-    actions = [
-        [f'url={url}', 'sleep=2', 'go to url'],
-        # [None, f'js={js_script}', 'run java_script'],
-    ]
+    steps = [ f'url={url}', 'sleep=2']
 
     i = 0
     # on Windows file*.js doesn't expand on cmd.exe. we have to expand it ourselves
@@ -74,10 +70,10 @@ def code(all_cfg, known, **opt):
                 ifh.close()
                 if trap:
                     js = tpsup.seleniumtools.wrap_js_in_trap(js)
-                actions.append([f'js={js}', None,  f'run #{i} file {js_file}'])
+                steps.append(f'js={js}')
 
-    print(f'actions = {pformat(actions)}')
-    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
+    print(f'steps = {pformat(steps)}')
+    result = tpsup.seleniumtools.follow(driver, steps, **opt)
 
     print(f"result element = {result['element'].get_attribute('outerHTML')}")
     tpsup.seleniumtools.js_print_debug(driver, result['element'])

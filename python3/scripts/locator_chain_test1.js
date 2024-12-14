@@ -1,4 +1,5 @@
-var e = document.evaluate("/html/body/ntp-app", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.shadowRoot.querySelector("ntp-iframe").shadowRoot.querySelector("#iframe");
+// this is test against chrome new tab. as of 2024/12/13, it is chrome://new-tab-page
+var e = document.evaluate("/html/body/input", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.shadowRoot.querySelector("ntp-iframe").shadowRoot.querySelector("#iframe");
         
 const current_origin = window.location.origin;
 

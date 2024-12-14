@@ -60,7 +60,7 @@ our_cfg = {
             'action': 'store_true',
             'help': 'remove the dump directory before start',
         },
-        'dump': {
+        'dump_dir': {
             # dump directory
             'switches': ['-dump', '--dump'],
             'default': None,
@@ -112,7 +112,7 @@ our_cfg = {
                but for remote page, this is needed. otherwise, you get error: 
                stale element reference: element is not attached to the page document
         - once entered shadow, xpath is not working anymore., use css selector instead.
-    {{{{prog}}}} https://google.com -dump "{HOME}/dumpdir" "sleep=2" css=input 
+    {{{{prog}}}} chrome://new-tab-page -dump "{HOME}/dumpdir" "sleep=2" "xpath=/iframe[1]" iframe "xpath=//a[@aria-label='Gmail ']"
 
     - test block steps
     {{{{prog}}}} "about:blank" code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
@@ -175,15 +175,16 @@ def code(all_cfg, known, **opt):
     else:
         steps.extend(locator_chain)
     
-    scope = opt.get('scope', 'element')
-    if scope == 'dom':
-        steps.append(f'dump_dom={dump_dir}')
-    elif scope == 'all':
-        steps.append(f'dump_all={dump_dir}')
-    else:
-        steps.append(f'dump_element={dump_dir}')
-                      
-    steps.append(f'comment=dumped to {dump_dir}')
+    if dump_dir:
+        scope = opt.get('scope', 'element')
+        if scope == 'dom':
+            steps.append(f'dump_dom={dump_dir}')
+        elif scope == 'all':
+            steps.append(f'dump_all={dump_dir}')
+        else:
+            steps.append(f'dump_element={dump_dir}')
+                        
+        steps.append(f'comment=dumped to {dump_dir}')
 
     print(f'steps = {pformat(steps)}')
     result = tpsup.seleniumtools.follow(driver, steps, **opt)
