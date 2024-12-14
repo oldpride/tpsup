@@ -20,7 +20,7 @@ examples:
 
    for windows
    $prog 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-   $prog c:/Users/william/chrome/Application/chrome.exe
+   $prog c:/Users/tian/sitebase/Windows/10.0/Chrome/Application/chrome.exe
 
    for linux
    $prog /usr/bin/google-chrome
@@ -63,7 +63,7 @@ if [ "$p" = "default" ]; then
       target=chrome
    fi
 
-   p=`which $target`
+   p=`which $target|sed 's/ /\\ /g'`
    if [ "X$p" = "X" ]; then
       echo "ERROR: cannot find $target in PATH=$PATH" >&2
       exit 1
@@ -72,7 +72,7 @@ if [ "$p" = "default" ]; then
    [ $verbose = Y ] && echo "p=$p" >&2
 fi   
 
-if [[ "$uname" =~ Linux ]]; then
+if [[ "$uname" =~ Linux|Darwin ]]; then
    # $ google-chrome --version
    # Google Chrome 99.0.4844.74 
 
@@ -80,5 +80,16 @@ if [[ "$uname" =~ Linux ]]; then
    $p --version | cut -d" " -f3
 else 
    [ $verbose = Y ] && set -x
-   powershell -command "&{(Get-Item '$p').VersionInfo.ProductVersion}"
+
+   source_termtype=`termtype get`
+   target_termtype=batch
+   new_p=`convertpath -s $source_termtype -t $target_termtype $p`
+
+   # add .exe if it doesn't have one
+   if [[ ! "$new_p" =~ \.exe$ ]]; then
+      new_p=$new_p.exe
+   fi
+
+   [ $verbose = Y ] && echo "new_p=$new_p" >&2
+   powershell -command "&{(Get-Item '$new_p').VersionInfo.ProductVersion}"
 fi

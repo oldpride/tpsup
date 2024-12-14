@@ -1,0 +1,66 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog get
+
+   get terminal type. This is based on env var UNAME which is set by tpsup. 
+   
+   -v        verbose
+
+examples:
+
+   $prog get
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+while getopts v o;
+do
+   case "$o" in
+      v) verbose=Y;;
+      #s) site_dir="$OPTARG";;
+      *) echo "unknow switch '$o'"; usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+action=$1
+
+if [ "$action" = "get" ]; then
+   # UNAME=MINGW64_NT-10.0-19045 tianpc2 3.4.10-87d57229.x86_64 2024-02-14 20:17 UTC x86_64 Msys
+   # UNAME=CYGWIN_NT-10.0-19045 tianpc2 3.5.3-1.x86_64 2024-04-03 17:25 UTC x86_64 Cygwin
+   # UNAME=Linux tianpc2 5.15.167.4-microsoft-standard-WSL2 #1 SMP Tue Nov 5 00:21:55 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+   # UNAME=Microsoft Windows [Version 10.0.19045.5247] Windows_NT
+
+   if [[ "$UNAME" =~ MINGW64_NT ]]; then
+      echo "gitbash"
+   elif [[ "$UNAME" =~ CYGWIN_NT ]]; then
+      echo "cygwin"
+   elif [[ "$UNAME" =~ Linux ]]; then
+      echo "Linux"
+   elif [[ "$UNAME" =~ Darwin ]]; then
+      echo "Mac"
+   elif [[ "$UNAME" =~ Microsoft|Windows ]]; then
+      # this is unlikely to happen, but just in case
+      echo "batch"
+   else
+      echo "unknown UNAME: $UNAME"
+   fi
+else
+   echo "unknown action: $action"
+   usage
+fi

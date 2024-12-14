@@ -636,11 +636,12 @@ def get_term_type(**opt):
     # I used tpsup/python3/scripts/win_env to test this function.
     env_uname = os.environ.get('UNAME', None)
     if env_uname is None:
-        raise RuntimeError("UNAME is not defined in environment")
+        raise RuntimeError("UNAME is not defined in environment. we didn't run tpsup or siteenv")
     
     # UNAME=MINGW64_NT-10.0-19045 tianpc2 3.4.10-87d57229.x86_64 2024-02-14 20:17 UTC x86_64 Msys
     # UNAME=CYGWIN_NT-10.0-19045 tianpc2 3.5.3-1.x86_64 2024-04-03 17:25 UTC x86_64 Cygwin
     # UNAME=Linux tianpc2 5.15.167.4-microsoft-standard-WSL2 #1 SMP Tue Nov 5 00:21:55 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+    # UNAME=Microsoft Windows [Version 10.0.19045.5247] Windows_NT
 
     if re.search(r'MINGW64', env_uname):
         return 'gitbash'
@@ -650,12 +651,10 @@ def get_term_type(**opt):
         return 'linux'
     elif re.search(r'Darwin', env_uname):
         return 'mac'
+    elif re.search(r'Windows', env_uname):
+        return 'batch'
     else:
-        env_os = os.environ.get('OS', None)
-        if env_os is not None:
-            if env_os == 'Windows_NT':
-                return 'batch'
-        raise RuntimeError(f"cannot determine term type from UNAME={env_uname}. run python3/scripts/win_env to test it")
+        raise RuntimeError(f"cannot determine term type from UNAME={env_uname}. if on windows, run python3/scripts/win_env to test it")
 
 
 def main():

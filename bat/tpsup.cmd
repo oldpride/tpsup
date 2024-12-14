@@ -18,6 +18,12 @@ REM change backslash to forward slash
 REM set "HOME=%USERPROFILE:\=/%"
 set "HOME=%USERPROFILE%%"
 
+REM set UNAME to command @var's output
+REM https://stackoverflow.com/questions/2349300
+for /f "tokens=*" %%a in ('ver') do set UNAME=%%a
+REM append "Windows_NT" to UNAME
+set UNAME=%UNAME% Windows_NT
+
 rem use 'call' to invoke external script; otherwise, the current script will exit after the external script
 call "%CMD_DIR%\addpath.cmd" -q PATH "%CMD_DIR%"
 

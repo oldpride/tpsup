@@ -33,4 +33,7 @@ def code(all_cfg, known, **opt):
 
     action = opt.get('action')
 
-    result = tpsup.seleniumtools.check_setup(compareVersion=1)
+    if action == 'check':
+        result = tpsup.seleniumtools.check_setup(compareVersion=1)
+    else:
+        raise Exception(f'unknown action={action}')

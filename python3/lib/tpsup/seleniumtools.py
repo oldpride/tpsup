@@ -5,6 +5,7 @@ import time
 import subprocess
 from urllib.parse import urlparse
 from shutil import which
+import tpsup.cmdtools
 import tpsup.envtools
 from selenium import webdriver
 from tpsup.human import human_delay
@@ -476,20 +477,34 @@ def get_driver(**args) -> webdriver.Chrome:
 
 
 def get_static_setup(**opt):
+    verbose = opt.get('verbose', 0)
+
     env = tpsup.envtools.Env()
     env.adapt()
     static_setup = {}
     if env.isWindows:
         # as of now, only windows has static setup
         static_browser_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/Chrome/Application/chrome.exe"
-        static_browser_path = os.path.normpath(static_browser_path)
-        # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
+        if verbose:
+            print(f"get_static_setup: static_browser_path={static_browser_path}")
+
+        if env.isWindows:
+            # convert to native path: for windows, we convert it to batch path with forward slash for cygwin/gitbash/powershell
+            static_browser_path = tpsup.envtools.convert_path(static_browser_path, target_type='batch')
+            if verbose:
+                print(f"get_static_setup: converted: static_browser_path={static_browser_path}")
+
         static_setup['chrome'] = static_browser_path
-        # print(f"static_setup['chrome']={static_setup['chrome']}")
 
         static_driver_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/chromedriver/chromedriver.exe"
-        static_driver_path = os.path.normpath(static_driver_path)
-        # maily for cygwin/gitbash, to convert /cydrive/c/users/... to c:/users/...
+        print(f"get_static_setup: static_driver_path={static_driver_path}")
+
+        if env.isWindows:
+            # convert to native path: for windows, we convert it to batch path with forward slash for cygwin/gitbash/powershell
+            static_driver_path = tpsup.envtools.convert_path(static_driver_path, target_type='batch')
+            if verbose:
+                print(f"get_static_setup: converted: static_driver_path={static_driver_path}")
+
         static_setup['chromedriver'] = static_driver_path
 
     return static_setup
@@ -508,6 +523,7 @@ def search_exec_in_path(execList: list, **opt) -> str:
 
 def check_setup(**opt):
     target = opt.get('target')
+    verbose = opt.get('verbose', 0)
 
     if target:
         targetList = [target]
@@ -563,9 +579,20 @@ def check_setup(**opt):
                 raise RuntimeError(
                     f"cannot find 'chrome_version' command in PATH={os.environ['PATH']}")
 
-            chrome_vesion = str(subprocess.check_output(
-                [chrome_version_full_path, found_path['chrome']]).strip(), 'utf-8')
-            # 99.0.4844.74
+            print (f"check_setup: chrome_version_full_path={chrome_version_full_path}")
+            print (f"check_setup: found_path['chrome']={found_path['chrome']}")
+
+            cmd_term = tpsup.envtools.get_term_type()
+            if cmd_term == 'batch':
+                chrome_vesion = str(subprocess.check_output(
+                    [chrome_version_full_path, found_path['chrome']]).strip(), 'utf-8')
+                # 99.0.4844.74
+            else:
+                # convert backslash to forward slash
+                found_path['chrome'] = found_path['chrome'].replace('\\', '/')
+                print(f"check_setup: found_path['chrome']={found_path['chrome']}")
+                chrome_vesion = run_cmd_clean(f"chrome_version {found_path['chrome']}", is_bash=True)
+            # chrome_vesion = tpsup.cmdtools.run_cmd_clean(f"chrome_version {found_path['chrome'].replace('\\', '/')}", is_bash=True)
 
             # use str() to convert bytes to string
 
@@ -932,6 +959,8 @@ locator_chain_list.txt
         "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow"
 
 locator_chain_map.txt
+    The most useful file!!!
+
     the locator chain to shadow/iframe mapping. this shows how to reach to 
     each shadow or iframe from the root or the specified element.
     you can run ptslnm_locate with the chain on command line to locate the element.
@@ -939,15 +968,41 @@ locator_chain_map.txt
         iframe001: "xpath=/html[1]/body[1]/iframe[1]" "iframe"
         iframe001.shadow001: "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow"
         iframe001.shadow001.shadow002: "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow"
-    this is probably the most useful file !!!
+    
+    you may see shadow doms not defined by you. for example, form input may have a shadow dom.
+        <!-- shadow_test2_main.html -->
+        <input type="checkbox" />
+        <input type="file" />
+    they create two shadow doms
+        shadow001.shadow003: "xpath=id('shadow_host')" "shadow" "css=INPUT:nth-child(4)" "shadow"
+        shadow001.shadow004: "xpath=id('shadow_host')" "shadow" "css=INPUT:nth-child(6)" "shadow"
 
 shadow*.html
-    the shadow dom of the page or specific element
+    the shadow dom of the page or specific element.
+    it is the HTML of the shadow host.
 
 source.html
-    the source html of the page or specific element
+    the source html specific element, or dom, or the whoe page: 
+        if dump_element, this will be the html of the element.
+        if dump_dom, this will be the html of the innest dom (shadow or iframe) of that contains the element.
+        if dump_all, this will be the whole page.
+
     note that when there is a shadow dom, the source.html doesn't show the shadow dom's full content.
     you need to look at shadow*.html for that.
+
+    normally source.html will be different from the original html because source.html contains
+    dynamic content, such as the content of shadow dom or js generated content.
+
+    you will see see some tags are neither from the original html nor from the js that you provided.
+    for example: 
+        <input type="button" value="Choose File" pseudo="-webkit-file-upload-button" id="file-upload-button" aria-hidden="true">
+    here,
+        'aria' (Accessible Rich Internet Applications) is a set attributes that define ways to make web content and web 
+        applications (especially those developed with JavaScript) more accessible to people with disabilities.
+
+        'pseudo': A CSS pseudo-class is a keyword added to a selector that specifies a special state of the selected element(s).
+        For example, the pseudo-class :hover can be used to select a button when a user's pointer hovers over the button and
+        this selected button can then be styled.
 
 xpath_chain_list.txt
     similar to locator_chain_list.txt, but only xpath
@@ -955,7 +1010,7 @@ xpath_chain_list.txt
         /html[1]/body[1]/iframe[1] iframe
         /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow
         /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow /div[@id='nested_shadow_host'] shadow
-    note: xpath* file is less useful than locator* file, because xpath is not useable in shadow dom
+    note: xpath* files are less useful than locator* files, because xpath is not useable in shadow dom.
 
 xpath_chain_map.txt
     similar to locator_chain_map.txt, but only xpath
@@ -963,34 +1018,34 @@ xpath_chain_map.txt
         iframe001: /html[1]/body[1]/iframe[1] iframe
         iframe001.shadow001: /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow
         iframe001.shadow001.shadow002: /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow /div[@id='nested_shadow_host'] shadow
-    note: xpath* file is less useful than locator* file, because xpath is not useable in shadow dom
+    note: xpath* files are less useful than locator* files, because xpath is not useable in shadow dom.
 
  xpath_list.txt
     all xpaths of shadow/iframe.
-    This is a single xpath, not a chain as in xpath_chain_list.txt
+    The list are single x-paths pointing to iframe/shadow, not a chain as in xpath_chain_list.txt
     eg
         /html[1]/body[1]/iframe[1]
         id('shadow_host')
         /iframe[1]
         /div[@id='nested_shadow_host']
+    note: xpath* files are less useful than locator* files, because xpath is not useable in shadow dom.
 
  xpath_map.txt
     map between xpath and shadow/iframe. 
-    This is a single xpath, not a chain as in xpath_chain_map.txt
+    This map uses a single xpath to locate a iframe/shadow, not a chain as in xpath_chain_map.txt
     eg
         iframe001: /html[1]/body[1]/iframe[1]
         shadow001: id('shadow_host')
         shadow001.iframe002: /iframe[1]
         shadow001.shadow002: /div[@id='nested_shadow_host']
+    note: xpath* files are less useful than locator* files, because xpath is not useable in shadow dom.
+    for example, the last line above is a nested shadow dom, which is not reachable by the xpath.
     
-
-
-    
-
 '''
 
 def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, **opt):
     verbose = opt.get('verbose', 0)
+    debug = opt.get('debug', 0)
 
     source_file = f"{output_dir}/source.html"
     readme_file = f"{output_dir}/README.txt"
@@ -1000,6 +1055,13 @@ def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, 
         if element:
             source_fh.write(element.get_attribute('outerHTML'))
         else:
+            '''
+            driver.page_source may not be the whole page.
+            for example, if we are in an iframe or shadow dom, driver.page_source
+            will not show the content of the iframe or shadow.
+            to get the whole page, we need to reset driver to original page
+            using driver.switch_to.default_content()
+            '''
             source_fh.write(driver.page_source)
         source_fh.close()
 
@@ -1195,8 +1257,8 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
         for e in driver.find_elements(By.XPATH, "//*"):
             dump_deeper(driver, e, dump_state, 'shadow', **opt)
 
-        driver.switch_to.default_content()  # don't forget to switch back
-
+        # don't forget to switch back to main web page.
+        driver.switch_to.default_content()  
     elif type == 'shadow':
         # shadow_host = element
         shadow_driver = element.shadow_root
@@ -1269,24 +1331,36 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     pop_locator_chain1 = dump_state['locator_chain'].pop()
     pop_locator_chain2 = dump_state['locator_chain'].pop()
 
-
 def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
+    '''
+    the conversion is not 1 to 1, meaning there are likely less number
+    of items in js_list the in locator_chain
+    '''
     js_list: list = []
     trap = opt.get('trap', 0)
+    debug = opt.get('debug', 0)
+
+    in_shadowDom = False
 
     js = 'var e = document'
     for locator in locator_chain:
         if m := get_locator_compiled_path1().match(locator):
+            # we can only convert single path, eg, xpath=/a/b
+            # we cannot conver multiple path, eg, xpath=/a/b,xpath=/c/d
             ptype, path = m.groups()
             if ptype == 'xpath':
-                js += f'.evaluate("{path}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue'
+                if not in_shadowDom:
+                    js += f'.evaluate("{path}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue'
+                else:
+                    raise RuntimeError("xpath is not supported in shadow dom. use css instead")
             elif ptype == 'css':
                 js += f'.querySelector("{path}")'
             else:
                 raise RuntimeError(
                     f"unsupported ptype={ptype} in locator={locator}")
         elif locator == 'shadow':
-            js += '.shadowRoot'
+            js += '.shadowRoot' # this is the shadow driver
+            in_shadowDom = True    
         elif locator == 'iframe':
             # https://stackoverflow.com/questions/7961229/
 
@@ -1325,6 +1399,10 @@ try {
     const current_origin = window.location.origin;
     console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
 } catch(err) {
+    // print the error. note that console.log() is not available in Selenium. 
+    // console log is only available in browser's webtools console.
+    console.log(err.stack);
+
     let iframe_src = e.getAttribute('src');
     //iframe_url = new URL(iframe_src);
     iframe_url = iframe_src;
@@ -1332,15 +1410,37 @@ try {
     window.location.replace(iframe_url);
 }
             '''
-            # save one js after very iframe
+            # save one js after very iframe.
+            # so every 'iframe' creates a new js. 
             if trap:
                 js = wrap_js_in_trap(js)
             js_list.append(js)
 
             # start another js
             js = 'var e = document'
+
+            # once we are in iframe, we are out of shadow driver, back to normal driver.
+            # even if the iframe is in shadow dom.
+            in_shadowDom = False
         else:
-            raise RuntimeError(f"unsupported locator={locator}")
+            raise RuntimeError(f"unsupported locator={locator}. js only accept locators: xpath, css, shadow, or iframe")
+  
+    '''
+    this is the last js.
+    if the last js ends with a shadowRoot, we remove it because
+    we shadowRoot (shadow driver) doesn't support a lot of methods.
+    for example, we cannot run dump() on shadowRoot
+        source_fh.write(element.get_attribute('outerHTML'))
+                    ^^^^^^^^^^^^^^^^^^^^^
+        AttributeError: 'ShadowRoot' object has no attribute 'get_attribute'. Did you mean: '__getattribute__'?
+    we can run dump() on shadow host.
+    But we need shadowRoot to run querySelector() to locate element in shadow dom. (see comment on 
+    'locator_dirver' vs 'driver'). Therefore,
+        if ShadowRoot is the last js, we remove it.
+        if ShadowRoot is followed by querySelector(), we keep it.
+    '''
+    if js.endswith('.shadowRoot'):
+        js = js[:-len('.shadowRoot')]
 
     # save the last js.
     #   - only the last js 'return e'
@@ -1348,7 +1448,16 @@ try {
     js += ';\nreturn e'
     if trap:
         js = wrap_js_in_trap(js)
+
     js_list.append(js)
+
+    if debug:
+        print(f"locator_chain_to_js_list: js_list_size={len(js_list)}")
+        i = 0
+        for item in js_list:
+            print(f"js{i}={item}")
+            print(f"")
+            i += 1
 
     return js_list
 
@@ -1627,7 +1736,7 @@ def test_basic():
     # If we want to keep a browser running, we need to start it manually first, and then let the webdriver
     # to connect to it. As the webdriver didn't start the browser, it wouldn't register the closing action.
     # There were folks played with the code to only closing the webdriver without closing the browser, but
-    # ends up with many zombie webdriver running in the background.
+    # ends up with many zombie webdriver running in the background."
     # therefore, we close the driver explicitly.
     driver.quit()
     # driver.dispose()    # this will call driver.close()
@@ -1643,7 +1752,7 @@ def test_basic():
 def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     '''
     follow() is a recursive. it basic flow is: if ... then if ... then if ... then ...
-    for example: [ 'click_xpath=/a/b', 'iframe', 'click_xpath=/c/d', 'string="hello world"', 'dump' ]
+    for example: [ 'click_xpath=/a/b', '"iframe', 'click_xpath=/c/d', 'string="hello world"', 'dump' ]
     By default, if any 'if' failed, we stop. For example, if 'click_xpath=/a/b' failed, we stop.
     If any 'then if' failed, we stop. For example, if 'iframe' failed, we stop.
 
@@ -2145,9 +2254,10 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             #     time.sleep(2)
             #     driver_url = driver.current_url
             driver_url = driver.current_url
+            last_element = driver.switch_to.active_element
             ret['Success'] = True
-    elif m := re.match(r"code=(.+)", locator, re.MULTILINE | re.DOTALL):
-        code, *_ = m.groups()
+    elif m := re.match(r"(code|python)=(.+)", locator, re.MULTILINE | re.DOTALL):
+        _, code, *_ = m.groups()
         print(f"locate: run python code = {code}")
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2170,7 +2280,11 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             element = driver.execute_script(js)
-            last_element = element
+            if element:
+                last_element = element
+            else:
+                last_element = driver.switch_to.active_element
+            
             ret['Success'] = True
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
@@ -2501,14 +2615,33 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             locator_driver = driver
             last_element = None # after entering iframe, we need to search element again.
             ret['Success'] = True
-    elif m := re.match(r"dump_(element|all)=(.+)", locator):
+    elif m := re.match(r"dump_(element|dom|all)=(.+)", locator):
         scope, output_dir, *_ = m.groups()
         print(f"locate: dump {scope} to {output_dir}")
+        '''
+        about the scope:
+            element: dump the last element's info
+            dom:     dump everything about the innest iframe or shadow dom of the element.
+            all:     dump the whole page.
+
+            for example, when we run 
+            ptslnm_locate -rm -debug "file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "C:/Users/tian/dumpdir2" xpath=//iframe[1] iframe "xpath=//body/p"
+            the chain is: xpath=//iframe[1] iframe "xpath=//body/p"
+
+            if we dump_element, we dump the last element, which is the <p> element. source.html only contains the <p> element.
+            if we dump_dom, we dump the shadow dom of the <p> element. source.html only contains the iframe dom which contains the <p> element.
+            if we dump_all, we dump the whole page. source.html contains the whole page.        
+        '''
 
         # output_dir can be from both **opt and step, to avoid the multiple-values error,
         # we group output_dir into **opt, allowing override kwargs
         #
-        if scope == 'all':
+        if scope == 'dom':
+            dump(driver, **{**opt, 'output_dir': output_dir})
+        elif scope == 'all':
+            # switch driver to original driver, because dump() needs to dump the whole page.
+            driver.switch_to.default_content()
+
             dump(driver, **{**opt, 'output_dir': output_dir})
         else:
             # scope == 'element'
@@ -2516,8 +2649,10 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             # if element is None:
             if last_element is None:
                 print(
-                    "dump_element() is called but element is None, we dump_all() instead")
-            dump(driver, element=last_element, **
+                    "ERROR: dump_element() is called but element is None, we dump_all() instead")
+                dump(driver, **{**opt, 'output_dir': output_dir})
+            else:
+                dump(driver, element=last_element, **
                     {**opt, 'output_dir': output_dir})
         ret['Success'] = True
     elif m := re.match(r"we_return()$|we_return=(\d+)", locator):
