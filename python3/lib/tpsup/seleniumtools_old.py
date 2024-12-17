@@ -1909,7 +1909,7 @@ try {{
 def js_list_to_locator_chain(js_list: list, **opt) -> list:
     locator_chain = []
     for js in js_list:
-        locator_chain.append(f'js={js}')
+        locator_chain.append(f'jselement={js}')
     return locator_chain
 
 

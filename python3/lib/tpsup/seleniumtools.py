@@ -19,6 +19,7 @@ from selenium.common.exceptions import \
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.chrome.service import Service as ChromeDriverService
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 # find_element_by_name('q') is replaced with find_element(By.NAME, 'q')
 from selenium.webdriver.common.by import By
@@ -84,6 +85,9 @@ wait_seconds = 10 # seconds
 # however, if we just want to get attribute or dump the element, we can just
 # use the "last_element".
 last_element = None
+
+# last result from js code: jsr = driver.execute_script(js_code)
+jsr = None
 
 ########### end of global variables ###########
 
@@ -322,6 +326,11 @@ class SeleniumEnv:
         self.browser_options.add_argument("--disable-browser-side-navigation")
         # self.browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
+        # enable console log
+        # https://stackoverflow.com/questions/76430192
+        # desired_capabilities has been replaced with set_capability
+        self.browser_options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+
         for arg in opt.get("browserArgs", []):
             self.browser_options.add_argument(f"--{arg}")
             # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
@@ -347,7 +356,7 @@ class SeleniumEnv:
                 log_path=self.driverlog,
                 service_args=self.driver_args,  # for chromedriver
             )
-
+            
             log_FileFuncLine()
 
             self.driver = webdriver.Chrome(
@@ -889,8 +898,6 @@ class tp_find_element_by_chains:
         return None
 
 
-
-
 def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
     # driver.get(url) often got the following error:
     #   selenium.common.exceptions.TimeoutException:
@@ -947,6 +954,15 @@ def get_locator_compiled_path2():
         re.MULTILINE | re.DOTALL)
 
 dump_readme = '''
+element/
+    directory for element dump
+
+dom/
+    directory for dom dump
+
+page/
+    directory for page dump
+
 iframe*.html
     the iframe html of the page (dump all) or specified element (dump element)
     note that when there is a shadow dom, the iframe*.html doesn't show the shadow dom;
@@ -977,15 +993,24 @@ locator_chain_map.txt
         shadow001.shadow003: "xpath=id('shadow_host')" "shadow" "css=INPUT:nth-child(4)" "shadow"
         shadow001.shadow004: "xpath=id('shadow_host')" "shadow" "css=INPUT:nth-child(6)" "shadow"
 
+screenshot_element.png
+    the screenshot of the element
+    as of 2024/12/15, it works in -js mode. non-js mode screenshot is blank.
+
 shadow*.html
     the shadow dom of the page or specific element.
     it is the HTML of the shadow host.
 
 source.html
-    the source html specific element, or dom, or the whoe page: 
+    the source html specific to dump scope: element, or dom, or the whoe page: 
         if dump_element, this will be the html of the element.
-        if dump_dom, this will be the html of the innest dom (shadow or iframe) of that contains the element.
+        if dump_dom, this will be the html of the innest iframe dom that contains the element.
+                     we cannot get the innest shadow dom html because shadowRoot (shadow driver) 
+                     has no page_source attribute.
         if dump_all, this will be the whole page.
+
+    dump_element and dump_dom are reliable because they are not affected by the driver's state (in iframe/shadow or not).
+    dump_page is unreliable or have side effect because it needs to switch driver to the original driver.
 
     note that when there is a shadow dom, the source.html doesn't show the shadow dom's full content.
     you need to look at shadow*.html for that.
@@ -1020,7 +1045,7 @@ xpath_chain_map.txt
         iframe001.shadow001.shadow002: /html[1]/body[1]/iframe[1] iframe id('shadow_host') shadow /div[@id='nested_shadow_host'] shadow
     note: xpath* files are less useful than locator* files, because xpath is not useable in shadow dom.
 
- xpath_list.txt
+xpath_list.txt
     all xpaths of shadow/iframe.
     The list are single x-paths pointing to iframe/shadow, not a chain as in xpath_chain_list.txt
     eg
@@ -1030,7 +1055,7 @@ xpath_chain_map.txt
         /div[@id='nested_shadow_host']
     note: xpath* files are less useful than locator* files, because xpath is not useable in shadow dom.
 
- xpath_map.txt
+xpath_map.txt
     map between xpath and shadow/iframe. 
     This map uses a single xpath to locate a iframe/shadow, not a chain as in xpath_chain_map.txt
     eg
@@ -1040,34 +1065,86 @@ xpath_chain_map.txt
         shadow001.shadow002: /div[@id='nested_shadow_host']
     note: xpath* files are less useful than locator* files, because xpath is not useable in shadow dom.
     for example, the last line above is a nested shadow dom, which is not reachable by the xpath.
+
+How to use these files:
+    scenario 1: I want to locate the search box in google new tab page
+        dump the page
+            $ ptslnm_steps -rm newtab -dump $HOME/dumpdir -scope all
+        open browser, go to new tab page, open devtools, inspect the search box html
+            it has: id="input"
+        find this string in our dump files
+            $ cd $HOME/dumpdir/page
+            $ grep 'id="input"' *
+            shadow009.html:<div id="inputWrapper"><input id="input" class="truncate" type="search" ...
+            shadow028.html:        <input id="input" part="input" autocomplete="off" ...
+
+            shadow009.html is the shadow dom that contains the search box.
+
+            find the locator chain for shadow009.html
+            $ grep shadow009 locator_chain_map.txt
+            shadow006.shadow009: "xpath=/html[@class='focus-outline-visible']/body[1]/ntp-app[1]" "shadow" "css=#searchbox" "shadow"
+
+            this locator chain will bring us the the shadow that contains the search box.
+        now we need to find the css selector (xpath doesn't work in shadow dom) for the search box
+            in browser, inspect the search box. in devtools, right click the search box, copy css selector.
+            it is: #searchbox
+
+        now we can locate the search box
+            $ ptslnm_locate newtab -locator "xpath=/html[@class='focus-outline-visible']/body[1]/ntp-app[1]" "shadow" "css=#searchbox"
     
 '''
 
-def dump(driver: webdriver.Chrome, output_dir: str, element: WebElement = None, **opt):
+def dump(driver: webdriver.Chrome, 
+        #  locator_driver: webdriver.Chrome,
+         output_dir: str, 
+         element: WebElement = None, **opt):
     verbose = opt.get('verbose', 0)
     debug = opt.get('debug', 0)
 
-    source_file = f"{output_dir}/source.html"
-    readme_file = f"{output_dir}/README.txt"
+    
 
     os.makedirs(output_dir, exist_ok=True)  # this is mkdir -p
-    with open(source_file, "w", encoding="utf-8") as source_fh:
-        if element:
+    
+    if element:
+        # this part takes care of dump_scope=element
+        source_file = f"{output_dir}/source_element.html"
+        with open(source_file, "w", encoding="utf-8") as source_fh:
             source_fh.write(element.get_attribute('outerHTML'))
-        else:
+            # screenshot the element
+            # element.click()
+
+        
+        element.screenshot(f"{output_dir}/screenshot_element.png")
+
+        # dump shadow host if any
+        source_file = f"{output_dir}/source_shadowhost.html"
+        shadowHost = js_get_shadowhost(driver, element)
+        if shadowHost:
+            with open(source_file, "w", encoding="utf-8") as source_fh:
+                source_fh.write(shadowHost.get_attribute('outerHTML'))
+    else:
+        # this part takes care of dump_scope=dom or dump_scope=page
+        source_file = f"{output_dir}/source.html"
+        with open(source_file, "w", encoding="utf-8") as source_fh:  
             '''
             driver.page_source may not be the whole page.
-            for example, if we are in an iframe or shadow dom, driver.page_source
-            will not show the content of the iframe or shadow.
-            to get the whole page, we need to reset driver to original page
+                - If driver is in iframe, driver.page_source will only show
+                  the content of the iframe. (dump_scope=iframe)
+                - if driver is not in any iframe, driver.page_source will show
+                  the whole page. (dump_scope=page)
+                - if driver enters shadowRoot, shadowRoot doesn't have page_source,
+                  therefore, we can only use driver.pagesource to get the shadow's
+                  parent iframe's source.
+            but driver.page_source will not show the content of the iframe or shadow inside it.
+            If we are in an iframe and wanted to see the whole page, we need to go out of iframe
             using driver.switch_to.default_content()
             '''
             source_fh.write(driver.page_source)
+           
+            # locator_dirver.page_source doesn't work, error:
+            #    AttributeError: 'ShadowRoot' object has no attribute 'page_source'
+            # source_fh.write(locator_driver.page_source)
         source_fh.close()
-
-    with open(readme_file, "w", encoding="utf-8") as readme_fh:
-        readme_fh.write(dump_readme)
-        readme_fh.close()
 
     if element is None:
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
@@ -1258,7 +1335,17 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
             dump_deeper(driver, e, dump_state, 'shadow', **opt)
 
         # don't forget to switch back to main web page.
-        driver.switch_to.default_content()  
+        driver.switch_to.default_content()
+
+        # DON'T switch back to the last iframe, because we will switch back in the caller, locate().
+        # If we do it here, then the caller's switch_to.frame(last_iframe) will fail with error:
+        #     element is not found.
+        # if last_iframe:
+        #     driver.switch_to.frame(last_iframe)
+
+        #     print("driver.switch_to.frame(last_iframe) worked. hit enter to continue")
+        #     hit_enter_to_continue()
+ 
     elif type == 'shadow':
         # shadow_host = element
         shadow_driver = element.shadow_root
@@ -1339,6 +1426,33 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
     js_list: list = []
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
+
+    '''
+    window vs screen vs and document
+        https://stackoverflow.com/questions/9895202
+    
+        - window is the main JavaScript object root, aka the global object in a browser, and it can
+          also be treated as the root of the document object model. You can access it as window.
+
+        - window.screen or just screen is a small information object about physical screen dimensions.
+
+        - window.document or just document is the main object of the potentially visible (or better
+          yet: rendered) document object model/DOM.
+
+        - viewport is the rectangle of the rendered document seen within the tab or frame
+
+    Since window is the global object, you can reference any properties of it with just the property
+    name - so you do not have to write down window. - it will be figured out by the runtime.
+    therefore window.document is the same as document.
+
+    let vs var vs const
+        - "let" allows you to declare variables that are limited to the scope of a block ({}).
+          for example, "if" block, "for" block, or "while" block. 
+          note: python's "if" doesn't limit the scope of variables.
+        - "var" is function scoped when it is declared within a function.
+          if it is declared outside a function, it is global.
+        - "const" is block scoped, like "let". 
+    '''
 
     in_shadowDom = False
 
@@ -1526,7 +1640,7 @@ try {{
 def js_list_to_locator_chain(js_list: list, **opt) -> list:
     locator_chain = []
     for js in js_list:
-        locator_chain.append(f'js={js}')
+        locator_chain.append(f'js2element={js}')
     return locator_chain
 
 
@@ -1841,12 +1955,12 @@ def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
 
     if not steps:
         if debug or verbose:
-            print(f'steps are empty. return')
+            print(f'follow: steps are empty. return')
         return
 
     for step in steps:
         if debug:
-            print(f"step={pformat(step)}")
+            print(f"follow: step={pformat(step)}")
 
         step_type = type(step)
 
@@ -2234,6 +2348,7 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
     global wait_seconds
     global return_levels
     global last_element
+    global jsr
 
     # we don't have a global var for active element, because
     #    - we can always get it from driver.switch_to.active_element
@@ -2283,6 +2398,12 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
         accept_alert = 0
         if tag == 'url_accept_alert':
             accept_alert = 1
+        # some shortcuts for url
+        if url == 'newtab':
+            url = "chrome://new-tab-page"
+        elif url == 'blank':
+            url = "about:blank"
+
         print(f"locate: go to url={url}, accept_alert={accept_alert}")
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2322,18 +2443,54 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             else:
                 exec_into_globals(code, globals(), locals())
                 ret['Success'] = True # hard code to True for now
-    elif m := re.match(r"js=(.+)", locator, re.MULTILINE | re.DOTALL):
-        js, *_ = m.groups()
+    elif m := re.match(r"(js.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
+        js_directive, js, *_ = m.groups()
+
+        # js_directive 
+        #   source: 
+        #       code: default to code
+        #       file: read js code from a file
+        #   target:
+        #       element: default to element
+        #       print: print the result of js
+        #       targets can be combined, eg, js2elementprint, js2printelement
+        #  
+        # examples
+        #     jsflie=filename.js
+        #     js=js_code
+        #     js2element=js_code
+        #     jsfile2element=filename.js
+        #     js2elementprint
+        if '2' in js_directive:
+            js_source, js_target = js_directive.split("2")
+        else:
+            js_source = js_directive
+            js_target = None
+
+        if js_source == 'jsfile':
+            with open(js) as f:
+                js = f.read()
+
         print(f"locate: execute js={js}\n")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            element = driver.execute_script(js)
-            if element:
-                last_element = element
+            jsr = driver.execute_script(js)
+            if 'element' in js_target:
+                last_element = jsr
             else:
                 last_element = driver.switch_to.active_element
+
+            if 'print' in js_target:
+                print(jsr)
             
+            # https://stackoverflow.com/questions/37791547
+            # https://stackoverflow.com/questions/23408668
+            # last_iframe = driver.execute_script("return window.frameElement")
+            # # pause to confirm
+            # print(f"last_iframe={last_iframe}")
+            # hit_enter_to_continue(helper=helper)
+
             ret['Success'] = True
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
@@ -2542,9 +2699,19 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             if not (value is None or value == ""):
                 raise RuntimeError(f"{attr} is not empty")
             ret['Success'] = True
-    elif m := re.match(r"key=(.+?),(\d+)", locator, re.IGNORECASE):
+    elif m := re.match(r"key=(.+?)(,\d+)?$", locator, re.IGNORECASE):
+        '''
+        example:
+            key=enter
+            key=enter,3
+        '''
         key, count_str = m.groups()
-        count = int(count_str)
+
+        if count_str:
+            count = int(count_str[1:])
+        else:
+            count = 1
+        
         print(f"locate: type {key} {count} times")
 
         if interactive:
@@ -2656,6 +2823,7 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
 
             # don't change last_element
     elif (locator == "default_iframe"):
+        # 'default_iframe' is the original page.
         print(f"locate: switch back to default iframe")
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2664,14 +2832,15 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
             locator_driver = driver
             last_element = None # after entering iframe, we need to search element again.
             ret['Success'] = True
-    elif m := re.match(r"dump_(element|dom|all)=(.+)", locator):
+    elif m := re.match(r"dump_(element|iframe|page|all)=(.+)", locator):
         scope, output_dir, *_ = m.groups()
         print(f"locate: dump {scope} to {output_dir}")
         '''
         about the scope:
             element: dump the last element's info
             dom:     dump everything about the innest iframe or shadow dom of the element.
-            all:     dump the whole page.
+            page:    dump the whole page.
+            all:     dump all scopes: 'element', 'dom', 'page', into separate subdirs.
 
             for example, when we run 
             ptslnm_locate -rm -debug "file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "C:/Users/tian/dumpdir2" xpath=//iframe[1] iframe "xpath=//body/p"
@@ -2679,30 +2848,60 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
 
             if we dump_element, we dump the last element, which is the <p> element. source.html only contains the <p> element.
             if we dump_dom, we dump the shadow dom of the <p> element. source.html only contains the iframe dom which contains the <p> element.
-            if we dump_all, we dump the whole page. source.html contains the whole page.        
+            if we dump_all, we dump the whole page. source.html contains the whole page.
+
+            dump_element and dump_dom are reliable because they are not affected by the driver's state (in iframe/shadow or not).
+            dump_page is unreliable or have side effect because it needs to switch driver to the original driver.
         '''
 
         # output_dir can be from both **opt and step, to avoid the multiple-values error,
         # we group output_dir into **opt, allowing override kwargs
-        #
-        if scope == 'dom':
-            dump(driver, **{**opt, 'output_dir': output_dir})
-        elif scope == 'all':
+
+        # save a copy of README.txt
+        readme_file = f"{output_dir}/README.txt"
+
+        os.makedirs(output_dir, exist_ok=True)  # this is mkdir -p
+
+        with open(readme_file, "w", encoding="utf-8") as readme_fh:
+            readme_fh.write(dump_readme)
+            readme_fh.close()
+        
+        if scope == 'element' or scope == 'all':
+            subdir = f"{output_dir}/element"
+            print()
+            print(f"locate: dump element to {subdir}")
+
+            # element = driver.switch_to.active_element
+            # if element is None:
+            if last_element:
+                dump(driver, element=last_element, **
+                    {**opt, 'output_dir': f"{subdir}"})
+
+        if scope == 'iframe' or scope == 'all':
+            subdir = f"{output_dir}/iframe"
+            print()
+            print(f"locate: dump iframe to {subdir}")
+
+            # we don't use locator_driver, because we got error
+            #    AttributeError: 'ShadowRoot' object has no attribute 'page_source'
+            # dump(locator_driver, **{**opt, 'output_dir': f"{subdir}"})
+            dump(driver, **{**opt, 'output_dir': f"{subdir}"})
+
+        # we put 'page' and 'all' at the end, because they need to switch driver to original driver.
+        if scope == 'page' or scope == 'all':
+            subdir = f"{output_dir}/page"
+            print()
+            print(f"locate: dump page to {subdir}")
+                
             # switch driver to original driver, because dump() needs to dump the whole page.
             driver.switch_to.default_content()
 
-            dump(driver, **{**opt, 'output_dir': output_dir})
-        else:
-            # scope == 'element'
-            # element = driver.switch_to.active_element
-            # if element is None:
-            if last_element is None:
-                print(
-                    "ERROR: dump_element() is called but element is None, we dump_all() instead")
-                dump(driver, **{**opt, 'output_dir': output_dir})
-            else:
-                dump(driver, element=last_element, **
-                    {**opt, 'output_dir': output_dir})
+            dump(driver, **{**opt, 'output_dir': f"{subdir}"})
+
+            # # switch back to the last iframe
+            # if last_iframe:
+            #     driver.switch_to.frame(last_iframe)
+
         ret['Success'] = True
     elif m := re.match(r"we_return()$|we_return=(\d+)", locator):
         ret['Success'] = True # hard code to True for now
@@ -2754,10 +2953,29 @@ def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
         ret['Success'] = True # hard code to True for now
         commnet, *_ = m.groups()
         print(f"locate: comment = {commnet}")
+    elif m := re.match(r"consolelog", locator):
+        ret['Success'] = True
+        print(f"locate: print console log")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            print_js_console_log(driver)
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
     return ret
+
+def js_get_shadowhost(driver: webdriver.Remote, element: WebElement, **opt):
+    # https://stackoverflow.com/questions/27453617
+    js = '''
+    var root = arguments[0].getRootNode();
+    if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && root.host != undefined) {
+        return root.host;
+    } else {
+        return null;
+    }
+    '''
+    return driver.execute_script(js, element)
 
 
 def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  condition: str, block: list, **opt):
