@@ -66,14 +66,22 @@ if driver's url changes, we reset the locator_driver to original driver.
 therefore, we keep track of driver url too.
 
 note: driver is the session, therefore it is global, no matter you make it a global var or not.
-each shadowroot is also a global var. We use locator_driver to switch between shadowroot drivers.
+Making driver a global var signifies this fact.
+Each shadowroot is also a global var. We use locator_driver to switch between shadowroot drivers.
 
 I cannot find a way to save a copy of driver and then restore it later.
 
+Class webdriver.Chrome and class ShadowRoot are parallel classes, not parent-child classes.
+the class of locator_driver can be either webdriver.Chrome or ShadowRoot
+    sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/shadowroot.py
+the class of driver is webdriver.Chrome
+    sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/webdriver.py
+    sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/chrome/webdriver.py
+therefore, we cast only driver, not locator_driver.
 '''
-driver: webdriver = None
+driver: webdriver.Chrome = None
 driver_url: str = None
-locator_driver: webdriver = None
+locator_driver = None
 
 # we use this to retrieve the effect after we eval code.
 action_data = {}
@@ -333,6 +341,11 @@ class SeleniumEnv:
         self.browser_options.add_argument("--disable-browser-side-navigation")
         # self.browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
+        if opt.get("allowFile", 0):
+            # this allow us to test with local files, ie, file:///. otherwise, you get 'origin' error
+            # but this is security risk. so don't use it in production
+            self.browser_options.add_argument("--allow-file-access-from-files")
+
         # enable console log
         # https://stackoverflow.com/questions/76430192
         # desired_capabilities has been replaced with set_capability
@@ -449,7 +462,8 @@ def get_browser_path() -> str:
     return path
 
 
-def print_js_console_log(driver: webdriver.Chrome, **opt):
+def print_js_console_log(**opt):
+    global driver
     printed_header = 0
     for entry in driver.get_log('browser'):
         if not printed_header:
@@ -687,7 +701,7 @@ class tp_find_element_by_paths:
             if 'click_' in ptype:
                 # click_xpath=//...
                 # e.click()
-                tp_click(driver, e)
+                tp_click(e)
 
             print(f'tp_find_element_by_paths: found {ptype}="{path}"')
 
@@ -888,7 +902,8 @@ class tp_find_element_by_chains:
         return None
 
 
-def tp_get_url(driver: webdriver.Chrome, url: str, **opt):
+def tp_get_url(url: str, **opt):
+    global driver
     # driver.get(url) often got the following error:
     #   selenium.common.exceptions.TimeoutException:
     #   Message: timeout: Timed out receiving message from renderer: 10.243
@@ -1084,14 +1099,10 @@ How to use these files:
     
 '''
 
-def dump(driver: webdriver.Chrome, 
-        #  locator_driver: webdriver.Chrome,
-         output_dir: str, 
-         element: WebElement = None, **opt):
+def dump(output_dir: str, element: WebElement = None, **opt):
+    global driver
     verbose = opt.get('verbose', 0)
     debug = opt.get('debug', 0)
-
-    
 
     os.makedirs(output_dir, exist_ok=True)  # this is mkdir -p
     
@@ -1103,12 +1114,12 @@ def dump(driver: webdriver.Chrome,
             # screenshot the element
             # element.click()
 
-        
         element.screenshot(f"{output_dir}/screenshot_element.png")
 
-        # dump shadow host if any
+        # dump shadow host if any. note: we cannot dump shadowRoot.
         source_file = f"{output_dir}/source_shadowhost.html"
-        shadowHost = js_get_shadowhost(driver, element)
+        # shadowHost = js_get_shadowhost(element)
+        shadowHost = js_get(element, "shadowHost")
         if shadowHost:
             with open(source_file, "w", encoding="utf-8") as source_fh:
                 source_fh.write(shadowHost.get_attribute('outerHTML'))
@@ -1167,7 +1178,7 @@ def dump(driver: webdriver.Chrome,
             dump_state[format][scheme] = open(f, "w", encoding="utf-8")
 
     for iframe in iframe_list:
-        dump_deeper(driver, iframe, dump_state, 'iframe', **opt)
+        dump_deeper(iframe, dump_state, 'iframe', **opt)
 
     # get all shadow doms
     #
@@ -1187,11 +1198,11 @@ def dump(driver: webdriver.Chrome,
     else:
         start_node = element
         find_path = './/*'
-        dump_deeper(driver, element, dump_state, 'shadow',
+        dump_deeper(element, dump_state, 'shadow',
                     **opt)  # don't forget element itself
 
     for e in start_node.find_elements(By.XPATH, find_path):
-        dump_deeper(driver, e, dump_state, 'shadow', **opt)
+        dump_deeper(e, dump_state, 'shadow', **opt)
 
     for format in ['list', 'map']:
         for scheme in ['xpath', 'xpath_chain', 'locator_chain']:
@@ -1214,7 +1225,7 @@ def dump(driver: webdriver.Chrome,
         raise RuntimeError(f"dump_state type_chain is not empty")
 
 
-def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: str, **opt):
+def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     verbose = opt.get('verbose', 0)
 
     dump_state['scan_count'][type] += 1
@@ -1246,7 +1257,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
                 pass
         except NoSuchShadowRootException:
             if verbose > 1:
-                xpath = js_get(driver, element, 'xpath', **opt)
+                xpath = js_get(element, 'xpath', **opt)
                 print(f'no shadow root under xpath={xpath}')
             return
 
@@ -1259,7 +1270,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     css: str = None
 
     try:
-        xpath = js_get(driver, element, 'xpath', **opt)
+        xpath = js_get(element, 'xpath', **opt)
     except StaleElementReferenceException as e:
         print(e)
         print(f"we skipped this {type}")
@@ -1272,7 +1283,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     if shadowed:
         # shadow root only support css, not xpath
         try:
-            css = js_get(driver, element, 'css', **opt)
+            css = js_get(element, 'css', **opt)
         except StaleElementReferenceException as e:
             print(e)
             print(f"we skipped this {type}")
@@ -1312,6 +1323,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
     if type == 'iframe':
         # https://www.selenium.dev/selenium/docs/api/py/webdriver_remote/selenium.webdriver.remote.switch_to.html#selenium.webdriver.remote.switch_to.SwitchTo.frame
         driver.switch_to.frame(element)
+        # tp_switch_to_frame(element)
         with open(output_file, "w", encoding="utf-8") as ofh:
             ofh.write(driver.page_source)
             ofh.close()
@@ -1319,14 +1331,15 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
         # find sub iframes in this frame
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
         for sub_frame in iframe_list:
-            dump_deeper(driver, sub_frame, dump_state, 'iframe', **opt)
+            dump_deeper(sub_frame, dump_state, 'iframe', **opt)
 
         # find shadows in this frame
         for e in driver.find_elements(By.XPATH, "//*"):
-            dump_deeper(driver, e, dump_state, 'shadow', **opt)
+            dump_deeper(e, dump_state, 'shadow', **opt)
 
         # don't forget to switch back to main web page.
-        driver.switch_to.default_content()
+        # driver.switch_to.default_content()
+        tp_switch_to_top()
 
         # DON'T switch back to the last iframe, because we will switch back in the caller, locate().
         # If we do it here, then the caller's switch_to.frame(last_iframe) will fail with error:
@@ -1379,7 +1392,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
         # find sub iframes in this shadow
         iframe_list = shadow_driver.find_elements(By.CSS_SELECTOR, 'iframe')
         for iframe in iframe_list:
-            dump_deeper(driver, iframe, dump_state, 'iframe', **opt)
+            dump_deeper(iframe, dump_state, 'iframe', **opt)
 
         # find child shadows in this shadow, can only use CSS SELECTOR
         # https://stackoverflow.com/questions/42627939
@@ -1396,7 +1409,7 @@ def dump_deeper(driver: webdriver, element: WebElement, dump_state: dict, type: 
             #     # continue
             # else:
             #     seen[e.id] = 1
-            dump_deeper(driver, e, dump_state, 'shadow', **opt)
+            dump_deeper(e, dump_state, 'shadow', **opt)
 
     poptype = dump_state['type_chain'].pop()
     popkey = dump_state['typekey_chain'].pop()
@@ -1467,36 +1480,45 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
             js += '.shadowRoot' # this is the shadow driver
             in_shadowDom = True    
         elif locator == 'iframe':
-            # https://stackoverflow.com/questions/7961229/
+            """
+            https://stackoverflow.com/questions/7961229/
 
-            # cd(iframe_element) only works in Firefox
-            # js += '.contentWindow;\ncd(element);\nelement = document'
-            #             js += ''';
-            # const current_origin = window.location.origin;
-            #
-            # var iframe_src = e.getAttribute('src');
-            # // alert(`iframe_src=${iframe_src}`);
-            # var iframe_url = null
-            # var iframe_origin = null
-            # if (iframe_src) {
-            #     //https://developer.mozilla.org/en-US/docs/Web/API/URL/origin
-            #     iframe_url = new URL(iframe_src);
-            #     // console.log(`iframe_url=${iframe_url}`);
-            #     alert(`iframe_url=${iframe_url}`);
-            #     iframe_origin = iframe_url.origin;
-            # }
-            #
-            # var iframe_inner = null;
-            # if ( (!iframe_origin) || (current_origin.toUpperCase() === iframe_origin.toUpperCase()) ) {
-            #     //case-insensitive compare
-            #     console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
-            #     iframe_inner=e.contentDocument || e.contentWindow.document;
-            #     document = iframe_inner
-            # } else {
-            #     console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
-            #     window.location.replace(iframe_url);
-            # }
-            #     '''
+            cd(iframe_element) only works in Firefox
+            js += '.contentWindow;\ncd(element);\nelement = document'
+                        js += ''';
+            const current_origin = window.location.origin;
+            
+            var iframe_src = e.getAttribute('src');
+            // alert(`iframe_src=${iframe_src}`);
+            var iframe_url = null
+            var iframe_origin = null
+            if (iframe_src) {
+                //https://developer.mozilla.org/en-US/docs/Web/API/URL/origin
+                iframe_url = new URL(iframe_src);
+                // console.log(`iframe_url=${iframe_url}`);
+                alert(`iframe_url=${iframe_url}`);
+                iframe_origin = iframe_url.origin;
+            }
+            
+            var iframe_inner = null;
+            if ( (!iframe_origin) || (current_origin.toUpperCase() === iframe_origin.toUpperCase()) ) {
+                //case-insensitive compare
+                console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
+                iframe_inner=e.contentDocument || e.contentWindow.document;
+                document = iframe_inner
+            } else {
+                console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
+                window.location.replace(iframe_url);
+            }
+                '''
+
+            problem: when work with local file, ie, file:///... , we got origin issue. Error is like
+                SecurityError: Failed to read a named property 'document' from 'Window':
+                    : Blocked a frame with origin \"null\" from accessing a cross-origin frame.
+            solution: 
+                for production: use a web server to serve the file.
+                for testing: use --allow-file-access-from-files for the browser. this is security risk.
+            """
             js += '''
 try {
     let iframe_inner = e.contentDocument || e.contentWindow.document;
@@ -1506,6 +1528,7 @@ try {
 } catch(err) {
     // print the error. note that console.log() is not available in Selenium. 
     // console log is only available in browser's webtools console.
+    // we have a locator 'consolelog' to print it out. 
     console.log(err.stack);
 
     let iframe_src = e.getAttribute('src');
@@ -1641,7 +1664,7 @@ def js_list_to_locator_chain(js_list: list, **opt) -> list:
     return locator_chain
 
 
-def tp_click(driver: webdriver.Chrome, element: WebElement, **opt):
+def tp_click(element: WebElement, **opt):
     try:
         # this didn't improve
         #   print("first scrowIntoView")
@@ -1675,6 +1698,15 @@ def tp_click(driver: webdriver.Chrome, element: WebElement, **opt):
 
 
 js_by_key = {
+    # https://stackoverflow.com/questions/27453617
+    'shadowHost': '''
+        var root = arguments[0].getRootNode();
+        if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && root.host != undefined) {
+            return root.host;
+        } else {
+            return null;
+        }
+    ''',
     "attrs": """
         var items = {};
         for (index = 0; index < arguments[0].attributes.length; ++index) {
@@ -1804,14 +1836,16 @@ js_by_key = {
 }
 
 
-def js_get(driver: webdriver.Chrome, element: WebElement, key: str, **opt):
+def js_get(element: WebElement, key: str, **opt):
+    global driver
+
     # https: // selenium - python.readthedocs.io / api.html  # module-selenium.webdriver.remote.webelement
     # element has no info about driver, therefore, we need two args there
 
     js = js_by_key.get(key, None)
 
     if js is None:
-        raise RuntimeError(f'key="key" is not supported')
+        raise RuntimeError(f'key={key} is not supported')
 
     # print(f"js={js}")
 
@@ -1829,20 +1863,21 @@ def js_get(driver: webdriver.Chrome, element: WebElement, key: str, **opt):
     return driver.execute_script(js, element, *extra_args)
 
 
-def js_print(driver: webdriver.Chrome, element: WebElement, key: str, **opt):
-    print(f"{key}={pformat(js_get(driver, element, key))}")
+def js_print(element: WebElement, key: str, **opt):
+    print(f"{key}={pformat(js_get(element, key))}")
 
 
-def js_print_debug(driver: webdriver.Chrome, element: WebElement, **opt):
+def js_print_debug(element: WebElement, **opt):
+    global driver
     keys = ["attrs", "xpath"]
     print("specified element")
     for key in keys:
-        js_print(driver, element, key)
+        js_print(element, key)
     print(f"tpdata = {pformat(getattr(element, 'tpdata', None))}")
     print("active element")
     active_element = driver.switch_to.active_element
     for key in keys:
-        js_print(driver, active_element, key)
+        js_print(active_element, key)
     print(f"tpdata = {pformat(getattr(element, 'tpdata', None))}")
 
 
@@ -2362,6 +2397,39 @@ def update_locator_driver(**opt):
         driver_url = driver.current_url
 
 def tp_switch_to_frame(element: WebElement, **opt):
+    '''
+    the selenium.webdriver.switch_to.frame() is doesn't work perfectly
+        for example, it doesn't update
+                driver.current_url
+                driver.title
+        to test
+            ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')"
+            ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "selenium_iframe" get=url,title "xpath=id('shadow_host')" 
+        the ending url and title are different.
+        'selenium_iframe' gave (wrong)
+            file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
+            driver.title=Iframe over shadow
+        'iframe' gave (correct)
+            file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
+            driver.title=child page
+    selenium.webdriver.switch_to.frame() is implemented in
+        sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/switch_to.py: self._driver.execute(Command.SWITCH_TO_FRAME ...
+        sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/remote_connection.py: Command.SWITCH_TO_FRAME: ("POST", "/session/$sessionId/frame"),
+        therefore, the real implementation is in chrome.exe.
+        Chrome has the same user interface functionality as Chromium, but with a Google-branded color scheme. 
+        Unlike Chromium, Chrome is not open-source.
+        Therefore, we can look at chromium source code to see how it is implemented.
+        The REST API source code is under https://github.com/chromium/chromium/blob/main/chrome/test/chromedriver/session.cc
+        This seems to be implemented in C++, not in JavaScript. 
+            void Session::SwitchToSubFrame(const std::string& frame_id,
+                const std::string& chromedriver_frame_id) {
+                std::string parent_frame_id;
+                if (!frames.empty())
+                    parent_frame_id = frames.back().frame_id;
+                frames.push_back(FrameInfo(parent_frame_id, frame_id, chromedriver_frame_id));
+                SwitchFrameInternal(false);
+            }   
+    '''
     js = '''
 let e = arguments[0];
 try {
@@ -2385,6 +2453,17 @@ try {
 
     global driver
     driver.execute_script(js, element)
+
+def tp_switch_to_top(**opt):
+    # get out of iframe
+    # selenium has: driver.switch_to.default_content()
+    js = '''
+if (window.self !== window.top) {
+  window.top.location.href = window.self.location.href; 
+}
+    '''
+    global driver
+    driver.execute_script(js)
 
 def locate(locator: str, **opt):
     dryrun = opt.get("dryrun", 0)
@@ -2420,27 +2499,31 @@ def locate(locator: str, **opt):
                   ],
         }
 
-    # locator_driver vs original 'driver'
-    #    - we introduce locator_driver because shadow_host.shadow_root is also a driver,
-    #      we can call it shadow driver, but its locator can only see the shadow DOM,
-    #      and only css locator is supported as of 2022/09/09.
-    #    - locator_driver started as the original driver.
-    #    - locator_driver will be shadow driver when we are in a shadow root.
-    #    - locator_driver will be (original) driver after we switch_to an iframe, even if
-    #      the iframe is under a shadow root.
-    #    - every time driver_url changes, we should reset locator_driver to driver.
-    #      driver_url can be changed not only by get(url), but also by click()
-    # shadow driver only has a few attributes, just to support the separate DOM, the shadow DOM.
-    #     - find_element
-    #     - find_elements
-    # pycharm hint also only shows the above two attributes from a shadow driver.
-    # for example, shadow_host.shadow_root cannot
-    #      - get(url)
-    #      - switch_to
-    #      - click()
-    # therefore, we don't need to pass 'locator_driver' to send_input().
+    '''
+    locator_driver vs original 'driver'
+       - we introduce locator_driver because shadow_host.shadow_root is also a driver,
+         we can call it shadow driver, but its locator can only see the shadow DOM,
+         and only css locator is supported as of 2022/09/09.
+       - locator_driver started as the original driver.
+       - locator_driver will be shadow driver when we are in a shadow root.
+       - locator_driver will be (original) driver after we switch_to an iframe, even if
+         the iframe is under a shadow root.
+       - every time driver_url changes, we should reset locator_driver to driver.
+         driver_url can be changed not only by get(url), but also by click()
+    shadow driver only has two attributes, just to support the separate DOM, the shadow DOM.
+        - find_element
+        - find_elements
+    pycharm hint also only shows the above two attributes from a shadow driver.
+    for example, shadow_host.shadow_root cannot
+         - get(url)
+         - switch_to
+         - click()
+         - execute_script()
+    the difference can be seen in source code
+        sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/shadowroot.py
+        sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/webdriver.py
+    '''
 
-    print(f"about to update locator_driver")
     update_locator_driver(**opt)
     
     # copied from old locate()
@@ -2459,7 +2542,7 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            tp_get_url(driver, url, accept_alert=accept_alert,
+            tp_get_url(url, accept_alert=accept_alert,
                     interactive=interactive)
             locator_driver = driver
             # the following doesn't work. i had to move it into tp_get_url()
@@ -2586,8 +2669,10 @@ def locate(locator: str, **opt):
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
             # last_element = element # last element is unchanged. this is different from iframe.
             ret['Success'] = True
-    elif locator == "iframe" or locator == "selenium_iframe":
-        print(f"locate: switch into iframe")
+    # elif locator == "iframe" or locator == "selenium_iframe" or locator == "parentIframe":
+    elif m := re.match(r"(iframe|selenium_iframe|parentIframe|top|selenium_top)", locator):
+        iframe = m.group(1)
+        print(f"locate: switch into {iframe}")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
@@ -2618,15 +2703,21 @@ def locate(locator: str, **opt):
                 driver.title=child page
             '''
    
-            if locator == "selenium_iframe":
+            if iframe == "selenium_iframe":
                 # we keep the selenium way here, in case the problem is fixed in the future.
                 driver.switch_to.frame(element)
-                driver_url = driver.current_url
+            elif iframe == "parentIframe":
+                driver.switch_to.parent_frame()   
+            elif iframe == "selenium_top":
+                driver.switch_to.default_content()
+            elif iframe == "top":
+                tp_switch_to_top()
             else:
                 tp_switch_to_frame(element, **opt)
             
             # once we switch into an iframe, we should use original driver to locate    
             locator_driver = driver
+            driver_url = driver.current_url
             
             # switch info iframe change the last element to active element.
             # this is different from when we switch into shadow root.
@@ -2813,7 +2904,7 @@ def locate(locator: str, **opt):
                 # we keep the selenium way here, in case the problem is fixed in the future.
                 last_element.click()
             else:
-                tp_click(driver, last_element)
+                tp_click(last_element)
             ret['Success'] = True
     elif m := re.match(r"select=(value|index|text),(.+)", locator):
             attr, string = m.groups()
@@ -2893,23 +2984,13 @@ def locate(locator: str, **opt):
                         ret['Success'] = True
                         break
             if e:
-                js_print_debug(driver, e)
+                js_print_debug(e)
                 raise RuntimeError(f"not all paths gone in {i} seconds")
             
             # restore implicit wait
             driver.implicitly_wait(wait_seconds)
 
             # don't change last_element
-    elif (locator == "default_iframe"):
-        # 'default_iframe' is the original page.
-        print(f"locate: switch back to default iframe")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver.switch_to.default_content()
-            locator_driver = driver
-            last_element = None # after entering iframe, we need to search element again.
-            ret['Success'] = True
     elif m := re.match(r"dump_(element|iframe|page|all)=(.+)", locator):
         scope, output_dir, *_ = m.groups()
         print(f"locate: dump {scope} to {output_dir}")
@@ -2952,8 +3033,7 @@ def locate(locator: str, **opt):
             # element = driver.switch_to.active_element
             # if element is None:
             if last_element:
-                dump(driver, element=last_element, **
-                    {**opt, 'output_dir': f"{subdir}"})
+                dump(element=last_element, **{**opt, 'output_dir': f"{subdir}"})
 
         if scope == 'iframe' or scope == 'all':
             subdir = f"{output_dir}/iframe"
@@ -2963,7 +3043,7 @@ def locate(locator: str, **opt):
             # we don't use locator_driver, because we got error
             #    AttributeError: 'ShadowRoot' object has no attribute 'page_source'
             # dump(locator_driver, **{**opt, 'output_dir': f"{subdir}"})
-            dump(driver, **{**opt, 'output_dir': f"{subdir}"})
+            dump(**{**opt, 'output_dir': f"{subdir}"})
 
         # we put 'page' and 'all' at the end, because they need to switch driver to original driver.
         if scope == 'page' or scope == 'all':
@@ -2972,9 +3052,10 @@ def locate(locator: str, **opt):
             print(f"locate: dump page to {subdir}")
                 
             # switch driver to original driver, because dump() needs to dump the whole page.
-            driver.switch_to.default_content()
+            # driver.switch_to.default_content()
+            tp_switch_to_top()
 
-            dump(driver, **{**opt, 'output_dir': f"{subdir}"})
+            dump(**{**opt, 'output_dir': f"{subdir}"})
 
             # # switch back to the last iframe
             # if last_iframe:
@@ -3037,7 +3118,7 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            print_js_console_log(driver)
+            print_js_console_log()
     elif m := re.match(r"pagewait=(\d+)", locator):
         ret['Success'] = True
         page_load_timeout, *_ = m.groups()
@@ -3097,17 +3178,17 @@ def locate(locator: str, **opt):
     
     return ret
 
-def js_get_shadowhost(driver: webdriver.Remote, element: WebElement, **opt):
-    # https://stackoverflow.com/questions/27453617
-    js = '''
-    var root = arguments[0].getRootNode();
-    if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && root.host != undefined) {
-        return root.host;
-    } else {
-        return null;
-    }
-    '''
-    return driver.execute_script(js, element)
+# def js_get_shadowhost(element: WebElement, **opt):
+#     # https://stackoverflow.com/questions/27453617
+#     js = '''
+#     var root = arguments[0].getRootNode();
+#     if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && root.host != undefined) {
+#         return root.host;
+#     } else {
+#         return null;
+#     }
+#     '''
+#     return driver.execute_script(js, element)
 
 
 def run_block(blockstart: str, negation: str,  condition: str, block: list, **opt):

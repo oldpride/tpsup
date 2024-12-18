@@ -77,6 +77,12 @@ our_cfg = {
             'choices': ['element', 'iframe', 'page', 'all'],
             'help': 'dump the "element", the innest "iframe" only, "page" (the whole page), or "all". default scope is "element"',
         },
+        'allowFile': {
+            'switches': ['-af', '--allowFile'],
+            'default': False,
+            'action': 'store_true',
+            'help': "allow file:// url; otherwise, we get 'origin' error in console log when switch iframe. but this is security risk. use for testing only",
+        },
 
     },
 
