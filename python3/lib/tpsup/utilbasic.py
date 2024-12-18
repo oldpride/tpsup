@@ -95,7 +95,7 @@ def current_file():
 step_count = 0
 
 
-def hit_enter_to_continue(initial_steps=0, helper: dict = {}, verbose=0):
+def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None, verbose=0):
     # helper example, see seleniumtools.py
     # helper = {
     #     'd' : ["dump page", dump, {'driver':driver, 'outputdir_dir' : tmpdir} ],
@@ -109,6 +109,8 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, verbose=0):
         if verbose:
             print(f"step_count left={step_count}")
     else:
+        if message:
+            print(message)
         hint = f"Hit Enter to continue; a number to skip steps; q to quit"
         for k, v in helper.items():
             hint += f"; {k} to {v[0]}"

@@ -111,8 +111,8 @@ our_cfg = {
     - test using js to locate. js is much faster.
         in shadow, we can only use css selector to locate
         but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -js -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir2" -rm -js
     diff -r dumpdir dumpdir2 # should be the same
     
     - test dump scope: element, page, all
@@ -204,7 +204,8 @@ def code(all_cfg, known, **opt):
             raise Exception(f'unknown step type={step_type}')
     print(f']')
 
-    result = tpsup.seleniumtools.follow(driver, steps, **opt)
+    tpsup.seleniumtools.set_driver(driver)
+    result = tpsup.seleniumtools.follow(steps, **opt)
 
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):

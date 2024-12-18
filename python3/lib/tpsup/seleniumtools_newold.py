@@ -51,29 +51,20 @@ from tpsup.cmdtools import run_cmd_clean
 # | selenium +----->+ chromedriver +---->+ chrome browser +---->internet
 # +----------+      +--------------+     +----------------+
 
-'''
 ########### start of global variables ###########
-because we use a lot of eval(), therefore, we use many global variables.
-note: global var is only global within the same module, ie, same file.
+# because we use a lot of eval(), therefore, we use many global variables.
+# note: global var is only global within the same module, ie, same file.
 
-locator_driver is different from driver (aka. session)
-when we enter a shadow, the shadow root is a new driver; we have to use
-this new driver to run find_element_by_css. 
-if we enter an iframe, even if it is a iframe within a shadow, we go
-back to the original driver.
-therefore, we use locator_driver to differentiate from original driver.
-if driver's url changes, we reset the locator_driver to original driver.
-therefore, we keep track of driver url too.
-
-note: driver is the session, therefore it is global, no matter you make it a global var or not.
-each shadowroot is also a global var. We use locator_driver to switch between shadowroot drivers.
-
-I cannot find a way to save a copy of driver and then restore it later.
-
-'''
-driver: webdriver = None
-driver_url: str = None
+# locator_driver is different from driver (aka. session)
+# when we enter a shadow, the shadow root is a new driver; we have to use
+# this new driver to run find_element_by_css. 
+# if we enter an iframe, even if it is a iframe within a shadow, we go
+# back to the original driver.
+# therefore, we use locator_driver to differentiate from original driver.
+# if driver's url changes, we reset the locator_driver to original driver.
+# therefore, we keep track of driver url too.
 locator_driver: webdriver = None
+driver_url = None
 
 # we use this to retrieve the effect after we eval code.
 action_data = {}
@@ -1908,18 +1899,8 @@ def test_basic():
     print(cmd)
     os.system(cmd)
 
-def set_driver(caller_driver: webdriver.Chrome, **opt):
-    global driver
-    global driver_url
-    global locator_driver
 
-    if caller_driver:
-        driver = caller_driver
-        driver_url = caller_driver.current_url
-        locator_driver = driver
-        
-
-def follow(steps: list,  **opt):
+def follow(driver: Union[webdriver.Chrome, None],  steps: list, **opt):
     '''
     follow() is a recursive. it basic flow is: if ... then if ... then if ... then ...
     for example: [ 'click_xpath=/a/b', '"iframe', 'click_xpath=/c/d', 'string="hello world"', 'dump' ]
@@ -1927,14 +1908,12 @@ def follow(steps: list,  **opt):
     If any 'then if' failed, we stop. For example, if 'iframe' failed, we stop.
 
     '''
-    
     global locator_driver
-    global driver
     global driver_url
     global last_element
     global return_levels
 
-    update_locator_driver(**opt)
+    update_locator_driver(driver, **opt)
 
     # we support single-level block, just for convenience when testing using appium_steps
     # we don't support nested blocks; for nested block, use python directly
@@ -1990,7 +1969,7 @@ def follow(steps: list,  **opt):
                         raise RuntimeError(f"block is empty")
                 
                     # run_block() recursively calls follow()
-                    run_block(blockstart, negation,
+                    run_block(driver, blockstart, negation,
                                 condition, block, **opt)
                 else:
                     # we only encountered a nested block end
@@ -2146,9 +2125,9 @@ def follow(steps: list,  **opt):
         result = {'Success': False}
 
         if step_type == str:
-            result = locate(step, **opt)
+            result = locate(driver, step, **opt)
         elif step_type == dict:
-            result = locate_dict(step, **opt)
+            result = locate_dict(driver, step, **opt)
         else:
             raise RuntimeError(f"unsupported step type={step_type}, step={pformat(step)}")
         
@@ -2176,20 +2155,19 @@ def follow(steps: list,  **opt):
     - they are designed to be called by follow(), which is recursive.
     this is the reason why when we handle 'Success' and 'Failure', we call locate(), not call follow().
 '''
-def locate_dict(step: dict, **opt):
+def locate_dict(driver: Union[webdriver.Chrome, None], step: dict, **opt):
     dryrun = opt.get("dryrun", 0)
     interactive = opt.get("interactive", 0)
     debug = opt.get("debug", 0)
     verbose = opt.get("verbose", 0)
     checkonly = opt.get("checkonly", 0)
     
-    global driver
     global driver_url
     global locator_driver
     global return_levels
     global last_element
 
-    update_locator_driver(**opt)
+    update_locator_driver(driver, **opt)
     
     if debug:
         print(f"locate_dict: step={pformat(step)}")
@@ -2215,17 +2193,17 @@ def locate_dict(step: dict, **opt):
         if type(locator) != str:
             raise RuntimeError(f"simple step locator must be a string, but got {type(locator)}, step={pformat(step)}")
         
-        result = locate(locator, **opt)
+        result = locate(driver, locator, **opt)
 
         if result['Success']:
             # we found the element
             if 'Success' in action:
-                locate(action['Success'], **opt) # we don't use follow() here, because we don't want to be recursive.
+                locate(driver, action['Success'], **opt) # we don't use follow() here, because we don't want to be recursive.
             ret['Success'] = True
         else:
             # we didn't find the element
             if 'Failure' in action:
-                locate(action['Failure'], **opt)
+                locate(driver, action['Failure'], **opt)
             else:
                 raise RuntimeError(f"element not found, step={pformat(step)}")
     elif locator_type == 'parallel':
@@ -2239,7 +2217,7 @@ def locate_dict(step: dict, **opt):
         # locate() calls tp_find_element_by_paths() which can take multiple locators in parallel.
         locators_string = ",".join([path['locator'] for path in paths])
 
-        result = locate(locators_string, **opt)
+        result = locate(driver, locators_string, **opt)
 
         # copy result to ret
         ret['Success'] = result['Success']
@@ -2255,15 +2233,15 @@ def locate_dict(step: dict, **opt):
             path = paths[path_index]
             if 'Success' in path:
                 # path-level Found
-                locate(path['Success'], **opt)
+                locate(driver, path['Success'], **opt)
             if 'Success' in action:
                 # action-level Found
-                locate(action['Success'], **opt)
+                locate(driver, action['Success'], **opt)
         else:
             # we didn't find the element
             if 'Failure' in action:
                 # action-level NotFound
-                locate(action['Failure'], **opt)
+                locate(driver, action['Failure'], **opt)
             else:
                 raise RuntimeError(f"element not found, step={pformat(step)}")
     elif locator_type == 'chains':
@@ -2322,17 +2300,17 @@ def locate_dict(step: dict, **opt):
 
                 if 'Success' in path:
                     # path-level Found
-                    result = locate(path['Success'], **opt)
+                    result = locate(driver, path['Success'], **opt)
                 if 'Success' in action:
                     # action-level Found
-                    result = locate(action['Success'], **opt)             
+                    result = locate(driver, action['Success'], **opt)             
             else:
                 element = driver.switch_to.active_element
                 last_element = element
 
                 if 'Failure' in action:
                     # action-level NotFound
-                    result = locate(action['Failure'], **opt)
+                    result = locate(driver, action['Failure'], **opt)
                 else:
                     raise RuntimeError(f"element not found, step={pformat(step)}")
     else:
@@ -2340,10 +2318,9 @@ def locate_dict(step: dict, **opt):
     
     return ret
 
-def update_locator_driver(**opt):
+def update_locator_driver(driver: Union[webdriver.Chrome, None], **opt):
     global locator_driver
     global driver_url
-    global driver
 
     helper = {}  # interactivity helper
 
@@ -2357,36 +2334,11 @@ def update_locator_driver(**opt):
         
     if message:
         print(f"locate: update driver_url and locator_driver to driver because {message}")
-        # hit_enter_to_continue(helper=helper)
+        hit_enter_to_continue(helper=helper)
         locator_driver = driver
         driver_url = driver.current_url
 
-def tp_switch_to_frame(element: WebElement, **opt):
-    js = '''
-let e = arguments[0];
-try {
-    let iframe_inner = e.contentDocument || e.contentWindow.document;
-    document = iframe_inner
-    const current_origin = window.location.origin;
-    console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
-} catch(err) {
-    // print the error. note that console.log() is not available in Selenium.
-    // console log is only available in browser's webtools console.
-    console.log(err.stack);
-
-    let iframe_src = e.getAttribute('src');
-    //iframe_url = new URL(iframe_src);
-    iframe_url = iframe_src;
-    console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
-    window.location.replace(iframe_url);
-}
-
-    '''
-
-    global driver
-    driver.execute_script(js, element)
-
-def locate(locator: str, **opt):
+def locate(driver: Union[webdriver.Chrome, None], locator: str, **opt):
     dryrun = opt.get("dryrun", 0)
     interactive = opt.get("interactive", 0)
     debug = opt.get("debug", 0)
@@ -2395,7 +2347,6 @@ def locate(locator: str, **opt):
     isExpression = opt.get("isExpression", 0) # for condtion test, we set isExpression=1, so that we get True/False.
 
     global locator_driver
-    global driver
     global driver_url
     global wait_seconds
     global return_levels
@@ -2440,8 +2391,7 @@ def locate(locator: str, **opt):
     #      - click()
     # therefore, we don't need to pass 'locator_driver' to send_input().
 
-    print(f"about to update locator_driver")
-    update_locator_driver(**opt)
+    update_locator_driver(driver, **opt)
     
     # copied from old locate()
     if m := re.match(r"(url|url_accept_alert)=(.+)", locator):
@@ -2586,7 +2536,7 @@ def locate(locator: str, **opt):
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
             # last_element = element # last element is unchanged. this is different from iframe.
             ret['Success'] = True
-    elif locator == "iframe" or locator == "selenium_iframe":
+    elif locator == "iframe":
         print(f"locate: switch into iframe")
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2596,35 +2546,14 @@ def locate(locator: str, **opt):
             # element = driver.switch_to.active_element
             element = last_element
 
-            '''
-            we cannot use locator_driver to swith iframe when locator_driver is a shadow root.
-              locator_driver.switch_to.frame(element)
-              AttributeError: 'ShadowRoot' object has no attribute 'switch_to'
-            Therefore, we use (original) driver
+            # we cannot use locator_driver to swith iframe when locator_driver is a shadow root.
+            #   locator_driver.switch_to.frame(element)
+            #   AttributeError: 'ShadowRoot' object has no attribute 'switch_to'
+            # Therefore, we use (original) driver
 
-            the selenium.webdriver.switch_to.frame() is doesn't work perfectly
-                for example, it doesn't update
-                     driver.current_url
-                     driver.title
-            to test
-                ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')"
-                ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "selenium_iframe" get=url,title "xpath=id('shadow_host')" 
-            the ending url and title are different.
-            'selenium_iframe' gave (wrong)
-                file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
-                driver.title=Iframe over shadow
-            'iframe' gave (correct)
-                file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
-                driver.title=child page
-            '''
-   
-            if locator == "selenium_iframe":
-                # we keep the selenium way here, in case the problem is fixed in the future.
-                driver.switch_to.frame(element)
-                driver_url = driver.current_url
-            else:
-                tp_switch_to_frame(element, **opt)
-            
+            driver.switch_to.frame(element)
+            driver_url = driver.current_url
+
             # once we switch into an iframe, we should use original driver to locate    
             locator_driver = driver
             
@@ -2795,12 +2724,12 @@ def locate(locator: str, **opt):
                 Keys, key.upper()) * count)
             last_element = element
             ret['Success'] = True
-    elif locator == 'click' or locator == 'selenium_click':
+    elif locator == 'click':
         print(f"locate: click")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            # the to-be-clicked element may not be the active element, for
+            # the clicked element may not be the active element, for
             # example, we just found a element by find_element_by_xpath(),
             # that element is not the active element.
             # but after we click it, it will be active.
@@ -2808,12 +2737,7 @@ def locate(locator: str, **opt):
             # element.click()
             if not last_element:
                 raise RuntimeError("no element to click")
-            
-            if locator == 'selenium_click':
-                # we keep the selenium way here, in case the problem is fixed in the future.
-                last_element.click()
-            else:
-                tp_click(driver, last_element)
+            tp_click(driver, last_element)
             ret['Success'] = True
     elif m := re.match(r"select=(value|index|text),(.+)", locator):
             attr, string = m.groups()
@@ -3110,7 +3034,7 @@ def js_get_shadowhost(driver: webdriver.Remote, element: WebElement, **opt):
     return driver.execute_script(js, element)
 
 
-def run_block(blockstart: str, negation: str,  condition: str, block: list, **opt):
+def run_block(driver: webdriver.Remote, blockstart: str, negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is
     # neither True or False.  In this case, we want to know the condition test failed.
     verbose = opt.get('verbose', False)
@@ -3121,7 +3045,7 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
 
     if blockstart == 'while':
         while True:
-            result = if_block(negation, condition, block, **opt)
+            result = if_block(driver, negation, condition, block, **opt)
             if debug:
                 print(f"run_block: result={result}")
             if not result['executed']:
@@ -3135,7 +3059,7 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
                 return_levels = return_levels - 1
                 break
     elif blockstart == 'if':
-        result=if_block(negation, condition, block, **opt)
+        result=if_block(driver, negation, condition, block, **opt)
 
     ret['Success'] = result['Success']
     ret['executed'] = result['executed']
@@ -3143,7 +3067,7 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
     return ret
 
 
-def if_block(negation: str,  condition: str, block: list, **opt):
+def if_block(driver: webdriver.Remote, negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is
     # neither True or False.  In this case, we want to know the condition test failed.
 
@@ -3158,7 +3082,7 @@ def if_block(negation: str,  condition: str, block: list, **opt):
     #     # if verbose:
     #     print(f"if_block(): condition test failed with exception={e}")
     #     result['Success'] = False
-    result = locate(condition, isExpression=True, **opt)
+    result = locate(driver, condition, isExpression=True, **opt)
 
     if result['Success'] and negation:
         print(
@@ -3176,7 +3100,7 @@ def if_block(negation: str,  condition: str, block: list, **opt):
         if not checkonly:
             # recursively calling follow() to run the block
             try:
-                result = follow(block, **opt)
+                result = follow(driver, block, **opt)
             except Exception as e:
                 print(f"if_block: follow() failed with exception={pformat(e)}")
                 return ret
