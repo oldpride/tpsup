@@ -1074,7 +1074,7 @@ xpath_map.txt
 How to use these files:
     scenario 1: I want to locate the search box in google new tab page
         dump the page
-            $ ptslnm_steps -rm newtab -dump $HOME/dumpdir -scope all
+            $ ptslnm -rm newtab -dump $HOME/dumpdir -scope all
         open browser, go to new tab page, open devtools, inspect the search box html
             it has: id="input"
         find this string in our dump files
@@ -1943,17 +1943,6 @@ def test_basic():
     print(cmd)
     os.system(cmd)
 
-def set_driver(caller_driver: webdriver.Chrome, **opt):
-    global driver
-    global driver_url
-    global locator_driver
-
-    if caller_driver:
-        driver = caller_driver
-        driver_url = caller_driver.current_url
-        locator_driver = driver
-        
-
 def follow(steps: list,  **opt):
     '''
     follow() is a recursive. it basic flow is: if ... then if ... then if ... then ...
@@ -2403,15 +2392,17 @@ def tp_switch_to_frame(element: WebElement, **opt):
                 driver.current_url
                 driver.title
         to test
-            ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')"
-            ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "selenium_iframe" get=url,title "xpath=id('shadow_host')" 
+            ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')"
+            ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" get=url,title "xpath=id('shadow_host')" 
         the ending url and title are different.
-        'selenium_iframe' gave (wrong)
+        'iframe' gave (wrong)
             file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
             driver.title=Iframe over shadow
-        'iframe' gave (correct)
+        'tp_iframe' gave (correct)
             file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
             driver.title=child page
+        the reason is that 'iframe' only works on http url, not on file:/// url.
+        'tp_iframe' works on both because tp_iframe will force load the url after it caught the exception.
     selenium.webdriver.switch_to.frame() is implemented in
         sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/switch_to.py: self._driver.execute(Command.SWITCH_TO_FRAME ...
         sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/remote_connection.py: Command.SWITCH_TO_FRAME: ("POST", "/session/$sessionId/frame"),
@@ -2669,8 +2660,7 @@ def locate(locator: str, **opt):
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
             # last_element = element # last element is unchanged. this is different from iframe.
             ret['Success'] = True
-    # elif locator == "iframe" or locator == "selenium_iframe" or locator == "parentIframe":
-    elif m := re.match(r"(iframe|selenium_iframe|parentIframe|top|selenium_top)", locator):
+    elif m := re.match(r"(iframe|tp_iframe|parentIframe|top|tp_top)", locator):
         iframe = m.group(1)
         print(f"locate: switch into {iframe}")
         if interactive:
@@ -2692,27 +2682,30 @@ def locate(locator: str, **opt):
                      driver.current_url
                      driver.title
             to test
-                ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')"
-                ptslnm_steps url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "selenium_iframe" get=url,title "xpath=id('shadow_host')" 
+                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" get=url,title "xpath=id('shadow_host')"
+                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')" 
             the ending url and title are different.
-            'selenium_iframe' gave (wrong)
+            'iframe' gave (wrong)
                 file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
                 driver.title=Iframe over shadow
-            'iframe' gave (correct)
+            'tp_iframe' gave (correct)
                 file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
                 driver.title=child page
+            the reason is that 'iframe' only works on http url, not on file:/// url.
+            'tp_iframe' works on both because tp_iframe will force load the url after it caught the exception.
             '''
    
-            if iframe == "selenium_iframe":
+            if iframe == "iframe":
                 # we keep the selenium way here, in case the problem is fixed in the future.
                 driver.switch_to.frame(element)
             elif iframe == "parentIframe":
                 driver.switch_to.parent_frame()   
-            elif iframe == "selenium_top":
-                driver.switch_to.default_content()
             elif iframe == "top":
+                driver.switch_to.default_content()
+            elif iframe == "tp_top":
                 tp_switch_to_top()
             else:
+                # tp_frame
                 tp_switch_to_frame(element, **opt)
             
             # once we switch into an iframe, we should use original driver to locate    
@@ -2886,7 +2879,7 @@ def locate(locator: str, **opt):
                 Keys, key.upper()) * count)
             last_element = element
             ret['Success'] = True
-    elif locator == 'click' or locator == 'selenium_click':
+    elif locator == 'click' or locator == 'tp_click':
         print(f"locate: click")
         if interactive:
             hit_enter_to_continue(helper=helper)
@@ -2900,10 +2893,11 @@ def locate(locator: str, **opt):
             if not last_element:
                 raise RuntimeError("no element to click")
             
-            if locator == 'selenium_click':
+            if locator == 'click':
                 # we keep the selenium way here, in case the problem is fixed in the future.
                 last_element.click()
             else:
+                # tp_click() is a wrapper of click() to handle the case when the element is not clickable.
                 tp_click(last_element)
             ret['Success'] = True
     elif m := re.match(r"select=(value|index|text),(.+)", locator):
@@ -3282,6 +3276,10 @@ def pre_batch(all_cfg, known, **opt):
     print("pre_batch(): done")
     print("--------------------------------")
     print("")
+
+    # init global variables
+    global driver
+    driver = all_cfg["resources"]["selenium"]["driver"]
 
 
 def post_batch(all_cfg, known, **opt):

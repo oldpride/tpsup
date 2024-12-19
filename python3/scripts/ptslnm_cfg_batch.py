@@ -17,6 +17,9 @@ from selenium import webdriver
 HOME = tpsup.envtools.get_home_dir()
 TPSUP = os.environ['TPSUP']
 TPP3 = f'{TPSUP}/python3/scripts'
+HTTP_BASE = 'http://localhost:8000'
+FILE_BASE = f'file:///{TPP3}'
+EXAMPLE_BASE = HTTP_BASE
 
 our_cfg = {
     'module': 'tpsup.seleniumtools',
@@ -83,30 +86,38 @@ our_cfg = {
             'action': 'store_true',
             'help': "allow file:// url; otherwise, we get 'origin' error in console log when switch iframe. but this is security risk. use for testing only",
         },
-
     },
 
     'usage_example': f'''
+    - To run a local server, 
+        cd "{TPP3}"
+        python3 -m http.server 8000
+      this allows you to use http url, eg, {HTTP_BASE}/shadow_test2_main.html.
+      otherwise, use "-af" to run file url, eg {FILE_BASE}/shadow_test2_main.html.
+      to print file-url example
+        {{{{prog}}}} fe
+        {{{{prog}}}} file_example
+
     - has shadows, no iframes, simple pages to test shadows
-    {{{{prog}}}} url="file:///{TPP3}/shadow_test2_main.html" -dump "{HOME}/dumpdir" -rm # without locators
-    {{{{prog}}}} url="file:///{TPP3}/shadow_test2_main.html" -dump "{HOME}/dumpdir" "xpath=id('shadow_host')" "shadow" -rm # with locators
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" -rm # without locators
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" "xpath=id('shadow_host')" "shadow" -rm # with locators
 
     - has iframes, no shadows
-    {{{{prog}}}} url="file:///{TPP3}/iframe_test1.html" -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_test1.html" -dump "{HOME}/dumpdir" -rm
 
     - has both shadows and iframes: iframe over shadow, shadow over iframe
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" -dump "{HOME}/dumpdir" -rm
-    {{{{prog}}}} url="file:///{TPP3}/shadow_over_iframe_test_main.html" -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_over_iframe_test_main.html" -dump "{HOME}/dumpdir" -rm
 
     - test a static page with nested iframes, same origin vs cross origin (has dice.com iframe)
       many website doesn't allow iframe, eg, google, youtube, but dice.com allows iframe. 
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1] -dump "{HOME}/dumpdir" -rm
-    {{{{prog}}}} url="file:///{TPP3}/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1] -dump "{HOME}/dumpdir2" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1] -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1] -dump "{HOME}/dumpdir2" -rm
     
     - test using js as steps. 
       variable value can either be persisted in python or in js's window or document (ie, window.documnt) object.
       'jsr' is a special code to return js variable to python.
-        {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" "js=document.testvar=777" "js=return document.testvar" "code=print(jsr)"
+        {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "js=document.testvar=777" "js=return document.testvar" "code=print(jsr)"
       
     other js directives: js2element, jsfile, jsfile2element, js2print
         {{{{prog}}}} url=newtab "jsfile2elementprint={TPP3}/ptslnm_js_test_google.js" consolelog click key=Enter sleep=3
@@ -117,14 +128,14 @@ our_cfg = {
     - test using js to locate. js is much faster.
         in shadow, we can only use css selector to locate
         but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir" -rm
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir2" -rm -js
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir2" -rm -js
     diff -r dumpdir dumpdir2 # should be the same
     
     - test dump scope: element, page, all
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm -scope page
-    {{{{prog}}}} url="file:///{TPP3}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm -scope all
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm -scope page
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm -scope all
     
     - dump out dynamically generated html too
       note:
@@ -138,7 +149,7 @@ our_cfg = {
     - test block steps
     {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
 
-    {{{{prog}}}} url="file:///{TPP3}/scripts/ptslnm_steps_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" we_return end_if end_while
+    {{{{prog}}}} url="{HTTP_BASE}/scripts/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" we_return end_if end_while
 
     
     notes for windows cmd.exe, 
@@ -154,9 +165,27 @@ our_cfg = {
     },
 }
 
+def pre_batch(all_cfg, known, **opt):
+    if 'fe' in known['REMAININGARGS'] or 'file_example' in known['REMAININGARGS']:
+        debug = opt.get('debug', 0)
+
+        # replace http with file in all_cfg
+        if debug:
+            print(f'before usage_example={all_cfg['usage_example']}')
+        
+        # print(pformat(known))
+        # prog = os.path.basename(__file__).replace('_cfg_batch.py', '') # this gave batch.py
+        prog = 'ptslnm'
+        usage_example = all_cfg['usage_example'].replace(HTTP_BASE, FILE_BASE).replace("{{prog}}", prog)
+        print()
+        print(usage_example)
+        exit(0)
+
+    # run tpsup.seleniumtools.pre_batch() to set up driver
+    tpsup.seleniumtools.pre_batch(all_cfg, known, **opt)
 
 def code(all_cfg, known, **opt):
-    global driver
+    # global driver
 
     verbose = opt.get('verbose', 0)
     if verbose:
@@ -169,6 +198,7 @@ def code(all_cfg, known, **opt):
     run_js = opt.get('js', 0)
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
+    allowFile = opt.get('allowFile', 0)
 
     # yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
@@ -179,7 +209,7 @@ def code(all_cfg, known, **opt):
         else:
             os.makedirs(dump_dir, exist_ok=True)  # this does "mkdir -p"
 
-    driver = all_cfg["resources"]["selenium"]["driver"]
+    # driver = all_cfg["resources"]["selenium"]["driver"]
 
     steps = [
         # f'url={url}', 
@@ -210,9 +240,7 @@ def code(all_cfg, known, **opt):
             raise Exception(f'unknown step type={step_type}')
     print(f']')
 
-    tpsup.seleniumtools.set_driver(driver)
     result = tpsup.seleniumtools.follow(steps, **opt)
-
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     return {'REMAININGARGS': input}
