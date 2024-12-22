@@ -101,6 +101,9 @@ our_cfg = {
     - To see all defineded locators
         {{{{prog}}}} locators
 
+    - To clean up chrome persistence and driver logs
+        {{{{prog}}}} any -cq
+
     - has shadows, no iframes, simple pages to test shadows
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" -rm # without locators
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" "xpath=id('shadow_host')" "shadow" -rm # with locators
@@ -215,8 +218,6 @@ def code(all_cfg, known, **opt):
             shutil.rmtree(dump_dir, ignore_errors=True)
         else:
             os.makedirs(dump_dir, exist_ok=True)  # this does "mkdir -p"
-
-    # driver = all_cfg["resources"]["selenium"]["driver"]
 
     steps = [
         # f'url={url}', 

@@ -11,7 +11,8 @@ var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
 var e1 = iframeDoc.evaluate("id('shadow_host')", iframeDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
 console.log(`e1=${e1}`);
 
-// can I assign iframeDoc to document?
+// can I assign iframeDoc to document? no. because window.document is read-only.
+// https://stackoverflow.com/questions/79300259
 window.document = iframeDoc;
 var e2 = window.document.evaluate("id('shadow_host')", window.document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
 console.log(`e2=${e2}`);

@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sys
 import time
 import subprocess
@@ -136,6 +137,11 @@ class SeleniumEnv:
         self.chromedir = os.path.join(self.log_base, "selenium_browser")
         # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
         # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
+
+        if opt.get("cleanLog", 0) or opt.get("cleanQuit", 0):
+            self.cleanLog()
+            if opt.get("cleanQuit", 0):
+                exit(0)
 
         self.download_dir = tpsup.tmptools.tptmp(
             base=os.path.join(self.log_base, "Downloads", "selenium")
@@ -393,6 +399,16 @@ class SeleniumEnv:
 
             self.driver.driverEnv = self  # monkey patching for convenience
 
+    def cleanLog(self):
+        # remove driver log and chromedir
+        for f in [self.driverlog, self.chromedir]:
+            print(f'__init__: removing {f}')
+            try:
+                shutil.rmtree(f)
+            except FileNotFoundError:
+                if self.verbose:
+                    print(f'__init__: {f} not found')
+
     def get_driver(self) -> webdriver.Chrome:
         return self.driver
 
@@ -458,6 +474,9 @@ class SeleniumEnv:
             raise RuntimeError(
                 f"unsupported method={method}. accepted: bs4 or js")
 
+def cleanLog(**opt):
+    global driver
+    
 
 def get_browser_path() -> str:
     path = check_setup().get('chrome')
@@ -1471,7 +1490,7 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
 
     # if shadowHost is not null, we need to update locator_driver to shadowHost.shadowRoot.
     js_start = '''
-var shadowHost = null;
+var shadowHost = null; // we assume we start from outside of shadow dom.
 var startDoc = document;
 if (window.iframeDoc) {
     startDoc = window.iframeDoc;
@@ -1559,34 +1578,27 @@ var e = startDoc'''
             was loaded from a different origin...
             """
             js +=''';
-window.iframeDoc = e.contentDocument || e.contentWindow.document; // enter iframe. this can trigger the error to catch below.
+// enter iframe. this can trigger the 'null origin' error when we run with file url without --all-file-access.
+window.iframeDoc = e.contentDocument || e.contentWindow.document; 
 
 // we cannot return any element once we entered iframe because we would get error: 
 //      stale element not found in the current frame"
-// so instead of returning element, we return iframeDoc.
-//      return { 'iframeElement': e, 'iframeDoc': iframeDoc };
-// we persist iframeDoc in window. so we can use it later.
+// so instead of returning element, we return indicator (int), and persist iframeDoc and iframeElement
+// in global variable 'window'.
 window.iframeElement = e;
+
 // we return 1 to indicate the variable is set.
-// no need to tell whether iframeDoc is set because python's execute_script() cannot convert 
-// it to a python object; so python always return None.
 return { 'iframeElementIsSet': 1 }; 
 '''
+# we used to use below code to run with file url before we have --all-file-access.
+# the main draw back is that it does not allow us to go back to parent iframe.
 #             js += ''';
-# // console.log(`e=${e}, shadowHost=${shadowHost}`);
 # // remove shadowHost because iframe is not in shadow dom, no need to change locator_driver.
 # var shadowHost = null;
 # try {
 #     // cd(e.contentWindow); // cd is not defined in chrome's js. it is only in firefox.
 #     // let iframe_inner = e.contentDocument || e.contentWindow.document;
-#     // document = iframe_inner // this deosn't work in chrome at least. somehow i cannot change 'document'.
-#     iframeDoc = e.contentDocument || e.contentWindow.document; // enter iframe. this can trigger the error to catch below.
-#     element_url = e.src;
-#     console.log('element_url=' + element_url);
-#     //iframe_url = window.location.href;
-#     //iframe_parent_url = iframeDoc.referrer;
-#     //console.log('iframe_url=' + iframe_url);
-#     //console.log('iframe_parent_url=' + iframe_parent_url);
+#     window.iframeDoc = e.contentDocument || e.contentWindow.document; // enter iframe. this can trigger the error to catch below.
 #     const current_origin = window.location.origin;
 #     console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
 # } catch(err) {
@@ -1594,25 +1606,18 @@ return { 'iframeElementIsSet': 1 };
 #     // console log is only available in browser's webtools console.
 #     // we have a locator 'consolelog' to print it out. 
 #     console.log(err.stack);
-
-#     //let iframe_src = e.getAttribute('src');
-#     //iframe_url = new URL(iframe_src);
-#     //iframe_url = iframe_src;
-#     //console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
-
+#     let iframe_src = e.getAttribute('src');
+#     iframe_url = new URL(iframe_src);
+#     iframe_url = iframe_src;
+#     console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
 #     // window is the main JavaScript object root. 
 #     // window.document or just document is the main object of the potentially visible.
-#     // below replaces the whole oject root - then we loss all the previous objects, eg, iframe parent.
-#     //window.location.replace(iframe_url);
+#     // below replaces the whole object root - then we loss all the previous objects, eg, iframe parent.
+#     // basically we start a new page with the iframe's url.
+#     window.location.replace(iframe_url);
 # }
-# // 'iframe' doesn't return an element because it enters a new page, no element is selected yet.
-# // however, 'iframe' changes 'document' to the new iframe's document. 
-# // 'document' corresponds to python selenium's 'driver'. 
-# return {
-#      //'iframeElement': e, 
-#      'iframeDoc': iframeDoc
-# };
 #             '''
+
             # save one js after every iframe because document is reset to iframe's document.
             # and this iframe js doesn't change locator_driver because only shadow dom changes locator_driver.
             # so every 'iframe' creates a new js. 
@@ -1656,7 +1661,7 @@ return { 'iframeElementIsSet': 1 };
         #   - only the last js 'return e'
         #   - the intermediate js were all ending with iframes
         # js += ';\nreturn {element: e, shadowHost: shadowHost};\n'
-        js += ';\nconsole.log(`e=${e}, shadowHost=${shadowHost}`);\nreturn {"elelment": e, "shadowHost": shadowHost};\n'
+        js += ';\nconsole.log(`e=${e}, shadowHost=${shadowHost}`);\nreturn {"element": e, "shadowHost": shadowHost};\n'
         # js += ';\nreturn e;\n'
         # js += ';\nreturn [1, 2];\n'
         if trap:
@@ -2743,6 +2748,7 @@ def locate(locator: str, **opt):
                         element = jsr['element']
                         print(f"locate: jsr['element']={jsr}")
                         last_element = element
+
                     if "iframeElementIsSet" in jsr:
                         iframe_element = driver.execute_script("return window.iframeElement")
                         print(f"locate: iframe_element={iframe_element}. switch to iframe")
@@ -2753,6 +2759,7 @@ def locate(locator: str, **opt):
                     # if "iframeDocIsSet" in jsr:
                     #     iframeDoc = driver.execute_script("return window.iframeDoc")
                     #     print(f"locate: iframeDoc={iframeDoc}")
+
                     if "shadowHost" in jsr and jsr['shadowHost']:
                         shadowHost = jsr['shadowHost']
                         print(f"locate: shadowHost={shadowHost}")
@@ -3560,6 +3567,18 @@ tpbatch = {
             "default": None,
             "action": "store",
             "help": "base dir for selenium_browser log files, default to home_dir",
+        },
+        'cleanLog': {
+            "switches": ["-clean", "--cleanLog"],
+            "default": False,
+            "action": "store_true",
+            "help": "clean chrome persistence files and logs before running. clean driver log",
+        },
+        'cleanQuit': {
+            "switches": ["-cq", "--cleanQuit"],
+            "default": False,
+            "action": "store_true",
+            "help": "clean chrome persistence files and logs, clean driver log, then quit",
         },
     },
     "resources": {
