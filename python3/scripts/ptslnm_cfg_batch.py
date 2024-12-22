@@ -98,6 +98,9 @@ our_cfg = {
         {{{{prog}}}} fe
         {{{{prog}}}} file_example
 
+    - To see all defineded locators
+        {{{{prog}}}} locators
+
     - has shadows, no iframes, simple pages to test shadows
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" -rm # without locators
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" "xpath=id('shadow_host')" "shadow" -rm # with locators
@@ -128,8 +131,8 @@ our_cfg = {
     - test using js to locate. js is much faster.
         in shadow, we can only use css selector to locate
         but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir" -rm
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span get=title,url -dump "{HOME}/dumpdir2" -rm -js
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir" -rm
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span -dump "{HOME}/dumpdir2" -rm -js
     diff -r dumpdir dumpdir2 # should be the same
     
     - test dump scope: element, page, all
@@ -149,7 +152,7 @@ our_cfg = {
     - test block steps
     {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
 
-    {{{{prog}}}} url="{HTTP_BASE}/scripts/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" we_return end_if end_while
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" we_return end_if end_while
 
     
     notes for windows cmd.exe, 
@@ -166,9 +169,8 @@ our_cfg = {
 }
 
 def pre_batch(all_cfg, known, **opt):
-    if 'fe' in known['REMAININGARGS'] or 'file_example' in known['REMAININGARGS']:
-        debug = opt.get('debug', 0)
-
+    debug = opt.get('debug', 0)
+    if known['REMAININGARGS'] and (known['REMAININGARGS'][0] == 'fe' or known['REMAININGARGS'][0] == 'file_example'):
         # replace http with file in all_cfg
         if debug:
             print(f'before usage_example={all_cfg['usage_example']}')
@@ -176,9 +178,14 @@ def pre_batch(all_cfg, known, **opt):
         # print(pformat(known))
         # prog = os.path.basename(__file__).replace('_cfg_batch.py', '') # this gave batch.py
         prog = 'ptslnm'
-        usage_example = all_cfg['usage_example'].replace(HTTP_BASE, FILE_BASE).replace("{{prog}}", prog)
+        usage_example = all_cfg['usage_example'].replace(HTTP_BASE, FILE_BASE).replace("{{prog}}", f'{prog} -af')
         print()
         print(usage_example)
+        exit(0)
+
+    if known['REMAININGARGS'] and known['REMAININGARGS'][0] == 'locators':
+        for line in tpsup.seleniumtools.get_defined_locators():
+            print(line)
         exit(0)
 
     # run tpsup.seleniumtools.pre_batch() to set up driver

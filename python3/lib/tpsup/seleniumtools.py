@@ -106,7 +106,11 @@ last_element = None
 # last result from js code: jsr = driver.execute_script(js_code)
 jsr = None
 
-########### end of global variables ###########
+# run these locators before or after each step
+debuggers = {
+    'before': [],
+    'after': [],
+}
 
 class SeleniumEnv:
     def __init__(self, host_port: str = 'auto', **opt):
@@ -1455,12 +1459,26 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
           note: python's "if" doesn't limit the scope of variables.
         - "var" is function scoped when it is declared within a function.
           if it is declared outside a function, it is global.
+          'var' can be used multiple times for the same variable; the second declaration does
+           not create new variable,;it will be ignored.
         - "const" is block scoped, like "let". 
     '''
 
+    # in_shadowDom vs shadowHost:
+    #     in_shadowDom is a python var used for js to keep track of whether we are in shadow dom or not.
+    #     shadowHost is a js var used to return to python so that python can update locator_driver.
     in_shadowDom = False
 
-    js = 'var e = document'
+    # if shadowHost is not null, we need to update locator_driver to shadowHost.shadowRoot.
+    js_start = '''
+var shadowHost = null;
+var startDoc = document;
+if (window.iframeDoc) {
+    startDoc = window.iframeDoc;
+}
+var e = startDoc'''
+
+    js = js_start
     for locator in locator_chain:
         if m := get_locator_compiled_path1().match(locator):
             # we can only convert single path, eg, xpath=/a/b
@@ -1468,7 +1486,7 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
             ptype, path = m.groups()
             if ptype == 'xpath':
                 if not in_shadowDom:
-                    js += f'.evaluate("{path}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue'
+                    js += f'.evaluate("{path}", startDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue'
                 else:
                     raise RuntimeError("xpath is not supported in shadow dom. use css instead")
             elif ptype == 'css':
@@ -1477,10 +1495,16 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
                 raise RuntimeError(
                     f"unsupported ptype={ptype} in locator={locator}")
         elif locator == 'shadow':
-            js += '.shadowRoot' # this is the shadow driver
+            # change shadowHost. this tells python to change locator_driver to shadow driver.
+            # once we enter shadow dom, we reset iframeDoc/iframeElement to null.
+            # because shaodowRoot doesn't need change document, therefore, we don't need
+            # using 'window' to persist shadowHost, we can pass shadowHost to caller (python).
+            js += '; window.iframeDoc = null; window.iframeElement = null; var shadowHost=e; e = shadowHost.shadowRoot' 
+            # js += '.shadowRoot' 
             in_shadowDom = True    
         elif locator == 'iframe':
             """
+            this is comment.
             https://stackoverflow.com/questions/7961229/
 
             cd(iframe_element) only works in Firefox
@@ -1518,34 +1542,88 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
             solution: 
                 for production: use a web server to serve the file.
                 for testing: use --allow-file-access-from-files for the browser. this is security risk.
-            """
-            js += '''
-try {
-    let iframe_inner = e.contentDocument || e.contentWindow.document;
-    document = iframe_inner
-    const current_origin = window.location.origin;
-    console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
-} catch(err) {
-    // print the error. note that console.log() is not available in Selenium. 
-    // console log is only available in browser's webtools console.
-    // we have a locator 'consolelog' to print it out. 
-    console.log(err.stack);
 
-    let iframe_src = e.getAttribute('src');
-    //iframe_url = new URL(iframe_src);
-    iframe_url = iframe_src;
-    console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
-    window.location.replace(iframe_url);
-}
-            '''
-            # save one js after very iframe.
+            what is: let iframe_inner = e.contentDocument || e.contentWindow.document;
+
+            https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#scripting
+            
+            With the DOM HTMLIFrameElement object, scripts can access the window object of 
+            the framed resource via the contentWindow property. The contentDocument property
+            refers to the document inside the <iframe>, same as contentWindow.document.
+
+            From the inside of a frame, a script can get a reference to its parent window with
+            window.parent.
+
+            Script access to a frame's content is subject to the same-origin policy. 
+            Scripts cannot access most properties in other window objects if the script
+            was loaded from a different origin...
+            """
+            js +=''';
+window.iframeDoc = e.contentDocument || e.contentWindow.document; // enter iframe. this can trigger the error to catch below.
+
+// we cannot return any element once we entered iframe because we would get error: 
+//      stale element not found in the current frame"
+// so instead of returning element, we return iframeDoc.
+//      return { 'iframeElement': e, 'iframeDoc': iframeDoc };
+// we persist iframeDoc in window. so we can use it later.
+window.iframeElement = e;
+// we return 1 to indicate the variable is set.
+// no need to tell whether iframeDoc is set because python's execute_script() cannot convert 
+// it to a python object; so python always return None.
+return { 'iframeElementIsSet': 1 }; 
+'''
+#             js += ''';
+# // console.log(`e=${e}, shadowHost=${shadowHost}`);
+# // remove shadowHost because iframe is not in shadow dom, no need to change locator_driver.
+# var shadowHost = null;
+# try {
+#     // cd(e.contentWindow); // cd is not defined in chrome's js. it is only in firefox.
+#     // let iframe_inner = e.contentDocument || e.contentWindow.document;
+#     // document = iframe_inner // this deosn't work in chrome at least. somehow i cannot change 'document'.
+#     iframeDoc = e.contentDocument || e.contentWindow.document; // enter iframe. this can trigger the error to catch below.
+#     element_url = e.src;
+#     console.log('element_url=' + element_url);
+#     //iframe_url = window.location.href;
+#     //iframe_parent_url = iframeDoc.referrer;
+#     //console.log('iframe_url=' + iframe_url);
+#     //console.log('iframe_parent_url=' + iframe_parent_url);
+#     const current_origin = window.location.origin;
+#     console.log(`iframe stays in the same origin ${current_origin}`); // note to use backticks
+# } catch(err) {
+#     // print the error. note that console.log() is not available in Selenium. 
+#     // console log is only available in browser's webtools console.
+#     // we have a locator 'consolelog' to print it out. 
+#     console.log(err.stack);
+
+#     //let iframe_src = e.getAttribute('src');
+#     //iframe_url = new URL(iframe_src);
+#     //iframe_url = iframe_src;
+#     //console.log(`iframe needs new url ${iframe_url}`);  // note to use backticks
+
+#     // window is the main JavaScript object root. 
+#     // window.document or just document is the main object of the potentially visible.
+#     // below replaces the whole oject root - then we loss all the previous objects, eg, iframe parent.
+#     //window.location.replace(iframe_url);
+# }
+# // 'iframe' doesn't return an element because it enters a new page, no element is selected yet.
+# // however, 'iframe' changes 'document' to the new iframe's document. 
+# // 'document' corresponds to python selenium's 'driver'. 
+# return {
+#      //'iframeElement': e, 
+#      'iframeDoc': iframeDoc
+# };
+#             '''
+            # save one js after every iframe because document is reset to iframe's document.
+            # and this iframe js doesn't change locator_driver because only shadow dom changes locator_driver.
             # so every 'iframe' creates a new js. 
+            # the next js will run with a new document (iframe's document).
             if trap:
                 js = wrap_js_in_trap(js)
             js_list.append(js)
 
-            # start another js
-            js = 'var e = document'
+            # start another js 
+            # js = 'var shadowHost = null; var e = document'
+            js = js_start
 
             # once we are in iframe, we are out of shadow driver, back to normal driver.
             # even if the iframe is in shadow dom.
@@ -1567,17 +1645,24 @@ try {
         if ShadowRoot is the last js, we remove it.
         if ShadowRoot is followed by querySelector(), we keep it.
     '''
-    if js.endswith('.shadowRoot'):
-        js = js[:-len('.shadowRoot')]
+    if js == js_start:
+        # if js is still the same as js_start, we don't need to append it.
+        pass
+    else:
+        if js.endswith('.shadowRoot'):
+            js = js[:-len('.shadowRoot')]
 
-    # save the last js.
-    #   - only the last js 'return e'
-    #   - the intermediate js were all ending with iframes
-    js += ';\nreturn e'
-    if trap:
-        js = wrap_js_in_trap(js)
+        # save the last js.
+        #   - only the last js 'return e'
+        #   - the intermediate js were all ending with iframes
+        # js += ';\nreturn {element: e, shadowHost: shadowHost};\n'
+        js += ';\nconsole.log(`e=${e}, shadowHost=${shadowHost}`);\nreturn {"elelment": e, "shadowHost": shadowHost};\n'
+        # js += ';\nreturn e;\n'
+        # js += ';\nreturn [1, 2];\n'
+        if trap:
+            js = wrap_js_in_trap(js)
 
-    js_list.append(js)
+        js_list.append(js)
 
     if debug:
         print(f"locator_chain_to_js_list: js_list_size={len(js_list)}")
@@ -1950,6 +2035,9 @@ def follow(steps: list,  **opt):
     By default, if any 'if' failed, we stop. For example, if 'click_xpath=/a/b' failed, we stop.
     If any 'then if' failed, we stop. For example, if 'iframe' failed, we stop.
 
+    as of now, we only allow follow() to be recursive on block-statement (if/while) level; once
+    follow() calls locate(), locate() will not call follow(). This is to avoid infinite recursion.
+
     '''
     
     global locator_driver
@@ -1957,6 +2045,7 @@ def follow(steps: list,  **opt):
     global driver_url
     global last_element
     global return_levels
+    global debuggers
 
     update_locator_driver(**opt)
 
@@ -2068,6 +2157,15 @@ def follow(steps: list,  **opt):
                 continue
         # now we are done with control block handling
 
+        print()
+
+        # run debuggers['before']
+        for step in debuggers['before']:
+            # we don't care about the return value but we should avoid
+            # using locator (step) that has side effect: eg, click, send_keys
+            print(f"follow: debug_before={step}")
+            locate(step, **opt) 
+
         """
         non-control-block step can be a string or a more complex structure     
 
@@ -2175,6 +2273,12 @@ def follow(steps: list,  **opt):
             result = locate_dict(step, **opt)
         else:
             raise RuntimeError(f"unsupported step type={step_type}, step={pformat(step)}")
+        
+        for step in debuggers['after']:
+            # we don't care about the return value but we should avoid
+            # using locator (step) that has side effect: eg, click, send_keys
+            print(f"follow: debug_after={step}")
+            locate(step, **opt)
         
         if debug:
             print(f"follow: result={pformat(result)}")
@@ -2392,8 +2496,8 @@ def tp_switch_to_frame(element: WebElement, **opt):
                 driver.current_url
                 driver.title
         to test
-            ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')"
-            ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" get=url,title "xpath=id('shadow_host')" 
+            ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 print=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" print=url,title "xpath=id('shadow_host')"
+            ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 print=url,title "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" print=url,title "xpath=id('shadow_host')" 
         the ending url and title are different.
         'iframe' gave (wrong)
             file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
@@ -2401,8 +2505,11 @@ def tp_switch_to_frame(element: WebElement, **opt):
         'tp_iframe' gave (correct)
             file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
             driver.title=child page
-        the reason is that 'iframe' only works on http url, not on file:/// url.
-        'tp_iframe' works on both because tp_iframe will force load the url after it caught the exception.
+        the reason is that 'iframe' only works on http url, not on file:/// url (null origin exception).
+        'tp_iframe' gives correct url and title because tp_iframe will force load the url after it caught the exception.
+        however, if we disable the exception using "-af" (allow file access), then 'tp_iframe' stops working.
+        also, even 'iframe' doesn't give correct url and title, it still can find the element in the iframe.
+
     selenium.webdriver.switch_to.frame() is implemented in
         sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/switch_to.py: self._driver.execute(Command.SWITCH_TO_FRAME ...
         sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/remote_connection.py: Command.SWITCH_TO_FRAME: ("POST", "/session/$sessionId/frame"),
@@ -2456,6 +2563,29 @@ if (window.self !== window.top) {
     global driver
     driver.execute_script(js)
 
+def get_defined_locators(**opt):
+    '''
+    get list of locators in locate() function.
+    we first get the source code of locate() function, then we extract the locators
+    from 'if' and 'elif' statements.    
+    '''
+    import inspect
+    import re
+
+    source = inspect.getsource(locate)
+    # print(f"source={source}")
+
+    locators = []
+    # extract all the 'if' and 'elif' statements from the source code
+    # we use re.DOTALL to match newline
+    for m in re.finditer(r"^    (if|elif) (m :=.+?locator)", source, re.MULTILINE | re.DOTALL):
+
+        locators.append(m.group(2))
+    for m in re.finditer(r"^    (if|elif) (locator == .+?):", source, re.MULTILINE | re.DOTALL):
+        locators.append(m.group(2))
+
+    return locators
+
 def locate(locator: str, **opt):
     dryrun = opt.get("dryrun", 0)
     interactive = opt.get("interactive", 0)
@@ -2471,6 +2601,7 @@ def locate(locator: str, **opt):
     global return_levels
     global last_element
     global jsr
+    global debuggers
 
     # we don't have a global var for active element, because
     #    - we can always get it from driver.switch_to.active_element
@@ -2590,7 +2721,7 @@ def locate(locator: str, **opt):
             js_source, js_target = js_directive.split("2")
         else:
             js_source = js_directive
-            js_target = None
+            js_target = ""
 
         if js_source == 'jsfile':
             with open(js) as f:
@@ -2601,8 +2732,39 @@ def locate(locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             jsr = driver.execute_script(js)
+            print(f"locate: jsr={pformat(jsr)}")
             if 'element' in js_target:
-                last_element = jsr
+                '''
+                jsr can be an element or a dict with possible keys: 
+                element, shadowHost, iframeElementIsSet
+                '''
+                if type(jsr) == dict:
+                    if "element" in jsr:
+                        element = jsr['element']
+                        print(f"locate: jsr['element']={jsr}")
+                        last_element = element
+                    if "iframeElementIsSet" in jsr:
+                        iframe_element = driver.execute_script("return window.iframeElement")
+                        print(f"locate: iframe_element={iframe_element}. switch to iframe")
+                        driver.switch_to.frame(iframe_element)
+                        last_element = None
+                    
+                    # the following always returns None because python cannot convert it to an python object..
+                    # if "iframeDocIsSet" in jsr:
+                    #     iframeDoc = driver.execute_script("return window.iframeDoc")
+                    #     print(f"locate: iframeDoc={iframeDoc}")
+                    if "shadowHost" in jsr and jsr['shadowHost']:
+                        shadowHost = jsr['shadowHost']
+                        print(f"locate: shadowHost={shadowHost}")
+                        locator_driver = shadowHost.shadowRoot
+                        last_element = shadowHost                   
+                             
+                elif isinstance(jsr, WebElement):
+                    # jsr is an instance of element
+                    last_element = jsr
+                else:
+                    print(f"locate: jsr={jsr} is not an element nor a dict")
+                    last_element = driver.switch_to.active_element
             else:
                 last_element = driver.switch_to.active_element
 
@@ -2682,8 +2844,8 @@ def locate(locator: str, **opt):
                      driver.current_url
                      driver.title
             to test
-                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" get=url,title "xpath=id('shadow_host')"
-                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 get=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" get=url,title "xpath=id('shadow_host')" 
+                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 print=url,title "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" print=url,title "xpath=id('shadow_host')"
+                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 print=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" print=url,title "xpath=id('shadow_host')" 
             the ending url and title are different.
             'iframe' gave (wrong)
                 file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
@@ -2707,8 +2869,8 @@ def locate(locator: str, **opt):
             else:
                 # tp_frame
                 tp_switch_to_frame(element, **opt)
-            
-            # once we switch into an iframe, we should use original driver to locate    
+
+            # once we switch into an iframe, we should u+se original driver to locate    
             locator_driver = driver
             driver_url = driver.current_url
             
@@ -3142,7 +3304,7 @@ def locate(locator: str, **opt):
             "therefore, we need to add extra sleep time after page is loaded. "
             "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
             '''
-    elif m := re.match(r"get=(.+)", locator):
+    elif m := re.match(r"print=(.+)", locator):
         ret['Success'] = True
         keys_string = m.groups()[0]
         keys = keys_string.split(",")
@@ -3154,19 +3316,68 @@ def locate(locator: str, **opt):
                 if key == 'timeouts':
                     # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
                     # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
-                    print(f'implicit_wait={driver.timeouts.implicit_wait}')
-                    print(f'page_load_timeout={driver.timeouts.page_load}')
-                    print(f'script_timeout={driver.timeouts.script}')
+                    print(f'    implicit_wait={driver.timeouts.implicit_wait}')
+                    print(f'    page_load_timeout={driver.timeouts.page_load}')
+                    print(f'    script_timeout={driver.timeouts.script}')
                 elif key == 'title':
                     title = driver.title
                     print(f'driver.title={title}')
                 elif key == 'url':
-                    # iframe will change the url.
-                    url = driver.current_url
-                    print(url)
+                    '''
+                    https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
+                    javascript: URLs can be used anywhere a URL is a navigation target. 
+                    This includes, but is not limited to:
+                        The href attribute of an <a> or <area> element.
+                        The action attribute of a <form> element.
+                        The src attribute of an <iframe> element.
+                        The window.location JavaScript property.
+                        The browser address bar itself.
+
+                    url has mutliple meanings:
+                        the url of the current page
+                        the url that you go next if you click a link, eg, <a href="url">
+                    our url is the url of the current page.
+                    '''
+                    element_url = None
+                    if last_element:
+                        element_url = driver.execute_script("return arguments[0].src", last_element)
+                        print(f'    element_url=element.src={element_url}')
+                    else:
+                        print(f'    element_url is not available because last_element is None')
+
+                    # https://stackoverflow.com/questions/938180
+                    iframe_url = driver.execute_script("return window.location.href")
+                    print(f'    iframe_url=window.location.href={iframe_url}')
+
+                    driver_url = driver.current_url
+                    print(f'    driver_url=driver.current_url={driver_url}')
+
+                    # https://stackoverflow.com/questions/938180
+                    parent_url = driver.execute_script("return document.referrer")
+                    print(f'    parent_url=document.referrer={parent_url}')
+                elif key == 'tag':
+                    # get element type
+                    if last_element:
+                        tag = last_element.tag_name
+                        print(f'element_tag_name=element.tag_name={tag}')
+                elif key == 'xpath':
+                    if last_element:
+                        xpath = js_get(last_element, 'xpath', **opt)
+                        print(f'element_xpath=element.xpath={xpath}')
                 else:
                     raise RuntimeError(f"unsupported key={key}")
+    elif m := re.match(r"debug_(before|after)=(.+)", locator):
+        # items are locators and separated by comma
+        ret['Success'] = True
+        before_after, items_string = m.groups()
+        debuggers[before_after] = []
+        for item in items_string.split(","):
+            if re.match(r"(url|title|timeouts|tag|xpath)$", item):
+                debuggers[before_after].append(f"print={item}")
+            else:
+                debuggers[before_after].append(item)
 
+        print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
