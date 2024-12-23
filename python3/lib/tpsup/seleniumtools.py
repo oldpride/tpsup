@@ -1464,6 +1464,29 @@ def print_domstack(**opt):
         url = item['url']
         print(f"{ident}{dom_type}: {url}")
 
+def replay_domstack(domstack2: list, **opt):
+    # replay domstack from the beginning
+    global driver
+    global locator_driver
+
+    # go back to the beginning
+    driver.switch_to.default_content()
+    locator_driver = driver
+
+    for item in domstack2:
+        dom_type = item['type']
+        url = item['url']
+        element = item['element']
+        print(f"replay {dom_type}: {url}")
+        if dom_type == 'iframe':
+            driver.switch_to.frame(element)
+            locator_driver = driver
+        elif dom_type == 'shadow':
+            shadow_root = element.shadow_root
+            locator_driver = shadow_root
+        else:
+            raise RuntimeError(f"unsupported dom_type={dom_type}")
+
 def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
     '''
     the conversion is not 1 to 1, meaning there are likely less number
@@ -1509,7 +1532,8 @@ def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
 
     # if shadowHost is not null, we need to update locator_driver to shadowHost.shadowRoot.
     js_start = '''
-var shadowHost = null; // we assume we start from outside of shadow dom.
+var shadowHosts = []; // we assume we start from outside of shadow dom. shawdowHosts is an array.
+var iframeElement = null; // we assume we start from outside of iframe. 
 var startDoc = document;
 if (window.iframeDoc) {
     startDoc = window.iframeDoc;
@@ -1537,7 +1561,7 @@ var e = startDoc'''
             # once we enter shadow dom, we reset iframeDoc/iframeElement to null.
             # because shaodowRoot doesn't need change document, therefore, we don't need
             # using 'window' to persist shadowHost, we can pass shadowHost to caller (python).
-            js += '; window.iframeDoc = null; window.iframeElement = null; var shadowHost=e; e = shadowHost.shadowRoot' 
+            js += '; window.iframeDoc = null; window.iframeElement = null; shadowHosts.push(e); e = e.shadowRoot' 
             # js += '.shadowRoot' 
             in_shadowDom = True    
         elif locator == 'iframe':
@@ -1597,6 +1621,7 @@ var e = startDoc'''
             was loaded from a different origin...
             """
             js +=''';
+var iframeElement = e;
 // enter iframe. this can trigger the 'null origin' error when we run with file url without --all-file-access.
 window.iframeDoc = e.contentDocument || e.contentWindow.document; 
 
@@ -1607,7 +1632,8 @@ window.iframeDoc = e.contentDocument || e.contentWindow.document;
 window.iframeElement = e;
 
 // we return 1 to indicate the variable is set.
-return { 'iframeElementIsSet': 1 }; 
+// return { 'iframeElementIsSet': 1 }; 
+return { 'iframeElement': iframeElement, 'shadowHosts': shadowHosts };
 '''
 # we used to use below code to run with file url before we have --all-file-access.
 # the main draw back is that it does not allow us to go back to parent iframe.
@@ -1681,7 +1707,7 @@ return { 'iframeElementIsSet': 1 };
         #   - only the last js 'return e'
         #   - the intermediate js were all ending with iframes
         # js += ';\nreturn {element: e, shadowHost: shadowHost};\n'
-        js += ';\nconsole.log(`e=${e}, shadowHost=${shadowHost}`);\nreturn {"element": e, "shadowHost": shadowHost};\n'
+        js += ';\nconsole.log(`e=${e}, shadowHosts=${shadowHosts}`);\nreturn {"element": e, "shadowHosts": shadowHosts};\n'
         # js += ';\nreturn e;\n'
         # js += ';\nreturn [1, 2];\n'
         if trap:
@@ -2638,6 +2664,7 @@ def locate(locator: str, **opt):
     global last_element
     global jsr
     global debuggers
+    global domstack
 
     # we don't have a global var for active element, because
     #    - we can always get it from driver.switch_to.active_element
@@ -2768,35 +2795,58 @@ def locate(locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             jsr = driver.execute_script(js)
-            print(f"locate: jsr={pformat(jsr)}")
+            # print(f"locate: jsr={pformat(jsr)}") # this is too verbose
+            print("locate: jsr=", end="")
+            for key in jsr:
+                print(f" {key}={type(jsr[key])}")
+            
             if 'element' in js_target:
                 '''
                 jsr can be an element or a dict with possible keys: 
-                element, shadowHost, iframeElementIsSet
+                element, shadowHost, iframeElement
                 '''
                 if type(jsr) == dict:
-                    if "element" in jsr:
-                        element = jsr['element']
-                        print(f"locate: jsr['element']={jsr}")
-                        last_element = element
-
-                    if "iframeElementIsSet" in jsr:
-                        iframe_element = driver.execute_script("return window.iframeElement")
-                        print(f"locate: iframe_element={iframe_element}. switch to iframe")
-                        driver.switch_to.frame(iframe_element)
-                        last_element = None
+                    '''
+                    keys in the dict
+                        'element' and 'iframeElement' can not be in the same dict.
+                        'element' and 'shadowHost' can be in the same dict.
+                        'shadowHosts' and 'iframeElement' can be in the same dict: shaodowHosts first, then iframe.
+                            this is because every 'iframe' will end a piece of js. see locator_chain_to_js_list().
+                            therefore, we parse shadowHosts first, to make sure shadowHosts in the front of iframe
+                            in domstack.
+                    '''
                     
-                    # the following always returns None because python cannot convert it to an python object..
-                    # if "iframeDocIsSet" in jsr:
-                    #     iframeDoc = driver.execute_script("return window.iframeDoc")
-                    #     print(f"locate: iframeDoc={iframeDoc}")
+                    if "shadowHosts" in jsr and jsr['shadowHosts']:
+                            shadowHosts = jsr['shadowHosts']
+                            print(f"locate: jsr shadowHost count={len(shadowHosts)}")
 
-                    if "shadowHost" in jsr and jsr['shadowHost']:
-                        shadowHost = jsr['shadowHost']
-                        print(f"locate: shadowHost={shadowHost}")
-                        locator_driver = shadowHost.shadowRoot
-                        last_element = shadowHost                   
-                             
+                            for shadowHost in shadowHosts:
+                                locator_driver = shadowHost.shadow_root
+                                url = get_shadowHost_info(shadowHost)
+                                print(f"locate: switch to shadowHost={url}")
+                                domstack.append({
+                                    'type': 'shadow',
+                                    'element': shadowHost,
+                                    'url': url,
+                                })
+                            last_element = None # we don't know what the active element is in the shadow root.
+
+                    if "iframeElement" in jsr:
+                        iframeElement = jsr['iframeElement']
+                        url = iframeElement.get_attribute('src')
+                        print(f"locate: switch to iframe={url}") 
+                        domstack.append({
+                            'type': 'iframe',
+                            'element': iframeElement,
+                            'url': url,
+                        })
+                        driver.switch_to.frame(iframeElement)
+                        last_element = None
+
+                    elif "element" in jsr:
+                        element = jsr['element']
+                        last_element = element
+                                           
                 elif isinstance(jsr, WebElement):
                     # jsr is an instance of element
                     last_element = jsr
@@ -2860,12 +2910,7 @@ def locate(locator: str, **opt):
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
             # last_element = element # last element is unchanged. this is different from iframe.
 
-            # we pick id, name, or tag_name as the shadow root's name
-            url = element.get_attribute('id')
-            if not url:
-                url = element.get_attribute('name')
-            if not url:
-                url = element.tag_name
+            url = get_shadowHost_info(element)
 
             domstack.append({
                 'type': 'shadow',
@@ -2873,6 +2918,7 @@ def locate(locator: str, **opt):
                 'url': url,
             })
             ret['Success'] = True
+            last_element = None # we don't know what the active element is in the shadow root.
     elif m := re.match(r"(iframe|tp_iframe|parentIframe|top|tp_top)$", locator):
         iframe = m.group(1)
         print(f"locate: switch into {iframe}")
@@ -3476,6 +3522,15 @@ def locate(locator: str, **opt):
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
     return ret
+
+def get_shadowHost_info(shadowHost: WebElement):
+    # we pick id, name, or tag_name as the shadow root's name
+    url = shadowHost.get_attribute('id')
+    if not url:
+        url = shadowHost.get_attribute('name')
+    if not url:
+        url = shadowHost.tag_name
+    return url
 
 # def js_get_shadowhost(element: WebElement, **opt):
 #     # https://stackoverflow.com/questions/27453617
