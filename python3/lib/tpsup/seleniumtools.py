@@ -113,6 +113,9 @@ debuggers = {
     'after': [],
 }
 
+# dom stack, to keep track of the dom tree: iframe, shadow
+domstack = []
+
 class SeleniumEnv:
     def __init__(self, host_port: str = 'auto', **opt):
         # print(pformat(opt))
@@ -1297,7 +1300,10 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     except StaleElementReferenceException as e:
         print(e)
         print(f"we skipped this {type}")
-        return
+    except NoSuchElementException as e:
+        print(e)
+        print_domstack()
+        exit(1)
 
     shadowed = False
     if 'shadow' in dump_state['type_chain']:
@@ -1444,6 +1450,19 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     pop_xpath_chain2 = dump_state['xpath_chain'].pop()
     pop_locator_chain1 = dump_state['locator_chain'].pop()
     pop_locator_chain2 = dump_state['locator_chain'].pop()
+
+    
+def print_domstack(**opt):
+    # this function is domstack safe, meaning it doesn't change the domstack, neither changes driver (dom)
+    global domstack
+    global driver
+
+    ident = ""
+    for item in reversed(domstack):
+        ident += "  "
+        dom_type = item['type']
+        url = item['url']
+        print(f"{ident}{dom_type}: {url}")
 
 def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
     '''
@@ -1790,11 +1809,22 @@ def tp_click(element: WebElement, **opt):
 
 js_by_key = {
     # https://stackoverflow.com/questions/27453617
+    # get current parent shadowRoot's shadowHost
     'shadowHost': '''
         var root = arguments[0].getRootNode();
         if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && root.host != undefined) {
             return root.host;
         } else {
+            return null;
+        }
+    ''',
+    # get the parent iframe (if any) of the current context
+    'iframe': '''
+        if (window.self !== window.top) {
+            // You are in an iframe
+            return window.frameElement; 
+        } else {
+            // Not in an iframe
             return null;
         }
     ''',
@@ -2829,8 +2859,21 @@ def locate(locator: str, **opt):
         if not dryrun:
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
             # last_element = element # last element is unchanged. this is different from iframe.
+
+            # we pick id, name, or tag_name as the shadow root's name
+            url = element.get_attribute('id')
+            if not url:
+                url = element.get_attribute('name')
+            if not url:
+                url = element.tag_name
+
+            domstack.append({
+                'type': 'shadow',
+                'element': element,
+                'url': url,
+            })
             ret['Success'] = True
-    elif m := re.match(r"(iframe|tp_iframe|parentIframe|top|tp_top)", locator):
+    elif m := re.match(r"(iframe|tp_iframe|parentIframe|top|tp_top)$", locator):
         iframe = m.group(1)
         print(f"locate: switch into {iframe}")
         if interactive:
@@ -2866,16 +2909,43 @@ def locate(locator: str, **opt):
             '''
    
             if iframe == "iframe":
-                # we keep the selenium way here, in case the problem is fixed in the future.
+                # url = driver.url # this driver's url 
+                # url = driver.execute_script("return window.location.href") # this is my (current) iframe url
+                url = element.get_attribute('src') # this is child (future) iframe's url
+                if not url:
+                    url = 'about:srcdoc'
+
+                domstack.append({
+                    'type': 'iframe',
+                    'element': element,
+                    # we need to save url before we switch into iframe.
+                    # otherwise, if we need url later, we would have to switch back to this iframe.
+                    'url': url,
+                })
                 driver.switch_to.frame(element)
             elif iframe == "parentIframe":
+                while domstack:
+                    dom = domstack.pop()
+                    if dom['type'] == 'iframe':
+                        # driver.switch_to.parent_frame()
+                        break
                 driver.switch_to.parent_frame()   
             elif iframe == "top":
+                domstack.clear()
                 driver.switch_to.default_content()
             elif iframe == "tp_top":
+                domstack.clear()
                 tp_switch_to_top()
             else:
+                url = element.get_attribute('src')
+                if not url:
+                    url = 'about:srcdoc'
                 # tp_frame
+                domstack.append({
+                    'type': 'iframe',
+                    'element': element,
+                    'url': url,
+                })
                 tp_switch_to_frame(element, **opt)
 
             # once we switch into an iframe, we should u+se original driver to locate    
@@ -3325,7 +3395,7 @@ def locate(locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         for key in keys:
             if not dryrun:
-                if key == 'timeouts':
+                if key == 'timeouts' or key == 'waits':
                     # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
                     # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
                     print(f'    implicit_wait={driver.timeouts.implicit_wait}')
@@ -3359,14 +3429,24 @@ def locate(locator: str, **opt):
 
                     # https://stackoverflow.com/questions/938180
                     iframe_url = driver.execute_script("return window.location.href")
-                    print(f'    iframe_url=window.location.href={iframe_url}')
+                    print(f'    current_iframe_url=window.location.href={iframe_url}')
+
+                    '''
+                    1. the following returns the same as above
+                        iframe_current = driver.execute_script("return window.location.toString()")
+                        print(f'    iframe_current=window.location.toString()={iframe_current}')
+                    2. all iframe defined by srcdoc will return "about:srcdoc", eg
+                        <iframe srcdoc="<p>hello</p>"></iframe>
+                    3. people normally use iframe url to id an iframe, but it is not reliable for
+                       srcdoc iframe.
+                    '''
 
                     driver_url = driver.current_url
                     print(f'    driver_url=driver.current_url={driver_url}')
 
                     # https://stackoverflow.com/questions/938180
                     parent_url = driver.execute_script("return document.referrer")
-                    print(f'    parent_url=document.referrer={parent_url}')
+                    print(f'    parent_iframe_url=document.referrer={parent_url}')
                 elif key == 'tag':
                     # get element type
                     if last_element:
@@ -3376,6 +3456,8 @@ def locate(locator: str, **opt):
                     if last_element:
                         xpath = js_get(last_element, 'xpath', **opt)
                         print(f'element_xpath=element.xpath={xpath}')
+                elif key == 'domstack':
+                    print_domstack()
                 else:
                     raise RuntimeError(f"unsupported key={key}")
     elif m := re.match(r"debug_(before|after)=(.+)", locator):
@@ -3384,7 +3466,7 @@ def locate(locator: str, **opt):
         before_after, items_string = m.groups()
         debuggers[before_after] = []
         for item in items_string.split(","):
-            if re.match(r"(url|title|timeouts|tag|xpath)$", item):
+            if re.match(r"(url|title|timeouts|waits|tag|xpath|domstack)$", item):
                 debuggers[before_after].append(f"print={item}")
             else:
                 debuggers[before_after].append(item)

@@ -145,7 +145,12 @@ our_cfg = {
     
     - test go up and down in shadow and iframe
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span top
-
+    
+    // vs / in xpath:
+        // is short path
+        / is full path
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "xpath=//iframe[1]" "iframe" debug_after=url,consolelog "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]" debug_after=url,consolelog,iframestack
+    
     - dump out dynamically generated html too
       note:
         - add sleep time to let the page fully loaded.

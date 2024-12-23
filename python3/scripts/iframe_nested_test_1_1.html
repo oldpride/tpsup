@@ -3,11 +3,22 @@
 <html>
 
 <head>
+    <style>
+        #iframe_nested_test_1_1_1 {
+            display: block;
+            width: 400px;
+            height: 50px;
+            background-color: lightsalmon;
+            padding: 10px;
+        }
+    </style>
+
 </head>
 
 <body>
     <div id="iframe_nested_test_1_1_div">
         <p>text from iframe_nested_test_1_1.html</p>
+        <iframe id="iframe_nested_test_1_1_1" srcdoc="<p>text from iframe_nested_test_1_1_1 srcdoc</p>"></iframe>
     </div>
 </body>
 
