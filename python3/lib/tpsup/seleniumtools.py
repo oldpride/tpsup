@@ -1147,7 +1147,7 @@ def dump(output_dir: str, element: WebElement = None, **opt):
             with open(source_file, "w", encoding="utf-8") as source_fh:
                 source_fh.write(shadowHost.get_attribute('outerHTML'))
     else:
-        # this part takes care of dump_scope=dom or dump_scope=page
+        # this part takes care of dump_scope=iframe or dump_scope=page
         source_file = f"{output_dir}/source.html"
         with open(source_file, "w", encoding="utf-8") as source_fh:  
             '''
@@ -1361,8 +1361,8 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
             dump_deeper(e, dump_state, 'shadow', **opt)
 
         # don't forget to switch back to main web page.
-        # driver.switch_to.default_content()
-        tp_switch_to_top()
+        driver.switch_to.default_content()
+        # tp_switch_to_top()
 
         # DON'T switch back to the last iframe, because we will switch back in the caller, locate().
         # If we do it here, then the caller's switch_to.frame(last_iframe) will fail with error:
@@ -1592,6 +1592,7 @@ return { 'iframeElementIsSet': 1 };
 '''
 # we used to use below code to run with file url before we have --all-file-access.
 # the main draw back is that it does not allow us to go back to parent iframe.
+# ie, it makes driver.switch_to.default_content() to not go back to the top.
 #             js += ''';
 # // remove shadowHost because iframe is not in shadow dom, no need to change locator_driver.
 # var shadowHost = null;
@@ -3203,9 +3204,13 @@ def locate(locator: str, **opt):
             print()
             print(f"locate: dump iframe to {subdir}")
 
+            # scope == 'iframe' looks the same as scope == 'page' - both calls
+            # dump() without element. However, before calling scope == 'page',
+            # we need to get out of iframe.
+
+            # dump(locator_driver, **{**opt, 'output_dir': f"{subdir}"})
             # we don't use locator_driver, because we got error
             #    AttributeError: 'ShadowRoot' object has no attribute 'page_source'
-            # dump(locator_driver, **{**opt, 'output_dir': f"{subdir}"})
             dump(**{**opt, 'output_dir': f"{subdir}"})
 
         # we put 'page' and 'all' at the end, because they need to switch driver to original driver.
@@ -3215,8 +3220,8 @@ def locate(locator: str, **opt):
             print(f"locate: dump page to {subdir}")
                 
             # switch driver to original driver, because dump() needs to dump the whole page.
-            # driver.switch_to.default_content()
-            tp_switch_to_top()
+            driver.switch_to.default_content()
+            # tp_switch_to_top()
 
             dump(**{**opt, 'output_dir': f"{subdir}"})
 
