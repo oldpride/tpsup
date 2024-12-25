@@ -1240,10 +1240,13 @@ def dump(output_dir: str, element: WebElement = None, **opt):
 
     dump_state = {
         'output_dir': output_dir,
-        'type_chain': [],  # iframe, shadow
-        'typekey_chain': [],  # iframe001, shadow001
-        'locator_chain': [],  # 'xpath=/a/b', 'shadow', 'css=div'
-        'xpath_chain': [],  # /a/b, shadow, /div
+
+        'type_chain': [],  # iframe, shadow, ... to current iframe/shadow
+        'typekey_chain': [],  # iframe001, shadow001 ... to current iframe/shadow
+        'locator_chain': [],  # 'xpath=/a/b', 'shadow', 'css=div' ... to current iframe/shadow
+        'xpath_chain': [],  # /a/b, shadow, /div ... to current iframe/shadow
+
+        # performance stats
         'scan_count': {
             'iframe': 0,
             'shadow': 0,
@@ -1253,6 +1256,18 @@ def dump(output_dir: str, element: WebElement = None, **opt):
             'shadow': 0,
         },
         'max_depth_so_far': 0,
+
+        # file handlers - will be opened below
+        # 'list': {
+        #     'locator_chain': None,
+        #     'xpath_chain': None,
+        #     'xpath': None,
+        # },
+        # 'map': {
+        #     'locator_chain': None,
+        #     'xpath_chain': None,
+        #     'xpath': None,
+        # },
     }
 
     for format in ['list', 'map']:
@@ -1276,18 +1291,22 @@ def dump(output_dir: str, element: WebElement = None, **opt):
 
     start_node: webdriver.Chrome = None
     find_path: str = None
+
+    # unlike iframe are always under iframe tag, shadow host can be any tag, 
+    # therefore, we need to try every element. 
+    # if element.shadow_root exists, it is a shadow host.
     if element is None:
         start_node = driver
         find_path = '//*'
     else:
         start_node = element
         find_path = './/*'
-        dump_deeper(element, dump_state, 'shadow',
-                    **opt)  # don't forget element itself
+        dump_deeper(element, dump_state, 'shadow', **opt)  # don't forget this element itself
 
     for e in start_node.find_elements(By.XPATH, find_path):
         dump_deeper(e, dump_state, 'shadow', **opt)
 
+    # close all file handlers after we finish
     for format in ['list', 'map']:
         for scheme in ['xpath', 'xpath_chain', 'locator_chain']:
             dump_state[format][scheme].close()
@@ -1304,15 +1323,18 @@ def dump(output_dir: str, element: WebElement = None, **opt):
     print(
         f"current depth={scan_depth}, max depth so far={max_depth_so_far}, max_exist_depth is 1 less")
 
-    # we put the chain check at last so that we won't miss the summary
+    # we put the chain check at last so that summary will be printed before the program exits.
     if scan_depth != 0:
+        # when we exit, the chain should be empty
         raise RuntimeError(f"dump_state type_chain is not empty")
 
 
 def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     verbose = opt.get('verbose', 0)
 
-    dump_state['scan_count'][type] += 1
+    dump_state['scan_count'][type] += 1 # type is iframe or shadow
+
+    # begin performance stats
     iframe_scan_count = dump_state['scan_count']['iframe']
     shadow_scan_count = dump_state['scan_count']['shadow']
     total_scan_count = iframe_scan_count + shadow_scan_count
@@ -1382,6 +1404,7 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     dump_state['exist_count'][type] += 1
     i = dump_state['exist_count'][type]
 
+    # update locator chains to current iframe/shadow
     typekey = f'{type}{i:03d}'  # padding
     dump_state['type_chain'].append(type)
     dump_state['typekey_chain'].append(typekey)
@@ -1395,6 +1418,8 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     typekey_chain = '.'.join(dump_state['typekey_chain'])
     line = f"{typekey_chain}: {xpath}"
     print(line)
+
+    # save the current iframe/shadow's chains to files
     dump_state['map']['xpath'].write(line + "\n")
     dump_state['list']['xpath'].write(xpath + "\n")
 
@@ -1409,24 +1434,37 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     dump_state['list']['locator_chain'].write(locator_chain + "\n")
 
     if type == 'iframe':
+        # we need to 
+        #   1. go into the iframe content (context)
+        #   2. dump the iframe content
+        #   3. recursively dump the child iframes and shadows
+        #   4. go back 1 level, to the parent iframe content (context)
+
+        # 1. go into the iframe content (context)
         # https://www.selenium.dev/selenium/docs/api/py/webdriver_remote/selenium.webdriver.remote.switch_to.html#selenium.webdriver.remote.switch_to.SwitchTo.frame
         driver.switch_to.frame(element)
         # tp_switch_to_frame(element)
+
+        # 2. dump the iframe content
         with open(output_file, "w", encoding="utf-8") as ofh:
             ofh.write(driver.page_source)
             ofh.close()
 
-        # find sub iframes in this frame
+        # 3. recursively dump the child iframes and shadows
+        # 3.1 find sub iframes in this frame
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
         for sub_frame in iframe_list:
             dump_deeper(sub_frame, dump_state, 'iframe', **opt)
 
-        # find shadows in this frame
+        # 3.2 find shadows in this frame
         for e in driver.find_elements(By.XPATH, "//*"):
             dump_deeper(e, dump_state, 'shadow', **opt)
 
+        # 4. go back 1 level, to the parent iframe content (context)
+        driver.switch_to.parent_frame()
+
         # don't forget to switch back to main web page.
-        driver.switch_to.default_content()
+        # driver.switch_to.default_content()
         # tp_switch_to_top()
 
         # DON'T switch back to the last iframe, because we will switch back in the caller, locate().
@@ -1499,6 +1537,7 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
             #     seen[e.id] = 1
             dump_deeper(e, dump_state, 'shadow', **opt)
 
+    # restore the locator chains to the previous iframe/shadow
     poptype = dump_state['type_chain'].pop()
     popkey = dump_state['typekey_chain'].pop()
     if popkey != typekey:
