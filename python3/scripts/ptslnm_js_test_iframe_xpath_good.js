@@ -1,6 +1,6 @@
 // cd "C:/Users/tian/sitebase/github/tpsup/python3/scripts"
 // python3 -m http.server 8000
-// ptslnm url="http://localhost:8000/iframe_over_shadow_test_main.html" sleep=1 debug_after=url,consolelog jsfile=ptslnm_js_test_iframe_xpath.js
+// ptslnm url="http://localhost:8000/iframe_over_shadow_test_main.html" sleep=1 debug_after=url,consolelog jsfile=ptslnm_js_test_iframe_xpath_good.js
 
 // Get the iframe element
 var iframe = document.evaluate("/html[1]/body[1]/iframe[1]", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; 

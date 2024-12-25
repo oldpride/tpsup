@@ -149,7 +149,7 @@ our_cfg = {
     // vs / in xpath:
         // is short path
         / is full path
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "xpath=//iframe[1]" "iframe" debug_after=url,consolelog "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]" debug_after=url,consolelog,iframestack
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 debug_after=url,consolelog,domstack "xpath=//iframe[1]" "iframe" "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]"
     
     - dump out dynamically generated html too
       note:

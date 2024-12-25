@@ -116,6 +116,64 @@ debuggers = {
 # dom stack, to keep track of the dom tree: iframe, shadow
 domstack = []
 
+'''
+    iframestack vs domstack
+        iframestack is a list of iframe urls starting from current iframe to the top iframe.
+        domstack    is a list of iframe and shadow starting from top to current iframe or shadow.
+
+        iframestack is built by js in realtime. There is no global variable for iframestack.
+        domstack    is accumulated into a global variable as we go deeper into iframe or shadow.
+    why do we need both?
+        one reason is that we need to them to cross check each other.
+'''
+def print_iframestack(**opt):
+    global driver
+    print("print_iframestack:")
+    iframestack = driver.execute_script(js_by_key['iframestack'])
+    ident = ""
+    for item in iframestack:
+        ident += "  "
+        url = item['url']
+        print(f"{ident}{url}")
+    
+def print_domstack(**opt):
+    # this function is domstack safe, meaning it doesn't change the domstack, neither changes driver (dom)
+    global domstack
+    global driver
+
+    print("print_domstack:")
+    ident = ""
+    for item in reversed(domstack):
+        ident += "  "
+        dom_type = item['type']
+        url = item['url']
+        print(f"{ident}{dom_type}: {url}")
+
+def replay_domstack(domstack2: list, **opt):
+    # replay domstack from the beginning
+    global driver
+    global locator_driver
+    global last_element
+
+    # go back to the beginning
+    driver.switch_to.default_content()
+    locator_driver = driver
+
+    for item in domstack2:
+        dom_type = item['type']
+        url = item['url']
+        element = item['element']
+        print(f"replay {dom_type}: {url}")
+        if dom_type == 'iframe':
+            driver.switch_to.frame(element)
+            locator_driver = driver
+            last_element = driver.switch_to.active_element
+        elif dom_type == 'shadow':
+            shadow_root = element.shadow_root
+            locator_driver = shadow_root
+        else:
+            raise RuntimeError(f"unsupported dom_type={dom_type}")
+
 class SeleniumEnv:
     def __init__(self, host_port: str = 'auto', **opt):
         # print(pformat(opt))
@@ -1145,7 +1203,7 @@ def dump(output_dir: str, element: WebElement = None, **opt):
         # dump shadow host if any. note: we cannot dump shadowRoot.
         source_file = f"{output_dir}/source_shadowhost.html"
         # shadowHost = js_get_shadowhost(element)
-        shadowHost = js_get(element, "shadowHost")
+        shadowHost = js_get(element, "shadowhost")
         if shadowHost:
             with open(source_file, "w", encoding="utf-8") as source_fh:
                 source_fh.write(shadowHost.get_attribute('outerHTML'))
@@ -1303,6 +1361,7 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     except NoSuchElementException as e:
         print(e)
         print_domstack()
+        print_iframestack()
         exit(1)
 
     shadowed = False
@@ -1451,41 +1510,6 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     pop_locator_chain1 = dump_state['locator_chain'].pop()
     pop_locator_chain2 = dump_state['locator_chain'].pop()
 
-    
-def print_domstack(**opt):
-    # this function is domstack safe, meaning it doesn't change the domstack, neither changes driver (dom)
-    global domstack
-    global driver
-
-    ident = ""
-    for item in reversed(domstack):
-        ident += "  "
-        dom_type = item['type']
-        url = item['url']
-        print(f"{ident}{dom_type}: {url}")
-
-def replay_domstack(domstack2: list, **opt):
-    # replay domstack from the beginning
-    global driver
-    global locator_driver
-
-    # go back to the beginning
-    driver.switch_to.default_content()
-    locator_driver = driver
-
-    for item in domstack2:
-        dom_type = item['type']
-        url = item['url']
-        element = item['element']
-        print(f"replay {dom_type}: {url}")
-        if dom_type == 'iframe':
-            driver.switch_to.frame(element)
-            locator_driver = driver
-        elif dom_type == 'shadow':
-            shadow_root = element.shadow_root
-            locator_driver = shadow_root
-        else:
-            raise RuntimeError(f"unsupported dom_type={dom_type}")
 
 def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
     '''
@@ -1836,7 +1860,7 @@ def tp_click(element: WebElement, **opt):
 js_by_key = {
     # https://stackoverflow.com/questions/27453617
     # get current parent shadowRoot's shadowHost
-    'shadowHost': '''
+    'shadowhost': '''
         var root = arguments[0].getRootNode();
         if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && root.host != undefined) {
             return root.host;
@@ -1844,8 +1868,14 @@ js_by_key = {
             return null;
         }
     ''',
-    # get the parent iframe (if any) of the current context
-    'iframe': '''
+    # get the current iframe's iframeElement (if any) of the current context
+    # javascript can get current iframe's document object too, which is
+    #    window.iframeDoc = e.contentDocument || e.contentWindow.document;
+    # but javascript cannot return it back to python's 
+    #    driver.execute_script("return window.iframeDoc")
+    # because the document object is not serializable. 
+    # Only element and primitive types are serializable.
+    'iframeelement': '''
         if (window.self !== window.top) {
             // You are in an iframe
             return window.frameElement; 
@@ -1854,6 +1884,61 @@ js_by_key = {
             return null;
         }
     ''',
+
+    # get the current iframe's and its parent iframes' iframeElement and URL.
+    # we can get their iframe document too, but we cannot return it back to python
+    # because the document object is not serializable.
+    #
+    # I couldn't add the iframeElement to the return value because I got the following error:
+    #     selenium.common.exceptions.JavascriptException: Message: javascript error: 
+    #        {"status":10,"value":"stale element not found in the current frame"}
+    # when I ran
+    #     ptslnm url="http://localhost:8000/iframe_nested_test_main.html" sleep=1 
+    #         debug_after=url,consolelog,domstack,iframestack "xpath=//iframe[1]" 
+    #         "iframe" "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" 
+    #         "xpath=/html/body/div[1]/p[1]" 
+
+    'iframestack': '''
+        var iframes = []; // each element is a dict with 'element' and 'url'
+
+        // push current iframe's element and url
+        url = window.location.href;
+        iframes.push(
+            { 
+                //'element': window.parent.frameElement, 
+                'url': url 
+            }
+        );
+
+        var current = window;
+        
+        while (current.self !== window.top) {
+            current = current.parent;
+
+            if (!current) {
+                break;
+            }
+            
+            if (!current.frameElement) {
+                // we are at the top
+                url = current.location.href;
+                iframes.push({ 'url': url});
+                break;
+            }   
+            url = current.frameElement.contentWindow.location.href;
+            iframes.push(
+                { 
+                    // 'element': current.frameElement,
+                    'url': url
+                }
+            );
+
+            
+        }
+
+        return iframes;
+    ''',
+
     "attrs": """
         var items = {};
         for (index = 0; index < arguments[0].attributes.length; ++index) {
@@ -2745,128 +2830,241 @@ def locate(locator: str, **opt):
             driver_url = driver.current_url
             last_element = driver.switch_to.active_element
             ret['Success'] = True
-    elif m := re.match(r"(code|python)=(.+)", locator, re.MULTILINE | re.DOTALL):
-        _, code, *_ = m.groups()
-        print(f"locate: run python code = {code}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # exec_into_globals(code, globals(), locals())
-            if isExpression:
-                # we are testing condition, we want to know True/False
-                try:
-                    ret['Success'] = eval(code)
-                except Exception as e:
-                    print(f"eval failed with exception={e}")
-                    ret['Success'] = False
-            else:
-                exec_into_globals(code, globals(), locals())
-                ret['Success'] = True # hard code to True for now
-    elif m := re.match(r"(js.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
-        js_directive, js, *_ = m.groups()
+    elif m := re.match(r"(code|python|exp|js)(file)?(.*)?=(.+)", locator, re.MULTILINE | re.DOTALL):
+        '''
+        'code' and 'python' are the same - python code to be executed.
+        'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
+        examples
+            code=print("hello world")
+            python=print("hello world")
+            exp=i==1
+            js=console.log("hello world")
+            jsfile=filename.js
+            code2print="1+1"
+            codefile=filename.py
+            jsfile2element=filename.js
+            js2element="return document.querySelector('body')"
+        '''
+        # directive, code, *_ = m.groups()
+        lang, file, target, code, *_ = m.groups()
 
-        # js_directive 
-        #   source: 
-        #       code: default to code
-        #       file: read js code from a file
-        #   target:
-        #       element: default to element
-        #       print: print the result of js
-        #       targets can be combined, eg, js2elementprint, js2printelement
-        #  
-        # examples
-        #     jsflie=filename.js
-        #     js=js_code
-        #     js2element=js_code
-        #     jsfile2element=filename.js
-        #     js2elementprint
-        if '2' in js_directive:
-            js_source, js_target = js_directive.split("2")
+        if file:
+            print(f"locate: read {lang} from file {code}")
+            with open(code) as f:
+                code = f.read()
         else:
-            js_source = js_directive
-            js_target = ""
+            print(f"locate: run {lang} code {code}")
 
-        if js_source == 'jsfile':
-            with open(js) as f:
-                js = f.read()
-
-        print(f"locate: execute js={js}\n")
+        # parse 'target'
+        if target:
+            if m := re.match(r"2(file|print|element)+$", target):
+                target = m.group(1)
+            else:
+                raise RuntimeError(f"unsupported target={target}")
+           
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            jsr = driver.execute_script(js)
-            # print(f"locate: jsr={pformat(jsr)}") # this is too verbose
-            print("locate: jsr=", end="")
-            for key in jsr:
-                print(f" {key}={type(jsr[key])}")
-            
-            if 'element' in js_target:
-                '''
-                jsr can be an element or a dict with possible keys: 
-                element, shadowHost, iframeElement
-                '''
-                if type(jsr) == dict:
-                    '''
-                    keys in the dict
-                        'element' and 'iframeElement' can not be in the same dict.
-                        'element' and 'shadowHost' can be in the same dict.
-                        'shadowHosts' and 'iframeElement' can be in the same dict: shaodowHosts first, then iframe.
-                            this is because every 'iframe' will end a piece of js. see locator_chain_to_js_list().
-                            therefore, we parse shadowHosts first, to make sure shadowHosts in the front of iframe
-                            in domstack.
-                    '''
-                    
-                    if "shadowHosts" in jsr and jsr['shadowHosts']:
-                            shadowHosts = jsr['shadowHosts']
-                            print(f"locate: jsr shadowHost count={len(shadowHosts)}")
-
-                            for shadowHost in shadowHosts:
-                                locator_driver = shadowHost.shadow_root
-                                url = get_shadowHost_info(shadowHost)
-                                print(f"locate: switch to shadowHost={url}")
-                                domstack.append({
-                                    'type': 'shadow',
-                                    'element': shadowHost,
-                                    'url': url,
-                                })
-                            last_element = None # we don't know what the active element is in the shadow root.
-
-                    if "iframeElement" in jsr:
-                        iframeElement = jsr['iframeElement']
-                        url = iframeElement.get_attribute('src')
-                        print(f"locate: switch to iframe={url}") 
-                        domstack.append({
-                            'type': 'iframe',
-                            'element': iframeElement,
-                            'url': url,
-                        })
-                        driver.switch_to.frame(iframeElement)
-                        last_element = None
-
-                    elif "element" in jsr:
-                        element = jsr['element']
-                        last_element = element
-                                           
-                elif isinstance(jsr, WebElement):
-                    # jsr is an instance of element
-                    last_element = jsr
+            if lang in ['code', 'python', 'exp']:
+                if isExpression or lang == 'exp':
+                    # we are testing condition, we want to know True/False
+                    try:
+                        ret['Success'] = eval(code)
+                    except Exception as e:
+                        print(f"eval failed with exception={e}")
+                        ret['Success'] = False
                 else:
-                    print(f"locate: jsr={jsr} is not an element nor a dict")
+                    exec_into_globals(code, globals(), locals())
+                    ret['Success'] = True # hard code to True for now
+
+                if target:
+                    print(f"lang={lang} doesn't support target={target}. ignored the target")
+            elif lang == 'js':
+                jsr = driver.execute_script(code)
+                if debug:
+                    print(f"locate: jsr={pformat(jsr)}") # this is too verbose            
+                if 'element' in target:
+                    '''
+                    jsr can be an element or a dict with possible keys: 
+                    element, shadowHost, iframeElement
+                    '''
+                    if type(jsr) == dict:
+                        '''
+                        keys in the dict
+                            'element' and 'iframeElement' can not be in the same dict.
+                            'element' and 'shadowHost' can be in the same dict.
+                            'shadowHosts' and 'iframeElement' can be in the same dict: shaodowHosts first, then iframe.
+                                this is because every 'iframe' will end a piece of js. see locator_chain_to_js_list().
+                                therefore, we parse shadowHosts first, to make sure shadowHosts in the front of iframe
+                                in domstack.
+                        '''
+
+                        # print(f"locate: jsr={pformat(jsr)}") # this is too verbose
+                        print("locate: jsr=", end="")
+                        for key in jsr:
+                            print(f" {key}={type(jsr[key])}")
+                        
+                        if "shadowHosts" in jsr and jsr['shadowHosts']:
+                                shadowHosts = jsr['shadowHosts']
+                                print(f"locate: jsr shadowHost count={len(shadowHosts)}")
+
+                                for shadowHost in shadowHosts:
+                                    locator_driver = shadowHost.shadow_root
+                                    url = get_shadowHost_info(shadowHost)
+                                    print(f"locate: switch to shadowHost={url}")
+                                    domstack.append({
+                                        'type': 'shadow',
+                                        'element': shadowHost,
+                                        'url': url,
+                                    })
+                                last_element = None # we don't know what the active element is in the shadow root.
+
+                        if "iframeElement" in jsr:
+                            iframeElement = jsr['iframeElement']
+                            url = iframeElement.get_attribute('src')
+                            print(f"locate: switch to iframe={url}") 
+                            domstack.append({
+                                'type': 'iframe',
+                                'element': iframeElement,
+                                'url': url,
+                            })
+                            driver.switch_to.frame(iframeElement)
+                            last_element = driver.switch_to.active_element
+                        elif "element" in jsr:
+                            element = jsr['element']
+                            last_element = element
+                                            
+                    elif isinstance(jsr, WebElement):
+                        # jsr is an instance of element
+                        print(f'locate: jsr={type(jsr)}')
+                        last_element = jsr
+                    else:
+                        print(f"locate: jsr is not an element nor a dict, but {type(jsr)}")
+                        last_element = driver.switch_to.active_element
+                else:
+                    print(f"locate: jsr={pformat(jsr)}") # this is too verbose
                     last_element = driver.switch_to.active_element
-            else:
-                last_element = driver.switch_to.active_element
 
-            if 'print' in js_target:
-                print(jsr)
+                if 'print' in target:
+                    print(jsr)
+                
+                # https://stackoverflow.com/questions/37791547
+                # https://stackoverflow.com/questions/23408668
+                # last_iframe = driver.execute_script("return window.frameElement")
+                # # pause to confirm
+                # print(f"last_iframe={last_iframe}")
+                # hit_enter_to_continue(helper=helper)
+
+                ret['Success'] = True
+
+    # elif m := re.match(r"(js.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
+    #     js_directive, js, *_ = m.groups()
+
+    #     # js_directive 
+    #     #   source: 
+    #     #       code: default to code
+    #     #       file: read js code from a file
+    #     #   target:
+    #     #       element: default to element
+    #     #       print: print the result of js
+    #     #       targets can be combined, eg, js2elementprint, js2printelement
+    #     #  
+    #     # examples
+    #     #     jsflie=filename.js
+    #     #     js=js_code
+    #     #     js2element=js_code
+    #     #     jsfile2element=filename.js
+    #     #     js2elementprint
+    #     if '2' in js_directive:
+    #         js_source, js_target = js_directive.split("2")
+    #     else:
+    #         js_source = js_directive
+    #         js_target = ""
+
+    #     if js_source == 'jsfile':
+    #         with open(js) as f:
+    #             js = f.read()
+    
+    #     print(f"locate: execute js={js}\n")
+    #     if interactive:
+    #         hit_enter_to_continue(helper=helper)
+    #     if not dryrun:
+    #         jsr = driver.execute_script(js)
+    #         if debug:
+    #             print(f"locate: jsr={pformat(jsr)}") # this is too verbose            
+    #         if 'element' in js_target:
+    #             '''
+    #             jsr can be an element or a dict with possible keys: 
+    #             element, shadowHost, iframeElement
+    #             '''
+    #             if type(jsr) == dict:
+    #                 '''
+    #                 keys in the dict
+    #                     'element' and 'iframeElement' can not be in the same dict.
+    #                     'element' and 'shadowHost' can be in the same dict.
+    #                     'shadowHosts' and 'iframeElement' can be in the same dict: shaodowHosts first, then iframe.
+    #                         this is because every 'iframe' will end a piece of js. see locator_chain_to_js_list().
+    #                         therefore, we parse shadowHosts first, to make sure shadowHosts in the front of iframe
+    #                         in domstack.
+    #                 '''
+
+    #                 # print(f"locate: jsr={pformat(jsr)}") # this is too verbose
+    #                 print("locate: jsr=", end="")
+    #                 for key in jsr:
+    #                     print(f" {key}={type(jsr[key])}")
+                    
+    #                 if "shadowHosts" in jsr and jsr['shadowHosts']:
+    #                         shadowHosts = jsr['shadowHosts']
+    #                         print(f"locate: jsr shadowHost count={len(shadowHosts)}")
+
+    #                         for shadowHost in shadowHosts:
+    #                             locator_driver = shadowHost.shadow_root
+    #                             url = get_shadowHost_info(shadowHost)
+    #                             print(f"locate: switch to shadowHost={url}")
+    #                             domstack.append({
+    #                                 'type': 'shadow',
+    #                                 'element': shadowHost,
+    #                                 'url': url,
+    #                             })
+    #                         last_element = None # we don't know what the active element is in the shadow root.
+
+    #                 if "iframeElement" in jsr:
+    #                     iframeElement = jsr['iframeElement']
+    #                     url = iframeElement.get_attribute('src')
+    #                     print(f"locate: switch to iframe={url}") 
+    #                     domstack.append({
+    #                         'type': 'iframe',
+    #                         'element': iframeElement,
+    #                         'url': url,
+    #                     })
+    #                     driver.switch_to.frame(iframeElement)
+    #                     last_element = driver.switch_to.active_element
+    #                 elif "element" in jsr:
+    #                     element = jsr['element']
+    #                     last_element = element
+                                           
+    #             elif isinstance(jsr, WebElement):
+    #                 # jsr is an instance of element
+    #                 print(f'locate: jsr={type(jsr)}')
+    #                 last_element = jsr
+    #             else:
+    #                 print(f"locate: jsr is not an element nor a dict, but {type(jsr)}")
+    #                 last_element = driver.switch_to.active_element
+    #         else:
+    #             print(f"locate: jsr={pformat(jsr)}") # this is too verbose
+    #             last_element = driver.switch_to.active_element
+
+    #         if 'print' in js_target:
+    #             print(jsr)
             
-            # https://stackoverflow.com/questions/37791547
-            # https://stackoverflow.com/questions/23408668
-            # last_iframe = driver.execute_script("return window.frameElement")
-            # # pause to confirm
-            # print(f"last_iframe={last_iframe}")
-            # hit_enter_to_continue(helper=helper)
+    #         # https://stackoverflow.com/questions/37791547
+    #         # https://stackoverflow.com/questions/23408668
+    #         # last_iframe = driver.execute_script("return window.frameElement")
+    #         # # pause to confirm
+    #         # print(f"last_iframe={last_iframe}")
+    #         # hit_enter_to_continue(helper=helper)
 
-            ret['Success'] = True
+    #         ret['Success'] = True
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
         count = int(count_str)
@@ -2955,7 +3153,8 @@ def locate(locator: str, **opt):
             '''
    
             if iframe == "iframe":
-                # url = driver.url # this driver's url 
+                # url = driver.current_url # this driver's url, the top level url of the current page.
+                # url = driver.execute_script("return document.referrer") # this is the parent url of the iframe
                 # url = driver.execute_script("return window.location.href") # this is my (current) iframe url
                 url = element.get_attribute('src') # this is child (future) iframe's url
                 if not url:
@@ -2975,7 +3174,7 @@ def locate(locator: str, **opt):
                     if dom['type'] == 'iframe':
                         # driver.switch_to.parent_frame()
                         break
-                driver.switch_to.parent_frame()   
+                driver.switch_to.parent_frame()  
             elif iframe == "top":
                 domstack.clear()
                 driver.switch_to.default_content()
@@ -2997,7 +3196,7 @@ def locate(locator: str, **opt):
             # once we switch into an iframe, we should u+se original driver to locate    
             locator_driver = driver
             driver_url = driver.current_url
-            
+
             # switch info iframe change the last element to active element.
             # this is different from when we switch into shadow root.
             last_element = driver.switch_to.active_element
@@ -3335,15 +3534,18 @@ def locate(locator: str, **opt):
             print()
             print(f"locate: dump page to {subdir}")
                 
-            # switch driver to original driver, because dump() needs to dump the whole page.
+            # 1. save current domstack
+            domstack_save = domstack.copy()
+
+            # 2. switch to top
             driver.switch_to.default_content()
             # tp_switch_to_top()
 
+            # 3. dump
             dump(**{**opt, 'output_dir': f"{subdir}"})
 
-            # # switch back to the last iframe
-            # if last_iframe:
-            #     driver.switch_to.frame(last_iframe)
+            # 4. restore domstack
+            replay_domstack(domstack_save)
 
         ret['Success'] = True
     elif m := re.match(r"we_return()$|we_return=(\d+)", locator):
@@ -3464,12 +3666,19 @@ def locate(locator: str, **opt):
                     url has mutliple meanings:
                         the url of the current page
                         the url that you go next if you click a link, eg, <a href="url">
-                    our url is the url of the current page.
+                    more accurately, we care about the following urls, from big to small:
+                        url = driver.current_url # this driver's url, the top level url of the current page.
+                        url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
+                        url = driver.execute_script("return window.location.href") # this is my (current) iframe url
+                        url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
                     '''
                     element_url = None
                     if last_element:
-                        element_url = driver.execute_script("return arguments[0].src", last_element)
-                        print(f'    element_url=element.src={element_url}')
+                        # the following are the same
+                        # element_url = driver.execute_script("return arguments[0].src", last_element)
+                        element_url = last_element.get_attribute('src')
+
+                        print(f'    element_url=element.get_attribute("src")={element_url}')
                     else:
                         print(f'    element_url is not available because last_element is None')
 
@@ -3504,6 +3713,8 @@ def locate(locator: str, **opt):
                         print(f'element_xpath=element.xpath={xpath}')
                 elif key == 'domstack':
                     print_domstack()
+                elif key == 'iframestack':
+                    print_iframestack()
                 else:
                     raise RuntimeError(f"unsupported key={key}")
     elif m := re.match(r"debug_(before|after)=(.+)", locator):
@@ -3512,7 +3723,7 @@ def locate(locator: str, **opt):
         before_after, items_string = m.groups()
         debuggers[before_after] = []
         for item in items_string.split(","):
-            if re.match(r"(url|title|timeouts|waits|tag|xpath|domstack)$", item):
+            if re.match(r"(url|title|timeouts|waits|tag|xpath|domstack|iframestack)$", item):
                 debuggers[before_after].append(f"print={item}")
             else:
                 debuggers[before_after].append(item)
