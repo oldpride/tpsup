@@ -1,0 +1,5 @@
+iframe001: "xpath=id('iframe1')" "iframe"
+iframe001.shadow001: "xpath=id('iframe1')" "iframe" "xpath=id('shadow_host')" "shadow"
+iframe001.shadow001.iframe002: "xpath=id('iframe1')" "iframe" "xpath=id('shadow_host')" "shadow" "css=#iframe1.shadow1.iframe1" "iframe"
+iframe001.shadow001.shadow002: "xpath=id('iframe1')" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow"
+iframe001.shadow001.shadow002.iframe003: "xpath=id('iframe1')" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=#iframe1.shadow1.shadow1.iframe1" "iframe"

@@ -114,6 +114,13 @@ debuggers = {
 }
 
 # dom stack, to keep track of the dom tree: iframe, shadow
+# we update domstack only in locate(), and use it track our 
+# current dom at locate() level.
+# we don't use it to track dom in other functions. 
+#     - we don't use it to track dom in dump() because in dump() the dom switch
+#       is very predictable, between child and parent, and self-contained.
+#     - we don't use it to track dom in replay_domstack() because we normally
+#       use it to replay the global domstack anyway.
 domstack = []
 
 '''
@@ -915,7 +922,6 @@ class tp_find_element_by_chains:
                         break
                 elif locator[0][0] == "iframe":
                     try:
-                        # https://www.selenium.dev/selenium/docs/api/py/webdriver_remote/selenium.webdriver.remote.switch_to.html#selenium.webdriver.remote.switch_to.SwitchTo.frame
                         driver.switch_to.frame(e)
                         locator_driver = driver
                         self.matched_numbers[i].append("0")
@@ -988,6 +994,7 @@ class tp_find_element_by_chains:
 
 def tp_get_url(url: str, **opt):
     global driver
+    global domstack
     # driver.get(url) often got the following error:
     #   selenium.common.exceptions.TimeoutException:
     #   Message: timeout: Timed out receiving message from renderer: 10.243
@@ -1028,6 +1035,9 @@ def tp_get_url(url: str, **opt):
             print("alert accepted")
         except TimeoutException:
             print("no alert")
+    
+    # clear global domstack
+    domstack.clear()
 
 
 # we will use the following patterns more than once, therefore,
@@ -1035,7 +1045,6 @@ def tp_get_url(url: str, **opt):
 def get_locator_compiled_path1():
     return re.compile(r"\s*(xpath|css|click_xpath|click_css)=(.+)",
                       re.MULTILINE | re.DOTALL)
-
 
 def get_locator_compiled_path2():
     return re.compile(
@@ -1066,9 +1075,9 @@ locator_chain_list.txt
 locator_chain_map.txt
     The most useful file!!!
 
-    the locator chain to shadow/iframe mapping. this shows how to reach to 
-    each shadow or iframe from the root or the specified element.
-    you can run ptslnm_locate with the chain on command line to locate the element.
+    the locator chain to shadow/iframe mapping. 
+    This shows how to reach to each child shadow or iframe from the scope (element, iframe, or root).
+    you can run ptslnm with the chain on command line to locate the element.
     eg
         iframe001: "xpath=/html[1]/body[1]/iframe[1]" "iframe"
         iframe001.shadow001: "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow"
@@ -1083,8 +1092,7 @@ locator_chain_map.txt
         shadow001.shadow004: "xpath=id('shadow_host')" "shadow" "css=INPUT:nth-child(6)" "shadow"
 
 screenshot_element.png
-    the screenshot of the element
-    as of 2024/12/15, it works in -js mode. non-js mode screenshot is blank.
+    the screenshot of the element, iframe, or shadow dom.
 
 shadow*.html
     the shadow dom of the page or specific element.
@@ -1179,7 +1187,7 @@ How to use these files:
             it is: #searchbox
 
         now we can locate the search box
-            $ ptslnm_locate newtab -locator "xpath=/html[@class='focus-outline-visible']/body[1]/ntp-app[1]" "shadow" "css=#searchbox"
+            $ ptslnm newtab -locator "xpath=/html[@class='focus-outline-visible']/body[1]/ntp-app[1]" "shadow" "css=#searchbox"
     
 '''
 
@@ -1200,10 +1208,18 @@ def dump(output_dir: str, element: WebElement = None, **opt):
 
         element.screenshot(f"{output_dir}/screenshot_element.png")
 
-        # dump shadow host if any. note: we cannot dump shadowRoot.
+        # dump shadow host if the element is in a shadow dorm,  eg, shadow, or iframe.shadow.
+        # but shadow.iframe doesn't count.
         source_file = f"{output_dir}/source_shadowhost.html"
-        # shadowHost = js_get_shadowhost(element)
-        shadowHost = js_get(element, "shadowhost")
+
+        # shadowHost = js_get(element, "shadowhost")
+        #  we can also get shadow host from domstack - if the last element in domstack is shadow,
+        #  then the shadow host is the last element in domstack
+        shadowHost = None
+        if domstack:
+            if domstack[-1]['type'] == 'shadow':
+                shadowHost = domstack[-1]['element']
+
         if shadowHost:
             with open(source_file, "w", encoding="utf-8") as source_fh:
                 source_fh.write(shadowHost.get_attribute('outerHTML'))
@@ -1215,21 +1231,49 @@ def dump(output_dir: str, element: WebElement = None, **opt):
             driver.page_source may not be the whole page.
                 - If driver is in iframe, driver.page_source will only show
                   the content of the iframe. (dump_scope=iframe)
+                - If we are in an iframe and wanted to see the whole page, we
+                  need to go out of all iframes using driver.switch_to.default_content()
                 - if driver is not in any iframe, driver.page_source will show
                   the whole page. (dump_scope=page)
                 - if driver enters shadowRoot, shadowRoot doesn't have page_source,
-                  therefore, we can only use driver.pagesource to get the shadow's
+                  therefore, we can only use driver.page_source to get the shadow's
                   parent iframe's source.
-            but driver.page_source will not show the content of the iframe or shadow inside it.
-            If we are in an iframe and wanted to see the whole page, we need to go out of iframe
-            using driver.switch_to.default_content()
+                - driver.page_source will not show the content of the iframe or shadow inside it.        
             '''
             source_fh.write(driver.page_source)
            
-            # locator_dirver.page_source doesn't work, error:
-            #    AttributeError: 'ShadowRoot' object has no attribute 'page_source'
-            # source_fh.write(locator_driver.page_source)
-        source_fh.close()
+        # driver.save_screenshot(f"{output_dir}/screenshot.png")
+
+        # check if we are in an iframe. if yes, we get the iframe element, and then screenshot the element
+        # otherwise, we screenshot the whole page
+
+        # find the current frame's iframe element, if any
+        # iframeelement = js_get(None, "iframeelement")
+        iframeelement = None
+        for item in reversed(domstack):
+            if item['type'] == 'iframe':
+                iframeelement = item['element']
+                print(f"dump: we are in iframe url = {item['url']}")
+                break
+
+        if iframeelement:
+            # we are in an iframe, screenshot the iframe element, but first we need to switch to the iframe
+            #    1. go to parent frame
+            #    2. screenshot this iframe
+            #    3. replay the domstack
+            # we don't update domstack because we quickly restore the current state.
+
+            # go to parent frame
+            driver.switch_to.parent_frame()
+
+            # screenshot the iframe
+            iframeelement.screenshot(f"{output_dir}/screenshot_iframe.png")
+
+            # restore driver state but no need to restore domstack because we never changed it
+            replay_domstack(domstack)
+        else:
+            # we are not in any iframe, screenshot the whole page
+            driver.save_screenshot(f"{output_dir}/screenshot_page.png")
 
     if element is None:
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
@@ -1434,14 +1478,15 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
     dump_state['list']['locator_chain'].write(locator_chain + "\n")
 
     if type == 'iframe':
+        # diagarm: parent iframe -> element (child iframe) -> grandchild iframe/shadow.
         # we need to 
-        #   1. go into the iframe content (context)
-        #   2. dump the iframe content
-        #   3. recursively dump the child iframes and shadows
-        #   4. go back 1 level, to the parent iframe content (context)
+        #   1. go into the element (child iframe) content (context)
+        #   2. dump the child iframe content
+        #   3. recursively dump the grandchild iframes and shadows
+        #   4. go back up 1 level, to the parent iframe content (context) - ie, get out of the child iframe
+        # this part we don't update domstack because the dom switch is predictable and restored at the end.
 
         # 1. go into the iframe content (context)
-        # https://www.selenium.dev/selenium/docs/api/py/webdriver_remote/selenium.webdriver.remote.switch_to.html#selenium.webdriver.remote.switch_to.SwitchTo.frame
         driver.switch_to.frame(element)
         # tp_switch_to_frame(element)
 
@@ -1460,22 +1505,8 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
         for e in driver.find_elements(By.XPATH, "//*"):
             dump_deeper(e, dump_state, 'shadow', **opt)
 
-        # 4. go back 1 level, to the parent iframe content (context)
+        # 4. go back up 1 level, to the parent iframe content (context) - ie, get out of the child iframe
         driver.switch_to.parent_frame()
-
-        # don't forget to switch back to main web page.
-        # driver.switch_to.default_content()
-        # tp_switch_to_top()
-
-        # DON'T switch back to the last iframe, because we will switch back in the caller, locate().
-        # If we do it here, then the caller's switch_to.frame(last_iframe) will fail with error:
-        #     element is not found.
-        # if last_iframe:
-        #     driver.switch_to.frame(last_iframe)
-
-        #     print("driver.switch_to.frame(last_iframe) worked. hit enter to continue")
-        #     hit_enter_to_continue()
- 
     elif type == 'shadow':
         # shadow_host = element
         shadow_driver = element.shadow_root
@@ -1535,6 +1566,9 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
             #     # continue
             # else:
             #     seen[e.id] = 1
+
+            # e may or may not be a shadow host. 
+            # dump_deeper will figure it out whether it is a shadow host or not.
             dump_deeper(e, dump_state, 'shadow', **opt)
 
     # restore the locator chains to the previous iframe/shadow
@@ -2695,24 +2729,6 @@ def tp_switch_to_frame(element: WebElement, **opt):
         'tp_iframe' gives correct url and title because tp_iframe will force load the url after it caught the exception.
         however, if we disable the exception using "-af" (allow file access), then 'tp_iframe' stops working.
         also, even 'iframe' doesn't give correct url and title, it still can find the element in the iframe.
-
-    selenium.webdriver.switch_to.frame() is implemented in
-        sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/switch_to.py: self._driver.execute(Command.SWITCH_TO_FRAME ...
-        sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/remote_connection.py: Command.SWITCH_TO_FRAME: ("POST", "/session/$sessionId/frame"),
-        therefore, the real implementation is in chrome.exe.
-        Chrome has the same user interface functionality as Chromium, but with a Google-branded color scheme. 
-        Unlike Chromium, Chrome is not open-source.
-        Therefore, we can look at chromium source code to see how it is implemented.
-        The REST API source code is under https://github.com/chromium/chromium/blob/main/chrome/test/chromedriver/session.cc
-        This seems to be implemented in C++, not in JavaScript. 
-            void Session::SwitchToSubFrame(const std::string& frame_id,
-                const std::string& chromedriver_frame_id) {
-                std::string parent_frame_id;
-                if (!frames.empty())
-                    parent_frame_id = frames.back().frame_id;
-                frames.push_back(FrameInfo(parent_frame_id, frame_id, chromedriver_frame_id));
-                SwitchFrameInternal(false);
-            }   
     '''
     js = '''
 let e = arguments[0];
@@ -2996,114 +3012,6 @@ def locate(locator: str, **opt):
 
                 ret['Success'] = True
 
-    # elif m := re.match(r"(js.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
-    #     js_directive, js, *_ = m.groups()
-
-    #     # js_directive 
-    #     #   source: 
-    #     #       code: default to code
-    #     #       file: read js code from a file
-    #     #   target:
-    #     #       element: default to element
-    #     #       print: print the result of js
-    #     #       targets can be combined, eg, js2elementprint, js2printelement
-    #     #  
-    #     # examples
-    #     #     jsflie=filename.js
-    #     #     js=js_code
-    #     #     js2element=js_code
-    #     #     jsfile2element=filename.js
-    #     #     js2elementprint
-    #     if '2' in js_directive:
-    #         js_source, js_target = js_directive.split("2")
-    #     else:
-    #         js_source = js_directive
-    #         js_target = ""
-
-    #     if js_source == 'jsfile':
-    #         with open(js) as f:
-    #             js = f.read()
-    
-    #     print(f"locate: execute js={js}\n")
-    #     if interactive:
-    #         hit_enter_to_continue(helper=helper)
-    #     if not dryrun:
-    #         jsr = driver.execute_script(js)
-    #         if debug:
-    #             print(f"locate: jsr={pformat(jsr)}") # this is too verbose            
-    #         if 'element' in js_target:
-    #             '''
-    #             jsr can be an element or a dict with possible keys: 
-    #             element, shadowHost, iframeElement
-    #             '''
-    #             if type(jsr) == dict:
-    #                 '''
-    #                 keys in the dict
-    #                     'element' and 'iframeElement' can not be in the same dict.
-    #                     'element' and 'shadowHost' can be in the same dict.
-    #                     'shadowHosts' and 'iframeElement' can be in the same dict: shaodowHosts first, then iframe.
-    #                         this is because every 'iframe' will end a piece of js. see locator_chain_to_js_list().
-    #                         therefore, we parse shadowHosts first, to make sure shadowHosts in the front of iframe
-    #                         in domstack.
-    #                 '''
-
-    #                 # print(f"locate: jsr={pformat(jsr)}") # this is too verbose
-    #                 print("locate: jsr=", end="")
-    #                 for key in jsr:
-    #                     print(f" {key}={type(jsr[key])}")
-                    
-    #                 if "shadowHosts" in jsr and jsr['shadowHosts']:
-    #                         shadowHosts = jsr['shadowHosts']
-    #                         print(f"locate: jsr shadowHost count={len(shadowHosts)}")
-
-    #                         for shadowHost in shadowHosts:
-    #                             locator_driver = shadowHost.shadow_root
-    #                             url = get_shadowHost_info(shadowHost)
-    #                             print(f"locate: switch to shadowHost={url}")
-    #                             domstack.append({
-    #                                 'type': 'shadow',
-    #                                 'element': shadowHost,
-    #                                 'url': url,
-    #                             })
-    #                         last_element = None # we don't know what the active element is in the shadow root.
-
-    #                 if "iframeElement" in jsr:
-    #                     iframeElement = jsr['iframeElement']
-    #                     url = iframeElement.get_attribute('src')
-    #                     print(f"locate: switch to iframe={url}") 
-    #                     domstack.append({
-    #                         'type': 'iframe',
-    #                         'element': iframeElement,
-    #                         'url': url,
-    #                     })
-    #                     driver.switch_to.frame(iframeElement)
-    #                     last_element = driver.switch_to.active_element
-    #                 elif "element" in jsr:
-    #                     element = jsr['element']
-    #                     last_element = element
-                                           
-    #             elif isinstance(jsr, WebElement):
-    #                 # jsr is an instance of element
-    #                 print(f'locate: jsr={type(jsr)}')
-    #                 last_element = jsr
-    #             else:
-    #                 print(f"locate: jsr is not an element nor a dict, but {type(jsr)}")
-    #                 last_element = driver.switch_to.active_element
-    #         else:
-    #             print(f"locate: jsr={pformat(jsr)}") # this is too verbose
-    #             last_element = driver.switch_to.active_element
-
-    #         if 'print' in js_target:
-    #             print(jsr)
-            
-    #         # https://stackoverflow.com/questions/37791547
-    #         # https://stackoverflow.com/questions/23408668
-    #         # last_iframe = driver.execute_script("return window.frameElement")
-    #         # # pause to confirm
-    #         # print(f"last_iframe={last_iframe}")
-    #         # hit_enter_to_continue(helper=helper)
-
-    #         ret['Success'] = True
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
         count = int(count_str)
@@ -3173,22 +3081,45 @@ def locate(locator: str, **opt):
               AttributeError: 'ShadowRoot' object has no attribute 'switch_to'
             Therefore, we use (original) driver
 
-            the selenium.webdriver.switch_to.frame() is doesn't work perfectly
-                for example, it doesn't update
+            the selenium.webdriver.switch_to.frame() will not work for cross-origin iframe.
+            neither will it work for file url, eg, file:///C:/Users/... by default.
+            It doesn't throw exception, but it doesn't update
                      driver.current_url
                      driver.title
+            to make it work for file url, we need to set "-af" (allow file access) in ptslnm command line.
             to test
-                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 print=url,title "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" print=url,title "xpath=id('shadow_host')"
-                ptslnm url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 print=url,title "xpath=/html[1]/body[1]/iframe[1]" "iframe" print=url,title "xpath=id('shadow_host')" 
-            the ending url and title are different.
-            'iframe' gave (wrong)
-                file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
-                driver.title=Iframe over shadow
-            'tp_iframe' gave (correct)
-                file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html
-                driver.title=child page
-            the reason is that 'iframe' only works on http url, not on file:/// url.
-            'tp_iframe' works on both because tp_iframe will force load the url after it caught the exception.
+                ptslnm     url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 debug=iframestack "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')"
+                ptslnm -af url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 debug=iframestack "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" 
+            
+                the first errors out: Failed to read a named property 'frameElement' from 'Window': 
+                                      Blocked a frame with origin "null" from accessing a cross-origin frame."
+                the second works.
+
+            'tp_iframe' was meant to handle cross-origin page, including file url without using "-af".
+                tp_iframe will force load the child iframe url after it caught the cross-origin exception.
+                but this ruins the page-hierarchy (domstack) because it uses the child iframe url as root url.
+                this may not be a concern if our locator chain is one way from parent to child. (most time it is).
+                therefore, tp_iframe is not recommended; we may use it only as a last resort.
+            to test
+                ptslnm     url="file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 debug=iframestack "xpath=/html[1]/body[1]/iframe[1]" "tp_iframe" print=url,title "xpath=id('shadow_host')"         
+
+            selenium.webdriver.switch_to.frame() is implemented in
+                sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/switch_to.py: self._driver.execute(Command.SWITCH_TO_FRAME ...
+                sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/remote_connection.py: Command.SWITCH_TO_FRAME: ("POST", "/session/$sessionId/frame"),
+                therefore, the real implementation is in chrome.exe.
+                Chrome has the same user interface functionality as Chromium, but with a Google-branded color scheme. 
+                Unlike Chromium, Chrome is not open-source.
+                Therefore, we can look at chromium source code to see how it is implemented.
+                The REST API source code is under https://github.com/chromium/chromium/blob/main/chrome/test/chromedriver/session.cc
+                This seems to be implemented in C++, not in JavaScript. 
+                    void Session::SwitchToSubFrame(const std::string& frame_id,
+                        const std::string& chromedriver_frame_id) {
+                        std::string parent_frame_id;
+                        if (!frames.empty())
+                            parent_frame_id = frames.back().frame_id;
+                        frames.push_back(FrameInfo(parent_frame_id, frame_id, chromedriver_frame_id));
+                        SwitchFrameInternal(false);
+                    }   
             '''
    
             if iframe == "iframe":
@@ -3520,15 +3451,12 @@ def locate(locator: str, **opt):
             all:     dump all scopes: 'element', 'dom', 'page', into separate subdirs.
 
             for example, when we run 
-            ptslnm_locate -rm -debug "file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "C:/Users/tian/dumpdir2" xpath=//iframe[1] iframe "xpath=//body/p"
+            ptslnm -rm -debug "file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "C:/Users/tian/dumpdir2" xpath=//iframe[1] iframe "xpath=//body/p"
             the chain is: xpath=//iframe[1] iframe "xpath=//body/p"
 
             if we dump_element, we dump the last element, which is the <p> element. source.html only contains the <p> element.
             if we dump_dom, we dump the shadow dom of the <p> element. source.html only contains the iframe dom which contains the <p> element.
             if we dump_all, we dump the whole page. source.html contains the whole page.
-
-            dump_element and dump_dom are reliable because they are not affected by the driver's state (in iframe/shadow or not).
-            dump_page is unreliable or have side effect because it needs to switch driver to the original driver.
         '''
 
         # output_dir can be from both **opt and step, to avoid the multiple-values error,
@@ -3576,15 +3504,16 @@ def locate(locator: str, **opt):
             # 1. save current domstack
             domstack_save = domstack.copy()
 
-            # 2. switch to top
+            # 2. switch to top - clear domstack
             driver.switch_to.default_content()
-            # tp_switch_to_top()
+            domstack.clear()
 
-            # 3. dump
+            # 3. dump - dump() will not change domstack
             dump(**{**opt, 'output_dir': f"{subdir}"})
 
-            # 4. restore domstack
+            # 4. restore driver dom and domstack
             replay_domstack(domstack_save)
+            domstack = domstack_save
 
         ret['Success'] = True
     elif m := re.match(r"we_return()$|we_return=(\d+)", locator):
@@ -3756,10 +3685,13 @@ def locate(locator: str, **opt):
                     print_iframestack()
                 else:
                     raise RuntimeError(f"unsupported key={key}")
-    elif m := re.match(r"debug_(before|after)=(.+)", locator):
+    elif m := re.match(r"debug(_before|_after)*=(.+)", locator):
         # items are locators and separated by comma
         ret['Success'] = True
         before_after, items_string = m.groups()
+        if not before_after:
+            before_after = '_after' # default to after
+        before_after = before_after[1:] # remove the underscore
         debuggers[before_after] = []
         for item in items_string.split(","):
             if re.match(r"(url|title|timeouts|waits|tag|xpath|domstack|iframestack)$", item):
@@ -3781,19 +3713,6 @@ def get_shadowHost_info(shadowHost: WebElement):
     if not url:
         url = shadowHost.tag_name
     return url
-
-# def js_get_shadowhost(element: WebElement, **opt):
-#     # https://stackoverflow.com/questions/27453617
-#     js = '''
-#     var root = arguments[0].getRootNode();
-#     if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && root.host != undefined) {
-#         return root.host;
-#     } else {
-#         return null;
-#     }
-#     '''
-#     return driver.execute_script(js, element)
-
 
 def run_block(blockstart: str, negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is

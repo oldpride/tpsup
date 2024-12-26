@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import os
+import re
 import shutil
 import time
 from typing import Union
@@ -88,6 +89,11 @@ our_cfg = {
         },
     },
 
+    'test_example': f'''
+    ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p -dump "{HOME}/dumpdir" -scope all -rm
+    diff -r ~/dumpdir {TPP3}/expected/ptslnm_test1/dumpdir
+    ''',
+
     'usage_example': f'''
     - To run a local server, 
         cd "{TPP3}"
@@ -105,7 +111,7 @@ our_cfg = {
         {{{{prog}}}} any -cq
 
     - has shadows, no iframes, simple pages to test shadows
-    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" -rm # without locators
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" -scope page -rm # without locators, dump whole page
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" -dump "{HOME}/dumpdir" "xpath=id('shadow_host')" "shadow" -rm # with locators
 
     - has iframes, no shadows
@@ -180,24 +186,24 @@ our_cfg = {
 }
 
 def pre_batch(all_cfg, known, **opt):
-    debug = opt.get('debug', 0)
-    if known['REMAININGARGS'] and (known['REMAININGARGS'][0] == 'fe' or known['REMAININGARGS'][0] == 'file_example'):
-        # replace http with file in all_cfg
-        if debug:
-            print(f'before usage_example={all_cfg['usage_example']}')
+    # debug = opt.get('debug', 0)
+    # if known['REMAININGARGS'] and (known['REMAININGARGS'][0] == 'fe' or known['REMAININGARGS'][0] == 'file_example'):
+    #     # replace http with file in all_cfg
+    #     if debug:
+    #         print(f'before usage_example={all_cfg['usage_example']}')
         
-        # print(pformat(known))
-        # prog = os.path.basename(__file__).replace('_cfg_batch.py', '') # this gave batch.py
-        prog = 'ptslnm'
-        usage_example = all_cfg['usage_example'].replace(HTTP_BASE, FILE_BASE).replace("{{prog}}", f'{prog} -af')
-        print()
-        print(usage_example)
-        exit(0)
+    #     # print(pformat(known))
+    #     # prog = os.path.basename(__file__).replace('_cfg_batch.py', '') # this gave batch.py
+    #     prog = 'ptslnm'
+    #     usage_example = all_cfg['usage_example'].replace(HTTP_BASE, FILE_BASE).replace("{{prog}}", f'{prog} -af')
+    #     print()
+    #     print(usage_example)
+    #     exit(0)
 
-    if known['REMAININGARGS'] and known['REMAININGARGS'][0] == 'locators':
-        for line in tpsup.seleniumtools.get_defined_locators():
-            print(line)
-        exit(0)
+    # if known['REMAININGARGS'] and known['REMAININGARGS'][0] == 'locators':
+    #     for line in tpsup.seleniumtools.get_defined_locators():
+    #         print(line)
+    #     exit(0)
 
     # run tpsup.seleniumtools.pre_batch() to set up driver
     tpsup.seleniumtools.pre_batch(all_cfg, known, **opt)
@@ -259,4 +265,23 @@ def code(all_cfg, known, **opt):
     result = tpsup.seleniumtools.follow(steps, **opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
+    caller = all_cfg.get('caller', None)
+
+    # if user enter 'example', then we print out usage_example and quit
+    if re.match(r'example$', input[0]):
+        print(all_cfg.get('usage_example', '').replace("{{prog}}", caller))
+        exit(0)
+
+    if re.match(r'(file_example|fe)$', input[0]):
+        print(all_cfg.get('usage_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
+        exit(0)
+    
+    if re.match(r'^test$', input[0]):
+        print(all_cfg.get('test_example', '').replace("{{prog}}", caller))
+        exit(0)
+
+    if re.match(r'(test_example|ft)$', input[0]):
+        print(all_cfg.get('test_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
+        exit(0)
+
     return {'REMAININGARGS': input}

@@ -1,0 +1,5 @@
+iframe001: id('iframe1')
+iframe001.shadow001: id('shadow_host')
+iframe001.shadow001.iframe002: /iframe[@id='iframe1.shadow1.iframe1']
+iframe001.shadow001.shadow002: /div[@id='nested_shadow_host']
+iframe001.shadow001.shadow002.iframe003: /iframe[@id='iframe1.shadow1.shadow1.iframe1']

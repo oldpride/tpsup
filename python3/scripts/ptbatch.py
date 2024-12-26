@@ -45,6 +45,7 @@ def usage(message: str = None, **opt):
 
     detail = all_cfg.get('usage_detail', "")
     example = all_cfg.get('usage_example', None)
+    test_example = all_cfg.get('test_example', None)
 
     if detail:
         detail = resolve_scalar_var_in_string(detail, {'prog': usage_caller}, **opt)
@@ -289,6 +290,7 @@ for k in all_cfg.keys():
         print(
             f"overriding {k} from '{all_cfg[k]}' to '{cmdline_value}'", file=sys.stderr)
         all_cfg[k] = cmdline_value
+all_cfg['caller'] = caller
 # the override waterfall is:
 #   1. command-line switches
 #   2. app_cfg.py

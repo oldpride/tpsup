@@ -270,6 +270,17 @@ def parse_input_default_way(input: Union[str, List], all_cfg: dict, **opt):
         input_array = input
     else:
         input_array = shlex.split(input)
+
+    # if input is 'example', then print usage_example
+    if input_array[0] == 'example':
+        print(all_cfg.get('usage_example', ''))
+        exit(0)
+    
+    # if input is 'test', then print test_example
+    if input_array[0] == 'test':
+        print(all_cfg.get('test_example', ''))
+        exit(0)
+
     known = {}
 
     for pair in (input_array):
