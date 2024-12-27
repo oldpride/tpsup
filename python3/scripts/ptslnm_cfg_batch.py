@@ -90,6 +90,7 @@ our_cfg = {
     },
 
     'test_example': f'''
+    the expected results are created wehn using http url to test.
     ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p -dump "{HOME}/dumpdir" -scope all -rm
     diff -r ~/dumpdir {TPP3}/expected/ptslnm_test1/dumpdir
     ''',
@@ -103,6 +104,13 @@ our_cfg = {
       to print file-url example
         {{{{prog}}}} fe
         {{{{prog}}}} file_example
+      to print test example
+        {{{{prog}}}} test
+        {{{{prog}}}} test_example
+      to print test example with file url   
+        {{{{prog}}}} ft
+        {{{{prog}}}} file_test
+
 
     - To see all defineded locators
         {{{{prog}}}} locators
@@ -171,7 +179,15 @@ our_cfg = {
 
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" we_return end_if end_while
 
+    - test parallel steps
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "xpath=//iframe[1],css=p" print=html
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "css=p,xpath=//iframe[1]" print=html
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "dictfile={TPP3}/ptslnm_test_dict_parallel.py" debug=domstack,iframestack
     
+    - test chains steps
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "dictfile={TPP3}/ptslnm_test_dict_chains.py" debug=domstack,iframestack print=tag
+    
+
     notes for windows cmd.exe, 
         double quotes cannot be escaped, 
         single quote is just a letter, cannot do grouping. 
@@ -276,12 +292,17 @@ def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
         print(all_cfg.get('usage_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
         exit(0)
     
-    if re.match(r'^test$', input[0]):
+    if re.match(r'^(test|test_example)$', input[0]):
         print(all_cfg.get('test_example', '').replace("{{prog}}", caller))
         exit(0)
 
-    if re.match(r'(test_example|ft)$', input[0]):
+    if re.match(r'(file_test|ft)$', input[0]):
         print(all_cfg.get('test_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
+        exit(0)
+
+    if re.match(r'locators$', input[0]):
+        for line in tpsup.seleniumtools.get_defined_locators():
+            print(line)
         exit(0)
 
     return {'REMAININGARGS': input}

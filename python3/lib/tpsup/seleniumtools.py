@@ -811,49 +811,46 @@ class tp_find_element_by_paths:
 
 class tp_find_element_by_chains:
     # check whether one of the chains matches any element
-    def __init__(self, chains: list, **opt):
+    def __init__(self, chains2: list, **opt):
         self.opt = opt
         self.verbose = opt.get('verbose', 0)
-        self.matched_paths = []
-        self.matched_numbers = []
-
-        # this didn't work. error: IndexError: list assignment index out of range
-        # i=0
-        # for chain in chains:
-        #     self.matched_paths[i] = []
-        #     self.matched_numbers[i] = []
-        #     i +=1
+        self.matched_so_far = [] # this saves the matched path so far, for debugging purpose.
 
         self.chains = []
-        for chain in chains:
-            self.matched_paths.append([])
-            self.matched_numbers.append([])
+        for chain in chains2:
+            self.matched_so_far.append([])
+            # self.matched_numbers.append([])
             self.chains.append([])
-
-        # parse chains
+        
+        # parse user specified 'chains2' and save it in 'self.chains'
+        #    we parse it in _init__ so that we don't have to parse it in __call__ every time.
         #
-        #  example: convert ONE chain from
-        #
-        # [
-        #     'xpath=/html/body[1]/ntp-app[1]', 'shadow', 'css=#mostVisited', 'shadow',
-        #     '''
-        #     css=#removeButton2,
-        #     css=#actionMenuButton
-        #     ''',
-        # ],
-        #
-        # into
-        #
-        # [
-        #     [['xpath', '/html/body[1]/ntp-app[1]']], [['shadow']] , [['css', '#mostVisited']], [['shadow']] ,
-        #     [['css', '#removeButton2'], ['css', '#actionMenuButton']],
-        # ]
-        for i in range(0, len(chains)):
-            chain = chains[i]
+        # example: convert ONE chain (from user specified 'chains2')
+        # from 
+        #   [
+        #     'xpath=/html/body[1]/ntp-app[1]', 
+        #     'shadow', 
+        #     'css=#mostVisited',
+        #     'shadow',
+        #     'css=#removeButton2,css=#actionMenuButton',
+        #   ],
+        # into ONE chain in 'self.chains'.
+        #   [
+        #     [['xpath', '/html/body[1]/ntp-app[1]']],
+        #     [['shadow']], 
+        #     [['css', '#mostVisited']], 
+        #     [['shadow']] ,
+        #     [['css', '#removeButton2'], ['css', '#actionMenuButton']], # this is the reason we need extra brackets.
+        #   ]
+        for i in range(0, len(chains2)):
+            chain = chains2[i]
             for locator in chain:
                 if (locator == "shadow") or (locator == "iframe"):
                     self.chains[i].append([[locator]])
                 elif m1 := get_locator_compiled_path1().match(locator):
+                    # locator => path_type, path_string_and extra
+                    # 'xpath=/html/body[1]/ntp-app[1]' => ['xpath', '/html/body[1]/ntp-app[1]']
+                    # 'css=#removeButton2,css=#actionMenuButton' => ['css', '#removeButton2,css=#actionMenuButton']                                 
                     ptype, paths_string = m1.groups()
                     # default to strip blanks: space, tab, newline ...
                     paths_string = paths_string.strip()
@@ -890,29 +887,33 @@ class tp_find_element_by_chains:
 
     def __call__(self, driver):
         e: WebElement = None
-
+        
         if self.verbose:
             print(f'parsed chains = {pformat(self.chains)}')
 
-        for i in range(0, len(self.chains)):
-            chain = self.chains[i]
+        for chain_idx in range(0, len(self.chains)):
+            # make sure we start from the same domstack every time.
+            if self.verbose:
+                print("replay domstack")
+            replay_domstack(domstack)
+
+            chain = self.chains[chain_idx]
             if self.verbose:
                 print(f'testing chain = {pformat(chain)}')
 
             locator_driver = driver
-            self.matched_numbers[i].clear()
-            self.matched_paths[i].clear()
+            self.matched_so_far[chain_idx].clear()
 
             found_chain = True
 
-            for locator in chain:
+            for locator_idx in range(0, len(chain)):
+                locator= chain[locator_idx]
                 if self.verbose:
                     print(f'testing locator = {pformat(locator)}')
                 if locator[0][0] == "shadow":
                     try:
                         locator_driver = e.shadow_root  # shadow_driver is a webdriver type
-                        self.matched_numbers[i].append("0")
-                        self.matched_paths[i].append(locator[0][0])
+                        self.matched_so_far[chain_idx].append(locator[0][0])
                         if self.verbose:
                             print(f"found {locator[0][0]}")
                     except Exception as ex:
@@ -924,8 +925,7 @@ class tp_find_element_by_chains:
                     try:
                         driver.switch_to.frame(e)
                         locator_driver = driver
-                        self.matched_numbers[i].append("0")
-                        self.matched_paths[i].append(locator[0][0])
+                        self.matched_so_far[chain_idx].append(locator[0][0])
                         if self.verbose:
                             print(f"found {locator[0][0]}")
                     except Exception as ex:
@@ -936,41 +936,46 @@ class tp_find_element_by_chains:
                 else:
                     type_paths = locator
                     if self.verbose:
-                        print(f"paths = {pformat(type_paths)}")
+                        print(f"type_paths = {pformat(type_paths)}")
 
                     one_parallel_path_matched = False
-                    j = 0
-                    for ptype, path in type_paths:
+                    for type_path in type_paths:
+                        ptype, path = type_path # path_type and path
                         if self.verbose:
                             print(f'testing {ptype}={path}')
                         if "xpath" in ptype:  # python's string.contains() method
                             try:
                                 e = locator_driver.find_element(By.XPATH, path)
                             except Exception:
-                                j += 1
+                                # j += 1
+                                if self.verbose:
+                                    print(f"not found xpath {ptype}={path}")
                                 continue
                         elif "css" in ptype:
                             try:
                                 e = locator_driver.find_element(
                                     By.CSS_SELECTOR, path)
                             except Exception:
-                                j += 1
+                                # j += 1
+                                if self.verbose:
+                                    print(f"not found css {ptype}={path}")
                                 continue
                         else:
                             raise RuntimeError(
                                 f"unsupported path type={ptype}")
 
-                        self.matched_numbers[i].append(f"{j}")
-                        self.matched_paths[i].append(f"{ptype}={path}")
+                        self.matched_so_far[chain_idx].append(f"{ptype}={path}")
                         if self.verbose:
                             print(f'found {ptype}="{path}"')
                         one_parallel_path_matched = True
                         break
                     if self.verbose:
                         print(
-                            f'one_parallel_path_matched={pformat(one_parallel_path_matched)}')
+                            f'one_parallel_path_matched={one_parallel_path_matched}')
                     if not one_parallel_path_matched:
                         found_chain = False
+                        if self.verbose:
+                            print(f"matched so far = {pformat(self.matched_so_far[chain_idx])}")
                         break
 
                 if not e:
@@ -978,14 +983,13 @@ class tp_find_element_by_chains:
                     e = driver.switch_to.active_element
                     if not e:
                         raise RuntimeError(f'cannot find active element')
-                self.current_matched_path = self.matched_paths[i].copy
+                self.current_matched_path = self.matched_so_far[chain_idx].copy
 
             if found_chain:
                 # e.tpdata = {"ptype" : ptype, "path" : path, "position" : i}
 
                 e.tpdata = {
-                    "matched_chain": self.matched_paths[i].copy(),
-                    "position": f"{i}." + ".".join(self.matched_numbers[i])
+                    "position": chain_idx
                 }  # monkey patch for convenience
 
                 return e
@@ -1052,18 +1056,22 @@ def get_locator_compiled_path2():
         re.MULTILINE | re.DOTALL)
 
 dump_readme = '''
-element/
-    directory for element dump
 
-dom/
-    directory for dom dump
+the dump() function aims to dump everything that you can find in chrome devtools source tab.
+
+element/
+    directory for dumping the current element
+
+iframe/
+    directory for dumping the current iframe that contains the element.
+    there could be shadow doms between the element and the iframe.
 
 page/
-    directory for page dump
+    directory for dumping the whole page
 
 iframe*.html
     the iframe html of the page (dump all) or specified element (dump element)
-    note that when there is a shadow dom, the iframe*.html doesn't show the shadow dom;
+    note that when there is a shadow dom, the iframe*.html doesn't show the shadow dom's content;
     you need to look at shadow*.html for that.
 
 locator_chain_list.txt
@@ -1092,28 +1100,38 @@ locator_chain_map.txt
         shadow001.shadow004: "xpath=id('shadow_host')" "shadow" "css=INPUT:nth-child(6)" "shadow"
 
 screenshot_element.png
-    the screenshot of the element, iframe, or shadow dom.
+screenshot_iframe.png
+screenshot_shadowhost.png
+screenshot_page.png
+    the screenshot of the element, iframe, shadow, or the whole page.
+    screenshot_element.png and screenshot_shadowhost.png are in the element/ directory.
+    screenshot_shadowhost.png is created only if the element is under a shadow dom and there 
+    no iframe in between.
 
 shadow*.html
     the shadow dom of the page or specific element.
     it is the HTML of the shadow host.
 
-source.html
-    the source html specific to dump scope: element, or dom, or the whoe page: 
-        if dump_element, this will be the html of the element.
-        if dump_dom, this will be the html of the innest iframe dom that contains the element.
-                     we cannot get the innest shadow dom html because shadowRoot (shadow driver) 
-                     has no page_source attribute.
-        if dump_all, this will be the whole page.
+source_element.html
+source_iframe.html
+source_shadowhost.html
+source_page.html
+    the source html specific to dump scope: element, iframe, shadow, or page: 
+        if scope is element, dump to source_element.html and source_shadowhost.html if the element
+            is under a shadow and there is no iframe in between.
+        if scope is iframe, dump to source_iframe.html
+            this will be the html of the innest iframe dom that contains the element.
+            we cannot get the innest shadow dom html because shadowRoot (shadow driver) 
+            has no page_source attribute. we can only get shadow dom's (shadow root) 
+            shadowhost's html.
+        if scope is page, dump to source_page.html
 
-    dump_element and dump_dom are reliable because they are not affected by the driver's state (in iframe/shadow or not).
-    dump_page is unreliable or have side effect because it needs to switch driver to the original driver.
+    note that when there is a child iframe/shadow dom, the source*.html doesn't show 
+    the child iframe/shadow dom's full content.
+    you need to look at iframe*.html and shadow*.html for that.
 
-    note that when there is a shadow dom, the source.html doesn't show the shadow dom's full content.
-    you need to look at shadow*.html for that.
-
-    normally source.html will be different from the original html because source.html contains
-    dynamic content, such as the content of shadow dom or js generated content.
+    source.html will be different from the original html also because source.html contains
+    dynamic content, such as js generated content.
 
     you will see see some tags are neither from the original html nor from the js that you provided.
     for example: 
@@ -1223,6 +1241,7 @@ def dump(output_dir: str, element: WebElement = None, **opt):
         if shadowHost:
             with open(source_file, "w", encoding="utf-8") as source_fh:
                 source_fh.write(shadowHost.get_attribute('outerHTML'))
+            shadowHost.screenshot(f"{output_dir}/screenshot_shadowhost.png")
     else:
         # this part takes care of dump_scope=iframe or dump_scope=page
         source_file = f"{output_dir}/source.html"
@@ -2654,7 +2673,7 @@ def locate_dict(step: dict, **opt):
                 element = driverwait.until(finder)
             except Exception as ex:
                 print(f"locate failed. {ex}")
-                print(f"matched_paths = {pformat(finder.matched_paths)}")
+                print(f"matched_paths = {pformat(finder.matched_so_far)}")
 
             # restore implicit wait
             driver.implicitly_wait(wait_seconds)
@@ -2666,6 +2685,8 @@ def locate_dict(step: dict, **opt):
                 # Found. then find which path found the element
                 tpdata = getattr(element, 'tpdata', None)
                 path_index = tpdata['position']
+                print(f"locate_dict: found path_index={path_index} (starting from 0)")
+
                 path = paths[path_index]
 
                 if 'Success' in path:
@@ -3011,7 +3032,43 @@ def locate(locator: str, **opt):
                 # hit_enter_to_continue(helper=helper)
 
                 ret['Success'] = True
+    elif m := re.match(r"(dict)(file)?(.*)?=(.+)", locator, re.MULTILINE | re.DOTALL):
+        '''
+        'dict' is python code of dict locator. see locate_dict() for details.
+        examples:
+            dict="{
+                'type': 'parallel',
+                'action': {
+                    'paths' : [
+                        {
+                            'locator' : 'xpath=//iframe[1]',
+                            'Success': 'iframe',
+                        },
+                        {
+                            'locator' : 'css=p',
+                            'Success': 'print=html',
+                        },
+                    ],
+                }
+            }",
 
+            dictfile=ptslnm_test_dict_parallel.py
+        '''
+        lang, file, target, code, *_ = m.groups()
+
+        if file:
+            print(f"locate: read {lang} from file {code}")
+            with open(code) as f:
+                code = f.read()
+
+        print(f"locate: run {lang} code \n{code}")
+
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            dict_locator = eval(code)[0]
+            print(f"locate: dict_locator=\n{pformat(dict_locator)}")
+            ret = locate_dict(dict_locator, **opt)
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
         count = int(count_str)
@@ -3602,7 +3659,7 @@ def locate(locator: str, **opt):
             "therefore, we need to add extra sleep time after page is loaded. "
             "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
             '''
-    elif m := re.match(r"print=(.+)", locator):
+    elif m := re.match(r"print=(timeouts|waits|title|url|tag|xpath|domstack|iframestack|html)", locator):
         ret['Success'] = True
         keys_string = m.groups()[0]
         keys = keys_string.split(",")
@@ -3683,8 +3740,12 @@ def locate(locator: str, **opt):
                     print_domstack()
                 elif key == 'iframestack':
                     print_iframestack()
-                else:
-                    raise RuntimeError(f"unsupported key={key}")
+                elif key == 'html':
+                    if last_element:
+                        html = last_element.get_attribute('outerHTML')
+                        print(f'element_html=element.outerHTML={html}')
+                    else:
+                        print(f'element_html is not available because last_element is None')
     elif m := re.match(r"debug(_before|_after)*=(.+)", locator):
         # items are locators and separated by comma
         ret['Success'] = True

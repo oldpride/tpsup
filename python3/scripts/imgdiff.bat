@@ -1,0 +1,12 @@
+@echo off
+
+:: wrapper script 
+
+
+set "prog=%~n0"
+set "dir=%~dp0"
+
+set "pyfile=%dir%/%prog%_cmd.py"
+python "%pyfile%" %*
+
+
