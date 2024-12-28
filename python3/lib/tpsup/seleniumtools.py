@@ -3721,8 +3721,26 @@ def locate(locator: str, **opt):
 
             if not wait_type or wait_type == 'page':
                 # set page load timeout
-                driver.set_page_load_timeout(int(value))
+                '''
+                this for chromedriver; other driver use implicitly_wait()
+                The default value for implicitly_waits is 0, which means
+                (and always has meant) "fail findElement immediately if
+                the element can't be found."
+                You shouldn't be receiving a TimeoutException directly
+                from findElement.
+                You'll likely only be receiving that when using a
+                so-called "explicit wait", using the WebDriverWait construct.
+                the code is at
+                lib/webdriver line 1353:
+                webdriver.Command(webdriver.CommandName.IMPLICITLY_WAIT).
+                    setParameter('ms', ms < 0 ? 0 : ms)
 
+                For slow app like Service Now, we need set 30 or more. "
+                "Even after page is loaded, it took more time for page to render fully; "
+                "therefore, we need to add extra sleep time after page is loaded. "
+                "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
+                '''
+                driver.set_page_load_timeout(int(value))
     elif locator == 'refresh':
         print(f"locate: refresh driver")
         if interactive:
@@ -3736,36 +3754,6 @@ def locate(locator: str, **opt):
         ret['Success'] = True # hard code to True for now
         commnet, *_ = m.groups()
         print(f"locate: comment = {commnet}")
-    elif m := re.match(r"pagewait=(\d+)", locator):
-        ret['Success'] = True
-        page_load_timeout, *_ = m.groups()
-        print(f"locate: set page_load_timeout to {page_load_timeout} seconds")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # set timeout
-            # https://stackoverflow.com/questions/17533024/how-to-set-selenium-python-webdriver-default-timeout
-            driver.set_page_load_timeout(page_load_timeout)
-            '''
-            this for chromedriver; other driver use implicitly_wait()
-            The default value for implicitly_waits is 0, which means
-            (and always has meant) "fail findElement immediately if
-            the element can't be found."
-            You shouldn't be receiving a TimeoutException directly
-             from findElement.
-            You'll likely only be receiving that when using a
-             so-called "explicit wait", using the WebDriverWait construct.
-            the code is at
-            lib/webdriver line 1353:
-            webdriver.Command(webdriver.CommandName.IMPLICITLY_WAIT).
-                 setParameter('ms', ms < 0 ? 0 : ms)
-
-            For slow app like Service Now, we need set 30 or more. "
-            "Even after page is loaded, it took more time for page to render fully; "
-            "therefore, we need to add extra sleep time after page is loaded. "
-            "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
-            '''
-    # elif m := re.match(r"print=(timeouts|waits|title|url|tag|xpath|domstack|iframestack|html|element)", locator):
     elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:url|title|timeouts|waits|tag|xpath|domstack|iframestack|element|consolelog))+)$", locator):
         '''
         (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
