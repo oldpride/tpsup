@@ -89,8 +89,8 @@ action_data = {}
 
 # '1' return 1 layer, '2' return 2 layers, ....
 # we start with 0, meaning we are outside of any layer, no layer to return
-# everytime we break out a layer (while loop), we decrease return_levels by 1
-return_levels = 0 
+# everytime we break out a layer (while loop), we decrease break_levels by 1
+break_levels = 0 
 
 # we use this to control both explicit and implicit wait. 
 # more detail about explicit and implicit wait, see other comments in this file.
@@ -897,6 +897,8 @@ class tp_find_element_by_chains:
                 print("replay domstack")
             replay_domstack(domstack)
 
+            local_domstack = domstack.copy()    
+
             chain = self.chains[chain_idx]
             if self.verbose:
                 print(f'testing chain = {pformat(chain)}')
@@ -914,6 +916,7 @@ class tp_find_element_by_chains:
                     try:
                         locator_driver = e.shadow_root  # shadow_driver is a webdriver type
                         self.matched_so_far[chain_idx].append(locator[0][0])
+
                         if self.verbose:
                             print(f"found {locator[0][0]}")
                     except Exception as ex:
@@ -921,7 +924,26 @@ class tp_find_element_by_chains:
                             print(f"not found {locator[0][0]}")
                         found_chain = False
                         break
+
+                    # update local_domstack
+                    url = get_shadowHost_info(e)
+                    local_domstack.append({
+                        'type': 'shadow',
+                        'element': e,
+                        'url': url,
+                    })
                 elif locator[0][0] == "iframe":
+                    # update local_domstack before we switch to iframe
+                    url = e.get_attribute('src') # this is child (future) iframe's url
+                    if not url:
+                        url = 'about:srcdoc'
+                    local_domstack.append({
+                        'type': 'iframe',
+                        'element': e,
+                        # we need to save url before we switch into iframe.
+                        # otherwise, if we need url later, we would have to switch back to this iframe.
+                        'url': url,
+                    })
                     try:
                         driver.switch_to.frame(e)
                         locator_driver = driver
@@ -989,7 +1011,8 @@ class tp_find_element_by_chains:
                 # e.tpdata = {"ptype" : ptype, "path" : path, "position" : i}
 
                 e.tpdata = {
-                    "position": chain_idx
+                    "position": chain_idx,
+                    "domstack": local_domstack,
                 }  # monkey patch for convenience
 
                 return e
@@ -2283,7 +2306,7 @@ def follow(steps: list,  **opt):
     global driver
     global driver_url
     global last_element
-    global return_levels
+    global break_levels
     global debuggers
 
     update_locator_driver(**opt)
@@ -2425,9 +2448,10 @@ def follow(steps: list,  **opt):
 
         dict
             # dict are mainly for real locators, eg, xpath/css/id/iframe/shadow/tab. 
-            # we use dict to introduce parallelism.
+            # we use dict to introduce parallelism and if-then-else control.
             # other 'locators', eg, sleep, dump, wait, ... can be easily handled by string directly.
             {
+                # 'simple' allows you to handle parallelism and if-then-else control on top level.
                 'type': 'simple',
                 'action': {
                     'locator' : 'xpath=/a/b,xpath=/a/c', # 'simple' parallel, like the example on the left.
@@ -2438,10 +2462,10 @@ def follow(steps: list,  **opt):
             },
 
             {
+                # 'parallel' allows you to handle individual path differently - define 'Success' and 'Failure' for each path.
                 'type': 'parallel',
                 'action': {
                     'paths' : [
-                        # 'parallel' allows you to handle individual path differently - define 'Success' and 'Failure' for each path.
                         {
                             'locator' : 'xpath=//dhi-wc-apply-button[@applystatus="true"]',
                             'Success': 'code=' + '''action_data['error'] = "applied previously"''', # optional. default is None
@@ -2460,6 +2484,9 @@ def follow(steps: list,  **opt):
             {
                 # chain is a list of list of locators in parallel.
                 #     locators are in parallel, but the chain in each locator is in sequence.
+                #     locator in the chain can be parallel, eg, 'css=p,css=iframe'.
+                #     locator in chain can change dom, eg, 'iframe', 'shadow'.
+                # 'chains' is the only way that to archive dom change and parallelism at the same time.
                 'type': 'chains',          
                 'action': {
                     'paths' : [
@@ -2467,7 +2494,7 @@ def follow(steps: list,  **opt):
                             'locator': [
                                 'xpath=/html/body[1]/ntp-app[1]', 'shadow',
                                 'css=#mostVisited', 'shadow',
-                                'css=#removeButton2',  # correct on ewould be 'css=#removeButton'. we purposefully typoed
+                                'css=#removeButton',
                             ],
                             'Success': 'code=print("found remove button")',
                         },
@@ -2532,7 +2559,7 @@ def follow(steps: list,  **opt):
         if not result['Success']:
             break
 
-        if return_levels:
+        if break_levels:
             break
     
     return ret
@@ -2553,8 +2580,10 @@ def locate_dict(step: dict, **opt):
     global driver
     global driver_url
     global locator_driver
-    global return_levels
+    global break_levels
     global last_element
+    global domstack
+    global debuggers
 
     update_locator_driver(**opt)
     
@@ -2611,7 +2640,7 @@ def locate_dict(step: dict, **opt):
         # copy result to ret
         ret['Success'] = result['Success']
 
-        if return_levels:
+        if break_levels:
             return ret
 
         if result['Success']:
@@ -2687,6 +2716,9 @@ def locate_dict(step: dict, **opt):
                 path_index = tpdata['position']
                 print(f"locate_dict: found path_index={path_index} (starting from 0)")
 
+                # update global domstack
+                domstack = tpdata['domstack']
+
                 path = paths[path_index]
 
                 if 'Success' in path:
@@ -2696,8 +2728,14 @@ def locate_dict(step: dict, **opt):
                     # action-level Found
                     result = locate(action['Success'], **opt)             
             else:
-                element = driver.switch_to.active_element
-                last_element = element
+                # restore domstack
+                replay_domstack(domstack)
+
+                # restore to last element
+                element = last_element
+
+                # element = driver.switch_to.active_element
+                # last_element = element
 
                 if 'Failure' in action:
                     # action-level NotFound
@@ -2821,7 +2859,7 @@ def locate(locator: str, **opt):
     global driver
     global driver_url
     global wait_seconds
-    global return_levels
+    global break_levels
     global last_element
     global jsr
     global debuggers
@@ -2906,7 +2944,7 @@ def locate(locator: str, **opt):
             driver_url = driver.current_url
             last_element = driver.switch_to.active_element
             ret['Success'] = True
-    elif m := re.match(r"(code|python|exp|js)(file)?(.*)?=(.+)", locator, re.MULTILINE | re.DOTALL):
+    elif m := re.match(r"(code|python|exp|js)(file)?(.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
         '''
         'code' and 'python' are the same - python code to be executed.
         'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
@@ -2929,7 +2967,7 @@ def locate(locator: str, **opt):
             with open(code) as f:
                 code = f.read()
         else:
-            print(f"locate: run {lang} code {code}")
+            print(f"locate: run {lang}: {code}")
 
         # parse 'target'
         if target:
@@ -3573,42 +3611,52 @@ def locate(locator: str, **opt):
             domstack = domstack_save
 
         ret['Success'] = True
-    elif m := re.match(r"we_return()$|we_return=(\d+)", locator):
+    elif m := re.match(r"break()$|break=(\d+)", locator):
         ret['Success'] = True # hard code to True for now
 
-        we_return, *_ = m.groups()
+        string_levels, *_ = m.groups()
 
         # default return levels is 999, ie, return all levels
-        if we_return == "":
-            return_levels = 999
+        if string_levels == "":
+            break_levels = 999
         else:
-            return_levels = int(we_return)
+            break_levels = int(string_levels)
 
-        print(f"locate: we_return={we_return}, return_levels={return_levels}")
+        print(f"locate: break break_levels={break_levels}")
 
     # end of old send_input()
 
     # the following are new
-    elif m := re.match(r"wait=(\d+)", locator):
+    elif m := re.match(r"(impl|expl|script|page)*wait=(\d+)", locator):
         ret['Success'] = True # hard code to True
 
         # implicit wait
-        value, *_ = m.groups()
-        print(f"locate: set wait {value} seconds for both implicit and explicit wait")
+        wait_type, value, *_ = m.groups()
+        print(f"locate: set wait {value} seconds for both implicit and explicit wait, script and page-load timeout")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
-            # explicit wait is done per call (WebDriverWait()).
-            # As we are not calling WebDriverWait() here, we only set the global variable,
-            # so that it can be used when we call WebDriverWait() in the future.
-            wait_seconds = int(value)
+            if not wait_type or wait_type == 'expl':
+                # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
+                # explicit wait is done per call (WebDriverWait()).
+                # As we are not calling WebDriverWait() here, we only set the global variable,
+                # so that it can be used when we call WebDriverWait() in the future.
+                wait_seconds = int(value)
 
-            # driver.implicitly_wait() only set the implicit wait for the driver, 
-            # affect all find_element() calls right away.
-            # implicit wait is done once per session (driver), not per call.
-            # selenium's default implicit wait is 0, meaning no wait.
-            driver.implicitly_wait(wait_seconds)
+            if not wait_type or wait_type == 'impl':
+                # driver.implicitly_wait() only set the implicit wait for the driver, 
+                # affect all find_element() calls right away.
+                # implicit wait is done once per session (driver), not per call.
+                # selenium's default implicit wait is 0, meaning no wait.
+                driver.implicitly_wait(wait_seconds)
+
+            if not wait_type or wait_type == 'script':
+                # set script timeout
+                driver.set_script_timeout(int(value))
+
+            if not wait_type or wait_type == 'page':
+                # set page load timeout
+                driver.set_page_load_timeout(int(value))
 
     elif locator == 'refresh':
         print(f"locate: refresh driver")
@@ -3623,13 +3671,6 @@ def locate(locator: str, **opt):
         ret['Success'] = True # hard code to True for now
         commnet, *_ = m.groups()
         print(f"locate: comment = {commnet}")
-    elif m := re.match(r"consolelog", locator):
-        ret['Success'] = True
-        print(f"locate: print console log")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            print_js_console_log()
     elif m := re.match(r"pagewait=(\d+)", locator):
         ret['Success'] = True
         page_load_timeout, *_ = m.groups()
@@ -3659,108 +3700,124 @@ def locate(locator: str, **opt):
             "therefore, we need to add extra sleep time after page is loaded. "
             "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
             '''
-    elif m := re.match(r"print=(timeouts|waits|title|url|tag|xpath|domstack|iframestack|html)", locator):
+    # elif m := re.match(r"print=(timeouts|waits|title|url|tag|xpath|domstack|iframestack|html|element)", locator):
+    elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:url|title|timeouts|waits|tag|xpath|domstack|iframestack|element|consolelog))+)$", locator):
+        '''
+        (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
+        and both are on outside.
+        debug_before=url,title,tag => group 1 = debug_before, group 2 = url,title,tag
+        '''
         ret['Success'] = True
-        keys_string = m.groups()[0]
+        directive, keys_string = m.groups()
         keys = keys_string.split(",")
-        print(f"locate: get property {keys}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        for key in keys:
-            if not dryrun:
-                if key == 'timeouts' or key == 'waits':
-                    # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
-                    # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
-                    print(f'    implicit_wait={driver.timeouts.implicit_wait}')
-                    print(f'    page_load_timeout={driver.timeouts.page_load}')
-                    print(f'    script_timeout={driver.timeouts.script}')
-                elif key == 'title':
-                    title = driver.title
-                    print(f'driver.title={title}')
-                elif key == 'url':
-                    '''
-                    https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
-                    javascript: URLs can be used anywhere a URL is a navigation target. 
-                    This includes, but is not limited to:
-                        The href attribute of an <a> or <area> element.
-                        The action attribute of a <form> element.
-                        The src attribute of an <iframe> element.
-                        The window.location JavaScript property.
-                        The browser address bar itself.
+        '''
+        directive: 'print' vs 'debug...'
+            'print' is excuted right here and only once.
+            'debug' is saved in debuggers[] and executed later, before or after each locate() call.
+        '''
+        if directive == 'print':
+            print(f"locate: get property {keys}")
+            # if interactive:
+            #     hit_enter_to_continue(helper=helper)
+            for key in keys:
+                if not dryrun:
+                    if key == 'timeouts' or key == 'waits':
+                        # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
+                        # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
+                        print(f'    explicit_wait={wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
+                        print(f'    implicit_wait={driver.timeouts.implicit_wait}') # when we call find_element()
+                        print(f'    page_load_timeout={driver.timeouts.page_load}') # driver.get()
+                        print(f'    script_timeout={driver.timeouts.script}') # driver.execute_script()
+                    elif key == 'title':
+                        title = driver.title
+                        print(f'driver.title={title}')
+                    elif key == 'url':
+                        '''
+                        https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
+                        javascript: URLs can be used anywhere a URL is a navigation target. 
+                        This includes, but is not limited to:
+                            The href attribute of an <a> or <area> element.
+                            The action attribute of a <form> element.
+                            The src attribute of an <iframe> element.
+                            The window.location JavaScript property.
+                            The browser address bar itself.
 
-                    url has mutliple meanings:
-                        the url of the current page
-                        the url that you go next if you click a link, eg, <a href="url">
-                    more accurately, we care about the following urls, from big to small:
-                        url = driver.current_url # this driver's url, the top level url of the current page.
-                        url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
-                        url = driver.execute_script("return window.location.href") # this is my (current) iframe url
-                        url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
-                    '''
-                    element_url = None
-                    if last_element:
-                        # the following are the same
-                        # element_url = driver.execute_script("return arguments[0].src", last_element)
-                        element_url = last_element.get_attribute('src')
+                        url has mutliple meanings:
+                            the url of the current page
+                            the url that you go next if you click a link, eg, <a href="url">
+                        more accurately, we care about the following urls, from big to small:
+                            url = driver.current_url # this driver's url, the top level url of the current page.
+                            url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
+                            url = driver.execute_script("return window.location.href") # this is my (current) iframe url
+                            url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
+                        '''
+                        element_url = None
+                        if last_element:
+                            # the following are the same
+                            # element_url = driver.execute_script("return arguments[0].src", last_element)
+                            element_url = last_element.get_attribute('src')
 
-                        print(f'    element_url=element.get_attribute("src")={element_url}')
-                    else:
-                        print(f'    element_url is not available because last_element is None')
+                            print(f'    element_url=element.get_attribute("src")={element_url}')
+                        else:
+                            print(f'    element_url is not available because last_element is None')
 
-                    # https://stackoverflow.com/questions/938180
-                    iframe_url = driver.execute_script("return window.location.href")
-                    print(f'    current_iframe_url=window.location.href={iframe_url}')
+                        # https://stackoverflow.com/questions/938180
+                        iframe_url = driver.execute_script("return window.location.href")
+                        print(f'    current_iframe_url=window.location.href={iframe_url}')
 
-                    '''
-                    1. the following returns the same as above
-                        iframe_current = driver.execute_script("return window.location.toString()")
-                        print(f'    iframe_current=window.location.toString()={iframe_current}')
-                    2. all iframe defined by srcdoc will return "about:srcdoc", eg
-                        <iframe srcdoc="<p>hello</p>"></iframe>
-                    3. people normally use iframe url to id an iframe, but it is not reliable for
-                       srcdoc iframe.
-                    '''
+                        '''
+                        1. the following returns the same as above
+                            iframe_current = driver.execute_script("return window.location.toString()")
+                            print(f'    iframe_current=window.location.toString()={iframe_current}')
+                        2. all iframe defined by srcdoc will return "about:srcdoc", eg
+                            <iframe srcdoc="<p>hello</p>"></iframe>
+                        3. people normally use iframe url to id an iframe, but it is not reliable for
+                        srcdoc iframe.
+                        '''
 
-                    driver_url = driver.current_url
-                    print(f'    driver_url=driver.current_url={driver_url}')
+                        driver_url = driver.current_url
+                        print(f'    driver_url=driver.current_url={driver_url}')
 
-                    # https://stackoverflow.com/questions/938180
-                    parent_url = driver.execute_script("return document.referrer")
-                    print(f'    parent_iframe_url=document.referrer={parent_url}')
-                elif key == 'tag':
-                    # get element type
-                    if last_element:
-                        tag = last_element.tag_name
-                        print(f'element_tag_name=element.tag_name={tag}')
-                elif key == 'xpath':
-                    if last_element:
-                        xpath = js_get(last_element, 'xpath', **opt)
-                        print(f'element_xpath=element.xpath={xpath}')
-                elif key == 'domstack':
-                    print_domstack()
-                elif key == 'iframestack':
-                    print_iframestack()
-                elif key == 'html':
-                    if last_element:
-                        html = last_element.get_attribute('outerHTML')
-                        print(f'element_html=element.outerHTML={html}')
-                    else:
-                        print(f'element_html is not available because last_element is None')
-    elif m := re.match(r"debug(_before|_after)*=(.+)", locator):
-        # items are locators and separated by comma
-        ret['Success'] = True
-        before_after, items_string = m.groups()
-        if not before_after:
-            before_after = '_after' # default to after
-        before_after = before_after[1:] # remove the underscore
-        debuggers[before_after] = []
-        for item in items_string.split(","):
-            if re.match(r"(url|title|timeouts|waits|tag|xpath|domstack|iframestack)$", item):
-                debuggers[before_after].append(f"print={item}")
+                        # https://stackoverflow.com/questions/938180
+                        parent_url = driver.execute_script("return document.referrer")
+                        print(f'    parent_iframe_url=document.referrer={parent_url}')
+                    elif key == 'tag':
+                        # get element type
+                        if last_element:
+                            tag = last_element.tag_name
+                            print(f'element_tag_name=element.tag_name={tag}')
+                    elif key == 'xpath':
+                        if last_element:
+                            xpath = js_get(last_element, 'xpath', **opt)
+                            print(f'element_xpath=element.xpath={xpath}')
+                    elif key == 'domstack':
+                        print_domstack()
+                    elif key == 'iframestack':
+                        print_iframestack()
+                    elif key == 'html':
+                        if last_element:
+                            html = last_element.get_attribute('outerHTML')
+                            print(f'element_html=element.outerHTML={html}')   
+                        else:
+                            print(f'element_html is not available because last_element is None')
+                    elif key == 'element':
+                        if last_element:
+                            js_print_debug(last_element)
+                        else:
+                            print(f'element is not available because last_element is None')
+                    elif key == 'consolelog':
+                        print_js_console_log()
+        else:
+            # now for debugs
+            if directive == 'debug_before':
+                before_after = 'before'
             else:
-                debuggers[before_after].append(item)
+                # directive == 'debug_after' or directive == 'debug'
+                before_after = 'after'
 
-        print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
+            action = f"print={keys_string}"
+            debuggers[before_after] = [action]
+            print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
@@ -3782,7 +3839,7 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
     debug = opt.get('debug', False)
     ret = {'Success': False, 'executed': False, 'element': None}
 
-    global return_levels
+    global break_levels
 
     if blockstart == 'while':
         while True:
@@ -3793,11 +3850,11 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
                 break
 
             # only while-loop can be broken.
-            if return_levels:
+            if break_levels:
                 if debug:
-                    print(f"run_block: return_levels={return_levels}, break the while loop")
-                # reduce return_levels by 1
-                return_levels = return_levels - 1
+                    print(f"run_block: break_levels={break_levels}, break the while loop")
+                # reduce break_levels by 1
+                break_levels = break_levels - 1
                 break
     elif blockstart == 'if':
         result=if_block(negation, condition, block, **opt)
@@ -3852,7 +3909,7 @@ def if_block(negation: str,  condition: str, block: list, **opt):
     return ret
 
 # pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
-# known is only available in post_batch, not in pre_batch.
+# 'known' is only available in post_batch, not in pre_batch.
 
 
 def pre_batch(all_cfg, known, **opt):
@@ -3958,7 +4015,8 @@ tpbatch = {
             # "method": tpsup.seleniumtools.get_driver,
             "method": get_driver,
             # "cfg": {},
-            "init_resource": 0,  # delay init until first use
+
+            "init_resource": 0,  # delay init until first use. this logic is in batch.py
         },
     },
 }

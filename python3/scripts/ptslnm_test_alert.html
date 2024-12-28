@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        .container {
+            border: 2px dotted;
+            width: 60%;
+            border-radius: 5px;
+            padding: 10px;
+        }
+
+        input,
+        textarea {
+            width: 90%;
+            padding: 10px;
+            margin: 10px;
+        }
+
+        .submit-btn {
+            background-color: green;
+            color: white;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 style="color: green;">
+        GeeksforGeeks
+    </h1>
+
+    <p>
+        The page will notify if the user has
+        started filling the form and tries
+        to navigate away from it.
+    </p>
+
+    <div class="container">
+        <h2>A Demo Contact Form</h2>
+        <form action="#">
+            <label>First Name</label>
+
+            <!-- Create all the input boxes and
+			assign there respective functions
+			to update the content in a variable -->
+            <input type="text" id="fname" name="firstname" onchange="updateFname()">
+            <p></p>
+
+            <label>Last Name</label>
+            <input type="text" id="lname" name="lastname" onchange="updateLname()">
+            <p></p>
+
+            <label>Subject</label>
+            <textarea id="subject" name="subject" style="height:100px" onchange="updateSubject()">
+			</textarea>
+            <p></p>
+
+            <button class="submit-btn" onclick="return false;">
+                Submit
+            </button>
+        </form>
+    </div>
+
+    <script type="text/javascript">
+
+        // Variables to store the input text
+        let fname = '';
+        let lname = '';
+        let subject = '';
+
+        // Functions to update the input text
+        updateFname = () => {
+            fname = document
+                .getElementById('fname').value;
+        }
+
+        updateLname = () => {
+            lname = document
+                .getElementById('lname').value;
+        }
+
+        updateSubject = () => {
+            subject = document
+                .getElementById('subject').value;
+        }
+
+        // Event listener for the
+        // 'beforeunload' event
+        window.addEventListener('beforeunload',
+            function (e) {
+
+                // Check if any of the input
+                // fields are filled
+                if (fname !== '' ||
+                    lname !== '' ||
+                    subject !== '') {
+
+
+                    console.log("form is filled");
+                    alert("form is filled but not submitted yet.");
+                    // Cancel the event and
+                    // show alert that the unsaved
+                    // changes would be lost
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+    </script>
+</body>
+
+</html>

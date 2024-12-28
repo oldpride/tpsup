@@ -106,84 +106,58 @@ def code(all_cfg: dict, known: dict, **opt):
 
     driver: webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
 
-    actions = [
-        [f"url={url}"],
-        [
-            """
+    steps = [
+        f"url={url}",
+        
+        """
             click_xpath=//input[@id="user id"],
-            click_css=#user\ id,
+            click_css=#user id,
             xpath=//tr[class="non exist"]
-         """,
-            [
-                f'string={known["USERID"]}',
-                "code=js_print_debug(driver, element)",
-            ],
-            "enter user id",
-        ],
-    ]
+        """,
+            
+        f'string={known["USERID"]}',
+        
+        'print=element',
+        'sleep=1',
+        
+        "tab=4",
+            
+        # test getting element id
+        """code=print(f'element id = {last_element.get_attribute("id")}, expecting DateOfBirth')""",
+        """sleep=2""",
+        f'string={known["DOB"]}',
+        "comment=go to Date of Birth",
+        'sleep=2',
 
-    print(f"test actions = {pformat(actions)}")
+        "shifttab=3",
+        
+        """code=print(f'element id = {last_element.get_attribute("id")}, expecting password')""",
+        f'string={known["PASSWORD"]}',
+        "sleep=2",
 
-    # '-interactive' is passed through **opt
-    result = tpsup.seleniumtools.run_actions(driver, actions, **opt)
 
-    print(f'active element in current context')
-    element = driver.switch_to.active_element
-    tpsup.seleniumtools.js_print_debug(driver, element)
-
-    print('')
-    print(f'active element in run_actions()')
-    element = result['element']
-    tpsup.seleniumtools.js_print_debug(driver, element)
-
-    actions2 = [
-        [
-            "tab=4",
-            [
-                # test getting element id
-                """code=print(f'element id = {element.get_attribute("id")}, expecting DateOfBirth')""",
-                """sleep=2""",
-                f'string={known["DOB"]}',
-            ],
-            "go to Date of Birth",
-        ],
-        [
-            "shifttab=3",
-            [
-                """code=print(f'element id = {element.get_attribute("id")}, expecting password')""",
-                f'string={known["PASSWORD"]}',
-            ],
-            "enter password",
-        ],
-
-        [
-            'click_xpath=//select[@id="Expertise"]',
-            "select=text,JavaScript",
-            "select JavaScript",
-        ],
+        'click_xpath=//select[@id="Expertise"]',
+        "select=text,JavaScript",
+        
         # NOTE: !!!
         # after selection, somehow I have to use xpath to get to the next element, tab
         # won't move to next element.
         # ['tab=2', 'select=value,2', 'select 2-Medium'],
-        ['click_xpath=//select[@id="Urgency"]',
-            "select=value,2", "select 2-Medium"],
-        [None, "code=test_var=2", "set test_var=2"],
-        [None, "code=print(f'test_var={test_var}')",
-         "print test_var, should be 2"],
-        [
-            # test searching two elements
-            # note: to fit into one string
-            # 'xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"],xpath=//tr[@class="non exist"]',
-            'xpath=//tr[@class="non exist"],xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"]',
-            ["click", 'gone_xpath=//select[@id="Expertise"]', "sleep=3"],
-            "submit",
-        ],
+        'click_xpath=//select[@id="Urgency"]',
+        "select=value,2", 
+        "comment=selected 2-Medium",
+        "sleep=2",
+        
+        # test searching two elements
+        # note: to fit into one string
+        # 'xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"],xpath=//tr[@class="non exist"]',
+        'xpath=//tr[@class="non exist"],xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"]',
+        "click", 
+        'gone_xpath=//select[@id="Expertise"]',
+        "sleep=3",
     ]
-    print(f"test actions2 = {pformat(actions2)}")
-    result = tpsup.seleniumtools.run_actions(driver, actions2, **opt)
-
-    # print(f"test result = {pformat(result)}")
-    print(f"test result['we_return'] = {result['we_return']}")
+    print(f"test steps = {pformat(steps)}")
+    result = tpsup.seleniumtools.follow(steps, **opt)
 
     interval = 2
     print(f"sleep {interval} seconds so that you can see")

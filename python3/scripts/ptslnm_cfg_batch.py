@@ -177,7 +177,7 @@ our_cfg = {
     - test block steps
     {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
 
-    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" we_return end_if end_while
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" break end_if end_while
 
     - test parallel steps - simple
     {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "xpath=//iframe[1],css=p" print=html
@@ -188,6 +188,9 @@ our_cfg = {
     
     - test parallel steps - dict - chains type
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "dictfile={TPP3}/ptslnm_test_dict_chains.py" debug=domstack,iframestack print=tag
+    
+    - test alert popup
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_alert.html" "click_xpath=//input[@id='fname']" string=henry tab=1 url_accept_alert=http://google.com sleep=1
     
     notes for windows cmd.exe, 
         double quotes cannot be escaped, 
@@ -203,25 +206,6 @@ our_cfg = {
 }
 
 def pre_batch(all_cfg, known, **opt):
-    # debug = opt.get('debug', 0)
-    # if known['REMAININGARGS'] and (known['REMAININGARGS'][0] == 'fe' or known['REMAININGARGS'][0] == 'file_example'):
-    #     # replace http with file in all_cfg
-    #     if debug:
-    #         print(f'before usage_example={all_cfg['usage_example']}')
-        
-    #     # print(pformat(known))
-    #     # prog = os.path.basename(__file__).replace('_cfg_batch.py', '') # this gave batch.py
-    #     prog = 'ptslnm'
-    #     usage_example = all_cfg['usage_example'].replace(HTTP_BASE, FILE_BASE).replace("{{prog}}", f'{prog} -af')
-    #     print()
-    #     print(usage_example)
-    #     exit(0)
-
-    # if known['REMAININGARGS'] and known['REMAININGARGS'][0] == 'locators':
-    #     for line in tpsup.seleniumtools.get_defined_locators():
-    #         print(line)
-    #     exit(0)
-
     # run tpsup.seleniumtools.pre_batch() to set up driver
     tpsup.seleniumtools.pre_batch(all_cfg, known, **opt)
 
