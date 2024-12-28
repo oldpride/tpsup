@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 import shutil
 import sys
 import time
@@ -435,6 +436,7 @@ class SeleniumEnv:
 
         print(
             f"SeleniumEnv.__init__: browser_options.arguments = {pformat(self.browser_options.arguments)}")
+        print(f'SeleniumEnv.__init__: driver.args = {pformat(self.driver_args)}')
 
         if self.dryrun:
             sys.stderr.write(
@@ -2417,6 +2419,69 @@ def follow(steps: list,  **opt):
                     print(f"follow: blockstart={blockstart}, negation={negation}, condition={condition}, "
                         f"expected_blockend={expected_blockend}, block_depth={block_depth}")
                 continue
+
+            if m := re.match(r"\s*steps_(txt|py)=(.+)", step):
+                '''
+                file that contains steps
+                    steps_txt=file.txt
+                        this is a text file that contains steps, just like command line.
+                        steps can be in multiple lines.
+                        multiple steps can be in a single line. (we use shell-like syntax)
+                        there can be blank and comment lines (starting with #).
+                    steps_py=file.py
+                        this is a python file that contains steps, but is a python list of steps.
+                '''
+                file_type, file_name = m.groups()
+
+                steps2 = []
+                if file_type == 'txt':
+                    with open(file_name) as fh:
+                        lines = fh.readlines()
+                        for line in lines:
+                            # skip comment part of line
+                            # for example,
+                            #     # this is a comment
+                            #     click_xpath=/a/b # this is a comment
+                            #     css=#c # this is not a comment
+                            if m := re.match(r"(.*?)\s(#.*?)", line):
+                                # there is a comment at the end of the line; remove it.
+                                line = m.group(1)
+                            if m := re.match(r"#", line):
+                                # comment starts at the beginning of the line; skip the whole line.
+                                continue
+                            if not line.strip():
+                                # empty line; skip it.
+                                continue
+                            
+                            # split the line using shell syntax
+                            steps_in_this_line = shlex.split(line)
+                            if debug:
+                                print(f"follow: parsed line={line} to {steps_in_this_line}")
+                            steps2.extend(steps_in_this_line)
+
+                        print(f"follow: parsed txt file {file_name} to steps2={steps2}")
+                else:
+                    # file_type == 'py':
+                    string = None
+                    with open(file_name) as fh:
+                        string = fh.read()
+                    if not string:
+                        print(f"file {file_name} is empty")
+                    else:
+                        try:
+                            steps2 = eval(string)   
+                        except Exception as e:
+                            raise RuntimeError(f"failed to eval file {file_name}: {e}")
+                        
+                        # we expect the steps to be a list
+                        if type(steps2) != list:
+                            raise RuntimeError(f"steps in python file {file_name} is not a list")
+                        
+                        print(f"follow: parsed py file {file_name} to steps2={steps2}")
+                            
+                follow(steps2, **opt)
+
+                continue
         # now we are done with control block handling
 
         print()
@@ -3909,7 +3974,8 @@ def if_block(negation: str,  condition: str, block: list, **opt):
     return ret
 
 # pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
-# 'known' is only available in post_batch, not in pre_batch.
+# '
+# known' is only available in post_batch, not in pre_batch.
 
 
 def pre_batch(all_cfg, known, **opt):

@@ -1,0 +1,12 @@
+ sleep=1 
+
+ "xpath=/html[1]/body[1]/iframe[1]" "iframe"  # two steps in one line
+
+ debug_after=url,consolelog 
+
+ "xpath=id('shadow_host')" "shadow" 
+ 
+ # use double quotes for protect the # character in css selector
+ "css=#nested_shadow_host" "shadow" 
+ 
+ css=span
