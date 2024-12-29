@@ -177,8 +177,16 @@ our_cfg = {
     - test block steps
     {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
 
+    {{{{prog}}}} if_not=exp="a=0;1/a" code="print('negate False worked')" end_if_not
+
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" break end_if end_while
 
+    - test exp
+    {{{{prog}}}} exp="a=1;a+1" code="print(a)"  # this will pass - 2
+    {{{{prog}}}} exp="a=1"     code="print(a)"  # this will fail - NameError: name 'a' is not defined
+    {{{{prog}}}} code="a=1"    code="print(a)"  # this will pass - 1
+
+    - test steps in file
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps_txt="{TPP3}/ptslnm_test_steps_txt.txt" top
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html"  steps_py="{TPP3}/ptslnm_test_steps_py.py"   top
 

@@ -7,6 +7,45 @@ from pprint import pformat
 from tpsup.logbasic import log_FileFuncLine
 
 
+def multiline_eval(expr,
+                   _globals=None,
+                   _locals=None,
+                   **opt):
+    '''
+    Evaluate several lines of input, returning the result of the last line
+    https://stackoverflow.com/questions/12698028
+
+    eval() can only handle a single expression, not a code block (multiple expressions).
+    '''
+    _verbose = opt.get("verbose", 0)
+
+    if (_globals is None) or (_locals is None):
+        import inspect
+        if _globals is None:
+            _globals = inspect.currentframe().f_back.f_globals
+        if _locals is None:
+            _locals = inspect.currentframe().f_back.f_locals
+
+    import ast
+    _tree = ast.parse(expr)
+    _body_but_last = _tree.body[:-1]
+    _last_expr = _tree.body[-1]
+    
+    if _verbose > 1:
+        print(f"last_expr = {ast.dump(_last_expr)}")
+    
+    _eval_expr = ast.Expression(_last_expr.value)
+    _exec_expr = ast.Module(_body_but_last)
+    exec(compile(_exec_expr, 'file', 'exec'), _globals, _locals)
+    _result = eval(compile(_eval_expr, 'file', 'eval'), _globals, _locals)
+
+    _updated = _exec_filter(_locals)
+    if _verbose > 1:
+        log_FileFuncLine(f"_updated = {pformat(_updated)}")
+    _globals.update(_updated)
+
+    return _result
+
 def _exec_filter(_dict, **opt):
     pattern = opt.get("pattern", None)
     if pattern:
@@ -218,6 +257,7 @@ def main():
         # we can have comment and blank lines in the test code
 
         print("hello world")
+        multiline_eval("a=2;1/a")
 
     test_lines(test_code)
 

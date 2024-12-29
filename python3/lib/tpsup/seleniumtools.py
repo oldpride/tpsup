@@ -42,7 +42,7 @@ import tpsup.tmptools
 import os.path
 
 from tpsup.utilbasic import hit_enter_to_continue
-from tpsup.exectools import exec_into_globals
+from tpsup.exectools import exec_into_globals, multiline_eval
 
 from typing import List, Union
 from pprint import pformat
@@ -419,6 +419,9 @@ class SeleniumEnv:
         self.browser_options.add_argument("enable-automation")
         self.browser_options.add_argument("--disable-browser-side-navigation")
         # self.browser_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+
+        # https://stackoverflow.com/questions/79313080
+        # self.browser_options.add_argument("--disable-popup-blocking")
 
         if opt.get("allowFile", 0):
             # this allow us to test with local files, ie, file:///. otherwise, you get 'origin' error
@@ -2367,8 +2370,13 @@ def follow(steps: list,  **opt):
                         raise RuntimeError(f"block is empty")
                 
                     # run_block() recursively calls follow()
-                    run_block(blockstart, negation,
+                    result = run_block(blockstart, negation,
                                 condition, block, **opt)
+
+                    if not result['Success']:
+                        print(f"follow: break because block failed.")
+                        # if the block failed, we stop
+                        break
                 else:
                     # we only encountered a nested block end
                     if debug:
@@ -2479,8 +2487,10 @@ def follow(steps: list,  **opt):
                         
                         print(f"follow: parsed py file {file_name} to steps2={steps2}")
                             
-                follow(steps2, **opt)
-
+                result = follow(steps2, **opt)
+                if not result['Success']:
+                    print(f"follow: run steps_{file_type}={file_name} failed")
+                    return result
                 continue
         # now we are done with control block handling
 
@@ -2615,6 +2625,7 @@ def follow(steps: list,  **opt):
             print(f"follow: result={pformat(result)}")
 
         if result is None:
+            print(f"follow: break, step={step} failed because result is None")
             ret['Success'] = False
             break
 
@@ -2622,9 +2633,11 @@ def follow(steps: list,  **opt):
         ret['Success'] = result['Success']
 
         if not result['Success']:
+            print(f"follow: break, step={step} failed because result['Success'] is False")
             break
 
         if break_levels:
+            print(f"follow: break because break_levels={break_levels} > 0")
             break
     
     return ret
@@ -3047,11 +3060,16 @@ def locate(locator: str, **opt):
             if lang in ['code', 'python', 'exp']:
                 if isExpression or lang == 'exp':
                     # we are testing condition, we want to know True/False
+                    # cc = compile(code, '<string>', 'single')
                     try:
-                        ret['Success'] = eval(code)
+                        # ret['Success'] = multiline_eval(cc)
+                        ret['Success'] = multiline_eval(code, globals(), locals())
                     except Exception as e:
                         print(f"eval failed with exception={e}")
                         ret['Success'] = False
+
+                    print(f"lang={lang} returns {ret['Success']}")
+
                 else:
                     exec_into_globals(code, globals(), locals())
                     ret['Success'] = True # hard code to True for now
@@ -3697,29 +3715,31 @@ def locate(locator: str, **opt):
 
         # implicit wait
         wait_type, value, *_ = m.groups()
-        print(f"locate: set wait {value} seconds for both implicit and explicit wait, script and page-load timeout")
+        if not wait_type:
+            wait_type = 'all'
+        print(f"locate: set {wait_type} wait type to {value} seconds")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            if not wait_type or wait_type == 'expl':
+            if wait_type == 'all' or wait_type == 'expl':
                 # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
                 # explicit wait is done per call (WebDriverWait()).
                 # As we are not calling WebDriverWait() here, we only set the global variable,
                 # so that it can be used when we call WebDriverWait() in the future.
                 wait_seconds = int(value)
 
-            if not wait_type or wait_type == 'impl':
+            if wait_type == 'all' or wait_type == 'impl':
                 # driver.implicitly_wait() only set the implicit wait for the driver, 
                 # affect all find_element() calls right away.
                 # implicit wait is done once per session (driver), not per call.
                 # selenium's default implicit wait is 0, meaning no wait.
                 driver.implicitly_wait(wait_seconds)
 
-            if not wait_type or wait_type == 'script':
+            if wait_type == 'all' or wait_type == 'script':
                 # set script timeout
                 driver.set_script_timeout(int(value))
 
-            if not wait_type or wait_type == 'page':
+            if wait_type == 'all' or wait_type == 'page':
                 # set page load timeout
                 '''
                 this for chromedriver; other driver use implicitly_wait()
@@ -3911,6 +3931,8 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
                 break
     elif blockstart == 'if':
         result=if_block(negation, condition, block, **opt)
+    else:
+        raise RuntimeError(f"unsupported blockstart={blockstart}")
 
     ret['Success'] = result['Success']
     ret['executed'] = result['executed']
@@ -3927,22 +3949,26 @@ def if_block(negation: str,  condition: str, block: list, **opt):
 
     ret = {'Success': False, 'executed': False}
 
-    # try:
-    #     result['Success'] = eval(condition)
-    # except Exception as e:
-    #     # if verbose:
-    #     print(f"if_block(): condition test failed with exception={e}")
-    #     result['Success'] = False
-    result = locate(condition, isExpression=True, **opt)
+    # we should catch exception here, because the condition may fail with exception
+    # and it should not be fatal
+    try:
+        result = locate(condition, isExpression=True, **opt)
+    except Exception as e:
+        print(f"if_block(): condition={condition} test failed with exception={e}")
+        result = {'Success': False}
 
     if result['Success'] and negation:
         print(
             f"if_not_block: condition '{condition}' is true, but negated, block is not executed")
         executed = False
+    elif result['Success'] and not negation:
+        print(f"if_block: condition '{condition}' is true, block is executed")
+        executed = True
     elif not result['Success'] and not negation:
         print(f"if_block: condition '{condition}' is not true, block is not executed")
         executed = False
     else:
+        print(f"if_block: condition '{condition}' is not true, but negated, block is executed")
         executed = True
 
     ret['executed'] = executed
@@ -3950,12 +3976,16 @@ def if_block(negation: str,  condition: str, block: list, **opt):
     if executed:
         if not checkonly:
             # recursively calling follow() to run the block
-            try:
-                result = follow(block, **opt)
-            except Exception as e:
-                print(f"if_block: follow() failed with exception={pformat(e)}")
-                return ret
-    
+            # try:
+            #     result = follow(block, **opt)
+            # except Exception as e:
+            #     print(f"if_block: block part failed with exception={pformat(e)}")
+            #     return ret
+
+            # we should only catch exception in the condition part.
+            # we should not catch the exception if the block part failed.
+            result = follow(block, **opt)
+
             if result:
                 ret['Success'] = result['Success']
 
