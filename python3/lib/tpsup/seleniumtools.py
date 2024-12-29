@@ -2672,7 +2672,7 @@ def locate_dict(step: dict, **opt):
 
     if locator_type == 'simple':
         # locator must be a string
-        locator = action.get('locator', None)
+        locator = step.get('locator', None)
         if type(locator) != str:
             raise RuntimeError(f"simple step locator must be a string, but got {type(locator)}, step={pformat(step)}")
         
@@ -2680,15 +2680,15 @@ def locate_dict(step: dict, **opt):
 
         if result['Success']:
             # we found the element
-            if 'Success' in action:
-                locate(action['Success'], **opt) # we don't use follow() here, because we don't want to be recursive.
+            if 'Success' in step:
+                locate(step['Success'], **opt) # we don't use follow() here, because we don't want to be recursive.
             ret['Success'] = True
         else:
             # we didn't find the element
-            if 'Failure' in action:
-                locate(action['Failure'], **opt)
+            if 'Failure' in step:
+                locate(step['Failure'], **opt)
             else:
-                raise RuntimeError(f"element not found, step={pformat(step)}")
+                raise RuntimeError(f"locator failed. step={pformat(step)}")
     elif locator_type == 'parallel':
         # paths must be a list
         paths = action.get('paths', None)

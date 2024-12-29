@@ -182,10 +182,13 @@ our_cfg = {
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps_txt="{TPP3}/ptslnm_test_steps_txt.txt" top
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html"  steps_py="{TPP3}/ptslnm_test_steps_py.py"   top
 
-    - test parallel steps - simple
+    - test parallel steps - string
     {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "xpath=//iframe[1],css=p" print=html
     {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "css=p,xpath=//iframe[1]" print=html
 
+    - test dict step - besides provide parallellism, it also provides a mini if-else logic 
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "dictfile={TPP3}/ptslnm_test_dict_simple.py" debug=domstack,iframestack
+    
     - test parallel steps - dict - parallel type
     {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "dictfile={TPP3}/ptslnm_test_dict_parallel.py" debug=domstack,iframestack
     
