@@ -182,13 +182,54 @@ def replay_domstack(domstack2: list, **opt):
         else:
             raise RuntimeError(f"unsupported dom_type={dom_type}")
 
+def get_domstack(request: str, **opt):
+    '''
+    if request is 'last_shadow', this returns {
+        item: {
+            type: 'shadow',
+            url: '...',
+            element: ...
+        },
+        domstack: [ ... ]
+        }
+        or None if no shadow found.
+    
+    if request is 'last_iframe', this returns {
+        item: {
+            type: 'iframe',
+            url: '...',
+            element: ...
+        },
+        domstack: [ ... ]
+        }
+        or None if no iframe found.
+    '''
+    global domstack
+    global driver
+
+    if m := re.match(r'last_(shadow|iframe)', request):
+        request_type = m.group(1)
+        domstack2 = domstack.copy()
+        for item in reversed(domstack):
+            if item['type'] == request_type:
+                return {
+                    'item': item,
+                    'domstack': domstack2
+                }
+            else:
+                domstack2.pop()
+        return None
+    else:
+        raise RuntimeError(f"unsupported request={request}")    
+
 class SeleniumEnv:
     def __init__(self, host_port: str = 'auto', **opt):
         # print(pformat(opt))
         # exit(1)
         global cmd
         self.host_port = host_port
-        self.verbose = opt.get("verbose", 0)
+        self.debug = opt.get("debug", 0)
+        self.verbose = opt.get("verbose", self.debug) # verbose is more common than debug
         self.env = tpsup.envtools.Env()
         self.env.adapt()
         home_dir = os.path.normpath(
@@ -287,7 +328,7 @@ class SeleniumEnv:
 
             self.print_running_drivers()
 
-            if self.verbose > 1:
+            if self.debug > 1:
                 if self.env.isLinux or self.env.isGitBash or self.env.isCygwin:
                     # display the beginning of the log file as 'tail' only display the later part
                     # use /dev/null to avoid error message in case the log file has not been created
@@ -475,11 +516,12 @@ class SeleniumEnv:
     def cleanLog(self):
         # remove driver log and chromedir
         for f in [self.driverlog, self.chromedir]:
-            print(f'__init__: removing {f}')
+            if self.debug:
+                print(f'__init__: removing {f}')
             try:
                 shutil.rmtree(f)
             except FileNotFoundError:
-                if self.verbose:
+                if self.debug:
                     print(f'__init__: {f} not found')
 
     def get_driver(self) -> webdriver.Chrome:
@@ -759,7 +801,7 @@ class tp_find_element_by_paths:
     def __init__(self, type_paths: list, **opt):
         self.type_paths = type_paths
         self.opt = opt
-        self.verbose = opt.get('verbose', 0)
+        self.debug = opt.get('debug', 0)
 
     def __call__(self, driver):
         e = None
@@ -818,7 +860,7 @@ class tp_find_element_by_chains:
     # check whether one of the chains matches any element
     def __init__(self, chains2: list, **opt):
         self.opt = opt
-        self.verbose = opt.get('verbose', 0)
+        self.debug = opt.get('debug', 0)
         self.matched_so_far = [] # this saves the matched path so far, for debugging purpose.
 
         self.chains = []
@@ -893,19 +935,19 @@ class tp_find_element_by_chains:
     def __call__(self, driver):
         e: WebElement = None
         
-        if self.verbose:
+        if self.debug:
             print(f'parsed chains = {pformat(self.chains)}')
 
         for chain_idx in range(0, len(self.chains)):
             # make sure we start from the same domstack every time.
-            if self.verbose:
+            if self.debug:
                 print("replay domstack")
             replay_domstack(domstack)
 
             local_domstack = domstack.copy()    
 
             chain = self.chains[chain_idx]
-            if self.verbose:
+            if self.debug:
                 print(f'testing chain = {pformat(chain)}')
 
             locator_driver = driver
@@ -915,17 +957,17 @@ class tp_find_element_by_chains:
 
             for locator_idx in range(0, len(chain)):
                 locator= chain[locator_idx]
-                if self.verbose:
+                if self.debug:
                     print(f'testing locator = {pformat(locator)}')
                 if locator[0][0] == "shadow":
                     try:
                         locator_driver = e.shadow_root  # shadow_driver is a webdriver type
                         self.matched_so_far[chain_idx].append(locator[0][0])
 
-                        if self.verbose:
+                        if self.debug:
                             print(f"found {locator[0][0]}")
                     except Exception as ex:
-                        if self.verbose:
+                        if self.debug:
                             print(f"not found {locator[0][0]}")
                         found_chain = False
                         break
@@ -953,29 +995,29 @@ class tp_find_element_by_chains:
                         driver.switch_to.frame(e)
                         locator_driver = driver
                         self.matched_so_far[chain_idx].append(locator[0][0])
-                        if self.verbose:
+                        if self.debug:
                             print(f"found {locator[0][0]}")
                     except Exception as ex:
-                        if self.verbose:
+                        if self.debug:
                             print(f"not found {locator[0][0]}")
                         found_chain = False
                         break
                 else:
                     type_paths = locator
-                    if self.verbose:
+                    if self.debug:
                         print(f"type_paths = {pformat(type_paths)}")
 
                     one_parallel_path_matched = False
                     for type_path in type_paths:
                         ptype, path = type_path # path_type and path
-                        if self.verbose:
+                        if self.debug:
                             print(f'testing {ptype}={path}')
                         if "xpath" in ptype:  # python's string.contains() method
                             try:
                                 e = locator_driver.find_element(By.XPATH, path)
                             except Exception:
                                 # j += 1
-                                if self.verbose:
+                                if self.debug:
                                     print(f"not found xpath {ptype}={path}")
                                 continue
                         elif "css" in ptype:
@@ -984,7 +1026,7 @@ class tp_find_element_by_chains:
                                     By.CSS_SELECTOR, path)
                             except Exception:
                                 # j += 1
-                                if self.verbose:
+                                if self.debug:
                                     print(f"not found css {ptype}={path}")
                                 continue
                         else:
@@ -992,16 +1034,16 @@ class tp_find_element_by_chains:
                                 f"unsupported path type={ptype}")
 
                         self.matched_so_far[chain_idx].append(f"{ptype}={path}")
-                        if self.verbose:
+                        if self.debug:
                             print(f'found {ptype}="{path}"')
                         one_parallel_path_matched = True
                         break
-                    if self.verbose:
+                    if self.debug:
                         print(
                             f'one_parallel_path_matched={one_parallel_path_matched}')
                     if not one_parallel_path_matched:
                         found_chain = False
-                        if self.verbose:
+                        if self.debug:
                             print(f"matched so far = {pformat(self.matched_so_far[chain_idx])}")
                         break
 
@@ -1091,8 +1133,12 @@ element/
     directory for dumping the current element
 
 iframe/
-    directory for dumping the current iframe that contains the element.
+    directory for dumping the current (or closest) iframe that contains the element.
     there could be shadow doms between the element and the iframe.
+
+shadow/
+    directory for dumping the currnet (or closest) shadow dom that contains the element.
+    there could be iframes between the element and the shadow dom.
 
 page/
     directory for dumping the whole page
@@ -1132,9 +1178,6 @@ screenshot_iframe.png
 screenshot_shadowhost.png
 screenshot_page.png
     the screenshot of the element, iframe, shadow, or the whole page.
-    screenshot_element.png and screenshot_shadowhost.png are in the element/ directory.
-    screenshot_shadowhost.png is created only if the element is under a shadow dom and there 
-    no iframe in between.
 
 shadow*.html
     the shadow dom of the page or specific element.
@@ -1144,15 +1187,7 @@ source_element.html
 source_iframe.html
 source_shadowhost.html
 source_page.html
-    the source html specific to dump scope: element, iframe, shadow, or page: 
-        if scope is element, dump to source_element.html and source_shadowhost.html if the element
-            is under a shadow and there is no iframe in between.
-        if scope is iframe, dump to source_iframe.html
-            this will be the html of the innest iframe dom that contains the element.
-            we cannot get the innest shadow dom html because shadowRoot (shadow driver) 
-            has no page_source attribute. we can only get shadow dom's (shadow root) 
-            shadowhost's html.
-        if scope is page, dump to source_page.html
+    the source html specific to dump scope: element, iframe, shadow, or page.
 
     note that when there is a child iframe/shadow dom, the source*.html doesn't show 
     the child iframe/shadow dom's full content.
@@ -1237,42 +1272,119 @@ How to use these files:
     
 '''
 
-def dump(output_dir: str, element: WebElement = None, **opt):
+def dump(output_dir: str, scope: str = 'element',  **opt):
     global driver
-    verbose = opt.get('verbose', 0)
+    global locator_driver
+    global domstack
+    global last_element
+    
     debug = opt.get('debug', 0)
+    verbose = opt.get('verbose', debug)
+
+    '''
+    about the scope:
+        element: dump the last element's info
+        iframe:  dump everything about the innest iframe dom of the element.
+        shadow:  dump everything about the innest shadowHost of the element.
+        page:    dump the whole page.
+        all:     dump all scopes: 'element', 'dom', 'page', into separate subdirs.
+
+        for example,
+        ptslnm -rm -debug "file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" -dump="C:/Users/tian/dumpdir2" xpath=//iframe[1] iframe "xpath=//body/p"
+        the chain is: xpath=//iframe[1] iframe "xpath=//body/p"
+
+        if appending "-scope element", we dump the last element, which is the <p> element. 
+            source_elemnet.html only contains the <p> element.
+        if appending "-scope shadow",  we dump the closest shadowHost of the <p> element.
+            we cannot dump shadowRoot because shadowRoot is stripped-down version of WebDriver, which
+            doesn't have page_source attribute ...
+        if appending "-scope iframe,  we dump the closest iframe of the <p> element.
+        if appending "-scope page",   we dump the whole page.
+        if appending "-scope all",    we dump all scopes: element, shadow, iframe, page.
+    '''
+
+    # output_dir can be from both **opt and step, to avoid the multiple-values error,
+    # we group output_dir into **opt, allowing override kwargs
+
+    # save a copy of README.txt
+    readme_file = f"{output_dir}/README.txt"
 
     os.makedirs(output_dir, exist_ok=True)  # this is mkdir -p
-    
-    if element:
-        # this part takes care of dump_scope=element
-        source_file = f"{output_dir}/source_element.html"
-        with open(source_file, "w", encoding="utf-8") as source_fh:
-            source_fh.write(element.get_attribute('outerHTML'))
-            # screenshot the element
-            # element.click()
 
-        element.screenshot(f"{output_dir}/screenshot_element.png")
+    with open(readme_file, "w", encoding="utf-8") as readme_fh:
+        readme_fh.write(dump_readme)
+        readme_fh.close()
+    
+    start_node = None
+    if scope == 'element' or scope == 'all':
+        subdir = f"{output_dir}/element"
+        os.makedirs(subdir, exist_ok=True)  # this is mkdir -p
+        print()
+        print(f"locate: dump element to {subdir}")
+
+        # element = driver.switch_to.active_element
+        # if element is None:
+        if last_element:
+            source_file = f"{subdir}/source_element.html"
+            screenshot_file = f"{subdir}/screenshot_element.png"
+            with open(source_file, "w", encoding="utf-8") as source_fh:
+                source_fh.write(last_element.get_attribute('outerHTML'))
+                # screenshot the element
+                # element.click()
+            last_element.screenshot(screenshot_file)
+
+            dump_deeper(subdir, element=last_element, **opt)
+        elif scope == 'element':
+            raise RuntimeError(f"scope is element, but last_element is not set")
+    if scope == 'shadow' or scope == 'all':
+        subdir = f"{output_dir}/shadow"
+        os.makedirs(subdir, exist_ok=True)  # this is mkdir -p
+        print()
+        print(f"locate: dump shadow to {subdir}")
 
         # dump shadow host if the element is in a shadow dorm,  eg, shadow, or iframe.shadow.
         # but shadow.iframe doesn't count.
-        source_file = f"{output_dir}/source_shadowhost.html"
+        source_file = f"{subdir}/source_shadowhost.html"
+        screenshot_file = f"{subdir}/screenshot_shadowhost.png"
 
-        # shadowHost = js_get(element, "shadowhost")
-        #  we can also get shadow host from domstack - if the last element in domstack is shadow,
-        #  then the shadow host is the last element in domstack
-        shadowHost = None
-        if domstack:
-            if domstack[-1]['type'] == 'shadow':
-                shadowHost = domstack[-1]['element']
+        # shadowHost = js_get(element, "shadowhost") # this gives the immediate shadow host of the element
+        # eg, shadow, or iframe.shadow. but shadow.iframe doesn't count.
 
-        if shadowHost:
+        # we can also get shadow host from domstack. if there is a iframe in between, we still dump 
+        # the shadow host.
+        result = get_domstack('last_shadow')
+        if result:
+            shadowHost = result['item']['element']
+            domstack2 = result['domstack']
+
+            # remove the last shadow from domstack2
+            domstack2.pop()
+
+            # play domstack2
+            replay_domstack(domstack2)
+
+            # dump shadow host
             with open(source_file, "w", encoding="utf-8") as source_fh:
                 source_fh.write(shadowHost.get_attribute('outerHTML'))
-            shadowHost.screenshot(f"{output_dir}/screenshot_shadowhost.png")
-    else:
-        # this part takes care of dump_scope=iframe or dump_scope=page
-        source_file = f"{output_dir}/source.html"
+            shadowHost.screenshot(screenshot_file)
+
+            # restore domstack
+            replay_domstack(domstack)
+
+            dump_deeper(subdir, element=None, scope='shadow', **opt)
+        elif scope == "all":
+            print(f"scope is all, but no shadow host found")
+        else:
+            raise RuntimeError(f"scope is shadow, but no shadow host found")
+    if scope == 'iframe' or scope == 'all':
+        subdir = f"{output_dir}/iframe"
+        os.makedirs(subdir, exist_ok=True)  # this is mkdir -p
+        print()
+        print(f"locate: dump iframe to {subdir}")
+
+        source_file = f"{subdir}/source_iframe.html"
+        screenshot_file = f"{subdir}/screenshot_iframe.png"
+
         with open(source_file, "w", encoding="utf-8") as source_fh:  
             '''
             driver.page_source may not be the whole page.
@@ -1288,46 +1400,73 @@ def dump(output_dir: str, element: WebElement = None, **opt):
                 - driver.page_source will not show the content of the iframe or shadow inside it.        
             '''
             source_fh.write(driver.page_source)
-           
-        # driver.save_screenshot(f"{output_dir}/screenshot.png")
 
-        # check if we are in an iframe. if yes, we get the iframe element, and then screenshot the element
-        # otherwise, we screenshot the whole page
+        # to dump screenshot, we need to see the element. 
+        # iframe's element cannot be seen from the iframe dom, we need to go to the parent frame.
+        # this situation is same to shadowRoot.
+        result = get_domstack('last_iframe')
+        if result:
+            iframeelement = result['item']['element']
+            domstack2 = result['domstack']
 
-        # find the current frame's iframe element, if any
-        # iframeelement = js_get(None, "iframeelement")
-        iframeelement = None
-        for item in reversed(domstack):
-            if item['type'] == 'iframe':
-                iframeelement = item['element']
-                print(f"dump: we are in iframe url = {item['url']}")
-                break
+            # two ways to go to the parent frame
+            # way-1: like we did with shadow
+            # # remove the last iframe from domstack2
+            # domstack2.pop()
+            # # play domstack2
+            # replay_domstack(domstack2)
 
-        if iframeelement:
-            # we are in an iframe, screenshot the iframe element, but first we need to switch to the iframe
-            #    1. go to parent frame
-            #    2. screenshot this iframe
-            #    3. replay the domstack
-            # we don't update domstack because we quickly restore the current state.
-
+            # way-2:
             # go to parent frame
             driver.switch_to.parent_frame()
 
             # screenshot the iframe
-            iframeelement.screenshot(f"{output_dir}/screenshot_iframe.png")
+            iframeelement.screenshot(screenshot_file)
 
             # restore driver state but no need to restore domstack because we never changed it
             replay_domstack(domstack)
-        else:
-            # we are not in any iframe, screenshot the whole page
-            driver.save_screenshot(f"{output_dir}/screenshot_page.png")
 
-    if element is None:
+            dump_deeper(subdir, element=None, **opt)
+    if scope == 'page' or scope == 'all':
+        subdir = f"{output_dir}/page"
+        os.makedirs(subdir, exist_ok=True)  # this is mkdir -p
+        print()
+        print(f"locate: dump page to {subdir}")
+        
+        source_file = f"{subdir}/source_page.html"
+        screenshot_file = f"{subdir}/screenshot_page.png"
+
+        # 1. save current domstack
+        domstack_save = domstack.copy()
+
+        # 2. switch to top - clear domstack
+        driver.switch_to.default_content()
+        domstack.clear()
+        locator_driver = driver
+        driver_url = driver.current_url
+
+        # save the whole page's screenshot
+        driver.save_screenshot(screenshot_file)
+
+        # 3. dump - dump() will not change domstack
+        dump_deeper(subdir, element=None, **opt)
+
+        # 4. restore driver dom and domstack
+        replay_domstack(domstack_save)
+        domstack = domstack_save
+
+        
+
+def dump_deeper(output_dir: str, element: WebElement = None, scope:str=None, **opt):
+    # prepare for recursive dump
+    if element:
+        iframe_list = element.find_elements(By.XPATH, './/iframe')
+    elif scope and scope == 'shadow':
+        iframe_list = locator_driver.find_elements(By.XPATH, './/iframe')
+    else:
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
         # driverwait = WebDriverWait(driver, 20)
         # iframe_list = driverwait.until(EC.presence_of_all_elements_located((By.XPATH, '//iframe')))
-    else:
-        iframe_list = element.find_elements(By.XPATH, './/iframe')
 
     dump_state = {
         'output_dir': output_dir,
@@ -1368,7 +1507,7 @@ def dump(output_dir: str, element: WebElement = None, **opt):
             dump_state[format][scheme] = open(f, "w", encoding="utf-8")
 
     for iframe in iframe_list:
-        dump_deeper(iframe, dump_state, 'iframe', **opt)
+        dump_recursively(iframe, dump_state, 'iframe', **opt)
 
     # get all shadow doms
     #
@@ -1386,16 +1525,20 @@ def dump(output_dir: str, element: WebElement = None, **opt):
     # unlike iframe are always under iframe tag, shadow host can be any tag, 
     # therefore, we need to try every element. 
     # if element.shadow_root exists, it is a shadow host.
-    if element is None:
-        start_node = driver
-        find_path = '//*'
-    else:
+    if element:
         start_node = element
         find_path = './/*'
-        dump_deeper(element, dump_state, 'shadow', **opt)  # don't forget this element itself
+        # don't forget checking whether this element itself is a shadow host
+        dump_recursively(element, dump_state, 'shadow', **opt)  
+    elif scope and scope == 'shadow':
+        start_node = locator_driver
+        find_path = '//*'
+    else:
+        start_node = driver
+        find_path = '//*'      
 
     for e in start_node.find_elements(By.XPATH, find_path):
-        dump_deeper(e, dump_state, 'shadow', **opt)
+        dump_recursively(e, dump_state, 'shadow', **opt)
 
     # close all file handlers after we finish
     for format in ['list', 'map']:
@@ -1420,8 +1563,8 @@ def dump(output_dir: str, element: WebElement = None, **opt):
         raise RuntimeError(f"dump_state type_chain is not empty")
 
 
-def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
-    verbose = opt.get('verbose', 0)
+def dump_recursively(element: WebElement, dump_state: dict, type: str, **opt):
+    debug = opt.get('debug', 0)
 
     dump_state['scan_count'][type] += 1 # type is iframe or shadow
 
@@ -1453,7 +1596,7 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
             if element.shadow_root:
                 pass
         except NoSuchShadowRootException:
-            if verbose > 1:
+            if debug > 1:
                 xpath = js_get(element, 'xpath', **opt)
                 print(f'no shadow root under xpath={xpath}')
             return
@@ -1546,11 +1689,11 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
         # 3.1 find sub iframes in this frame
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
         for sub_frame in iframe_list:
-            dump_deeper(sub_frame, dump_state, 'iframe', **opt)
+            dump_recursively(sub_frame, dump_state, 'iframe', **opt)
 
         # 3.2 find shadows in this frame
         for e in driver.find_elements(By.XPATH, "//*"):
-            dump_deeper(e, dump_state, 'shadow', **opt)
+            dump_recursively(e, dump_state, 'shadow', **opt)
 
         # 4. go back up 1 level, to the parent iframe content (context) - ie, get out of the child iframe
         driver.switch_to.parent_frame()
@@ -1596,7 +1739,7 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
         # find sub iframes in this shadow
         iframe_list = shadow_driver.find_elements(By.CSS_SELECTOR, 'iframe')
         for iframe in iframe_list:
-            dump_deeper(iframe, dump_state, 'iframe', **opt)
+            dump_recursively(iframe, dump_state, 'iframe', **opt)
 
         # find child shadows in this shadow, can only use CSS SELECTOR
         # https://stackoverflow.com/questions/42627939
@@ -1615,8 +1758,8 @@ def dump_deeper(element: WebElement, dump_state: dict, type: str, **opt):
             #     seen[e.id] = 1
 
             # e may or may not be a shadow host. 
-            # dump_deeper will figure it out whether it is a shadow host or not.
-            dump_deeper(e, dump_state, 'shadow', **opt)
+            # dump_recursively will figure it out whether it is a shadow host or not.
+            dump_recursively(e, dump_state, 'shadow', **opt)
 
     # restore the locator chains to the previous iframe/shadow
     poptype = dump_state['type_chain'].pop()
@@ -2245,7 +2388,7 @@ def test_basic():
     #         "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe" --window-size=960,540 \
     #         --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=19999
 
-    driverEnv = SeleniumEnv("localhost:19999", verbose=1)
+    driverEnv = SeleniumEnv("localhost:19999", debug=1)
     driver = driverEnv.get_driver()
     print(f"driver.title={driver.title}")
 
@@ -2314,7 +2457,12 @@ def follow(steps: list,  **opt):
     global break_levels
     global debuggers
 
-    update_locator_driver(**opt)
+    debug = opt.get("debug", 0)
+    verbose = opt.get("verbose", 0)
+    dryrun = opt.get("dryrun", 0)
+
+    if not dryrun:
+        update_locator_driver(**opt)
 
     # we support single-level block, just for convenience when testing using appium_steps
     # we don't support nested blocks; for nested block, use python directly
@@ -2335,14 +2483,10 @@ def follow(steps: list,  **opt):
     blockstart = None
     negation = False
 
-    debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", 0)
-
     ret = {'Success': False}
 
     if not steps:
-        if debug or verbose:
-            print(f'follow: steps are empty. return')
+        print(f'follow: steps are empty. return')
         return
 
     for step in steps:
@@ -2360,7 +2504,7 @@ def follow(steps: list,  **opt):
                 block_depth -= 1
 
                 if block_depth == 0:
-                    # the outermost block is done
+                    # the outermost block is ended; we didn't run the block yet.
                     if debug:
                         print(f"follow: matched expected_blockend={expected_blockend}")
                     expected_blockend = None
@@ -2371,7 +2515,10 @@ def follow(steps: list,  **opt):
                 
                     # run_block() recursively calls follow()
                     result = run_block(blockstart, negation,
-                                condition, block, **opt)
+                                condition, block, **opt)                    
+                    if dryrun:
+                        # we only check syntax, therefore, we don't check the result and move on
+                        continue
 
                     if not result['Success']:
                         print(f"follow: break because block failed.")
@@ -2401,22 +2548,6 @@ def follow(steps: list,  **opt):
                 blockstart = m.group(1)
                 negation = m.group(2)
                 condition = m.group(3)
-
-                # if m := re.match(r"\s*(xpath|css|id)=(.+)", condition):
-                #     tag, value, *_ = m.groups()
-                #     if tag == 'id':
-                #         condition = f"driver.find_element(By.ID, '''{value}''')"
-                #     elif tag == 'xpath':
-                #         if checkonly:
-                #             print(f"check xpath={value}")
-                #             try:
-                #                 lxml.etree.XPath(value)
-                #             except lxml.etree.XPathSyntaxError as e:
-                #                 raise RuntimeError(
-                #                     f"XPath syntax error in step={step}: {e}")
-                #         condition = f"driver.find_element(By.XPATH, '''{value}''')"
-                #     elif tag == 'css':
-                #         condition = f"driver.find_element(By.CSS_SELECTOR, '''{value}''')"
 
                 if negation:
                     expected_blockend = f"end_{blockstart}{negation}"
@@ -2488,6 +2619,8 @@ def follow(steps: list,  **opt):
                         print(f"follow: parsed py file {file_name} to steps2={steps2}")
                             
                 result = follow(steps2, **opt)
+                if dryrun:
+                    continue
                 if not result['Success']:
                     print(f"follow: run steps_{file_type}={file_name} failed")
                     return result
@@ -2620,6 +2753,9 @@ def follow(steps: list,  **opt):
             # using locator (step) that has side effect: eg, click, send_keys
             print(f"follow: debug_after={step}")
             locate(step, **opt)
+
+        if dryrun:
+            continue
         
         if debug:
             print(f"follow: result={pformat(result)}")
@@ -2652,8 +2788,7 @@ def locate_dict(step: dict, **opt):
     dryrun = opt.get("dryrun", 0)
     interactive = opt.get("interactive", 0)
     debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", 0)
-    checkonly = opt.get("checkonly", 0)
+    dryrun = opt.get("dryrun", 0)
     
     global driver
     global driver_url
@@ -2663,7 +2798,8 @@ def locate_dict(step: dict, **opt):
     global domstack
     global debuggers
 
-    update_locator_driver(**opt)
+    if not dryrun:
+        update_locator_driver(**opt)
     
     if debug:
         print(f"locate_dict: step={pformat(step)}")
@@ -2689,6 +2825,14 @@ def locate_dict(step: dict, **opt):
         if type(locator) != str:
             raise RuntimeError(f"simple step locator must be a string, but got {type(locator)}, step={pformat(step)}")
         
+        if dryrun:
+            locate(locator, **opt)
+
+            for status in ['Success', 'Failure']:
+                if status in step:
+                    locate(step[status], **opt)
+            return ret
+        
         result = locate(locator, **opt)
 
         if result['Success']:
@@ -2708,6 +2852,22 @@ def locate_dict(step: dict, **opt):
         if type(paths) != list:
             raise RuntimeError(f"parallel step paths must be a list, but got {type(paths)}, step={pformat(step)}")
 
+        if dryrun:
+            for path in paths:
+                locator = path.get('locator', None)
+                if type(locator) != str:
+                    raise RuntimeError(f"'parallel' step 'locator' must be a string, but got {type(locator)}, step={pformat(step)}")
+                locate(locator, **opt)
+                if 'Success' in path:
+                    locate(path['Success'], **opt)
+                if 'Failure' in path:
+                    locate(path['Failure'], **opt)
+            if 'Success' in action:
+                locate(action['Success'], **opt)
+            if 'Failure' in action:
+                locate(action['Failure'], **opt)
+            return ret
+        
         # concatenate all paths' locators into a single string so that we can call locate()
         # which take a string of locators, separated by comma.
         # locate() calls tp_find_element_by_paths() which can take multiple locators in parallel.
@@ -2738,20 +2898,36 @@ def locate_dict(step: dict, **opt):
             if 'Failure' in action:
                 # action-level NotFound
                 locate(action['Failure'], **opt)
-            else:
+            elif not dryrun:
                 raise RuntimeError(f"element not found, step={pformat(step)}")
     elif locator_type == 'chains':
         # paths must be a list
         paths = action.get('paths', None)
         if type(paths) != list:
-            raise RuntimeError(f"chains step paths must be a list, but got {type(paths)}, step={pformat(step)}")
+            raise RuntimeError(f"chains step 'paths' must be a list, but got {type(paths)}, step={pformat(step)}")
 
+        if dryrun:
+            for path in paths:
+                locator = path.get('locator', None)
+                if type(locator) != list:
+                    raise RuntimeError(f"chains step 'locator' must be a list, but got {type(locator)}, step={pformat(step)}")
+                tp_find_element_by_chains(locator, **opt)
+                if 'Success' in path:
+                    locate(path['Success'], **opt)
+                if 'Failure' in path:
+                    locate(path['Failure'], **opt)
+            if 'Success' in action:
+                locate(action['Success'], **opt)
+            if 'Failure' in action:
+                locate(action['Failure'], **opt)
+            return ret
+        
         # collect all the locators in all paths in a list and then call tp_find_element_by_chains()
         chains = []
         for path in paths:
             locator = path.get('locator', None)
             if type(locator) != list:
-                raise RuntimeError(f"chains step locator must be a list, but got {type(locator)}, step={pformat(step)}")
+                raise RuntimeError(f"chains step 'locator' must be a list, but got {type(locator)}, step={pformat(step)}")
             
             chains.append(locator)
         
@@ -2829,6 +3005,11 @@ def update_locator_driver(**opt):
     global locator_driver
     global driver_url
     global driver
+    global last_element
+    dryrun = opt.get("dryrun", 0)
+
+    if dryrun:
+        return
 
     helper = {}  # interactivity helper
 
@@ -2845,6 +3026,8 @@ def update_locator_driver(**opt):
         # hit_enter_to_continue(helper=helper)
         locator_driver = driver
         driver_url = driver.current_url
+        print(f"locate: updated last_element to driver.switch_to.active_element")
+        last_element = driver.switch_to.active_element
 
 def tp_switch_to_frame(element: WebElement, **opt):
     '''
@@ -2929,8 +3112,7 @@ def locate(locator: str, **opt):
     dryrun = opt.get("dryrun", 0)
     interactive = opt.get("interactive", 0)
     debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", 0)
-    checkonly = opt.get("checkonly", 0)
+    verbose = opt.get("verbose", debug)
     isExpression = opt.get("isExpression", 0) # for condtion test, we set isExpression=1, so that we get True/False.
 
     global locator_driver
@@ -2986,7 +3168,8 @@ def locate(locator: str, **opt):
         sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/webdriver.py
     '''
 
-    update_locator_driver(**opt)
+    if not dryrun:
+        update_locator_driver(**opt)   
     
     # copied from old locate()
     if m := re.match(r"(url|url_accept_alert)=(.+)", locator):
@@ -3062,7 +3245,7 @@ def locate(locator: str, **opt):
                     # we are testing condition, we want to know True/False
                     # cc = compile(code, '<string>', 'single')
                     try:
-                        # ret['Success'] = multiline_eval(cc)
+                        # ret['Success'] = -eval(cc)
                         ret['Success'] = multiline_eval(code, globals(), locals())
                     except Exception as e:
                         print(f"eval failed with exception={e}")
@@ -3153,7 +3336,7 @@ def locate(locator: str, **opt):
                 # hit_enter_to_continue(helper=helper)
 
                 ret['Success'] = True
-    elif m := re.match(r"(dict)(file)?(.*)?=(.+)", locator, re.MULTILINE | re.DOTALL):
+    elif m := re.match(r"(dict)(file)?=(.+)", locator, re.MULTILINE | re.DOTALL):
         '''
         'dict' is python code of dict locator. see locate_dict() for details.
         examples:
@@ -3175,7 +3358,7 @@ def locate(locator: str, **opt):
 
             dictfile=ptslnm_test_dict_parallel.py
         '''
-        lang, file, target, code, *_ = m.groups()
+        lang, file, code, *_ = m.groups()
 
         if file:
             print(f"locate: read {lang} from file {code}")
@@ -3221,15 +3404,16 @@ def locate(locator: str, **opt):
         # may not be the active element. therefore, we use last_element.
         # element = driver.switch_to.active_element
         element = last_element
-        try:
-            if element.shadow_root:
-                pass
-        except NoSuchShadowRootException:
-            print(f'locate: no shadow root under this element')
-            return
+        
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
+            # try:
+            #     if element.shadow_root:
+            #         pass
+            # except NoSuchShadowRootException:
+            #     print(f'locate: no shadow root under this element')
+            #     return
             locator_driver = element.shadow_root  # shadow_driver is a webdriver type
             # last_element = element # last element is unchanged. this is different from iframe.
 
@@ -3557,9 +3741,9 @@ def locate(locator: str, **opt):
                     se.select_by_visible_text(string)
                 last_element = se # todo: or keep old last_element?
                 ret['Success'] = True      
-    elif m1 := re.match(r"(?:\n|\r\n|\s?)*gone_(xpath|css)=(.+)",
+    elif m := re.match(r"(?:\n|\r\n|\s?)*gone_(xpath|css)=(.+)",
                         locator, re.MULTILINE | re.DOTALL):
-        ptype, paths_string = m1.groups()
+        ptype, paths_string = m.groups()
 
         type_paths = []
         while m2 := re.match(r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*gone_(xpath|css)=",
@@ -3618,82 +3802,18 @@ def locate(locator: str, **opt):
             driver.implicitly_wait(wait_seconds)
 
             # don't change last_element
-    elif m := re.match(r"dump_(element|iframe|page|all)=(.+)", locator):
-        scope, output_dir, *_ = m.groups()
-        print(f"locate: dump {scope} to {output_dir}")
-        '''
-        about the scope:
-            element: dump the last element's info
-            dom:     dump everything about the innest iframe or shadow dom of the element.
-            page:    dump the whole page.
-            all:     dump all scopes: 'element', 'dom', 'page', into separate subdirs.
-
-            for example, when we run 
-            ptslnm -rm -debug "file:///C:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "C:/Users/tian/dumpdir2" xpath=//iframe[1] iframe "xpath=//body/p"
-            the chain is: xpath=//iframe[1] iframe "xpath=//body/p"
-
-            if we dump_element, we dump the last element, which is the <p> element. source.html only contains the <p> element.
-            if we dump_dom, we dump the shadow dom of the <p> element. source.html only contains the iframe dom which contains the <p> element.
-            if we dump_all, we dump the whole page. source.html contains the whole page.
-        '''
-
-        # output_dir can be from both **opt and step, to avoid the multiple-values error,
-        # we group output_dir into **opt, allowing override kwargs
-
-        # save a copy of README.txt
-        readme_file = f"{output_dir}/README.txt"
-
-        os.makedirs(output_dir, exist_ok=True)  # this is mkdir -p
-
-        with open(readme_file, "w", encoding="utf-8") as readme_fh:
-            readme_fh.write(dump_readme)
-            readme_fh.close()
-        
-        if scope == 'element' or scope == 'all':
-            subdir = f"{output_dir}/element"
-            print()
-            print(f"locate: dump element to {subdir}")
-
-            # element = driver.switch_to.active_element
-            # if element is None:
-            if last_element:
-                dump(element=last_element, **{**opt, 'output_dir': f"{subdir}"})
-
-        if scope == 'iframe' or scope == 'all':
-            subdir = f"{output_dir}/iframe"
-            print()
-            print(f"locate: dump iframe to {subdir}")
-
-            # scope == 'iframe' looks the same as scope == 'page' - both calls
-            # dump() without element. However, before calling scope == 'page',
-            # we need to get out of iframe.
-
-            # dump(locator_driver, **{**opt, 'output_dir': f"{subdir}"})
-            # we don't use locator_driver, because we got error
-            #    AttributeError: 'ShadowRoot' object has no attribute 'page_source'
-            dump(**{**opt, 'output_dir': f"{subdir}"})
-
-        # we put 'page' and 'all' at the end, because they need to switch driver to original driver.
-        if scope == 'page' or scope == 'all':
-            subdir = f"{output_dir}/page"
-            print()
-            print(f"locate: dump page to {subdir}")
-                
-            # 1. save current domstack
-            domstack_save = domstack.copy()
-
-            # 2. switch to top - clear domstack
-            driver.switch_to.default_content()
-            domstack.clear()
-
-            # 3. dump - dump() will not change domstack
-            dump(**{**opt, 'output_dir': f"{subdir}"})
-
-            # 4. restore driver dom and domstack
-            replay_domstack(domstack_save)
-            domstack = domstack_save
-
-        ret['Success'] = True
+    elif m := re.match(r"dump(?:_(element|shadow|iframe|page|all))(?:-(clean))=(.+)", locator):
+        scope, args, output_dir, *_ = m.groups()
+        print(f"locate: dump {scope} to {output_dir} with args={args}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            if 'clean' in args:
+                # clean up the output_dir before we dump
+                print(f"locate: clean up {output_dir}")
+                shutil.rmtree(output_dir, ignore_errors=True)
+            dump(output_dir, scope=scope, **opt)
+            ret['Success'] = True
     elif m := re.match(r"break()$|break=(\d+)", locator):
         ret['Success'] = True # hard code to True for now
 
@@ -3788,109 +3908,110 @@ def locate(locator: str, **opt):
             'print' is excuted right here and only once.
             'debug' is saved in debuggers[] and executed later, before or after each locate() call.
         '''
-        if directive == 'print':
-            print(f"locate: get property {keys}")
-            # if interactive:
-            #     hit_enter_to_continue(helper=helper)
-            for key in keys:
-                if not dryrun:
-                    if key == 'timeouts' or key == 'waits':
-                        # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
-                        # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
-                        print(f'    explicit_wait={wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
-                        print(f'    implicit_wait={driver.timeouts.implicit_wait}') # when we call find_element()
-                        print(f'    page_load_timeout={driver.timeouts.page_load}') # driver.get()
-                        print(f'    script_timeout={driver.timeouts.script}') # driver.execute_script()
-                    elif key == 'title':
-                        title = driver.title
-                        print(f'driver.title={title}')
-                    elif key == 'url':
-                        '''
-                        https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
-                        javascript: URLs can be used anywhere a URL is a navigation target. 
-                        This includes, but is not limited to:
-                            The href attribute of an <a> or <area> element.
-                            The action attribute of a <form> element.
-                            The src attribute of an <iframe> element.
-                            The window.location JavaScript property.
-                            The browser address bar itself.
+        if not dryrun:
+            if directive == 'print':
+                print(f"locate: get property {keys}")
+                # if interactive:
+                #     hit_enter_to_continue(helper=helper)
+                for key in keys:
+                    if not dryrun:
+                        if key == 'timeouts' or key == 'waits':
+                            # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
+                            # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
+                            print(f'    explicit_wait={wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
+                            print(f'    implicit_wait={driver.timeouts.implicit_wait}') # when we call find_element()
+                            print(f'    page_load_timeout={driver.timeouts.page_load}') # driver.get()
+                            print(f'    script_timeout={driver.timeouts.script}') # driver.execute_script()
+                        elif key == 'title':
+                            title = driver.title
+                            print(f'driver.title={title}')
+                        elif key == 'url':
+                            '''
+                            https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
+                            javascript: URLs can be used anywhere a URL is a navigation target. 
+                            This includes, but is not limited to:
+                                The href attribute of an <a> or <area> element.
+                                The action attribute of a <form> element.
+                                The src attribute of an <iframe> element.
+                                The window.location JavaScript property.
+                                The browser address bar itself.
 
-                        url has mutliple meanings:
-                            the url of the current page
-                            the url that you go next if you click a link, eg, <a href="url">
-                        more accurately, we care about the following urls, from big to small:
-                            url = driver.current_url # this driver's url, the top level url of the current page.
-                            url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
-                            url = driver.execute_script("return window.location.href") # this is my (current) iframe url
-                            url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
-                        '''
-                        element_url = None
-                        if last_element:
-                            # the following are the same
-                            # element_url = driver.execute_script("return arguments[0].src", last_element)
-                            element_url = last_element.get_attribute('src')
+                            url has mutliple meanings:
+                                the url of the current page
+                                the url that you go next if you click a link, eg, <a href="url">
+                            more accurately, we care about the following urls, from big to small:
+                                url = driver.current_url # this driver's url, the top level url of the current page.
+                                url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
+                                url = driver.execute_script("return window.location.href") # this is my (current) iframe url
+                                url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
+                            '''
+                            element_url = None
+                            if last_element:
+                                # the following are the same
+                                # element_url = driver.execute_script("return arguments[0].src", last_element)
+                                element_url = last_element.get_attribute('src')
 
-                            print(f'    element_url=element.get_attribute("src")={element_url}')
-                        else:
-                            print(f'    element_url is not available because last_element is None')
+                                print(f'    element_url=element.get_attribute("src")={element_url}')
+                            else:
+                                print(f'    element_url is not available because last_element is None')
 
-                        # https://stackoverflow.com/questions/938180
-                        iframe_url = driver.execute_script("return window.location.href")
-                        print(f'    current_iframe_url=window.location.href={iframe_url}')
+                            # https://stackoverflow.com/questions/938180
+                            iframe_url = driver.execute_script("return window.location.href")
+                            print(f'    current_iframe_url=window.location.href={iframe_url}')
 
-                        '''
-                        1. the following returns the same as above
-                            iframe_current = driver.execute_script("return window.location.toString()")
-                            print(f'    iframe_current=window.location.toString()={iframe_current}')
-                        2. all iframe defined by srcdoc will return "about:srcdoc", eg
-                            <iframe srcdoc="<p>hello</p>"></iframe>
-                        3. people normally use iframe url to id an iframe, but it is not reliable for
-                        srcdoc iframe.
-                        '''
+                            '''
+                            1. the following returns the same as above
+                                iframe_current = driver.execute_script("return window.location.toString()")
+                                print(f'    iframe_current=window.location.toString()={iframe_current}')
+                            2. all iframe defined by srcdoc will return "about:srcdoc", eg
+                                <iframe srcdoc="<p>hello</p>"></iframe>
+                            3. people normally use iframe url to id an iframe, but it is not reliable for
+                            srcdoc iframe.
+                            '''
 
-                        driver_url = driver.current_url
-                        print(f'    driver_url=driver.current_url={driver_url}')
+                            driver_url = driver.current_url
+                            print(f'    driver_url=driver.current_url={driver_url}')
 
-                        # https://stackoverflow.com/questions/938180
-                        parent_url = driver.execute_script("return document.referrer")
-                        print(f'    parent_iframe_url=document.referrer={parent_url}')
-                    elif key == 'tag':
-                        # get element type
-                        if last_element:
-                            tag = last_element.tag_name
-                            print(f'element_tag_name=element.tag_name={tag}')
-                    elif key == 'xpath':
-                        if last_element:
-                            xpath = js_get(last_element, 'xpath', **opt)
-                            print(f'element_xpath=element.xpath={xpath}')
-                    elif key == 'domstack':
-                        print_domstack()
-                    elif key == 'iframestack':
-                        print_iframestack()
-                    elif key == 'html':
-                        if last_element:
-                            html = last_element.get_attribute('outerHTML')
-                            print(f'element_html=element.outerHTML={html}')   
-                        else:
-                            print(f'element_html is not available because last_element is None')
-                    elif key == 'element':
-                        if last_element:
-                            js_print_debug(last_element)
-                        else:
-                            print(f'element is not available because last_element is None')
-                    elif key == 'consolelog':
-                        print_js_console_log()
-        else:
-            # now for debugs
-            if directive == 'debug_before':
-                before_after = 'before'
+                            # https://stackoverflow.com/questions/938180
+                            parent_url = driver.execute_script("return document.referrer")
+                            print(f'    parent_iframe_url=document.referrer={parent_url}')
+                        elif key == 'tag':
+                            # get element type
+                            if last_element:
+                                tag = last_element.tag_name
+                                print(f'element_tag_name=element.tag_name={tag}')
+                        elif key == 'xpath':
+                            if last_element:
+                                xpath = js_get(last_element, 'xpath', **opt)
+                                print(f'element_xpath=element.xpath={xpath}')
+                        elif key == 'domstack':
+                            print_domstack()
+                        elif key == 'iframestack':
+                            print_iframestack()
+                        elif key == 'html':
+                            if last_element:
+                                html = last_element.get_attribute('outerHTML')
+                                print(f'element_html=element.outerHTML={html}')   
+                            else:
+                                print(f'element_html is not available because last_element is None')
+                        elif key == 'element':
+                            if last_element:
+                                js_print_debug(last_element)
+                            else:
+                                print(f'element is not available because last_element is None')
+                        elif key == 'consolelog':
+                            print_js_console_log()
             else:
-                # directive == 'debug_after' or directive == 'debug'
-                before_after = 'after'
+                # now for debugs
+                if directive == 'debug_before':
+                    before_after = 'before'
+                else:
+                    # directive == 'debug_after' or directive == 'debug'
+                    before_after = 'after'
 
-            action = f"print={keys_string}"
-            debuggers[before_after] = [action]
-            print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
+                action = f"print={keys_string}"
+                debuggers[before_after] = [action]
+                print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
@@ -3908,8 +4029,8 @@ def get_shadowHost_info(shadowHost: WebElement):
 def run_block(blockstart: str, negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is
     # neither True or False.  In this case, we want to know the condition test failed.
-    verbose = opt.get('verbose', False)
-    debug = opt.get('debug', False)
+    debug = opt.get('debug', 0)
+    verbose = opt.get('verbose', debug)
     ret = {'Success': False, 'executed': False, 'element': None}
 
     global break_levels
@@ -3944,8 +4065,7 @@ def if_block(negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is
     # neither True or False.  In this case, we want to know the condition test failed.
 
-    verbose = opt.get('verbose', False)
-    checkonly = opt.get('checkonly', False)
+    verbose = opt.get('verbose', 0)
 
     ret = {'Success': False, 'executed': False}
 
@@ -3974,27 +4094,26 @@ def if_block(negation: str,  condition: str, block: list, **opt):
     ret['executed'] = executed
 
     if executed:
-        if not checkonly:
-            # recursively calling follow() to run the block
-            # try:
-            #     result = follow(block, **opt)
-            # except Exception as e:
-            #     print(f"if_block: block part failed with exception={pformat(e)}")
-            #     return ret
+        # recursively calling follow() to run the block
+        # try:
+        #     result = follow(block, **opt)
+        # except Exception as e:
+        #     print(f"if_block: block part failed with exception={pformat(e)}")
+        #     return ret
 
-            # we should only catch exception in the condition part.
-            # we should not catch the exception if the block part failed.
-            result = follow(block, **opt)
+        # we should only catch exception in the condition part.
+        # we should not catch the exception if the block part failed.
+        result = follow(block, **opt)
 
-            if result:
-                ret['Success'] = result['Success']
+        if result:
+            ret['Success'] = result['Success']
 
     return ret
+
 
 # pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
 # '
 # known' is only available in post_batch, not in pre_batch.
-
 
 def pre_batch(all_cfg, known, **opt):
     print("")
@@ -4014,9 +4133,16 @@ def pre_batch(all_cfg, known, **opt):
 
 
 def post_batch(all_cfg, known, **opt):
+    dryrun = opt.get('dryrun', False)
     print("")
     print("--------------------------------")
+
+    if dryrun:
+        print("dryrun, skip post_batch()")
+        return
+    
     print(f"running post_batch()")
+
     if 'driver' in all_cfg["resources"]["selenium"]:
         print(f"we have driver, quit it")
         driver = all_cfg["resources"]["selenium"]["driver"]

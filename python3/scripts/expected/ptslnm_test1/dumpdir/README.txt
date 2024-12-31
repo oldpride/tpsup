@@ -1,16 +1,24 @@
 
-element/
-    directory for element dump
 
-dom/
-    directory for dom dump
+the dump() function aims to dump everything that you can find in chrome devtools source tab.
+
+element/
+    directory for dumping the current element
+
+iframe/
+    directory for dumping the current (or closest) iframe that contains the element.
+    there could be shadow doms between the element and the iframe.
+
+shadow/
+    directory for dumping the currnet (or closest) shadow dom that contains the element.
+    there could be iframes between the element and the shadow dom.
 
 page/
-    directory for page dump
+    directory for dumping the whole page
 
 iframe*.html
     the iframe html of the page (dump all) or specified element (dump element)
-    note that when there is a shadow dom, the iframe*.html doesn't show the shadow dom;
+    note that when there is a shadow dom, the iframe*.html doesn't show the shadow dom's content;
     you need to look at shadow*.html for that.
 
 locator_chain_list.txt
@@ -39,28 +47,27 @@ locator_chain_map.txt
         shadow001.shadow004: "xpath=id('shadow_host')" "shadow" "css=INPUT:nth-child(6)" "shadow"
 
 screenshot_element.png
-    the screenshot of the element, iframe, or shadow dom.
+screenshot_iframe.png
+screenshot_shadowhost.png
+screenshot_page.png
+    the screenshot of the element, iframe, shadow, or the whole page.
 
 shadow*.html
     the shadow dom of the page or specific element.
     it is the HTML of the shadow host.
 
-source.html
-    the source html specific to dump scope: element, or dom, or the whoe page: 
-        if dump_element, this will be the html of the element.
-        if dump_dom, this will be the html of the innest iframe dom that contains the element.
-                     we cannot get the innest shadow dom html because shadowRoot (shadow driver) 
-                     has no page_source attribute.
-        if dump_all, this will be the whole page.
+source_element.html
+source_iframe.html
+source_shadowhost.html
+source_page.html
+    the source html specific to dump scope: element, iframe, shadow, or page.
 
-    dump_element and dump_dom are reliable because they are not affected by the driver's state (in iframe/shadow or not).
-    dump_page is unreliable or have side effect because it needs to switch driver to the original driver.
+    note that when there is a child iframe/shadow dom, the source*.html doesn't show 
+    the child iframe/shadow dom's full content.
+    you need to look at iframe*.html and shadow*.html for that.
 
-    note that when there is a shadow dom, the source.html doesn't show the shadow dom's full content.
-    you need to look at shadow*.html for that.
-
-    normally source.html will be different from the original html because source.html contains
-    dynamic content, such as the content of shadow dom or js generated content.
+    source.html will be different from the original html also because source.html contains
+    dynamic content, such as js generated content.
 
     you will see see some tags are neither from the original html nor from the js that you provided.
     for example: 

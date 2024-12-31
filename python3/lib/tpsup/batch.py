@@ -48,7 +48,7 @@ extra_args = {
     'caller': {'switches': ['-c', '--caller'], 'action': 'store', 'default': None, 'help': "caller name"},
 
     'dryrun': {'switches': ['-dryrun', '--dryrun'], 'action': 'store_true', 'default': False,
-               'help': "dryrun mode if implemented"},
+               'help': "dryrun mode if implemented. use it to check syntax"},
 
     'debug': {'switches': ['-debug', '--debug'], 'action': 'store_true', 'default': False, 'help': "debug mode"},
 
