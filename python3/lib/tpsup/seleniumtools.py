@@ -3629,12 +3629,15 @@ def locate(locator: str, **opt):
                 last_element).pause(seconds).perform()
             # this action should not change the active element
             ret['Success'] = True
-    elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL):
-        value, *_ = m.groups()
-        print(f"locate: string={value}")
+    elif m := re.match(r"string(FromCode)?=(.+)", locator, re.MULTILINE | re.DOTALL):
+        source, value, *_ = m.groups()
+        print(f"locate: string{source}={value}")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
+            if source:
+                value = multiline_eval(value, globals(), locals())
+                print(f"locate: after eval string={value}")
             element = driver.switch_to.active_element
             element.send_keys(value)
             last_element = element
