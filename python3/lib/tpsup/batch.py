@@ -125,7 +125,8 @@ def parse_cfg(cfg_file: str = None, **opt):
 
     # unify all configs under our_cfg (later becomes all_cfg),
     # make it include functions of app_cfg.py (pre_batch, post_batch, ...).
-    # this makes easier to access.
+    # this makes easier to access. 
+    # 'our_cfg' is a global variable in this file. 'all_cfg' is local variable in functions.
     #
     # config precedence:
     #     1. cfg file - eg, pyslnm_test_input_cfg.py, which is loaded into a our_cfg dict.

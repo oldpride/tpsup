@@ -1,19 +1,14 @@
 #!/usr/bin/env python
-import datetime
 import os
 import re
-import shutil
-import time
 from typing import Union
 
 import tpsup.envtools
-import json
 import tpsup.csvtools
 import tpsup.htmltools
 import tpsup.seleniumtools
 import tpsup.pstools
 from pprint import pformat
-from selenium import webdriver
 
 HOME = tpsup.envtools.get_home_dir()
 TPSUP = os.environ['TPSUP']
@@ -181,9 +176,12 @@ our_cfg = {
     - test parallel steps - dict - chains type
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "dictfile={TPP3}/ptslnm_test_dict_chains.py" debug=domstack,iframestack print=tag
     
-    - test alert popup
+    - test alert popup - alert popup doesn't show up as o 2024/12/30
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_alert.html" "click_xpath=//input[@id='fname']" string=henry tab=1 url_accept_alert=http://google.com sleep=1
     
+    - test clear text field
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" "xpath=//textarea[id('message')]" click clear_text code2element='f"abc{{1+1}}"' sleep=10
+
     notes for windows cmd.exe, 
         double quotes cannot be escaped, 
         single quote is just a letter, cannot do grouping. 

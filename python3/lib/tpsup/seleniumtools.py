@@ -526,6 +526,9 @@ class SeleniumEnv:
 
     def get_driver(self) -> webdriver.Chrome:
         return self.driver
+    
+    def get_home_dir(self) -> str:
+        return self.env.home_dir
 
     def delay_for_viewer(self, seconds: int = 1):
         if not self.headless:
@@ -619,11 +622,26 @@ def print_js_console_log(**opt):
     if printed_header:
         print("------ end console log -------")
 
+driverEnv: SeleniumEnv = None
+def get_driverEnv(**args) -> SeleniumEnv:
+    global driverEnv
+
+    if driverEnv:
+        return driverEnv
+    driverEnv = SeleniumEnv(**args)
+    return driverEnv
 
 def get_driver(**args) -> webdriver.Chrome:
+    global driver
+
+    if driver:
+        return driver
+    
     # driverEnv = tpsup.seleniumtools.SeleniumEnv(**args)
-    driverEnv = SeleniumEnv(**args)
-    return driverEnv.get_driver()
+    # driverEnv = SeleniumEnv(**args)
+    driverEnv = get_driverEnv(**args)
+    driver = driverEnv.get_driver()
+    return driver
 
 
 def get_static_setup(**opt):
@@ -1247,7 +1265,7 @@ xpath_map.txt
 How to use these files:
     scenario 1: I want to locate the search box in google new tab page
         dump the page
-            $ ptslnm -rm newtab -dump $HOME/dumpdir -scope all
+            $ ptslnm -rm newtab dump_all=$HOME/dumpdir
         open browser, go to new tab page, open devtools, inspect the search box html
             it has: id="input"
         find this string in our dump files
@@ -3241,7 +3259,7 @@ def locate(locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             if lang in ['code', 'python', 'exp']:
-                if isExpression or lang == 'exp':
+                if isExpression or lang == 'exp' or (target and 'element' in target):
                     # we are testing condition, we want to know True/False
                     # cc = compile(code, '<string>', 'single')
                     try:
@@ -3253,12 +3271,18 @@ def locate(locator: str, **opt):
 
                     print(f"lang={lang} returns {ret['Success']}")
 
+                    if target:
+                        if 'element' in target:
+                            element = driver.switch_to.active_element
+                            element.send_keys(ret['Success'])
+                            last_element = element
+                        else:
+                            raise RuntimeError(f"lang={lang} doesn't support target={target}.")
                 else:
                     exec_into_globals(code, globals(), locals())
                     ret['Success'] = True # hard code to True for now
 
-                if target:
-                    print(f"lang={lang} doesn't support target={target}. ignored the target")
+                
             elif lang == 'js':
                 jsr = driver.execute_script(code)
                 if debug:
@@ -3629,19 +3653,10 @@ def locate(locator: str, **opt):
                 last_element).pause(seconds).perform()
             # this action should not change the active element
             ret['Success'] = True
-    elif m := re.match(r"string(FromCode)?=(.+)", locator, re.MULTILINE | re.DOTALL):
-        source, value, *_ = m.groups()
-        print(f"locate: string{source}={value}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            if source:
-                value = multiline_eval(value, globals(), locals())
-                print(f"locate: after eval string={value}")
-            element = driver.switch_to.active_element
-            element.send_keys(value)
-            last_element = element
-            ret['Success'] = True
+    elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL):
+        value, *_ = m.groups()
+        result = locate(f"code2element='''{value}'''", **opt)
+        ret['Success'] = result['Success']
     elif m := re.match(r"clear_attr=(.+)", locator):
         # even if only capture group, still add *_; other attr would become list, not scalar
         attr, *_ = m.groups()
@@ -3659,6 +3674,25 @@ def locate(locator: str, **opt):
                     Keys.__getattribute__((Keys, key.upper())) * length
                 )
             last_element = element
+    #         ret['Success'] = True
+    elif m := re.match(r"clear_text", locator):
+        # clear text field
+        print(f"locate: clear element")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            # if not working, then try to click the element first
+            element = driver.switch_to.active_element
+            last_element = element
+
+            # https://stackoverflow.com/questions/7732125
+
+            # this clears the element's text but after that, the text field is not active element anymore.
+            # element.clear() 
+
+            # the following keeps the element as active element. this is not tested on mac yet.
+            element.send_keys(Keys.CONTROL + "a")
+            element.send_keys(Keys.DELETE)
             ret['Success'] = True
     elif m := re.match(r"is_attr_empty=(.+)", locator):
         attr, *_ = m.groups()
@@ -3805,13 +3839,21 @@ def locate(locator: str, **opt):
             driver.implicitly_wait(wait_seconds)
 
             # don't change last_element
-    elif m := re.match(r"dump(?:_(element|shadow|iframe|page|all))(?:-(clean))=(.+)", locator):
-        scope, args, output_dir, *_ = m.groups()
-        print(f"locate: dump {scope} to {output_dir} with args={args}")
+    elif m := re.match(r"dump(?:_(element|shadow|iframe|page|all))?(?:-(clean))?(=.+)?$", locator):
+        scope, dash_args, output_dir, *_ = m.groups()
+        if not output_dir:
+            # output_dir default to $HOME/dumpdir
+            home_dir = driverEnv.get_home_dir()
+            output_dir = os.path.join(home_dir, 'dumpdir')
+        else:
+            output_dir = output_dir[1:] # remove the leading '='
+        if not scope:
+            scope = 'element'
+        print(f"locate: dump {scope} to {output_dir} with args={dash_args}")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            if 'clean' in args:
+            if dash_args and 'clean' in dash_args:
                 # clean up the output_dir before we dump
                 print(f"locate: clean up {output_dir}")
                 shutil.rmtree(output_dir, ignore_errors=True)
@@ -4119,21 +4161,26 @@ def if_block(negation: str,  condition: str, block: list, **opt):
 # known' is only available in post_batch, not in pre_batch.
 
 def pre_batch(all_cfg, known, **opt):
+    # init global variables
+    global driverEnv
+    global driver
+
     print("")
     print('running pre_batch()')
     if all_cfg["resources"]["selenium"].get('driver', None) is None:
+        # driver is created in delayed mode
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        all_cfg["resources"]["selenium"]['driver'] = method(**kwargs)
-        print("pre_batch(): driver is created")
+        # all_cfg["resources"]["selenium"]['driver'] = method(**kwargs)
+        driverEnv = method(**kwargs)
+        driver = driverEnv.driver
+        all_cfg["resources"]["selenium"]['driverEnv'] = driverEnv
+        all_cfg["resources"]["selenium"]['driver'] = driver
+
+        print("pre_batch(): driverEnv and driver are created in delayed mode")
     print("pre_batch(): done")
     print("--------------------------------")
     print("")
-
-    # init global variables
-    global driver
-    driver = all_cfg["resources"]["selenium"]["driver"]
-
 
 def post_batch(all_cfg, known, **opt):
     dryrun = opt.get('dryrun', False)
@@ -4226,7 +4273,8 @@ tpbatch = {
     "resources": {
         "selenium": {
             # "method": tpsup.seleniumtools.get_driver,
-            "method": get_driver,
+            # "method": get_driver,
+            "method": SeleniumEnv,
             # "cfg": {},
 
             "init_resource": 0,  # delay init until first use. this logic is in batch.py

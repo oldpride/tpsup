@@ -37,6 +37,7 @@ def multiline_eval(expr,
     _eval_expr = ast.Expression(_last_expr.value)
     _exec_expr = ast.Module(_body_but_last, 
                             type_ignores=[], # this is required by python 3.8. Later version may not need this.
+                            
                             )
     exec(compile(_exec_expr, 'file', 'exec'), _globals, _locals)
     _result = eval(compile(_eval_expr, 'file', 'eval'), _globals, _locals)

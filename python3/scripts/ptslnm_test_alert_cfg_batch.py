@@ -32,7 +32,7 @@ def code(all_cfg: dict, known: dict, **opt):
 
     driver: webdriver.Chrome = all_cfg["resources"]["selenium"]["driver"]
 
-    actions = [
+    steps = [
         [f"url={url}"],
         ['click_xpath=//input[@id="fname"]',
             [f'string=henry', 'tab=1'], 'enter first name'],
