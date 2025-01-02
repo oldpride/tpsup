@@ -27,11 +27,23 @@ version=$1
 
 user=$(id | cut -d\( -f2 | cut -d\) -f1)
 
-if [[ $UNAME =~ CYGWIN ]]; then
+# if [[ $UNAME =~ CYGWIN ]]; then
+#    declare -A path_by_tag=([sys]=/usr/bin [st]="/cygdrive/c/Strawberry/perl/bin")
+#    inc=$(convertpath -t batch "$TPSUP/lib/perl")
+#    declare -A inc_by_tag=([sys]="$TPSUP/lib/perl" [st]="$inc")
+# elif [[ $UNAME =~ MINGW64_NT ]]; then
+#    declare -A path_by_tag=([sys]=/usr/bin [st]="/c/Strawberry/perl/bin")
+#    declare -A inc_by_tag=([sys]="$TPSUP/lib/perl" [st]="$TPSUP/lib/perl")
+# else
+#    declare -A path_by_tag=([sys]=/usr/bin)
+#    declare -A inc_by_tag=()
+# fi
+uname2term
+if [ $UNAMETERM = cygwin ]; then
    declare -A path_by_tag=([sys]=/usr/bin [st]="/cygdrive/c/Strawberry/perl/bin")
    inc=$(convertpath -t batch "$TPSUP/lib/perl")
    declare -A inc_by_tag=([sys]="$TPSUP/lib/perl" [st]="$inc")
-elif [[ $UNAME =~ MINGW64_NT ]]; then
+elif [ $UNAMETERM = msys ]; then
    declare -A path_by_tag=([sys]=/usr/bin [st]="/c/Strawberry/perl/bin")
    declare -A inc_by_tag=([sys]="$TPSUP/lib/perl" [st]="$TPSUP/lib/perl")
 else

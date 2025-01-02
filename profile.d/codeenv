@@ -21,16 +21,29 @@ fi
 action=$1
 
 
-if [[ $UNAME =~ CYGWIN ]]; then
+# if [[ $UNAME =~ CYGWIN ]]; then
+#    DIR="/cygdrive/c/Program Files/Microsoft VS Code/bin"
+# elif [[ $UNAME =~ Msys ]]; then
+#    DIR="/c/Program Files/Microsoft VS Code/bin"
+# elif [[ $UNAME =~ Linux ]]; then
+#    DIR=/snap/bin
+# elif [[ $UNAME =~ Darwin ]]; then
+#    DIR="/Applications/Visual Studio Code.app/Contents/Resources/app/bin"   
+# else
+#    echo "unsupported UNAME='$UNAME'"
+#    return
+# fi
+uname2term
+if [ $UNAMETERM = cygwin ]; then
    DIR="/cygdrive/c/Program Files/Microsoft VS Code/bin"
-elif [[ $UNAME =~ MINGW64_NT ]]; then
+elif [ $UNAMETERM = msys ]; then
    DIR="/c/Program Files/Microsoft VS Code/bin"
-elif [[ $UNAME =~ Linux ]]; then
+elif [ $UNAMETERM = linux ]; then
    DIR=/snap/bin
-elif [[ $UNAME =~ Darwin ]]; then
+elif [ $UNAMETERM = darwin ]; then
    DIR="/Applications/Visual Studio Code.app/Contents/Resources/app/bin"   
 else
-   echo "unsupported UNAME='$UNAME'"
+   echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
    return
 fi
 
@@ -70,4 +83,3 @@ else
    echo "unknown action='$action'"
    usage
 fi
-

@@ -68,6 +68,47 @@ export UNAME=$(uname -a)
 # Windows cmd.exe, 'ver' command
 #    Microsoft Windows [Version 10.0.19044.1889]
 
+print_stack() {
+   # https://stackoverflow.com/questions/11090899
+   # this function is to print the stack trace
+   local STACK=""
+   local i message="${1:-""}"
+   local stack_size=${#FUNCNAME[@]}
+   # to avoid noise we start with 1 to skip the get_stack function
+   for (( i=1; i<$stack_size; i++ )); do
+      local func="${FUNCNAME[$i]}"
+      [ x$func = x ] && func=MAIN
+      local linen="${BASH_LINENO[$(( i - 1 ))]}"
+      local src="${BASH_SOURCE[$i]}"
+      [ x"$src" = x ] && src=non_file_source
+
+      STACK+=$'\n'"   at: "$func" "$src" "$linen
+   done
+   STACK="${message}${STACK}"
+   echo "$STACK"
+}
+
+uname2term() {
+   UNAMETERM=""
+   if [[ $UNAME =~ CYGWIN ]]; then
+      # CYGWIN_NT-10.0-19045 tianpc2 3.5.3-1.x86_64 2024-04-03 17:25 UTC x86_64 Cygwin
+      UNAMETERM="cygwin"
+   elif [[ $UNAME =~ Msys ]]; then
+      # this is gitbash or vscode bash
+      # MINGW64_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
+      # MSYS_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
+      UNAMETERM="msys"
+   elif [[ $UNAME =~ ^Linux ]]; then
+      UNAMETERM="linux"
+   elif [[ $UNAME =~ ^Darwin ]]; then
+      UNAMETERM="darwin"
+   else
+      UNAMETERM="unknown"
+      print_stack >&2
+      echo "unsupported UNAME=$UNAME" >&2
+   fi
+}
+
 kcd() {
    local old new cd
    old=$1

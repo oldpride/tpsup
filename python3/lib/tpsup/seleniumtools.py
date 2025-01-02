@@ -854,6 +854,12 @@ class tp_find_element_by_paths:
             #    likely prematurally
             #
             # therefore, we introduced the click_xxxx switch
+            # 2025/01/01, we can separate the click logic from the find logic now.
+            #     so 'click_xpath' can be done as 'xpath' and 'click' in two separate steps.
+            #     'click_xpath' was introduced in 2021 for the old locator+action style of flow.
+            #      now our new flow is locator+locator+...
+            #     'click_xpath' is still supported for backward compatibility and reminder of 
+            #     caveat of the difference between found element vs active element.
             if 'click_' in ptype:
                 # click_xpath=//...
                 # e.click()
@@ -870,8 +876,6 @@ class tp_find_element_by_paths:
             break
 
         return e
-    
-    # defind an exit function
 
 
 class tp_find_element_by_chains:
@@ -1265,7 +1269,7 @@ xpath_map.txt
 How to use these files:
     scenario 1: I want to locate the search box in google new tab page
         dump the page
-            $ ptslnm -rm newtab dump_all=$HOME/dumpdir
+            $ ptslnm newtab dump_all=$HOME/dumpdir
         open browser, go to new tab page, open devtools, inspect the search box html
             it has: id="input"
         find this string in our dump files
@@ -3694,10 +3698,10 @@ def locate(locator: str, **opt):
             element.send_keys(Keys.CONTROL + "a")
             element.send_keys(Keys.DELETE)
             ret['Success'] = True
-    elif m := re.match(r"is_attr_empty=(.+)", locator):
+    elif m := re.match(r"is_empty=(.+)", locator):
         attr, *_ = m.groups()
         print(
-            f"locate: check whether {attr} is empty.")
+            f"locate: check whether '{attr}' is empty.")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
@@ -3705,12 +3709,15 @@ def locate(locator: str, **opt):
             # element = driver.switch_to.active_element
             if not last_element:
                 raise RuntimeError("no element to check")
-            value = last_element.get_attribute(attr)
+            if attr == 'text':
+                value = last_element.text
+            else:
+                value = last_element.get_attribute(attr)
             print(f'{attr} = "{value}"')
             if not (value is None or value == ""):
-                raise RuntimeError(f"{attr} is not empty")
+                raise RuntimeError(f"{attr} is not empty. value={value}")
             ret['Success'] = True
-    elif m := re.match(r"key=(.+?)(,\d+)?$", locator, re.IGNORECASE):
+    elif m := re.match(r"sendkey=(.+?)(,\d+)?$", locator, re.IGNORECASE):
         '''
         example:
             key=enter
@@ -3839,7 +3846,7 @@ def locate(locator: str, **opt):
             driver.implicitly_wait(wait_seconds)
 
             # don't change last_element
-    elif m := re.match(r"dump(?:_(element|shadow|iframe|page|all))?(?:-(clean))?(=.+)?$", locator):
+    elif m := re.match(r"dump(?:_(element|shadow|iframe|page|all))?(?:-(over))?(=.+)?$", locator):
         scope, dash_args, output_dir, *_ = m.groups()
         if not output_dir:
             # output_dir default to $HOME/dumpdir
@@ -3853,8 +3860,9 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            if dash_args and 'clean' in dash_args:
-                # clean up the output_dir before we dump
+            if dash_args and 'over' not in dash_args:
+                # default dump is to clean up the output_dir before we dump.
+                # 'over' means we don't clean up the output_dir
                 print(f"locate: clean up {output_dir}")
                 shutil.rmtree(output_dir, ignore_errors=True)
             dump(output_dir, scope=scope, **opt)
@@ -3864,9 +3872,10 @@ def locate(locator: str, **opt):
 
         string_levels, *_ = m.groups()
 
-        # default return levels is 999, ie, return all levels
+        # default break levels is 1, ie, break one level of while loop.
+        # we can use break=999 to break all levels of while loop.
         if string_levels == "":
-            break_levels = 999
+            break_levels = 1
         else:
             break_levels = int(string_levels)
 
@@ -3874,10 +3883,8 @@ def locate(locator: str, **opt):
 
     # end of old send_input()
 
-    # the following are new
+    # the following are new features
     elif m := re.match(r"(impl|expl|script|page)*wait=(\d+)", locator):
-        ret['Success'] = True # hard code to True
-
         # implicit wait
         wait_type, value, *_ = m.groups()
         if not wait_type:
@@ -3926,6 +3933,7 @@ def locate(locator: str, **opt):
                 "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
                 '''
                 driver.set_page_load_timeout(int(value))
+            ret['Success'] = True
     elif locator == 'refresh':
         print(f"locate: refresh driver")
         if interactive:
@@ -3934,12 +3942,14 @@ def locate(locator: str, **opt):
             driver.refresh()
             locator_driver = driver
             last_element = None
-
+            ret['Success'] = True
     elif m := re.match(r"comment=(.+)", locator, re.MULTILINE | re.DOTALL):
         ret['Success'] = True # hard code to True for now
         commnet, *_ = m.groups()
         print(f"locate: comment = {commnet}")
-    elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:url|title|timeouts|waits|tag|xpath|domstack|iframestack|element|consolelog))+)$", locator):
+        # for fancier comment, we can use 
+        #   code='print(f"a+b={a+b}")'
+    elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:consolelog|css|domstack|element|html|iframestack|tag|title|timeouts|url|waits|xpath))+)$", locator):
         '''
         (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
         and both are on outside.
@@ -3956,20 +3966,44 @@ def locate(locator: str, **opt):
         if not dryrun:
             if directive == 'print':
                 print(f"locate: get property {keys}")
-                # if interactive:
-                #     hit_enter_to_continue(helper=helper)
                 for key in keys:
                     if not dryrun:
-                        if key == 'timeouts' or key == 'waits':
+                        if key == 'consolelog':
+                            print_js_console_log()
+                        elif key == 'css':
+                            if last_element:
+                                css = js_get(last_element, 'css', **opt)
+                                print(f'element_css={css}')
+                        elif key == 'domstack':
+                            print_domstack()
+                        elif key == 'element':
+                            if last_element:
+                                js_print_debug(last_element)
+                            else:
+                                print(f'element is not available because last_element is None')
+                        elif key == 'html':
+                            if last_element:
+                                html = last_element.get_attribute('outerHTML')
+                                print(f'element_html=element.outerHTML={html}')   
+                            else:
+                                print(f'element_html is not available because last_element is None')
+                        elif key == 'iframestack':
+                            print_iframestack()
+                        elif key == 'tag':
+                            # get element type
+                            if last_element:
+                                tag = last_element.tag_name
+                                print(f'element_tag_name=element.tag_name={tag}')
+                        elif key == 'title':
+                            title = driver.title
+                            print(f'driver.title={title}')
+                        elif key == 'timeouts' or key == 'waits':
                             # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
                             # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
                             print(f'    explicit_wait={wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
                             print(f'    implicit_wait={driver.timeouts.implicit_wait}') # when we call find_element()
                             print(f'    page_load_timeout={driver.timeouts.page_load}') # driver.get()
                             print(f'    script_timeout={driver.timeouts.script}') # driver.execute_script()
-                        elif key == 'title':
-                            title = driver.title
-                            print(f'driver.title={title}')
                         elif key == 'url':
                             '''
                             https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
@@ -4003,7 +4037,6 @@ def locate(locator: str, **opt):
                             # https://stackoverflow.com/questions/938180
                             iframe_url = driver.execute_script("return window.location.href")
                             print(f'    current_iframe_url=window.location.href={iframe_url}')
-
                             '''
                             1. the following returns the same as above
                                 iframe_current = driver.execute_script("return window.location.toString()")
@@ -4013,39 +4046,18 @@ def locate(locator: str, **opt):
                             3. people normally use iframe url to id an iframe, but it is not reliable for
                             srcdoc iframe.
                             '''
-
                             driver_url = driver.current_url
                             print(f'    driver_url=driver.current_url={driver_url}')
 
                             # https://stackoverflow.com/questions/938180
                             parent_url = driver.execute_script("return document.referrer")
                             print(f'    parent_iframe_url=document.referrer={parent_url}')
-                        elif key == 'tag':
-                            # get element type
-                            if last_element:
-                                tag = last_element.tag_name
-                                print(f'element_tag_name=element.tag_name={tag}')
                         elif key == 'xpath':
                             if last_element:
                                 xpath = js_get(last_element, 'xpath', **opt)
-                                print(f'element_xpath=element.xpath={xpath}')
-                        elif key == 'domstack':
-                            print_domstack()
-                        elif key == 'iframestack':
-                            print_iframestack()
-                        elif key == 'html':
-                            if last_element:
-                                html = last_element.get_attribute('outerHTML')
-                                print(f'element_html=element.outerHTML={html}')   
+                                print(f'element_xpath={xpath}')
                             else:
-                                print(f'element_html is not available because last_element is None')
-                        elif key == 'element':
-                            if last_element:
-                                js_print_debug(last_element)
-                            else:
-                                print(f'element is not available because last_element is None')
-                        elif key == 'consolelog':
-                            print_js_console_log()
+                                print(f'element_xpath is not available because last_element is None')
             else:
                 # now for debugs
                 if directive == 'debug_before':
@@ -4268,6 +4280,37 @@ tpbatch = {
             "default": False,
             "action": "store_true",
             "help": "clean chrome persistence files and logs, clean driver log, then quit",
+        },
+        'js': {
+            'switches': ['-js', '--js'],
+            'default': False,
+            'action': 'store_true',
+            'help': 'run locator in js. js only accept locators: xpath, css, shadow, or iframe'
+        },
+        'trap': {
+            'switches': ['-trap', '--trap'],
+            'default': False,
+            'action': 'store_true',
+            'help': 'used with -js, to add try{...}catch{...}',
+        },
+        'full': {
+            'switches': ['-full', '--full'],
+            'default': False,
+            'action': 'store_true',
+            'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
+        },
+        'limit_depth': {
+            'switches': ['--limit_depth'],
+            'default': 5,
+            'action': 'store',
+            'type': int,
+            'help': 'limit scan depth',
+        },
+        'allowFile': {
+            'switches': ['-af', '--allowFile'],
+            'default': False,
+            'action': 'store_true',
+            'help': "allow file:// url; otherwise, we get 'origin' error in console log when switch iframe. but this is security risk. use for testing only",
         },
     },
     "resources": {

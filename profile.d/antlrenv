@@ -56,18 +56,33 @@ fi
 
 delpath -q antlr CLASSPATH
 
-if [[ $UNAME =~ Cygwin ]] ; then
+# if [[ $UNAME =~ Cygwin ]] ; then
+#    # Cygwin - convert path from /cygdrive/c/... to C:\..., and convert : to ;
+#    jar=`cygpath -w "$jar"`
+#    export ANTLR_JAR="$jar"
+#    separator=";"
+# elif [[ $UNAME =~ Linux ]] || [[ $UNAME =~ Msys ]] ; then
+#    # linux or GitBash.
+#    # note: GitBash knows to convert : to ;
+#    export ANTLR_JAR="$jar"
+#    separator=":"
+# else
+#    echo "unsupported os: $UNAME" >&2
+#    usage
+# fi
+uname2term
+if [ $UNAMETERM = cygwin ]; then
    # Cygwin - convert path from /cygdrive/c/... to C:\..., and convert : to ;
    jar=`cygpath -w "$jar"`
    export ANTLR_JAR="$jar"
    separator=";"
-elif [[ $UNAME =~ Linux ]] || [[ $UNAME =~ Msys ]] ; then
+elif [ $UNAMETERM = linux ] || [ $UNAMETERM = msys ]; then
    # linux or GitBash.
    # note: GitBash knows to convert : to ;
    export ANTLR_JAR="$jar"
    separator=":"
 else
-   echo "unsupported os: $UNAME" >&2
+   echo "unsupported os: $UNAMETERM" >&2
    usage
 fi
 
@@ -81,4 +96,3 @@ else
 fi
 
 # echo CLASSPATH=$CLASSPATH
-

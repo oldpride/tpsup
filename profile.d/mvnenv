@@ -16,10 +16,23 @@ END
    return
 fi
 
-if [[ $UNAME =~ CYGWIN || $UNAME =~ MINGW64_NT ]]; then
+# if [[ $UNAME =~ CYGWIN || $UNAME =~ MINGW64_NT ]]; then
+#    HOMEDIR=$(cd $USERPROFILE; pwd -P)
+# elif [[ $UNAME =~ Linux ]]; then
+#    HOMEDIR=$HOME
+# fi
+uname2term
+if [ $UNAMETERM = cygwin ]; then
    HOMEDIR=$(cd $USERPROFILE; pwd -P)
-elif [[ $UNAME =~ Linux ]]; then
+elif [ $UNAMETERM = msys ]; then
+   HOMEDIR=$(cd $USERPROFILE; pwd -P)
+elif [ $UNAMETERM = linux ]; then
    HOMEDIR=$HOME
+elif [ $UNAMETERM = darwin ]; then
+   HOMEDIR=$HOME
+else
+   echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
+   return
 fi
 
 if [ "X$M2_HOME" != "X" ]; then

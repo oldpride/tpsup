@@ -36,25 +36,47 @@ version=$1
 
 user=$(id | cut -d\( -f2 | cut -d\) -f1)
 
-if [[ $UNAME =~ CYGWIN ]]; then
+# if [[ $UNAME =~ CYGWIN ]]; then
+#    # use array because we have space char in the string
+#    BASEDIRS=(
+#       "/cygdrive/c/Users/$user/java"
+#       "/cygdrive/c/Program Files/Java"
+#    )
+# elif [[ $UNAME =~ MINGW64_NT ]]; then
+#    # can also use, [[ $UNAME =~ Msys ]]
+#    BASEDIRS=(
+#       "/c/Users/$user/java"
+#       "/c/Program Files/Java"
+#    )
+# elif [[ $UNAME =~ Linux ]]; then
+#    BASEDIRS=(
+#       "$HOME/java"
+#       "/usr/lib/jvm"
+#    )
+# else
+#    echo "unsupported UNAME='$UNAME'"
+#    return
+# fi
+uname2term
+if [ $UNAMETERM = cygwin ]; then
    # use array because we have space char in the string
    BASEDIRS=(
       "/cygdrive/c/Users/$user/java"
       "/cygdrive/c/Program Files/Java"
    )
-elif [[ $UNAME =~ MINGW64_NT ]]; then
+elif [ $UNAMETERM = msys ]; then
    # can also use, [[ $UNAME =~ Msys ]]
    BASEDIRS=(
       "/c/Users/$user/java"
       "/c/Program Files/Java"
    )
-elif [[ $UNAME =~ Linux ]]; then
+elif [ $UNAMETERM = linux ]; then
    BASEDIRS=(
       "$HOME/java"
       "/usr/lib/jvm"
    )
 else
-   echo "unsupported UNAME='$UNAME'"
+   echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
    return
 fi
 

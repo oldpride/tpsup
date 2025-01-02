@@ -155,20 +155,36 @@ svenv() {
 
    # unset OLD_VIRTUAL_PATH  # see notes/vscode.txt
 
-   if [[ $UNAME =~ CYGWIN ]]; then
-      # this is cygwin. the activate bash script needs removing ^M, ie, dos2unix. ^M doesn't affect gitbash
+   # if [[ $UNAME =~ CYGWIN ]]; then
+   #    # this is cygwin. the activate bash script needs removing ^M, ie, dos2unix. ^M doesn't affect gitbash
+   #    . "$VENV_DIR/Scripts/activate"
+   # elif [[ $UNAME =~ Msys ]]; then
+   #    # this is gitbash or vscode bash
+   #    # MINGW64_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
+   #    # MSYS_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
+   #    . "$VENV_DIR/Scripts/activate"
+   # elif [[ $UNAME =~ ^(Linux|Darwin) ]]; then
+   #    # linux or WSL
+   #    . "$VENV_DIR/bin/activate"
+   # else
+
+   #    echo "tpsup/profile.d/pythonenv:svenv(): unsupported UNAME=$UNAME"
+   #    return 1
+   # fi
+   uname2term
+   if [ $UNAMETERM = cygwin ]; then
+      # this is cygwin. the activate bash script needs removing ^M, ie, dos2unix. 
+      # ^M doesn't affect gitbash
       . "$VENV_DIR/Scripts/activate"
-   elif [[ $UNAME =~ Msys ]]; then
-      # this is gitbash or vscode bash
-      # MINGW64_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
-      # MSYS_NT-10.0-19045 myhostname 3.3.3-341.x86_64 2022-01-17 11:45 UTC x86_64 Msys
+   elif [ $UNAMETERM = msys ]; then
       . "$VENV_DIR/Scripts/activate"
-   elif [[ $UNAME =~ ^(Linux|Darwin) ]]; then
-      # linux or WSL
+   elif [ $UNAMETERM = linux ]; then
+      . "$VENV_DIR/bin/activate"
+   elif [ $UNAMETERM = darwin ]; then
       . "$VENV_DIR/bin/activate"
    else
-      echo "psup/profile.d/pythonenv:svenv(): unsupported UNAME=$UNAME"
-      return 1
+      echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
+      return
    fi
 }
 

@@ -75,6 +75,7 @@ fi
 if [[ "$uname" =~ Linux|Darwin ]]; then
    # $ google-chrome --version
    # Google Chrome 99.0.4844.74 
+   
 
    [ $verbose = Y ] && set -x
    $p --version | cut -d" " -f3

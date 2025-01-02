@@ -22,20 +22,37 @@ fi
 
 action=$1
 
-if [[ $UNAME =~ CYGWIN ]]; then
+# if [[ $UNAME =~ CYGWIN ]]; then
+#    CARGO_DIR=/cygdrive/c/users/$USERNAME/.cargo
+#    WABT_DIR=$(ls -1dt /cygdrive/c/users/$USERNAME/local/wabt* | tail -1)
+# elif [[ $UNAME =~ MINGW64_NT ]]; then
+#    CARGO_DIR=~/c/users/$USERNAME/.cargo
+#    WABT_DIR=$(ls -1dt /c/users/$USERNAME/local/wabt* | tail -1)
+# elif [[ $UNAME =~ Linux ]]; then
+#    CARGO_DIR=~/.cargo
+#    WABT_DIR=$(ls -1dt ~/local/wabt* | tail -1)
+# elif [[ $UNAME =~ Darwin ]]; then
+#    CARGO_DIR=~/.cargo
+#    WABT_DIR=$(ls -1dt ~/local/wabt* | tail -1)
+# else
+#    echo "unsupported UNAME='$UNAME'"
+#    return
+# fi
+uname2term
+if [ $UNAMETERM = cygwin ]; then
    CARGO_DIR=/cygdrive/c/users/$USERNAME/.cargo
    WABT_DIR=$(ls -1dt /cygdrive/c/users/$USERNAME/local/wabt* | tail -1)
-elif [[ $UNAME =~ MINGW64_NT ]]; then
+elif [ $UNAMETERM = msys ]; then
    CARGO_DIR=~/c/users/$USERNAME/.cargo
    WABT_DIR=$(ls -1dt /c/users/$USERNAME/local/wabt* | tail -1)
-elif [[ $UNAME =~ Linux ]]; then
+elif [ $UNAMETERM = linux ]; then
    CARGO_DIR=~/.cargo
    WABT_DIR=$(ls -1dt ~/local/wabt* | tail -1)
-elif [[ $UNAME =~ Darwin ]]; then
+elif [ $UNAMETERM = darwin ]; then
    CARGO_DIR=~/.cargo
    WABT_DIR=$(ls -1dt ~/local/wabt* | tail -1)
 else
-   echo "unsupported UNAME='$UNAME'"
+   echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
    return
 fi
 

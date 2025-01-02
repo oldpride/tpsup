@@ -31,22 +31,39 @@ action=$1
 #  files goes to
 #     C:\Users\william\AppData\Local\Yarn\bin
 
-if [[ $UNAME =~ CYGWIN ]]; then
-   BIN_DIRS="/cygdrive/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
+uname2term
+if [ $UNAMETERM = cygwin ]; then
+   BIN_DIRS="/cygdrive/c/Program Files/nodejs:/cygdrive/c/Users/william/AppData/Roaming/npm/node_modules/yarn/bin:/cygdrive/c/Users/william/AppData/Local/Yarn/bin"
    NPM_DIRS="/cygdrive/c/Program Files/nodejs"
-elif [[ $UNAME =~ MINGW64_NT ]]; then
-   BIN_DIRS="/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
+elif [ $UNAMETERM = msys ]; then
+   BIN_DIRS="/c/Program Files/nodejs:/c/Users/william/AppData/Roaming/npm/node_modules/yarn/bin:/c/Users/william/AppData/Local/Yarn/bin"
    NPM_DIRS="/c/Program Files/nodejs"
-elif [[ $UNAME =~ Linux ]]; then
+elif [ $UNAMETERM = linux ]; then
    BIN_DIRS=/snap/bin
    NPM_DIRS="/usr/local/lib/node_modules"
-elif [[ $UNAME =~ Darwin ]]; then
+elif [ $UNAMETERM = darwin ]; then
    BIN_DIRS="/usr/local/bin"
    NPM_DIRS="/usr/local/lib/node_modules"
 else
-   echo "unsupported UNAME='$UNAME'"
+   echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
    return
 fi
+# if [[ $UNAME =~ CYGWIN ]]; then
+#    BIN_DIRS="/cygdrive/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
+#    NPM_DIRS="/cygdrive/c/Program Files/nodejs"
+# elif [[ $UNAME =~ MINGW64_NT ]]; then
+#    BIN_DIRS="/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
+#    NPM_DIRS="/c/Program Files/nodejs"
+# elif [[ $UNAME =~ Linux ]]; then
+#    BIN_DIRS=/snap/bin
+#    NPM_DIRS="/usr/local/lib/node_modules"
+# elif [[ $UNAME =~ Darwin ]]; then
+#    BIN_DIRS="/usr/local/bin"
+#    NPM_DIRS="/usr/local/lib/node_modules"
+# else
+#    echo "unsupported UNAME='$UNAME'"
+#    return
+# fi
 
 if [ $action = check ]; then
    echo ""

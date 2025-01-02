@@ -20,52 +20,17 @@ EXAMPLE_BASE = HTTP_BASE
 our_cfg = {
     'module': 'tpsup.seleniumtools',
 
-    'position_args': [
-        # 'url'
-    ],
+    # 'position_args': [
+    #     # 'url'
+    # ],
 
-    'extra_args': {
-        'js': {'switches': ['-js', '--js'],
-               'default': False,
-               'action': 'store_true',
-               'help': 'run locator in js. js only accept locators: xpath, css, shadow, or iframe'
-               },
-        'trap': {
-            'switches': ['-trap', '--trap'],
-            'default': False,
-            'action': 'store_true',
-            'help': 'used with -js, to add try{...}catch{...}',
-        },
-        'full': {
-            'switches': ['-full', '--full'],
-            'default': False,
-            'action': 'store_true',
-            'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
-        },
-        'print_console_log': {
-            'switches': ['-ps', '--print_console_log'],
-            'default': False,
-            'action': 'store_true',
-            'help': 'print js console log',
-        },
-        'limit_depth': {
-            'switches': ['--limit_depth'],
-            'default': 5,
-            'action': 'store',
-            'type': int,
-            'help': 'limit scan depth',
-        },
-        'allowFile': {
-            'switches': ['-af', '--allowFile'],
-            'default': False,
-            'action': 'store_true',
-            'help': "allow file:// url; otherwise, we get 'origin' error in console log when switch iframe. but this is security risk. use for testing only",
-        },
-    },
+    # 'extra_args': {
+
+    # },
 
     'test_example': f'''
     the expected results are created wehn using http url to test.
-    ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p dump_all-clean="{HOME}/dumpdir"
+    ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p dump_all="{HOME}/dumpdir"
     diff -r ~/dumpdir {TPP3}/expected/ptslnm_test1/dumpdir
     ''',
 
@@ -92,22 +57,21 @@ our_cfg = {
     - To clean up chrome persistence and driver logs
         {{{{prog}}}} any -cq
 
-    - has shadows, no iframes, simple pages to test shadows
-    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump_page-clean="{HOME}/dumpdir" # without locators, dump whole page
-    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" "xpath=id('shadow_host')" "shadow" dump_element-clean="{HOME}/dumpdir" # with locators
+    - has shadows, no iframes, simple pages to test shadows, default dump scope is element, default dump dir is $HOME/dumpdir
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump_page="{HOME}/dumpdir" # without locators, dump whole page
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" "xpath=id('shadow_host')" "shadow" dump # with locators
 
     - has iframes, no shadows
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_test1.html" dump-clean="{HOME}/dumpdir"
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_test1.html" dump
 
     - has both shadows and iframes: iframe over shadow, shadow over iframe
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" dump-clean="{HOME}/dumpdir"
-    {{{{prog}}}} url="{HTTP_BASE}/shadow_over_iframe_test_main.html" dump-clean="{HOME}/dumpdir"
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" dump
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_over_iframe_test_main.html" dump
 
     - test a static page with nested iframes, same origin vs cross origin (has dice.com iframe)
       many website doesn't allow iframe, eg, google, youtube, but dice.com allows iframe. 
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1] dump-clean="{HOME}/dumpdir"
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1] dump-clean="{HOME}/dumpdir2"
-    
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1] dump
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1] dump
     - test using js as steps. 
       variable value can either be persisted in python or in js's window or document (ie, window.documnt) object.
       'jsr' is a special code to return js variable to python.
@@ -122,13 +86,13 @@ our_cfg = {
     - test using js to locate. js is much faster.
         in shadow, we can only use css selector to locate
         but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump-clean="{HOME}/dumpdir"
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump-clean="{HOME}/dumpdir2" -js
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir"
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir2" -js
     diff -r dumpdir dumpdir2 # should be the same
     
     - test dump scope: element, shadow, iframe, page, all
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump-clean="{HOME}/dumpdir"
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump_all-clean="{HOME}/dumpdir"    
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump_all 
 
     - test go up and down in shadow and iframe
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span top
@@ -145,7 +109,7 @@ our_cfg = {
                but for remote page, this is needed. otherwise, you get error: 
                stale element reference: element is not attached to the page document
         - once entered shadow, xpath is not working anymore., use css selector instead.
-    {{{{prog}}}} url=newtab "sleep=2" "xpath=/iframe[1]" iframe "xpath=//a[@aria-label='Gmail ']" dump-clean="{HOME}/dumpdir"
+    {{{{prog}}}} url=newtab "sleep=2" "xpath=/iframe[1]" iframe "xpath=//a[@aria-label='Gmail ']" dump="{HOME}/dumpdir"
 
     - test block steps
     {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
@@ -177,7 +141,7 @@ our_cfg = {
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "dictfile={TPP3}/ptslnm_test_dict_chains.py" debug=domstack,iframestack print=tag
     
     - test alert popup - alert popup doesn't show up as o 2024/12/30
-    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_alert.html" "click_xpath=//input[@id='fname']" string=henry tab=1 url_accept_alert=http://google.com sleep=1
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_alert.html" "xpath=//input[@id='fname']" click string=henry tab=1 url_accept_alert=http://google.com sleep=1
     
     - test clear text field
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" "xpath=//textarea[id('message')]" click clear_text code2element='f"abc{{1+1}}"' sleep=10
@@ -236,9 +200,16 @@ def code(all_cfg, known, **opt):
             raise Exception(f'unknown step type={step_type}')
     print(f']')
 
-    opt2 = opt.copy()
-    opt2['dryrun'] = 1
-    result = tpsup.seleniumtools.follow(steps, **opt2)
+    if not dryrun:
+        # check syntax only - we call follow() with dryrun=1 to check syntax
+        opt2 = opt.copy()
+        opt2['dryrun'] = 1
+        opt2['debug'] = 0
+        opt2['show_progress'] = 0
+        opt2['interactive'] = 0
+        opt2['verbose'] = 0
+        result = tpsup.seleniumtools.follow(steps, **opt2)
+
     result = tpsup.seleniumtools.follow(steps, **opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
