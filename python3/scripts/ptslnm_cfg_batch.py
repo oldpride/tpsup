@@ -208,7 +208,12 @@ def code(all_cfg, known, **opt):
         opt2['show_progress'] = 0
         opt2['interactive'] = 0
         opt2['verbose'] = 0
+
+        print(f'begin checking syntax')
+        print(f"----------------------------------------------")
         result = tpsup.seleniumtools.follow(steps, **opt2)
+        print(f"----------------------------------------------")
+        print(f'end checking syntax')
 
     result = tpsup.seleniumtools.follow(steps, **opt)
 

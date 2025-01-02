@@ -225,11 +225,12 @@ def get_domstack(request: str, **opt):
 class SeleniumEnv:
     def __init__(self, host_port: str = 'auto', **opt):
         # print(pformat(opt))
-        # exit(1)
+        # exit(1) 
         global cmd
+        self.driver:webdriver.Chrome = None 
         self.host_port = host_port
         self.debug = opt.get("debug", 0)
-        self.verbose = opt.get("verbose", self.debug) # verbose is more common than debug
+        self.verbose = opt.get("verbose", self.debug) # verbose is more common (lighter) than debug
         self.env = tpsup.envtools.Env()
         self.env.adapt()
         home_dir = os.path.normpath(
@@ -321,10 +322,10 @@ class SeleniumEnv:
             "--verbose",
         ]  # for chromedriver
 
-        if self.verbose:
+        if self.debug:
             # print(sys.path)
-            sys.stderr.write(f"SeleniumEnv.__init__: pwd={os.getcwd()}\n")
-            sys.stderr.write(f'SeleniumEnv.__init__:PATH={os.environ["PATH"]}\n')
+            log_FileFuncLine(f"pwd={os.getcwd()}")
+            log_FileFuncLine(f'PATH={os.environ["PATH"]}')
 
             self.print_running_drivers()
 
@@ -333,13 +334,13 @@ class SeleniumEnv:
                     # display the beginning of the log file as 'tail' only display the later part
                     # use /dev/null to avoid error message in case the log file has not been created
                     cmd = f"cat /dev/null {self.driverlog}"
-                    sys.stderr.write(f"cmd={cmd}\n")
+                    log_FileFuncLine(f"cmd={cmd}\n")
                     os.system(cmd)
 
                     # --pid PID  exits when PID is gone
                     # -F         retry file if it doesn't exist
                     cmd = f"tail --pid {os.getpid()} -F -f {self.driverlog} &"
-                    sys.stderr.write(f"SeleniumEnv.__init__: cmd={cmd}\n")
+                    log_FileFuncLine(f"cmd={cmd}")
                     os.system(cmd)
                 elif self.env.isWindows:
                     # windows doesn't have a way to do "tail -f file &"
@@ -369,18 +370,16 @@ class SeleniumEnv:
             # by setting this, we tell chromedriver not to start a browser
             self.browser_options.debugger_address = f"{host_port}"
 
-            sys.stderr.write(f"SeleniumEnv.__init__: check browser port at {host_port}\n") 
+            log_FileFuncLine(f"check browser port at {host_port}") 
             self.connected_existing_browser = False
             (host, port) = host_port.split(":", 1)
             if is_tcp_open(host, port):
-                sys.stderr.write(
-                    f"SeleniumEnv.__init__: {host_port} is open. let chromedriver to connect to it\n")
+                log_FileFuncLine(f"{host_port} is open. let chromedriver to connect to it")
             else:
                 raise RuntimeError(f"browser host_port={host_port} is not open.\n")
 
         if host_port == "auto":
-            sys.stderr.write(
-                "SeleniumEnv.__init__: chromedriver will auto start a browser and pick a port\n")
+            log_FileFuncLine("chromedriver will auto start a browser and pick a port")
 
             if self.env.isLinux:
                 # 2023/09/09,
@@ -400,7 +399,7 @@ class SeleniumEnv:
                 #   https://stackoverflow.com/questions/78996364
                 #   we will remove it when we upgrade to chromedriver 130
                 self.browser_options.add_argument("--headless --window-position=-2400,-2400")
-                sys.stderr.write(" in headless mode\n")
+                log_FileFuncLine(" in headless mode\n")
         else:
             host, port = host_port.split(":", 1)
             self.browser_options.add_argument(
@@ -409,21 +408,16 @@ class SeleniumEnv:
 
             if host.lower() != "localhost" and host != "127.0.0.1" and host != "":
                 if self.dryrun:
-                    sys.stderr.write(
-                        "SeleniumEnv.__init__: cannot connect to remote browser, but this is dryrun, so we continue\n"
-                    )
+                    log_FileFuncLine("cannot connect to remote browser, but this is dryrun, so we continue")
                 else:
                     raise RuntimeError("cannot connect to remote browser.")
             else:
-                sys.stderr.write(
-                    "SeleniumEnv.__init__: cannot connect to an existing local browser. we will start up one.\n")
+                log_FileFuncLine("cannot connect to an existing local browser. we will start up one.")
                 self.browser_options.binary_location = get_browser_path()
 
                 if self.headless:
                     self.browser_options.add_argument("--headless")
-                    sys.stderr.write("SeleniumEnv.__init__: in headless mode\n")
-                else:
-                    sys.stderr.write("\n")
+                    log_FileFuncLine("in headless mode")
 
         if self.env.isLinux:
             self.browser_options.add_argument(
@@ -478,36 +472,32 @@ class SeleniumEnv:
             self.browser_options.add_argument(f"--{arg}")
             # chrome_options.add_argument('--proxy-pac-url=http://pac.abc.net')  # to run with proxy
 
-        print(
-            f"SeleniumEnv.__init__: browser_options.arguments = {pformat(self.browser_options.arguments)}")
-        print(f'SeleniumEnv.__init__: driver.args = {pformat(self.driver_args)}')
+        log_FileFuncLine(f"browser_options.arguments = {pformat(self.browser_options.arguments)}")
+        log_FileFuncLine(f"driver.args = {pformat(self.driver_args)}")
 
-        if self.dryrun:
-            sys.stderr.write(
-                "SeleniumEnv.__init__: this is dryrun, therefore, we don't start a webdriver, nor a browser\n"
-            )
-        else:
-            # rotate the log file if it is bigger than the size.
-            tpsup.logtools.rotate_log(
-                self.driverlog, size=1024 * 1024 * 10, count=1)
+        # rotate the log file if it is bigger than the size.
+        tpsup.logtools.rotate_log(
+            self.driverlog, size=1024 * 1024 * 10, count=1)
 
-            # make sure chromedriver is in the PATH
-            # selenium 4.10+ need to wrap executable_path into Service
-            # https://stackoverflow.com/questions/76428561
-            driver_service = ChromeDriverService(
-                # Service decides how driver starts and stops
-                executable_path=self.driver_exe,
-                log_path=self.driverlog,
-                service_args=self.driver_args,  # for chromedriver
-            )
+        # make sure chromedriver is in the PATH
+        # selenium 4.10+ need to wrap executable_path into Service
+        # https://stackoverflow.com/questions/76428561
+        self.driver_service = ChromeDriverService(
+            # Service decides how driver starts and stops
+            executable_path=self.driver_exe,
+            log_path=self.driverlog,
+            service_args=self.driver_args,  # for chromedriver
+        )
             
-            log_FileFuncLine()
-
+        if self.dryrun:
+            log_FileFuncLine("this is dryrun, therefore, we don't start a webdriver, nor a browser")
+            # even if it is dryrun, we still have a SeleniumEnv
+        else:
             self.driver = webdriver.Chrome(
-                service=driver_service,
+                service=self.driver_service,
                 options=self.browser_options,
             )
-            sys.stderr.write("SeleniumEnv.__init__: started\n")
+            log_FileFuncLine("started driver")
             # if self.headless:
             #    time.sleep(1)  # throttle for the headless mode
 
@@ -517,14 +507,21 @@ class SeleniumEnv:
         # remove driver log and chromedir
         for f in [self.driverlog, self.chromedir]:
             if self.debug:
-                print(f'__init__: removing {f}')
+                log_FileFuncLine(f"removing {f}")
             try:
                 shutil.rmtree(f)
             except FileNotFoundError:
                 if self.debug:
-                    print(f'__init__: {f} not found')
+                    log_FileFuncLine(f"{f} not found")
 
     def get_driver(self) -> webdriver.Chrome:
+        if not self.driver:
+            self.driver = webdriver.Chrome(
+                service=self.driver_service,
+                options=self.browser_options,
+            )
+            log_FileFuncLine("started driver")
+            self.driver.driverEnv = self  # monkey patching for convenience            
         return self.driver
     
     def get_home_dir(self) -> str:
@@ -1269,7 +1266,7 @@ xpath_map.txt
 How to use these files:
     scenario 1: I want to locate the search box in google new tab page
         dump the page
-            $ ptslnm newtab dump_all=$HOME/dumpdir
+            $ ptslnm url=newtab dump_all=$HOME/dumpdir
         open browser, go to new tab page, open devtools, inspect the search box html
             it has: id="input"
         find this string in our dump files
@@ -1290,7 +1287,7 @@ How to use these files:
             it is: #searchbox
 
         now we can locate the search box
-            $ ptslnm newtab -locator "xpath=/html[@class='focus-outline-visible']/body[1]/ntp-app[1]" "shadow" "css=#searchbox"
+            $ ptslnm url=newtab -locator "xpath=/html[@class='focus-outline-visible']/body[1]/ntp-app[1]" "shadow" "css=#searchbox"
     
 '''
 
@@ -3029,8 +3026,14 @@ def update_locator_driver(**opt):
     global driver
     global last_element
     dryrun = opt.get("dryrun", 0)
+    debug = opt.get("debug", 0)
 
     if dryrun:
+        return
+    
+    if not driver:
+        if debug:
+            print(f"update_locator_driver: driver is None, not initialized yet")
         return
 
     helper = {}  # interactivity helper
@@ -3194,7 +3197,7 @@ def locate(locator: str, **opt):
         update_locator_driver(**opt)   
     
     # copied from old locate()
-    if m := re.match(r"(url|url_accept_alert)=(.+)", locator):
+    if m := re.match(r"(url|url_accept_alert)=(.+)", locator): # shortcuts: newtab, blank
         tag, url, *_ = m.groups()
         accept_alert = 0
         if tag == 'url_accept_alert':
@@ -3209,6 +3212,10 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
+            if not driver:
+                # start driver (and browser) only when we really need it
+                driver = driverEnv.get_driver()
+                update_locator_driver(**opt)
             tp_get_url(url, accept_alert=accept_alert,
                     interactive=interactive)
             locator_driver = driver
@@ -4173,28 +4180,29 @@ def if_block(negation: str,  condition: str, block: list, **opt):
 # known' is only available in post_batch, not in pre_batch.
 
 def pre_batch(all_cfg, known, **opt):
-    # init global variables
+    # init global variables.
+    # SeleniumEnv class doesn't need global vars because it is Object-Oriented
+    # but batch.py uses global vars to shorten code which will be eval()/exec()
     global driverEnv
-    global driver
 
     print("")
     print('running pre_batch()')
-    if all_cfg["resources"]["selenium"].get('driver', None) is None:
-        # driver is created in delayed mode
+    if all_cfg["resources"]["selenium"].get('driverEnv', None) is None:
+        # driverEnv is created in delayed mode
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        # all_cfg["resources"]["selenium"]['driver'] = method(**kwargs)
         driverEnv = method(**kwargs)
-        driver = driverEnv.driver
         all_cfg["resources"]["selenium"]['driverEnv'] = driverEnv
-        all_cfg["resources"]["selenium"]['driver'] = driver
+        log_FileFuncLine(f"driverEnv is created in delayed mode")
 
-        print("pre_batch(): driverEnv and driver are created in delayed mode")
     print("pre_batch(): done")
     print("--------------------------------")
     print("")
 
 def post_batch(all_cfg, known, **opt):
+    global driver
+    global driverEnv
+
     dryrun = opt.get('dryrun', False)
     print("")
     print("--------------------------------")
@@ -4205,14 +4213,14 @@ def post_batch(all_cfg, known, **opt):
     
     print(f"running post_batch()")
 
-    if 'driver' in all_cfg["resources"]["selenium"]:
-        print(f"we have driver, quit it")
-        driver = all_cfg["resources"]["selenium"]["driver"]
+    if 'driver':
+        log_FileFuncLine(f"we have driver, quit it")
+        # driver = all_cfg["resources"]["selenium"]["driver"]
         driver.quit()
-        print("")
+        print()
 
         print(f"list all the log files for debug purpose")
-        driverEnv = driver.driverEnv
+        # driverEnv = driver.driverEnv
         my_env = driverEnv.env
         if my_env.isWindows:
             cmd = f"{my_env.ls_cmd} \"{driverEnv.log_base}\\selenium*\""
@@ -4226,9 +4234,9 @@ def post_batch(all_cfg, known, **opt):
         #    se d.pop if you want to capture the removed item, like in item = d.pop("keyA").
         #    Use del if you want to delete an item from a dictionary.
         #        if thekey in thedict: del thedict[thekey]
-        del all_cfg["resources"]["selenium"]["driver"]
+        del all_cfg["resources"]["selenium"]["driverEnv"]
 
-    print(f"check if chromedriver is still running")
+    log_FileFuncLine(f"check if chromedriver is still running")
     my_env = tpsup.envtools.Env()
     if tpsup.pstools.ps_grep("chromedriver", printOutput=1):
         print(f"seeing leftover chromedriver, kill it")
