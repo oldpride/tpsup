@@ -2468,6 +2468,7 @@ def check_syntax_then_follow(steps: list, **opt):
 
     dryrun = opt.get('dryrun', 0)
 
+    # checking syntax saves a lot time by spotting syntax error early!!!
     # first check syntax only - we call follow() with dryrun=1 to check syntax
     opt2 = opt.copy()
     opt2['dryrun'] = 1
@@ -3921,11 +3922,13 @@ def locate(locator: str, **opt):
         # default break levels is 1, ie, break one level of while loop.
         # we can use break=999 to break all levels of while loop.
         if string_levels == "":
-            break_levels = 1
+            break_levels2 = 1
         else:
-            break_levels = int(string_levels)
+            break_levels2 = int(string_levels)
 
-        print(f"locate: break break_levels={break_levels}")
+        print(f"locate: break break_levels={break_levels2}")
+        if not dryrun:
+            break_levels = break_levels2 
 
     # end of old send_input()
 
