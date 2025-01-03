@@ -488,20 +488,19 @@ class SeleniumEnv:
             log_path=self.driverlog,
             service_args=self.driver_args,  # for chromedriver
         )
-            
-        if self.dryrun:
-            log_FileFuncLine("this is dryrun, therefore, we don't start a webdriver, nor a browser")
-            # even if it is dryrun, we still have a SeleniumEnv
-        else:
-            self.driver = webdriver.Chrome(
-                service=self.driver_service,
-                options=self.browser_options,
-            )
-            log_FileFuncLine("started driver")
-            # if self.headless:
-            #    time.sleep(1)  # throttle for the headless mode
+        
+        log_FileFuncLine(f"driverEnv is created. driver will be created when needed by calling driverEnv.get_driver()")
+        # if self.dryrun:
+        #     log_FileFuncLine("this is dryrun, therefore, we don't start a webdriver, nor a browser")
+        #     # even if it is dryrun, we still have a SeleniumEnv
+        # else:
+        #     self.driver = webdriver.Chrome(
+        #         service=self.driver_service,
+        #         options=self.browser_options,
+        #     )
+        #     log_FileFuncLine("started driver")
 
-            self.driver.driverEnv = self  # monkey patching for convenience
+        #     self.driver.driverEnv = self  # monkey patching for convenience
 
     def cleanLog(self):
         # remove driver log and chromedir
@@ -2457,6 +2456,35 @@ def test_basic():
     print(cmd)
     os.system(cmd)
 
+
+need_driver = False
+
+def check_syntax_then_follow(steps: list, **opt):
+    global need_driver
+
+    dryrun = opt.get('dryrun', 0)
+
+    # first check syntax only - we call follow() with dryrun=1 to check syntax
+    opt2 = opt.copy()
+    opt2['dryrun'] = 1
+    opt2['debug'] = 0
+    opt2['show_progress'] = 0
+    opt2['interactive'] = 0
+    opt2['verbose'] = 0
+
+    print(f'begin checking syntax')
+    print(f"----------------------------------------------")
+    result = follow(steps, **opt2)
+    print(f"----------------------------------------------")
+    print(f'end checking syntax')
+
+    if need_driver:
+        if not driver:
+            driver = get_driver(**opt)
+
+    if not dryrun:
+        follow(steps, **opt)
+
 def follow(steps: list,  **opt):
     '''
     follow() is a recursive. it basic flow is: if ... then if ... then if ... then ...
@@ -2475,10 +2503,12 @@ def follow(steps: list,  **opt):
     global last_element
     global break_levels
     global debuggers
+    global need_driver
 
     debug = opt.get("debug", 0)
     verbose = opt.get("verbose", 0)
     dryrun = opt.get("dryrun", 0)
+
 
     if not dryrun:
         update_locator_driver(**opt)
@@ -2763,6 +2793,7 @@ def follow(steps: list,  **opt):
         if step_type == str:
             result = locate(step, **opt)
         elif step_type == dict:
+            need_driver = True # all dict locators need driver
             result = locate_dict(step, **opt)
         else:
             raise RuntimeError(f"unsupported step type={step_type}, step={pformat(step)}")
@@ -3149,6 +3180,7 @@ def locate(locator: str, **opt):
     global jsr
     global debuggers
     global domstack
+    global need_driver
 
     # we don't have a global var for active element, because
     #    - we can always get it from driver.switch_to.active_element
@@ -3209,6 +3241,7 @@ def locate(locator: str, **opt):
             url = "about:blank"
 
         print(f"locate: go to url={url}, accept_alert={accept_alert}")
+        need_driver = True
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
@@ -4193,7 +4226,7 @@ def pre_batch(all_cfg, known, **opt):
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
         driverEnv = method(**kwargs)
         all_cfg["resources"]["selenium"]['driverEnv'] = driverEnv
-        log_FileFuncLine(f"driverEnv is created in delayed mode")
+        log_FileFuncLine(f"driverEnv is created in batch.py's delayed mode")
 
     print("pre_batch(): done")
     print("--------------------------------")
