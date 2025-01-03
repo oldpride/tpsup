@@ -3928,6 +3928,7 @@ def locate(locator: str, **opt):
 
         print(f"locate: break break_levels={break_levels2}")
         if not dryrun:
+            # we update global break_levels only when we are not in dryrun.
             break_levels = break_levels2 
 
     # end of old send_input()
@@ -4178,16 +4179,19 @@ def if_block(negation: str,  condition: str, block: list, **opt):
 
     ret = {'Success': False, 'executed': False}
 
-    # we should catch exception here, because the condition may fail with exception
-    # and it should not be fatal
-    try:
-        result = locate(condition, isExpression=True, **opt)
-    except Exception as e:
-        print(f"if_block(): condition={condition} test failed with exception={e}")
-        result = {'Success': False}
-
-    to_execute_block = False
     if not dryrun:
+        # we should catch exception here, because the condition may fail with exception
+        # and it should not be fatal
+        try:
+            result = locate(condition, isExpression=True, **opt)
+        except Exception as e:
+            # we want to catch exception=unsupported 'locator=nosuch=1' in dryrun mode, so that 
+            # we can catch syntax error in the condition.
+            if dryrun and 'unsupported' in str(e):
+                raise RuntimeError(f"if_block: condition={condition} test failed with exception={e}")
+            print(f"if_block: condition={condition} test failed with exception={e}")
+            result = {'Success': False}
+    
         if result['Success'] and negation:
             print(
                 f"if_not_block: condition '{condition}' is true, but negated, block is not executed")
@@ -4204,21 +4208,24 @@ def if_block(negation: str,  condition: str, block: list, **opt):
 
         ret['executed'] = to_execute_block
 
-    if to_execute_block or dryrun:
-        # recursively calling follow() to run the block
-        # try:
-        #     result = follow(block, **opt)
-        # except Exception as e:
-        #     print(f"if_block: block part failed with exception={pformat(e)}")
-        #     return ret
+        if to_execute_block:
+            # recursively calling follow() to run the block
+            # try:
+            #     result = follow(block, **opt)
+            # except Exception as e:
+            #     print(f"if_block: block part failed with exception={pformat(e)}")
+            #     return ret
 
-        # we should only catch exception in the condition part.
-        # we should not catch the exception if the block part failed.
-        result = follow(block, **opt)
+            # we should only catch exception in the condition part.
+            # we should not catch the exception if the block part failed.
+            result = follow(block, **opt)
 
-        if result and not dryrun:
-            ret['Success'] = result['Success']
-
+            if result and not dryrun:
+                ret['Success'] = result['Success']
+    else:
+        # dryrun
+        locate(condition, isExpression=True, **opt)  
+        follow(block, **opt)
     return ret
 
 
