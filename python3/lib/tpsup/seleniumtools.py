@@ -512,6 +512,9 @@ class SeleniumEnv:
             except FileNotFoundError:
                 if self.debug:
                     log_FileFuncLine(f"{f} not found")
+            except NotADirectoryError:
+                if self.debug:
+                    os.remove(f)
 
     def get_driver(self) -> webdriver.Chrome:
         if not self.driver:
@@ -4247,7 +4250,7 @@ def post_batch(all_cfg, known, **opt):
     
     print(f"running post_batch()")
 
-    if 'driver':
+    if driver:
         log_FileFuncLine(f"we have driver, quit it")
         # driver = all_cfg["resources"]["selenium"]["driver"]
         driver.quit()
