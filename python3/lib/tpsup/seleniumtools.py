@@ -2476,11 +2476,13 @@ def check_syntax_then_follow(steps: list, **opt):
     opt2['interactive'] = 0
     opt2['verbose'] = 0
 
+    print()
     print(f'begin checking syntax')
     print(f"----------------------------------------------")
     result = follow(steps, **opt2)
     print(f"----------------------------------------------")
     print(f'end checking syntax')
+    print()
 
     if need_driver:
         if not driver:
@@ -4166,7 +4168,7 @@ def if_block(negation: str,  condition: str, block: list, **opt):
     # we separate condition and negation because condition test may fail with exception, which is
     # neither True or False.  In this case, we want to know the condition test failed.
 
-    verbose = opt.get('verbose', 0)
+    dryrun = opt.get('dryrun', False)
 
     ret = {'Success': False, 'executed': False}
 
@@ -4178,23 +4180,25 @@ def if_block(negation: str,  condition: str, block: list, **opt):
         print(f"if_block(): condition={condition} test failed with exception={e}")
         result = {'Success': False}
 
-    if result['Success'] and negation:
-        print(
-            f"if_not_block: condition '{condition}' is true, but negated, block is not executed")
-        executed = False
-    elif result['Success'] and not negation:
-        print(f"if_block: condition '{condition}' is true, block is executed")
-        executed = True
-    elif not result['Success'] and not negation:
-        print(f"if_block: condition '{condition}' is not true, block is not executed")
-        executed = False
-    else:
-        print(f"if_block: condition '{condition}' is not true, but negated, block is executed")
-        executed = True
+    to_execute_block = False
+    if not dryrun:
+        if result['Success'] and negation:
+            print(
+                f"if_not_block: condition '{condition}' is true, but negated, block is not executed")
+            to_execute_block = False
+        elif result['Success'] and not negation:
+            print(f"if_block: condition '{condition}' is true, block is executed")
+            to_execute_block = True
+        elif not result['Success'] and not negation:
+            print(f"if_block: condition '{condition}' is not true, block is not executed")
+            to_execute_block = False
+        else:
+            print(f"if_block: condition '{condition}' is not true, but negated, block is executed")
+            to_execute_block = True
 
-    ret['executed'] = executed
+        ret['executed'] = to_execute_block
 
-    if executed:
+    if to_execute_block or dryrun:
         # recursively calling follow() to run the block
         # try:
         #     result = follow(block, **opt)
@@ -4206,7 +4210,7 @@ def if_block(negation: str,  condition: str, block: list, **opt):
         # we should not catch the exception if the block part failed.
         result = follow(block, **opt)
 
-        if result:
+        if result and not dryrun:
             ret['Success'] = result['Success']
 
     return ret
