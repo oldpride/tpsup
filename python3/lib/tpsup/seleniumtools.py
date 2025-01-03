@@ -4136,7 +4136,7 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
     # we separate condition and negation because condition test may fail with exception, which is
     # neither True or False.  In this case, we want to know the condition test failed.
     debug = opt.get('debug', 0)
-    verbose = opt.get('verbose', debug)
+    dryrun = opt.get('dryrun', False)
     ret = {'Success': False, 'executed': False, 'element': None}
 
     global break_levels
@@ -4155,6 +4155,9 @@ def run_block(blockstart: str, negation: str,  condition: str, block: list, **op
                     print(f"run_block: break_levels={break_levels}, break the while loop")
                 # reduce break_levels by 1
                 break_levels = break_levels - 1
+                break
+            if dryrun:
+                # avoid infinite while loop in dryrun
                 break
     elif blockstart == 'if':
         result=if_block(negation, condition, block, **opt)
