@@ -2461,6 +2461,7 @@ need_driver = False
 
 def check_syntax_then_follow(steps: list, **opt):
     global need_driver
+    global driver
 
     dryrun = opt.get('dryrun', 0)
 
