@@ -2409,7 +2409,8 @@ def test_basic():
     #         "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe" --window-size=960,540 \
     #         --user-data-dir=C:/users/%USERNAME%/chrome_test --remote-debugging-port=19999
 
-    driverEnv = SeleniumEnv("localhost:19999", debug=1)
+    # driverEnv = SeleniumEnv("localhost:19999", debug=1)
+    driverEnv = SeleniumEnv("auto", debug=0)
     driver = driverEnv.get_driver()
     print(f"driver.title={driver.title}")
 
@@ -2453,37 +2454,53 @@ def test_basic():
     # driver.dispose()    # this will call driver.close()
 
     my_env = tpsup.envtools.Env()
+    # cmd_term = tpsup.envtools.get_term_type()
+    # if cmd_term == 'batch':
+    #     # list all the log files for debug purpose
+    #     # use double quotes to close "C:/Users/.../selenium*" because bare / is a switch in cmd.exe.
+    #     dir = f'"{driverEnv.log_base}/"seleninum*'
+    # else:
+    #     dir = f'{driverEnv.log_base}/seleninum*'.replace('\\', '/')
+    # cmd = f"{my_env.ls_cmd} -ld {dir}"
+
     # list all the log files for debug purpose
     # use double quotes to close "C:/Users/.../selenium*" because bare / is a switch in cmd.exe.
     cmd = f"{my_env.ls_cmd} -ld \"{driverEnv.log_base}/\"seleninum*"
-    print(cmd)
+    
+    print(f"cmd = {cmd}")
     os.system(cmd)
 
 
 need_driver = False
+already_checked_syntax = False
 
 def check_syntax_then_follow(steps: list, **opt):
     global need_driver
     global driver
+    global already_checked_syntax
 
     dryrun = opt.get('dryrun', 0)
 
-    # checking syntax saves a lot time by spotting syntax error early!!!
-    # first check syntax only - we call follow() with dryrun=1 to check syntax
-    opt2 = opt.copy()
-    opt2['dryrun'] = 1
-    opt2['debug'] = 0
-    opt2['show_progress'] = 0
-    opt2['interactive'] = 0
-    opt2['verbose'] = 0
+    if not already_checked_syntax:
+        # 1. checking syntax saves a lot time by spotting syntax error early!!!
+        #    we call follow() with dryrun=1 to check syntax
+        # 2. batch.py can call this function repeatedly with batches of steps,
+        #    but we only need to check syntax once (for one batch).
+        opt2 = opt.copy()
+        opt2['dryrun'] = 1
+        opt2['debug'] = 0
+        opt2['show_progress'] = 0
+        opt2['interactive'] = 0
+        opt2['verbose'] = 0
 
-    print()
-    print(f'begin checking syntax')
-    print(f"----------------------------------------------")
-    result = follow(steps, **opt2)
-    print(f"----------------------------------------------")
-    print(f'end checking syntax')
-    print()
+        print()
+        print(f'begin checking syntax')
+        print(f"----------------------------------------------")
+        result = follow(steps, **opt2)
+        print(f"----------------------------------------------")
+        print(f'end checking syntax - syntax looks good')
+        print()
+        already_checked_syntax = True
 
     if need_driver:
         if not driver:
@@ -2501,7 +2518,6 @@ def follow(steps: list,  **opt):
 
     as of now, we only allow follow() to be recursive on block-statement (if/while) level; once
     follow() calls locate(), locate() will not call follow(). This is to avoid infinite recursion.
-
     '''
     
     global locator_driver
@@ -2513,9 +2529,7 @@ def follow(steps: list,  **opt):
     global need_driver
 
     debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", 0)
     dryrun = opt.get("dryrun", 0)
-
 
     if not dryrun:
         update_locator_driver(**opt)
@@ -3444,10 +3458,9 @@ def locate(locator: str, **opt):
 
         if interactive:
             hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            dict_locator = eval(code)[0]
-            print(f"locate: dict_locator=\n{pformat(dict_locator)}")
-            ret = locate_dict(dict_locator, **opt)
+        dict_locator = eval(code)[0]
+        print(f"locate: dict_locator=\n{pformat(dict_locator)}")
+        ret = locate_dict(dict_locator, **opt)
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
         count = int(count_str)
@@ -4389,7 +4402,7 @@ tpbatch = {
 
 
 def main():
-    # test_basic()
+    test_basic()
     pass
 
 

@@ -13,6 +13,10 @@ if NOT %argC% == 2 (
    echo ERROR:   wrong number of args. got %argC%, expected 2. args=%*
    echo usage:   %prog% var_name file
    echo.
+   echo search filename in env_var. this enhanced 'which' command
+   echo    - it searches beyond the first match
+   echo    - it searches in other env_var besides PATH
+   echo.
    echo example: %prog% PATH python 
    echo          %prog% PATH grep
    echo          %prog% PYTHONPATH tpsup

@@ -14,6 +14,7 @@ if NOT %argC% == 1 (
    echo usage:   %prog% var_name 
    echo example: %prog% PATH 
    echo example: %prog% PATH  ^| sort
+   echo example: %prog% PATH  ^| grep tpsup
    echo example: %prog% PYTHONPATH 
    exit /b
 )
