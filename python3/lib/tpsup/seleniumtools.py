@@ -35,6 +35,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 
 from selenium.webdriver.common.action_chains import ActionChains
+from webdriver_manager.chrome import ChromeDriverManager
 
 from tpsup.nettools import is_tcp_open
 import tpsup.pstools
@@ -650,29 +651,30 @@ def get_static_setup(**opt):
     env.adapt()
     static_setup = {}
     if env.isWindows:
-        # as of now, only windows has static setup
         static_browser_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/Chrome/Application/chrome.exe"
-        if verbose:
-            print(f"get_static_setup: static_browser_path={static_browser_path}")
-
-        if env.isWindows:
-            # convert to native path: for windows, we convert it to batch path with forward slash for cygwin/gitbash/powershell
-            static_browser_path = tpsup.envtools.convert_path(static_browser_path, target_type='batch')
-            if verbose:
-                print(f"get_static_setup: converted: static_browser_path={static_browser_path}")
-
-        static_setup['chrome'] = static_browser_path
-
         static_driver_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/chromedriver/chromedriver.exe"
-        print(f"get_static_setup: static_driver_path={static_driver_path}")
+        
+        # convert to native path: for windows, we convert it to batch path with forward slash for cygwin/gitbash/powershell
+        static_browser_path = tpsup.envtools.convert_path(static_browser_path, target_type='batch')
+        static_driver_path = tpsup.envtools.convert_path(static_driver_path, target_type='batch')
+        if verbose:
+            print(f"get_static_setup: converted: static_browser_path={static_browser_path}")
+            print(f"get_static_setup: converted: static_driver_path={static_driver_path}")
+    elif env.isLinux:
+        # static_browser_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/Chrome/Application/chrome"
+        tatic_browser_path = f"/usr/bin/google-chrome"
+        static_driver_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/chromedriver/chromedriver"
+    elif env.isMac:
+        # static_browser_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/Google Chrome.app/Contents/MacOS/Google Chrome"
+        static_browser_path = f"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        static_driver_path = f"{os.environ['SITEBASE']}/{env.system}/{env.os_major}.{env.os_minor}/chromedriver/chromedriver"
+    else:
+        raise RuntimeError(f"unsupported system={env.system}")
+    if verbose:
+        print(f"get_static_setup: static_browser_path={static_browser_path}")
 
-        if env.isWindows:
-            # convert to native path: for windows, we convert it to batch path with forward slash for cygwin/gitbash/powershell
-            static_driver_path = tpsup.envtools.convert_path(static_driver_path, target_type='batch')
-            if verbose:
-                print(f"get_static_setup: converted: static_driver_path={static_driver_path}")
-
-        static_setup['chromedriver'] = static_driver_path
+    static_setup['chrome'] = static_browser_path
+    static_setup['chromedriver'] = static_driver_path
 
     return static_setup
 
@@ -698,6 +700,7 @@ def check_setup(**opt):
         targetList = ['chrome', 'chromedriver']
 
     static_setup = get_static_setup(**opt)
+    print(f"check_setup: expected static_setup={pformat(static_setup)}")
 
     found_path = {}
 
@@ -758,7 +761,7 @@ def check_setup(**opt):
                 # convert backslash to forward slash
                 found_path['chrome'] = found_path['chrome'].replace('\\', '/')
                 print(f"check_setup: found_path['chrome']={found_path['chrome']}")
-                chrome_vesion = run_cmd_clean(f"chrome_version {found_path['chrome']}", is_bash=True)
+                chrome_vesion = run_cmd_clean(f'''chrome_version "{found_path['chrome']}"''', is_bash=True)
             # chrome_vesion = tpsup.cmdtools.run_cmd_clean(f"chrome_version {found_path['chrome'].replace('\\', '/')}", is_bash=True)
 
             # use str() to convert bytes to string
@@ -4241,7 +4244,23 @@ def if_block(negation: str,  condition: str, block: list, **opt):
         follow(block, **opt)
     return ret
 
+def download_chromedriver(**opt):
+    '''
+    download webdriver for selenium
+    '''
+    # https://pypi.org/project/webdriver-manager/
+    driver_version = opt.get('driver_version', None)
+    driver_path = ChromeDriverManager(driver_version=driver_version).install()
+    # driver_path = /Users/tian/.wdm/drivers/chromedriver/mac64/116.0.5845.179/chromedriver-mac-arm64/chromedriver
+    print(f'downloaded driver_path = {driver_path}')
 
+    # run chromedriver --version to see the version
+    cmd = f"{driver_path} --version"
+    print(cmd)
+    os.system(cmd)
+
+# the following is for batch framework - batch.py
+#
 # pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
 # '
 # known' is only available in post_batch, not in pre_batch.

@@ -417,9 +417,16 @@ elif [[ $UNAME =~ Linux|Darwin ]]; then
    alias mygit='cd ~/github'
    alias downloads='cd ~/Downloads'
 
-   export OS_TYPE=Linux
    export OS_MAJOR=$(echo $UNAME | cut -d' ' -f3 | cut -d. -f1)
    export OS_MINOR=$(echo $UNAME | cut -d' ' -f3 | cut -d. -f2)
+
+   if [[ $UNAME =~ Darwin ]]; then
+      export OS_TYPE=Mac
+      # add tpsup/mac/scripts to PATH, which is specific to Mac
+      export PATH="$PATH:$TPSUP/mac/scripts"
+   else
+      export OS_TYPE=Linux
+   fi
 else
    echo "UNAME='$UNAME' is not supported"
 fi

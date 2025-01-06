@@ -25,6 +25,9 @@ examples:
    for linux
    $prog /usr/bin/google-chrome
 
+   for mac
+   $prog /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome
+
 EOF
 
    exit 1
@@ -78,7 +81,7 @@ if [[ "$uname" =~ Linux|Darwin ]]; then
    
 
    [ $verbose = Y ] && set -x
-   $p --version | cut -d" " -f3
+   "$p" --version | cut -d" " -f3
 else 
    [ $verbose = Y ] && set -x
 

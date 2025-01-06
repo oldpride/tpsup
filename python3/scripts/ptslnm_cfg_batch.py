@@ -25,7 +25,6 @@ our_cfg = {
     # ],
 
     # 'extra_args': {
-
     # },
 
     'test_example': f'''
@@ -41,15 +40,19 @@ our_cfg = {
       this allows you to use http url, eg, {HTTP_BASE}/shadow_test2_main.html.
       otherwise, use "-af" to run file url, eg {FILE_BASE}/shadow_test2_main.html.
       to print file-url example
-        {{{{prog}}}} fe
-        {{{{prog}}}} file_example
-      to print test example
-        {{{{prog}}}} test
-        {{{{prog}}}} test_example
-      to print test example with file url   
-        {{{{prog}}}} ft
-        {{{{prog}}}} file_test
-
+            {{{{prog}}}} fe
+            {{{{prog}}}} file_example
+        to print test example
+            {{{{prog}}}} test
+            {{{{prog}}}} test_example
+        to print test example with file url   
+            {{{{prog}}}} ft
+            {{{{prog}}}} file_test
+        to download chromedriver
+            {{{{prog}}}} ddriver [130.0]
+            {{{{prog}}}} download_chromedriver [130.0]
+        to check setup
+            {{{{prog}}}} check_setup
 
     - To see all defineded locators
         {{{{prog}}}} locators
@@ -225,6 +228,15 @@ def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     if re.match(r'locators$', input[0]):
         for line in tpsup.seleniumtools.get_defined_locators():
             print(line)
+        exit(0)
+
+    if re.match(r'(d|download_chrome)driver$', input[0]):
+        version = input[1] if len(input) > 1 else None
+        tpsup.seleniumtools.download_chromedriver(driver_version=version)
+        exit(0)
+
+    if re.match(r'check_setup$', input[0]):
+        tpsup.seleniumtools.check_setup(compareVersion=1)
         exit(0)
 
     return {'REMAININGARGS': input}
