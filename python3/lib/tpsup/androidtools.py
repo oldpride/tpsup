@@ -14,9 +14,10 @@ import tpsup.tmptools
 # %ANDROID_HOME%\emulator"
 
 sdk_subdirs = [
-    "tools/bin",
+    # "tools/bin",
+    "cmdline-tools/latest/bin",
     "platform-tools",
-    "build-tools/33.0.0",
+    "build-tools/35.0.0", # todo: find the latest version
     "emulator"
 ]
 
@@ -58,10 +59,13 @@ def get_apk_manifest(apk_path: str, **opt):
     $ apkanalyzer manifest print Gallery2.apk # print manifest file
     '''
     # check if apkanalyzer is in path
-    # apkanalyzer is in $ANDROID_HOME/tools/bin
-    # it is a bash script!!
+    # apkanalyzer is in $ANDROID_HOME/cmdline-tools/latest/bin
+    # it is a bat script on windows, and a bash script on linux
     # shutil.which() cannot find it (bash) in windows, therefore, we use tpsup.cmdtools.which()
-    if not tpsup.cmdtools.which('apkanalyzer'):
+    which_result = tpsup.cmdtools.which('apkanalyzer')
+    if which_result:
+        print(f'apkanalyzer found in path: {which_result}')
+    else:
         print('apkanalyzer not found in path. trying to set android env ...')
         # check if ANDROID_HOME is set
         set_android_env(**opt)
@@ -72,15 +76,21 @@ def get_apk_manifest(apk_path: str, **opt):
 
         print('PATH =' + pformat(os.environ['PATH'].split(os.pathsep)))
 
-        if not tpsup.cmdtools.which('apkanalyzer'):
+        # check again
+        which_result = tpsup.cmdtools.which('apkanalyzer')
+        if which_result:
+            print(f'apkanalyzer found in path: {which_result} after setting android env')
+        else:
             raise Exception(
                 'still cannot find apkanalyzer after setting android env')
 
     # apkanalyzer works with java 1.8, not java 11
-    tpsup.javatools.set_java_env("1.8")
+    # tpsup.javatools.set_java_env("1.8")
+    # new version of apkanalyzer works with java 17+
+    tpsup.javatools.set_java_env("22")
     tpsup.javatools.check_java_env(verbose=1)
 
-    cmd = f'apkanalyzer manifest print "{apk_path}"'
+    cmd = f'{which_result.replace('\\', '/')} manifest print "{apk_path}"'
     if verbose:
         print(f'cmd = {cmd}')
     output = tpsup.cmdtools.run_cmd_clean(cmd, is_bash=True, **opt)
