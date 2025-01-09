@@ -16,6 +16,9 @@ from appium.webdriver import WebElement
 # import appium webdriver extensions
 import appium.webdriver.extensions.android.nativekey as nativekey
 from appium.webdriver.common.touch_action import TouchAction
+# https://stackoverflow.com/questions/75881566/ 
+# TouchAction class is being deprecated, and the documentation recommends to use ActionChains
+
 # from selenium.webdriver import ActionChains
 
 import tpsup.envtools
