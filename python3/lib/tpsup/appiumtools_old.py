@@ -1,6 +1,5 @@
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -25,7 +24,6 @@ from selenium.webdriver import ActionChains
 import tpsup.envtools
 import tpsup.filetools
 
-from tpsup.logbasic import log_FileFuncLine
 from tpsup.nettools import is_tcp_open, wait_tcps_open
 import tpsup.pstools
 import tpsup.tmptools
@@ -38,24 +36,17 @@ from tpsup.exectools import exec_into_globals
 from typing import List, Union
 from pprint import pformat
 
-'''
-appium vs selenium
 
-                                                      device/emulator
-    +----------+       +----------+      +------+    +---------------+
-    | appium   +------>+ appium   +----->+ adb  +--->+ adbd          |
-    | python   |       | server   | adb  |server|    |               |
-    | webdriver|       | Nodejs   | cmd  +------+    |               +---->internet
-    |          |       |          |                  | UIAutomator2. |
-    |          |       |          |----------------->| Bootstrap.js  |
-    |          |       |          |     HTTP  W3C    | runs a TCP    |
-    |          |       |          |                  | listening port|
-    +----------+       +----------+                  +---------------+    
-
-    +----------+      +--------------+     +----------------+
-    | selenium +----->+ chromedriver +---->+ chrome browser +---->internet
-    +----------+      +--------------+     +----------------+
-'''
+# appium vs selenium
+# +----------+       +----------+      +-----+    +---------+
+# | appium   +------>| appium   +----->+ adb +--->+ phone / | +---->internet
+# | python   |       | server   |      |     |    | emulator|
+# | webdriver|       |GUI/Nodejs|      |     |    |         |
+# +----------+       +----------+      +-----+    +---------+
+#
+# +----------+      +--------------+     +----------------+
+# | selenium +----->+ chromedriver +---->+ chrome browser +---->internet
+# +----------+      +--------------+     +----------------+
 
 
 # appium starting emulator
@@ -76,15 +67,15 @@ def start_proc(proc: str, **opt):
 
     (host, port) = host_port.split(":", 1)
     if is_tcp_open(host, port):
-        log_FileFuncLine(f"{proc}_host_port={host_port} is already open")
+        print(f"{proc}_host_port={host_port} is already open")
         return {'status': 'already running', 'error': 0}
     else:
-        log_FileFuncLine(f"{proc}_host_port={host_port} is not open")
+        print(f"{proc}_host_port={host_port} is not open")
 
     if host.lower() != "localhost" and host != "127.0.0.1" and host != "":
-        log_FileFuncLine(f"we cannot start remote {proc}")
+        sys.stderr.write(f"we cannot start remote {proc}\n")
         if opt.get('dryrun', 0):
-            log_FileFuncLine("this is dryrun, so we continue")
+            sys.stderr.write("this is dryrun, so we continue\n")
             return {'status': 'cannot start', 'error': 1}
         else:
             raise RuntimeError("cannot proceed")
@@ -103,7 +94,7 @@ def start_proc(proc: str, **opt):
         # else:
         #     cmd = f"appium --address localhost -p {port} --log-no-colors"
         #             # f"--log={self.appium_log}","
-        log_FileFuncLine(f"cmd = {cmd}")
+        print(f"cmd = {cmd}")
         with open(log, "w+") as log_ofh:
             subprocess.Popen(
                 cmd, shell=True, stderr=subprocess.STDOUT, stdout=log_ofh)
@@ -133,10 +124,10 @@ def start_proc(proc: str, **opt):
         ]
         # f"--log={self.appium_log}"
 
-        log_FileFuncLine(f"starting cmd = appium {' '.join(args)}")
+        print(f"starting cmd = appium {' '.join(args)}")
         service.start(args=args)
-        log_FileFuncLine(f"service.is_running={service.is_running}")
-        log_FileFuncLine(f"service.is_listening={service.is_listening}")
+        print(f"service.is_running={service.is_running}")
+        print(f"service.is_listening={service.is_listening}")
         # service.stop()
         return {
             'status': 'started',
@@ -211,31 +202,30 @@ class AppiumEnv:
         self.appium_log = os.path.join(self.log_base, "appium_.log")
 
         need_wait = []
-        self.emulator_log = None
         if opt.get('is_emulator', False):
             emulator_log = os.path.join(self.log_base, "emulator.log")
-            log_FileFuncLine(f"emulator_log={emulator_log}")
+            print(f"emulator_log={emulator_log}")
             response = start_proc('emulator', log=emulator_log, **opt)
-            log_FileFuncLine(f"emulator response = {pformat(response)}")
+            print(f"emulator response = {pformat(response)}")
             if response.get('status', None) == "started":
                 need_wait.append(response.get("host_port"))
 
         appium_exe = which('appium')
         if appium_exe:
-            log_FileFuncLine(f"appium is {appium_exe}")
+            print(f"appium is {appium_exe}")
         else:
             raise RuntimeError(f"appium is not in PATH={os.environ['PATH']}")
 
-        self.appium_log = os.path.join(self.log_base, "appium.log")
-        log_FileFuncLine(f"appium_log={self.appium_log}")
-        response = start_proc('appium', log=self.appium_log, **opt)
-        log_FileFuncLine(f"appium response = {pformat(response)}")
+        appium_log = os.path.join(self.log_base, "appium.log")
+        print(f"appium_log={appium_log}")
+        response = start_proc('appium', log=appium_log, **opt)
+        print(f"appium response = {pformat(response)}")
         self.service: AppiumService = response.get('service', None)
         if response.get('status', None) == "started":
             need_wait.append(response.get("host_port"))
 
         if need_wait:
-            log_FileFuncLine(f"wait max 60 seconds for: {need_wait}")
+            print(f"wait max 60 seconds for: {need_wait}")
             if not wait_tcps_open(need_wait, timeout=60):
                 raise RuntimeError(f"one of port is not ready: {need_wait}")
 
@@ -274,19 +264,14 @@ class AppiumEnv:
             print(f"sleep {sleep_time} seconds and try again")
             time.sleep(sleep_time)
 
-        # if not self.driver:
-        #     print("trying again")
-        #     self.driver = webdriver.Remote(
-        #         f"http://{host_port}/wd/hub", self.desired_cap)
+        if not self.driver:
+            print("trying again")
+            self.driver = webdriver.Remote(
+                f"http://{host_port}/wd/hub", self.desired_cap)
 
-        # self.driver.driverEnv = self  # monkey patching for convenience
+        self.driver.driverEnv = self  # monkey patching for convenience
 
     def get_driver(self) -> webdriver.Remote:
-        if not self.driver:
-            self.driver = webdriver.Remote(
-                f"http://{self.host_port}/wd/hub", self.desired_cap)
-            log_FileFuncLine("started driver")
-            self.driver.driverEnv = self  # monkey patching for convenience   
         return self.driver
 
     def close_env(self):
@@ -301,81 +286,14 @@ class AppiumEnv:
         print(f"service.is_running={self.service.is_running}")
         print(f"service.is_listening={self.service.is_listening}")
         return (self.driver.session_id and self.service.is_listening and self.service.is_running)
-    
-    def get_home_dir(self) -> str:
-        return self.env.home_dir
 
-    def cleanLog(self):
-        # remove driver log and chromedir
-        for f in [self.appium_log, self.emulator_log]:
-            if self.debug:
-                log_FileFuncLine(f"removing {f}")
-            try:
-                shutil.rmtree(f)
-            except FileNotFoundError:
-                if self.debug:
-                    log_FileFuncLine(f"{f} not found")
-            except NotADirectoryError:
-                if self.debug:
-                    os.remove(f)
-
-driverEnv: Union[AppiumEnv, None] = None
-
-def get_driverEnv(**args) -> AppiumEnv:
-    global driverEnv
-
-    if not driverEnv:
-        driverEnv = AppiumEnv(**args)
-    return driverEnv
 
 def get_driver(**args) -> webdriver.Remote:
-    global driver
+    driverEnv = AppiumEnv(**args)
+    return driverEnv.get_driver()
 
-    if not driver:
-        driverEnv = get_driverEnv(**args)
-        driver = driverEnv.get_driver()
-    return driver
 
-need_driver = False
-already_checked_syntax = False
-
-def check_syntax_then_follow(steps: list, **opt):
-    global need_driver
-    global driver
-    global already_checked_syntax
-
-    dryrun = opt.get('dryrun', 0)
-
-    if not already_checked_syntax:
-        # 1. checking syntax saves a lot time by spotting syntax error early!!!
-        #    we call follow() with dryrun=1 to check syntax
-        # 2. batch.py can call this function repeatedly with batches of steps,
-        #    but we only need to check syntax once (for one batch).
-        opt2 = opt.copy()
-        opt2['dryrun'] = 1
-        opt2['debug'] = 0
-        opt2['show_progress'] = 0
-        opt2['interactive'] = 0
-        opt2['verbose'] = 0
-
-        print()
-        print(f'begin checking syntax')
-        print(f"----------------------------------------------")
-        result = follow(steps, **opt2)
-        print(f"----------------------------------------------")
-        print(f'end checking syntax - syntax looks good')
-        print()
-        already_checked_syntax = True
-
-    if need_driver:
-        if not driver:
-            driver = get_driver(**opt)
-
-    if not dryrun:
-        follow(steps, **opt)
-
-def follow(steps: list, **opt):
-
+def follow(driver: Union[webdriver.Remote, None],  steps: list, **opt):
     if not list:
         return
 
@@ -736,45 +654,43 @@ def dump(driver: webdriver.Remote, element: WebElement, scope: str, path: str, *
         print("")
 
 
-# def tap2(driver: webdriver.Remote, element: WebElement, **opt):
-#     verbose = opt.get('verbose', False)
+def tap2(driver: webdriver.Remote, element: WebElement, **opt):
+    verbose = opt.get('verbose', False)
 
-#     location = element.location  # (0, 0) is the top left corner of the element
-#     size = element.size  # (width, height) of the element
+    location = element.location  # (0, 0) is the top left corner of the element
+    size = element.size  # (width, height) of the element
 
-#     # get element's center
-#     x = location['x'] + size['width'] / 2
-#     y = location['y'] + size['height'] / 2
-#     # action = TouchAction(driver)
-#     actions = ActionChains(driver)
+    # get element's center
+    x = location['x'] + size['width'] / 2
+    y = location['y'] + size['height'] / 2
+    action = TouchAction(driver)
 
+    i = 0
+    max = 9
+    while i < max:
+        i += 1
+        print(f"doubleclick: try {i}/{max}")
 
-#     i = 0
-#     max = 9
-#     while i < max:
-#         i += 1
-#         print(f"doubleclick: try {i}/{max}")
+        if i % 3 == 1:
+            action.tap2(x=x, y=y, wait=100).perform()
+        elif i % 3 == 2:
+            action.tap2(x=x, y=y, wait=175).perform()
+        else:
+            action.tap2(x=x, y=y, wait=250).perform()
 
-#         if i % 3 == 1:
-#             action.tap2(x=x, y=y, wait=100).perform()
-#         elif i % 3 == 2:
-#             action.tap2(x=x, y=y, wait=175).perform()
-#         else:
-#             action.tap2(x=x, y=y, wait=250).perform()
+        print(f"sleep 3 seconds before check")
+        time.sleep(3)
+        try:
+            # (0, 0) is the top left corner of the element
+            location = element.location
+        except Exception as e:
+            if verbose:
+                print(
+                    f"cannot find element location any more, meaning previous tap worked: {e}")
+            break
 
-#         print(f"sleep 3 seconds before check")
-#         time.sleep(3)
-#         try:
-#             # (0, 0) is the top left corner of the element
-#             location = element.location
-#         except Exception as e:
-#             if verbose:
-#                 print(
-#                     f"cannot find element location any more, meaning previous tap worked: {e}")
-#             break
-
-#         print(f"sleep 3 seconds before next try")
-#         time.sleep(3)
+        print(f"sleep 3 seconds before next try")
+        time.sleep(3)
 
 
 def doubleclick(driver: webdriver.Remote, element: WebElement, **opt):
@@ -786,10 +702,55 @@ def doubleclick(driver: webdriver.Remote, element: WebElement, **opt):
     # get element's center
     x = location['x'] + size['width'] / 2
     y = location['y'] + size['height'] / 2
-    # action = TouchAction(driver)
-    actions = ActionChains(driver)
+    action = TouchAction(driver)
 
-    actions.double_click(element).perform()
+    i = 0
+    max = 10
+    while i < max:
+        i += 1
+        print(f"doubleclick: try {i}/{max}")
+
+        # wait time between taps is critial for double click to work.
+        # ideally, the following should work
+        #       action.tap(element).wait(100).tap(element).perform()
+        # but looking into appium log we see
+        #    tap(element) = locate element's (x,y) + tap (x,y)
+        # the locate part took extra time. therefore, we locate the element
+        # in a separate action, and then tap it in the next action.
+        # Because the wait interval is not controllable in wireless debugging, we
+        # try different wait intervals to see if it work
+        if i % 5 == 4:
+            action.tap(x=x, y=y).wait(50).tap(x=x, y=y).perform()
+        elif i % 5 == 3:
+            action.tap(x=x, y=y).wait(10).tap(x=x, y=y).perform()
+        else:
+            # the following 2 are the same. They are more likely to succeed due to network latency.
+            # action.tap(x=x, y=y).tap(x=x, y=y).perform()
+            action.tap(x=x, y=y, count=2).perform()
+
+            # sometimes, even no-wait is not fast enough. the following is from appium server log. we
+            # can see no-wait still took about 1 second, because the 2nd tap had to wait for the response
+            # from the first tap.
+            # 2023-01-01 00:45:15:379 [W3C (0e33c728)] Calling AppiumDriver.performTouch() with args: [[{"action":"tap","options":{"x":551.5,"y":1107,"count":1}},{"action":"tap","options":{"x":551.5,"y":1107,"count":1}}],"0e33c728-8dc6-49b5-82dd-567c1508a410"]
+            # 2023-01-01 00:45:15:382 [WD Proxy] Proxying [POST /appium/tap] to [POST http://127.0.0.1:8200/wd/hub/session/448df8e5-309e-4448-bf69-dbfd36602b77/appium/tap] with body: {"x":551.5,"y":1107,"undefined":null}
+            # 2023-01-01 00:45:16:256 [WD Proxy] Got response with status 200: {"sessionId":"448df8e5-309e-4448-bf69-dbfd36602b77","value":null}
+            # 2023-01-01 00:45:16:259 [WD Proxy] Proxying [POST /appium/tap] to [POST http://127.0.0.1:8200/wd/hub/session/448df8e5-309e-4448-bf69-dbfd36602b77/appium/tap] with body: {"x":551.5,"y":1107,"undefined":null}
+            # 2023-01-01 00:45:16:931 [WD Proxy] Got response with status 200: {"sessionId":"448df8e5-309e-4448-bf69-dbfd36602b77","value":null}
+            # when it works, i saw the interval was 280 ms
+        print(f"sleep 3 seconds before check")
+        time.sleep(3)
+        try:
+            # (0, 0) is the top left corner of the element
+            location = element.location
+        except Exception as e:
+            if verbose:
+                print(
+                    f"cannot find element location any more, meaning previous tap worked: {e}")
+            break
+
+        print(f"sleep 3 seconds before next try")
+        time.sleep(3)
+
 
 def swipe(driver: webdriver.Remote, param: str, **opt):
     window_size = driver.get_window_size()
@@ -797,8 +758,7 @@ def swipe(driver: webdriver.Remote, param: str, **opt):
     height = window_size['height']
     print(f"swipe: window_size={window_size}")
 
-    # actions = TouchAction(driver)
-    # actions = ActionChains(driver)
+    actions = TouchAction(driver)
 
     if 'small' in param:
         factor = 0.55
@@ -839,27 +799,22 @@ def check_proc(**opt):
                 print(cmd)
                 os.system(cmd)
 
-# the following is for batch framework - batch.py
-#
-# pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
-# '
-# known' is only available in post_batch, not in pre_batch.
 
 def pre_batch(all_cfg, known, **opt):
-    # init global variables.
-    # AppiumEnv class doesn't need global vars because it is Object-Oriented
-    # but batch.py uses global vars to shorten code which will be eval()/exec()
-    global driverEnv
-
-    log_FileFuncLine(f"running pre_batch()")
-    if all_cfg["resources"]["appium"].get('driverEnv', None) is None:
-        # driverEnv is created in delayed mode
+    print("")
+    print('running pre_batch()')
+    driver: webdriver = all_cfg["resources"]["appium"].get("driver", None)
+    if driver is None:
         method = all_cfg["resources"]["appium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["appium"]["driver_call"]["kwargs"]
-        driverEnv = method(**{**kwargs, "dryrun": 0, **opt})  # overwrite kwargs
+        driver = method(**{**kwargs, "dryrun": 0, **opt})  # overwrite kwargs
         # 'host_port' are in **opt
-        all_cfg["resources"]["appium"]["driverEnv"] = driverEnv
-        log_FileFuncLine(f"driverEnv is created in batch.py's delayed mode")
+        all_cfg["resources"]["appium"]["driver"] = driver
+        print("pre_batch(): driver is created")
+    print("pre_batch(): done")
+    print("--------------------------------")
+    print("")
+
 
 def post_batch(all_cfg, known, **opt):
     print("")

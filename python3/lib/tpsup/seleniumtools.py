@@ -592,9 +592,6 @@ class SeleniumEnv:
             raise RuntimeError(
                 f"unsupported method={method}. accepted: bs4 or js")
 
-def cleanLog(**opt):
-    global driver
-    
 
 def get_browser_path() -> str:
     path = check_setup().get('chrome')
@@ -626,23 +623,17 @@ driverEnv: SeleniumEnv = None
 def get_driverEnv(**args) -> SeleniumEnv:
     global driverEnv
 
-    if driverEnv:
-        return driverEnv
-    driverEnv = SeleniumEnv(**args)
+    if not driverEnv:
+        driverEnv = SeleniumEnv(**args)
     return driverEnv
 
 def get_driver(**args) -> webdriver.Chrome:
     global driver
 
-    if driver:
-        return driver
-    
-    # driverEnv = tpsup.seleniumtools.SeleniumEnv(**args)
-    # driverEnv = SeleniumEnv(**args)
-    driverEnv = get_driverEnv(**args)
-    driver = driverEnv.get_driver()
+    if not driver:
+        driverEnv = get_driverEnv(**args)
+        driver = driverEnv.get_driver()
     return driver
-
 
 def get_static_setup(**opt):
     verbose = opt.get('verbose', 0)
@@ -4135,6 +4126,17 @@ def locate(locator: str, **opt):
                 action = f"print={keys_string}"
                 debuggers[before_after] = [action]
                 print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
+    elif m := re.match(r"debug_(before|after)", locator):
+        ret['Success'] = True # hard code to True for now
+
+        before_after, *_ = m.groups()
+
+        if not dryrun:
+            for step in debuggers[before_after]:
+                # we don't care about the return value but we should avoid
+                # using locator (step) that has side effect: eg, click, send_keys
+                print(f"follow: debug_after={step}")
+                locate(step, **opt)
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
@@ -4271,8 +4273,7 @@ def pre_batch(all_cfg, known, **opt):
     # but batch.py uses global vars to shorten code which will be eval()/exec()
     global driverEnv
 
-    print("")
-    print('running pre_batch()')
+    log_FileFuncLine(f"running pre_batch()")
     if all_cfg["resources"]["selenium"].get('driverEnv', None) is None:
         # driverEnv is created in delayed mode
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
@@ -4280,10 +4281,6 @@ def pre_batch(all_cfg, known, **opt):
         driverEnv = method(**kwargs)
         all_cfg["resources"]["selenium"]['driverEnv'] = driverEnv
         log_FileFuncLine(f"driverEnv is created in batch.py's delayed mode")
-
-    print("pre_batch(): done")
-    print("--------------------------------")
-    print("")
 
 def post_batch(all_cfg, known, **opt):
     global driver
