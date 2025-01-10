@@ -503,11 +503,10 @@ class SeleniumEnv:
 
         #     self.driver.driverEnv = self  # monkey patching for convenience
 
-    def cleanLog(self):
+    def clean(self):
         # remove driver log and chromedir
         for f in [self.driverlog, self.chromedir]:
-            if self.debug:
-                log_FileFuncLine(f"removing {f}")
+            log_FileFuncLine(f"removing {f}")
             try:
                 shutil.rmtree(f)
             except FileNotFoundError:
@@ -3309,7 +3308,7 @@ def locate(locator: str, **opt):
 
         # parse 'target'
         if target:
-            if m := re.match(r"2(file|print|element)+$", target):
+            if m := re.match(r"2(print|pformat|element)+$", target):
                 target = m.group(1)
             else:
                 raise RuntimeError(f"unsupported target={target}")
@@ -3321,27 +3320,36 @@ def locate(locator: str, **opt):
                 if isExpression or lang == 'exp' or (target and 'element' in target):
                     # we are testing condition, we want to know True/False
                     # cc = compile(code, '<string>', 'single')
+                    code_run_fine = False
                     try:
                         # ret['Success'] = -eval(cc)
-                        ret['Success'] = multiline_eval(code, globals(), locals())
+                        result = multiline_eval(code, globals(), locals())
+                        code_run_fine = True
+                        print(f"lang={lang} returns {result}")
                     except Exception as e:
                         print(f"eval failed with exception={e}")
                         ret['Success'] = False
 
-                    print(f"lang={lang} returns {ret['Success']}")
-
-                    if target:
-                        if 'element' in target:
-                            element = driver.switch_to.active_element
-                            element.send_keys(ret['Success'])
-                            last_element = element
+                    if code_run_fine:
+                        if target:
+                            if 'element' in target:
+                                element = driver.switch_to.active_element
+                                element.send_keys(result)
+                                last_element = element
+                            elif 'print' in target:
+                                print(result)
+                            elif 'pformat' in target:
+                                print(pformat(result))
+                            else:
+                                raise RuntimeError(f"lang={lang} doesn't support target={target}.")
+                            # note 'result' could be a empty string, which is False in python.
+                            # therefore we don't use 'result' to set ret['Success']
+                            ret['Success'] = True
                         else:
-                            raise RuntimeError(f"lang={lang} doesn't support target={target}.")
+                            ret['Success'] = result
                 else:
                     exec_into_globals(code, globals(), locals())
-                    ret['Success'] = True # hard code to True for now
-
-                
+                    ret['Success'] = True # hard code to True for now               
             elif lang == 'js':
                 jsr = driver.execute_script(code)
                 if debug:
@@ -4006,6 +4014,23 @@ def locate(locator: str, **opt):
         print(f"locate: comment = {commnet}")
         # for fancier comment, we can use 
         #   code='print(f"a+b={a+b}")'
+    elif m := re.match(r"debug_(before|after)", locator):
+        '''
+        "debug_before" vs "debug_before=step1,step2"
+
+        "debug_before", ie, without steps, is to execute all debuggers['before'].
+        "debug_before=step1,step2" is to update debuggers['before'], not execute them.
+        '''
+        ret['Success'] = True # hard code to True for now
+
+        before_after, *_ = m.groups()
+
+        if not dryrun:
+            for step in debuggers[before_after]:
+                # we don't care about the return value but we should avoid
+                # using locator (step) that has side effect: eg, click, send_keys
+                print(f"follow: debug_after={step}")
+                locate(step, **opt)
     elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:consolelog|css|domstack|element|html|iframestack|tag|title|timeouts|url|waits|xpath))+)$", locator):
         '''
         (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
@@ -4126,17 +4151,6 @@ def locate(locator: str, **opt):
                 action = f"print={keys_string}"
                 debuggers[before_after] = [action]
                 print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
-    elif m := re.match(r"debug_(before|after)", locator):
-        ret['Success'] = True # hard code to True for now
-
-        before_after, *_ = m.groups()
-
-        if not dryrun:
-            for step in debuggers[before_after]:
-                # we don't care about the return value but we should avoid
-                # using locator (step) that has side effect: eg, click, send_keys
-                print(f"follow: debug_after={step}")
-                locate(step, **opt)
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
@@ -4360,17 +4374,17 @@ tpbatch = {
             "action": "store",
             "help": "base dir for selenium_browser log files, default to home_dir",
         },
-        'cleanLog': {
-            "switches": ["-clean", "--cleanLog"],
+        'clean': {
+            "switches": ["-clean", "--clean"],
             "default": False,
             "action": "store_true",
-            "help": "clean chrome persistence files and logs before running. clean driver log",
+            "help": "clean chrome persistence dir and driver log",
         },
         'cleanQuit': {
             "switches": ["-cq", "--cleanQuit"],
             "default": False,
             "action": "store_true",
-            "help": "clean chrome persistence files and logs, clean driver log, then quit",
+            "help": "clean chrome persistence dir and driver log then quit",
         },
         'js': {
             'switches': ['-js', '--js'],

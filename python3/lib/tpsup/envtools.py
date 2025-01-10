@@ -638,12 +638,13 @@ def get_term_type(**opt):
     if env_uname is None:
         raise RuntimeError("UNAME is not defined in environment. we didn't run tpsup or siteenv")
     
-    # UNAME=MINGW64_NT-10.0-19045 tianpc2 3.4.10-87d57229.x86_64 2024-02-14 20:17 UTC x86_64 Msys
+    # UNAME=MINGW64_NT-10.0-19045 tianpc2 3.4.10-87d57229.x86_64 2024-02-14 20:17 UTC x86_64 Msys  # gitbash in vscode, old windows
+    # UNAME=MSYS_NT-10.0-19045 tianpc2 3.4.10-87d57229.x86_64 2024-02-14 20:17 UTC x86_64 Msys # gitbash in new windows
     # UNAME=CYGWIN_NT-10.0-19045 tianpc2 3.5.3-1.x86_64 2024-04-03 17:25 UTC x86_64 Cygwin
     # UNAME=Linux tianpc2 5.15.167.4-microsoft-standard-WSL2 #1 SMP Tue Nov 5 00:21:55 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
     # UNAME=Microsoft Windows [Version 10.0.19045.5247] Windows_NT
 
-    if re.search(r'MINGW64', env_uname):
+    if re.search(r'Msys', env_uname):
         return 'gitbash'
     elif re.search(r'CYGWIN', env_uname):
         return 'cygwin'

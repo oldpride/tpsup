@@ -16,15 +16,15 @@ class FollowEnv:
         self.break_levels = 0
         self.already_checked_syntax = False
 
-    def follow(self, steps: list,  **opt):
+    def follow2(self, steps: list,  **opt):
         '''
-        follow() is a recursive. it basic flow is: if ... then if ... then if ... then ...
+        follow2() is a recursive. it basic flow is: if ... then if ... then if ... then ...
         for example: [ 'click_xpath=/a/b', '"iframe', 'click_xpath=/c/d', 'string="hello world"', 'dump' ]
         By default, if any 'if' failed, we stop. For example, if 'click_xpath=/a/b' failed, we stop.
         If any 'then if' failed, we stop. For example, if 'iframe' failed, we stop.
 
-        as of now, we only allow follow() to be recursive on block-statement (if/while) level; once
-        follow() calls locate(), locate() will not call follow(). This is to avoid infinite recursion.
+        as of now, we only allow follow2() to be recursive on block-statement (if/while) level; once
+        follow2() calls locate(), locate() will not call follow2(). This is to avoid infinite recursion.
         '''
 
         debug = opt.get("debug", 0)
@@ -43,7 +43,7 @@ class FollowEnv:
         #         end_while # while block depth = 0, if block depth = 1
         #     end_if      # if block depth = 0
 
-        block_depth = 0 # this needs to be a local var as follow() is recursive.
+        block_depth = 0 # this needs to be a local var as follow2() is recursive.
 
         condition = None
         blockstart = None
@@ -79,7 +79,7 @@ class FollowEnv:
                         if not block:
                             raise RuntimeError(f"block is empty")
                     
-                        # run_block() recursively calls follow()
+                        # run_block() recursively calls follow2()
                         result = self.run_block(blockstart, negation,
                                     condition, block, **opt)                    
                         if dryrun:
@@ -184,7 +184,7 @@ class FollowEnv:
                             
                             print(f"follow: parsed py file {file_name} to steps2={steps2}")
                                 
-                    result = self.follow(steps2, **opt)
+                    result = self.follow2(steps2, **opt)
                     if dryrun:
                         continue
                     if not result['Success']:
@@ -218,7 +218,7 @@ class FollowEnv:
                     dump, ...
                     note: only xpath/css/id can be in parallel (multiple locators separated by comma).
 
-            # we could have also introduced 'list' for sequence flow, but sequence is already handled by follow() interface.
+            # we could have also introduced 'list' for sequence flow, but sequence is already handled by follow2() interface.
             #     ['click_xpath=/a/b,click_xpath=/c/d', 'string="hello world"', 'dump']
 
             dict
@@ -299,7 +299,7 @@ class FollowEnv:
             we only define 'Success' at 'path' level, because the find...() function returns the first found element
             only. Therefore, we are not sure whether the other paths are found or not.
 
-            we can make recurisve call of follow() at 'Success' and 'Failure' to handle the next step; but
+            we can make recurisve call of follow2() at 'Success' and 'Failure' to handle the next step; but
             that could make 'locator_driver' and 'driver_url' confusing.
 
             The design of non-control-block flow is: if...then if ... then if ... then ....
@@ -354,12 +354,12 @@ class FollowEnv:
         
         return ret
 
-    def check_syntax_then_follow(self, steps: list, **opt):
+    def follow(self, steps: list, **opt):
         dryrun = opt.get('dryrun', 0)
 
         if not self.already_checked_syntax:
             # 1. checking syntax saves a lot time by spotting syntax error early!!!
-            #    we call follow() with dryrun=1 to check syntax
+            #    we call follow2() with dryrun=1 to check syntax
             # 2. batch.py can call this function repeatedly with batches of steps,
             #    but we only need to check syntax once (for one batch).
             opt2 = opt.copy()
@@ -372,14 +372,14 @@ class FollowEnv:
             print()
             print(f'begin checking syntax')
             print(f"----------------------------------------------")
-            result = self.follow(steps, **opt2)
+            result = self.follow2(steps, **opt2)
             print(f"----------------------------------------------")
             print(f'end checking syntax - syntax looks good')
             print()
             self.already_checked_syntax = True
 
         if not dryrun:
-            self.follow(steps, **opt)
+            self.follow2(steps, **opt)
 
     def run_block(self, blockstart: str, negation: str,  condition: str, block: list, **opt):
         # we separate condition and negation because condition test may fail with exception, which is
@@ -460,21 +460,21 @@ class FollowEnv:
             ret['executed'] = to_execute_block
 
             if to_execute_block:
-                # recursively calling follow() to run the block
+                # recursively calling follow2() to run the block
                 # try:
-                #     result = follow(block, **opt)
+                #     result = follow2(block, **opt)
                 # except Exception as e:
                 #     print(f"if_block: block part failed with exception={pformat(e)}")
                 #     return ret
 
                 # we should only catch exception in the condition part.
                 # we should not catch the exception if the block part failed.
-                result = self.follow(block, **opt)
+                result = self.follow2(block, **opt)
 
                 if result and not dryrun:
                     ret['Success'] = result['Success']
         else:
             # dryrun
             self.str_action(condition, isExpression=True, **opt)  
-            self.follow(block, **opt)
+            self.follow2(block, **opt)
         return ret
