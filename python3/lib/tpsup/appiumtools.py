@@ -13,6 +13,7 @@ from appium import webdriver
 from appium.webdriver.appium_service import AppiumService
 from appium.webdriver.common.appiumby import AppiumBy
 from appium.webdriver import WebElement
+from appium.options.android import UiAutomator2Options
 
 # import appium webdriver extensions
 import appium.webdriver.extensions.android.nativekey as nativekey
@@ -46,7 +47,7 @@ diagarm = '''
     | python   |       | server   | adb  |server|    |               |
     | webdriver|       | Nodejs   | cmd  +------+    |               +---->internet
     |          |       |          |                  | UIAutomator2. |
-    |          |       |          |----------------->| Bootstrap.js  |
+    |          |       |          |----------------->| Bootstrap.jar  |
     |          |       |          |     HTTP  W3C    | runs a TCP    |
     |          |       |          |                  | listening port|
     +----------+       +----------+                  +---------------+    
@@ -55,8 +56,7 @@ diagarm = '''
     adb_device_name is what command "adb devices" shows.
 '''
 
-# driver: webdriver.Chrome = None
-driver: webdriver.Remote = None
+driver: webdriver.Remote = None # not webdriver.Chrome!
 # we use this to control both explicit and implicit wait. 
 # more detail about explicit and implicit wait, see other comments in this file.
 wait_seconds = 10 # seconds
@@ -131,11 +131,6 @@ def start_proc(proc: str, **opt):
 
         service = AppiumService()
 
-        static_setup = tpsup.seleniumtools.get_static_setup(**opt)
-        chromedriver_path = static_setup.get('chromedriver', None)
-        if not chromedriver_path:
-            raise RuntimeError(f"chromedriver is not set in static_setup={static_setup}")
-
         args = [
             "--address", "127.0.0.1",  # this works
             # "--address", "0.0.0.0",  # this works on command line but in this script. Why?
@@ -144,14 +139,6 @@ def start_proc(proc: str, **opt):
             "--base-path", '/wd/hub',
             "--log", log,
             "--log-level", "debug",
-
-            # chromedriver
-            #   1. this is called only when driver.switch_to.context("webview...")
-            #      it may only work when desired_capacity has "app" set
-            #      https://github.com/appium/appium-inspector/issues/465
-            #      otherwise, error: unrecognized chrome option: androidDeviceSerial
-            #   2. chromedriver's version must match chrome version on the device.
-            "--chromedriver-executable", chromedriver_path,
         ]
         # f"--log={self.appium_log}"
 
@@ -263,34 +250,55 @@ class AppiumEnv:
 
         self.driver: webdriver.Remote = None
 
-        self.desired_cap = {
-            "appium:platformName": "Android",
-        }
+        static_setup = tpsup.seleniumtools.get_static_setup(**opt)
+        chromedriver_path = static_setup.get('chromedriver', None)
+        if not chromedriver_path:
+            raise RuntimeError(f"chromedriver is not set in static_setup={static_setup}")
 
-        if app := opt.get("app", None):
-            self.desired_cap['app'] = app  # this actually installs the app
+        # looks appium 2.0 deprecated desired_capabilities, use capabilities instead.
+        # https://appium.io/docs/en/latest/quickstart/test-py/
+        self.capabilities = dict(
+            platformName='Android',
+            automationName='UiAutomator2',
+            # deviceName='Android',
+            # appPackage='com.android.settings',
+            # appActivity='.Settings',
+            # language='en',
+            # locale='US',
+
+            # chromedriver
+            #   1. this is called only when driver.switch_to.context("webview...")
+            #      it may only work when desired_capacity has "app" set
+            #      https://github.com/appium/appium-inspector/issues/465
+            #      otherwise, error: unrecognized chrome option: androidDeviceSerial
+            #   2. chromedriver's version must match chrome version on the device.
+            chromedriverExecutable=chromedriver_path,
+        )
 
         # these two can be replaced with run=app/activity
-        # if appPackage := opt.get("appPackage", None):
-        #     self.desired_cap['appPackage'] = appPackage
-        #
-        # if appActivity := opt.get("appActivity", None):
-        #     self.desired_cap['appActivity'] = appActivity
-
-        if self.verbose:
-            print(f"desire_capabilities = {pformat(self.desired_cap)}")
+        if app := opt.get("app", None):
+            self.capabilities['appPackage'] = app  # this actually installs the app
+        if act := opt.get("act", None):
+            self.capabilities['appActivity'] = act
+        
+        log_FileFuncLine(f"capabilities = {pformat(self.capabilities)}")
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
 
-        self.driver = None
+        log_FileFuncLine(f"driverEnv is created. driver will be created when needed by calling driverEnv.get_driver()")
 
         # we only set up driverEnv, not initializing driver.
         # we initialize driver when get_driver() is called on demand.
 
     def get_driver(self) -> webdriver.Remote:
+        # https://appium.io/docs/en/latest/quickstart/test-py/
+        # we use /wd/hub here because we set --base-path /wd/hub in appium server (see above)
+        appium_server_url = f"http://{self.host_port}/wd/hub" 
+        print(f"connecting appium_server_url={appium_server_url}")
         if not self.driver:
             try:
                 self.driver = webdriver.Remote(
-                    f"http://{self.host_port}/wd/hub", self.desired_cap)
+                    appium_server_url, 
+                    options=UiAutomator2Options().load_capabilities(self.capabilities))
                 # appium implicit wait is default 0. there is no get_implicitly_wait() method
                 # self.driver.implicitly_wait(60)
             except Exception as e:
@@ -302,8 +310,9 @@ class AppiumEnv:
                 print(f"sleep {sleep_time} seconds and try again")
                 time.sleep(sleep_time)
                 self.driver = webdriver.Remote(
-                    f"http://{self.host_port}/wd/hub", self.desired_cap)
-                log_FileFuncLine("started driver")
+                    appium_server_url, 
+                    options=UiAutomator2Options().load_capabilities(self.capabilities))
+            log_FileFuncLine("started appium.webdriver.Remote")
 
             self.driver.driverEnv = self  # monkey patching for convenience   
         return self.driver
