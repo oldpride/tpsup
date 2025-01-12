@@ -7,6 +7,8 @@ import tpsup.envtools
 import tpsup.csvtools
 import tpsup.htmltools
 import tpsup.seleniumtools
+import tpsup.locatetools
+import tpsup.locatetools
 import tpsup.pstools
 from pprint import pformat
 
@@ -34,6 +36,8 @@ our_cfg = {
     ''',
 
     'usage_example': f'''
+    {tpsup.seleniumtools.diagram}
+
     - To run a local server, 
         cd "{TPP3}"
         python3 -m http.server 8000
@@ -81,10 +85,10 @@ our_cfg = {
         {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "js=document.testvar=777" "js=return document.testvar" "code=print(jsr)"
       
     other js directives: js2element, jsfile, jsfile2element, js2print
-        {{{{prog}}}} url=newtab "jsfile2elementprint={TPP3}/ptslnm_js_test_google.js" consolelog click key=Enter sleep=3
+        {{{{prog}}}} url=newtab "jsfile2elementprint={TPP3}/ptslnm_js_test_google.js" debug_after=consolelog click sendkey=Enter sleep=3
 
     js error should stop locator chain
-        {{{{prog}}}} url=blank "jsfile2elementprint={TPP3}/ptslnm_js_test_throw.js" consolelog click key=Enter sleep=3
+        {{{{prog}}}} url=blank "jsfile2elementprint={TPP3}/ptslnm_js_test_throw.js" debug_after=consolelog click sendkey=Enter sleep=3
 
     - test using js to locate. js is much faster.
         in shadow, we can only use css selector to locate
@@ -119,7 +123,7 @@ our_cfg = {
 
     {{{{prog}}}} if_not=exp="a=0;1/a" code="print('negate False worked')" end_if_not
 
-    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" click_xpath=/html/body/button sleep=1 "if=xpath=//*[@id=\\"random\\" and text()=\\"10\\"]" break end_if end_while
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" "click_xpath=/html/body/button" sleep=1 "if=xpath=//*[@id='random' and text()='10']" break end_if end_while
 
     - test exp
     {{{{prog}}}} exp="a=1;a+1" code="print(a)"  # this will pass - 2
@@ -185,6 +189,17 @@ def code(all_cfg, known, **opt):
     steps = []
 
     locator_chain = known['REMAININGARGS']
+
+    # moved below to seleniumtools
+    # locator_chain = []
+    # for locator in known['REMAININGARGS']:
+    #     # gitbash changes xpath=/html/body to xpath=C:/Program Files/Git/html/body
+    #     # so we need to change it back
+    #     locator2 = re.sub(r'xpath=C:/Program Files/Git', 'xpath=', locator, flags=re.IGNORECASE|re.DOTALL)
+    #     if locator2 != locator:
+    #         print(f'corrected locator from {locator} to {locator2}')
+    #     locator_chain.append(locator2)
+
     if run_js:
         locator_chain2 = tpsup.seleniumtools.locator_chain_to_locator_chain_using_js(locator_chain, trap=trap, debug=debug)
         steps.extend(locator_chain2)
@@ -203,7 +218,11 @@ def code(all_cfg, known, **opt):
             raise Exception(f'unknown step type={step_type}')
     print(f']')
 
-    result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
+    # result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
+    followEnv = tpsup.locatetools.FollowEnv(str_action=tpsup.seleniumtools.locate, 
+                                            dict_action=tpsup.seleniumtools.locate_dict,
+                                            **opt)
+    result = followEnv.follow(steps, **opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     caller = all_cfg.get('caller', None)
@@ -226,7 +245,7 @@ def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
         exit(0)
 
     if re.match(r'locators$', input[0]):
-        for line in tpsup.seleniumtools.get_defined_locators():
+        for line in tpsup.locatetools.get_defined_locators(locate_func=tpsup.seleniumtools.locate):
             print(line)
         exit(0)
 

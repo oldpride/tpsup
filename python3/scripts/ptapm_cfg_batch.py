@@ -2,6 +2,7 @@
 import datetime
 import os
 
+import re
 import time
 from typing import Union
 
@@ -10,6 +11,7 @@ import json
 import tpsup.csvtools
 import tpsup.htmltools
 import tpsup.appiumtools
+import tpsup.locatetools
 import tpsup.pstools
 from pprint import pformat
 # from selenium import webdriver
@@ -30,19 +32,8 @@ our_cfg = {
     # appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
 
     'usage_example': f'''
-                         host_port   adb_device_name  phone/emulator
-    +----------+       +----------+      +------+    +---------------+
-    | appium   +------>+ appium   +----->+ adb  +--->+ adbd          |
-    | python   |       | server   | adb  |server|    |               |
-    | webdriver|       | Nodejs   | cmd  +------+    |               +---->internet
-    |          |       |          |                  | UIAutomator2. |
-    |          |       |          |----------------->| Bootstrap.js  |
-    |          |       |          |     HTTP  W3C    | runs a TCP    |
-    |          |       |          |                  | listening port|
-    +----------+       +----------+                  +---------------+    
-    
-    host_port is appium sever's host and port.
-    adb_device_name is what command "adb devices" shows.
+    {tpsup.appiumtools.diagarm}
+
     Note: we won't mention adb_device_name on command line because
         1. appium server will auto find the device from "adb devices"
         2. appium only works when "adb devices" has only one device.
@@ -131,14 +122,6 @@ our_cfg = {
 
 
 def pre_batch(all_cfg, known, **opt):
-    steps = known['REMAININGARGS']
-    print(f'steps = {pformat(steps)}')
-
-    # check first, then run. this saves time to catch errors early.
-    print(f'---------- begin checking steps -----------')
-    tpsup.appiumtools.follow(None, steps, checkonly=1, **opt)
-    print(f'---------- end checking steps -----------')
-
     # call the default pre_batch() from tpsup.appiumtools
     tpsup.appiumtools.pre_batch(all_cfg, known, **opt)
 
@@ -158,13 +141,17 @@ def code(all_cfg, known, **opt):
     steps = known['REMAININGARGS']
     print(f'steps = {pformat(steps)}')
 
-    driver: webdriver = all_cfg["resources"]["appium"]["driver"]
-
-    result = tpsup.appiumtools.follow(driver, steps, **opt)
+    followEnv = tpsup.locatetools.FollowEnv()
+    result = followEnv.follow(str_action=tpsup.appiumtools.locate, steps=steps, **opt)
 
     if verbose:
         print(f'result = {pformat(result)}')
 
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
+    if re.match(r'locators$', input[0]):
+        for line in tpsup.locatetools.get_defined_locators(locate_func=tpsup.appiumtools.locate):
+            print(line)
+        exit(0)
+
     return {'REMAININGARGS': input}

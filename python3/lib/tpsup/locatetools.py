@@ -11,9 +11,10 @@ class FollowEnv:
         self.str_action = str_action
         self.dict_action = dict_action
 
-        self.caller_globals = inspect.currentframe().f_back.f_globals
-        self.caller_locals = inspect.currentframe().f_back.f_locals
-        self.break_levels = 0
+        # hope we will never need this
+        # self.caller_globals = inspect.currentframe().f_back.f_globals
+        # self.caller_locals = inspect.currentframe().f_back.f_locals
+
         self.already_checked_syntax = False
 
     def follow2(self, steps: list,  **opt):
@@ -45,19 +46,20 @@ class FollowEnv:
 
         block_depth = 0 # this needs to be a local var as follow2() is recursive.
 
+        first_step_of_block = None
         condition = None
         blockstart = None
         negation = False
 
-        ret = {'Success': False}
+        ret = {'Success': False, 'break_levels': 0}
 
         if not steps:
-            print(f'follow: steps are empty. return')
+            print(f'follow2: steps are empty. return')
             return
 
         for step in steps:
             if debug:
-                print(f"follow: step={pformat(step)}")
+                print(f"follow2: step={pformat(step)}")
 
             step_type = type(step)
 
@@ -70,30 +72,38 @@ class FollowEnv:
                     block_depth -= 1
 
                     if block_depth == 0:
-                        # the outermost block is ended; we didn't run the block yet.
+                        # the outermost of a recursive block is ended; we will run the block now.
                         if debug:
-                            print(f"follow: matched expected_blockend={expected_blockend}")
+                            print(f"follow2: matched expected_blockend={expected_blockend}")
                         expected_blockend = None
 
-                        print(f"follow: run block={block}, condition={condition}, block_depth={block_depth}")
+                        print(f"follow2: run block={block}, condition={condition}, block_depth={block_depth}")
                         if not block:
                             raise RuntimeError(f"block is empty")
                     
                         # run_block() recursively calls follow2()
-                        result = self.run_block(blockstart, negation,
-                                    condition, block, **opt)                    
+                        result = self.run_block(blockstart, negation, condition, block, **opt)   
+
+                        if debug:
+                            print(f"follow2: run_block result={pformat(result)}")
+
                         if dryrun:
                             # we only check syntax, therefore, we don't check the result and move on
                             continue
 
+                        if result['break_levels']:
+                            print(f"follow2: break because block result break_levels={result['break_levels']} > 0")
+                            ret['break_levels'] = result['break_levels']
+                            break
+
                         if not result['Success']:
-                            print(f"follow: break because block failed.")
+                            print(f"follow2: break because block failed.")
                             # if the block failed, we stop
                             break
                     else:
                         # we only encountered a nested block end
                         if debug:
-                            print(f"follow: matched expected_blockend={expected_blockend}, but still in block_depth={block_depth}")
+                            print(f"follow2: matched expected_blockend={expected_blockend}, but still in block_depth={block_depth}")
 
                         # we keep the nested block end in the block, so that we can recursively call run_block()
                         block.append(step)
@@ -114,6 +124,7 @@ class FollowEnv:
                     blockstart = m.group(1)
                     negation = m.group(2)
                     condition = m.group(3)
+                    first_step_of_block = step
 
                     if negation:
                         expected_blockend = f"end_{blockstart}{negation}"
@@ -121,7 +132,7 @@ class FollowEnv:
                         expected_blockend = f"end_{blockstart}"
                     block = []
                     if debug:
-                        print(f"follow: blockstart={blockstart}, negation={negation}, condition={condition}, "
+                        print(f"follow2: blockstart={blockstart}, negation={negation}, condition={condition}, "
                             f"expected_blockend={expected_blockend}, block_depth={block_depth}")
                     continue
 
@@ -161,10 +172,10 @@ class FollowEnv:
                                 # split the line using shell syntax
                                 steps_in_this_line = shlex.split(line)
                                 if debug:
-                                    print(f"follow: parsed line={line} to {steps_in_this_line}")
+                                    print(f"follow2: parsed line={line} to {steps_in_this_line}")
                                 steps2.extend(steps_in_this_line)
 
-                            print(f"follow: parsed txt file {file_name} to steps2={steps2}")
+                            print(f"follow2: parsed txt file {file_name} to steps2={steps2}")
                     else:
                         # file_type == 'py':
                         string = None
@@ -182,13 +193,13 @@ class FollowEnv:
                             if type(steps2) != list:
                                 raise RuntimeError(f"steps in python file {file_name} is not a list")
                             
-                            print(f"follow: parsed py file {file_name} to steps2={steps2}")
+                            print(f"follow2: parsed py file {file_name} to steps2={steps2}")
                                 
                     result = self.follow2(steps2, **opt)
                     if dryrun:
                         continue
                     if not result['Success']:
-                        print(f"follow: run steps_{file_type}={file_name} failed")
+                        print(f"follow2: run steps_{file_type}={file_name} failed")
                         return result
                     continue
             # now we are done with control block handling
@@ -199,7 +210,7 @@ class FollowEnv:
             # for step in self.caller_globals['debuggers']['before']:
             #     # we don't care about the return value but we should avoid
             #     # using locator (step) that has side effect: eg, click, send_keys
-            #     print(f"follow: debug_before={step}")
+            #     print(f"follow2: debug_before={step}")
             #     self.str_action(step, **opt) 
             self.str_action('debug_before', **opt)
 
@@ -319,7 +330,7 @@ class FollowEnv:
             # for step in self.caller_globals['debuggers']['after']:
             #     # we don't care about the return value but we should avoid
             #     # using locator (step) that has side effect: eg, click, send_keys
-            #     print(f"follow: debug_after={step}")
+            #     print(f"follow2: debug_after={step}")
             #     self.str_action(step, **opt)
             self.str_action('debug_after', **opt)
 
@@ -327,10 +338,10 @@ class FollowEnv:
                 continue
             
             if debug:
-                print(f"follow: result={pformat(result)}")
+                print(f"follow2: result={pformat(result)}")
 
             if result is None:
-                print(f"follow: break, step={step} failed because result is None")
+                print(f"follow2: break, step={step} failed because result is None")
                 ret['Success'] = False
                 break
 
@@ -338,20 +349,18 @@ class FollowEnv:
             ret['Success'] = result['Success']
 
             if not result['Success']:
-                print(f"follow: break, step={step} failed because result['Success'] is False")
+                print(f"follow2: break, step={step} failed because result['Success'] is False")
                 break
 
-            # check break_levels in result
-            if 'break_levels' in result:
-                self.break_levels = result['break_levels']
-                ret['break_levels'] = self.break_levels
-
-            if self.break_levels:
-                print(f"follow: break because break_levels={self.break_levels} > 0")
-                # reduce break_levels by 1
-                self.break_levels = self.break_levels - 1
+            if result['break_levels']:
+                print(f"follow2: break because step result break_levels={result['break_levels']} > 0")
+                ret['break_levels'] = result['break_levels']
                 break
         
+        # check for missing blockend
+        if block_depth > 0:
+            whole_block = [first_step_of_block] + block
+            raise RuntimeError(f"missing blockend={expected_blockend} for block={whole_block}")
         return ret
 
     def follow(self, steps: list, **opt):
@@ -370,11 +379,11 @@ class FollowEnv:
             opt2['verbose'] = 0
 
             print()
-            print(f'begin checking syntax')
+            print(f'follow: begin checking syntax')
             print(f"----------------------------------------------")
             result = self.follow2(steps, **opt2)
             print(f"----------------------------------------------")
-            print(f'end checking syntax - syntax looks good')
+            print(f'follow: end checking syntax - syntax looks good')
             print()
             self.already_checked_syntax = True
 
@@ -386,38 +395,52 @@ class FollowEnv:
         # neither True or False.  In this case, we want to know the condition test failed.
         debug = opt.get('debug', 0)
         dryrun = opt.get('dryrun', False)
-        ret = {'Success': False, 'executed': False, 'element': None}
+        ret = {'Success': False, 'break_levels':0, 'executed': False, 'element': None}
 
         if blockstart == 'while':
             while True:
                 result = self.if_block(negation, condition, block, **opt)
                 if debug:
-                    print(f"run_block: result={result}")
+                    print(f"run_block: 1 while-loop result={result}")
+
                 if not result['executed']:
                     break
 
-                # check break_levels in result
-                if 'break_levels' in result:
-                    self.break_levels = result['break_levels']
-                    ret['break_levels'] = self.break_levels
+                ret['executed'] = True
+                ret['Success'] = result['Success']
 
-                # only while-loop can be broken.
-                if self.break_levels:
-                    if debug:
-                        print(f"run_block: break_levels={self.break_levels}, break the while loop")
-                    # reduce break_levels by 1
-                    self.break_levels = self.break_levels - 1
+                if result['break_levels']:
+                    print(f"run_block: break_levels={result['break_levels']}, break the while loop")
+                    ret['break_levels'] = result['break_levels']
+
+                    # reduce break_levels by 1 because we really break a loop in while-loop block.
+                    ret['break_levels'] = result['break_levels'] - 1
+                    # '1' return 1 layer, '2' return 2 layers, ....
+                    # we start with 0, meaning we are outside of any layer, no layer to return
+                    # everytime we break out a layer (while loop), we decrease break_levels by 1.
+                    # we allow break_levels greater than 1, so that we can break multiple layers,
+                    # or even use it to implement 'return' in a function.
+
+                    # only break the while-loop block, not the if block
                     break
                 if dryrun:
                     # avoid infinite while loop in dryrun
                     break
+                if not result['Success']:
+                    # even if the non-control-block failed, we should break the while loop.
+                    # noramlly if non-control-block failed, an exception is raised.
+                    break
         elif blockstart == 'if':
             result=self.if_block(negation, condition, block, **opt)
+            if debug:
+                print(f"run_block: if_block result={result}")
+            ret['Success'] = result['Success']
+            ret['executed'] = result['executed']
+
+            # propagate break_levels to outer layer
+            ret['break_levels'] = result['break_levels']
         else:
             raise RuntimeError(f"unsupported blockstart={blockstart}")
-
-        ret['Success'] = result['Success']
-        ret['executed'] = result['executed']
 
         return ret
 
@@ -427,8 +450,9 @@ class FollowEnv:
         # neither True or False.  In this case, we want to know the condition test failed.
 
         dryrun = opt.get('dryrun', False)
+        debug = opt.get('debug', 0)
 
-        ret = {'Success': False, 'executed': False}
+        ret = {'Success': False, 'executed': False, 'break_levels': 0}
 
         if not dryrun:
             # we should catch exception here, because the condition may fail with exception
@@ -445,16 +469,16 @@ class FollowEnv:
         
             if result['Success'] and negation:
                 print(
-                    f"if_not_block: condition '{condition}' is true, but negated, block is not executed")
+                    f"if_not_block: condition '{condition}' is true, but negated, block will not be executed")
                 to_execute_block = False
             elif result['Success'] and not negation:
-                print(f"if_block: condition '{condition}' is true, block is executed")
+                print(f"if_block: condition '{condition}' is true, block will be executed")
                 to_execute_block = True
             elif not result['Success'] and not negation:
-                print(f"if_block: condition '{condition}' is not true, block is not executed")
+                print(f"if_block: condition '{condition}' is not true, block will not be executed")
                 to_execute_block = False
             else:
-                print(f"if_block: condition '{condition}' is not true, but negated, block is executed")
+                print(f"if_block: condition '{condition}' is not true, but negated, block will be executed")
                 to_execute_block = True
 
             ret['executed'] = to_execute_block
@@ -471,10 +495,37 @@ class FollowEnv:
                 # we should not catch the exception if the block part failed.
                 result = self.follow2(block, **opt)
 
-                if result and not dryrun:
+                if debug:
+                    print(f"if_block: block result={result}")
+
+                if not dryrun:
                     ret['Success'] = result['Success']
+                    ret['break_levels'] = result['break_levels']
         else:
-            # dryrun
+            # dryrun, for syntax check
             self.str_action(condition, isExpression=True, **opt)  
             self.follow2(block, **opt)
         return ret
+
+def get_defined_locators(locate_func: callable, **opt):
+    '''
+    get list of locators in locate() function.
+    we first get the source code of locate() function, then we extract the locators
+    from 'if' and 'elif' statements.    
+    '''
+    import inspect
+    import re
+
+    source = inspect.getsource(locate_func)
+    # print(f"source={source}")
+
+    locators = []
+    # extract all the 'if' and 'elif' statements from the source code
+    # we use re.DOTALL to match newline
+    for m in re.finditer(r"^    (if|elif) (m :=.+?locator)", source, re.MULTILINE | re.DOTALL):
+
+        locators.append(m.group(2))
+    for m in re.finditer(r"^    (if|elif) (locator == .+?):", source, re.MULTILINE | re.DOTALL):
+        locators.append(m.group(2))
+
+    return locators

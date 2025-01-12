@@ -110,12 +110,8 @@ def usage(message: str = None, **opt):
 '''
     usage_top = resolve_scalar_var_in_string(usage_top, {'prog': usage_caller})
     print(f'''
-    usage:
-{usage_top}
-
-example:
-{example}
-
+usage:{usage_top}
+example:{example}
 ''', file=sys.stderr)
     exit(1)
 

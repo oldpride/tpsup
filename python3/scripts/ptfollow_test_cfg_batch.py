@@ -8,7 +8,7 @@ import tpsup.csvtools
 import tpsup.htmltools
 import tpsup.seleniumtools
 import tpsup.appiumtools
-import tpsup.followtools
+import tpsup.locatetools
 from tpsup.logbasic import log_FileFuncLine
 import tpsup.pstools
 from pprint import pformat
@@ -107,7 +107,7 @@ def code(all_cfg, known, **opt):
     else:
         raise Exception(f"unknown module={module}")
 
-    followEnv = tpsup.followtools.FollowEnv(str_action=locate_func, **opt)
+    followEnv = tpsup.locatetools.FollowEnv(str_action=locate_func, **opt)
     result = followEnv.follow(steps, **opt)
 
 
