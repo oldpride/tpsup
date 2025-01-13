@@ -3588,6 +3588,8 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
+            if not driver:
+                driver = get_driver(**opt)
             if wait_type == 'all' or wait_type == 'expl':
                 # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
                 # explicit wait is done per call (WebDriverWait()).
