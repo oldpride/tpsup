@@ -26,6 +26,7 @@ from selenium.webdriver import ActionChains
 import tpsup.envtools
 import tpsup.filetools
 
+import tpsup.locatetools
 from tpsup.logbasic import log_FileFuncLine
 from tpsup.nettools import is_tcp_open, wait_tcps_open
 import tpsup.pstools
@@ -78,7 +79,6 @@ debuggers = {
 # appium starting emulator
 #   https://appium.io/docs/en/writing-running-appium/running-tests/
 #   https://stackoverflow.com/questions/42604543/launch-emulator-from-appium-python-client
-
 def start_proc(proc: str, **opt):
     if proc != 'emulator' and proc != 'appium':
         raise RuntimeError(
@@ -113,8 +113,10 @@ def start_proc(proc: str, **opt):
     # https://developer.android.com/studio/run/emulator-commandline
     # https://stackoverflow.com/questions/42604543/launch-emulator-from-appium-python-client
     if proc == 'emulator':
+        # andorid studio -> virtual device manager -> select emulator -> edit -> name it to below
+        emulator_name = "myemulator"
         cmd = f"{os.environ['ANDROID_HOME']}/emulator/emulator -netdelay none -netspeed full " \
-              f"-avd myemulator -port {port}"
+              f"-avd {emulator_name} -port {port}"
         if opt.get('headless', False):
             cmd += " -no-window"
         # else:
@@ -136,7 +138,7 @@ def start_proc(proc: str, **opt):
             # "--address", "0.0.0.0",  # this works on command line but in this script. Why?
             "--port", f"{port}",
             "--log-no-colors",
-            "--base-path", '/wd/hub',
+            "--base-path", opt['base_path'],
             "--log", log,
             "--log-level", "debug",
         ]
@@ -192,9 +194,14 @@ Note: there are many host:port pairs involved
     device connect host:port
         '''
 
-
 class AppiumEnv:
-    def __init__(self, host_port: str, **opt):
+    def __init__(self, 
+                 host_port: str, 
+                 base_path: str = '/wd/hub',
+                 clean = False, # whether to remove server and driver persistent data and logs
+                 cleanQuit = False, # whether to remove server and driver persistent data and logs and quit
+                 is_emulator = False, # whether to connect to an emulator             
+                 **opt):
         # host_port is appium server's host and port,
         #   not to be confused with emulator's host and port.
         #   if host_port is not open and host is localhost, this call will start
@@ -204,6 +211,15 @@ class AppiumEnv:
         #   appium only support one device.
 
         self.host_port = host_port
+
+        '''
+        base_path is called "remove path" in appium inspector.
+            it is part of the appium server's url, eg, http://localhost:4723/wd/hub
+            if appium (server) is started without --base-path, the url will be http://localhost:4723/
+            if appium is started with --base-path /wd/hub, the url will be http://localhost:4723/wd/hub
+        '''
+        self.base_path = base_path
+        
         self.verbose = opt.get("verbose", 0)
         self.env = tpsup.envtools.Env()
         self.env.adapt()
@@ -217,36 +233,23 @@ class AppiumEnv:
         self.emulator_log = os.path.join(self.log_base, "emulator.log")
         self.appium_log = os.path.join(self.log_base, "appium.log")
 
-        if opt.get("clean", 0) or opt.get("cleanQuit", 0):
+        if clean or cleanQuit:
             self.clean()
-            if opt.get("cleanQuit", 0):
+            if cleanQuit:
                 exit(0)
 
+        self.is_emulator = is_emulator
         need_wait = []
-        if opt.get('is_emulator', False):
+        if self.is_emulator:
             log_FileFuncLine(f"emulator_log={self.emulator_log}")
-            response = start_proc('emulator', log=self.emulator_log, **opt)
-            log_FileFuncLine(f"emulator response = {pformat(response)}")
-            if response.get('status', None) == "started":
-                need_wait.append(response.get("host_port"))
-
-        appium_exe = which('appium')
-        if appium_exe:
-            log_FileFuncLine(f"appium is {appium_exe}")
+            
+        self.appium_exe = which('appium')
+        if self.appium_exe:
+            log_FileFuncLine(f"appium is {self.appium_exe}")
         else:
             raise RuntimeError(f"appium is not in PATH={os.environ['PATH']}\nnormally C:/tools/nodejs/appium")
         
         log_FileFuncLine(f"appium_log={self.appium_log}")
-        response = start_proc('appium', log=self.appium_log, **opt)
-        log_FileFuncLine(f"appium response = {pformat(response)}")
-        self.service: AppiumService = response.get('service', None)
-        if response.get('status', None) == "started":
-            need_wait.append(response.get("host_port"))
-
-        if need_wait:
-            log_FileFuncLine(f"wait max 60 seconds for: {need_wait}")
-            if not wait_tcps_open(need_wait, timeout=60):
-                raise RuntimeError(f"one of port is not ready: {need_wait}")
 
         self.driver: webdriver.Remote = None
 
@@ -280,6 +283,8 @@ class AppiumEnv:
             self.capabilities['appPackage'] = app  # this actually installs the app
         if act := opt.get("act", None):
             self.capabilities['appActivity'] = act
+
+        self.opt = opt
         
         log_FileFuncLine(f"capabilities = {pformat(self.capabilities)}")
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
@@ -290,15 +295,51 @@ class AppiumEnv:
         # we initialize driver when get_driver() is called on demand.
 
     def get_driver(self) -> webdriver.Remote:
+        need_wait = []
+
+        if self.is_emulator:
+            print()
+            print(f"starting emulator if not already started")
+            response = start_proc('emulator', log=self.emulator_log, **self.opt)
+            log_FileFuncLine(f"emulator response = {pformat(response)}")
+            if response.get('status', None) == "started":
+                need_wait.append(response.get("host_port"))
+
+        print()
+        print(f"starting appium server if not already started")
+        response = start_proc('appium', log=self.appium_log, base_path=self.base_path, **self.opt)
+        log_FileFuncLine(f"appium response = {pformat(response)}")
+        self.service: AppiumService = response.get('service', None)
+        if response.get('status', None) == "started":
+            need_wait.append(response.get("host_port"))
+
+        if need_wait:
+            proc_wait_seconds = 60
+            log_FileFuncLine(f"wait max {proc_wait_seconds} seconds for: {need_wait}")
+            if not wait_tcps_open(need_wait, timeout=proc_wait_seconds):
+                raise RuntimeError(f"one of port is not ready: {need_wait}")
+            
+        print(f"starting webdriver session (appium.webdriver). this is not a separate process.")
         # https://appium.io/docs/en/latest/quickstart/test-py/
         # we use /wd/hub here because we set --base-path /wd/hub in appium server (see above)
-        appium_server_url = f"http://{self.host_port}/wd/hub" 
-        print(f"connecting appium_server_url={appium_server_url}")
+        appium_server_url = f"http://{self.host_port}{self.base_path}"
+        print()
+        print(f"connecting to appium_server_url={appium_server_url}")
         if not self.driver:
+            connected = False
             try:
+                '''
+                appium.webdriver is a subclass of selenium.webdriver.Remote.
+                    see venv/Windows/win10-python3.12/Lib/site-packages/appium/webdriver/webdriver.py
+                selenium.webdriver.Remote class is actually selenium.webdriver.remote.webdriver.WebDriver class
+                    see venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/__init__.py
+                        from .remote.webdriver import WebDriver as Remote
+                '''
+
                 self.driver = webdriver.Remote(
                     appium_server_url, 
                     options=UiAutomator2Options().load_capabilities(self.capabilities))
+                connected = True
                 # appium implicit wait is default 0. there is no get_implicitly_wait() method
                 # self.driver.implicitly_wait(60)
             except Exception as e:
@@ -306,13 +347,16 @@ class AppiumEnv:
                 print(
                     "both appium and device/emulator are running, but webdriver failed to connect")
                 print("likely device/emulator is still booting up.")
+
+            if not connected:
                 sleep_time = 40
                 print(f"sleep {sleep_time} seconds and try again")
                 time.sleep(sleep_time)
                 self.driver = webdriver.Remote(
                     appium_server_url, 
                     options=UiAutomator2Options().load_capabilities(self.capabilities))
-            log_FileFuncLine("started appium.webdriver.Remote")
+                
+            log_FileFuncLine(f"started appium.webdriver.Remote and connected to {appium_server_url}\n")
 
             self.driver.driverEnv = self  # monkey patching for convenience   
         return self.driver
@@ -381,14 +425,52 @@ def locate(locator: str, **opt):
 
     ret = {'Success': False, 'break_levels': 0}
 
-    if m := re.match(r"(start_driver|driver)=(.+)", locator):
+    if m := re.match(r"(start_driver|driver)$", locator):
         print(f"locate: start driver")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             driver = get_driver(**opt)
             # update_locator_driver(**opt)
-            ret['Success'] = True    
+            ret['Success'] = True
+    elif m := re.match(r"kill_procs$", locator):   
+        print(f"locate: kill_procs: {procs}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            tpsup.pstools.kill_procs(procs)
+            ret['Success'] = True
+    elif m := re.match(r"check_procs$", locator):   
+        print(f"locate: check_procs: {procs}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            tpsup.pstools.check_procs(procs)
+            ret['Success'] = True
+    elif m := re.match(r"installapp=(.+)$", locator, flags=re.IGNORECASE):
+        app, *_ = m.groups()
+        print(f"locate: installapp={app}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            if not driver:
+                driver = get_driver(**opt)
+            driver.install_app(app)
+            ret['Success'] = True
+    elif m := re.match(r"(existsapp|removeapp)=(.+)$", locator, flags=re.IGNORECASE):
+        action, app, *_ = m.groups()
+        print(f"locate: {action}={app}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            if not driver:
+                driver = get_driver(**opt)
+            if action == 'existsapp':
+                ret['Success'] = driver.is_app_installed(app)
+            else:
+                driver.remove_app(app)
+                ret['Success'] = True
+
     elif m := re.match(r"\s*(xpath|css|id)=(.+)", locator):
         tag, value, *_ = m.groups()
         # AppiumBy.ID is the "resource-id" in uiautomator.
@@ -414,6 +496,8 @@ def locate(locator: str, **opt):
                 print(f"validate xpath={value}")
                 lxml.etree.XPath(value)
         else:
+            if not driver:
+                driver = get_driver(**opt)
             if tag == 'id':
                 element = driver.find_element(AppiumBy.ID, value)
             elif tag == 'xpath':
@@ -481,14 +565,19 @@ def locate(locator: str, **opt):
                 '''
                 driver.set_page_load_timeout(int(value))
             ret['Success'] = True
+    elif m := re.match(r"(home|enter|backspace)$", locator, re.IGNORECASE):
+        value, *_ = m.groups()
+        print(f"follow(): {value}")
+        locate(f"sendkey={value}", **opt)
+        ret['Success'] = True
     elif m := re.match(r"sendkey=(.+)", locator, re.IGNORECASE):
         value, *_ = m.groups()
-        value = value.upper()
         print(f"follow(): sendkey={value}")
+
+        value = value.upper()
         # https://stackoverflow.com/questions/74188556
         androidkey = nativekey.AndroidKey
 
-        print(f"validate key={value}")
         keycode = androidkey.__dict__.get(value, None)
         if not keycode:
             raise RuntimeError(f"key={value} is not supported")
@@ -496,14 +585,19 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            keycode = androidkey.__dict__.get(value, None)
             if debug:
                 print(f"key={value}, keycode={keycode}")
-            if keycode:
-                driver.press_keycode(keycode)
-            else:
-                raise RuntimeError(f"key={value} is not supported")
+
+            # selenium's send_keys is element.send_keys(), using the element as the target.
+            # appium's send_keys is driver.press_keycode(), using the driver as the target.
+            if not driver:
+                driver = get_driver(**opt)
+            driver.press_keycode(keycode)
             ret['Success'] = True
+    elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL):
+        value, *_ = m.groups()
+        result = locate(f"code2element='''{value}'''", **opt)
+        ret['Success'] = result['Success']
     elif m := re.match(r"(code|python|exp|js)(file)?(.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
         '''
         'code' and 'python' are the same - python code to be executed.
@@ -677,7 +771,7 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            element.click()
+            last_element.click()
             ret['Success'] = True
     elif locator == 'doubleclick':
         print(f"follow(): doubleclick")
@@ -722,6 +816,136 @@ def locate(locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             swipe(driver, param, **opt)
+    elif m := re.match(r"debug_(before|after)$", locator):
+        '''
+        "debug_before" vs "debug_before=step1,step2"
+
+        "debug_before", ie, without steps, is to execute all debuggers['before'].
+        "debug_before=step1,step2" is to update debuggers['before'], not execute them.
+        '''
+        ret['Success'] = True # hard code to True for now
+
+        before_after, *_ = m.groups()
+
+        if not dryrun:
+            for step in debuggers[before_after]:
+                # we don't care about the return value but we should avoid
+                # using locator (step) that has side effect: eg, click, send_keys
+                print(f"follow: debug_{before_after}={step}")
+                locate(step, **opt)
+    elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:css|element|tag|text|title|timeouts|url|waits|xpath))+)$", locator):
+        '''
+        (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
+        and both are on outside.
+        debug_before=url,title,tag => group 1 = debug_before, group 2 = url,title,tag
+
+        examples:
+            print=text,tag
+        '''
+        ret['Success'] = True
+        directive, keys_string = m.groups()
+        keys = keys_string.split(",")
+        '''
+        directive: 'print' vs 'debug...'
+            'print' is excuted right here and only once.
+            'debug' is saved in debuggers[] and executed later, before or after each locate() call.
+        '''
+        if not dryrun:
+            if directive == 'print':
+                print(f"locate: get property {keys}")
+                for key in keys:
+                    if not dryrun:
+                        if key == 'html':
+                            if last_element:
+                                html = last_element.get_attribute('outerHTML')
+                                print(f'element_html=element.outerHTML={html}')   
+                            else:
+                                print(f'element_html is not available because last_element is None')
+                        elif key == 'tag':
+                            # get element type
+                            if last_element:
+                                tag = last_element.tag_name
+                                print(f'element_tag_name=element.tag_name={tag}')
+                        elif key == 'text':
+                            if last_element:
+                                text = last_element.text
+                                print(f'element.text={text}')
+                        elif key == 'title':
+                            title = driver.title
+                            print(f'driver.title={title}')
+                        elif key == 'timeouts' or key == 'waits':
+                            # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
+                            # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
+                            print(f'    explicit_wait={wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
+                            print(f'    implicit_wait={driver.timeouts.implicit_wait}') # when we call find_element()
+                            print(f'    page_load_timeout={driver.timeouts.page_load}') # driver.get()
+                            print(f'    script_timeout={driver.timeouts.script}') # driver.execute_script()
+                        elif key == 'url':
+                            '''
+                            https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
+                            javascript: URLs can be used anywhere a URL is a navigation target. 
+                            This includes, but is not limited to:
+                                The href attribute of an <a> or <area> element.
+                                The action attribute of a <form> element.
+                                The src attribute of an <iframe> element.
+                                The window.location JavaScript property.
+                                The browser address bar itself.
+
+                            url has mutliple meanings:
+                                the url of the current page
+                                the url that you go next if you click a link, eg, <a href="url">
+                            more accurately, we care about the following urls, from big to small:
+                                url = driver.current_url # this driver's url, the top level url of the current page.
+                                url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
+                                url = driver.execute_script("return window.location.href") # this is my (current) iframe url
+                                url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
+                            '''
+                            element_url = None
+                            if last_element:
+                                # the following are the same
+                                # element_url = driver.execute_script("return arguments[0].src", last_element)
+                                element_url = last_element.get_attribute('src')
+
+                                print(f'    element_url=element.get_attribute("src")={element_url}')
+                            else:
+                                print(f'    element_url is not available because last_element is None')
+
+                            # https://stackoverflow.com/questions/938180
+                            iframe_url = driver.execute_script("return window.location.href")
+                            print(f'    current_iframe_url=window.location.href={iframe_url}')
+                            '''
+                            1. the following returns the same as above
+                                iframe_current = driver.execute_script("return window.location.toString()")
+                                print(f'    iframe_current=window.location.toString()={iframe_current}')
+                            2. all iframe defined by srcdoc will return "about:srcdoc", eg
+                                <iframe srcdoc="<p>hello</p>"></iframe>
+                            3. people normally use iframe url to id an iframe, but it is not reliable for
+                            srcdoc iframe.
+                            '''
+                            driver_url = driver.current_url
+                            print(f'    driver_url=driver.current_url={driver_url}')
+
+                            # https://stackoverflow.com/questions/938180
+                            parent_url = driver.execute_script("return document.referrer")
+                            print(f'    parent_iframe_url=document.referrer={parent_url}')
+                        elif key == 'xpath':
+                            print("xpath is not implemented yet")
+                        #     if last_element:
+                        #         xpath = js_get(last_element, 'xpath', **opt)
+                        #         print(f'element_xpath={xpath}')
+                        #     else:
+                        #         print(f'element_xpath is not available because last_element is None')
+            else:
+                # now for debugs
+                if directive == 'debug_before':
+                    before_after = 'before'
+                else:
+                    # directive == 'debug_after' or directive == 'debug'
+                    before_after = 'after'
+
+                action = f"print={keys_string}"
+                debuggers[before_after] = [action]
+                print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
 
@@ -869,21 +1093,13 @@ def swipe(driver: webdriver.Remote, param: str, **opt):
                      0.5, width * factor, height * 0.5)
 
 
-def check_proc(**opt):
-    for proc in ["qemu-system-x86_64.exe", "node.exe", "adb.exe"]:
-        print(f"check if {proc} is still running")
-        my_env = tpsup.envtools.Env()
-        if tpsup.pstools.ps_grep(f"{proc}", printOutput=1):
-            print(f"seeing leftover {proc}")
-            # try not to kill it because it takes time to start up
-            if opt.get('kill', False):
-                if my_env.isWindows:
-                    cmd = f"pkill {proc}"
-                else:
-                    # -f means match the full command line. available in linux, not in windows
-                    cmd = f"pkill -f {proc}"
-                print(cmd)
-                os.system(cmd)
+procs = [
+            "qemu-system-x86_64.exe", # emulator
+            "node.exe",  # appium server
+            "adb.exe", # adb server
+            "chromedriver", # chromedriver
+        ]
+
 
 # the following is for batch framework - batch.py
 #
@@ -902,43 +1118,31 @@ def pre_batch(all_cfg, known, **opt):
         # driverEnv is created in delayed mode
         method = all_cfg["resources"]["appium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["appium"]["driver_call"]["kwargs"]
-        driverEnv = method(**{**kwargs, "dryrun": 0, **opt})  # overwrite kwargs
+        # driverEnv = method(**{**kwargs, "dryrun": 0, **opt})  # overwrite kwargs
+        driverEnv = method(**{**kwargs, **opt})  # overwrite kwargs
         # 'host_port' are in **opt
         all_cfg["resources"]["appium"]["driverEnv"] = driverEnv
         log_FileFuncLine(f"driverEnv is created in batch.py's delayed mode")
 
 def post_batch(all_cfg, known, **opt):
+    dryrun = opt.get("dryrun", 0)
+
     print("")
     print("--------------------------------")
+    
+    if dryrun:
+        print(f"dryrun, skip post_batch()")
+        return
+    
     print(f"running post_batch()")
-    if 'driver' in all_cfg["resources"]["appium"]:
-        print(f"we have driver, quit it")
-        driver = all_cfg["resources"]["appium"]["driver"]
-        # this is not needed as webdriver is part of this python script, not a separate process.
+
+    if driver:
+        print(f"driver is still alive, quit it")
         driver.quit()
-        print("")
 
-        print(f"list all the log files for debug purpose")
-        # env vs driverEnv
-        #    env is from env.py - no driver info
-        #    driverEnv is from AppiumEnv - contains env and driver info
-        driverEnv = driver.driverEnv
-        my_env = driverEnv.env
-        if my_env.isWindows:
-            cmd = f"{my_env.ls_cmd} \"{driverEnv.log_base}\\*\""
-        else:
-            cmd = f"{my_env.ls_cmd} -ld \"{driverEnv.log_base}\"/*"
-        print(cmd)
-        os.system(cmd)
-        print("")
+    # no need to close driverEnv because it it doesn't have much resource to close
 
-        # delete a key from a dict, we can use either del or pop
-        #    se d.pop if you want to capture the removed item, like in item = d.pop("keyA").
-        #    Use del if you want to delete an item from a dictionary.
-        #        if thekey in thedict: del thedict[thekey]
-        del all_cfg["resources"]["appium"]["driver"]
-
-    check_proc(**opt)
+    tpsup.pstools.check_procs(procs, **opt)
 
 
 tpbatch = {
@@ -1012,7 +1216,7 @@ tpbatch = {
             "switches": ["--kill"],
             "default": False,
             "action": "store_true",
-            "help": "kill the leftover processes in post_batch()",
+            "help": f"kill {procs}",
         },
 
         # these two can be replaced with run=app/activity
@@ -1032,7 +1236,8 @@ tpbatch = {
     },
     'resources': {
         'appium': {
-            'method': get_driver,
+            # 'method': get_driver,
+            'method': AppiumEnv, 
             'cfg': {
                 # 'host_port': 'auto'
             },

@@ -2847,14 +2847,28 @@ def locate(locator: str, **opt):
     locator = correct_xpath(locator)
 
     # copied from old locate()
-    if m := re.match(r"(start_driver|driver)=(.+)", locator):
+    if m := re.match(r"(start_driver|driver)$", locator):
         print(f"locate: start driver")
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             driver = get_driver(**opt)
             update_locator_driver(**opt)
-            ret['Success'] = True   
+            ret['Success'] = True
+    elif m := re.match(r"kill_procs$", locator):   
+        print(f"locate: kill_procs: {procs}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            tpsup.pstools.kill_procs(procs)
+            ret['Success'] = True
+    elif m := re.match(r"check_procs$", locator):   
+        print(f"locate: check_procs: {procs}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            tpsup.pstools.check_procs(procs)
+            ret['Success'] = True
     elif m := re.match(r"(url|url_accept_alert)=(.+)", locator): # shortcuts: newtab, blank
         tag, url, *_ = m.groups()
         accept_alert = 0
@@ -3807,6 +3821,10 @@ def download_chromedriver(**opt):
     print(cmd)
     os.system(cmd)
 
+procs = [
+            "chromedriver", # chromedriver
+        ]
+
 # the following is for batch framework - batch.py
 #
 # pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
@@ -3824,14 +3842,13 @@ def pre_batch(all_cfg, known, **opt):
         # driverEnv is created in delayed mode
         method = all_cfg["resources"]["selenium"]["driver_call"]['method']
         kwargs = all_cfg["resources"]["selenium"]["driver_call"]["kwargs"]
-        driverEnv = method(**kwargs)
+        # driverEnv = method(**kwargs)
+        driverEnv = method(**{**kwargs, **opt})
+        # 'host_port' are in **opt
         all_cfg["resources"]["selenium"]['driverEnv'] = driverEnv
         log_FileFuncLine(f"driverEnv is created in batch.py's delayed mode")
 
 def post_batch(all_cfg, known, **opt):
-    global driver
-    global driverEnv
-
     dryrun = opt.get('dryrun', False)
     print("")
     print("--------------------------------")
@@ -3843,40 +3860,11 @@ def post_batch(all_cfg, known, **opt):
     print(f"running post_batch()")
 
     if driver:
-        log_FileFuncLine(f"we have driver, quit it")
-        # driver = all_cfg["resources"]["selenium"]["driver"]
+        print(f"driver is still alive, quit it")
         driver.quit()
-        print()
 
-        print(f"list all the log files for debug purpose")
-        # driverEnv = driver.driverEnv
-        my_env = driverEnv.env
-        if my_env.isWindows:
-            cmd = f"{my_env.ls_cmd} \"{driverEnv.log_base}\\selenium*\""
-        else:
-            cmd = f"{my_env.ls_cmd} -ld \"{driverEnv.log_base}\"/selenium*"
-        print(cmd)
-        os.system(cmd)
-        print("")
-
-        # delete a key from a dict, we can use either del or pop
-        #    se d.pop if you want to capture the removed item, like in item = d.pop("keyA").
-        #    Use del if you want to delete an item from a dictionary.
-        #        if thekey in thedict: del thedict[thekey]
-        del all_cfg["resources"]["selenium"]["driverEnv"]
-
-    log_FileFuncLine(f"check if chromedriver is still running")
-    my_env = tpsup.envtools.Env()
-    if tpsup.pstools.ps_grep("chromedriver", printOutput=1):
-        print(f"seeing leftover chromedriver, kill it")
-        if my_env.isWindows:
-            cmd = f"pkill chromedriver"
-        else:
-            # -f means match the full command line. available in linux, not in windows
-            cmd = f"pkill -f chromedriver"
-        print(cmd)
-        os.system(cmd)
-
+    log_FileFuncLine(f"kill chromedriver if it is still running")
+    tpsup.pstools.kill_procs(procs, **opt)
 
 tpbatch = {
     'pre_batch': pre_batch,

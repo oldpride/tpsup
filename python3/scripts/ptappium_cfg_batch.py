@@ -71,18 +71,23 @@ our_cfg = {
         device pairing host:port
         device connect host:port
 
+    - how to find "id" or "xpath" for an element,
+    use appium inspector -> start seesion -> right click on the element and inspect
+        in the "Selected Element tab", copy thee "id" or "xpath"
+       
     {{{{prog}}}} -is_emulator --humanlike '''
-                     'key=home id=com.android.quicksearchbox:id/search_widget_text click '
-                     'id=com.android.quicksearchbox:id/search_src_text click string=Amazon action=Search '
+                     'home sleep=3 id=com.google.android.apps.nexuslauncher:id/overview_actions_view click '
+                     'string=Amazon enter sleep=8 '
                      'dump_page={HOME}/dumpdir/page_source.html '
                      'xpath="//*[@content-desc]" '
     # 'context=webview dump_element=stdout '
                      f'''
     
     - test with app - this command installs the app too if not installed yet.
-    {{{{prog}}}} -is_emulator -v -np -app "%TPSUP%/python3/scripts/test02.apk" sleep=1
-    - if app stuck, 
-    adb uninstall org.nativescript.test02ngchallenge
+    {{{{prog}}}} -is_emulator if=existsapp=org.nativescript.test02ngchallenge removeapp=org.nativescript.test02ngchallenge end_if sleep=1
+        if app stuck, 
+            adb uninstall org.nativescript.test02ngchallenge
+    {{{{prog}}}} -is_emulator if_not=existsapp=org.nativescript.test02ngchallenge installapp="{TPP3}/test02.apk" end_if_not sleep=1
     
     - test webview context
     {{{{prog}}}} -is_emulator context=webview
@@ -90,7 +95,7 @@ our_cfg = {
     
     - test with real device, 
     - the following command load the package onto the device
-    {{{{prog}}}} -np -v -app "%TPSUP%/python3/scripts/test02.apk" sleep=1
+    {{{{prog}}}} installapp="{TPP3}/test02.apk" sleep=1
     
     - find package name
     adb shell "pm list packages|grep test02"
@@ -141,8 +146,9 @@ def code(all_cfg, known, **opt):
     steps = known['REMAININGARGS']
     print(f'steps = {pformat(steps)}')
 
-    followEnv = tpsup.locatetools.FollowEnv()
-    result = followEnv.follow(str_action=tpsup.appiumtools.locate, steps=steps, **opt)
+    followEnv = tpsup.locatetools.FollowEnv(str_action=tpsup.appiumtools.locate,
+                                            **opt)
+    result = followEnv.follow(steps, **opt)
 
     if verbose:
         print(f'result = {pformat(result)}')

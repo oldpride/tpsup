@@ -1,7 +1,10 @@
 import inspect
+import os
 from pprint import pformat
 import re
 import shlex
+import tpsup.envtools
+import tpsup.pstools
 
 class FollowEnv:
     def __init__(self,
