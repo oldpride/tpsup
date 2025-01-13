@@ -126,6 +126,7 @@ class FollowEnv:
                     # we are still in a block; we continue until we find the expected blockend.
                     # we only build the block, we don't run it.
                     # we will run the block after we find the expected blockend.
+                    block.append(step)
                     continue
 
                 if block:
