@@ -34,10 +34,18 @@ our_cfg = {
 
     'usage_example': f'''
 
-    - test block steps
+    - while block
     {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
 
-    {{{{prog}}}} if_not=exp="a=0;1/a" code="print('negate False worked')" end_if_not
+    - handle exception in if-condition
+    {{{{prog}}}} if_not=exp="a=0;1/a" code="print('negate False worked')" end_if
+
+    - if-else
+    {{{{prog}}}} if=exp="a=0;a+1==1" code="print('yes')" else code="print('no')" end_if
+    {{{{prog}}}} if=exp="a=0;a+1==2" code="print('yes')" else code="print('no')" end_if
+
+    - while-else
+    {{{{prog}}}} code=i=0 while=exp="i<3" code="i=i+1;print(i)" else code="print('while loop breaks here')" end_while
 
     {{{{prog}}}} if=dummy=1 tab=1 end_if -m local
 

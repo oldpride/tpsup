@@ -2,8 +2,8 @@
 
 use strict;
 
-my $line = "this is a long line: ";
-for (my $i = 0; $i < 100; $i++) {
-    $line .= "$i ";
+my $line = "echo cmd ";
+for (my $i = 0; $i < 20; $i++) {
+    $line .= "arg$i ";
 }
 print "$line\n";

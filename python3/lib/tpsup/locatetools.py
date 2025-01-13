@@ -37,22 +37,14 @@ class FollowEnv:
         # we support single-level block, just for convenience when testing using appium_steps
         # we don't support nested blocks; for nested block, use python directly
         block = []
-        expected_blockend = None
+        negation = None  # the outermost block's negation, if vs if_not, while vs while_not.
 
-        # use this to detect nested block of the same type, for example
-        #     if      # if block depth = 1
-        #         if      # if block depth = 2
-        #         end_if  # if block depth = 1
-        #         while   # while block depth = 1, if block depth = 1
-        #         end_while # while block depth = 0, if block depth = 1
-        #     end_if      # if block depth = 0
+        # we need to know the caller's blockstart. 
+        # If it is 'if' or 'if_not', we will look for 'else' too, besides 'end_if' or 'end_if_not'.
+        # caller_blockstart = opt.get('blockstart', None)
 
-        block_depth = 0 # this needs to be a local var as follow2() is recursive.
-
-        first_step_of_block = None
-        condition = None
-        blockstart = None
-        negation = False
+        # we use blockend_stack to keep track of nested block
+        blockend_stack = []
 
         ret = {'Success': False, 'break_levels': 0}
 
@@ -67,76 +59,96 @@ class FollowEnv:
             step_type = type(step)
 
             # first handle control block. block start and block end are strings only.
-            if block_depth > 0:
-                # we are in a block
-                
-                if step_type == str and step == expected_blockend:
-                    # step matches the expected blockend
-                    block_depth -= 1
-
-                    if block_depth == 0:
-                        # the outermost of a recursive block is ended; we will run the block now.
-                        if debug:
-                            print(f"follow2: matched expected_blockend={expected_blockend}")
-                        expected_blockend = None
-
-                        print(f"follow2: run block={block}, condition={condition}, block_depth={block_depth}")
-                        if not block:
-                            raise RuntimeError(f"block is empty")
-                    
-                        # run_block() recursively calls follow2()
-                        result = self.run_block(blockstart, negation, condition, block, **opt)   
-
-                        if debug:
-                            print(f"follow2: run_block result={pformat(result)}")
-
-                        if dryrun:
-                            # we only check syntax, therefore, we don't check the result and move on
-                            continue
-
-                        if result['break_levels']:
-                            print(f"follow2: break because block result break_levels={result['break_levels']} > 0")
-                            ret['break_levels'] = result['break_levels']
-                            break
-
-                        if not result['Success']:
-                            print(f"follow2: break because block failed.")
-                            # if the block failed, we stop
-                            break
-                    else:
-                        # we only encountered a nested block end
-                        if debug:
-                            print(f"follow2: matched expected_blockend={expected_blockend}, but still in block_depth={block_depth}")
-
-                        # we keep the nested block end in the block, so that we can recursively call run_block()
-                        block.append(step)
-                else:
-                    # this is not the expected blockend, we keep it in the block.
-                    block.append(step)
-
-                # we are still in a block; we continue until we find the expected blockend.
-                # we only build the block, we don't run it.
-                # we will run the block after we find the expected blockend.
-                continue
-            
-            # now that we are not in a block, we check whether this step is a start of a block
             if step_type == str:
+                if blockend_stack:
+                    # we are in a block
+                
+                    if step == blockend_stack[-1]:
+                        # step matches the expected blockend
+                        blockend = blockend_stack.pop()
+
+                        if not blockend_stack:
+                            # the outermost of a recursive block is ended; we will run the block now.
+                            if debug:
+                                print(f"follow2: matched expected_blockend={blockend}")
+
+                            print(f"follow2: run condition={condition}, negation={negation}, block={block}")
+
+                            if not block:
+                                raise RuntimeError(f"block is empty")
+                        
+                            # run_block() recursively calls follow2()
+                            result = self.run_block(blockstart, negation, condition, block, **opt)   
+
+                            if debug:
+                                print(f"follow2: run_block result={pformat(result)}")
+
+                            # reset block, negation. blockend_stack is already empty.
+                            block = [] 
+                            negation = None
+
+                            if dryrun:
+                                # we only check syntax, therefore, we don't check the result and move on
+                                continue
+
+                            if result['break_levels']:
+                                print(f"follow2: break because block result break_levels={result['break_levels']} > 0")
+                                ret['break_levels'] = result['break_levels']
+                                break
+
+                            if not result['Success']:
+                                print(f"follow2: break because block failed.")
+                                # if the block failed, we stop
+                                break
+                        else:
+                            # we only encountered a nested block end
+                            if debug:
+                                print(f"follow2: matched a nested blockend={blockend}")
+
+                            # we keep the nested block end in the block, so that we can recursively call run_block()
+                            block.append(step)
+                    elif m := re.match(r"\s*(end_while|end_if)$", step, flags=re.IGNORECASE):
+                        # this is an unexpected blockend
+                        raise RuntimeError(f"unexpected blockend={step}")
+                    elif m := re.match(r"\s*(while|if)(_not)?=(.+)", step, flags=re.IGNORECASE):
+                        # this is a nested block
+                        blockstart, negation, condition = m.groups()
+                        blockend = f"end_{blockstart}"
+                        blockend_stack.append(blockend)
+                        if debug:
+                            print(f"follow2: blockstart={blockstart}, negation={negation}, condition={condition}, "
+                                f"expected_blockend={blockend}, blockend_stack={blockend_stack}")
+                        block.append(step)
+                    else:
+                        # this is neither blockend nor blockstart. while we are in a block, we save the step to the block.
+                        # nested block 
+                        block.append(step)
+                    # we are still in a block; we continue until we find the expected blockend.
+                    # we only build the block, we don't run it.
+                    # we will run the block after we find the expected blockend.
+                    continue
+
+                if block:
+                    # we should never be here, because we should have handled all block cases above.
+                    # we keep this for debugging purpose.
+                    raise RuntimeError(f"unexpected block={block}")
+                
+                if step == 'else':
+                    raise RuntimeError(f"unexpected 'else' outside of any block")
+            
+                # now that we are not in any block, we check whether this step is a start of a block
                 if m := re.match(r"\s*(while|if)(_not)?=(.+)", step):
                     # we are starting a new block
-                    block_depth += 1
                     blockstart = m.group(1)
                     negation = m.group(2)
                     condition = m.group(3)
-                    first_step_of_block = step
+                    blockend = f"end_{blockstart}"
+                    blockend_stack.append(blockend)
 
-                    if negation:
-                        expected_blockend = f"end_{blockstart}{negation}"
-                    else:
-                        expected_blockend = f"end_{blockstart}"
                     block = []
                     if debug:
                         print(f"follow2: blockstart={blockstart}, negation={negation}, condition={condition}, "
-                            f"expected_blockend={expected_blockend}, block_depth={block_depth}")
+                            f"expected_blockend={blockend}, blockend_stack={blockend_stack}")
                     continue
 
                 if m := re.match(r"\s*steps_(txt|py)=(.+)", step):
@@ -361,9 +373,8 @@ class FollowEnv:
                 break
         
         # check for missing blockend
-        if block_depth > 0:
-            whole_block = [first_step_of_block] + block
-            raise RuntimeError(f"missing blockend={expected_blockend} for block={whole_block}")
+        if blockend_stack:
+            raise RuntimeError(f"missing blockend={blockend_stack}, for block={block}")
         return ret
 
     def follow(self, steps: list, **opt):
@@ -457,6 +468,11 @@ class FollowEnv:
 
         ret = {'Success': False, 'executed': False, 'break_levels': 0}
 
+        steps1, steps2 = split_by_else(block, **opt)
+     
+        print(f"if_block:   steps1={steps1}")
+        print(f"else_block: steps2={steps2}")
+
         if not dryrun:
             # we should catch exception here, because the condition may fail with exception
             # and it should not be fatal
@@ -469,22 +485,26 @@ class FollowEnv:
                     raise RuntimeError(f"if_block: condition={condition} test failed with exception={e}")
                 print(f"if_block: condition={condition} test failed with exception={e}")
                 result = {'Success': False}
-        
+
+            # ret['executed'] indicates whether the main block if if-else block is executed.
+            # this will also tell a while block whether to continue or break.
             if result['Success'] and negation:
                 print(
-                    f"if_not_block: condition '{condition}' is true, but negated, block will not be executed")
-                to_execute_block = False
+                    f"if_not_block: condition '{condition}' is true, but negated, will execute steps2={steps2}")
+                to_execute_block = steps2
+                ret['executed'] = False
             elif result['Success'] and not negation:
-                print(f"if_block: condition '{condition}' is true, block will be executed")
-                to_execute_block = True
+                print(f"if_block: condition '{condition}' is true, will execute steps1={steps1}")
+                to_execute_block = steps1
+                ret['executed'] = True
             elif not result['Success'] and not negation:
-                print(f"if_block: condition '{condition}' is not true, block will not be executed")
-                to_execute_block = False
+                print(f"if_block: condition '{condition}' is not true, will execute steps2={steps2}")
+                to_execute_block = steps2
+                ret['executed'] = False
             else:
-                print(f"if_block: condition '{condition}' is not true, but negated, block will be executed")
-                to_execute_block = True
-
-            ret['executed'] = to_execute_block
+                print(f"if_block: condition '{condition}' is not true, but negated, will execute steps1={steps1}")
+                to_execute_block = steps1
+                ret['executed'] = True
 
             if to_execute_block:
                 # recursively calling follow2() to run the block
@@ -496,7 +516,7 @@ class FollowEnv:
 
                 # we should only catch exception in the condition part.
                 # we should not catch the exception if the block part failed.
-                result = self.follow2(block, **opt)
+                result = self.follow2(to_execute_block, **opt)
 
                 if debug:
                     print(f"if_block: block result={result}")
@@ -507,8 +527,83 @@ class FollowEnv:
         else:
             # dryrun, for syntax check
             self.str_action(condition, isExpression=True, **opt)  
-            self.follow2(block, **opt)
+            self.follow2(steps1, **opt)
+            self.follow2(steps2, **opt)
         return ret
+    
+def split_by_else(steps: list, **opt):
+    '''
+    split steps by 'else'.
+    the 'else' shoule be outside of any if or while block.
+    return 2 lists: steps1, steps2
+    '''
+    debug = opt.get('debug', 0)
+    dryrun = opt.get('dryrun', 0)
+
+    steps1 = []
+    steps2 = []
+    in_else = False
+    blockend_stack = []
+
+
+    for step in steps:
+        if debug:
+            print(f"split_by_else: step={pformat(step)}")
+
+        step_type = type(step)
+
+        if step_type == str:
+            if blockend_stack:
+            # we are in a block
+                if step == blockend_stack[-1]:
+                    # we found the expected blockend
+                    blockend_stack.pop()
+                elif m := re.match(r"\s*(end_while|end_if)$", step, flags=re.IGNORECASE):
+                    # this is an unexpected blockend
+                    raise RuntimeError(f"unexpected blockend={step}")
+                if in_else:
+                    steps2.append(step)
+                else:
+                    steps1.append(step)
+                continue
+
+            if m := re.match(r"\s*(while|if)(_not)?=(.+)", step, flags=re.IGNORECASE):
+                # this is a nested block
+                blockstart, negation, condition = m.groups()
+                blockend = f"end_{blockstart}"
+                blockend_stack.append(blockend)
+                if in_else:
+                    steps2.append(step)
+                else:
+                    steps1.append(step)
+                continue
+
+            elif not blockend_stack and step == 'else':
+                # we found 'else' outside of any block.
+                # we only take action on 'else' when we are not in a block.
+                if in_else:
+                    raise RuntimeError(f"multiple 'else' found")
+                in_else = True
+                continue
+                
+            else:
+                if in_else:
+                    steps2.append(step)
+                else:
+                    steps1.append(step)
+                continue
+        else:
+            if in_else:
+                steps2.append(step)
+            else:
+                steps1.append(step)
+            continue
+
+    if blockend_stack:
+        raise RuntimeError(f"missing blockend={blockend_stack[-1]}")
+    
+    return steps1, steps2        
+    
 
 def get_defined_locators(locate_func: callable, **opt):
     '''

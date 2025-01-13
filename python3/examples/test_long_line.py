@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-line = "this is a long line: "
-for i in range(0, 100):
-    line = f"{line} {i} "
+line = "echo cmd"
+for i in range(0, 20):
+    line = f"{line} arg{i} "
 print(line)
