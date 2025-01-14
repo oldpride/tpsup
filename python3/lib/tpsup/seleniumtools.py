@@ -2513,6 +2513,7 @@ def locate_dict(step: dict, **opt):
             raise RuntimeError(f"simple step locator must be a string, but got {type(locator)}, step={pformat(step)}")
         
         if dryrun:
+            # syntax check only. therefore we don't check the return value.
             locate(locator, **opt)
 
             for status in ['Success', 'Failure']:
@@ -2522,15 +2523,32 @@ def locate_dict(step: dict, **opt):
         
         result = locate(locator, **opt)
 
+        if debug:
+            print(f"locate_dict: result={pformat(result)}")
+
+        # always check 'break_levels' first before checking 'Success'
+        if result['break_levels']:
+            ret['break_levels'] = result['break_levels']
+            # break now, by returning ret
+            return ret
+
         if result['Success']:
             # we found the element
             if 'Success' in step:
-                locate(step['Success'], **opt) # we don't use follow() here, because we don't want to be recursive.
-            ret['Success'] = True
+                result2 = locate(step['Success'], **opt) # we don't use follow() here, because we don't want to be recursive.
+
+                if result2['break_levels']:
+                    ret['break_levels'] = result2['break_levels']
+                    return ret
+            ret['Success'] = result2['Success']
         else:
             # we didn't find the element
             if 'Failure' in step:
-                locate(step['Failure'], **opt)
+                result2 = locate(step['Failure'], **opt)
+                if result2['break_levels']:
+                    ret['break_levels'] = result2['break_levels']
+                    return ret
+                ret['Success'] = result2['Success']
             else:
                 raise RuntimeError(f"locator failed. step={pformat(step)}")
     elif locator_type == 'parallel':
@@ -2540,6 +2558,7 @@ def locate_dict(step: dict, **opt):
             raise RuntimeError(f"parallel step paths must be a list, but got {type(paths)}, step={pformat(step)}")
 
         if dryrun:
+            # dryrun is to check syntax only. therefore we don't check the return value.
             for path in paths:
                 locator = path.get('locator', None)
                 if type(locator) != str:
@@ -2565,6 +2584,8 @@ def locate_dict(step: dict, **opt):
         # copy result to ret
         ret['Success'] = result['Success']
         
+        # always check 'break_levels' first before checking 'Success', because when 'break_levels' is set,
+        # we don't care about 'Success'.
         if result['break_levels']:
             ret['break_levels'] = result['break_levels']
             return ret
@@ -2577,16 +2598,28 @@ def locate_dict(step: dict, **opt):
             path = paths[path_index]
             if 'Success' in path:
                 # path-level Found
-                locate(path['Success'], **opt)
+                result2 = locate(path['Success'], **opt)
+                if result2['break_levels']:
+                    ret['break_levels'] = result2['break_levels']
+                    return ret
+                ret['Success'] = result2['Success']
             if 'Success' in action:
                 # action-level Found
-                locate(action['Success'], **opt)
+                result3 = locate(action['Success'], **opt)
+                if result3['break_levels']:
+                    ret['break_levels'] = result3['break_levels']
+                    return ret
+                ret['Success'] = result3['Success']
         else:
             # we didn't find the element
             if 'Failure' in action:
                 # action-level NotFound
-                locate(action['Failure'], **opt)
-            elif not dryrun:
+                result3 = locate(action['Failure'], **opt)
+                if result3['break_levels']:
+                    ret['break_levels'] = result3['break_levels']
+                    return ret
+                ret['Success'] = result3['Success']
+            else:
                 raise RuntimeError(f"element not found, step={pformat(step)}")
     elif locator_type == 'chains':
         # paths must be a list
@@ -2595,6 +2628,7 @@ def locate_dict(step: dict, **opt):
             raise RuntimeError(f"chains step 'paths' must be a list, but got {type(paths)}, step={pformat(step)}")
 
         if dryrun:
+            # dryrun is to check syntax only. therefore we don't check the return value.
             for path in paths:
                 locator = path.get('locator', None)
                 if type(locator) != list:
@@ -2665,10 +2699,18 @@ def locate_dict(step: dict, **opt):
 
                 if 'Success' in path:
                     # path-level Found
-                    result = locate(path['Success'], **opt)
+                    result2 = locate(path['Success'], **opt)
                 if 'Success' in action:
                     # action-level Found
-                    result = locate(action['Success'], **opt)             
+                    result2 = locate(action['Success'], **opt)
+
+                # always check 'break_levels' first before checking 'Success', because when 'break_levels' is set,
+                # we don't care about 'Success'.
+                if result2['break_levels']:
+                    ret['break_levels'] = result2['break_levels']
+                    return ret
+
+                ret['Success'] = result2['Success']           
             else:
                 # restore domstack
                 replay_domstack(domstack)
@@ -2681,7 +2723,12 @@ def locate_dict(step: dict, **opt):
 
                 if 'Failure' in action:
                     # action-level NotFound
-                    result = locate(action['Failure'], **opt)
+                    result2 = locate(action['Failure'], **opt)
+                    if result2['break_levels']:
+                        ret['break_levels'] = result2['break_levels']
+                        return ret
+                    ret['Success'] = result2['Success']
+                    
                 else:
                     raise RuntimeError(f"element not found, step={pformat(step)}")
     else:
@@ -3462,7 +3509,7 @@ def locate(locator: str, **opt):
 
             # a click may change the page
             handle_page_change(**opt)
-            
+
             ret['Success'] = True
     elif m := re.match(r"select=(value|index|text),(.+)", locator):
             attr, string = m.groups()
