@@ -2689,11 +2689,11 @@ def locate_dict(step: dict, **opt):
     
     return ret
 
-def update_locator_driver(**opt):
+def handle_page_change(**opt):
     global locator_driver
     global driver_url
     global driver
-    global last_element
+    # global last_element
     dryrun = opt.get("dryrun", 0)
     debug = opt.get("debug", 0)
 
@@ -2705,26 +2705,27 @@ def update_locator_driver(**opt):
     
     if not driver:
         if debug:
-            print(f"update_locator_driver: driver is None, not initialized yet")
+            print(f"handle_page_change: driver is None, not initialized yet")
         return
 
-    helper = {}  # interactivity helper
-
     message = None
-    if not locator_driver:
-        message = "locator_driver was None"
-    elif not driver_url:
+    
+    if not driver_url:
         message = "driver_url was None"
     elif driver_url != driver.current_url:
         message = f"driver_url changed from {driver_url} to {driver.current_url}"
         
     if message:
-        print(f"locate: update driver_url and locator_driver to driver because {message}")
-        # hit_enter_to_continue(helper=helper)
+        print(f"handle_page_change: update driver_url and locator_driver to driver because {message}")
         locator_driver = driver
         driver_url = driver.current_url
-        print(f"locate: updated last_element to driver.switch_to.active_element")
-        last_element = driver.switch_to.active_element
+        # print(f"locate: updated last_element to driver.switch_to.active_element")
+        # last_element = driver.switch_to.active_element
+
+    if not locator_driver:
+        print(f"handle_page_change: locator_driver is None, set it to driver")
+        locator_driver = driver
+
 
 def tp_switch_to_frame(element: WebElement, **opt):
     '''
@@ -2853,7 +2854,7 @@ def locate(locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             driver = get_driver(**opt)
-            update_locator_driver(**opt)
+            handle_page_change(**opt)
             ret['Success'] = True
     elif m := re.match(r"kill_procs$", locator):   
         print(f"locate: kill_procs: {procs}")
@@ -2889,7 +2890,7 @@ def locate(locator: str, **opt):
             tp_get_url(url, accept_alert=accept_alert,
                     interactive=interactive)
             # locator_driver = driver
-            update_locator_driver(**opt)
+            handle_page_change(**opt)
             # the following doesn't work. i had to move it into tp_get_url()
             # try:
             #     driver_url = driver.current_url
@@ -3051,7 +3052,7 @@ def locate(locator: str, **opt):
                 # hit_enter_to_continue(helper=helper)
 
                 ret['Success'] = True
-            update_locator_driver(**opt)
+            handle_page_change(**opt)
     elif m := re.match(r"(dict)(file)?=(.+)", locator, re.MULTILINE | re.DOTALL):
         '''
         'dict' is python code of dict locator. see locate_dict() for details.
@@ -3088,7 +3089,7 @@ def locate(locator: str, **opt):
         dict_locator = eval(code)[0]
         print(f"locate: dict_locator=\n{pformat(dict_locator)}")
         ret = locate_dict(dict_locator, **opt)
-        update_locator_driver(**opt)
+        handle_page_change(**opt)
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
         count = int(count_str)
@@ -3327,7 +3328,7 @@ def locate(locator: str, **opt):
             # locator_driver.implicitly_wait(0)
             driver.implicitly_wait(wait_seconds)
 
-            update_locator_driver(**opt)
+            handle_page_change(**opt)
     # end of old locate()
     # the following are from old send_input()
     elif m := re.match(r"sleep=(\d+)", locator):
@@ -3434,8 +3435,10 @@ def locate(locator: str, **opt):
             element.send_keys(Keys.__getattribute__(
                 Keys, key.upper()) * count)
             last_element = element
+            
+            # a key press may change the page
+            handle_page_change(**opt)
             ret['Success'] = True
-            update_locator_driver(**opt)
     elif locator == 'click' or locator == 'tp_click':
         print(f"locate: click")
         if interactive:
@@ -3456,8 +3459,11 @@ def locate(locator: str, **opt):
             else:
                 # tp_click() is a wrapper of click() to handle the case when the element is not clickable.
                 tp_click(last_element)
+
+            # a click may change the page
+            handle_page_change(**opt)
+            
             ret['Success'] = True
-            update_locator_driver(**opt)
     elif m := re.match(r"select=(value|index|text),(.+)", locator):
             attr, string = m.groups()
             print(f'locate: select {attr} = "{string}"')
@@ -3646,7 +3652,7 @@ def locate(locator: str, **opt):
             locator_driver = driver
             last_element = None
             ret['Success'] = True
-            update_locator_driver(**opt)
+            handle_page_change(**opt)
     elif m := re.match(r"comment=(.+)", locator, re.MULTILINE | re.DOTALL):
         ret['Success'] = True # hard code to True for now
         commnet, *_ = m.groups()
