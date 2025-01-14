@@ -2487,9 +2487,6 @@ def locate_dict(step: dict, **opt):
     global last_element
     global domstack
     global debuggers
-
-    if not dryrun:
-        update_locator_driver(**opt)
     
     if debug:
         print(f"locate_dict: step={pformat(step)}")
@@ -2703,6 +2700,9 @@ def update_locator_driver(**opt):
     if dryrun:
         return
     
+    # for level in [1,2,3,4]:
+    #     print(tpsup.logtools.get_stack(level=level))
+    
     if not driver:
         if debug:
             print(f"update_locator_driver: driver is None, not initialized yet")
@@ -2841,8 +2841,8 @@ def locate(locator: str, **opt):
         sitebase/python3/venv/Windows/win10-python3.12/Lib/site-packages/selenium/webdriver/remote/webdriver.py
     '''
 
-    if not dryrun:
-        update_locator_driver(**opt)   
+    # if not dryrun:
+    #     update_locator_driver(**opt)   
     
     locator = correct_xpath(locator)
 
@@ -2886,10 +2886,10 @@ def locate(locator: str, **opt):
             if not driver:
                 # start driver (and browser) only when we really need it
                 driver = get_driver(**opt)
-                update_locator_driver(**opt)
             tp_get_url(url, accept_alert=accept_alert,
                     interactive=interactive)
-            locator_driver = driver
+            # locator_driver = driver
+            update_locator_driver(**opt)
             # the following doesn't work. i had to move it into tp_get_url()
             # try:
             #     driver_url = driver.current_url
@@ -2902,7 +2902,7 @@ def locate(locator: str, **opt):
             #     print("alert accepted")
             #     time.sleep(2)
             #     driver_url = driver.current_url
-            driver_url = driver.current_url
+            # driver_url = driver.current_url
             last_element = driver.switch_to.active_element
             ret['Success'] = True
     elif m := re.match(r"(code|python|exp|js)(file)?(.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
@@ -3051,6 +3051,7 @@ def locate(locator: str, **opt):
                 # hit_enter_to_continue(helper=helper)
 
                 ret['Success'] = True
+            update_locator_driver(**opt)
     elif m := re.match(r"(dict)(file)?=(.+)", locator, re.MULTILINE | re.DOTALL):
         '''
         'dict' is python code of dict locator. see locate_dict() for details.
@@ -3087,6 +3088,7 @@ def locate(locator: str, **opt):
         dict_locator = eval(code)[0]
         print(f"locate: dict_locator=\n{pformat(dict_locator)}")
         ret = locate_dict(dict_locator, **opt)
+        update_locator_driver(**opt)
     elif m := re.match(r"tab=(.+)", locator):
         count_str, *_ = m.groups()
         count = int(count_str)
@@ -3324,6 +3326,8 @@ def locate(locator: str, **opt):
             # in shadow_root (driver).
             # locator_driver.implicitly_wait(0)
             driver.implicitly_wait(wait_seconds)
+
+            update_locator_driver(**opt)
     # end of old locate()
     # the following are from old send_input()
     elif m := re.match(r"sleep=(\d+)", locator):
@@ -3431,6 +3435,7 @@ def locate(locator: str, **opt):
                 Keys, key.upper()) * count)
             last_element = element
             ret['Success'] = True
+            update_locator_driver(**opt)
     elif locator == 'click' or locator == 'tp_click':
         print(f"locate: click")
         if interactive:
@@ -3452,6 +3457,7 @@ def locate(locator: str, **opt):
                 # tp_click() is a wrapper of click() to handle the case when the element is not clickable.
                 tp_click(last_element)
             ret['Success'] = True
+            update_locator_driver(**opt)
     elif m := re.match(r"select=(value|index|text),(.+)", locator):
             attr, string = m.groups()
             print(f'locate: select {attr} = "{string}"')
@@ -3640,6 +3646,7 @@ def locate(locator: str, **opt):
             locator_driver = driver
             last_element = None
             ret['Success'] = True
+            update_locator_driver(**opt)
     elif m := re.match(r"comment=(.+)", locator, re.MULTILINE | re.DOTALL):
         ret['Success'] = True # hard code to True for now
         commnet, *_ = m.groups()

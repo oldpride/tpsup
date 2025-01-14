@@ -72,7 +72,7 @@ class FollowEnv:
                             if debug:
                                 print(f"follow2: matched expected_blockend={blockend}")
 
-                            print(f"follow2: run condition={condition}, negation={negation}, block={block}")
+                            print(f"follow2: run {blockstart}, condition={condition}, negation={negation}, block={block}")
 
                             if not block:
                                 raise RuntimeError(f"block is empty")
@@ -123,17 +123,16 @@ class FollowEnv:
                         # this is neither blockend nor blockstart. while we are in a block, we save the step to the block.
                         # nested block 
                         block.append(step)
-                    # we are still in a block; we continue until we find the expected blockend.
-                    # we only build the block, we don't run it.
-                    # we will run the block after we find the expected blockend.
-                    block.append(step)
+
                     continue
 
+                # now that we are not in any block, block list should be empty.
                 if block:
                     # we should never be here, because we should have handled all block cases above.
                     # we keep this for debugging purpose.
-                    raise RuntimeError(f"unexpected block={block}")
+                    raise RuntimeError(f"unexpected block={block} when blockend_stack={blockend_stack}")
                 
+                # now that we are not in any block, there should be no 'else'
                 if step == 'else':
                     raise RuntimeError(f"unexpected 'else' outside of any block")
             
@@ -410,18 +409,18 @@ class FollowEnv:
         # neither True or False.  In this case, we want to know the condition test failed.
         debug = opt.get('debug', 0)
         dryrun = opt.get('dryrun', False)
-        ret = {'Success': False, 'break_levels':0, 'executed': False, 'element': None}
+        ret = {'Success': False, 'break_levels':0, 'executed': None, 'element': None}
 
         if blockstart == 'while':
             while True:
                 result = self.if_block(negation, condition, block, **opt)
-                if debug:
+                if debug and not dryrun:
                     print(f"run_block: 1 while-loop result={result}")
 
-                if not result['executed']:
+                if not result['executed'] or result['executed'] == 'else-block':
                     break
 
-                ret['executed'] = True
+                ret['executed'] = result['executed']
                 ret['Success'] = result['Success']
 
                 if result['break_levels']:
@@ -467,12 +466,20 @@ class FollowEnv:
         dryrun = opt.get('dryrun', False)
         debug = opt.get('debug', 0)
 
-        ret = {'Success': False, 'executed': False, 'break_levels': 0}
+        ret = {'Success': False, 'executed': None, 'break_levels': 0}
 
-        steps1, steps2 = split_by_else(block, **opt)
+        steps_by_type = {
+            'if-block': [],
+            'else-block': [],
+        }
+
+        steps_by_type['if-block'], steps_by_type['else-block'] = split_by_else(block, **opt)
      
-        print(f"if_block:   steps1={steps1}")
-        print(f"else_block: steps2={steps2}")
+        for k, v in steps_by_type.items():
+            print(f"if_block: {k} steps={v}")
+
+        if not steps_by_type['if-block']:
+            raise RuntimeError(f"if_block: missing if-block")
 
         if not dryrun:
             # we should catch exception here, because the condition may fail with exception
@@ -482,32 +489,29 @@ class FollowEnv:
             except Exception as e:
                 # we want to catch exception=unsupported 'locator=nosuch=1' in dryrun mode, so that 
                 # we can catch syntax error in the condition.
-                if dryrun and 'unsupported' in str(e):
+                if 'unsupported' in str(e):
                     raise RuntimeError(f"if_block: condition={condition} test failed with exception={e}")
                 print(f"if_block: condition={condition} test failed with exception={e}")
                 result = {'Success': False}
 
-            # ret['executed'] indicates whether the main block if if-else block is executed.
+            # ret['executed'] indicates whether the if-block (main block) or else-block is executated.
+            # if else-block doesn't exist, then ret['executed'] is None
             # this will also tell a while block whether to continue or break.
             if result['Success'] and negation:
+                to_execute_block = 'else-block'
                 print(
-                    f"if_not_block: condition '{condition}' is true, but negated, will execute steps2={steps2}")
-                to_execute_block = steps2
-                ret['executed'] = False
+                    f"if_not_block: condition '{condition}' is true, but negated, will execute {to_execute_block}")
             elif result['Success'] and not negation:
-                print(f"if_block: condition '{condition}' is true, will execute steps1={steps1}")
-                to_execute_block = steps1
-                ret['executed'] = True
+                to_execute_block = 'if-block'
+                print(f"if_block: condition '{condition}' is true, will execute {to_execute_block}")
             elif not result['Success'] and not negation:
-                print(f"if_block: condition '{condition}' is not true, will execute steps2={steps2}")
-                to_execute_block = steps2
-                ret['executed'] = False
+                to_execute_block = 'else-block'
+                print(f"if_block: condition '{condition}' is not true, will execute {to_execute_block}")
             else:
-                print(f"if_block: condition '{condition}' is not true, but negated, will execute steps1={steps1}")
-                to_execute_block = steps1
-                ret['executed'] = True
-
-            if to_execute_block:
+                to_execute_block = 'if-block'
+                print(f"if_not_block: condition '{condition}' is not true, but negated, will execute {to_execute_block}")
+                
+            if steps_by_type[to_execute_block]:
                 # recursively calling follow2() to run the block
                 # try:
                 #     result = follow2(block, **opt)
@@ -517,19 +521,21 @@ class FollowEnv:
 
                 # we should only catch exception in the condition part.
                 # we should not catch the exception if the block part failed.
-                result = self.follow2(to_execute_block, **opt)
+                result = self.follow2(steps_by_type[to_execute_block], **opt)
 
                 if debug:
-                    print(f"if_block: block result={result}")
+                    print(f"if_block: {to_execute_block} result={result}")
 
-                if not dryrun:
-                    ret['Success'] = result['Success']
-                    ret['break_levels'] = result['break_levels']
+                ret['Success'] = result['Success']
+                ret['break_levels'] = result['break_levels']
+                ret['executed'] = to_execute_block
         else:
             # dryrun, for syntax check
             self.str_action(condition, isExpression=True, **opt)  
-            self.follow2(steps1, **opt)
-            self.follow2(steps2, **opt)
+            self.follow2(steps_by_type['if-block'], **opt)
+
+            if steps_by_type['else-block']:
+                self.follow2(steps_by_type['else-block'], **opt)
         return ret
     
 def split_by_else(steps: list, **opt):
