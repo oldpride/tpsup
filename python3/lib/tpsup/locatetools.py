@@ -437,7 +437,12 @@ class FollowEnv:
         if blockstart == 'while':
             while True:
                 result = self.if_block(negation, condition, block, **opt)
-                if debug and not dryrun:
+
+                if dryrun:
+                    # avoid infinite while loop in dryrun
+                    break
+
+                if debug:
                     print(f"run_block: 1 while-loop result={result}")
 
                 if not result['executed']:
@@ -467,9 +472,7 @@ class FollowEnv:
 
                     # only break the while-loop block, not the if block
                     break
-                if dryrun:
-                    # avoid infinite while loop in dryrun
-                    break
+                
                 if not result['Success']:
                     # even if the non-control-block failed, we should break the while loop.
                     # noramlly if non-control-block failed, an exception is raised.
