@@ -3404,7 +3404,7 @@ def locate(locator: str, **opt):
                 last_element).pause(seconds).perform()
             # this action should not change the active element
             ret['Success'] = True
-    elif m := re.match(r"\(raw|string)=(.+)", locator, re.MULTILINE | re.DOTALL | re.IGNORECASE):
+    elif m := re.match(r"(raw|string)=(.+)", locator, re.MULTILINE | re.DOTALL | re.IGNORECASE):
         string_type, value, *_ = m.groups()
         if string_type.lower() != 'raw':
             # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
