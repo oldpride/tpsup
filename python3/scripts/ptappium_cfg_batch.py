@@ -100,7 +100,7 @@ our_cfg = {
     this info can also be found in package source code
     
     - find activities' names of the package
-    adb shell "dumpsys package |egrep '^[ ]+[0-9a-z]+[ ]+org.nativescript.test02ngchallenge/'"
+    adb shell "`dump`sys package |egrep '^[ ]+[0-9a-z]+[ ]+org.nativescript.test02ngchallenge/'"
         b20ec9c org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - run the package's activity
