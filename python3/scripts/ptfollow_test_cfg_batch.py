@@ -49,6 +49,9 @@ our_cfg = {
 
     {{{{prog}}}} if=dummy=1 tab=1 end_if -m local
 
+    - test nested while break
+    {{{{prog}}}} steps_txt={TPP3}/ptfollow_test_while_break.txt
+
     
     ''',
 

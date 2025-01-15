@@ -83,19 +83,16 @@ our_cfg = {
     # 'context=webview dump_element=stdout '
                      f'''
     
-    - test with app - this command installs the app too if not installed yet.
-    {{{{prog}}}} -is_emulator if=existsapp=org.nativescript.test02ngchallenge removeapp=org.nativescript.test02ngchallenge end_if sleep=1
-        if app stuck, 
-            adb uninstall org.nativescript.test02ngchallenge
-    {{{{prog}}}} -is_emulator if_not=existsapp=org.nativescript.test02ngchallenge installapp="{TPP3}/test02.apk" end_if_not sleep=1
+    - test install/uninstall app
+      test if-else block
+    {{{{prog}}}} -is_emulator if=existsapp=org.nativescript.test02ngchallenge removeapp=org.nativescript.test02ngchallenge else installapp="{TPP3}/test02.apk" end_if sleep=1
+    if app install stuck, 
+        adb uninstall org.nativescript.test02ngchallenge
     
     - test webview context
     {{{{prog}}}} -is_emulator context=webview
     todo: this is not working yet. we may need to launch an webview app first
     
-    - test with real device, 
-    - the following command load the package onto the device
-    {{{{prog}}}} installapp="{TPP3}/test02.apk" sleep=1
     
     - find package name
     adb shell "pm list packages|grep test02"
@@ -107,12 +104,7 @@ our_cfg = {
         b20ec9c org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - run the package's activity
-    {{{{prog}}}} -np -v run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
-
-    - the above can be done in one command assuming knowing pkg and activity beforehand
-    {{{{prog}}}} -np -v -app "%TPSUP%/python3/scripts/test02.apk" run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
-
-    - block (if/while/not) examples see notes/wechat.txt
+    {{{{prog}}}} run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity print=currentActivity
     
 ''',
 

@@ -22,13 +22,27 @@ class FollowEnv:
 
     def follow2(self, steps: list,  **opt):
         '''
-        follow2() is a recursive. it basic flow is: if ... then if ... then if ... then ...
+        follow2() follows steps in sequence; its basic flow is: if ... then if ... then if ... then ...
+
         for example: [ 'click_xpath=/a/b', '"iframe', 'click_xpath=/c/d', 'string="hello world"', 'dump' ]
         By default, if any 'if' failed, we stop. For example, if 'click_xpath=/a/b' failed, we stop.
         If any 'then if' failed, we stop. For example, if 'iframe' failed, we stop.
 
         as of now, we only allow follow2() to be recursive on block-statement (if/while) level; once
-        follow2() calls locate(), locate() will not call follow2(). This is to avoid infinite recursion.
+        follow2() calls locate() (eg, in seleniumtools.py), locate() will not call follow2(). 
+        This is to avoid infinite recursion.
+
+        With separation of follow2() and locate(), we can implement them in separate modules,
+            follow2() is in locatetools.py, 
+            locate() is in seleniumtools.py.
+
+            follow2() can recursively call follow2() because the recursion stays in locatetools.py.
+            locate() can recursively call locate() because the recursion stays in seleniumtools.py.
+
+            follow2() can call locate() but locate() should not call follow2(). this is to avoid 
+            infinite recursion.
+
+        follow2() recursion happens when it handles if/while block.
         '''
 
         debug = opt.get("debug", 0)
@@ -37,21 +51,20 @@ class FollowEnv:
         block = [] # this is the current block, which may contain nested block
 
         '''
-        we use block_stack to keep track of nested block.
-        each element is like {
-        'blockstart': 'if',
-        'condition': 'exp=a==1',
-        'negation': False,
-        'blockend': 'end_if',
-        }
+        we use block_stack to keep track of nested block. each element is like 
+            {
+                'blockstart': 'if',
+                'condition': 'exp=a==1',
+                'negation': False,
+                'blockend': 'end_if',
+            }
         '''
         block_stack = []
 
         ret = {'Success': False, 'break_levels': 0}
 
         if not steps:
-            print(f'follow2: steps are empty. return')
-            return
+            raise RuntimeError(f"steps is empty")
 
         for step in steps:
             if debug:
@@ -63,13 +76,16 @@ class FollowEnv:
             if step_type == str:
                 if block_stack:
                     # we are in a block
-                    blockend=block_stack[-1]['blockend']
+                    block_info=block_stack[-1]
+
+                    blockstart = block_info['blockstart']
+                    condition = block_info['condition']
+                    negation = block_info['negation']
+                    blockend = block_info['blockend']
+
                     if step == blockend:
                         # step matches the expected blockend
-                        block_info = block_stack.pop()
-                        blockstart = block_info['blockstart']
-                        condition = block_info['condition']
-                        negation = block_info['negation']
+                        block_stack.pop()
 
                         if not block_stack:
                             # the outermost of a recursive block is ended; we will run the block now.
@@ -94,6 +110,8 @@ class FollowEnv:
                                 # we only check syntax, therefore, we don't check the result and move on
                                 continue
 
+                            # always check break_levels first, before check 'Success'. Because if break_levels > 0,
+                            # we should break the loop, no matter 'Success' is True or False.
                             if result['break_levels']:
                                 print(f"follow2: break because block result break_levels={result['break_levels']} > 0")
                                 ret['break_levels'] = result['break_levels']
@@ -107,7 +125,7 @@ class FollowEnv:
                                 # if the block failed, we stop
                                 break
                         else:
-                            # we only encountered a nested block end
+                            # block_stack is not empty, we are still in a nested block
                             if debug:
                                 print(f"follow2: matched a nested blockend={blockend}")
 
@@ -233,8 +251,9 @@ class FollowEnv:
                         print(f"follow2: run steps_{file_type}={file_name} failed")
                         return result
                     continue
+                # there are other string steps that are related to block, we will handle them later.
             else:
-                # for non-string step
+                # for non-string step, here we only handle block related steps. non-block steps are handled later.
                 if block_stack:
                     # we are in a block
                     block.append(step)
@@ -382,17 +401,19 @@ class FollowEnv:
                 print(f"follow2: break, step={step} failed because result is None")
                 ret['Success'] = False
                 break
+            
+            # always check break_levels first, before check 'Success'. Because if break_levels > 0,
+            # we should break the loop, no matter 'Success' is True or False.
+            if result['break_levels']:
+                print(f"follow2: break because step result break_levels={result['break_levels']} > 0")
+                ret['break_levels'] = result['break_levels']
+                break
 
             # copy result to ret
             ret['Success'] = result['Success']
 
             if not result['Success']:
                 print(f"follow2: break, step={step} failed because result['Success'] is False")
-                break
-
-            if result['break_levels']:
-                print(f"follow2: break because step result break_levels={result['break_levels']} > 0")
-                ret['break_levels'] = result['break_levels']
                 break
         
         # check for missing blockend
@@ -439,7 +460,7 @@ class FollowEnv:
                 result = self.if_block(negation, condition, block, **opt)
 
                 if dryrun:
-                    # avoid infinite while loop in dryrun
+                    # avoid infinite while loop in dryrun which is to check syntax only
                     break
 
                 if debug:
@@ -479,6 +500,7 @@ class FollowEnv:
                     break
         elif blockstart == 'if':
             result=self.if_block(negation, condition, block, **opt)
+
             if debug:
                 print(f"run_block: if_block result={result}")
             ret['Success'] = result['Success']

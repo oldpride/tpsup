@@ -2894,6 +2894,10 @@ def locate(locator: str, **opt):
     
     locator = correct_xpath(locator)
 
+    '''
+    examples can be found in github test folder
+    https://github.com/SeleniumHQ/selenium/tree/trunk/py/test
+    '''
     # copied from old locate()
     if m := re.match(r"(start_driver|driver)$", locator):
         print(f"locate: start driver")
@@ -3400,8 +3404,11 @@ def locate(locator: str, **opt):
                 last_element).pause(seconds).perform()
             # this action should not change the active element
             ret['Success'] = True
-    elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL):
-        value, *_ = m.groups()
+    elif m := re.match(r"\(raw|string)=(.+)", locator, re.MULTILINE | re.DOTALL | re.IGNORECASE):
+        string_type, value, *_ = m.groups()
+        if string_type.lower() != 'raw':
+            # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
+            value = value.replace("\t", "    ")
         result = locate(f"code2element='''{value}'''", **opt)
         ret['Success'] = result['Success']
     elif m := re.match(r"clear_attr=(.+)", locator):

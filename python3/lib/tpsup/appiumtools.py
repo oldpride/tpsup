@@ -425,6 +425,11 @@ def locate(locator: str, **opt):
 
     ret = {'Success': False, 'break_levels': 0}
 
+    '''
+    examples can be found in github test folder
+    https://github.com/appium/python-client/tree/master/test
+    '''
+
     if m := re.match(r"(start_driver|driver)$", locator):
         print(f"locate: start driver")
         if interactive:
@@ -565,11 +570,11 @@ def locate(locator: str, **opt):
                 '''
                 driver.set_page_load_timeout(int(value))
             ret['Success'] = True
-    elif m := re.match(r"(home|enter|backspace)$", locator, re.IGNORECASE):
-        value, *_ = m.groups()
-        print(f"follow(): {value}")
-        locate(f"sendkey={value}", **opt)
-        ret['Success'] = True
+    # elif m := re.match(r"(home|enter|backspace)$", locator, re.IGNORECASE):
+    #     value, *_ = m.groups()
+    #     print(f"follow(): {value}")
+    #     locate(f"sendkey={value}", **opt)
+    #     ret['Success'] = True
     elif m := re.match(r"sendkey=(.+)", locator, re.IGNORECASE):
         value, *_ = m.groups()
         print(f"follow(): sendkey={value}")
@@ -594,7 +599,23 @@ def locate(locator: str, **opt):
                 driver = get_driver(**opt)
             driver.press_keycode(keycode)
             ret['Success'] = True
-    elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL):
+    elif m := re.match(r"(home|back|appSwitch)$", locator, re.IGNORECASE):
+        value, *_ = m.groups()
+        print(f"follow(): {value}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            if not driver:
+                driver = get_driver(**opt)
+            if value.lower() == 'home':
+                driver.press_keycode(nativekey.AndroidKey.HOME)
+            elif value.lower() == 'back':
+                driver.back()
+            elif value.lower == 'appswitch':
+                driver.press_keycode(nativekey.AndroidKey.APP_SWITCH)
+            ret['Success'] = True
+
+    elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL | re.IGNORECASE):
         value, *_ = m.groups()
         result = locate(f"code2element='''{value}'''", **opt)
         ret['Success'] = result['Success']
@@ -725,17 +746,17 @@ def locate(locator: str, **opt):
             hit_enter_to_continue(helper=helper)
         if not dryrun:
             # print(f"before dump, element.__getattribute__('id') = {element.__getattribute__('id')}")
-            dump(driver, element, scope, path, verbose=verbose)
+            dump(driver, last_element, scope, path, verbose=verbose)
             ret['Success'] = True
-    elif m := re.match(r"action=(Search)", locator):
-        value, *_ = m.groups()
-        print(f"follow(): perform action={value}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver.execute_script(
-                'mobile: performEditorAction', {'action': value})
-            ret['Success'] = True
+    # elif m := re.match(r"action=(Search)", locator):
+    #     value, *_ = m.groups()
+    #     print(f"follow(): perform action={value}")
+    #     if interactive:
+    #         hit_enter_to_continue(helper=helper)
+    #     if not dryrun:
+    #         driver.execute_script(
+    #             'mobile: performEditorAction', {'action': value})
+    #         ret['Success'] = True
     elif m := re.match(r"context=(native|webview)", locator):
         value, *_ = m.groups()
         print(f"follow(): switch to context matching {value}")
@@ -804,11 +825,16 @@ def locate(locator: str, **opt):
         if interactive:
             hit_enter_to_continue(helper=helper)
         if not dryrun:
-            # https://stackoverflow.com/questions/57644620/
-            # driver.launch_app() # launch_app is deprecated
-            driver.start_activity(pkg, activity)
-            print("launched activity, waiting for 60 seconds for its ready")
-            driver.wait_activity(activity, timeout=60)
+            if not driver:
+                driver = get_driver(**opt)
+            driver.execute_script(
+                'mobile: startActivity',
+                {
+                    'component': f'{pkg}/{activity}',
+                },
+            )
+            ret['Success'] = True
+
     elif m := re.match(r"swipe=(.+)", locator):
         param, *_ = m.groups()
         print(f"follow(): swipe {param}")
@@ -833,7 +859,8 @@ def locate(locator: str, **opt):
                 # using locator (step) that has side effect: eg, click, send_keys
                 print(f"follow: debug_{before_after}={step}")
                 locate(step, **opt)
-    elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:css|element|tag|text|title|timeouts|url|waits|xpath))+)$", locator):
+    elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:currentActivity|css|element|tag|text|title|timeouts|url|waits|xpath))+)$", 
+                       locator, flags=re.IGNORECASE):
         '''
         (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
         and both are on outside.
@@ -850,37 +877,42 @@ def locate(locator: str, **opt):
             'print' is excuted right here and only once.
             'debug' is saved in debuggers[] and executed later, before or after each locate() call.
         '''
-        if not dryrun:
-            if directive == 'print':
-                print(f"locate: get property {keys}")
+        if directive == 'print':
+            print(f"locate: print {keys}")
+            if not dryrun:
                 for key in keys:
                     if not dryrun:
-                        if key == 'html':
+                        if not driver:
+                            driver = get_driver(**opt)
+                        if key.lower() == 'currentactivity':
+                            current_activity = driver.current_activity
+                            print(f'current_activity={current_activity}')
+                        elif key.lower() == 'html':
                             if last_element:
                                 html = last_element.get_attribute('outerHTML')
                                 print(f'element_html=element.outerHTML={html}')   
                             else:
                                 print(f'element_html is not available because last_element is None')
-                        elif key == 'tag':
+                        elif key.lower() == 'tag':
                             # get element type
                             if last_element:
                                 tag = last_element.tag_name
                                 print(f'element_tag_name=element.tag_name={tag}')
-                        elif key == 'text':
+                        elif key.lower() == 'text':
                             if last_element:
                                 text = last_element.text
                                 print(f'element.text={text}')
-                        elif key == 'title':
+                        elif key.lower() == 'title':
                             title = driver.title
                             print(f'driver.title={title}')
-                        elif key == 'timeouts' or key == 'waits':
+                        elif key.lower() == 'timeouts' or key == 'waits':
                             # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
                             # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
                             print(f'    explicit_wait={wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
                             print(f'    implicit_wait={driver.timeouts.implicit_wait}') # when we call find_element()
                             print(f'    page_load_timeout={driver.timeouts.page_load}') # driver.get()
                             print(f'    script_timeout={driver.timeouts.script}') # driver.execute_script()
-                        elif key == 'url':
+                        elif key.lower() == 'url':
                             '''
                             https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
                             javascript: URLs can be used anywhere a URL is a navigation target. 
@@ -928,21 +960,24 @@ def locate(locator: str, **opt):
                             # https://stackoverflow.com/questions/938180
                             parent_url = driver.execute_script("return document.referrer")
                             print(f'    parent_iframe_url=document.referrer={parent_url}')
-                        elif key == 'xpath':
+                        elif key.lower() == 'xpath':
                             print("xpath is not implemented yet")
                         #     if last_element:
                         #         xpath = js_get(last_element, 'xpath', **opt)
                         #         print(f'element_xpath={xpath}')
                         #     else:
                         #         print(f'element_xpath is not available because last_element is None')
+        else:
+            # now for debugs
+            if directive == 'debug_before':
+                before_after = 'before'
             else:
-                # now for debugs
-                if directive == 'debug_before':
-                    before_after = 'before'
-                else:
-                    # directive == 'debug_after' or directive == 'debug'
-                    before_after = 'after'
+                # directive == 'debug_after' or directive == 'debug'
+                before_after = 'after'
 
+            print(f"locate: set debug_{before_after}={keys_string}")
+
+            if not dryrun:
                 action = f"print={keys_string}"
                 debuggers[before_after] = [action]
                 print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
@@ -1187,24 +1222,12 @@ tpbatch = {
             'action': 'store_true',
             'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
         },
-        'print_console_log': {
-            'switches': ['-pcl', '-print_console_log'],
-            'default': False,
-            'action': 'store_true',
-            'help': 'print js console log',
-        },
         'limit_depth': {
             'switches': ['-limit_depth'],
             'default': 5,
             'action': 'store',
             'type': int,
             'help': 'limit scan depth',
-        },
-        'app': {
-            'switches': ['-app'],
-            'default': None,
-            'action': 'store',
-            'help': 'app_path, /path/app.apk for android or https://app.com/app.ipa for ios. this copies the package onto device',
         },
         'humanlike': {
             "switches": ["--humanlike"],
@@ -1218,21 +1241,6 @@ tpbatch = {
             "action": "store_true",
             "help": f"kill {procs}",
         },
-
-        # these two can be replaced with run=app/activity
-        # {
-        #     'dest': 'appPackage',
-        #     'default': None,
-        #     'action': 'store',
-        #     'help': 'appPackage, eg. com.android.chrome',
-        # },
-        #
-        # {
-        #     'dest': 'appActivity',
-        #     'default': None,
-        #     'action': 'store',
-        #     'help': 'appActivity, eg. com.android.chrome.Main',
-        # }
     },
     'resources': {
         'appium': {

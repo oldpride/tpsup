@@ -1,0 +1,12 @@
+# test file for ptfollow_test.py
+
+"code=print('start');i=0"
+"while=exp=i<3"
+    "code=print(i);i+=1"
+    "while=exp=True"
+        "code=print('inner')"
+        "break"
+        "code=print('after break; should not be printed')"
+    end_while
+    "code=print('after inner while; should be printed')"
+end_while
