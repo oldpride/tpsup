@@ -423,7 +423,7 @@ def locate(locator: str, **opt):
 
     helper = opt.get("helper", {})
 
-    ret = {'Success': False, 'break_levels': 0}
+    ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
 
     '''
     examples can be found in github test folder
