@@ -52,6 +52,9 @@ our_cfg = {
     - test nested while break
     {{{{prog}}}} steps_txt={TPP3}/ptfollow_test_while_break.txt
 
+    - test nested while return
+    {{{{prog}}}} steps_txt={TPP3}/ptfollow_test_while_return.txt
+
     
     ''',
 

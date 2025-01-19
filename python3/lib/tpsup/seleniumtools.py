@@ -13,6 +13,7 @@ from selenium import webdriver
 from tpsup.human import human_delay
 import tpsup.logtools
 from tpsup.logbasic import log_FileFuncLine
+from tpsup.locatetools import handle_break
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -877,11 +878,15 @@ class tp_find_element_by_chains:
         self.debug = opt.get('debug', 0)
         self.matched_so_far = [] # this saves the matched path so far, for debugging purpose.
 
+        # print(f"tp_find_element_by_chains: chains2={pformat(chains2)}")
+
         self.chains = []
         for chain in chains2:
             self.matched_so_far.append([])
             # self.matched_numbers.append([])
             self.chains.append([])
+
+        # print(f"tp_find_element_by_chains: self.chains={pformat(self.chains)}")
         
         # parse user specified 'chains2' and save it in 'self.chains'
         #    we parse it in _init__ so that we don't have to parse it in __call__ every time.
@@ -906,6 +911,7 @@ class tp_find_element_by_chains:
         for i in range(0, len(chains2)):
             chain = chains2[i]
             for locator in chain:
+                print(f"locator={locator}")
                 if (locator == "shadow") or (locator == "iframe"):
                     self.chains[i].append([[locator]])
                 elif m1 := get_locator_compiled_path1().match(locator):
@@ -2501,7 +2507,7 @@ def locate_dict(step: dict, **opt):
                   ],
         }
 
-    ret = {'Success': False, 'break_levels': 0}
+    ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
 
     locator_type = step.get('type', None)
     action = step.get('action', None)
@@ -2531,6 +2537,11 @@ def locate_dict(step: dict, **opt):
             ret['break_levels'] = result['break_levels']
             # break now, by returning ret
             return ret
+        
+        if result['continue_levels']:
+            ret['continue_levels'] = result['continue_levels']
+            # continue now, by returning ret
+            return ret
 
         if result['Success']:
             # we found the element
@@ -2540,6 +2551,9 @@ def locate_dict(step: dict, **opt):
                 if result2['break_levels']:
                     ret['break_levels'] = result2['break_levels']
                     return ret
+                if result2['continue_levels']:
+                    ret['continue_levels'] = result2['continue_levels']
+                    return ret
             ret['Success'] = result2['Success']
         else:
             # we didn't find the element
@@ -2547,6 +2561,9 @@ def locate_dict(step: dict, **opt):
                 result2 = locate(step['Failure'], **opt)
                 if result2['break_levels']:
                     ret['break_levels'] = result2['break_levels']
+                    return ret
+                if result2['continue_levels']:
+                    ret['continue_levels'] = result2['continue_levels']
                     return ret
                 ret['Success'] = result2['Success']
             else:
@@ -2589,6 +2606,9 @@ def locate_dict(step: dict, **opt):
         if result['break_levels']:
             ret['break_levels'] = result['break_levels']
             return ret
+        if result['continue_levels']:
+            ret['continue_levels'] = result['continue_levels']
+            return ret
 
         if result['Success']:
             # we found the element, the corresponing locator is in result['element'].tpdata
@@ -2602,12 +2622,18 @@ def locate_dict(step: dict, **opt):
                 if result2['break_levels']:
                     ret['break_levels'] = result2['break_levels']
                     return ret
+                if result2['continue_levels']:
+                    ret['continue_levels'] = result2['continue_levels']
+                    return ret
                 ret['Success'] = result2['Success']
             if 'Success' in action:
                 # action-level Found
                 result3 = locate(action['Success'], **opt)
                 if result3['break_levels']:
                     ret['break_levels'] = result3['break_levels']
+                    return ret
+                if result3['continue_levels']:
+                    ret['continue_levels'] = result3['continue_levels']
                     return ret
                 ret['Success'] = result3['Success']
         else:
@@ -2617,6 +2643,9 @@ def locate_dict(step: dict, **opt):
                 result3 = locate(action['Failure'], **opt)
                 if result3['break_levels']:
                     ret['break_levels'] = result3['break_levels']
+                    return ret
+                if result3['continue_levels']:
+                    ret['continue_levels'] = result3['continue_levels']
                     return ret
                 ret['Success'] = result3['Success']
             else:
@@ -2633,7 +2662,9 @@ def locate_dict(step: dict, **opt):
                 locator = path.get('locator', None)
                 if type(locator) != list:
                     raise RuntimeError(f"chains step 'locator' must be a list, but got {type(locator)}, step={pformat(step)}")
-                tp_find_element_by_chains(locator, **opt)
+                # now that locator is a list.
+                for locator2 in locator:
+                    locate(locator2, **opt)
                 if 'Success' in path:
                     locate(path['Success'], **opt)
                 if 'Failure' in path:
@@ -2709,6 +2740,9 @@ def locate_dict(step: dict, **opt):
                 if result2['break_levels']:
                     ret['break_levels'] = result2['break_levels']
                     return ret
+                if result2['continue_levels']:
+                    ret['continue_levels'] = result2['continue_levels']
+                    return ret
 
                 ret['Success'] = result2['Success']           
             else:
@@ -2726,6 +2760,9 @@ def locate_dict(step: dict, **opt):
                     result2 = locate(action['Failure'], **opt)
                     if result2['break_levels']:
                         ret['break_levels'] = result2['break_levels']
+                        return ret
+                    if result2['continue_levels']:
+                        ret['continue_levels'] = result2['continue_levels']
                         return ret
                     ret['Success'] = result2['Success']
                     
@@ -2852,7 +2889,7 @@ def locate(locator: str, **opt):
     #      it needs to wait to update active element. Therefore, it is better to get it 
     #      from driver.switch_to.active_element in the next step (of locate()).
 
-    ret = {'Success': False, 'break_levels': 0}
+    ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
 
     helper = {}  # interactivity helper
     if interactive:
@@ -3624,24 +3661,6 @@ def locate(locator: str, **opt):
                 shutil.rmtree(output_dir, ignore_errors=True)
             dump(output_dir, scope=scope, **opt)
             ret['Success'] = True
-    elif m := re.match(r"break()$|break=(\d+)", locator):
-        ret['Success'] = True # hard code to True for now
-
-        string_levels, *_ = m.groups()
-
-        # default break levels is 1, ie, break one level of while loop.
-        # we can use break=999 to break all levels of while loop.
-        if string_levels == "":
-            break_levels2 = 1
-        else:
-            break_levels2 = int(string_levels)
-
-        print(f"locate: break break_levels={break_levels2}")
-        if not dryrun:
-            # we update global break_levels only when we are not in dryrun.
-            break_levels = break_levels2
-            ret['break_levels'] = break_levels
-
     # end of old send_input()
 
     # the following are new features
@@ -3857,6 +3876,13 @@ def locate(locator: str, **opt):
                 action = f"print={keys_string}"
                 debuggers[before_after] = [action]
                 print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
+    elif result := handle_break(locator, **opt):
+        if not dryrun:
+            # not dryrun, we check the result
+            # we found the expected break
+            ret['break_levels'] = result['break_levels']
+            ret['continue_levels'] = result['continue_levels']
+            # when matched any break statement, we break, no matter 'Success' is True or False.
     else:
         raise RuntimeError(f"unsupported 'locator={locator}'")
     

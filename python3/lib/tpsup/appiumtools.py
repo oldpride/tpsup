@@ -599,7 +599,7 @@ def locate(locator: str, **opt):
                 driver = get_driver(**opt)
             driver.press_keycode(keycode)
             ret['Success'] = True
-    elif m := re.match(r"(home|back|appSwitch)$", locator, re.IGNORECASE):
+    elif m := re.match(r"(home|back)$", locator, re.IGNORECASE):
         value, *_ = m.groups()
         print(f"follow(): {value}")
         if interactive:
@@ -611,8 +611,9 @@ def locate(locator: str, **opt):
                 driver.press_keycode(nativekey.AndroidKey.HOME)
             elif value.lower() == 'back':
                 driver.back()
-            elif value.lower == 'appswitch':
-                driver.press_keycode(nativekey.AndroidKey.APP_SWITCH)
+            # this didn't work
+            # elif value.lower == 'appswitch':
+            #     driver.press_keycode(nativekey.AndroidKey.APP_SWITCH)
             ret['Success'] = True
 
     elif m := re.match(r"string=(.+)", locator, re.MULTILINE | re.DOTALL | re.IGNORECASE):

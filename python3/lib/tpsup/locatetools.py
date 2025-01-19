@@ -61,7 +61,7 @@ class FollowEnv:
         '''
         block_stack = []
 
-        ret = {'Success': False, 'break_levels': 0}
+        ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
 
         if not steps:
             raise RuntimeError(f"steps is empty")
@@ -114,7 +114,14 @@ class FollowEnv:
                             # we should break the loop, no matter 'Success' is True or False.
                             if result['break_levels']:
                                 print(f"follow2: break because block result break_levels={result['break_levels']} > 0")
+                                # break_levels will be consumed by while-loop in run_block().
                                 ret['break_levels'] = result['break_levels']
+                                break
+
+                            if result['continue_levels']:
+                                print(f"follow2: break because block result continue_levels={result['continue_levels']} > 0")
+                                # 'continue_levels' will be consumed by while-loop in run_block().
+                                ret['continue_levels'] = result['continue_levels']
                                 break
 
                             if not result['executed']:
@@ -164,7 +171,50 @@ class FollowEnv:
                 # now that we are not in any block, there should be no 'else'
                 if step == 'else':
                     raise RuntimeError(f"unexpected 'else' outside of any block")
-            
+                
+                if m := re.match(r"(end_if|end_while)$", step):
+                    raise RuntimeError(f"unexpected blockend={step} when outside of any block, block_stack={block_stack}")
+                
+                # if step == 'break' or step == 'last':
+                #     print(f"follow2: break")
+                #     if not dryrun:
+                #         ret['break_levels'] = 1
+                #         break
+
+                # if step == 'continue' or step == 'next':
+                #     print(f"follow2: continue")
+                #     if not dryrun:
+                #         ret['continue'] = 1
+                #         break
+
+                # if step == 'return':
+                #     print(f"follow2: return")
+                #     if not dryrun:
+                #         ret['break_levels'] = 1000
+                #         break
+
+                # if m := re.match(r"exit=(\d+)?$", step):
+                #     exit_code = m.group(1)
+                #     if not exit_code:
+                #         exit_code = 0
+                #     else:
+                #         exit_code = int(exit_code)
+                #     print(f"follow2: exit with code {exit_code}")
+                #     if not dryrun:
+                #         exit(exit_code)
+
+                if result := handle_break(step, **opt):
+                    if dryrun:
+                        # dryrun is to check syntax only, we don't check the result and move on
+                        continue
+
+                    # not dryrun, we check the result
+                    # we found the expected break
+                    ret['break_levels'] = result['break_levels']
+                    ret['continue_levels'] = result['continue_levels']
+                    # when matched any break statement, we break, no matter 'Success' is True or False.
+                    break
+
                 # now that we are not in any block, we check whether this step is a start of a block (not a nested block)
                 if m := re.match(r"\s*(while|if)(_not)?=(.+)", step):
                     # we are starting a new block
@@ -251,7 +301,8 @@ class FollowEnv:
                         print(f"follow2: run steps_{file_type}={file_name} failed")
                         return result
                     continue
-                # there are other string steps that are related to block, we will handle them later.
+
+                # there are other string steps that are not related to block, we will handle them later.
             else:
                 # for non-string step, here we only handle block related steps. non-block steps are handled later.
                 if block_stack:
@@ -409,6 +460,11 @@ class FollowEnv:
                 ret['break_levels'] = result['break_levels']
                 break
 
+            if result['continue_levels']:
+                print(f"follow2: break because step result continue_levels={result['continue_levels']} > 0")
+                ret['continue_levels'] = result['continue_levels']
+                break
+
             # copy result to ret
             ret['Success'] = result['Success']
 
@@ -453,10 +509,14 @@ class FollowEnv:
         # neither True or False.  In this case, we want to know the condition test failed.
         debug = opt.get('debug', 0)
         dryrun = opt.get('dryrun', False)
-        ret = {'Success': False, 'break_levels':0, 'executed': None, 'element': None}
+        ret_init = {'Success': False, 'break_levels':0, 'continue_levels': 0, 'executed': None, 
+                    # 'element': None
+                    }
 
         if blockstart == 'while':
             while True:
+                ret = ret_init.copy()
+
                 result = self.if_block(negation, condition, block, **opt)
 
                 if dryrun:
@@ -475,13 +535,12 @@ class FollowEnv:
                     # the block's condition is not met, we ran the after-else. we break.
                     print(f"run_block: while-loop failed at condition and ran after-else. we break")
                     break
-
+       
                 ret['executed'] = result['executed']
                 ret['Success'] = result['Success']
 
                 if result['break_levels']:
                     print(f"run_block: break_levels={result['break_levels']}, break the while loop")
-                    ret['break_levels'] = result['break_levels']
 
                     # reduce break_levels by 1 because we really break a loop in while-loop block.
                     ret['break_levels'] = result['break_levels'] - 1
@@ -493,21 +552,38 @@ class FollowEnv:
 
                     # only break the while-loop block, not the if block
                     break
+
+                if result['continue_levels']:
+                    print(f"run_block: continue the while loop")
+                    # 'continue_levels' is consumed here (while-loop).
+                    ret['continue_levels'] = result['continue_levels'] - 1
+
+                    if ret['continue_levels'] > 0:
+                        # we need to continue in parent while loop. so we break here
+                        break
+                    else:
+                        # ret['continue_levels'] == 0:
+                        continue
                 
                 if not result['Success']:
                     # even if the non-control-block failed, we should break the while loop.
                     # noramlly if non-control-block failed, an exception is raised.
                     break
         elif blockstart == 'if':
+            ret = ret_init.copy()
+
             result=self.if_block(negation, condition, block, **opt)
 
             if debug:
                 print(f"run_block: if_block result={result}")
+
             ret['Success'] = result['Success']
             ret['executed'] = result['executed']
 
-            # propagate break_levels to outer layer
+            # propagate break_levels to outer layer; so do 'continue', because if-block doesn't consume
+            # any break_levels or continue.
             ret['break_levels'] = result['break_levels']
+            ret['continue_levels'] = result['continue_levels']
         else:
             raise RuntimeError(f"unsupported blockstart={blockstart}")
 
@@ -521,7 +597,9 @@ class FollowEnv:
         dryrun = opt.get('dryrun', False)
         debug = opt.get('debug', 0)
 
-        ret = {'Success': False, 'executed': None, 'break_levels': 0}
+        ret = {'Success': False, 'executed': None, 'break_levels': 0, 'continue_levels': 0, 
+            #    'element': None
+               }
 
         steps_by_type = split_by_else(block, **opt)
      
@@ -581,6 +659,7 @@ class FollowEnv:
 
                 ret['Success'] = result['Success']
                 ret['break_levels'] = result['break_levels']
+                ret['continue_levels'] = result['continue_levels']
                 ret['executed'] = to_execute_block
         else:
             # dryrun, for syntax check
@@ -692,3 +771,76 @@ def get_defined_locators(locate_func: callable, **opt):
         locators.append(m.group(2))
 
     return locators
+
+
+def handle_break(step: str, **opt):
+    '''
+    handle break and continue
+    '''
+    debug = opt.get('debug', 0)
+    dryrun = opt.get('dryrun', 0)
+
+    ret = {'break_levels': 0, 'continue_levels': 0,}
+    
+    '''
+    example of steps:
+        break       # this is default to break=1, ie, break one level of while loop.
+        break=2     # break two levels of while loop. 
+                    # we can use this archieve "goto" effect.
+        last        # this is the same as 'break'
+
+        continue    # break the current loop. then continue with the next while loop
+        continue=2  # break the current while loop and the parent while loop. then
+                    # continue with the next parent while loop.
+                    # we can use this archieve "goto" effect.
+        next        # this is the same as 'continue'
+
+        return      # this is the same as 'break=1000'
+
+        exit        # this is the same as 'exit=0'
+        exit=1      # this is the same as 'exit=1'
+    '''
+
+    # handle shorcut
+    if step == 'break' or step == 'last':
+        step = 'break=1'
+    elif step == 'continue' or step == 'next':
+        step = 'continue=1'
+    elif step == 'return':
+        step = 'break=1000'
+    elif step == 'exit':
+        step = 'exit=0'
+
+    if m := re.match(r"break=(\d+)", step):
+        count = int(m.group(1))
+        print(f"handle_break: break_levels={count}")
+        if not dryrun:
+            ret['break_levels'] = count
+    elif m := re.match(r"continue=(\d+)", step):
+        count = int(m.group(1))
+        print(f"handle_break: continue={count}")
+        if not dryrun:
+            ret['continue_levels'] = count
+    elif m := re.match(r"exit=(\d+)", step):
+        exit_code = m.group(1)
+        if not exit_code:
+            exit_code = 0
+        else:
+            exit_code = int(exit_code)
+        print(f"handle_break: exit with code {exit_code}")
+        if not dryrun:
+            exit(exit_code)
+    else:
+        '''
+        the goodness of returning None is that we add handle_break() into the elif chain.
+            if ....
+                 ...
+            elif ...
+                ...
+            elif result := handle_break(step, **opt):
+                 ...
+        '''
+        # no match
+        return None
+  
+    return ret

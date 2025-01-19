@@ -105,6 +105,10 @@ our_cfg = {
 
     - run the package's activity
     {{{{prog}}}} run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity print=currentActivity
+
+    - home, back
+    {{{{prog}}}} -is_emulator print=currentactivity home run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity back
+                     
     
 ''',
 
