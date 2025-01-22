@@ -3,6 +3,7 @@ import os
 from pprint import pformat
 import re
 import shlex
+import time
 import tpsup.envtools
 import tpsup.pstools
 
@@ -19,6 +20,7 @@ class FollowEnv:
         # self.caller_locals = inspect.currentframe().f_back.f_locals
 
         self.already_checked_syntax = False
+        self.delay = 0 # delay between steps
 
     def follow2(self, steps: list,  **opt):
         '''
@@ -302,6 +304,13 @@ class FollowEnv:
                         return result
                     continue
 
+                if m := re.match(r"delay=(\d+)$", step):
+                    delay = int(m.group(1))
+                    print(f"follow2: delay={delay}")
+                    if not dryrun:
+                        self.delay = delay
+                    continue
+
                 # there are other string steps that are not related to block, we will handle them later.
             else:
                 # for non-string step, here we only handle block related steps. non-block steps are handled later.
@@ -321,6 +330,10 @@ class FollowEnv:
             #     print(f"follow2: debug_before={step}")
             #     self.str_action(step, **opt) 
             self.str_action('debug_before', **opt)
+
+            if self.delay:
+                print(f"follow2: delay {self.delay} seconds before next step")
+                time.sleep(self.delay)
 
             """
             non-control-block step can be a string or a more complex structure     

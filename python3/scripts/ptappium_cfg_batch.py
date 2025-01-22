@@ -39,7 +39,7 @@ our_cfg = {
         2. appium only works when "adb devices" has only one device.
     
     to test with emulator, 
-        just add -is_emulator 
+        just add -emu 
         this call will start an emulator
 
     to test with real device running android,
@@ -71,11 +71,16 @@ our_cfg = {
         device pairing host:port
         device connect host:port
 
+    - ways to start an emulator
+    {{{{prog}}}} start_emulator
+    {{{{prog}}}} -emu start_driver    # emulator is started as part of start_driver
+    {{{{prog}}}} -emu xpath=//...     # both emulator and driver are started for searching xpath
+
     - how to find "id" or "xpath" for an element,
     use appium inspector -> start seesion -> right click on the element and inspect
         in the "Selected Element tab", copy thee "id" or "xpath"
        
-    {{{{prog}}}} -is_emulator --humanlike '''
+    {{{{prog}}}} -emu --humanlike '''
                      'home sleep=3 id=com.google.android.apps.nexuslauncher:id/overview_actions_view click '
                      'string=Amazon enter sleep=8 '
                      'dump_page={HOME}/dumpdir/page_source.html '
@@ -85,30 +90,86 @@ our_cfg = {
     
     - test install/uninstall app
       test if-else block
-    {{{{prog}}}} -is_emulator if=existsapp=org.nativescript.test02ngchallenge removeapp=org.nativescript.test02ngchallenge else installapp="{TPP3}/test02.apk" end_if sleep=1
+    {{{{prog}}}} -emu \\
+        if=existsapp=org.nativescript.test02ngchallenge \\
+            removeapp=org.nativescript.test02ngchallenge \\
+        else \\
+            installapp="{TPP3}/test02.apk" \\
+        end_if \\
+        sleep=1
+
     if app install stuck, 
         adb uninstall org.nativescript.test02ngchallenge
     
     - test webview context
-    {{{{prog}}}} -is_emulator context=webview
+    {{{{prog}}}} -emu context=webview
     todo: this is not working yet. we may need to launch an webview app first
     
-    
     - find package name
+    androidenv set # set android studio (adb) env
     adb shell "pm list packages|grep test02"
     i got "package:org.nativescript.test02ngchallenge"
     this info can also be found in package source code
     
     - find activities' names of the package
-    adb shell "`dump`sys package |egrep '^[ ]+[0-9a-z]+[ ]+org.nativescript.test02ngchallenge/'"
+    androidenv set
+    adb shell "dumpsys package |egrep '^[ ]+[0-9a-z]+[ ]+org.nativescript.test02ngchallenge/'"
         b20ec9c org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - run the package's activity
     {{{{prog}}}} run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity print=currentActivity
 
     - home, back
-    {{{{prog}}}} -is_emulator print=currentactivity home run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity back
-                     
+    {{{{prog}}}} -emu print=currentactivity home run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity back
+
+    - start an app
+    {{{{prog}}}} -emu ensureapp=org.nativescript.test02ngchallenge \\
+        run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
+
+    - click an element, clear text, enter text, click button
+      note: I had to use "xpath=//android.widget.EditText[matches(text(), '.*')]" instead of "xpath=//android.widget.EditText"
+            will need to find out why
+    {{{{prog}}}} -emu \\
+        run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity \\
+        "xpath=//android.widget.EditText[matches(text(), '.*')]" click clear \\
+        text="hello world" \\
+        css=android.widget.Button click \\
+        xpath=//*[@id='com.google.android.youtube:id/fullscreen_button']" click \\
+        record_screen
+
+    - download a Youtube video - there is no sound 
+    {{{{prog}}}} -emu \\
+        home wait=5 sleep=3 \\
+        xpath="//android.widget.FrameLayout[@resource-id='com.google.android.apps.nexuslauncher:id/overview_actions_view']" \\
+        click sleep=3 \\
+        xpath="//android.view.View[@content-desc='Home']" sleep=3 \\
+        text="https://youtu.be/3EaKUrU5qjA?si=p0DVT0wFL-s5rWas" search sleep=10 \\
+        xpath="//android.widget.ImageView[@content-desc='Enter fullscreen']" click sleep=5 \\
+        record
+
+    the above method is not reliable. the following way is more reliable but more manually.
+    open the video youtube in emulator, with disired settings, then
+    {{{{prog}}}} -emu record_screen
+
+    - run with localhost http server
+        note: 
+            http://127.0.1:8000 is the http server on emulator.
+            http://10.0.2.2 is the http server on computer (windows or linux)
+    
+        start the web server on computer
+        cd {TPP3}
+        python3 -m http.server 8000
+
+        run chrome on emulator and go to http://10.0.2.2:8000/iframe_over_shadow_test_main.html
+        - it took about 10 seconds for WEBVIEW context to be available.
+        - once chrome is launched, even if it is in background, WEBVIEW context is available.
+        {{{{prog}}}} -emu \\
+            home       sleep=5  print=context  # contexts=['NATIVE_APP'] \\
+            run=chrome sleep=10 print=context  # contexts=['NATIVE_APP', 'WEBVIEW_chrome'] \\
+            context=webview print=context  # contexts=['WEBVIEW_chrome'] \\
+        
+
+
     
 ''',
 

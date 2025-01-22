@@ -1,8 +1,10 @@
 # mainly calling adb shell commands
 import os
+import time
 import tpsup.cmdtools
 import tpsup.tmptools
 from shutil import which
+from tpsup.envtools import get_home_dir
 
 # steps to print android manifest file
 # to test with emulator
@@ -99,6 +101,60 @@ def adb_pull(path: str, **opt):
     os.system(cmd)
 
     return dest
+
+def adb_wait_screen(until: str, 
+                    check_interval: int = 5, 
+                    timeout: int = 3600, **opt):
+    '''
+    use adb screencap to check whether screen is still for a while.
+    we use homedir/downloads folder as default folder to save the screenshots
+    '''
+    verbose = opt.get('verbose', 0)
+
+    if not (until == 'still' or until == 'moving'):
+        raise Exception(f"unknown until={until}; can only be 'still' or 'moving'")
+    
+    homedir = get_home_dir()
+    download_dir = f'{homedir}/Downloads'
+    idx = 0
+    old_content = None
+
+    start_seconds = time.time()
+    last_seconds = start_seconds
+    
+    while True:
+        now_seconds = time.time()
+        total_seconds = now_seconds - start_seconds
+        
+        current_file = f'{download_dir}/screencap{idx}.png'
+        cmd = f'adb shell screencap -p > "{current_file}"'
+        if verbose:
+            print(f'cmd = {cmd}')
+        os.system(cmd)
+        idx = (idx + 1) % 2
+        
+        # read content from current file in binary mode
+        with open(current_file, 'rb') as f:
+            current_content = f.read()
+
+        if old_content:
+            if old_content == current_content:
+                print(f"screen is still for {check_interval} seconds, total_seconds={total_seconds}")
+                if until == 'still':               
+                    return True
+            else:
+                print(f"screen was moving in last {check_interval} seconds, total_seconds={total_seconds}")
+                if until == 'moving':
+                    return True
+        else:
+            print(f"first time to check screen")
+        old_content = current_content
+
+        if now_seconds - last_seconds > timeout:
+            return False
+        
+        time.sleep(check_interval)
+    
 
 
 def main():

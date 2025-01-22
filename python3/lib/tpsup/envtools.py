@@ -196,7 +196,7 @@ def restore_posix_paths(paths: list, **opt) -> list:
     # for example, xpath=/html becomes xpath=C:/Program Files/Git/html
     # this function converts C:/Program Files/Git/html back to /html
     # so that we can use xpath=/html in our code
-    my_env = Env()
+    my_env = get_env(**opt)
     if (not 'term' in my_env.__dict__) or (not my_env.term.get('term', None) == 'gitbash'):
         # linux (ubuntu, WSL) and gitbash don't need to change PATH
         return paths
@@ -214,24 +214,33 @@ def restore_posix_paths(paths: list, **opt) -> list:
             print(f"tpsup.env: restore_posix_paths: {old_path} -> {new_path}")
     return new_paths
 
+env = None
+
+def get_env(**opt) -> Env:
+    global env
+    if env is None:
+        env = Env(**opt)
+    return env
 
 def get_tmp_dir(**opt) -> str:
-    return Env(**opt).tmpdir
+    return get_env(**opt).tmpdir
 
 
 def get_home_dir(**opt) -> str:
-    home_dir = Env(**opt).home_dir
+    home_dir = get_env(**opt).home_dir
     term_type = get_term_type(**opt)
     if term_type != 'batch':
         # change backslash to forward slash
         home_dir = home_dir.replace('\\', '/')
     return home_dir
 
+def get_downloads_dir(**opt) -> str:
+    return f"{get_home_dir(**opt)}/Downloads"
 
 def get_user(secure: bool = False, **opt):
     # https://stackoverflow.com/questions/842059
     if secure:
-        myenv = Env(**opt)
+        myenv = get_env(**opt)
         if myenv.isWindows:
             import win32api  # pip install pywin32
             return win32api.GetUserName()
@@ -258,7 +267,7 @@ def get_user_fullname(user: str = None, **opt) -> str:
     full_name = None
     if user == myself:
         # cache for myself
-        env = Env()
+        env = get_env(**opt)
 
         cache_dir = env.home_dir + '/.tpsup'
         if not os.path.exists(cache_dir):
@@ -292,7 +301,7 @@ def query_user_fullname(user: str, **opt) -> str:
     verbose = opt.get('verbose', False)
 
     full_name = None
-    env = Env()
+    env = get_env(**opt)
     if env.isWindows:
         # cmd = 'wmic useraccount where name="william" get fullname /value'
         # cmd = 'wmic useraccount where name="%username%" get fullname /value'
@@ -559,7 +568,7 @@ def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = 
         print(f"source_type={source_type}")
 
     if target_type is None:
-        myenv = Env()
+        myenv = get_env(**opt)
         if term := myenv.term.get('term', None):
             if term in ('cygwin', 'gitbash', 'batch'):
                 target_type = term
@@ -621,7 +630,7 @@ def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = 
 
 
 def get_native_path(path: str, **opt):
-    myEnv = Env()
+    myEnv = get_env(**opt)
     if myEnv.isWindows:
         native_path = convert_path(path, target_type='batch')
     else:
@@ -660,7 +669,7 @@ def get_term_type(**opt):
 
 def main():
     from tpsup.testtools import test_lines
-    myenv = Env()
+    myenv = get_env()
     myenv.adapt()  # don't block output in gitbash and cygwin
 
     tpsup = os.environ.get('TPSUP')
@@ -683,6 +692,7 @@ def main():
 
         get_tmp_dir()
         get_home_dir()
+        get_downloads_dir()
         get_user()
         get_user(secure=True)
         get_user_fullname(verbose=True)
