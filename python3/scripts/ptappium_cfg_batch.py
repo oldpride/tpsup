@@ -151,10 +151,11 @@ our_cfg = {
     open the video youtube in emulator, with disired settings, then
     {{{{prog}}}} -emu record_screen
 
-    - run with localhost http server
+    - run with localhost http server to test webview context
         note: 
             http://127.0.1:8000 is the http server on emulator.
             http://10.0.2.2 is the http server on computer (windows or linux)
+            webview app examples: chrome, facebook,
     
         start the web server on computer
         cd {TPP3}
@@ -166,7 +167,13 @@ our_cfg = {
         {{{{prog}}}} -emu \\
             home       sleep=5  print=context  # contexts=['NATIVE_APP'] \\
             run=chrome sleep=10 print=context  # contexts=['NATIVE_APP', 'WEBVIEW_chrome'] \\
-            context=webview print=context  # contexts=['WEBVIEW_chrome'] \\
+            context=webview print=context      # contexts=['NATIVE_APP', 'WEBVIEW_chrome']
+
+        simplied steps to bring up WEBVIEW app (chrome)
+        {{{{prog}}}} -emu \\
+            start_http_server start_driver \\
+            code="driver.get('http://10.0.2.2:8000')" \\
+            print=context  # contexts=['NATIVE_APP', 'WEBVIEW_chrome']
         
 
 

@@ -61,20 +61,31 @@ rem    If the last character in the tokens= string is an asterisk, then addition
 rem    allocated for all the remaining text on the line.
 rem    therefore, if you start with letter %%p, then next token will go to %%q, and then %%r
 
-FOR /F "tokens=1,2,3 delims=," %%a IN ('tasklist /NH /FO CSV ^| findstr /i "%pattern%"') DO (
-   rem from tasklist /NH
-   rem    browser_broker.exe           27816 Console                    1      7,896 K
-   rem use /FO CSV to handle csv space inside command name
-   rem    "Appium Inspector.exe" "1760" "Console"
+@REM FOR /F "tokens=1,2,3 delims=," %%a IN ('tasklist /NH /FO CSV ^| findstr /i "%pattern%"') DO (
+@REM    rem from tasklist /NH
+@REM    rem    browser_broker.exe           27816 Console                    1      7,896 K
+@REM    rem use /FO CSV to handle csv space inside command name
+@REM    rem    "Appium Inspector.exe" "1760" "Console"
   
-   rem %%a is program name
+@REM    rem %%a is program name
+@REM    rem %%b is pid
+@REM    rem %%c is Console or Service
+@REM    echo killing %%a %%b %%c and its children
+
+
+FOR /F "tokens=1,2,3 delims=," %%a IN ('ps_csv.cmd ^| findstr /i %pattern%') DO (
+   @REM ps_csv.cmd  this prints full command-line args, better than tasklist  
+   @REM 1/24/2025 11:57:28 AM     15300 python  -m http.server 8000
+   @REM 1/24/2025 12:53:32 PM      2948 C:\Windows\system32\cmd.exe  /S /D /c" grep http.server"
+  
+   rem %%a is datetime
    rem %%b is pid
-   rem %%c is Console or Service
+   rem %%c is Command-line args
    echo killing %%a %%b %%c and its children
 
    rem echo immediate child processes:
    rem wmic process where (ParentProcessId=%b) get Caption,ProcessId 
-   rem > wmic process where (ParentProcessId=20488) get Caption,ProcessId
+   rem wmic process where (ParentProcessId=20488) get Caption,ProcessId
    rem Caption     ProcessId
    rem chrome.exe  26568
    
@@ -89,7 +100,3 @@ FOR /F "tokens=1,2,3 delims=," %%a IN ('tasklist /NH /FO CSV ^| findstr /i "%pat
 )
 
 endlocal
-
-
-
-

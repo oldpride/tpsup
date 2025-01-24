@@ -3714,8 +3714,7 @@ def locate(locator: str, **opt):
                 "therefore, we need to add extra sleep time after page is loaded. "
                 "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
                 '''
-                # https://appium.readthedocs.io/en/stable/en/commands/session/timeouts/timeouts/
-                driver.set_page_load_timeout(int(value)*1000)
+                driver.set_page_load_timeout(int(value))
             ret['Success'] = True
     elif locator == 'refresh':
         print(f"locate: refresh driver")

@@ -11,7 +11,7 @@ def ps_grep(pattern, printOutput=1, env=None, verbose=0):
         sys.stderr.write(f'Find any running {pattern}\n')
 
     if env is None:
-        env = tpsup.envtools.Env()
+        env = tpsup.envtools.get_env()
 
     # "ps -ef" in GitBash and Cygwin can only see its own processes
     # if env.isLinux or env.isGitBash or env.isCygwin:
@@ -96,25 +96,25 @@ def pid_alive(pid: int):
 def kill_procs(procs: list, **opt):
     for proc in procs:
         print(f"kill {proc}")
-        my_env = tpsup.envtools.Env()
+        my_env = tpsup.envtools.get_env()
         if my_env.isWindows:
             # cmd = f"taskkill /f /im {proc}"
             cmd = f"pkill {proc}"
         else:
             # -f means full command line
-            cmd = f"pkill -f {proc}"
+            cmd = f"pkill -f -- {proc}"
         print(f"cmd={cmd}")
         os.system(cmd)
 
-def check_procs(procs: list, **opt):
+def check_procs(procs: list, kill=False, **opt):
     for proc in procs:
         print(f"check whether {proc} is still running")
         if tpsup.pstools.ps_grep(f"{proc}", printOutput=1):
             print(f"saw leftover {proc}\n")
 
         # try not to kill it because it takes time to start up
-        if opt.get('kill', False):
-            kill_procs(**opt)
+        if kill:
+            kill_procs([proc], **opt)
 
 def main():
 

@@ -813,7 +813,7 @@ def locate(locator: str, **opt):
             driverEnv = get_driverEnv(**opt)
             if driverEnv.is_emulator:
                 # this is for emulator, there is no virtual keyboard,
-                # we can click the search button on the emulator,
+                # we can not click the search button on the emulator,
                 # so we type Enter key
                 locate(f"sendkey=enter", **opt)
             else:
