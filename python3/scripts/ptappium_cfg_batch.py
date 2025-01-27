@@ -172,7 +172,7 @@ our_cfg = {
         simplied steps to bring up WEBVIEW app (chrome)
         {{{{prog}}}} -emu \\
             start_http_server start_driver \\
-            code="driver.get('http://10.0.2.2:8000')" \\
+            url="http://10.0.2.2:8000" \\
             print=context  # contexts=['NATIVE_APP', 'WEBVIEW_chrome']
         
 

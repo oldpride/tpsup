@@ -54,7 +54,16 @@ def adb_get_pkg_path(pkg: str, **opt):
     output = tpsup.cmdtools.run_cmd_clean(cmd, **opt)
 
     lines = output.splitlines()
-    # package:com.android.gallery3d
+    # package:com.android.photos
+
+    if verbose:
+        print(f'{lines}')
+        
+    if len(lines) > 1:
+        print(f'multiple package path found for {pkg}: we use the first one')
+    elif len(lines) == 0:
+        raise Exception(f'no package path found for {pkg}')
+    
     path = lines[0].split(':')[1]
 
     # print detail
@@ -158,15 +167,18 @@ def adb_wait_screen(until: str,
 
 
 def main():
+    import tpsup.androidtools
+    tpsup.androidtools.check_android_env()
+
     if adb_path := which('adb'):
         print(f"adb_path = {adb_path}")
     else:
         raise Exception("adb not found. run adroidenv")
 
-    print(f"adb_find_pkg('gallery') = {adb_find_pkg('gallery')}")
+    print(f"adb_find_pkg('photos') = {adb_find_pkg('photos')}")
     print("")
     print(
-        f"adb_get_pkg_path('com.android.gallery3d') = {adb_get_pkg_path('com.android.gallery3d')}")
+        f"adb_get_pkg_path('com.android.photos') = {adb_get_pkg_path('com.android.gallery')}")
     print("")
     print(
         f"adb_pull('/product/app/Gallery2/Gallery2.apk') = {adb_pull('/product/app/Gallery2/Gallery2.apk')}")

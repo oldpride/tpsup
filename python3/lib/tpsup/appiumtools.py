@@ -49,15 +49,22 @@ diagarm = '''
     +----------+       +----------+      +------+    +---------------+
     | appium   +------>+ appium   +----->+ adb  +--->+ adbd          |
     | python   |       | server   | adb  |server|    |               |
-    | webdriver|       | Nodejs   | cmd  +------+    |               +---->internet
-    |          |       |          |                  | UIAutomator2. |
-    |          |       |          |----------------->| Bootstrap.jar  |
-    |          |       |          |     HTTP  W3C    | runs a TCP    |
+    | webdriver|       | Nodejs   | cmd  |      |    |               +---->internet
+    |          |       |          |      |:5037 |    | UIAutomator2. |
+    |          |       |          |      +------+    | UIAutomator2. |
+    |          |       |          |                  | Bootstrap.jar |
+    |          |       |          |                  | runs a TCP    |
     |          |       |          |                  | listening port|
+    |          |       | REST     |                  |               |
+    |          |       | :4723    |----------------->| :5444 emulator|
+    |          |       |          |   HTTP  W3C      |               |
     +----------+       +----------+                  +---------------+    
     
     host_port is appium sever's host and port.
     adb_device_name is what command "adb devices" shows.
+
+    UIAutomator2 opens listening port at 8200..8299. start with and default to 8200.
+    to 
 '''
 
 driver: webdriver.Remote = None # not webdriver.Chrome!
@@ -93,6 +100,7 @@ def start_proc(proc: str, **opt):
         if proc == 'emulator':
             host_port = 'localhost:5554'
         else:
+            # appium server
             host_port = 'localhost:4723'
 
     (host, port) = host_port.split(":", 1)
@@ -511,6 +519,15 @@ def locate(locator: str, **opt):
                 driver.remove_app(app)
                 ret['Success'] = True
 
+    elif m := re.match(r"url=(.+)$", locator, flags=re.IGNORECASE):
+        url, *_ = m.groups()
+        print(f"locate: url={url}")
+        if interactive:
+            hit_enter_to_continue(helper=helper)
+        if not dryrun:
+            driver = get_driver(**opt)
+            driver.get(url)
+            ret['Success'] = True
     elif m := re.match(r"\s*(xpath|css|id)=(.+)", locator):
         tag, value, *_ = m.groups()
         # AppiumBy.ID is the "resource-id" in uiautomator.
@@ -1256,10 +1273,24 @@ def swipe(driver: webdriver.Remote, param: str, **opt):
 
 
 procs = [
-            "qemu-system-x86_64.exe", # emulator
-            "node.exe",  # appium server
-            "adb.exe", # adb server
-            "chromedriver", # chromedriver
+            "qemu-system-x86_64.exe", 
+            # emulator
+            # C:\Users\tian>ps -ef |grep qemu-system-x86_64.exe
+            # 1/25/2025 7:49:52 PM      21612 C:\Users\tian\AppData\Local\Android\Sdk\emulator\qemu\windows-x86_64\qemu-system-x86_64.exe -netdelay none -netspeed full -avd myemulator -port 5554
+
+            "node.exe",  
+            # appium server
+            # C:\Users\tian>ps -ef |grep node.exe
+            # 1/25/2025 7:49:56 PM      10056 C:\tools\nodejs\node.exe C:\tools\nodejs\node_modules\appium\build\lib\main.js --address 127.0.0.1 --port 4723 --log-no-colors --base-path /wd/hub --log C:/Users/tian/appium\appium.log --log-level debug
+
+            "adb", 
+            # adb server
+            # C:\Users\tian>ps |grep adb
+            # 1/25/2025 7:50:52 PM       1936 adb -L tcp:5037 fork-server server --reply-fd 560
+
+            "chromedriver", 
+            # chromedriver
+            # we need chromedriver when we want to use webview
         ]
 
 

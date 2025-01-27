@@ -24,6 +24,7 @@ for /f "tokens=*" %%a in ('ver') do set UNAME=%%a
 REM append "Windows_NT" to UNAME
 set UNAME=%UNAME% Windows_NT
 
+
 rem use 'call' to invoke external script; otherwise, the current script will exit after the external script
 call "%CMD_DIR%\addpath.cmd" -q PATH "%CMD_DIR%"
 
@@ -31,6 +32,11 @@ REM now we should have addpath in PATH
 call addpath -q PATH "%TPSUP%\vbs"
 call addpath -q PATH "%SITESPEC%\bat"
 call addpath -q PATH "%SITESPEC%\vbs"
+
+REM set tpsup\bat\winntver.cmd output to NT_VERSION
+for /f %%i in ('winntver.cmd') do set "NT_VERSION=%%i"
+call addpath -q PATH "%SITEBASE%\Windows\%NT_VERSION%"
+
 
 :: blank line
 :: echo. 
