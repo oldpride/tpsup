@@ -16,7 +16,7 @@ usage = textwrap.dedent("""
 
 examples = textwrap.dedent(f"""
     examples:
-    {prog} gallery
+    {prog} photos
     """)
 
 parser = argparse.ArgumentParser(
@@ -32,6 +32,10 @@ parser.add_argument(
 parser.add_argument(
     '-v', '--verbose', default=0, action="count",
     help='verbose level: -v, -vv, -vvv')
+
+parser.add_argument(
+    '-m', '--method', default="apkanalyzer", action="store",
+    help='method to get manifest, aapt, aapt2, apkanalyzer, apktool')
 
 args = vars(parser.parse_args())
 
