@@ -68,6 +68,8 @@ export UNAME=$(uname -a)
 # Windows cmd.exe, 'ver' command
 #    Microsoft Windows [Version 10.0.19044.1889]
 
+export NT_VERSION=$(echo $UNAME | cut -d- -f2)
+
 print_stack() {
    # https://stackoverflow.com/questions/11090899
    # this function is to print the stack trace
@@ -92,6 +94,7 @@ uname2term() {
    UNAMETERM=""
    if [[ $UNAME =~ CYGWIN ]]; then
       # CYGWIN_NT-10.0-19045 tianpc2 3.5.3-1.x86_64 2024-04-03 17:25 UTC x86_64 Cygwin
+      # set NT_VERSION=10.0
       UNAMETERM="cygwin"
    elif [[ $UNAME =~ Msys ]]; then
       # this is gitbash or vscode bash
@@ -364,7 +367,7 @@ if [[ $UNAME =~ Msys ]]; then
    export OS_MAJOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f1)
    export OS_MINOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f2)
 
-   export PATH="$PATH:$TPSUP/bat"
+   export PATH="$PATH:$TPSUP/bat:$SITEBASE/Windows/$NT_VERSION"
 elif [[ $UNAME =~ Cygwin ]]; then
    export WINHOME=$(
       cd $USERPROFILE
@@ -396,7 +399,7 @@ elif [[ $UNAME =~ Cygwin ]]; then
    export OS_MAJOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f1)
    export OS_MINOR=$(echo $UNAME | cut -d- -f2 | cut -d' ' -f1 | cut -d. -f2)
 
-   export PATH="$PATH:$TPSUP/bat"
+   export PATH="$PATH:$TPSUP/bat:$SITEBASE/Windows/$NT_VERSION"
 elif [[ $UNAME =~ Linux|Darwin ]]; then
    export Linux=$(uname -a | cut -d" " -f3 | cut -d. -f1,2)
    # Linux linux1 4.15.0-112-generic #113-Ubuntu SMP Thu Jul 9 23:41:39 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux

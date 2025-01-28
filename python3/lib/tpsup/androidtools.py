@@ -63,8 +63,6 @@ def get_apk_manifest(apk_path: str, method:str="apkanalyzer", **opt):
     verbose = opt.get('verbose', 0)
     '''
     get manifest file from apk
-
-    https://stackoverflow.com/questions/3599210
     '''
 
     if method == "apkanalyzer":
@@ -97,16 +95,66 @@ def get_apk_manifest(apk_path: str, method:str="apkanalyzer", **opt):
 
     elif method == "aapt":
         '''
-        $ aapt dump badging Gallery2.apk
+        https://stackoverflow.com/questions/3599210
+        $ aapt dump badging photos.apk
         '''
-        aapt = tpsup.cmdtools.which('aapt')
+        aapt = tpsup.cmdtools.which(method).replace('\\', '/')
         if not aapt:
             raise Exception('aapt not found in PATH')
 
-        cmd = f'{aapt} dump badging "{apk_path}"'
+        cmd = f'{aapt} dump xmltree "{apk_path}" AndroidManifest.xml'
         if verbose:
             print(f'cmd = {cmd}')
         output = tpsup.cmdtools.run_cmd_clean(cmd, **opt)
+    elif method == "aapt2":
+        '''
+        https://developer.android.com/tools/aapt2
+        '''
+        exe = tpsup.cmdtools.which(method).replace('\\', '/')
+        if not exe:
+            raise Exception(f'{method} not found in PATH')
+        if verbose:
+            print(f'{method} = {exe}')
+
+        cmd = f'{exe} dump xmltree "{apk_path}" --file AndroidManifest.xml'
+        if verbose:
+            print(f'cmd = {cmd}')
+        output = tpsup.cmdtools.run_cmd_clean(cmd, **opt)
+    elif method == "apktool":
+        '''
+        https://stackoverflow.com/questions/3599210
+        apktool.bat decode -f -o downloads \
+            C:/Users/tian/AppData/Local/Temp/daily/20250127/com.google.android.apps.photos.apk
+        '''
+        exe = tpsup.cmdtools.which(method).replace('\\', '/')
+        if not exe:
+            raise Exception(f'{method} not found in PATH')
+        if verbose:
+            print(f'{method} = {exe}')
+
+        # normally we download apk file to a daily directory, but
+        # apktool will clean up its output directory, so we need 
+        # to direct apktool to a different directory so that the
+        # apk file is not deleted.
+        tmpdir = tpsup.tmptools.get_dailydir().replace('\\', '/')
+        tmpdir = f'{tmpdir}/apktool'
+        cmd = f'{exe} decode -f -o {tmpdir} "{apk_path}"'
+        if verbose:
+            print(f'cmd = {cmd}')
+
+        output2 = tpsup.cmdtools.run_cmd_clean(cmd, **opt)  
+
+        if verbose:
+            print(f'output2 = {output2}')
+
+        mainfest_file = f'{tmpdir}/AndroidManifest.xml'
+        if not os.path.exists(mainfest_file):
+            raise Exception(f'cannot find {mainfest_file}')
+        with open(mainfest_file, 'r') as f:
+            output = f.read()
+    else:
+        raise Exception(f'unsupported method={method}')      
+    
 
     return output
 
@@ -117,33 +165,11 @@ def get_app_manifest(pkg_pattern: str, **opt):
     get manifest file from app
     '''
     set_android_env(**opt)
-    # find package name
-    lines = tpsup.adbtools.adb_find_pkg(pkg_pattern, **opt)
-    if len(lines) == 0:
-        raise Exception(f'no package found for {pkg_pattern}')
-    elif len(lines) > 1:
-        raise Exception(f'multiple packages found for {pkg_pattern}: {lines}')
-    else:
-        pkg = lines[0].split(':')[1]
-
-    print(f'pkg = {pkg}')
-
-    # get package path
-    device_path = tpsup.adbtools.adb_get_pkg_path(pkg, **opt)
-    if not device_path:
-        raise Exception(f'no package path found for {pkg}')
-
-    print(f'pkg path on devie = {device_path}')
-    print("")
-
+    
     # pull the file using adb
-    local_path = tpsup.adbtools.adb_pull(device_path, **opt)
-    print(f'pulled apk file from device to local path = {local_path}')
+    local_path = tpsup.adbtools.adb_pull_pkg(pkg_pattern, **opt)
+    print(f'apk file local path = {local_path}')
     print("")
-
-    # check if path is a file
-    if not os.path.isfile(local_path):
-        raise Exception(f'{local_path} is not a file')
 
     # get manifest file
     manifest = get_apk_manifest(local_path, **opt)
@@ -156,7 +182,12 @@ def main():
     # $ ptappium start_emulator
 
     app='photos'
-    for method in ["apkanalyzer", "aapt"]:
+    for method in [
+            "apkanalyzer", 
+            "aapt",
+            'aapt2',
+            "apktool",
+        ]:
         print()
         print("----------------------------------------------")
         print(f'method = {method}')

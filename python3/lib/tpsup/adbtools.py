@@ -39,8 +39,12 @@ def adb_find_pkg(pattern: str, **opt):
     # get output from command
     output = tpsup.cmdtools.run_cmd_clean(cmd, **opt)
     lines = output.splitlines()
+    pkgs = []
+    for line in lines:
+        if line.startswith('package:'):
+            pkgs.append(line.replace('package:', ''))
 
-    return lines
+    return pkgs
 
 
 def adb_get_pkg_path(pkg: str, **opt):
@@ -58,7 +62,7 @@ def adb_get_pkg_path(pkg: str, **opt):
 
     if verbose:
         print(f'{lines}')
-        
+
     if len(lines) > 1:
         print(f'multiple package path found for {pkg}: we use the first one')
     elif len(lines) == 0:
@@ -75,20 +79,21 @@ def adb_get_pkg_path(pkg: str, **opt):
     return path
 
 
-def adb_pull(path: str, **opt):
+def adb_pull(path: str, dest:str = None, **opt):
     verbose = opt.get('verbose', 0)
     '''
     path can be a single file or dir, but no wild card.
     adb pull /product/app/Gallery2/Gallery2.apk
     '''
 
-    # get basenmae of path
-    path_basename = os.path.basename(path)
-
-    if not (download_dir := opt.get('download_dir', None)):
+    download_dir = opt.get('download_dir', None)
+    if not download_dir:
         download_dir = tpsup.tmptools.get_dailydir()
 
-    dest = f'{download_dir}/{path_basename}'
+    path_basename = os.path.basename(path)        
+
+    download_full_path = f'{download_dir}/{path_basename}'.replace('\\', '/')
+
     if os.path.exists(dest):
         print(f'{dest} already exists. we use it')
         return dest
@@ -109,7 +114,41 @@ def adb_pull(path: str, **opt):
         print(f'cmd = {cmd}')
     os.system(cmd)
 
+    if dest and download_full_path != dest:
+        os.rename(download_full_path, dest)
     return dest
+
+def adb_pull_pkg(pkg_pattern: str, **opt):
+    verbose = opt.get('verbose', 0)
+    '''
+    1. find package name, adb_find_pkg
+    2. get package path, adb_get_pkg_path
+    3. pull the package, adb_pull
+    '''
+    pkgs = adb_find_pkg(pkg_pattern, **opt)
+    if len(pkgs) == 0:
+        raise Exception(f'no package found for {pkg_pattern}')
+    elif len(pkgs) > 1:
+        raise Exception(f'multiple packages matched {pkg_pattern}: {pkgs}')
+    else:
+        pkg = pkgs[0]
+
+    print(f'pkg = {pkg}')
+
+    # get package path
+    device_path = adb_get_pkg_path(pkg, **opt)
+
+    download_dir = opt.get('download_dir', None)
+    if not download_dir:
+        download_dir = tpsup.tmptools.get_dailydir()
+
+    dest = f'{download_dir}/{pkg}.apk'.replace('\\', '/')
+
+    adb_pull(device_path, dest, **opt)
+
+    return dest
+
+
 
 def adb_wait_screen(until: str, 
                     check_interval: int = 5, 
@@ -175,15 +214,14 @@ def main():
     else:
         raise Exception("adb not found. run adroidenv")
 
-    print(f"adb_find_pkg('photos') = {adb_find_pkg('photos')}")
-    print("")
-    print(
-        f"adb_get_pkg_path('com.android.photos') = {adb_get_pkg_path('com.android.gallery')}")
-    print("")
-    print(
-        f"adb_pull('/product/app/Gallery2/Gallery2.apk') = {adb_pull('/product/app/Gallery2/Gallery2.apk')}")
+    pkgs = adb_find_pkg('photos')
+    print(f"pkgs = {pkgs}")
     print("")
 
+    pkg_path = adb_get_pkg_path(pkgs[0])
+    print(f"pkg_path = {pkg_path}")
+
+    adb_pull_pkg('photos')
 
 if __name__ == "__main__":
     main()
