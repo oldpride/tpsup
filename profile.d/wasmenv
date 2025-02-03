@@ -1,0 +1,2 @@
+# we could have linked wasmenv to rustenv but on Windows, sym link doesn't always work.
+rustenv "$@"
