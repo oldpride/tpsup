@@ -1,0 +1,73 @@
+local found DIR usage prog
+
+prog=${FUNCNAME[1]}
+
+usage="
+
+usage:
+
+   $prog check
+   $prog set
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+action=$1
+
+
+# uname2term
+# if [ $UNAMETERM = cygwin ]; then
+#    DIR="/cygdrive/c/Program Files/Microsoft VS Code/bin"
+# elif [ $UNAMETERM = msys ]; then
+#    DIR="/c/Program Files/Microsoft VS Code/bin"
+# elif [ $UNAMETERM = linux ]; then
+#    DIR=/snap/bin
+# elif [ $UNAMETERM = darwin ]; then
+#    DIR="/Applications/Visual Studio Code.app/Contents/Resources/app/bin"   
+# else
+#    echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
+#    return
+# fi
+DIR="$HOME/.deno/bin"
+
+if [ $action = check ]; then
+   echo ""
+   echo "current installations: "
+   /bin/ls -1d "$DIR"/file-server
+
+   # if [[ $UNAME =~ Darwin ]]; then
+   #    echo "Mac uses function code ()"
+   # else
+      echo ""
+      echo "check PATH"
+      which file-server
+   # fi
+elif [ $action = set ]; then
+   # if [[ $UNAME =~ Darwin ]]; then
+   #    # https://stackoverflow.com/questions/30065227/
+   #    echo "defined function code ()"
+   #    code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $* ;}
+   # else
+      export PATH="$PATH:$DIR"
+      reduce PATH
+   # fi
+
+   # codecfgdir () { 
+   #    if [[ $UNAME =~ Darwin|Linux ]]; then
+   #       cd $HOME/.config/Code/User/globalStorage/
+   #    else
+   #       myappdata
+   #       cd Code/User/globalStorage
+   #    fi
+
+   #    ls -l state.vscdb 
+   # }
+else
+   echo "unknown action='$action'"
+   usage
+fi
