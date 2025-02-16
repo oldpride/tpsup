@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# this wrapper is to shorten command line, so that instead of
+#    python grep_cmd.py ...
+# we can type
+#    grep ...
+# to archive this, we could have used symbolic link
+# however: symbolic link doesn't work well on windows, cygwin or gitbash.
+#          therefore, we had to use hard copy. see Makefile in this folder.
+
+# set -x
+
+# use double quotes to enclose path so that path like /c/Program Files/... will be protected
+prog=$(basename "$0")
+dir=$(dirname "$0")
+
+UNAME=$(uname -a)
+
+# associate array of extension to interpreter
+declare -A lang_ext
+ext2intepreter=(
+   ["js"]="deno"
+   ["ts"]="deno"
+   ["py"]="python"
+)
+for ext in js ts py; 
+do
+   file="$dir/${prog}_cmd.$ext"
+
+   if [[ -f "$file" ]]; then
+      interpreter=${ext2intepreter[$ext]}
+
+      if [[ "$UNAME" =~ Cygwin ]]; then
+         file=$(cygpath --windows "$file")
+         $interpreter "$file" "$@"
+      else
+         "file" "$@"
+      fi
+
+      break
+   fi
+done
