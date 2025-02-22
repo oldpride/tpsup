@@ -33,11 +33,11 @@ action=$1
 
 uname2term
 if [ $UNAMETERM = cygwin ]; then
-   BIN_DIRS="/cygdrive/c/Program Files/nodejs:/cygdrive/c/Users/william/AppData/Roaming/npm/node_modules/yarn/bin:/cygdrive/c/Users/william/AppData/Local/Yarn/bin"
-   NPM_DIRS="/cygdrive/c/Program Files/nodejs"
+   BIN_DIRS="/cygdrive/c/tools/nodejs:$HOME/.deno/bin"
+   NPM_DIRS="/cygdrive/c/tools/nodejs:$HOME/.deno/bin"
 elif [ $UNAMETERM = msys ]; then
-   BIN_DIRS="/c/Program Files/nodejs:/c/Users/william/AppData/Roaming/npm/node_modules/yarn/bin:/c/Users/william/AppData/Local/Yarn/bin"
-   NPM_DIRS="/c/Program Files/nodejs"
+   BIN_DIRS="/c/tools/nodejs:$HOME/.deno/bin"
+   NPM_DIRS="/c/tools/nodejs:$HOME/.deno/bin"
 elif [ $UNAMETERM = linux ]; then
    BIN_DIRS=/snap/bin
    NPM_DIRS="/usr/local/lib/node_modules"
@@ -48,22 +48,7 @@ else
    echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
    return
 fi
-# if [[ $UNAME =~ CYGWIN ]]; then
-#    BIN_DIRS="/cygdrive/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
-#    NPM_DIRS="/cygdrive/c/Program Files/nodejs"
-# elif [[ $UNAME =~ MINGW64_NT ]]; then
-#    BIN_DIRS="/c/Program Files/nodejs:$WINHOME/AppData/Roaming/npm/node_modules/yarn/bin:$WINHOME/AppData/Local/Yarn/bin"
-#    NPM_DIRS="/c/Program Files/nodejs"
-# elif [[ $UNAME =~ Linux ]]; then
-#    BIN_DIRS=/snap/bin
-#    NPM_DIRS="/usr/local/lib/node_modules"
-# elif [[ $UNAME =~ Darwin ]]; then
-#    BIN_DIRS="/usr/local/bin"
-#    NPM_DIRS="/usr/local/lib/node_modules"
-# else
-#    echo "unsupported UNAME='$UNAME'"
-#    return
-# fi
+
 
 if [ $action = check ]; then
    echo ""
@@ -82,11 +67,21 @@ if [ $action = check ]; then
 
    echo ""
    echo "check if commands are in PATH"
-   for cmd in node npm yarn npx; do
+   for cmd in node npm deno yarn npx; do
       which $cmd || echo "  $cmd not found"
    done
+
+   echo ""
+   echo "check deno npm folder"
+   if [[ $UNAME =~ Cygwin ]]; then
+      echo "$WINHOME/AppData/Local/deno/npm/registry.npmjs.org"
+   elif [[ $UNAME =~ Msys ]]; then
+      echo "$WINHOME/AppData/Local/deno/npm/registry.npmjs.org"
+   else
+      echo "$prog: TBD for uname=$UNAME"
+   fi
 elif [ $action = set ]; then
-   export PATH="$PATH:node_modules/.bin:$BIN_DIRS"
+   export PATH="$PATH:node_modules/.bin:$BIN_DIRS:$SITESPEC/js/scripts:$TPSUP/js/scripts"
 
    # node_modules/.bin is for local npm installations
    # see https://docs.npmjs.com/cli/v10/using-npm/scripts

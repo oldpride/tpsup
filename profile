@@ -854,6 +854,8 @@ tpps1() { cd "$TPSUP/ps1"; }
 tplib() { cd "$TPSUP/lib/perl/TPSUP"; }
 tpp3() { cd "$TPSUP/python3/scripts"; }
 tpp3lib() { cd "$TPSUP/python3/lib/tpsup"; }
+tpjs() { cd "$TPSUP/js/scripts"; }
+tpjslib() { cd "$TPSUP/js/lib"; }
 
 site() { cd "$SITESPEC/scripts"; }
 sitecmd() { cd "$SITESPEC/bat"; }
@@ -861,6 +863,8 @@ siteps1() { cd "$SITESPEC/ps1"; }
 sitelib() { cd "$SITESPEC/lib/perl/${SPECNAME^^}"; } # ${x,,} lower case, ${x^^} upper case
 sitep3() { cd "$SITESPEC/python3/scripts"; }
 sitep3lib() { cd "$SITESPEC/python3/lib/tpsup"; }
+sitejs() { cd "$SITESPEC/js/scripts"; }
+sitejslib() { cd "$SITESPEC/js/lib"; }
 
 if [ "X$MYBASE" = "X" ]; then
    # inside company,

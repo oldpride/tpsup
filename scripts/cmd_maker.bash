@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# wrap python scripts with bash or batch so that we can run them in any environment
+# wrap python/js/ts scripts with bash or batch so that we can run them in any environment
+# 
 
 prog=$(basename $0)
 

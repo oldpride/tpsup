@@ -1,9 +1,14 @@
 #!/bin/bash
 
+# wrapper script 
+# the original script is tpsup/scripts/cmd_generic.bash.
+# tpsup/scripts/cmd_maker.bash will copy tpsup/scripts/cmd_generic.bash to target's directory
+# and rename it to <target>
+
 # this wrapper is to shorten command line, so that instead of
-#    python grep_cmd.py ...
+#    python ptgrep_cmd.py ...
 # we can type
-#    grep ...
+#    ptgrep ...
 # to archive this, we could have used symbolic link
 # however: symbolic link doesn't work well on windows, cygwin or gitbash.
 #          therefore, we had to use hard copy. see Makefile in this folder.
@@ -17,12 +22,13 @@ dir=$(dirname "$0")
 UNAME=$(uname -a)
 
 # associate array of extension to interpreter
-declare -A lang_ext
+declare -A ext2intepreter
 ext2intepreter=(
-   ["js"]="deno"
-   ["ts"]="deno"
-   ["py"]="python"
+   [js]="node"
+   [ts]="deno"
+   [py]="python3"
 )
+
 for ext in js ts py; 
 do
    file="$dir/${prog}_cmd.$ext"
@@ -32,7 +38,11 @@ do
 
       if [[ "$UNAME" =~ Cygwin ]]; then
          file=$(cygpath --windows "$file")
-         $interpreter "$file" "$@"
+         if [[ "$interpreter" == "deno" ]]; then
+            deno run --allow-all "$file" "$@"
+         else
+            $interpreter "$file" "$@"
+         fi
       else
          "file" "$@"
       fi
