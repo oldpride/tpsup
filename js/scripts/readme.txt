@@ -5,3 +5,7 @@ vscode cannot resolve some path, eg, Deno. ...
         {
             "deno.enable": true
         }
+-----------------------------------------------
+nodejs popular modules
+   https://github.com/sindresorhus/awesome-nodejs
+

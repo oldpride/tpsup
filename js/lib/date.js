@@ -1,7 +1,14 @@
+// cache
+let Formatter_by_format = {};
+
 // genarate a function that returns a template string
-function getDateFunction(format, opt) {
+function getDateFormatter(format, opt) {
     if (!format) {
         format = '${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}';
+    }
+
+    if (format in Formatter_by_format) {
+        return Formatter_by_format[format];
     }
     
     let code = `
@@ -25,10 +32,13 @@ function getDateFunction(format, opt) {
     }
 
     let f = new Function('userDate', code);
+
+    Formatter_by_format[format] = f;
+    
     return f;
 }
 
-export { getDateFunction };
+export { getDateFormatter };
 
 // if this script is called directly, then run below
 // if (require.main === module) { // this does not work in es6 module
@@ -48,7 +58,7 @@ if (process.argv[1] === import.meta.filename) {
     'use strict';
 
     for (let line of formats) {
-        let f2 = getDateFunction(line);
+        let f2 = getDateFormatter(line);
         for (let date of dates) {
             let d = f2(date);
             console.log(`format=${line}, date=${date}, result=${d}`);

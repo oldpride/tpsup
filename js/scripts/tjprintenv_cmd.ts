@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env --allow-sys
+#!/usr/bin/env -S deno run --allow-env --allow-all
 
 // https://docs.deno.com/examples/hashbang_tutorial/
 // chmod +x printenv.ts

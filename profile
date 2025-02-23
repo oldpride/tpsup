@@ -434,6 +434,8 @@ else
    echo "UNAME='$UNAME' is not supported"
 fi
 
+export TPJSLIB=$TPSUP/js/lib
+
 freshenv() {
    local VAR
    for VAR in MANPATH PERL5LIB LD_LOAD_PATH LD_LIBRARY_PATH PYTHONPATH; do
@@ -609,7 +611,7 @@ chome() {
 
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    export PERL5LIB="$TPSUP/lib/perl:$PERL5LIB"
-   PATH="$TPSUP/scripts:$PATH"
+   PATH="$TPSUP/scripts:$TPSUP/js/scripts:$PATH"
 else
    export PERL5LIB="$PERL5LIB:$TPSUP/lib/perl"
    PATH="$TPSUP/autopath:$PATH"
