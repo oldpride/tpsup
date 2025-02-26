@@ -75,15 +75,21 @@ echo "remote_commit=$remote_commit"
 echo ""
 
 # diff the two commits
-cmd="git diff $remote_commit $local_commit --name-only"
+cmd="git diff --name-only --diff-filter=A $remote_commit $local_commit"
 [ $verbose = Y ] && echo $cmd
-output=$($cmd)
+output=$($cmd | sort)
 
 [ $verbose = Y ] && echo "$output"
 echo ""
 
+cmd="git rev-parse --show-toplevel"
+[ $verbose = Y ] && echo $cmd
+top_level=`$cmd`
+echo "top_level=$top_level"
+echo ""
+
 tmpfile=$(get_tmp /tmp $prog)
-echo "$output" |sed -e 's:^:tptouch :' > $tmpfile
+echo "$output" |sed -e "s%^%tptouch $top_level/%" > $tmpfile
 echo "-------------------------------------------------------"
 cat $tmpfile
 echo "-------------------------------------------------------"
