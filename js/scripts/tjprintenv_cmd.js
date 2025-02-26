@@ -7,14 +7,20 @@
 // const path = Deno.env.get("PATH");
 
 // take a command argument. if no command is given, print all environment variables
-const args = Deno.args;
-if (args.length === 0) {
-    for (const [key, value] of Object.entries(Deno.env.toObject())) {
-        console.log(`${key}=${value}`);
+const args = process.argv;
+
+// process.argv[0] is the path to the deno executable
+// process.argv[1] is the path to the script
+console.log(`args=${args}`);
+
+if (args.length === 1) {
+    // print all environment variables
+    for (let key in process.env) {
+        console.log(`${key}=${process.env[key]}`);
     }
 } else {
     // if the command is not found, print an error message
-    const key = args[0];
-    const value = Deno.env.get(key);
+    const key = args[2];
+    const value = process.env[key];
     console.log(`${key}=${value}`);
 }

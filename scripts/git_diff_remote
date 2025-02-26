@@ -1,0 +1,82 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+usage() {
+   cat <<EOF
+usage:
+
+   $prog dir
+
+   compare remote repo with local repo
+
+   -v verbose
+
+EOF
+
+   exit 1
+}
+
+verbose=N
+
+while getopts v o; do
+   case "$o" in
+   # d) depot_dir="$OPTARG" ;;
+   # s) site_dir="$OPTARG" ;;
+   v) verbose=Y ;;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+dir=$1
+
+cd $dir || exit 1
+
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+
+# fetch the latest from remote
+cmd="git fetch"
+[ $verbose = Y ] && echo $cmd
+$cmd
+echo ""
+
+# both works
+cmd="git rev-parse HEAD"
+# cmd="git log |grep ^commit |head -n 1|awk '{print \$2}'"
+[ $verbose = Y ] && echo $cmd
+local_commit=$($cmd)
+echo "local_commit=$local_commit"
+echo ""
+
+# get remote commit
+cmd="git ls-remote origin HEAD | cut -f1"
+[ $verbose = Y ] && echo $cmd
+remote_commit=$($cmd)
+echo "remote_commit=$remote_commit
+echo ""
+
+# diff the two commits
+cmd="git diff $remote_commit $local_commit --name-only"
+[ $verbose = Y ] && echo $cmd
+output=$($cmd)
+
+[ $verbose = Y ] && echo "$output"
+echo ""
+
+tmpfile=$(get_tmp /tmp $prog)
+echo "$output" > $tmpfile
+echo "-------------------------------------------------------"
+cat $tmpfile
+echo "-------------------------------------------------------"
+echo tmpfile=$tmpfile
