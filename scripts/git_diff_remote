@@ -63,7 +63,7 @@ echo ""
 cmd="git ls-remote origin HEAD | cut -f1"
 [ $verbose = Y ] && echo $cmd
 remote_commit=$($cmd)
-echo "remote_commit=$remote_commit
+echo "remote_commit=$remote_commit"
 echo ""
 
 # diff the two commits
