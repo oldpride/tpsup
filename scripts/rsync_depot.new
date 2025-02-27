@@ -77,18 +77,6 @@ cd $depot_dir/tpsup || exit 1
 unset LD_LIBRARY_PATH
 echo "unset LD_LIBRARY_PATH"
 
-if [ $local_only = N ]; then
-   # (
-   #    set -x
-   #    git_diff_remote -v .
-   # )
-   (
-      set -x
-      gitpull
-   ) # gitpull is a wrapper of "git pull"
-fi
-echo ""
-
 if [ $action = check -o $action = diff -o $action = sync ]; then
    if [ $# -ne 1 ]; then
       echo "wrong number of args"
@@ -101,16 +89,28 @@ if [ $action = check -o $action = diff -o $action = sync ]; then
       dryrun_flag="-n"
    fi
 
+   if [ $local_only = N ]; then
+      # (
+      #    set -x
+      #    git_diff_remote -v .
+      # )
+      (
+         set -x
+         gitpull
+      ) # gitpull is a wrapper of "git pull"
+   fi
+   echo ""
+
    # -a                   archive mode, equals -rlptgoD
-# --delete             delete files not in source side. we didn't use this for safety.
-# --existing --ignore-non-existing
-#                      only to update existing files. we don't want to bring in too many files.
-# --ignore-existing    skip updating files that already exist in destination.
-# --exclude='*[.]site' to skips site-specific files
-# --exclude='[.]git*'  to skip .git/ and .gitignore
-# -i                   to print item to be changed, ie, --itemize-changes
-# --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
-# [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
+   # --delete             delete files not in source side. we didn't use this for safety.
+   # --existing --ignore-non-existing
+   #                      only to update existing files. we don't want to bring in too many files.
+   # --ignore-existing    skip updating files that already exist in destination.
+   # --exclude='*[.]site' to skips site-specific files
+   # --exclude='[.]git*'  to skip .git/ and .gitignore
+   # -i                   to print item to be changed, ie, --itemize-changes
+   # --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
+   # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
 
    files=$( (
       set -x
