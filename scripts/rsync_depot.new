@@ -13,13 +13,13 @@ usage:
    $prog diff              # check and then diff
    $prog sync              # "git pull" and "rsync"
    $prog add  pattern [y]  # add missing files to "mytp". no "git pull" nor "rsync"
+   $prog del  pattern [y]  # delete files in "mytp" that are not in "local depot"
 
    remote repo   ------------> local depot  ------------>  mytp
                  git pull                    rsync
 
    "git pull" from github to local depot.
    "rsync" from local depot to "mytp".
-
 
    "rsync" will only update existing files. 
       It will not delete files in "mytp" that are not in "local depot".
@@ -131,44 +131,65 @@ if [ $action = check -o $action = diff -o $action = sync ]; then
       done
    fi
 
-elif [ $action = add ]; then
+elif [ $action = add -o $action = del -o $action = delete ]; then
    if [ $# -ne 2 -a $# -ne 3 ]; then
       echo "wrong number of args"
       usage
    fi
 
    pattern=$2
-   really_add=N
+   really_do=N
 
    if [ $# -eq 3 ]; then
       # the 3rd arg is "yes" or "y", case insensitive
       if [[ $3 =~ ^[yY]([eE][sS])*$ ]]; then
-         really_add=Y
+         really_do=Y
       else
          echo "unknown arg '$3'"
          usage
       fi
    fi
 
-   files=$( (
-      set -x
-      #dryrun to get the list of files to be added
-      rsync -n -a -i --ignore_existing --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
-   ))
+   if [ $action = add ]; then
+      files=$( (
+         set -x
+         #dryrun to get the list of files to be added
+         rsync -n -a -i --ignore-existing --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
+      ))
 
-   echo "$files" | egrep -v '/$'|while read f; 
-   do
-      if [[ $f =~ $pattern ]]; then
-         # only touch the file if it doesn't exist
-         cmd="tptouch $site_dir/$f"
-         echo cmd=$cmd
-         if [ $really_add = Y ]; then
-            $cmd
-         else
-      fi
-   done
-   if [ $really_add = N ]; then
-      echo "dryrun only. use '$prog add $pattern yes' to really add the files"
+      echo "$files" | egrep -v '/$'|while read f; 
+      do
+         if [[ $f =~ $pattern ]]; then
+            # only touch the file if it doesn't exist
+            cmd="tptouch $site_dir/$f"
+            echo $cmd
+            if [ $really_do = Y ]; then
+               $cmd
+            fi
+         fi
+      done
+   elif [ $action = del -o $action = delete ]; then
+      files=$( (
+         set -x
+         #dryrun to get the list of files to be added
+         rsync -n -a -i --existing --delete --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
+      ))
+
+      echo "$files" | egrep -v '/$'|while read f; 
+      do
+         if [[ $f =~ $pattern ]]; then
+            # only remove the file, not the dir
+            cmd="/bin/rm -f $site_dir/$f"
+            echo $cmd
+            if [ $really_do = Y ]; then
+               $cmd
+            fi
+         fi
+      done
+   fi
+
+   if [ $really_do = N ]; then
+      echo "dryrun only. use '$prog $action $pattern yes' to really do."
    fi
 else
    echo "unknown action='$action'"
