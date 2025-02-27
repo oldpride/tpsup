@@ -1,5 +1,7 @@
 #!/bin/bash
 
+prog=$(basename $0)
+
 depot_dir=$MYBASE/depot
 site_dir=$MYBASE/github
 
@@ -7,12 +9,21 @@ usage() {
    cat <<EOF
 usage:
 
+   $prog check             # check only. "git pull" but not "rsync".
+   $prog diff              # check and then diff
+   $prog sync              # "git pull" and "rsync"
+   $prog add  pattern [y]  # add missing files to "mytp". no "git pull" nor "rsync"
+
+   remote repo   ------------> local depot  ------------>  mytp
+                 git pull                    rsync
+
    "git pull" from github to local depot.
    "rsync" from local depot to "mytp".
 
-   $0 check         # check only. "git pull" but not "rsync".
-   $0 diff          # check and then diff
-   $0 sync          # "git pull" and "rsync"
+
+   "rsync" will only update existing files. 
+      It will not delete files in "mytp" that are not in "local depot".
+      neither will it bring in new files from "local depot" to "mytp".
 
    -d depot_dir     where you should see <depot_dir>/tpsup. 
                     default to $depot_dir. 
@@ -21,9 +32,16 @@ usage:
    -s site_dir      where you should see  <site_dir>/tpsup.
                     dfault to $site_dir
 
-   -m pattern       only apply to missing files that match this pattern
-
    -l               rsync from depot to "mytp", without "git pull"
+
+examples:
+
+   $prog check
+   $prog diff
+   $prog sync
+   $prog -l sync          # not "git pull", only rsync
+   $prog add  tptrace
+   $prog add  tptrace yes
 
 EOF
 
@@ -31,13 +49,11 @@ EOF
 }
 
 local_only=N
-missing_pattern=""
 
 while getopts s:d:l o; do
    case "$o" in
    d) depot_dir="$OPTARG" ;;
    s) site_dir="$OPTARG" ;;
-   m) missing_pattern="$OPTARG" ;;
    l) local_only=Y ;;
    *)
       echo "unknow switch '$o'"
@@ -48,7 +64,7 @@ done
 
 shift $((OPTIND - 1))
 
-if [ $# -ne 1 ]; then
+if [ $# -eq 0 ]; then
    echo "wrong number of args"
    usage
 fi
@@ -62,10 +78,10 @@ unset LD_LIBRARY_PATH
 echo "unset LD_LIBRARY_PATH"
 
 if [ $local_only = N ]; then
-   (
-      set -x
-      git_diff_remote -v .
-   )
+   # (
+   #    set -x
+   #    git_diff_remote -v .
+   # )
    (
       set -x
       gitpull
@@ -73,16 +89,19 @@ if [ $local_only = N ]; then
 fi
 echo ""
 
-if [ $action = check -o $action = diff ]; then
-   dryrun_flag="-n"
-elif [ $action = sync ]; then
-   dryrun_flag=""
-else
-   echo "unknown action='$action'"
-   usage
-fi
+if [ $action = check -o $action = diff -o $action = sync ]; then
+   if [ $# -ne 1 ]; then
+      echo "wrong number of args"
+      usage
+   fi
 
-# -a                   archive mode, equals -rlptgoD
+   if [ $action = sync ]; then
+      dryrun_flag=""
+   else
+      dryrun_flag="-n"
+   fi
+
+   # -a                   archive mode, equals -rlptgoD
 # --delete             delete files not in source side. we didn't use this for safety.
 # --existing --ignore-non-existing
 #                      only to update existing files. we don't want to bring in too many files.
@@ -93,7 +112,6 @@ fi
 # --out-format="%n%L"  to print out the relative path, only for -i, same as used in -v
 # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
 
-if [ "X$missing_pattern" = "X" ]; then
    files=$( (
       set -x
       rsync $dryrun_flag -a -i --existing --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
@@ -112,17 +130,47 @@ if [ "X$missing_pattern" = "X" ]; then
          )
       done
    fi
-else
-   dryrun_flag="-n"
+
+elif [ $action = add ]; then
+   if [ $# -ne 2 -a $# -ne 3 ]; then
+      echo "wrong number of args"
+      usage
+   fi
+
+   pattern=$2
+   really_add=N
+
+   if [ $# -eq 3 ]; then
+      # the 3rd arg is "yes" or "y", case insensitive
+      if [[ $3 =~ ^[yY]([eE][sS])*$ ]]; then
+         really_add=Y
+      else
+         echo "unknown arg '$3'"
+         usage
+      fi
+   fi
+
    files=$( (
       set -x
-      rsync $dryrun_flag -a -i --ignore_existing --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
+      #dryrun to get the list of files to be added
+      rsync -n -a -i --ignore_existing --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
    ))
 
-   for f in $(echo "$files" | egrep -v '/$'); 
+   echo "$files" | egrep -v '/$'|while read f; 
    do
-      if [[ "$f" =~ "$missing_pattern" ]]; then
-         echo $f
-      fi    
+      if [[ $f =~ $pattern ]]; then
+         # only touch the file if it doesn't exist
+         cmd="tptouch $site_dir/$f"
+         echo cmd=$cmd
+         if [ $really_add = Y ]; then
+            $cmd
+         else
+      fi
    done
+   if [ $really_add = N ]; then
+      echo "dryrun only. use '$prog add $pattern yes' to really add the files"
+   fi
+else
+   echo "unknown action='$action'"
+   usage
 fi
