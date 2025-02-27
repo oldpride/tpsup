@@ -172,7 +172,11 @@ elif [ $action = add -o $action = del -o $action = delete ]; then
       files=$( (
          set -x
          #dryrun to get the list of files to be added
-         rsync -n -a -i --existing --delete --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' --out-format="%n%L" $depot_dir/tpsup $site_dir/
+         rsync -n -a -i --delete \
+            --exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' \
+            --exclude='[.]idea' --exclude=__pycache__ --exclude='*[.]site' \
+            --out-format="%n%L" $depot_dir/tpsup $site_dir/ \
+            |grep ^deleting |awk '{print $2}'
       ))
 
       echo "$files" | egrep -v '/$'|while read f; 
@@ -189,7 +193,9 @@ elif [ $action = add -o $action = del -o $action = delete ]; then
    fi
 
    if [ $really_do = N ]; then
+      echo ""
       echo "dryrun only. use '$prog $action $pattern yes' to really do."
+      echo ""
    fi
 else
    echo "unknown action='$action'"
