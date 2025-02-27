@@ -121,7 +121,7 @@ else
 
    for f in $(echo "$files" | egrep -v '/$'); 
    do
-      if [[ "$f" ~ "$missing_pattern" ]]; then
+      if [[ "$f" =~ "$missing_pattern" ]]; then
          echo $f
       fi    
    done
