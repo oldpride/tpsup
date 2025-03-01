@@ -1,10 +1,14 @@
 // cache
 let Formatter_by_format = {};
+let timezoneOffsetMinutes = (new Date()).getTimezoneOffset();
+let timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+let defaultFormat = '${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}.${ms}';
+let availVars = ['yyyy', 'mm', 'dd', 'HH', 'MM', 'SS', 'ms', 'tzName', 'tzMinute'];
 
 // genarate a function that returns a template string
 function getDateFormatter(format, opt) {
     if (!format) {
-        format = '${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}';
+        format = defaultFormat;
     }
 
     if (format in Formatter_by_format) {
@@ -24,7 +28,11 @@ function getDateFormatter(format, opt) {
     const dd = String(now.getDate()).padStart(2, "0"); 
     const HH = String(now.getHours()).padStart(2, "0"); 
     const MM = String(now.getMinutes()).padStart(2, "0"); 
-    const SS = String(now.getSeconds()).padStart(2, "0"); 
+    const SS = String(now.getSeconds()).padStart(2, "0");
+    const ms = String(now.getMilliseconds()).padStart(3, "0");
+    const tzName = "${timezoneName}";
+    const tzMinute = ${timezoneOffsetMinutes};
+    
     return ` + '`' + format + '`';
 
     if (opt && 'debug' in opt && opt.debug) {
@@ -38,7 +46,20 @@ function getDateFormatter(format, opt) {
     return f;
 }
 
-export { getDateFormatter };
+function getTimestamp(opt) {
+    let format = null;
+    if (opt && 'formart' in opt) {
+        format = opt['format']
+    }
+    let formatter = getDateFormatter(format, opt);
+
+    return formatter();
+}
+
+export {
+    getDateFormatter, getTimestamp, defaultFormat,
+    timezoneOffsetMinutes, timezoneName, availVars,
+ };
 
 // if this script is called directly, then run below
 // if (require.main === module) { // this does not work in es6 module

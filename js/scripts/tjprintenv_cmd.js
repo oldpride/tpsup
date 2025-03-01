@@ -15,9 +15,8 @@ console.log(`args=${args}`);
 
 if (args.length === 1) {
     // print all environment variables
-    for (let key in process.env) {
-        console.log(`${key}=${process.env[key]}`);
-    }
+    
+    
 } else {
     // if the command is not found, print an error message
     const key = args[2];

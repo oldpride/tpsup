@@ -12,7 +12,7 @@ if (!TPJSLIB) {
     process.exit(1);
 }
 TPJSLIB = TPJSLIB.replace('/cygdrive/c/', 'c:/');
-const date = await import(`file:${TPJSLIB}/date.js`);
+const datetools = await import(`file:${TPJSLIB}/datetools.js`);
 
 // get the current program name
 const program = process.argv[1];
@@ -37,8 +37,12 @@ usage
 
     -v|--verbose     verbose mode
     format           date format, such as '\${yyyy}-\${mm}-\${dd} \${HH}:\${MM}:\${SS}'
-
+                     'default' = ${datetools.defaultFormat}
+                     available variables: ${datetools.availVars.join(', ')}
 example:
+    - use default
+    ${prog} default
+
     - for bash, use single quote
     ${prog} '\${yyyy}-\${mm}-\${dd} \${HH}:\${MM}:\${SS}'
 
@@ -76,6 +80,10 @@ if (positionals.length != 1) {
 }
 
 let format = positionals[0];
-let formatter = date.getDateFormatter(format);
+if (format == 'default') {
+    format = null;
+    console.log(`using default format: ${datetools.defaultFormat}`);
+}
+let formatter = datetools.getDateFormatter(format);
 let dateString = formatter();
 console.log(dateString);

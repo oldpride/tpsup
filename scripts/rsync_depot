@@ -10,16 +10,17 @@ usage() {
 usage:
 
    $prog check             # check only. "git pull" but not "rsync".
-   $prog diff              # check and then diff
-   $prog sync              # "git pull" and "rsync"
+   $prog diff              # check and then diff in detail
+   $prog       sync        # "git pull" and "rsync"
+   $prog -l    sync        # "rsync" only, no "git pull"
    $prog add  pattern [y]  # add missing files to "mytp". no "git pull" nor "rsync"
    $prog del  pattern [y]  # delete files in "mytp" that are not in "local depot"
 
    remote repo   ------------> local depot  ------------>  mytp
                  git pull                    rsync
 
-   "git pull" from github to local depot.
-   "rsync" from local depot to "mytp".
+   "git pull": from github to local depot.
+   "rsync":    from local depot to "mytp".
 
    "rsync" will only update existing files. 
       It will not delete files in "mytp" that are not in "local depot".
@@ -38,10 +39,13 @@ examples:
 
    $prog check
    $prog diff
-   $prog sync
+   $prog    sync
    $prog -l sync          # not "git pull", only rsync
-   $prog add  tptrace
-   $prog add  tptrace yes
+   $prog add  test_db
+   $prog add  test_db yes
+   $prog del  test_db
+   $prog del  test_db yes
+
 
 EOF
 
