@@ -21,7 +21,11 @@ function test_1_line(line, opt) {
     return result;
 }
 
-function test_lines(test_codes, opt) {
+let module = null;
+async function test_lines(test_codes, url, opt) {
+    // we make mdoule global because eval() sometimes only works with global variables.
+    module = await import(url);
+
     // 'use strict';
     let verbose = opt && 'verbose' in opt && opt.verbose;
     let lines = test_codes.toString().split('\r\n'); // ^M
@@ -55,12 +59,11 @@ function test_lines(test_codes, opt) {
         }
 
         let r = test_1_line(line, opt);
-        console.log(`${line}, result=${r}\n`);
+        console.log(`test=${line}\nresult=${r}\n`);
     }
 }
 
-export { test_lines };
-
+export { test_lines};
 
 
 if (process.argv[1] === import.meta.filename) {
@@ -73,4 +76,4 @@ if (process.argv[1] === import.meta.filename) {
 
     }
     test_lines(test_codes, { verbose: true });
-}
+} 
