@@ -4,15 +4,15 @@ import { basename, dirname} from 'node:path';
 // https://2ality.com/2022/08/node-util-parseargs.html
 import { parseArgs } from 'node:util';
 
-// import { getDateFormatter } from '../lib/date.js';
-// import * as date from '../lib/tpsup/date.js';
-let TPJSLIB = process.env.TPJSLIB;
-if (!TPJSLIB) {
-    console.error("TPJSLIB is not defined");
-    process.exit(1);
-}
-TPJSLIB = TPJSLIB.replace('/cygdrive/c/', 'c:/');
-const datetools = await import(`file:${TPJSLIB}/datetools.js`);
+// // import { getDateFormatter } from '../lib/date.js';
+// // import * as date from '../lib/tpsup/date.js';
+// let TPJSLIB = process.env.TPJSLIB;
+// if (!TPJSLIB) {
+//     console.error("TPJSLIB is not defined");
+//     process.exit(1);
+// }
+// TPJSLIB = TPJSLIB.replace('/cygdrive/c/', 'c:/');
+// const datetools = await import(`file:${TPJSLIB}/datetools.js`);
 
 // get the current program name
 const program = process.argv[1];
