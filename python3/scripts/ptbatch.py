@@ -123,9 +123,15 @@ verbose = 0
 
 if args[0] == '-v':
     verbose = verbose + 1
-    args = args[1:]  # shift away -v
+    print(f'verbose = {verbose}')
+    print(f'before args = {args}')
+    # shift away -v
+    args = args[1:]
     if len(args) == 0:
         usage("missing args", caller=f'{prog} config.py', verbose=verbose)
+
+if verbose:
+    print(f'args = {args}')
 
 all_cfg = parse_cfg(args[0])
 all_cfg['cfg_file'] = args[0]

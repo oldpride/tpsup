@@ -147,17 +147,20 @@ sub parse_cfg {
       }
    }
 
+   # $verbose = 1;
+   # $opt->{verbose} = $verbose;
+
    my $parse_hash_cfg_sub = \&parse_hash_cfg;
 
    my $package = $our_cfg->{package};
    if ($package) {
+      $verbose && print "require $package\n";
+      
       eval "require $package";
       if ($@) {
          croak "ERROR in: require $package: $@\n";
          return;
-      } else {
-         $verbose && print "require $package\n";
-      }
+      } 
 
       # https://stackoverflow.com/questions/25486449/check-if-subroutine-exists-in-perl
       my $package_sub = $package . "::tpbatch_parse_hash_cfg";
@@ -166,6 +169,8 @@ sub parse_cfg {
          $parse_hash_cfg_sub = \&$package_sub;
       }
    }
+
+   # print("our_cfg = ", Dumper($our_cfg));
 
    $our_cfg = $parse_hash_cfg_sub->( $our_cfg, $opt );
 

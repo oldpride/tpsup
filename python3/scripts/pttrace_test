@@ -32,12 +32,18 @@ done
 
 type=$seen_type
 
+# check whether it is running in versbose. we will pass it to ptbatch
+verbose=""
+if [ "X$1" = "X-v" ]; then
+   verbose="-v"
+fi
+
 if [[ "$UNAME" =~ Cygwin ]]; then
    cfg=$(cygpath --windows "$dir/${prog}_cfg_${type}.py")
    cmd=$(which pt${type}.py)
    cmd=$(cygpath --windows "$cmd")
-   python "$cmd" "$cfg" -c $prog "$@"
+   python "$cmd" $verbose "$cfg" -c $prog "$@"
 else
    cfg="$dir/${prog}_cfg_${type}.py"
-   pt${type}.py "$cfg" -c $prog "$@"
+   pt${type}.py $verbose "$cfg" -c $prog "$@"
 fi

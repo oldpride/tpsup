@@ -307,6 +307,7 @@ sub tpbatch_parse_hash_cfg {
 
          for my $op ( sort ( keys %{ $base_cfg->{op} } ) ) {
             my $cfg = $base_cfg->{op}->{$op};
+            $cfg->{meta} = $hash_cfg->{meta};   # push down meta to lower level
             $example .= "   {{prog}} $base $op";
 
             my $num_args = $cfg->{num_args} ? $cfg->{num_args} : 0;
@@ -348,6 +349,11 @@ sub tpbatch_parse_hash_cfg {
             #    sub_ui : app1/swagger-ui
 
             my $sub_url = $cfg->{sub_url};
+
+            my $method = $cfg->{method} || 'GET';
+            my $login = get_entry_by_method_suburl( $cfg, $hash_cfg, $opt );
+            $example .= "      method: $method\n";
+            $example .= "      login: $login\n";
 
             my $sub_ui;    # web user interface for manual operation
             if ( $cfg->{sub_ui} ) {
@@ -517,9 +523,11 @@ sub get_entry_by_method_suburl {
    my $entry_decide_file;    # this is not the password file. this is the file to decide which entry to use
    if ( $cfg->{entry_decide_file} ) {
       $entry_decide_file = $cfg->{entry_decide_file};
+      croak "\$entry_decide_file is blank of not defined" if !$entry_decide_file;
    } else {
       $entry_decide_file = $cfg->{meta}->{cfg_abs_path};
       $entry_decide_file =~ s/_cfg_batch.pl/_pattern.cfg/;
+      croak "\$entry_decide_file is blank or not defined" if !$entry_decide_file;
    }
    my $pattern_file = $entry_decide_file;
    my $pattern_cfg  = parse_login_by_method_pattern_file( $pattern_file, $opt );

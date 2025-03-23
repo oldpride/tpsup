@@ -32,12 +32,18 @@ done
 
 type=$seen_type
 
+# check whether it is running in versbose. we will pass it to tpbatch
+verbose=""
+if [ "X$0" = "X-v" ]; then
+   verbose="-v"
+fi
+
 if [[ "$UNAME" =~ Cygwin ]]; then
    cfg=$(cygpath --windows "$dir/${prog}_cfg_${type}.pl")
    cmd=$(which tp${type})
    cmd=$(cygpath --windows "$cmd")
-   perl "$cmd" "$cfg" -c $prog "$@"
+   perl "$cmd" $verbose "$cfg" -c $prog "$@"
 else
    cfg="$dir/${prog}_cfg_${type}.pl"
-   tp${type} "$cfg" -c $prog "$@"
+   tp${type} $verbose "$cfg" -c $prog "$@"
 fi

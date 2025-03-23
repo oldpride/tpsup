@@ -15,7 +15,7 @@ usage() {
    cat >&2 <<END
 usage:
 
-   $prog bash|bat|taskbash|taskbat
+   $prog bash|bat
    $prog all
    
    'all' covers: $all_targets.

@@ -87,7 +87,7 @@ our $our_cfg = {
                test_str  => [ '{"hello world"}', 'abc' ],  # two tests here
             },
             myop1_2 => {
-                num_args  => 1,
+               num_args  => 1,
                sub_url   => 'app1/api/run_myop1_2',
                json      => 1,
                method    => 'POST',
@@ -141,10 +141,3 @@ our $our_cfg = {
       },
    },
 };
-
-
-
-
-
-
-
