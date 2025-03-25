@@ -68,6 +68,38 @@ $@
    $func->();    # run-time error happens here
 }
 
+sub get_entry_by_cfg {
+   my ( $cfg, $base_url, $dict, $opt ) = @_;
+
+   print "cfg=", Dumper($cfg);
+
+   #  entry     => 'swagger-tian',
+   # entry_func => \&TPSUP::SWAGGER::get_swagger_entry,
+   # entry_func overrides entry. entry_func is a subroutine reference.
+
+   my $entry      = $cfg->{entry};
+   my $entry_type = ref($entry);
+   my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
+
+   my $entry_name;
+   if ( !$entry_type ) {
+      $entry_name = $entry;
+   } elsif ( $entry_type eq 'CODE' ) {
+      $entry_name = $entry->(
+         {
+            %$cfg,
+            base_url => $base_url,    # add base_url to cfg, so that the entry function can use it
+         },
+         $dict,
+         $opt
+      );
+   } else {
+      croak "unsupported entry type: $entry_type";
+   }
+
+   return $entry_name;
+}
+
 sub swagger {
    my ( $cfg, $args, $opt ) = @_;
 
@@ -133,26 +165,10 @@ sub swagger {
       # entry_func => \&TPSUP::SWAGGER::get_swagger_entry,
       # entry_func overrides entry. entry_func is a subroutine reference.
 
-      my $entry      = $cfg->{entry};
-      my $entry_type = ref($entry);
+      my $entry_name = get_entry_by_cfg( $cfg, $base_url, $dict, $opt );
+
       my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
       my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
-
-      my $entry_name;
-      if ( !$entry_type ) {
-         $entry_name = $entry;
-      } elsif ( $entry_type eq 'CODE' ) {
-         $entry_name = $entry->(
-            {
-               %$cfg,
-               base_url => $base_url,    # add base_url to cfg, so that the entry function can use it
-            },
-            $dict,
-            $opt
-         );
-      } else {
-         croak "unsupported entry type: $entry_type";
-      }
 
       # there are two places mentioning json
       #    --header 'Content-Type: application/json'
@@ -306,8 +322,12 @@ sub tpbatch_parse_hash_cfg {
          my $base_cfg = $hash_cfg->{cfg}->{$base};
 
          for my $op ( sort ( keys %{ $base_cfg->{op} } ) ) {
-            my $cfg = $base_cfg->{op}->{$op};
-            $cfg->{meta} = $hash_cfg->{meta};   # push down meta to lower level
+            my $cfg = $base_cfg->{op}->{$op};  
+            # push down meta to lower level
+            my @upper_keys = qw(base_urls entry entry_func);
+            @{$cfg}{@upper_keys} = @{ $hash_cfg->{cfg}->{$base} }{@upper_keys};
+            $cfg->{op}   = $op;
+            $cfg->{meta} = $hash_cfg->{meta};
             $example .= "   {{prog}} $base $op";
 
             my $num_args = $cfg->{num_args} ? $cfg->{num_args} : 0;
@@ -351,10 +371,8 @@ sub tpbatch_parse_hash_cfg {
             my $sub_url = $cfg->{sub_url};
 
             my $method = $cfg->{method} || 'GET';
-            my $login = get_entry_by_method_suburl( $cfg, $hash_cfg, $opt );
             $example .= "      method: $method\n";
-            $example .= "      login: $login\n";
-
+            
             my $sub_ui;    # web user interface for manual operation
             if ( $cfg->{sub_ui} ) {
                $sub_ui = $cfg->{sub_ui};
@@ -366,6 +384,12 @@ sub tpbatch_parse_hash_cfg {
             }
 
             for my $base_url ( @{ $base_cfg->{base_urls} } ) {
+               my $login = get_entry_by_cfg( $cfg, $base_url, {}, $opt );
+               if ( $login ) {
+                  $example .= "      entry: $login\n";
+               } else {
+                  $example .= "      entry: none\n";
+               }
                $example .= "        curl: $base_url/$sub_url\n";
             }
 
