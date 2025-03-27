@@ -92,6 +92,7 @@ class Crawler:
                  download_favicon: bool = True,
                  humanlike: bool = True,
                  ignoreHttpError: bool = False,
+                 matchPattern: str = None,
                  **opt):
         # trim the ending '/' so that we can add it back later
         self.start_url = start_url.rstrip('/')
@@ -139,6 +140,8 @@ class Crawler:
             'default': paths,
         }
 
+        self.matchPattern = matchPattern
+
     def get_local_relative_path(self, url: str):
         # map http://example.com/abc/def to abc/def
         # map https://test.abc.com/~johnsmith/cs101/slides/01-course_intro.html#1
@@ -169,7 +172,7 @@ class Crawler:
 
                     # ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS_HTML&delayStartupUntil=configured
                     # change weird characters to '-'
-                    local_relative = re.sub(r'[^a-zA-Z0-9=./-]', '-', local_relative)
+                    local_relative = re.sub(r'[^a-zA-Z0-9=./_-]', '-', local_relative)
             else:
                 raise RuntimeError(f"can't parse url {url}")
 
@@ -331,11 +334,11 @@ class Crawler:
                 log_FileFuncLine(f"skip processing {url} because it is already processed")
             return ret
 
-        abs_local = result['abs_local']
+        abs_local = result['abs_local'].replace('\\', '/')
 
         local_relative_path = self.get_local_relative_path(url)
 
-        processed_file = os.path.join(self.processed_dir, local_relative_path)
+        processed_file = os.path.join(self.processed_dir, local_relative_path).replace('\\', '/')
 
         # create parent directory if it does not exist
         parent_dir = os.path.dirname(processed_file)
@@ -529,10 +532,19 @@ class Crawler:
             raise RuntimeError(f"skip downloading favicon because start_url={self.start_url} is not a valid url")
 
         favicon_url = f"{host_url}/favicon.ico"
-        favicon_local = os.path.join(self.processed_dir, "favicon.ico")
-
-        if verbose:
-            log_FileFuncLine(f"downloading favicon {favicon_url} to {favicon_local}")
+        favicon_local = os.path.join(self.processed_dir, "favicon.ico").replace('\\', '/')
+        if os.path.exists(favicon_local):
+            if verbose:
+                log_FileFuncLine(f"skip downloading favicon {favicon_url} to {favicon_local} because it already exists")
+            return
+        
+        # create parent directory if it does not exist
+        parent_dir = os.path.dirname(favicon_local)
+        if not os.path.exists(parent_dir):
+            log_FileFuncLine(f"creating parent directory {parent_dir}")
+            os.makedirs(os.path.dirname(favicon_local))
+        
+        log_FileFuncLine(f"downloading favicon {favicon_url} to {favicon_local}")
 
         # use requests to download the favicon
         with requests.get(favicon_url, stream=True) as r:
@@ -544,9 +556,14 @@ class Crawler:
     def crawl(self, **opt):
         verbose = opt.get('verbose', self.verbose)
 
+        matchPattern1 = self.matchPattern
+        matchPattern2 = opt.get('matchPattern', None)
+
         page_count = 0
 
         if self.download_favicon:
+            if verbose:
+                print(f"downloading favicon for {self.start_url} to {self.processed_dir}")
             try:
                 self.download_favicon(**opt)
             except Exception as e:
@@ -569,6 +586,17 @@ class Crawler:
                     item = self.to_crawl_list.pop()
                 except:
                     return
+                
+            todo_link_full = item['todo_link_full']
+            matched = True
+            for p in ([matchPattern1, matchPattern2]):
+                if p is None:
+                    continue
+                if not re.search(p, todo_link_full):
+                    matched = False
+                    break
+            if not matched:
+                continue
 
             if verbose:
                 log_FileFuncLine(f"crawl {pformat(item, width=1)}, page_count={page_count}")

@@ -45,9 +45,14 @@ usage:
 
 examples = textwrap.dedent(f"""
 examples:
+                           
+    mkdir mybase; cd mybase;
     
-    {prog} -inhuman -dd dd -pd pd http://quotes.toscrape.com "xpath=//li[@class='next']/a" 
+    - download from internet                      
+    {prog} --inhuman -dd dd -pd pd http://quotes.toscrape.com "xpath=//li[@class='next']/a"
+    {prog} --inhuman -dd dd -pd pd https://eloquentjavascript.net/ "xpath=//li/a"
 
+    - download from local file, as a test
     {prog} -dd dd -pd pd sitebase/github/schoolproj/nyu_ds_java/course_slides.html "xpath=//ul/li/a"
 
     to run with local server
@@ -97,6 +102,10 @@ parser.add_argument(
 parser.add_argument(
     '-ih', '--ignoreHttpError', dest="ignoreHttpError", action='store_true', default=False,
     help="ignore http error. default is False")
+
+parser.add_argument(
+    '-mp', '--matchpattern', dest="matchpattern", action='store', type=str, default=None,
+    help="match pattern to match. default is None")
 
 parser.add_argument(
     'remainingArgs', default=None, nargs=argparse.REMAINDER,

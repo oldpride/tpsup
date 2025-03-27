@@ -71,11 +71,10 @@ $@
 sub get_entry_by_cfg {
    my ( $cfg, $base_url, $dict, $opt ) = @_;
 
-   print "cfg=", Dumper($cfg);
+   # print "cfg=", Dumper($cfg);
 
-   #  entry     => 'swagger-tian',
-   # entry_func => \&TPSUP::SWAGGER::get_swagger_entry,
-   # entry_func overrides entry. entry_func is a subroutine reference.
+   # entry => 'swagger-tian',
+   # entry => \&TPSUP::SWAGGER::get_swagger_entry,
 
    my $entry      = $cfg->{entry};
    my $entry_type = ref($entry);
@@ -85,14 +84,7 @@ sub get_entry_by_cfg {
    if ( !$entry_type ) {
       $entry_name = $entry;
    } elsif ( $entry_type eq 'CODE' ) {
-      $entry_name = $entry->(
-         {
-            %$cfg,
-            base_url => $base_url,    # add base_url to cfg, so that the entry function can use it
-         },
-         $dict,
-         $opt
-      );
+      $entry_name = $entry->($cfg,$dict,$opt);
    } else {
       croak "unsupported entry type: $entry_type";
    }
@@ -161,11 +153,9 @@ sub swagger {
 
       my $flag_string = join( " ", @flags );
 
-      #  entry     => 'swagger-tian',
-      # entry_func => \&TPSUP::SWAGGER::get_swagger_entry,
-      # entry_func overrides entry. entry_func is a subroutine reference.
+      $cfg->{base_url} = $base_url;    # add base_url to cfg, so that the entry function can use it
 
-      my $entry_name = get_entry_by_cfg( $cfg, $base_url, $dict, $opt );
+      my $entry_name = get_entry_by_cfg( $cfg, $dict, $opt );
 
       my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
       my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
@@ -384,17 +374,17 @@ sub tpbatch_parse_hash_cfg {
             }
 
             for my $base_url ( @{ $base_cfg->{base_urls} } ) {
-               my $login = get_entry_by_cfg( $cfg, $base_url, {}, $opt );
+               # add base_url to cfg, so that the entry function can use it
+               $cfg->{base_url} = $base_url;
+               my $login = get_entry_by_cfg( $cfg, {}, $opt );
                if ( $login ) {
-                  $example .= "      entry: $login\n";
+                  $example .= "         entry: $login\n";
                } else {
-                  $example .= "      entry: none\n";
+                  $example .= "         entry: none\n";
                }
-               $example .= "        curl: $base_url/$sub_url\n";
-            }
+               $example .= "           curl: $base_url/$sub_url\n";
 
-            for my $base_url ( @{ $base_cfg->{base_urls} } ) {
-               $example .= "      manual: $base_url/$sub_ui\n";
+               $example .= "         manual: $base_url/$sub_ui\n\n";
             }
 
             $example .= "\n";
