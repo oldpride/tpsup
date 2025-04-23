@@ -48,9 +48,8 @@ sub parse_cmdline_jobs {
    my $verbose = $opt->{verbose};
 
    # case-insensitive qr//
-   my $MatchPattern = $opt->{MatchPattern} ? qr/$opt->{MatchPattern}/i : undef;
-   my $ExcludePattern =
-     $opt->{ExcludePattern} ? qr/$opt->{ExcludePattern}/i : undef;
+   my $MatchPattern   = $opt->{MatchPattern}   ? qr/$opt->{MatchPattern}/i   : undef;
+   my $ExcludePattern = $opt->{ExcludePattern} ? qr/$opt->{ExcludePattern}/i : undef;
 
    my @supported_flags = qw(offtrack wait_offtrack);
    my $support_flag;
@@ -63,6 +62,10 @@ sub parse_cmdline_jobs {
 
    if ( $opt->{JFlag} ) {
       @jobs = @$ARGV;
+      for my $job (@jobs) {
+         my $v_by_k = { job => $job };
+         push @jobFlags, $v_by_k;
+      }
    } else {
       for my $file (@$ARGV) {
          my $ifh = get_in_fh($file);
@@ -70,12 +73,11 @@ sub parse_cmdline_jobs {
          while ( my $line = <$ifh> ) {
             chomp $line;
 
-            $line =~
-              s/^[^0-9a-zA-Z.#\%_-]+//;  # trim spaces or bad chars at beginning
-            $line =~ s/[^0-9a-zA-Z.#\%_-]+$//; # trim spaces or bad chars at end
+            $line =~ s/^[^0-9a-zA-Z.#\%_-]+//;    # trim spaces or bad chars at beginning
+            $line =~ s/[^0-9a-zA-Z.#\%_-]+$//;    # trim spaces or bad chars at end
 
-            next if $line =~ /^\s*$/;          # skip blank lines
-            next if $line =~ /^\s*#/;          # skip comment
+            next if $line =~ /^\s*$/;             # skip blank lines
+            next if $line =~ /^\s*#/;             # skip comment
 
             next if $line eq '';
 
@@ -86,8 +88,7 @@ sub parse_cmdline_jobs {
 
             for my $pair (@a) {
                if ( $pair =~ /^(.+?)=(.+)/ ) {
-                  my $key =
-                    uc($1); # convert to uppercase to make flag case-insensitive
+                  my $key   = uc($1);    # convert to uppercase to make flag case-insensitive
                   my $value = $2;
 
                   croak "flag='$key' in $pair is not supported"
@@ -122,8 +123,7 @@ sub parse_cmdline_jobs {
         if defined $MatchPattern && $job !~ /$MatchPattern/ && $job =~ /\%/;
       next if defined $ExcludePattern && $job =~ /$ExcludePattern/;
       $seen->{$job}++;
-      push @jobs2,
-        $job;    # dup is allowed here in case user wants to run a job twice.
+      push @jobs2,     $job;      # dup is allowed here in case user wants to run a job twice.
       push @jobFlags2, $v_by_k;
    }
 
@@ -162,8 +162,7 @@ sub autorep_J {
    my $autorep_array;
 
    if ( !$input ) {
-      my $UnivPatterns = get_setting_from_env( 'UNIV_PATTERNS', 'TPAUTOSYS',
-         get_homedir_by_user() . "/.tpautosys" );
+      my $UnivPatterns = get_setting_from_env( 'UNIV_PATTERNS', 'TPAUTOSYS', get_homedir_by_user() . "/.tpautosys" );
       $input = "command=autorep -J $UnivPatterns";
    } elsif ( ref($input) eq 'ARRAY' ) {
       $autorep_array = $input;
@@ -195,18 +194,18 @@ sub autorep_J {
       close_in_fh($in_fh);
    }
 
-# now we have $autorep_array, let's parse it
-# Job Name           Last Start           Last End             ST/Ex Run/Ntry Pri/Xit
-# _________________ ____________________ ____________________ _____ ________ _______
-# Nightly_Download   05/21/2010 11:27:31  05/21/2010 11:27:33  SU    197/1    0
-# Watch_4_file       05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0
-# filter_data        05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0
-# update_DBMS        05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0
-# test_job1_iced     -----                05/21/2010 11:27:33  OI    197/1    0
-# test_job2_iced     -----                -----                OI    197/1    0
-# test_job3_failed   05/21/2010 11:27:32  05/21/2010 11:27:33  FA    197/1    0
-# test_job4_run      05/21/2010 11:27:32  ----                 RU    197/1    0
-# test_job5_hold     05/21/2010 11:27:32  05/21/2010 11:27:33  OH    197/1    0
+   # now we have $autorep_array, let's parse it
+   # Job Name           Last Start           Last End             ST/Ex Run/Ntry Pri/Xit
+   # _________________ ____________________ ____________________ _____ ________ _______
+   # Nightly_Download   05/21/2010 11:27:31  05/21/2010 11:27:33  SU    197/1    0
+   # Watch_4_file       05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0
+   # filter_data        05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0
+   # update_DBMS        05/21/2010 11:27:32  05/21/2010 11:27:33  SU    197/1    0
+   # test_job1_iced     -----                05/21/2010 11:27:33  OI    197/1    0
+   # test_job2_iced     -----                -----                OI    197/1    0
+   # test_job3_failed   05/21/2010 11:27:32  05/21/2010 11:27:33  FA    197/1    0
+   # test_job4_run      05/21/2010 11:27:32  ----                 RU    197/1    0
+   # test_job5_hold     05/21/2010 11:27:32  05/21/2010 11:27:33  OH    197/1    0
 
    if ( !$opt->{AutorepInputHasNoHeader} ) {
       my $skip = 3;
@@ -278,14 +277,12 @@ sub expression_need {
             # if yes, we don't have to use job detail.
             $need->{status} = 1;
             if ( $opt->{verbose} ) {
-               print STDERR
-                 "need job status to find \$$attr in '$expression'\n";
+               print STDERR "need job status to find \$$attr in '$expression'\n";
             }
          } else {
             $need->{detail} = 1;
             if ( $opt->{verbose} ) {
-               print STDERR
-                 "need job detail to find \$$attr in '$expression'\n";
+               print STDERR "need job detail to find \$$attr in '$expression'\n";
             }
          }
       }
@@ -306,8 +303,7 @@ sub autorep_q_J {
    my ( $input, $opt ) = @_;
 
    if ( !$input ) {
-      my $UnivPatterns = get_setting_from_env( 'UNIV_PATTERNS', 'TPAUTOSYS',
-         get_homedir_by_user() . "/.tpautosys" );
+      my $UnivPatterns = get_setting_from_env( 'UNIV_PATTERNS', 'TPAUTOSYS', get_homedir_by_user() . "/.tpautosys" );
       $input = "command=autorep -q -J $UnivPatterns";
    } elsif ( $input !~ /(file|command)=/ ) {
 
@@ -355,8 +351,7 @@ sub autorep_q_J {
             my @a = split /\s+/, $rest;
             $current_JobName = shift(@a);
             if ( @a != 2 && $a[0] ne 'job_type:' ) {
-               confess "unexpected format at insert_job line: $line\n"
-                 . "expecting: insert_job: .... job_type: ...\n";
+               confess "unexpected format at insert_job line: $line\n" . "expecting: insert_job: .... job_type: ...\n";
             } else {
                $result->{$current_JobName}->{JobName}    = $current_JobName;
                $result->{$current_JobName}->{job_type}   = $a[1];
@@ -379,8 +374,7 @@ sub autorep_q_J {
 
             if ( $attr eq 'box_name' ) {
                my $box_name = $rest;
-               push @{ $result->{$box_name}->{detail_box_children} },
-                 $current_JobName;
+               push @{ $result->{$box_name}->{detail_box_children} }, $current_JobName;
             }
          }
       }
@@ -419,8 +413,7 @@ sub get_cache_file {
       $opt->{verbose} && print STDERR "we will use cached $file\n";
 
       if ( -z $file ) {
-         print STDERR
-"Cache file $file has zero size. If it shouldn't be zero, delete it or wait for it to expire\n";
+         print STDERR "Cache file $file has zero size. If it shouldn't be zero, delete it or wait for it to expire\n";
       }
       return $file;
    }
@@ -445,10 +438,7 @@ sub need_refresh {
       return 1;
    }
 
-   my (
-      $dev,  $ino,   $mode,  $nlink, $uid,     $gid, $rdev,
-      $size, $atime, $mtime, $ctime, $blksize, $blocks
-   ) = lstat($file);
+   my ( $dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks ) = lstat($file);
    my $now_sec = time();
    my $expire_sec =
      defined( $opt->{CacheExpire} ) ? $opt->{CacheExpire} : 3600 * 12;
@@ -457,12 +447,11 @@ sub need_refresh {
 
    if ( $staleness > $expire_sec ) {
       $opt->{verbose}
-        && print STDERR
-"$file (staleness=$now_sec-$mtime=$staleness) expired after $expire_sec seconds\n";
+        && print STDERR "$file (staleness=$now_sec-$mtime=$staleness) expired after $expire_sec seconds\n";
       return 1;
 
-#} else {
-#   print STDERR "$file (staleness=$now_sec-$mtime=$staleness<$expire_sec) not expired\n";
+      #} else {
+      #   print STDERR "$file (staleness=$now_sec-$mtime=$staleness<$expire_sec) not expired\n";
    }
 
    return 0;
@@ -471,8 +460,7 @@ sub need_refresh {
 sub get_univ_patterns {
    my ($opt) = @_;
    return $opt->{UnivPatterns} if $opt->{UnivPatterns};
-   return get_setting_from_env( 'UNIV_PATTERNS', 'TPAUTOSYS',
-      get_homedir_by_user() . "/.tpautosys" );
+   return get_setting_from_env( 'UNIV_PATTERNS', 'TPAUTOSYS', get_homedir_by_user() . "/.tpautosys" );
 }
 
 sub find_needed_patterns {
@@ -513,8 +501,7 @@ sub find_needed_patterns {
 
    for my $job (@jobs) {
       if ( !exists $pattern_by_job->{$job} ) {
-         print STDERR "WARN: job $job is not converted by ",
-           join( ",", @$patterns ), "\n";
+         print STDERR "WARN: job $job is not converted by ", join( ",", @$patterns ), "\n";
       }
    }
 
@@ -568,8 +555,7 @@ sub query_jobs_superset {
    }
 
    $opt->{verbose}
-     && print STDERR
-     "need_job_detail=$need_job_detail, need_job_status=$need_job_status\n";
+     && print STDERR "need_job_detail=$need_job_detail, need_job_status=$need_job_status\n";
 
    my $DetailFiles = $opt->{DetailFiles};
    my $StatusFiles = $opt->{StatusFiles};
@@ -681,8 +667,7 @@ sub query_jobs_superset {
             $new_detail_ref = { %$new_detail_ref, %$new };
          }
       } else {
-         confess
-"don't know how to find universe: neither DetailFiles nor UnivPatterns is defined.";
+         confess "don't know how to find universe: neither DetailFiles nor UnivPatterns is defined.";
       }
    }
 
@@ -748,8 +733,7 @@ sub query_jobs_superset {
             $new_status_ref = { %$new_status_ref, %$new };
          }
       } else {
-         confess
-"don't know how to find universe: neither StatusFiles nor UnivPatterns is defined.";
+         confess "don't know how to find universe: neither StatusFiles nor UnivPatterns is defined.";
       }
    }
 
@@ -797,8 +781,7 @@ sub query_jobs_superset {
          my $warn = $opt->{verbose} ? 'use' : 'no';
 
          my @matchExps = map {
-            my $compiled = eval
-"$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+            my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
             $@ ? ( die "Bad match expression '$_' : $@" ) : $compiled;
          } @{ $opt->{JobExps} };
 
@@ -812,8 +795,7 @@ sub query_jobs_superset {
                if ( $opt->{ValidateVars} ) {
                   for my $var ( @{ $opt->{ValidateVars} } ) {
                      if ( !defined $r->{$var} ) {
-                        carp "$job: '$var' is not defined. skipped r = "
-                          . Dumper($r);
+                        carp "$job: '$var' is not defined. skipped r = " . Dumper($r);
                         next FILTER_JOB;
                      }
                   }
@@ -904,16 +886,14 @@ sub get_dependency {
 
    my $children_by_parent = {};
    my $children_by_box    = {};
-   update_parent_child_mapping( $children_by_parent, $children_by_box,
-      $all_ref, $opt );
+   update_parent_child_mapping( $children_by_parent, $children_by_box, $all_ref, $opt );
 
    my $warn = $opt->{verbose} ? 'use' : 'no';
 
    my $matchExps;
    if ( $opt->{DepExps} && @{ $opt->{DepExps} } ) {
       @$matchExps = map {
-         my $compiled = eval
-           "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
+         my $compiled = eval "$warn warnings; no strict; package TPSUP::Expression; sub { $_ } ";
          $@ ? ( die "Bad match expression '$_' : $@" ) : $compiled;
       } @{ $opt->{DepExps} };
    }
@@ -951,8 +931,7 @@ sub get_dependency {
          if ( $meta->{updated} ) {
 
             # update mapping only when there is a update in the jobs
-            update_parent_child_mapping( $children_by_parent,
-               $children_by_box, $meta->{new}, $opt );
+            update_parent_child_mapping( $children_by_parent, $children_by_box, $meta->{new}, $opt );
          }
 
          my $r = $all_ref->{$job};
@@ -973,16 +952,14 @@ sub get_dependency {
                   }
                }
 
-               $opt->{verbose} && print "\nsaved a '$updown' dep = ",
-                 Dumper($dep), "\n";
+               $opt->{verbose} && print "\nsaved a '$updown' dep = ", Dumper($dep), "\n";
                push @{ $dependency->{$updown} }, $dep;
             } else {
 
                # this job is outside the UNIV_PATTERNS
                $r->{JobName} = $job;
 
-               $opt->{verbose} && print "\nsaved a '$updown' dep = ",
-                 Dumper($dep), "\n";
+               $opt->{verbose} && print "\nsaved a '$updown' dep = ", Dumper($dep), "\n";
                push @{ $dependency->{$updown} }, $dep;
                next TODO;
             }
@@ -1007,18 +984,14 @@ sub get_dependency {
             if (  $all_ref->{$job}->{start_times}
                && $opt->{IgnoreConditionWhenStartTimesDefined} )
             {
-              # if a job has both condition and start_times defined, then
-              # they both have to be true so that the job can run by itself.
-              # therefore, at certain situation, this 'condition' should not
-              # not be treated as a dependency, for example, when start_times is
-              # not true.
+               # if a job has both condition and start_times defined, then
+               # they both have to be true so that the job can run by itself.
+               # therefore, at certain situation, this 'condition' should not
+               # not be treated as a dependency, for example, when start_times is
+               # not true.
                push @next_level, [ 'condition', [] ];
             } else {
-               push @next_level,
-                 [
-                  'condition',
-                  [ condition_to_jobs( $all_ref->{$job}->{condition} ) ]
-                 ];
+               push @next_level, [ 'condition', [ condition_to_jobs( $all_ref->{$job}->{condition} ) ] ];
 
                # condition_to_jobs() return empty array if no condition defined.
             }
@@ -1032,19 +1005,19 @@ sub get_dependency {
 
          if ( $children_by_box->{$job} ) {
 
-        # this job is a box
-        # for this example, one box has two children
-        #    test_box1
-        #     test_job1
-        #     test_job2
-        # when we look for the downstream dependency of test_job1, we should get
-        #    test_job1, self
-        #      test_box1, box_parent
-        # not
-        #    test_job1, self
-        #      test_box1, box_parent
-        #        test_job2, box_child
-        # the following 'if' takes care of this.
+            # this job is a box
+            # for this example, one box has two children
+            #    test_box1
+            #     test_job1
+            #     test_job2
+            # when we look for the downstream dependency of test_job1, we should get
+            #    test_job1, self
+            #      test_box1, box_parent
+            # not
+            #    test_job1, self
+            #      test_box1, box_parent
+            #        test_job2, box_child
+            # the following 'if' takes care of this.
             if ( $reason ne "box_parent" ) {
                push @next_level, [ 'box_child', $children_by_box->{$job} ];
             }
@@ -1077,8 +1050,8 @@ sub condition_to_jobs {
 
    return @jobs if !$condition;
 
-# condition: s(${ENV}-ETL-EDW_DIM_DUMMY_RECORDS,0) and n(${ENV}-ETL-EDW_DIM_ACCOUNT_HIST_LV_stub,0)
-# s(test_job3,0) and n(test_job4)
+   # condition: s(${ENV}-ETL-EDW_DIM_DUMMY_RECORDS,0) and n(${ENV}-ETL-EDW_DIM_ACCOUNT_HIST_LV_stub,0)
+   # s(test_job3,0) and n(test_job4)
 
    my @a = split /[(]/, $condition;
    shift @a;    #throw away the first element
@@ -1101,8 +1074,7 @@ sub get_autorep_J_format {
 }
 
 sub print_autorep_J_header {
-   printf get_autorep_J_format(), "Job Name", "Last Start", "Last End",
-     "Status";
+   printf get_autorep_J_format(), "Job Name", "Last Start", "Last End", "Status";
    printf "\n";
    printf get_autorep_J_format(), "-" x 50, "-" x 19, "-" x 19, "-" x 2;
 }
@@ -1110,8 +1082,7 @@ sub print_autorep_J_header {
 sub print_autorep_J_job {
    my ( $info, $job, $indent, $opt ) = @_;
 
-   my $NotFoundMsg =
-     defined $opt->{NotFoundMsg} ? $opt->{NotFoundMsg} : "not found";
+   my $NotFoundMsg = defined $opt->{NotFoundMsg} ? $opt->{NotFoundMsg} : "not found";
 
    if ( !$info->{$job} ) {
       printf get_autorep_J_format(), $indent . $job, $NotFoundMsg, "", "";
@@ -1132,16 +1103,14 @@ sub print_autorep_J_job {
 sub print_autorep_q_J_job {
    my ( $info, $job, $indent, $opt ) = @_;
 
-   my $NotFoundMsg =
-     defined $opt->{NotFoundMsg} ? $opt->{NotFoundMsg} : "not found";
+   my $NotFoundMsg = defined $opt->{NotFoundMsg} ? $opt->{NotFoundMsg} : "not found";
 
    if ( !$info->{$job}->{defination} ) {
       print $indent, $job, " $NotFoundMsg\n\n";
       return;
    }
 
-   print $indent,
-     join( "\n$indent", split( /\n/, $info->{$job}->{defination} ) ), "\n\n";
+   print $indent, join( "\n$indent", split( /\n/, $info->{$job}->{defination} ) ), "\n\n";
 
    if ( exists $info->{$job}->{detail_box_children} ) {
       for my $child ( @{ $info->{$job}->{detail_box_children} } ) {
@@ -1155,8 +1124,7 @@ sub print_job_csv {
 
    my $type = ref($fields);
    $type = "" if !defined $type;
-   confess "fields type='$type' is not supported. must be ARRAY. fields=",
-     Dumper($fields)
+   confess "fields type='$type' is not supported. must be ARRAY. fields=", Dumper($fields)
      if $type ne 'ARRAY';
 
    my $delimiter = $opt->{delimiter} ? $opt->{delimiter} : ',';
@@ -1222,7 +1190,7 @@ sub wait_job {
    my $interval_limit = 60;           # sleep interval max
    my $sub_interval   = $interval;    # sleep interval starting value
 
-   sleep(1); # sleep one sec to let fast-running job have time update the status
+   sleep(1);                          # sleep one sec to let fast-running job have time update the status
 
    my $autorep_cmd = "autorep -J $job";
 
@@ -1237,10 +1205,8 @@ sub wait_job {
 
       for my $j (@subjobs) {
          if (  $before_result->{$j}->{Status} ne $after_result->{$j}->{Status}
-            || $before_result->{$j}->{LastStart} ne
-            $after_result->{$j}->{LastStart}
-            || $before_result->{$j}->{LastEnd} ne
-            $after_result->{$j}->{LastEnd} )
+            || $before_result->{$j}->{LastStart} ne $after_result->{$j}->{LastStart}
+            || $before_result->{$j}->{LastEnd} ne $after_result->{$j}->{LastEnd} )
          {
             if ( $after_result->{$j}->{Status} =~ /^(SU|TE|FA)$/ ) {
                $sub_run++;
@@ -1255,7 +1221,7 @@ sub wait_job {
          my $now_sec   = time();
          my $total_sec = $now_sec - $start_sec;
          print
-"Only $sub_run of $subcount subjobs complete since $sub_start ($total_sec sec). sleep for $sub_interval\n";
+           "Only $sub_run of $subcount subjobs complete since $sub_start ($total_sec sec). sleep for $sub_interval\n";
          sleep $sub_interval;
          $sub_interval += 10;
          $sub_interval = $interval_limit if $sub_interval > $interval_limit;
@@ -1282,10 +1248,7 @@ sub update_tally {
    # try to restore the original autorep -J format, starting with the main job
    for my $j (@subjobs) {
       if ( $job_result->{$j}->{IsMainJob} ) {
-         my $row = [
-            $j,                           $job_result->{$j}->{LastStart},
-            $job_result->{$j}->{LastEnd}, $job_result->{$j}->{Status}
-         ];
+         my $row = [ $j, $job_result->{$j}->{LastStart}, $job_result->{$j}->{LastEnd}, $job_result->{$j}->{Status} ];
          push @$tally, $row;
 
          if ( $opt->{PrintTally} ) {
@@ -1302,10 +1265,7 @@ sub update_tally {
       next if $job_result->{$j}->{IsMainJob};
 
       # add indent
-      my $row = [
-         "  $j",                       $job_result->{$j}->{LastStart},
-         $job_result->{$j}->{LastEnd}, $job_result->{$j}->{Status}
-      ];
+      my $row = [ "  $j", $job_result->{$j}->{LastStart}, $job_result->{$j}->{LastEnd}, $job_result->{$j}->{Status} ];
       push @$tally, $row;
 
       if ( $opt->{PrintTally} ) {
@@ -1332,13 +1292,13 @@ sub count_error_in_result {
 sub resolve_jobs {
    my ( $unresolved, $superset, $opt ) = @_;
 
-# unresolved examples: test_job1, test%, test%1
-#   resolved examples: test_job1, test_job2, test_box1, should be unique
-# $superset can be an array of resolved jobs or a hash keyed by jobs
-# note:  if an unresolved job name has no wild card, it will be passed through as
-#        a resolved job by default. The downstream logic is expected to handle this.
-#        The rational is that this sub is soly to resolve jobs, not to validate jobs.
-#        To change the default behavior, use WithinSuperset flag.
+   # unresolved examples: test_job1, test%, test%1
+   #   resolved examples: test_job1, test_job2, test_box1, should be unique
+   # $superset can be an array of resolved jobs or a hash keyed by jobs
+   # note:  if an unresolved job name has no wild card, it will be passed through as
+   #        a resolved job by default. The downstream logic is expected to handle this.
+   #        The rational is that this sub is soly to resolve jobs, not to validate jobs.
+   #        To change the default behavior, use WithinSuperset flag.
 
    my $type = ref $superset;
    my $jobs;
@@ -1362,9 +1322,8 @@ sub resolve_jobs {
       croak "unsupported type=$type in superset";
    }
 
-   my $MatchPattern = $opt->{MatchPattern} ? qr/$opt->{MatchPattern}/i : undef;
-   my $ExcludePattern =
-     $opt->{ExcludePattern} ? qr/$opt->{ExcludePattern}/i : undef;
+   my $MatchPattern   = $opt->{MatchPattern}   ? qr/$opt->{MatchPattern}/i   : undef;
+   my $ExcludePattern = $opt->{ExcludePattern} ? qr/$opt->{ExcludePattern}/i : undef;
 
    my @resolved;
    my %seen;
