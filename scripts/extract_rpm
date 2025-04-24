@@ -61,16 +61,19 @@ do
    else
       echo ""
       echo "removing $rpm from $dir"
-      echo ""
+      echo ""  
       # extract the rpm to a temp dir
-      tmpdir=$(get_tmp /tmp $prog $$)
-      [ -d $tmpdir ] && /bin/rm -fr $tmpdir 
+      HHMMSS=`date +%H%M%S`
+      suffix="${HHMMSS}_$$"
+      tmpdir=$(get_tmp -d /tmp $prog $suffix)
       rpm2cpio $rpm | (cd $tmpdir && cpio -idmv)
       cd $tmpdir
 
       # list the paths and reverse the lines using tac command.
       # we reverse the order so that we can remove the files before remove dir.
-      files=$(find .|tac )
+      # remove the 1st line which is the current dir ./
+      # remove the leading ./
+      files=$(find .|sed 1d|sed 's:^./::' |tac )
 
       # remove each file
       echo "$files" | while read line;
