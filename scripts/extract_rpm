@@ -76,7 +76,7 @@ do
       echo "$files" | while read line;
       do
          target="$dir/$line"
-         if [ -e $target ];
+         if [ -e $target ]; then
             if [ -d $target ]; then
                (set -x; /bin/rmdir $target)
             else
