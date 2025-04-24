@@ -1,0 +1,48 @@
+#!/bin/bash
+
+usage () {
+   cat >&2 <<EOF
+
+uasge:
+
+   $0 target_dir rpm1 [rpm2 ...]
+
+   install rpm files to target_dir
+
+example:
+
+   $0 vim_dir vim.rpm
+
+EOF
+
+   exit 1
+}
+
+if [ $# -lt 2 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+dir=$1
+shift
+
+if [ ! -d $dir ]; then
+   (set -x; mkdir -p $dir) || exit 1
+   chmod 755 $dir
+else
+   # test dir
+   (cd $dir) || exit 1
+fi
+
+# sometimes 3rd party (anaconda) lib gets linked to rpm command, causing error
+unset LD_LIBRARY_PATH
+
+for rpm in $@
+do
+   echo ""
+   echo "extracting $rpm to $dir"
+   echo ""
+   set -x
+   rpm2cpio $rpm | (cd $dir && cpio -idmv)
+   [ $? -eq 0 ] || exit 1
+done
