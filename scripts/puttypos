@@ -68,6 +68,7 @@ fi
 putty_login=$(echo $WHO | awk '{print $1}')
 putty_tty=$(echo $WHO | awk '{print $2}')
 putty_ip=$(echo $WHO | awk '{print $3}')
+putty_pid=$(ps -t $putty_tty -o |grep bash |awk '{print $1}')
 
 if [ $verbose = Y ]; then
    echo "putty_login=$putty_login"
@@ -166,9 +167,9 @@ else
                   if [ $verbose = Y ]; then
                      [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
                   fi
-               elif [ "$mypid" = "$pid" ]; then
-                  # this file has mypid
-                  [ $verbose = Y ] && echo "seen mypid=$mypid in $posfile. keep spot $i"
+               elif [ "$putty_pid" = "$pid" ]; then
+                  # this file has putty_pid
+                  [ $verbose = Y ] && echo "seen putty_pid=$putty_pid in $posfile. keep spot $i"
                else
                   [ $verbose = Y ] && echo "we will check next spot"
                   seen[$pid]=$posfile
@@ -190,7 +191,7 @@ else
       # https://superuser.com/questions/1162451
       printf '\033[3;'"$offset;$offset"'t'
 
-      echo $mypid > $posfile
+      echo $putty_pid > $posfile
 
       found=$i
       break
