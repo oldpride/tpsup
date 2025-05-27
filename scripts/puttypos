@@ -77,6 +77,9 @@ mypid=`ps -t $tty |grep bash|awk '{print $1}'`
    
 declare -A seen # bash seen implementation, using associate array
 
+# get ssh client IP
+SSHID=`echo $SSH_CLIENT |cut -d\  -f1`
+
 # for loop range, works for numbers
 #    for i in {0..10} 
 # but not work for variables
@@ -88,7 +91,7 @@ do
    [ $verbose = Y ] && echo "checking spot $i"
 
    padded=`printf '%03d' $i`
-   posfile=/tmp/puttypos.$user.$padded 
+   posfile=/tmp/puttypos.$user.$SSHID.$padded 
 
    if [ -e $posfile ]; then
       pid=`cat $posfile`

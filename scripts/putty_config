@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # $USERPROFILE is from windows env variable %USERPROFILE%
-file_unresolved='$USERPROFILE/Desktop/putty_config.reg'
+file_unresolved='$USERPROFILE/putty_config.reg'
 
 usage () {
    cat >&2 <<EOF
