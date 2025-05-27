@@ -942,33 +942,7 @@ gittop() {
    cd "$gitdir"
 }
 
-if ! [ "X$SSH_CLIENT" = "X" ]; then
-   # $ env |grep SSH
-   # SSH_CONNECTION=192.168.1.62 50334 192.168.1.191 22
-   # SSH_CLIENT=192.168.1.62 50334 22
-   # SSH_TTY=/dev/pts/4
-
-   putty_client=$(echo $SSH_CLIENT | cut -d" " -f1)
-   putty_client_file=~/.tpsup/putty_client.txt
-   # echo "putty_client=$putty_client"
-   # echo "putty_client_file=$putty_client_file"
-
-   if [ -f "$putty_client_file" ]; then
-      # putty_client_file format is
-      # ip min_pos max_pos
-      # 192.168.1.62 0 2
-      line=$(egrep "^$putty_client\\s" $putty_client_file)
-      if [ "X$line" = "X" ]; then
-         # "*" means any ip address
-         line=$(egrep "^[*]\\s" $putty_client_file)
-      fi
-
-      # if there is a line, then we can set the putty position
-      if ! [ "X$line" = "X" ]; then
-         min_pos=$(echo $line | awk '{print $2}')
-         max_pos=$(echo $line | awk '{print $3}')
-         # echo "puttypos $min_pos $max_pos"
-         puttypos $min_pos $max_pos
-      fi
-   fi
+# set PLACE_PUTTY to Y in site-spec/profile or $HOME/.profile
+if [ "X$PLACE_PUTTY" = "XY" ]; then
+   puttypos auto
 fi
