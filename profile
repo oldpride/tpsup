@@ -434,6 +434,12 @@ else
    echo "UNAME='$UNAME' is not supported"
 fi
 
+# if USER is like "AD-ENT+myname", then, remove the "AD-ENT+"" part
+if [[ $USER =~ \+ ]]; then
+   # this is AD user, remove the AD part
+   export USER=$(echo $USER | cut -d+ -f2)
+fi
+
 export TPJSLIB=$TPSUP/js/lib
 
 freshenv() {
@@ -952,6 +958,12 @@ if ! [ "X$SSH_CLIENT" = "X" ]; then
       # ip min_pos max_pos
       # 192.168.1.62 0 2
       line=$(egrep "^$putty_client\\s" $putty_client_file)
+      if [ "X$line" = "X" ]; then
+         # "*" means any ip address
+         line=$(egrep "^[*]\\s" $putty_client_file)
+      fi
+
+      # if there is a line, then we can set the putty position
       if ! [ "X$line" = "X" ]; then
          min_pos=$(echo $line | awk '{print $2}')
          max_pos=$(echo $line | awk '{print $3}')

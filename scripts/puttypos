@@ -11,6 +11,7 @@ usage () {
    cat >&2 <<EOF
 usage:
 
+   $prog auto
    $prog min max
 
    position a putty's window in the next available position between min and max.
@@ -21,6 +22,7 @@ usage:
 
 examples:
 
+   $prog auto
    $prog 0 9
    $prog 10 12
 
@@ -41,100 +43,145 @@ done
 
 shift $((OPTIND-1))
 
-if [ $# -ne 2 ]; then
+if [ $# -ne 1 -a $# -ne 2 ]; then
    echo "wrong number of args" >&2
    usage
 fi
 
-min=$1
-max=$2
+# $ env |grep SSH
+# SSH_CONNECTION=192.168.1.62 50334 192.168.1.191 22
+# SSH_CLIENT=192.168.1.62 50334 22
+# SSH_TTY=/dev/pts/4
 
-if [[ $min =~ [^0-9] ]]; then
-   echo "ERROR: min='$min' is not a number" >&2
-   usage
+# putty_ip=$(echo $SSH_CLIENT | cut -d" " -f1)
+# It is possible that SSH_CLIENT is not set, for example, when we "su - appid".
+# In Linux 5.15, "su -w SSH_CLIENT - appid" will pass the SSH_CLIENT to the new shell.
+# But for older Linux, this is not supported.
+# if SSH_CLIENT is not set, then we use 'who/tpwho' comand to get the putty client IP
+
+WHO=$(tpwho current)
+putty_login=$(echo $WHO | awk '{print $1}')
+putty_tty=$(echo $WHO | awk '{print $2}')
+putty_ip=$(echo $WHO | awk '{print $3}')
+
+if [ "X$putty_ip" = "X" ]; then
+   echo "ERROR: cannot get putty client IP from SSH_CLIENT or who" >&2
+   exit 1
 fi
 
-if [[ $max =~ [^0-9] ]]; then
-   echo "ERROR: max='$max' is not a number" >&2
-   usage
-fi
-
-if [ $min -ge $max ]; then
-   echo "ERROR: min=$min is not less than max=$max"
-   usage
-fi
-
-# get my pid
-tty=`tty`
-
-# tian@linux1:/home/tian$ ps -t /dev/pts/1 
-#     PID TTY          TIME CMD
-#   37801 pts/1    00:00:00 bash
-#   38110 pts/1    00:00:00 ps
-
-[ $verbose = Y ] && ps -t $tty -f 
-mypid=`ps -t $tty |grep bash|awk '{print $1}'`
-   
-declare -A seen # bash seen implementation, using associate array
-
-# get ssh client IP
-SSHID=`echo $SSH_CLIENT |cut -d\  -f1`
-
-# for loop range, works for numbers
-#    for i in {0..10} 
-# but not work for variables
-#    for i in {$min..$max}
-# for variables, use C-style instead
-for (( i = $min; i <= $max; i ++ ))
-do
-   [ $verbose = Y ] && echo ""
-   [ $verbose = Y ] && echo "checking spot $i"
-
-   padded=`printf '%03d' $i`
-   posfile=/tmp/puttypos.$user.$SSHID.$padded 
-
-   if [ -e $posfile ]; then
-      pid=`cat $posfile`
-
-      if ! [ "X$pid" = "X" ]; then
-         if ps -p $pid >/dev/null; then
-            [ $verbose = Y ] && echo "putty $padded is running, pid=$pid."             
-            if [ ${seen[$pid]+_} ]; then
-               if [ $verbose = Y ]; then
-                  [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
-               fi
-            elif [ "$mypid" = "$pid" ]; then
-               # this file has mypid
-               [ $verbose = Y ] && echo "seen mypid=$mypid in $posfile. keep spot $i"
-            else
-               [ $verbose = Y ] && echo "we will check next spot"
-               seen[$pid]=$posfile
-               continue
-            fi
-         else 
-            if [ $verbose = Y ]; then
-               [ $verbose = Y ] &&  "pid=$pid in $posfile is not running.  use sport $i"
-            fi
-         fi
-      else
-         [ $verbose = Y ] && "$posfile is empty. we can use sport $i"
-      fi
+if [ "$1" = "auto" ]; then
+   # auto mode, use default min and max
+   if [ $# -ne 1 ]; then
+      echo "wrong number of args for auto mode" >&2
+      usage
    fi
 
-   # found a spot
-   offset=`expr 30 \* $i`
+   putty_client_file=~/.tpsup/putty_client.txt
+   # echo "putty_ip=$putty_ip"
+   # echo "putty_client_file=$putty_client_file"
 
-   # https://superuser.com/questions/1162451
-   printf '\033[3;'"$offset;$offset"'t'
+   if ! [ -f "$putty_client_file" ]; then
+      echo "ERROR: putty client file $putty_client_file does not exist" >&2
+      exit 1
+   fi
 
-   echo $mypid > $posfile
-
-   found=$i
-   break
-done
+   # putty_client_file format is
+   # login,ip min_pos max_pos
+   # mylogin,192.168.1.62 0 2
+   line=$(egrep "^$putty_login,$putty_ip\\s" $putty_client_file)
    
-if [ "X$found" = "X" ]; then
-   echo "$prog: no available spot found"
+   # if there is a line, then we can set the putty position
+   if [ "X$line" = "X" ]; then
+      echo "ERROR: no putty client found in $putty_client_file for putty_ip='$putty_ip'" >&2
+      exit 1
+   fi
+
+   min_pos=$(echo $line | awk '{print $2}')
+   max_pos=$(echo $line | awk '{print $3}')
+   # echo "puttypos $min_pos $max_pos"
+   puttypos $min_pos $max_pos
+    
 else
-   [ $verbose = Y ] && echo "spot found at $found"
+   if [ $# -ne 2 ]; then
+      echo "wrong number of args" >&2
+      usage
+   fi
+
+   min=$1
+   max=$2
+
+   if [[ $min =~ [^0-9] ]]; then
+      echo "ERROR: min='$min' is not a number" >&2
+      usage
+   fi
+
+   if [[ $max =~ [^0-9] ]]; then
+      echo "ERROR: max='$max' is not a number" >&2
+      usage
+   fi
+
+   if [ $min -ge $max ]; then
+      echo "ERROR: min=$min is not less than max=$max"
+      usage
+   fi
+
+
+   # for loop range, works for numbers
+   #    for i in {0..10} 
+   # but not work for variables
+   #    for i in {$min..$max}
+   # for variables, use C-style instead
+   for (( i = $min; i <= $max; i ++ ))
+   do
+      [ $verbose = Y ] && echo ""
+      [ $verbose = Y ] && echo "checking spot $i"
+
+      padded=`printf '%03d' $i`
+      posfile=/tmp/puttypos.$user.$putty_ip.$padded 
+
+      if [ -e $posfile ]; then
+         pid=`cat $posfile`
+
+         if ! [ "X$pid" = "X" ]; then
+            if ps -p $pid >/dev/null; then
+               [ $verbose = Y ] && echo "putty $padded is running, pid=$pid."             
+               if [ ${seen[$pid]+_} ]; then
+                  if [ $verbose = Y ]; then
+                     [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
+                  fi
+               elif [ "$mypid" = "$pid" ]; then
+                  # this file has mypid
+                  [ $verbose = Y ] && echo "seen mypid=$mypid in $posfile. keep spot $i"
+               else
+                  [ $verbose = Y ] && echo "we will check next spot"
+                  seen[$pid]=$posfile
+                  continue
+               fi
+            else 
+               if [ $verbose = Y ]; then
+                  [ $verbose = Y ] &&  "pid=$pid in $posfile is not running.  use sport $i"
+               fi
+            fi
+         else
+            [ $verbose = Y ] && "$posfile is empty. we can use sport $i"
+         fi
+      fi
+
+      # found a spot
+      offset=`expr 30 \* $i`
+
+      # https://superuser.com/questions/1162451
+      printf '\033[3;'"$offset;$offset"'t'
+
+      echo $mypid > $posfile
+
+      found=$i
+      break
+   done
+      
+   if [ "X$found" = "X" ]; then
+      echo "$prog: no available spot found"
+   else
+      [ $verbose = Y ] && echo "spot found at $found"
+   fi
 fi
