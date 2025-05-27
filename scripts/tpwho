@@ -79,5 +79,7 @@ fi
 
 login=$(echo "$who" | awk '{print $1}')
 remote_ip=$(echo "$who" | awk '{print $5}')
+# remove parentheses around the IP address if present
+remote_ip=$(echo "$remote_ip" | sed 's/(\(.*\))/\1/')
 
 echo "$login $full_tty $remote_ip"

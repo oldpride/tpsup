@@ -60,9 +60,19 @@ fi
 # if SSH_CLIENT is not set, then we use 'who/tpwho' comand to get the putty client IP
 
 WHO=$(tpwho current)
+if [ $verbose = Y ]; then
+   echo "WHO=$WHO"
+fi
+
 putty_login=$(echo $WHO | awk '{print $1}')
 putty_tty=$(echo $WHO | awk '{print $2}')
 putty_ip=$(echo $WHO | awk '{print $3}')
+
+if [ $verbose = Y ]; then
+   echo "putty_login=$putty_login"
+   echo "putty_tty=$putty_tty"
+   echo "putty_ip=$putty_ip"
+fi
 
 if [ "X$putty_ip" = "X" ]; then
    echo "ERROR: cannot get putty client IP from SSH_CLIENT or who" >&2
