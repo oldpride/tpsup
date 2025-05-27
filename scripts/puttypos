@@ -35,7 +35,7 @@ verbose=N
 while getopts v o;
 do
    case "$o" in
-      v)  verbose=Y;;
+      v)  verbose=Y;flag=-v;;
       #x)  max=$OPTARG;;
       *)   usage;;
    esac
@@ -94,12 +94,18 @@ if [ "$1" = "auto" ]; then
    if [ "X$line" = "X" ]; then
       echo "ERROR: no putty client found in $putty_client_file for putty_ip='$putty_ip'" >&2
       exit 1
+   elif [ $verbose = Y ]; then
+      echo "found putty client line: $line"
    fi
 
    min_pos=$(echo $line | awk '{print $2}')
    max_pos=$(echo $line | awk '{print $3}')
    # echo "puttypos $min_pos $max_pos"
-   puttypos $min_pos $max_pos
+
+   if [ $verbose = Y ]; then
+      echo "puttypos $flag min=$min_pos max=$max_pos"
+   fi
+   puttypos $flag $min_pos $max_pos
     
 else
    if [ $# -ne 2 ]; then
