@@ -112,13 +112,15 @@ if [ "$1" = "auto" ]; then
    tmpfile=/tmp/puttypos.$putty_login.$putty_ip
    /bin/rm -f $tmpfile
 
-   [ $verbose = Y ] && echo "searching a pattern in $putty_client_file matching $putty_login,$putty_ip'"
+   target="$putty_login,$putty_ip"
+
+   [ $verbose = Y ] && echo "searching a pattern in $putty_client_file matching '$target'"
    cat $putty_client_file | while read line; do
       # echo "line=$line"
       pattern=$(echo $line | awk '{print $1}')
-      if [[ ^$putty_login,$putty_ip =~ $pattern ]]; then
+      if [[ ^$target =~ $pattern ]]; then
          # found the line that matches putty_login
-         [ $verbose = Y ] && echo "found putty client line: $line"
+         [ $verbose = Y ] && echo "pattern='$pattern' matched '$target' in line: $line"
          echo "$line" > $tmpfile
          break
       fi
@@ -127,19 +129,11 @@ if [ "$1" = "auto" ]; then
    # read the line from the tmpfile
    if [ -f $tmpfile ]; then
       line=$(cat $tmpfile)
+      [ $verbose = Y ] && echo "found line: $line"
       rm -f $tmpfile
    else
-      [ $verbose = Y ] && echo "ERROR: no putty client found in $putty_client_file for pattern='^$putty_login,$putty_ip'" >&2
+      [ $verbose = Y ] && echo "ERROR: no putty client found in $putty_client_file for target='$target'" >&2
       exit 1
-   fi
-   [ $verbose = Y ] && echo "line=$line"
-   
-   # if there is a line, then we can set the putty position
-   if [ "X$line" = "X" ]; then
-      [ $verbose = Y ] && echo "ERROR: no putty client found in $putty_client_file for pattern='^$putty_login,$putty_ip'" >&2
-      exit 1
-   elif [ $verbose = Y ]; then
-      echo "found putty client line: $line"
    fi
 
    min_pos=$(echo $line | awk '{print $2}')
