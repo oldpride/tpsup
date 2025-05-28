@@ -942,7 +942,13 @@ gittop() {
    cd "$gitdir"
 }
 
-# set PLACE_PUTTY to Y in site-spec/profile or $HOME/.profile
-if [ "X$PLACE_PUTTY" = "XY" ]; then
-   puttypos auto || : # '|| :' is to ignore the error and set return code to 0.
+# if you need to auto place PUTTY, 
+#    1. set PLACE_PUTTY to Y in site-spec/profile or $HOME/.profile
+#    2. config ~/.tpsup/putty_client.txt
+#    3. once login or after 'su -', run 'puttypos auto' or 'siteenv'
+if [[ $- == *i* ]]; then
+   # this is interactive shell
+   if [ "X$PLACE_PUTTY" = "XY" ]; then
+      puttypos auto || : # '|| :' is to ignore the error and set return code to 0.
+   fi
 fi
