@@ -78,8 +78,10 @@ if [ -z "$who" ]; then
 fi
 
 login=$(echo "$who" | awk '{print $1}')
-remote_ip=$(echo "$who" | awk '{print $5}')
-# remove parentheses around the IP address if present
-remote_ip=$(echo "$remote_ip" | sed 's/(\(.*\))/\1/')
+
+# use 'cut' to extract the remote IP address because its position can be
+# either the 5th or 6th field.
+remote_ip=$(echo "$who" | cut -d\( -f2 | cut -d\) -f1)
+
 
 echo "$login $full_tty $remote_ip"

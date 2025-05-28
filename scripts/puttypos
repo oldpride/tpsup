@@ -104,7 +104,7 @@ if [ "$1" = "auto" ]; then
    
    # if there is a line, then we can set the putty position
    if [ "X$line" = "X" ]; then
-      echo "ERROR: no putty client found in $putty_client_file for putty_ip='$putty_ip'" >&2
+      echo "ERROR: no putty client found in $putty_client_file for pattern='^$putty_login,$putty_ip'" >&2
       exit 1
    elif [ $verbose = Y ]; then
       echo "found putty client line: $line"
@@ -163,7 +163,7 @@ else
 
          if ! [ "X$pid" = "X" ]; then
             if ps -p $pid >/dev/null; then
-               [ $verbose = Y ] && echo "putty $padded is running, pid=$pid."             
+               [ $verbose = Y ] && echo "putty at position $i is running, pid=$pid."             
                if [ ${seen[$pid]+_} ]; then
                   if [ $verbose = Y ]; then
                      [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
