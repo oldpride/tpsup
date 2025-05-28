@@ -112,17 +112,15 @@ if [ "$1" = "auto" ]; then
    tmpfile=/tmp/puttypos.$putty_login.$putty_ip
    /bin/rm -f $tmpfile
 
-   [ $verbose = Y ] && echo "searching for putty client line in $putty_client_file for pattern='^$putty_login,$putty_ip'"
+   [ $verbose = Y ] && echo "searching a pattern in $putty_client_file matching $putty_login,$putty_ip'"
    cat $putty_client_file | while read line; do
       # echo "line=$line"
-      if [[ $line =~ ^$putty_login, ]]; then
+      pattern=$(echo $line | awk '{print $1}')
+      if [[ ^$putty_login,$putty_ip =~ $pattern ]]; then
          # found the line that matches putty_login
-         if [[ $line =~ ,$putty_ip ]]; then
-            # found the line that matches putty_ip
-            [ $verbose = Y ] && echo "found putty client line: $line"
-            echo "$line" > $tmpfile
-            break
-         fi
+         [ $verbose = Y ] && echo "found putty client line: $line"
+         echo "$line" > $tmpfile
+         break
       fi
    done
 
