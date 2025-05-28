@@ -96,7 +96,7 @@ if [ "$1" = "auto" ]; then
       usage
    fi
    
-   echo "in 'auto' mode, we use putty_client_file=$putty_client_file"
+   [ $verbose = Y ] && echo "in 'auto' mode, we use putty_client_file=$putty_client_file"
 
    if ! [ -f "$putty_client_file" ]; then
       [ $verbose = Y ] && echo "ERROR: putty client file $putty_client_file does not exist" >&2
@@ -121,7 +121,7 @@ if [ "$1" = "auto" ]; then
    # echo "puttypos $min_pos $max_pos"
 
    # recursively call this script with specific min and max
-   [ $verbose = Y ] && echo "puttypos $flag $min_pos $max_pos"
+   [ $verbose = Y ] && echo "recursively calling: puttypos $flag $min_pos $max_pos"
    puttypos $flag $min_pos $max_pos
     
 else
