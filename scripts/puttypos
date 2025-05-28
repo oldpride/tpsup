@@ -166,15 +166,21 @@ if [ "$1" = "auto" ]; then
 
    min_pos=$(echo $line | awk '{print $2}')
    max_pos=$(echo $line | awk '{print $3}')
-   width=$(echo $line | awk '{print $4}')
-   height=$(echo $line | awk '{print $5}')
+
+   # width,height precedence: command line > putty_client_file > default
+   if [ -z "$width" ]; then
+      width=$(echo $line | awk '{print $4}')
+   fi
+   if [ -z "$height" ]; then
+      height=$(echo $line | awk '{print $5}')
+   fi
+
    if [ -z "$width" ]; then
       width=$default_width
    fi
    if [ -z "$height" ]; then
       height=$default_height
    fi
-   # echo "puttypos $min_pos $max_pos"
 
    # recursively call this script with specific min and max
    [ $verbose = Y ] && echo "recursively calling: puttypos $flag -s $width,$height $min_pos $max_pos"
@@ -253,6 +259,7 @@ else
 
       # https://superuser.com/questions/1162451
       # printf '\033[3;'"$offset;$offset"'t'
+      [ $verbose = Y ] && echo "puttypos: setting position to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
 
       echo $putty_pid > $posfile
