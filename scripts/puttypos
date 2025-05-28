@@ -77,14 +77,14 @@ if [ $verbose = Y ]; then
 fi
 
 if [ "X$putty_ip" = "X" ]; then
-   echo "ERROR: cannot get putty client IP from SSH_CLIENT or who" >&2
+   [ $verbose = Y ] && echo "ERROR: cannot get putty client IP from 'who' command." >&2
    exit 1
 fi
 
 if [ "$1" = "auto" ]; then
    # auto mode, use default min and max
    if [ $# -ne 1 ]; then
-      echo "wrong number of args for auto mode" >&2
+      [ $verbose = Y ] && echo "wrong number of args for auto mode" >&2
       usage
    fi
 
@@ -93,7 +93,7 @@ if [ "$1" = "auto" ]; then
    # echo "putty_client_file=$putty_client_file"
 
    if ! [ -f "$putty_client_file" ]; then
-      echo "ERROR: putty client file $putty_client_file does not exist" >&2
+      [ $verbose = Y ] && echo "ERROR: putty client file $putty_client_file does not exist" >&2
       exit 1
    fi
 
@@ -104,7 +104,7 @@ if [ "$1" = "auto" ]; then
    
    # if there is a line, then we can set the putty position
    if [ "X$line" = "X" ]; then
-      echo "ERROR: no putty client found in $putty_client_file for pattern='^$putty_login,$putty_ip'" >&2
+      [ $verbose = Y ] && echo "ERROR: no putty client found in $putty_client_file for pattern='^$putty_login,$putty_ip'" >&2
       exit 1
    elif [ $verbose = Y ]; then
       echo "found putty client line: $line"
@@ -114,9 +114,7 @@ if [ "$1" = "auto" ]; then
    max_pos=$(echo $line | awk '{print $3}')
    # echo "puttypos $min_pos $max_pos"
 
-   if [ $verbose = Y ]; then
-      echo "puttypos $flag min=$min_pos max=$max_pos"
-   fi
+   [ $verbose = Y ] && echo "puttypos $flag min=$min_pos max=$max_pos"
    puttypos $flag $min_pos $max_pos
     
 else
