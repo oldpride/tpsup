@@ -95,9 +95,10 @@ fi
 # But for older Linux, this is not supported.
 # if SSH_CLIENT is not set, then we use 'who/tpwho' comand to get the putty client IP
 
-WHO=$(tpwho current)
-if [ $verbose = Y ]; then
-   echo "WHO=$WHO"
+WHO=$(tpwho current 2>/dev/null)
+if [ $? -ne 0 ]; then
+   [ $verbose = Y ] && echo "tpwho command failed. not a tty. quit" >&2
+   exit 1
 fi
 
 putty_login=$(echo $WHO | awk '{print $1}')
