@@ -8,6 +8,8 @@ putty_client_file=~/.tpsup/putty_client.txt
 
 min=0
 max=9
+default_width=110
+default_height=35
 
 usage () {
    cat >&2 <<EOF
@@ -28,11 +30,25 @@ usage:
 
    This script works both in initial login and in login-then-su cases.
 
+   -s width,height   default to $putty_client_file setting.
+                     if width or height is not set, use default $default_width,$default_height.
+
+   -v                verbose mode.
+
+   putty_client_file format is
+      login,ip min_pos max_pos width height
+      mylogin,192.168.1.62 0 9 100 30
+      mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2
+
+      # "login,ip" can be a regex pattern.
+      # width and height are optional, if not set, use default $default_width,$default_height.
+
 examples:
 
    $prog auto
    $prog 0 9
    $prog 10 12
+   $prog -s 100,30 auto
 
 EOF
    exit 1
@@ -41,11 +57,11 @@ EOF
 
 verbose=N
 flag=""
-while getopts v o;
+while getopts vs: o;
 do
    case "$o" in
       v)  verbose=Y;flag=-v;;
-      #x)  max=$OPTARG;;
+      s)  size=$OPTARG;;
       *)   usage;;
    esac
 done
@@ -55,6 +71,17 @@ shift $((OPTIND-1))
 if [ $# -ne 1 -a $# -ne 2 ]; then
    echo "wrong number of args" >&2
    usage
+fi
+
+# size format width,height
+if [ "X$size" != "X" ]; then
+   if [[ $size =~ ^[0-9]+,[0-9]+$ ]]; then
+      width=$(echo $size | cut -d, -f1)
+      height=$(echo $size | cut -d, -f2)
+   else
+      echo "ERROR: size='$size' is not in the format width,height" >&2
+      usage
+   fi
 fi
 
 # $ env |grep SSH
@@ -82,6 +109,7 @@ if [ $verbose = Y ]; then
    echo "putty_login=$putty_login"
    echo "putty_tty=$putty_tty"
    echo "putty_ip=$putty_ip"
+   echo "putty_pid=$putty_pid"
 fi
 
 if [ "X$putty_ip" = "X" ]; then
@@ -106,7 +134,7 @@ if [ "$1" = "auto" ]; then
    # putty_client_file format is
    # login,ip min_pos max_pos
    # mylogin,192.168.1.62 0 2
-   # mylogin,192.* 0 2  # this can be a regex pattern
+   # mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2  # this can be a regex pattern
 
    # loop through the file to find the line that matches the "putty_login,putty_ip"
    tmpfile=/tmp/puttypos.$putty_login.$putty_ip
@@ -121,7 +149,7 @@ if [ "$1" = "auto" ]; then
       if [[ ^$target =~ $pattern ]]; then
          # found the line that matches putty_login
          [ $verbose = Y ] && echo "pattern='$pattern' matched '$target' in line: $line"
-         echo "$line" > $tmpfile
+         echo "$line" |cut -d"#" -f1 > $tmpfile  # remove comments
          break
       fi
    done
@@ -138,11 +166,19 @@ if [ "$1" = "auto" ]; then
 
    min_pos=$(echo $line | awk '{print $2}')
    max_pos=$(echo $line | awk '{print $3}')
+   width=$(echo $line | awk '{print $4}')
+   height=$(echo $line | awk '{print $5}')
+   if [ -z "$width" ]; then
+      width=$default_width
+   fi
+   if [ -z "$height" ]; then
+      height=$default_height
+   fi
    # echo "puttypos $min_pos $max_pos"
 
    # recursively call this script with specific min and max
-   [ $verbose = Y ] && echo "recursively calling: puttypos $flag $min_pos $max_pos"
-   puttypos $flag $min_pos $max_pos
+   [ $verbose = Y ] && echo "recursively calling: puttypos $flag -s $width,$height $min_pos $max_pos"
+   puttypos $flag -s $width,$height $min_pos $max_pos
     
 else
    # puttypos min max
@@ -212,10 +248,12 @@ else
       fi
 
       # found a spot
-      offset=`expr 30 \* $i`
+      x=`expr 30 \* $i`
+      y=`expr 30 \* $i`
 
       # https://superuser.com/questions/1162451
-      printf '\033[3;'"$offset;$offset"'t'
+      # printf '\033[3;'"$offset;$offset"'t'
+      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
 
       echo $putty_pid > $posfile
 
