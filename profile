@@ -944,5 +944,5 @@ gittop() {
 
 # set PLACE_PUTTY to Y in site-spec/profile or $HOME/.profile
 if [ "X$PLACE_PUTTY" = "XY" ]; then
-   puttypos auto
+   puttypos auto || : # '|| :' is to ignore the error and set return code to 0.
 fi
