@@ -4,6 +4,8 @@
 prog=`basename $0`
 user=`id |cut -d\( -f2|cut -d\) -f1`
 
+putty_client_file=~/.tpsup/putty_client.txt
+
 min=0
 max=9
 
@@ -17,8 +19,14 @@ usage:
    position a putty's window in the next available position between min and max.
 
    min starts from 0.
+   max should not be greater than min+10. This limit is set by putty doesn't spawn
+   more than 10 windows in the same session.
 
-   if no available position, quit.
+   'auto' means to get min and max from $putty_client_file.
+
+   if no available position, quit; the putty window will not be moved.
+
+   This script works both in initial login and in login-then-su cases.
 
 examples:
 
@@ -87,10 +95,8 @@ if [ "$1" = "auto" ]; then
       [ $verbose = Y ] && echo "wrong number of args for auto mode" >&2
       usage
    fi
-
-   putty_client_file=~/.tpsup/putty_client.txt
-   # echo "putty_ip=$putty_ip"
-   # echo "putty_client_file=$putty_client_file"
+   
+   echo "in 'auto' mode, we use putty_client_file=$putty_client_file"
 
    if ! [ -f "$putty_client_file" ]; then
       [ $verbose = Y ] && echo "ERROR: putty client file $putty_client_file does not exist" >&2
@@ -114,10 +120,12 @@ if [ "$1" = "auto" ]; then
    max_pos=$(echo $line | awk '{print $3}')
    # echo "puttypos $min_pos $max_pos"
 
-   [ $verbose = Y ] && echo "puttypos $flag min=$min_pos max=$max_pos"
+   # recursively call this script with specific min and max
+   [ $verbose = Y ] && echo "puttypos $flag $min_pos $max_pos"
    puttypos $flag $min_pos $max_pos
     
 else
+   # puttypos min max
    if [ $# -ne 2 ]; then
       echo "wrong number of args" >&2
       usage
@@ -141,7 +149,6 @@ else
       usage
    fi
 
-
    # for loop range, works for numbers
    #    for i in {0..10} 
    # but not work for variables
@@ -152,6 +159,7 @@ else
       [ $verbose = Y ] && echo ""
       [ $verbose = Y ] && echo "checking spot $i"
 
+      # pad the number in the file name to make 'ls /tmp/puttypos.*' easy to sort
       padded=`printf '%03d' $i`
       posfile=/tmp/puttypos.$user.$putty_ip.$padded 
 
@@ -163,9 +171,10 @@ else
             if ps -p $pid >/dev/null; then
                [ $verbose = Y ] && echo "putty at position $i is running, pid=$pid."             
                if [ ${seen[$pid]+_} ]; then
-                  if [ $verbose = Y ]; then
-                     [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
-                  fi
+                  # +_: This is a shorthand way to check if the key $pid exists in the seen array.
+                  # when you use + with an array element, it evaluates to a non-empty string 
+                  # (e.g., _) if the key exists, or an empty string if it doesn't.
+                  [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
                elif [ "$putty_pid" = "$pid" ]; then
                   # this file has putty_pid
                   [ $verbose = Y ] && echo "seen putty_pid=$putty_pid in $posfile. keep spot $i"
@@ -175,9 +184,7 @@ else
                   continue
                fi
             else 
-               if [ $verbose = Y ]; then
-                  [ $verbose = Y ] &&  "pid=$pid in $posfile is not running.  use sport $i"
-               fi
+               [ $verbose = Y ] && echo  "pid=$pid in $posfile is not running.  use sport $i"
             fi
          else
             [ $verbose = Y ] && "$posfile is empty. we can use sport $i"
