@@ -158,7 +158,8 @@ else
       posfile=/tmp/puttypos.$user.$putty_ip.$padded 
 
       if [ -e $posfile ]; then
-         pid=`cat $posfile`
+         pid=$( cat $posfile | cut -d' ' -f1 )
+         [ $verbose = Y ] && echo "found posfile $posfile, pid=$pid"
 
          if ! [ "X$pid" = "X" ]; then
             if ps -p $pid >/dev/null; then
