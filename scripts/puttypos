@@ -106,15 +106,39 @@ if [ "$1" = "auto" ]; then
    # putty_client_file format is
    # login,ip min_pos max_pos
    # mylogin,192.168.1.62 0 2
-   line=$(egrep "^$putty_login,$putty_ip\\s" $putty_client_file)
-   
-   # if there is a line, then we can set the putty position
-   if [ "X$line" = "X" ]; then
-      [ $verbose = Y ] && echo "ERROR: no putty client found in $putty_client_file for pattern='^$putty_login,$putty_ip'" >&2
-      exit 1
-   elif [ $verbose = Y ]; then
-      echo "found putty client line: $line"
+   # mylogin,192.* 0 2  # this can be a regex pattern
+
+   # loop through the file to find the line that matches the "putty_login,putty_ip"
+   tmpfile=/tmp/puttypos.$putty_login.$putty_ip
+   cat $putty_client_file | while read line; do
+      # echo "line=$line"
+      if [[ $line =~ ^$putty_login, ]]; then
+         # found the line that matches putty_login
+         if [[ $line =~ ,$putty_ip ]]; then
+            # found the line that matches putty_ip
+            [ $verbose = Y ] && echo "found putty client line: $line"
+            echo "$line" > $tmpfile
+            break
+         fi
+      fi
+   done
+
+   # read the line from the tmpfile
+   if [ -f $tmpfile ]; then
+      line=$(cat $tmpfile)
+      rm -f $tmpfile
+   else
+      line=""
    fi
+   [ $verbose = Y ] && echo "line=$line"
+   
+   # # if there is a line, then we can set the putty position
+   # if [ "X$line" = "X" ]; then
+   #    [ $verbose = Y ] && echo "ERROR: no putty client found in $putty_client_file for pattern='^$putty_login,$putty_ip'" >&2
+   #    exit 1
+   # elif [ $verbose = Y ]; then
+   #    echo "found putty client line: $line"
+   # fi
 
    min_pos=$(echo $line | awk '{print $2}')
    max_pos=$(echo $line | awk '{print $3}')
