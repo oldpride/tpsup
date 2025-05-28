@@ -68,7 +68,7 @@ fi
 putty_login=$(echo $WHO | awk '{print $1}')
 putty_tty=$(echo $WHO | awk '{print $2}')
 putty_ip=$(echo $WHO | awk '{print $3}')
-putty_pid=$(ps -t $putty_tty |grep bash |awk '{print $1}')
+putty_pid=$(ps -t $putty_tty --sort=start_time |grep bash |head -n 1|awk '{print $1}')
 
 if [ $verbose = Y ]; then
    echo "putty_login=$putty_login"
