@@ -1,0 +1,106 @@
+#!/bin/bash
+
+prog=$(basename $0)
+
+usage() {
+   cat <<EOF
+usage:
+
+   $prog offset1 offset2 path
+
+   compare two commits by their offsets. 
+   current (not commited) offset is 0. 
+   last commit is 1.
+   max offset is 10.
+
+examples:
+
+   tplib
+   git log SWAGGER.pm
+   $prog 0 1 SWAGGER.pm
+   
+EOF
+
+   exit 1
+}
+
+# use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
+unset LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH
+
+verbose=N
+while getopts v o; do
+   case "$o" in
+   v) verbose=Y;;
+   # m) commit_message=$OPTARG;;
+   *)
+      echo "unknow switch '$o'"
+      usage
+      ;;
+   esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 3 ]; then
+   echo "wrong number of args"
+   usage
+fi
+
+o1=$1
+o2=$2
+path=$3
+
+# check if the offsets are valid
+if ! [[ $o1 =~ ^-?[0-9]+$ ]]; then
+   echo "offset1 '$o1' is not a valid integer" >&2
+   exit 1
+fi
+
+if ! [[ $o2 =~ ^-?[0-9]+$ ]]; then
+   echo "offset2 '$o2' is not a valid integer" >&2
+   exit 1
+fi
+
+if [ ! -f "$path" ]; then
+   echo "file '$path' does not exist" >&2
+   exit 1
+fi
+
+# map commit hashes to an assoicate array
+declare -A commit_by_offset
+[ $verbose = "Y" ] && echo "get commits from cmd=git log $path | grep '^commit' |head -n 10|awk '{print \$2}'"
+commits=$(git log $path | grep '^commit' |head -n 10|awk '{print $2}')
+
+commit_by_offset+=([0]="")
+i=1
+for c in `echo $commits`
+do
+   commit_by_offset+=([$i]=$c)
+   i=$((i + 1))
+done
+
+if [ $verbose = "Y" ]; then
+   echo "commit_by_offset:"
+   for k in "${!commit_by_offset[@]}"; do
+      echo "  $k: ${commit_by_offset[$k]}"
+   done
+fi
+
+for offset in $o1 $o2
+do
+   if [ $offset -ne 0 -a "X${commit_by_offset[$offset]}" = "X" } ]; then 
+      echo "ERROR: commit at offset=$offset is not found. run: git log $path"
+      exit 1
+   fi
+done
+
+commit1=${commit_by_offset[$o1]}
+commit2=${commit_by_offset[$o2]}
+
+set -x
+cmd="git diff $commit1 $commit2 -- $path"
+if [ "$verbose" = "Y" ]; then
+   echo "running: $cmd"
+fi
+exec $cmd
