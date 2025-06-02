@@ -228,8 +228,10 @@ if ( $local_hosts ne 'localhost' ) {
 
 $remote_host = resolve_scalar_var_in_string( $remote_host, $dict );
 
-die "remote_host='$remote_host' and localhost='$hostname' are the same. rsync instead"
-  if $remote_host =~ /$hostname/ || $hostname =~ /$remote_host/;
+if ( !$reverse ) {
+   die "remote_host='$remote_host' and localhost='$hostname' are the same. rsync instead"
+     if $remote_host =~ /$hostname/ || $hostname =~ /$remote_host/;
+}
 
 my $me = `id |cut -d\\( -f2|cut -d\\) -f1`;
 chomp $me;
