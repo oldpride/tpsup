@@ -175,7 +175,7 @@ if ( $? == 0 ) {
    my $cmd  = "who | grep $short_tty";
    my $line = `$cmd`;
    if ($line) {
-      if ( $line =~ /(\(.+?\))/ ) {
+      if ( $line =~ /\((.+?)\)/ ) {
          my $client_ip = $1;
          $dict->{CLIENT_IP} = $client_ip;
       } else {
