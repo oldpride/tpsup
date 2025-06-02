@@ -49,6 +49,9 @@ usage:
                      this overrides config.
                      eg. -rd "dir1,dir2"
 
+   -r
+   -reverse          reverse tpdist mode
+
    -ex id1,id2,...   only excludes with these ids
 
    -nx id1,id2,...   skip excludes with these ids
@@ -73,23 +76,25 @@ my $local_base;
 my $user_remote_server;
 my $user_remote_base;
 my $user_remote_dirs;
+my $user_reverse;
 my $dryrun;
 my $only_exclude_ids;
 my $skip_exclude_ids;
 my $not_check_user;
 
 GetOptions(
-   'verbose'  => \$verbose,
-   'c=s'      => \$cfg_file,
-   'a=s'      => \$app_name,
-   'n|dryrun' => \$dryrun,
-   'lb=s'     => \$local_base,
-   'rs=s'     => \$user_remote_server,
-   'rb=s'     => \$user_remote_base,
-   'rd=s'     => \$user_remote_dirs,
-   'ex=s'     => \$only_exclude_ids,
-   'nx=s'     => \$skip_exclude_ids,
-   'ncu'      => \$not_check_user,
+   'verbose'   => \$verbose,
+   'c=s'       => \$cfg_file,
+   'a=s'       => \$app_name,
+   'n|dryrun'  => \$dryrun,
+   'lb=s'      => \$local_base,
+   'rs=s'      => \$user_remote_server,
+   'rb=s'      => \$user_remote_base,
+   'rd=s'      => \$user_remote_dirs,
+   'r|reverse' => \$user_reverse,
+   'ex=s'      => \$only_exclude_ids,
+   'nx=s'      => \$skip_exclude_ids,
+   'ncu'       => \$not_check_user,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
@@ -139,6 +144,13 @@ $verbose && print "app_cfg = ", Dumper($app_cfg);
 
 my ( $remote_host, $remote_port, $remote_dirs, $remote_base, $local_hosts, $local_os, $exclude ) =
   @{$app_cfg}{qw(remote_host   remote_port   remote_dirs   remote_base   local_hosts   local_os   exclude)};
+
+my $cfg_reverse = $app_cfg->{reverse} || 0;
+my $reverse     = 0;
+if ( ( $user_reverse && !$cfg_reverse ) || ( !$user_reverse && $cfg_reverse ) ) {
+   $reverse = 1;
+}
+$verbose && print "reverse = $reverse\n";
 
 my $uname = `uname -a`;
 chomp $uname;
@@ -357,10 +369,26 @@ for my $sub_dir (@$remote_dirs) {
    $remote_dir =~ s:(\s+):'$1':g;
    $local_dir  =~ s:(\s+):'$1':g;
 
-   my $cmd =
-       qq(tpdist -q -timeout 3600 client $remote_host $remote_port $flag)
-     . qq( --exclude '$exclude_pattern')
-     . qq( $remote_dir $local_dir );
+   my $cmd;
+   if ( !$reverse ) {
+      $cmd =
+          qq(tpdist -q -timeout 3600 client $remote_host $remote_port $flag)
+        . qq( --exclude '$exclude_pattern')
+        . qq( $remote_dir $local_dir );
+   } else {
+      print <<EOF;
+
+NOTO:
+   we are running in reverse mode.
+   on client side: please run
+      tpdist -reverse client $remote_host $remote_port
+
+EOF
+      $cmd =
+          qq(tpdist -q -timeout 3600 -reverse server $remote_port $flag)
+        . qq( --exclude '$exclude_pattern')
+        . qq( $remote_dir $local_dir );
+   }
 
    if ($dryrun) {
       print "\nDRYRUN: $cmd\n";

@@ -1,0 +1,10 @@
+# normal mode, client pull, server push
+host1$ tpdist server 6666
+host2$ tpdist client host1 6666 /a/b/c b
+
+# reverse mode, client push, server pull
+host1$ tpdist -reverse client host1 6666
+host2$ tpdist -reverse server 6666 /a/b/c b
+
+# local mode
+$ tpdist local /a/b/c b
