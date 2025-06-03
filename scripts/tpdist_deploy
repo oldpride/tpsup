@@ -372,7 +372,7 @@ for my $sub_dir (@$remote_dirs) {
    } else {
       print <<EOF;
 
-NOTO:
+NOTE:
    we are running in reverse mode.
    on client side: please run
       tpdist -reverse client $remote_host $remote_port

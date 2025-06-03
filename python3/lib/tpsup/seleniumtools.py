@@ -2480,6 +2480,76 @@ def test_basic():
     print(f"cmd = {cmd}")
     os.system(cmd)
 
+def helper_find_element(path:str):
+    """
+    helper function to find an element by path.
+    This is used by locate() and locate_dict() to find an element.
+    """
+    global driver
+    global locator_driver
+    global last_element
+    global domstack
+    global debuggers
+
+    if not driver:
+        print("driver is not set. Please set driver first.")
+        return
+
+    if not path:
+        print("path is empty. Please provide a valid path.")
+        return
+
+    # we use locator_driver to find the element, so that we can switch to shadow dom if needed.
+    if not locator_driver:
+        print("locator_driver is not set. Using driver as locator_driver.")
+        return
+    
+    if m := re.match(r'css=(.*)', path):
+        # if path starts with css=, we use css selector to find the element.
+        path = m.group(1)
+        # we use css selector to find the element.
+        # this is the same as driver.find_element(By.CSS_SELECTOR, path)
+        print(f"Using css selector to find element: {path}")
+        try:
+            locator_driver.find_element(By.CSS_SELECTOR, path)
+            print(f"Found element by css selector: {path}")
+        except Exception as e:
+            print(f"{e}")
+            return None
+    elif m := re.match(r'xpath=(.*)', path):
+        # if path starts with xpath=, we use xpath to find the element.
+        path = m.group(1)
+        # we use xpath to find the element.
+        # this is the same as driver.find_element(By.XPATH, path)
+        print (f"Using xpath to find element: {path}")
+        try:
+            locator_driver.find_element(By.XPATH, path)
+            print(f"Found element by xpath: {path}")
+        except Exception as e:
+            print(f"{e}")
+            return None
+    else:
+        print(f"Unsupported path format: {path}. Please use css= or xpath= prefix.")
+        return None
+
+helper = {
+    'd': {
+        'desc': 'dump_page',
+        'func': dump,
+        'args': {
+            'driver': driver,
+            'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)
+            # we delay mkdir, till we really need it
+        }
+    },
+    'p': {
+        'desc': 'find element by path',
+        'func': helper_find_element,
+        'args': {
+            'fromUser': True
+        },
+    },
+}
 
 def locate_dict(step: dict, **opt):
     dryrun = opt.get("dryrun", 0)
@@ -2497,15 +2567,26 @@ def locate_dict(step: dict, **opt):
     if debug:
         print(f"locate_dict: step={pformat(step)}")
 
-    helper = {}  # interactivity helper
-    if interactive:
-        helper = {
-            'd': ['dump page', dump,
-                  {'driver': driver,
-                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
-                  # we delay mkdir, till we really need it
-                  ],
-        }
+    # helper = {}  # interactivity helper
+    # if interactive:
+    #     helper = {
+    #         'd': {
+    #             'desc': 'dump_page',
+    #             'func': dump,
+    #             'args': {
+    #                 'driver': driver,
+    #                 'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)
+    #                 # we delay mkdir, till we really need it
+    #             }
+    #         },
+    #         'p': {
+    #             'desc': 'find element by path',
+    #             'func': helper_find_element,
+    #             'args': {
+    #                 'fromUser': True
+    #             },
+    #         },
+    #     }
 
     ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
 
@@ -2891,15 +2972,16 @@ def locate(locator: str, **opt):
 
     ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
 
-    helper = {}  # interactivity helper
-    if interactive:
-        helper = {
-            'd': ['dump page', dump,
-                  {'driver': driver,
-                      'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
-                  # we delay mkdir, till we really need it
-                  ],
-        }
+    # helper = {}  # interactivity helper
+    # if interactive:
+    #     helper = {
+    #         'd': ['dump page', 
+    #               dump,
+    #               {'driver': driver,
+    #                   'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+    #               # we delay mkdir, till we really need it
+    #               ],
+    #     }
 
     '''
     locator_driver vs original 'driver'

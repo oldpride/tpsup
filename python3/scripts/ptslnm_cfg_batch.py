@@ -14,6 +14,10 @@ from pprint import pformat
 
 HOME = tpsup.envtools.get_home_dir()
 TPSUP = os.environ['TPSUP']
+
+# convert to native path, eg, /cygdrive/c/User/tian/... to C:/User/tian/...
+TPSUP = tpsup.envtools.convert_path(TPSUP)
+
 TPP3 = f'{TPSUP}/python3/scripts'
 HTTP_BASE = 'http://localhost:8000'
 FILE_BASE = f'file:///{TPP3}'
