@@ -1147,7 +1147,7 @@ def correct_xpath(path: str) -> str:
 # we will use the following patterns more than once, therefore,
 # we centralize them into functions, so we can easily change their behavior
 def get_locator_compiled_path1():
-    return re.compile(r"\s*(xpath|css|click_xpath|click_css)=(.+)",
+    return re.compile(r"\s*(?<!gone_)(xpath|css|click_xpath|click_css)=(.+)",
                       re.MULTILINE | re.DOTALL)
 
 def get_locator_compiled_path2():
