@@ -2540,6 +2540,10 @@ helper = {
             'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)
             # we delay mkdir, till we really need it
         },
+        'usage': f'''
+        dump the current element. no arg. output to
+        {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+        ''',
     },
     'p': {
         'desc': 'find element by path',

@@ -87,7 +87,7 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None
                 for k in helper.keys():
                     if m := re.match(f"{k}(.*)", answer):
                         v = helper[k]
-                        print(f"matched helper {k} = {v}")
+                        # print(f"matched helper {k} = {v}")
                         arg = m.group(1)
                         # trim whitespace
                         arg = arg.strip()
