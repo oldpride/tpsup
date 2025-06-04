@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# sort a list of strings in a line
+# https://stackoverflow.com/questions/49008137/bash-sort-a-list-of-strings
+echo "$@" | xargs -n1 | sort | xargs
