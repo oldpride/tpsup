@@ -1,4 +1,13 @@
 from pprint import pformat
+import re
+
+usage_by_subject = {
+    'i' : '''
+        inject python code. examples
+        i print("hello world")
+
+    ''',
+}
 
 nonstop_step_count = 0
 
@@ -22,7 +31,7 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None
         while True:
             if message:
                 print(message)
-            hint = f"Hit Enter - continue; number - multiple steps; i - inject code; q - quit"
+            hint = f"Hit Enter=1 step; number=steps; i=inject code; q=quit; s=skip; h=help"
             # if we have custom helper, add them to next line
             if helper:
                 hint += ";\n   "
@@ -30,6 +39,9 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None
                     v = helper[k]
                     # print(f"helper[{k}] = {pformat(v)}")
                     hint += f" {k} - {v['desc']};"
+
+                    if 'usage' in v:
+                        usage_by_subject[k] = v['usage']
                 # remove last semicolon
                 hint = hint[:-1]
             
@@ -51,6 +63,18 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None
                 print("skip")
                 ret['skip'] = 1
                 break
+            elif m := re.match("[h](.*)", answer):
+                # help
+                subject = m.group(1).strip()
+                
+                if not subject:
+                    # if subject is not specified, print all subjects
+                    for k in usage_by_subject.keys():
+                        print(f"{k} {usage_by_subject[k]}")
+                elif subject in usage_by_subject.keys():
+                    print(f"{subject} {usage_by_subject[subject]}")
+                else:
+                    print(f"no usage for '{subject}'")
             elif m := re.match("[i]\\s(.*)", answer):
                 print("inject code")
                 code = m.group(1)
@@ -62,19 +86,21 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None
                 matched_helper = False
                 for k in helper.keys():
                     if m := re.match(f"{k}(.*)", answer):
+                        v = helper[k]
+                        print(f"matched helper {k} = {v}")
                         arg = m.group(1)
                         # trim whitespace
                         arg = arg.strip()
                     
                         # v[0] is the description, v[1] is the function, v[2] is the args
-                        func = v['func']
+                        myfunc = v['func']
                         args = v['args']
 
                         if args.get('fromUser', False):
                             # if args['fromUser'] is True, then get the value from user
-                            func(arg)
+                            myfunc(arg)
                         else:
-                            func(**args)
+                            myfunc(**args)
 
                         matched_helper = True
                         break

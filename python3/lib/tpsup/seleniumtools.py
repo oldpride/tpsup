@@ -2537,10 +2537,9 @@ helper = {
         'desc': 'dump_page',
         'func': dump,
         'args': {
-            'driver': driver,
             'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)
             # we delay mkdir, till we really need it
-        }
+        },
     },
     'p': {
         'desc': 'find element by path',
@@ -2548,6 +2547,11 @@ helper = {
         'args': {
             'fromUser': True
         },
+        'usage': '''
+        test find_element path: xpath or css. Examples
+        p css=#my_element_id
+        p xpath=/a/b
+        ''',
     },
 }
 
