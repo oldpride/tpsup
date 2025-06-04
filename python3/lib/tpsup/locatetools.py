@@ -8,6 +8,8 @@ import tpsup.cmdtools
 import tpsup.envtools
 from tpsup.nettools import is_tcp_open
 import tpsup.pstools
+import tpsup.utilbasic
+import tpsup.interactivetools
 
 class FollowEnv:
     def __init__(self,
@@ -418,10 +420,28 @@ class FollowEnv:
             result = {'Success': False}
 
             if step_type == str:
-                result = self.str_action(step, **opt)
+                if opt['interactive']:
+                    while True:
+                        try:
+                            result = self.str_action(step, **opt)
+                            break
+                        except Exception as e:
+                            print(e)
+                            # setting step_count to 0 is to make interactive mode to single step.
+                            tpsup.interactivetools.nonstop_step_count = 0   
+                else:
+                    result = self.str_action(step, **opt)
             elif step_type == dict:
-                need_driver = True # all dict locators need driver
-                result = self.dict_action(step, **opt)
+                if opt['interactive']:
+                    while True:
+                        try:
+                            result = self.dict_action(step, **opt)
+                            break
+                        except Exception as e:
+                            print(e)
+                            tpsup.interactivetools.nonstop_step_count = 0
+                else:
+                    result = self.dict_action(step, **opt)
             else:
                 raise RuntimeError(f"unsupported step type={step_type}, step={pformat(step)}")
             

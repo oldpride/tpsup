@@ -42,7 +42,7 @@ import tpsup.pstools
 import tpsup.tmptools
 import os.path
 
-from tpsup.utilbasic import hit_enter_to_continue
+from tpsup.interactivetools import hit_enter_to_continue
 from tpsup.exectools import exec_into_globals, multiline_eval
 
 from typing import List, Union
