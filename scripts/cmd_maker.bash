@@ -20,10 +20,10 @@ usage:
    
    'all' covers: $all_targets.
 
-   create a wrapper script for *_cmd.py, *_cmd.js, *_cmd.js
+   create bash/batch wrapper scripts for *_cmd.py, *_cmd.js, *_cmd.ts
       bash - for bash on linux/cygwin/gitbash. 
             target will be launched from inside venv.
-      bat - for batch on windows, 
+      bat  - for batch on windows, 
             target will be launched from inside venv.
 
    ideally this can be done by a symbolic link but gitbash and cygwin cannot use 

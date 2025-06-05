@@ -13,7 +13,7 @@ from selenium import webdriver
 from tpsup.human import human_delay
 import tpsup.logtools
 from tpsup.logbasic import log_FileFuncLine
-from tpsup.locatetools import handle_break
+from tpsup.locatetools import handle_break,get_defined_locators
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -2545,6 +2545,7 @@ helper = {
         {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
         ''',
     },
+
     'p': {
         'desc': 'find element by path',
         'func': helper_find_element,
@@ -3977,6 +3978,23 @@ def locate(locator: str, **opt):
         raise RuntimeError(f"unsupported 'locator={locator}'")
     
     return ret
+
+# add 'locate' function to helper only after defined 'locate'
+
+helper['l'] = {
+    'desc': 'run a locate command',
+    'func': locate, # type: ignore
+    'args': {
+        'fromUser': True
+    },
+    'usage': f'''
+    run a locate command. Examples
+    l tab=1
+    l click
+    all locators:
+    {"\n".join(get_defined_locators(locate))}
+    ''',
+}
 
 def get_shadowHost_info(shadowHost: WebElement):
     # we pick id, name, or tag_name as the shadow root's name

@@ -1,6 +1,7 @@
 @echo off
 
-:: wrapper script 
+:: # this wrapper script created (copied) by tpsup/scripts/cmd_maker.bash
+:: example usage see tpsup/python3/scripts/Makefile 
 :: the original script is tpsup/scripts/cmd_generic.bat.
 :: tpsup/scripts/cmd_maker.bash will copy tpsup/scripts/cmd_generic.bat to target's directory
 :: and rename it to <target>.bat

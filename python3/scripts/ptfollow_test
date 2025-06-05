@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# this script is created (copied) from ptgeneric_make_cfg_exec.bash
+# see tpsup/python3/scripts/Makefile
+#
 # this wrapper is to shorten command line, so that instead of
 #    ptbatch.py ptslnm_test_cfg_batch.py ...
 # we can type

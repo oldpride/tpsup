@@ -1,0 +1,133 @@
+
+    
++----------+      +--------------+     +----------------+
+| selenium +----->+ chromedriver +---->+ chrome browser +---->internet
++----------+      +--------------+     +----------------+
+
+
+    - To run a local server, 
+        cd "c:/Users/tian/sitebase/github/tpsup/python3/scripts"
+        python3 -m http.server 8000
+      this allows you to use http url, eg, file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/shadow_test2_main.html.
+      otherwise, use "-af" to run file url, eg file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/shadow_test2_main.html.
+      to print file-url example
+            ptslnm -af fe
+            ptslnm -af file_example
+        to print test example
+            ptslnm -af test
+            ptslnm -af test_example
+        to print test example with file url   
+            ptslnm -af ft
+            ptslnm -af file_test
+        to download chromedriver
+            ptslnm -af ddriver [130.0]
+            ptslnm -af download_chromedriver [130.0]
+        to check setup
+            ptslnm -af check_setup
+
+    - To see all defineded locators
+        ptslnm -af locators
+
+    - To clean up chrome persistence and driver logs
+        ptslnm -af any -cq
+
+    - has shadows, no iframes, simple pages to test shadows, default dump scope is element, default dump dir is $HOME/dumpdir
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/shadow_test2_main.html" dump_page="C:/Users/tian/dumpdir" # without locators, dump whole page
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/shadow_test2_main.html" "xpath=id('shadow_host')" "shadow" dump # with locators
+
+    - has iframes, no shadows
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_test1.html" dump
+
+    - has both shadows and iframes: iframe over shadow, shadow over iframe
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" dump
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/shadow_over_iframe_test_main.html" dump
+
+    - test a static page with nested iframes, same origin vs cross origin (has dice.com iframe)
+      many website doesn't allow iframe, eg, google, youtube, but dice.com allows iframe. 
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1] dump
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1] dump
+    - test using js as steps. 
+      variable value can either be persisted in python or in js's window or document (ie, window.documnt) object.
+      'jsr' is a special code to return js variable to python.
+        ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "js=document.testvar=777" "js=return document.testvar" "code=print(jsr)"
+      
+    other js directives: js2element, jsfile, jsfile2element, js2print
+        ptslnm -af url=newtab "jsfile2elementprint=c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_js_test_google.js" debug_after=consolelog click sendkey=Enter sleep=3
+
+    js error should stop locator chain
+        ptslnm -af url=blank "jsfile2elementprint=c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_js_test_throw.js" debug_after=consolelog click sendkey=Enter sleep=3
+
+    - test using js to locate. js is much faster.
+        in shadow, we can only use css selector to locate
+        but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="C:/Users/tian/dumpdir"
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="C:/Users/tian/dumpdir2" -js
+    diff -r dumpdir dumpdir2 # should be the same
+    
+    - test dump scope: element, shadow, iframe, page, all
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump_all 
+
+    - test go up and down in shadow and iframe
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span top
+    
+    // vs / in xpath:
+        // is short path
+        / is full path
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_nested_test_main.html" sleep=1 debug_after=url,consolelog,domstack "xpath=//iframe[1]" "iframe" "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]"
+    
+    - dump out dynamically generated html too
+      note:
+        - add sleep time to let the page fully loaded.
+               for local test page, this is not needed;
+               but for remote page, this is needed. otherwise, you get error: 
+               stale element reference: element is not attached to the page document
+        - once entered shadow, xpath is not working anymore., use css selector instead.
+    ptslnm -af url=newtab "sleep=2" "xpath=/iframe[1]" iframe "xpath=//a[@aria-label='Gmail ']" dump="C:/Users/tian/dumpdir"
+
+    - test block steps
+    ptslnm -af code="i=0" code="print(f'i={i}')" while=code="i<3" code="i=i+1" code="print(f'i={i}')" sleep=1 end_while
+
+    ptslnm -af if_not=exp="a=0;1/a" code="print('negate False worked')" end_if_not
+
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" "click_xpath=/html/body/button" sleep=1 "if=xpath=//*[@id='random' and text()='10']" break end_if end_while
+
+    - test exp
+    ptslnm -af exp="a=1;a+1" code="print(a)"  # this will pass - 2
+    ptslnm -af exp="a=1"     code="print(a)"  # this will fail - NameError: name 'a' is not defined
+    ptslnm -af code="a=1"    code="print(a)"  # this will pass - 1
+
+    - test steps in file
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" steps_txt="c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_steps_txt.txt" top
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html"  steps_py="c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_steps_py.py"   top
+
+    - test parallel steps - string
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_nested_test_main.html" sleep=1 "xpath=//iframe[1],css=p" print=html
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_nested_test_main.html" sleep=1 "css=p,xpath=//iframe[1]" print=html
+
+    - test dict step - besides provide parallellism, it also provides a mini if-else logic 
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_nested_test_main.html" sleep=1 "dictfile=c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_dict_simple.py" debug=domstack,iframestack
+    
+    - test parallel steps - dict - parallel type
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_nested_test_main.html" sleep=1 "dictfile=c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_dict_parallel.py" debug=domstack,iframestack
+    
+    - test parallel steps - dict - chains type
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/iframe_over_shadow_test_main.html" sleep=1 "dictfile=c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_dict_chains.py" debug=domstack,iframestack print=tag
+    
+    - test alert popup - alert popup doesn't show up as o 2024/12/30
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_alert.html" "xpath=//input[@id='fname']" click string=henry tab=1 url_accept_alert=http://google.com sleep=1
+    
+    - test clear text field
+    ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_input.html" "xpath=//textarea[id('message')]" click clear_text code2element='f"abc{1+1}"' sleep=10
+
+    notes for windows cmd.exe, 
+        double quotes cannot be escaped, 
+        single quote is just a letter, cannot do grouping. 
+    
+
+
+
+# test forms
+   ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_input.html"  \
+     steps_py="c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_input_steps_py.py" \
+     --interactive

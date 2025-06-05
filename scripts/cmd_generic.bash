@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# wrapper script 
+# this wrapper script created (copied) by tpsup/scripts/cmd_maker.bash
+# example usage see tpsup/python3/scripts/Makefile
 # the original script is tpsup/scripts/cmd_generic.bash.
 # tpsup/scripts/cmd_maker.bash will copy tpsup/scripts/cmd_generic.bash to target's directory
 # and rename it to <target>
