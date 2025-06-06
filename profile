@@ -950,5 +950,8 @@ if [[ $- == *i* ]]; then
    # this is interactive shell
    if [ "X$PLACE_PUTTY" = "XY" ]; then
       puttypos auto || : # '|| :' is to ignore the error and set return code to 0.
+      pa () {
+         ( set-x; puttypos auto )      
+      }
    fi
 fi

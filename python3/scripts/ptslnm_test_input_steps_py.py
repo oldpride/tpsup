@@ -17,7 +17,7 @@
     # test getting element id
     """code=print(f'element id = {last_element.get_attribute("id")}, expecting DateOfBirth')""",
     """sleep=2""",
-    'string=01232025',
+    'string=01232025', # mmddyyyy
     "comment=go to Date of Birth",
     'sleep=2',
 
