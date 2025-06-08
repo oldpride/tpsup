@@ -1,6 +1,6 @@
 #!/bin/bash
 
-local OPTIND OPTARG verbose check_only usage
+local OPTIND OPTARG verbose check_only usage prog
 
 prog=${FUNCNAME[1]}
 

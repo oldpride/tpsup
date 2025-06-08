@@ -1,0 +1,11 @@
+
+#!/bin/bash
+local map prog
+
+prog=${FUNCNAME[1]}
+
+map="
+   plugin        ~/AppData/Local/Google/Chrome/User Data/Default/Extensions   
+"
+
+_go2dir "$@"

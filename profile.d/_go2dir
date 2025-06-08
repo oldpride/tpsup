@@ -1,0 +1,50 @@
+
+#!/bin/bash
+local OPTIND OPTARG o usage debug direction dir
+
+# map="
+#    plugin        ~/AppData/Local/Google/Chrome/User Data/Default/Extensions   
+# "
+
+usage="
+usage:
+
+    $prog direction
+
+directions: $map
+"
+
+debug=N
+while getopts d o; do
+    case $o in
+        d) debug=Y ;;
+        *) echo "unknown switch='$o'. $usage" >&2; return ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+    echo "wrong number of arguments. $usage" >&2
+    return
+fi
+
+direction="$1"
+
+tptime set
+
+[  $debug = Y ] && set -x
+
+dir=$(echo "$map" | grep -i " $direction " | perlfields 2 NF | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+if [ "X$dir" = "X" ]; then
+    echo "unknown direction='$direction'. $usage" >&2
+else
+   # expand ~ and variables
+   dir=$(eval echo "$dir") 
+   echo "dir='$dir'"
+
+   # double quotes to preserve spaces       
+   cd "$dir"                
+fi
+
+[ $debug = Y ] && set +x
