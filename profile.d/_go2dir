@@ -31,17 +31,23 @@ fi
 
 direction="$1"
 
-tptime set
-
 [  $debug = Y ] && set -x
 
 dir=$(echo "$map" | grep -i " $direction " | perlfields 2 NF | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 if [ "X$dir" = "X" ]; then
     echo "unknown direction='$direction'. $usage" >&2
 else
+   # we run tptime to set time variables if dir has yyyy mm dd YYMD HH MM SS, case insensitive
+   if echo "$dir" | grep -iqE '\b([pt]?yyyy|mm|dd|YYMD|HH|MM|SS)\b'; then
+      # run tptime to set time variables
+      tptime set
+      [ $debug = Y ] && echo "tptime set"
+   fi
+   [ $debug = Y ] && echo "before eval dir='$dir'"
+
    # expand ~ and variables
    dir=$(eval echo "$dir") 
-   echo "dir='$dir'"
+   [ $debug = Y ] && echo "after eval dir='$dir'"
 
    # double quotes to preserve spaces       
    cd "$dir"                
