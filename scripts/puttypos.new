@@ -143,7 +143,7 @@ if [ "$1" = "resetall" ]; then
       fi
 
       [ $verbose = Y ] && echo "resetting position $pos in file $posfile"
-      pid=$(head -n 1 $posfile|cut -d' ' -f1)
+      pid=$(get_nth_line 1 $posfile|cut -d' ' -f1)
       tty=$(ps -p $pid -o tty=)
       if [ "X$tty" = "X" ]; then
          [ $verbose = Y ] && echo "ERROR: cannot get tty for pid=$pid in file $posfile; likely the process is dead."
@@ -153,13 +153,13 @@ if [ "$1" = "resetall" ]; then
       tty="/dev/$tty"
       [ $verbose = Y ] && echo "resetting position $pos in tty=$tty"
 
-      file_tty=$(head -n 2 $posfile |tail -n 1)
+      file_tty=$(get_nth_line 2 $posfile)
       if [ "X$tty" != "X$file_tty" ]; then
          echo "ERROR: tty=$tty of pid=$pid is not the same as tty=$file_tty in the $posfile. ths should not happen."
          continue
       fi
 
-      size=$(head -n 3 $posfile |tail -n 1)
+      size=$(get_nth_line 3 $posfile)
       width=$(echo $size | cut -d' ' -f1)
       height=$(echo $size | cut -d' ' -f2)
       if [ "X$width" = "X" -o "X$height" = "X" ]; then
@@ -291,7 +291,7 @@ else
       #    width height
 
       if [ -e $posfile ]; then
-         pid=$( head -n 1 $posfile |cut -d' ' -f1 )
+         pid=$(get_nth_line 1 $posfile)
          [ $verbose = Y ] && echo "found posfile $posfile, pid=$pid"
 
          if ! [ "X$pid" = "X" ]; then
