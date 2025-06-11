@@ -143,7 +143,7 @@ if [ "$1" = "resetall" ]; then
       fi
 
       [ $verbose = Y ] && echo "resetting position $pos in file $posfile"
-      pid=$(head -n 1 $f|cut -d' ' -f1)
+      pid=$(head -n 1 $posfile|cut -d' ' -f1)
       tty=$(ps -p $pid -o tty=)
       if [ "X$tty" = "X" ]; then
          [ $verbose = Y ] && echo "ERROR: cannot get tty for pid=$pid in file $posfile; likely the process is dead."
@@ -291,7 +291,7 @@ else
       #    width height
 
       if [ -e $posfile ]; then
-         pid=$( cat $posfile | head -n 1 |cut -d' ' -f1 )
+         pid=$( head -n 1 $posfile |cut -d' ' -f1 )
          [ $verbose = Y ] && echo "found posfile $posfile, pid=$pid"
 
          if ! [ "X$pid" = "X" ]; then

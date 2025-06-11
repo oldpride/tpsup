@@ -1,0 +1,42 @@
+#!/bin/bash
+
+prog=`basename $0`
+
+# https://stackoverflow.com/questions/6022384/bash-tool-to-get-nth-line-from-a-file
+usage () {
+   cat >&2 <<END
+usage:
+   $prog n file
+   $prog n < file
+
+example
+   echo "1 2 3 4 5 6 7" | tr ' ' '\n' | $prog 5
+
+   echo "1 2 3" | tr ' ' '\n' | $prog 5
+
+END
+
+   exit 1
+
+}
+
+if [ $# -eq 0 ]; then
+   echo "$prog: wrong number of args"
+   usage
+fi
+
+n=$1
+
+if [ $# -eq 1 ]; then
+   # read from stdin
+   sed "${n}q;d"
+else
+   shift
+   for file in "$@"; do
+      if [ ! -f "$file" ]; then
+         echo "$prog: file '$file' does not exist" >&2
+         continue
+      fi
+      sed "${n}q;d" "$file"
+   done
+fi
