@@ -31,7 +31,7 @@ fi
 
 direction="$1"
 
-[  $debug = Y ] && set -x
+
 
 dir=$(echo "$map" | grep -i " $direction " | perlfields 2 NF | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 if [ "X$dir" = "X" ]; then
@@ -45,7 +45,13 @@ else
    #    '\b' to match word boundaries, so we don't match 'yyyyy' or 'mmmmm'
    #    '[pt]?yyyymmdd' to match 'yyyymmdd', 'pyyyymmdd', 'tyyyymmdd'.
    #         pyyyymmdd is previous tradeday, tyyyymmdd is next tradeday.
-   if echo "$dir" | grep -iqE '\b([pt]?yyyymmdd|[pt]?yyyy|[pt]?mm|[pt]?dd|YYMD|HHMMSS|HH|MM|SS)\b'; then
+   # we try to match $abc or ${abc}
+   #    $ echo '$abc'|grep -iE '[$][{]?ABC\b'
+   #    $abc
+   #    $ echo '${abc}'|grep -iE '[$][{]?ABC\b'
+   #    ${abc}
+
+   if echo "$dir" | grep -iqE '[$][{]?([pt]?yyyymmdd|[pt]?yyyy|[pt]?mm|[pt]?dd|YYMD|HHMMSS|HH|MM|SS)\b'; then
       # run tptime to set time variables
       tptime set
       [ $debug = Y ] && echo "tptime set"
