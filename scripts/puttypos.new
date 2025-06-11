@@ -198,12 +198,14 @@ elif [ "$1" = "auto" ]; then
    # mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2  # this can be a regex pattern
 
    # loop through the file to find the line that matches the "putty_login,putty_ip"
-   tmpfile=/tmp/puttypos.$putty_login.$putty_ip
-   /bin/rm -f $tmpfile
-
    target="$putty_login,$putty_ip"
 
    [ $verbose = Y ] && echo "searching a pattern in $putty_client_file matching '$target'"
+
+   # while loop cannot pass back the variable to the parent shell
+   # therefore, we save the result to a tmpfile
+   tmpfile=/tmp/puttypos.$putty_login.$putty_ip.tmp
+   /bin/rm -f $tmpfile
    cat $putty_client_file | while read line; do
       # echo "line=$line"
       pattern=$(echo $line | awk '{print $1}')
@@ -327,7 +329,7 @@ else
       [ $verbose = Y ] && echo "puttypos: setting position to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
 
-      echo $putty_pid > $posfile
+      echo "$putty_pid" > $posfile
       echo "$putty_tty" >> $posfile
       echo "$width $height" >> $posfile
 
