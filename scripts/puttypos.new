@@ -120,7 +120,7 @@ if [ "X$putty_ip" = "X" ]; then
 fi
 
 if [ "$1" = "resetall" ]; then
-   for posfile in `/bin/ls -1 /tmp/puttypos.$user.$putty_ip.* 2>dev/null`; 
+   for posfile in `/bin/ls -1 /tmp/puttypos.$user.$putty_ip.* 2>/dev/null`; 
    do
       # file is like /tmp/puttypos.tian.192.168.0.45.005
       # file content is:
