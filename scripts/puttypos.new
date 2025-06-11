@@ -155,7 +155,7 @@ if [ "$1" = "resetall" ]; then
 
       file_tty=$(head -n 2 $posfile |tail -n 1)
       if [ "X$tty" != "X$file_tty" ]; then
-         "ERROR: tty=$tty of pid=$pid is not the same as tty=$file_tty in the $posfile. ths should not happen."
+         echo "ERROR: tty=$tty of pid=$pid is not the same as tty=$file_tty in the $posfile. ths should not happen."
          continue
       fi
 
@@ -172,8 +172,10 @@ if [ "$1" = "resetall" ]; then
 
       # https://superuser.com/questions/1162451
       # printf '\033[3;'"$offset;$offset"'t'
-      [ $verbose = Y ] && echo "puttypos: setting putty at tty=$tty, pos=$pos to x=$x, y=$y, width=$width, height=$height"
+      [ $verbose = Y ] && echo "puttypos: setting putty at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
+
+      echo ""
    done
    
 elif [ "$1" = "auto" ]; then
