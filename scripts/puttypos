@@ -15,8 +15,9 @@ usage () {
    cat >&2 <<EOF
 usage:
 
-   $prog auto
-   $prog min max
+   $prog auto                      
+   $prog min max    
+   $prog resetall   # reset all putty windows to the initial position
 
    position a putty's window in the next available position between min and max.
 
@@ -31,7 +32,7 @@ usage:
    This script works both in initial login and in login-then-su cases.
 
    -s width,height   default to $putty_client_file setting.
-                     if width or height is not set, use default $default_width,$default_height.
+                     if width or height is not set, use default $default_width,$default_height.             
 
    -v                verbose mode.
 
@@ -118,7 +119,66 @@ if [ "X$putty_ip" = "X" ]; then
    exit 1
 fi
 
-if [ "$1" = "auto" ]; then
+if [ "$1" = "resetall" ]; then
+   for posfile in `/bin/ls -1 /tmp/puttypos.$user.$putty_ip.* 2>/dev/null`; 
+   do
+      # file is like /tmp/puttypos.tian.192.168.0.45.005
+      # file content is:
+      #    pid
+      #    tty
+      #    width height
+      [ $verbose = Y ] && echo "resetting position in file $posfile"
+      # get the last part after the last dot
+      pos=$(echo $posfile | sed -e "s/.*\.//")
+      # remove the leading zeros
+      pos=$(echo $pos | sed -e "s/^0*//")
+      # if pos2 is empty, set it to 0
+      if [ "X$pos" = "X" ]; then
+         pos=0
+      fi
+      # if pos is not a number, skip it
+      if [[ ! $pos =~ ^[0-9]+$ ]]; then
+         [ $verbose = Y ] && echo "ERROR: pos='$pos' is not a number. skip this file $posfile"
+         continue
+      fi
+
+      [ $verbose = Y ] && echo "resetting position $pos in file $posfile"
+      pid=$(get_nth_line 1 $posfile|cut -d' ' -f1)
+      tty=$(ps -p $pid -o tty=)
+      if [ "X$tty" = "X" ]; then
+         [ $verbose = Y ] && echo "ERROR: cannot get tty for pid=$pid in file $posfile; likely the process is dead."
+         continue
+      fi
+      # full path to the tty
+      tty="/dev/$tty"
+      [ $verbose = Y ] && echo "resetting position $pos in tty=$tty"
+
+      file_tty=$(get_nth_line 2 $posfile)
+      if [ "X$tty" != "X$file_tty" ]; then
+         echo "ERROR: tty=$tty of pid=$pid is not the same as tty=$file_tty in the $posfile. ths should not happen."
+         continue
+      fi
+
+      size=$(get_nth_line 3 $posfile)
+      width=$(echo $size | cut -d' ' -f1)
+      height=$(echo $size | cut -d' ' -f2)
+      if [ "X$width" = "X" -o "X$height" = "X" ]; then
+         [ $verbose = Y ] && echo "ERROR: size='$size' in $posfile is not in the format width height. skip this file."
+         continue
+      fi
+   
+      x=`expr 30 \* $pos`
+      y=`expr 30 \* $pos`
+
+      # https://superuser.com/questions/1162451
+      # printf '\033[3;'"$offset;$offset"'t'
+      [ $verbose = Y ] && echo "puttypos: setting putty at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
+      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
+
+      echo ""
+   done
+   
+elif [ "$1" = "auto" ]; then
    # auto mode, use default min and max
    if [ $# -ne 1 ]; then
       [ $verbose = Y ] && echo "wrong number of args for auto mode" >&2
@@ -138,12 +198,14 @@ if [ "$1" = "auto" ]; then
    # mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2  # this can be a regex pattern
 
    # loop through the file to find the line that matches the "putty_login,putty_ip"
-   tmpfile=/tmp/puttypos.$putty_login.$putty_ip
-   /bin/rm -f $tmpfile
-
    target="$putty_login,$putty_ip"
 
    [ $verbose = Y ] && echo "searching a pattern in $putty_client_file matching '$target'"
+
+   # while loop cannot pass back the variable to the parent shell
+   # therefore, we save the result to a tmpfile
+   tmpfile=/tmp/puttypos.$putty_login.$putty_ip.tmp
+   /bin/rm -f $tmpfile
    cat $putty_client_file | while read line; do
       # echo "line=$line"
       pattern=$(echo $line | awk '{print $1}')
@@ -225,9 +287,13 @@ else
       # pad the number in the file name to make 'ls /tmp/puttypos.*' easy to sort
       padded=`printf '%03d' $i`
       posfile=/tmp/puttypos.$user.$putty_ip.$padded 
+      # posfile content
+      #    pid
+      #    tty
+      #    width height
 
       if [ -e $posfile ]; then
-         pid=$( cat $posfile | cut -d' ' -f1 )
+         pid=$(get_nth_line 1 $posfile)
          [ $verbose = Y ] && echo "found posfile $posfile, pid=$pid"
 
          if ! [ "X$pid" = "X" ]; then
@@ -263,7 +329,9 @@ else
       [ $verbose = Y ] && echo "puttypos: setting position to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
 
-      echo $putty_pid > $posfile
+      echo "$putty_pid" > $posfile
+      echo "$putty_tty" >> $posfile
+      echo "$width $height" >> $posfile
 
       found=$i
       break

@@ -2,42 +2,53 @@
 
 
 prog=`basename $0`
-posdir=$HOME/.tpsup
-posfile=$posdir/puttypos.cache
+user=`id |cut -d\( -f2|cut -d\) -f1`
+
+putty_client_file=~/.tpsup/putty_client.txt
 
 min=0
 max=9
+default_width=110
+default_height=35
 
 usage () {
    cat >&2 <<EOF
 usage:
 
-   $prog pos
+   $prog auto
+   $prog min max
 
-   position the current putty's window at position.
+   position a putty's window in the next available position between min and max.
 
-   pos can be
-      - min..max - default min=$min, max=$max
-      - next     - position in $posfile + 1
-      - last     - report last position. report-only, no movement.
-      - reset    - this set the cache pos to max, so that the next one restart from 0.
-                   ths doesn't move the current putty's position.
+   min starts from 0.
+   max should not be greater than min+10. This limit is set by putty doesn't spawn
+   more than 10 windows in the same session.
 
-   if $posfile has no cached position, then next will be min.
+   'auto' means to get min and max from $putty_client_file.
 
-   -n min    set the min, default $min
-   -x max    set the max, default $max
+   if no available position, quit; the putty window will not be moved.
+
+   This script works both in initial login and in login-then-su cases.
+
+   -s width,height   default to $putty_client_file setting.
+                     if width or height is not set, use default $default_width,$default_height.
+
+   -v                verbose mode.
+
+   putty_client_file format is
+      login,ip min_pos max_pos width height
+      mylogin,192.168.1.62 0 9 100 30
+      mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2
+
+      # "login,ip" can be a regex pattern.
+      # width and height are optional, if not set, use default $default_width,$default_height.
 
 examples:
 
-   $prog 10
-
-   $prog next
-
-   $prog -n 10 -x 12 next
-   $prog -n 10 -x 12 next
-   $prog -n 10 -x 12 next
-   $prog -n 10 -x 12 next
+   $prog auto
+   $prog 0 9
+   $prog 10 12
+   $prog -s 100,30 auto
 
 EOF
    exit 1
@@ -45,60 +56,222 @@ EOF
 
 
 verbose=N
-while getopts vn:x: o;
+flag=""
+while getopts vs: o;
 do
    case "$o" in
-      v)  verbose=Y;;
-      n)  min=$OPTARG;;
-      x)  max=$OPTARG;;
+      v)  verbose=Y;flag=-v;;
+      s)  size=$OPTARG;;
       *)   usage;;
    esac
 done
 
 shift $((OPTIND-1))
 
-if [ $# -ne 1 ]; then
+if [ $# -ne 1 -a $# -ne 2 ]; then
    echo "wrong number of args" >&2
    usage
 fi
 
-pos=$1
-
-[ -d $posdir ] || mkdir -p $posdir
-
-if [ $pos = reset ]; then
-   # reset doesn't change current putty's position.
-   echo $max  >$posfile
-   exit 0;
-elif [ $pos = last ]; then
-   # reporting last position doesn't change current putty's position.
-   cat $posfile
-   exit 0;
-elif [ $pos = next ]; then
-   touch $posfile
-   cachepos=`cat $posfile`;
-
-   if [[ $cachepos =~ ^[0-9]+$ ]]; then
-      if [ $cachepos -lt $min  -o $cachepos -ge $max ]; then
-         # if cache pos is at max, the next one will be $min
-         pos=$min
-      else
-         pos=`expr $cachepos + 1`
-      fi
+# size format width,height
+if [ "X$size" != "X" ]; then
+   if [[ $size =~ ^[0-9]+,[0-9]+$ ]]; then
+      width=$(echo $size | cut -d, -f1)
+      height=$(echo $size | cut -d, -f2)
    else
-      # if cache file is corrupted, reset to min
-      pos=$min
-   fi
-else 
-   if ! [[ $pos =~ ^[0-9]+$ ]]; then  # bash regex
-      echo "unsupported pos='$pos'" >&2
+      echo "ERROR: size='$size' is not in the format width,height" >&2
       usage
    fi
 fi
 
-offset=`expr 35 \* $pos`
+# $ env |grep SSH
+# SSH_CONNECTION=192.168.1.62 50334 192.168.1.191 22
+# SSH_CLIENT=192.168.1.62 50334 22
+# SSH_TTY=/dev/pts/4
 
-# https://superuser.com/questions/1162451
-printf '\033[3;'"$offset;$offset"'t'
+# putty_ip=$(echo $SSH_CLIENT | cut -d" " -f1)
+# It is possible that SSH_CLIENT is not set, for example, when we "su - appid".
+# In Linux 5.15, "su -w SSH_CLIENT - appid" will pass the SSH_CLIENT to the new shell.
+# But for older Linux, this is not supported.
+# if SSH_CLIENT is not set, then we use 'who/tpwho' comand to get the putty client IP
 
-echo $pos >$posfile
+WHO=$(tpwho current 2>/dev/null)
+if [ $? -ne 0 ]; then
+   [ $verbose = Y ] && echo "tpwho command failed. not a tty. quit" >&2
+   exit 1
+fi
+
+putty_login=$(echo $WHO | awk '{print $1}')
+putty_tty=$(echo $WHO | awk '{print $2}')
+putty_ip=$(echo $WHO | awk '{print $3}')
+putty_pid=$(ps -t $putty_tty --sort=start_time |grep bash |head -n 1|awk '{print $1}')
+
+if [ $verbose = Y ]; then
+   echo "putty_login=$putty_login"
+   echo "putty_tty=$putty_tty"
+   echo "putty_ip=$putty_ip"
+   echo "putty_pid=$putty_pid"
+fi
+
+if [ "X$putty_ip" = "X" ]; then
+   [ $verbose = Y ] && echo "ERROR: cannot get putty client IP from 'who' command." >&2
+   exit 1
+fi
+
+if [ "$1" = "auto" ]; then
+   # auto mode, use default min and max
+   if [ $# -ne 1 ]; then
+      [ $verbose = Y ] && echo "wrong number of args for auto mode" >&2
+      usage
+   fi
+   
+   [ $verbose = Y ] && echo "in 'auto' mode, we use putty_client_file=$putty_client_file"
+
+   if ! [ -f "$putty_client_file" ]; then
+      [ $verbose = Y ] && echo "ERROR: putty client file $putty_client_file does not exist" >&2
+      exit 1
+   fi
+
+   # putty_client_file format is
+   # login,ip min_pos max_pos
+   # mylogin,192.168.1.62 0 2
+   # mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2  # this can be a regex pattern
+
+   # loop through the file to find the line that matches the "putty_login,putty_ip"
+   tmpfile=/tmp/puttypos.$putty_login.$putty_ip
+   /bin/rm -f $tmpfile
+
+   target="$putty_login,$putty_ip"
+
+   [ $verbose = Y ] && echo "searching a pattern in $putty_client_file matching '$target'"
+   cat $putty_client_file | while read line; do
+      # echo "line=$line"
+      pattern=$(echo $line | awk '{print $1}')
+      if [[ ^$target =~ $pattern ]]; then
+         # found the line that matches putty_login
+         [ $verbose = Y ] && echo "pattern='$pattern' matched '$target' in line: $line"
+         echo "$line" |cut -d"#" -f1 > $tmpfile  # remove comments
+         break
+      fi
+   done
+
+   # read the line from the tmpfile
+   if [ -f $tmpfile ]; then
+      line=$(cat $tmpfile)
+      [ $verbose = Y ] && echo "found line: $line"
+      rm -f $tmpfile
+   else
+      [ $verbose = Y ] && echo "ERROR: no putty client found in $putty_client_file for target='$target'" >&2
+      exit 1
+   fi
+
+   min_pos=$(echo $line | awk '{print $2}')
+   max_pos=$(echo $line | awk '{print $3}')
+
+   # width,height precedence: command line > putty_client_file > default
+   if [ -z "$width" ]; then
+      width=$(echo $line | awk '{print $4}')
+   fi
+   if [ -z "$height" ]; then
+      height=$(echo $line | awk '{print $5}')
+   fi
+
+   if [ -z "$width" ]; then
+      width=$default_width
+   fi
+   if [ -z "$height" ]; then
+      height=$default_height
+   fi
+
+   # recursively call this script with specific min and max
+   [ $verbose = Y ] && echo "recursively calling: puttypos $flag -s $width,$height $min_pos $max_pos"
+   puttypos $flag -s $width,$height $min_pos $max_pos
+    
+else
+   # puttypos min max
+   if [ $# -ne 2 ]; then
+      echo "wrong number of args" >&2
+      usage
+   fi
+
+   min=$1
+   max=$2
+
+   if [[ $min =~ [^0-9] ]]; then
+      echo "ERROR: min='$min' is not a number" >&2
+      usage
+   fi
+
+   if [[ $max =~ [^0-9] ]]; then
+      echo "ERROR: max='$max' is not a number" >&2
+      usage
+   fi
+
+   if [ $min -ge $max ]; then
+      echo "ERROR: min=$min is not less than max=$max"
+      usage
+   fi
+
+   # for loop range, works for numbers
+   #    for i in {0..10} 
+   # but not work for variables
+   #    for i in {$min..$max}
+   # for variables, use C-style instead
+   for (( i = $min; i <= $max; i ++ ))
+   do
+      [ $verbose = Y ] && echo ""
+      [ $verbose = Y ] && echo "checking spot $i"
+
+      # pad the number in the file name to make 'ls /tmp/puttypos.*' easy to sort
+      padded=`printf '%03d' $i`
+      posfile=/tmp/puttypos.$user.$putty_ip.$padded 
+
+      if [ -e $posfile ]; then
+         pid=$( cat $posfile | cut -d' ' -f1 )
+         [ $verbose = Y ] && echo "found posfile $posfile, pid=$pid"
+
+         if ! [ "X$pid" = "X" ]; then
+            if ps -p $pid >/dev/null; then
+               [ $verbose = Y ] && echo "putty at position $i is running, pid=$pid."             
+               if [ ${seen[$pid]+_} ]; then
+                  # +_: This is a shorthand way to check if the key $pid exists in the seen array.
+                  # when you use + with an array element, it evaluates to a non-empty string 
+                  # (e.g., _) if the key exists, or an empty string if it doesn't.
+                  [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
+               elif [ "$putty_pid" = "$pid" ]; then
+                  # this file has putty_pid
+                  [ $verbose = Y ] && echo "seen putty_pid=$putty_pid in $posfile. keep spot $i"
+               else
+                  [ $verbose = Y ] && echo "we will check next spot"
+                  seen[$pid]=$posfile
+                  continue
+               fi
+            else 
+               [ $verbose = Y ] && echo  "pid=$pid in $posfile is not running.  use sport $i"
+            fi
+         else
+            [ $verbose = Y ] && "$posfile is empty. we can use sport $i"
+         fi
+      fi
+
+      # found a spot
+      x=`expr 30 \* $i`
+      y=`expr 30 \* $i`
+
+      # https://superuser.com/questions/1162451
+      # printf '\033[3;'"$offset;$offset"'t'
+      [ $verbose = Y ] && echo "puttypos: setting position to x=$x, y=$y, width=$width, height=$height"
+      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
+
+      echo $putty_pid > $posfile
+
+      found=$i
+      break
+   done
+      
+   if [ "X$found" = "X" ]; then
+      echo "$prog: no available spot found"
+   else
+      [ $verbose = Y ] && echo "spot found at $found"
+   fi
+fi
