@@ -151,11 +151,18 @@ if [ "$1" = "resetall" ]; then
       fi
       # full path to the tty
       tty="/dev/$tty"
-      [ $verbose = Y ] && echo "resetting position $pos in tty=$tty"
+      [ $verbose = Y ] && echo "putty at pos=$pos uses tty=$tty"
 
       file_tty=$(get_nth_line 2 $posfile)
       if [ "X$tty" != "X$file_tty" ]; then
          echo "ERROR: tty=$tty of pid=$pid is not the same as tty=$file_tty in the $posfile. ths should not happen."
+         continue
+      fi
+
+      # make sure the tty is writable
+      if ! [ -w $tty ]; then
+         echo "ERROR: tty=$tty is not writable. skip this file $posfile"
+         ls -l $tty
          continue
       fi
 
