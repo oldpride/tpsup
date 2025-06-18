@@ -1,0 +1,66 @@
+#!/bin/bash
+
+prog=$(basename "$0")
+
+usage () {
+   cat >&2 <<END
+usage:
+   $prog tty
+
+   -v        verbose mode
+
+examples:
+
+   # linux
+   $prog /dev/pts/0
+   $prog pts/0
+
+   # cygwin
+   $prog /dev/pty0
+   $prog pty0
+
+END
+   exit 1
+}
+
+verbose=N
+
+while getopts "v" o; do
+   case $o in
+      v)
+         verbose=Y
+         ;;
+      *) echo "Error: unknown option '-$o'" >&2
+         usage
+         ;;
+   esac
+done
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+   echo "Error: wrong number of arguments" >&2
+   usage
+fi
+
+tty="$1"
+
+full_tty=""
+short_tty=""
+
+if [[ $tty =~ ^/dev/ ]]; then
+   full_tty="$tty"
+   short_tty="${tty#/dev/}"
+else
+   full_tty="/dev/$tty"
+   short_tty="$tty"
+fi
+
+# find the pid of the mintty process that is using this tty
+# note: cygwin's 'ps' comamnd does not support -t option. so we have to use "ps -ef"
+# tian@tianpc2:/cygdrive/c/Users/tian$ ps -ef |grep pty0
+#  tian    1068    1067 pty0       Jun 12 -bash
+#  tian    2392    1068 pty0     17:10:28 ps -ef
+#  tian    2393    1068 pty0     17:10:28 /usr/bin/grep
+
+[ $verbose = Y ] && echo >&2 "cmd=ps -ef | awk \"{ if (\\\$4 == \\\"$short_tty\\\" && (\\\$6 ~ /^-bash/ || \\\$7 ~ /^-bash/)) print \\\$2 }\" | head -n 1"
+ps -ef | awk "{ if (\$4 == \"$short_tty\" && (\$6 ~ /^-bash/ || \$7 ~ /^-bash/)) print \$2 }" | head -n 1

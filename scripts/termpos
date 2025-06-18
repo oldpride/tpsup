@@ -1,0 +1,392 @@
+#!/bin/bash
+
+
+prog=`basename $0`
+user=`id |cut -d\( -f2|cut -d\) -f1`
+
+termpos_cfg=~/.tpsup/termpos.cfg
+
+min=0
+max=9
+default_width=110
+default_height=35
+
+usage () {
+   cat >&2 <<EOF
+usage:
+
+   $prog auto                      
+   $prog min max    
+   $prog resetall   # reset all term windows to the initial position
+
+   position a term's window in the next available position between min and max.
+
+   min starts from 0.
+   max should not be greater than min+10. This limit is set by term doesn't spawn
+   more than 10 windows in the same session.
+
+   'auto' means to get min and max from $termpos_cfg.
+
+   if no available position, quit; the term window will not be moved.
+
+   This script works both in initial login and in login-then-su cases.
+
+   -s width,height   default to $termpos_cfg setting.
+                     if width or height is not set, use default $default_width,$default_height.             
+
+   -v                verbose mode.
+
+   termpos_cfg format is
+      login,ip min_pos max_pos width height
+      mylogin,192.168.1.62 0 9 100 30
+      mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2
+
+      # "login,ip" can be a regex pattern.
+      # width and height are optional, if not set, use default $default_width,$default_height.
+
+examples:
+
+   $prog auto
+   $prog 0 9
+   $prog 10 12
+   $prog -s 100,30 auto
+
+EOF
+   exit 1
+}
+
+
+verbose=N
+flag=""
+while getopts vs: o;
+do
+   case "$o" in
+      v)  verbose=Y;flag=-v;;
+      s)  size=$OPTARG;;
+      *)   usage;;
+   esac
+done
+
+shift $((OPTIND-1))
+
+if [ $# -ne 1 -a $# -ne 2 ]; then
+   echo "wrong number of args" >&2
+   usage
+fi
+
+# size format width,height
+if [ "X$size" != "X" ]; then
+   if [[ $size =~ ^[0-9]+,[0-9]+$ ]]; then
+      width=$(echo $size | cut -d, -f1)
+      height=$(echo $size | cut -d, -f2)
+   else
+      echo "ERROR: size='$size' is not in the format width,height" >&2
+      usage
+   fi
+fi
+
+IS_CYGWIN=N
+IS_GITBASH=N
+
+if [ -d /cygdrive ]; then
+   # we are in a cygwin terminal
+   IS_CYGWIN=Y
+   [ $verbose = Y ] && echo "we are in a cygwin terminal"
+   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+elif [ -d /c ]; then
+   # we are in git bash terminal
+   IS_GITBASH=Y
+   [ $verbose = Y ] && echo "we are in a git bash terminal"
+   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+fi
+
+# for now, we can handle cygwin on pc, putty on pc that logs into a linux server.
+if [ $IS_CYGWIN = Y ]; then
+   # cygwin on pc
+   term_login=$user
+   term_tty=`tty`
+   short_tty=$(echo $term_tty | sed -e "s/.*\///")  # remove the leading /dev/
+
+   # find the pid of the mintty process that is using this tty
+   # note: cygwin's 'ps' comamnd does not support -t option. so we have to use "ps -ef"
+   # tian@tianpc2:/cygdrive/c/Users/tian$ ps -ef |grep pty0
+   #  tian    1068    1067 pty0       Jun 12 -bash
+   #  tian    2392    1068 pty0     17:10:28 ps -ef
+   #  tian    2393    1068 pty0     17:10:28 /usr/bin/grep
+
+   term_pid=$(ps -ef | awk "{ if (\$4 == \"$short_tty\" && (\$6 ~ /^-bash/ || \$7 ~ /^-bash/)) print \$2 }" | head -n 1)
+
+   term_ip="127.0.0.1"  # cygwin on pc, we assume the term client is on the same machine
+else
+   # we assume this is a putty session that logs into a linux server
+   # $ env |grep SSH
+   # SSH_CONNECTION=192.168.1.62 50334 192.168.1.191 22
+   # SSH_CLIENT=192.168.1.62 50334 22
+   # SSH_TTY=/dev/pts/4
+
+   # term_ip=$(echo $SSH_CLIENT | cut -d" " -f1)
+   # It is possible that SSH_CLIENT is not set, for example, when we "su - appid".
+   # In Linux 5.15, "su -w SSH_CLIENT - appid" will pass the SSH_CLIENT to the new shell.
+   # But for older Linux, this is not supported.
+   # if SSH_CLIENT is not set, then we use 'who/tpwho' comand to get the putty client IP
+
+   WHO=$(tpwho current 2>/dev/null)
+   if [ $? -ne 0 ]; then
+      [ $verbose = Y ] && echo "tpwho command failed. not a tty. quit" >&2
+      exit 1
+   fi
+
+   term_login=$(echo $WHO | awk '{print $1}')
+   term_tty=$(echo $WHO | awk '{print $2}')
+   term_ip=$(echo $WHO | awk '{print $3}')
+   term_pid=$(ps -t $term_tty --sort=start_time |grep bash |head -n 1|awk '{print $1}')
+fi
+
+if [ $verbose = Y ]; then
+   echo "term_login=$term_login"
+   echo "term_tty=$term_tty"
+   echo "term_ip=$term_ip"
+   echo "term_pid=$term_pid"
+fi
+
+if [ "X$term_ip" = "X" ]; then
+   [ $verbose = Y ] && echo "ERROR: cannot get term client IP from 'who' command." >&2
+   exit 1
+fi
+
+if [ "$1" = "resetall" ]; then
+   for posfile in `/bin/ls -1 /tmp/termpos.$user.$term_ip.* 2>/dev/null`; 
+   do
+      # file is like /tmp/termpos.tian.192.168.0.45.005
+      # file content is:
+      #    pid
+      #    tty
+      #    width height
+      [ $verbose = Y ] && echo "resetting position in file $posfile"
+      # get the last part after the last dot
+      pos=$(echo $posfile | sed -e "s/.*\.//")
+      # remove the leading zeros
+      pos=$(echo $pos | sed -e "s/^0*//")
+      # if pos2 is empty, set it to 0
+      if [ "X$pos" = "X" ]; then
+         pos=0
+      fi
+      # if pos is not a number, skip it
+      if [[ ! $pos =~ ^[0-9]+$ ]]; then
+         [ $verbose = Y ] && echo "ERROR: pos='$pos' is not a number. skip this file $posfile"
+         continue
+      fi
+
+      [ $verbose = Y ] && echo "resetting position $pos in file $posfile"
+      pid=$(get_nth_line 1 $posfile|cut -d' ' -f1)
+      tty=$(ps -p $pid -o tty=)
+      if [ "X$tty" = "X" ]; then
+         [ $verbose = Y ] && echo "ERROR: cannot get tty for pid=$pid in file $posfile; likely the process is dead."
+         continue
+      fi
+      # full path to the tty
+      tty="/dev/$tty"
+      [ $verbose = Y ] && echo "term at pos=$pos uses tty=$tty"
+
+      file_tty=$(get_nth_line 2 $posfile)
+      if [ "X$tty" != "X$file_tty" ]; then
+         echo "ERROR: tty=$tty of pid=$pid is not the same as tty=$file_tty in the $posfile. ths should not happen."
+         continue
+      fi
+
+      # make sure the tty is writable
+      if ! [ -w $tty ]; then
+         echo "ERROR: tty=$tty is not writable. skip this file $posfile"
+         ls -l $tty
+         continue
+      fi
+
+      size=$(get_nth_line 3 $posfile)
+      width=$(echo $size | cut -d' ' -f1)
+      height=$(echo $size | cut -d' ' -f2)
+      if [ "X$width" = "X" -o "X$height" = "X" ]; then
+         [ $verbose = Y ] && echo "ERROR: size='$size' in $posfile is not in the format width height. skip this file."
+         continue
+      fi
+   
+      x=`expr 30 \* $pos`
+      y=`expr 30 \* $pos`
+
+      # https://superuser.com/questions/1162451
+      # printf '\033[3;'"$offset;$offset"'t'
+      [ $verbose = Y ] && echo "termpos: setting term at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
+      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
+
+      echo ""
+   done
+   
+elif [ "$1" = "auto" ]; then
+   # auto mode, use default min and max
+   if [ $# -ne 1 ]; then
+      [ $verbose = Y ] && echo "wrong number of args for auto mode" >&2
+      usage
+   fi
+   
+   [ $verbose = Y ] && echo "in 'auto' mode, we use termpos_cfg=$termpos_cfg"
+
+   if ! [ -f "$termpos_cfg" ]; then
+      [ $verbose = Y ] && echo "ERROR: term client file $termpos_cfg does not exist" >&2
+      exit 1
+   fi
+
+   # termpos_cfg format is
+   # login,ip min_pos max_pos
+   # mylogin,192.168.1.62 0 2
+   # mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2  # this can be a regex pattern
+   #
+   # note: login may not always be the user.for example, 
+   #       on pc term, I log into linux with myuserid, then I "su - myappid".
+   #       in this case, term_login is myuserid, not myappid.
+
+   # loop through the file to find the line that matches the "term_login,term_ip"
+   target="$term_login,$term_ip"
+
+   [ $verbose = Y ] && echo "searching a pattern in $termpos_cfg matching '$target'"
+
+   # while loop cannot pass back the variable to the parent shell
+   # therefore, we save the result to a tmpfile
+   tmpfile=/tmp/termpos.$term_login.$term_ip.tmp
+   /bin/rm -f $tmpfile
+   cat $termpos_cfg | while read line; do
+      # echo "line=$line"
+      pattern=$(echo $line | awk '{print $1}')
+      if [[ ^$target =~ $pattern ]]; then
+         # found the line that matches term_login
+         [ $verbose = Y ] && echo "pattern='$pattern' matched '$target' in line: $line"
+         echo "$line" |cut -d"#" -f1 > $tmpfile  # remove comments
+         break
+      fi
+   done
+
+   # read the line from the tmpfile
+   if [ -f $tmpfile ]; then
+      line=$(cat $tmpfile)
+      [ $verbose = Y ] && echo "found line: $line"
+      rm -f $tmpfile
+   else
+      [ $verbose = Y ] && echo "ERROR: no term client found in $termpos_cfg for target='$target'" >&2
+      exit 1
+   fi
+
+   min_pos=$(echo $line | awk '{print $2}')
+   max_pos=$(echo $line | awk '{print $3}')
+
+   # width,height precedence: command line > termpos_cfg > default
+   if [ -z "$width" ]; then
+      width=$(echo $line | awk '{print $4}')
+   fi
+   if [ -z "$height" ]; then
+      height=$(echo $line | awk '{print $5}')
+   fi
+
+   if [ -z "$width" ]; then
+      width=$default_width
+   fi
+   if [ -z "$height" ]; then
+      height=$default_height
+   fi
+
+   # recursively call this script with specific min and max
+   [ $verbose = Y ] && echo "recursively calling: termpos $flag -s $width,$height $min_pos $max_pos"
+   termpos $flag -s $width,$height $min_pos $max_pos
+    
+else
+   # termpos min max
+   if [ $# -ne 2 ]; then
+      echo "wrong number of args" >&2
+      usage
+   fi
+
+   min=$1
+   max=$2
+
+   if [[ $min =~ [^0-9] ]]; then
+      echo "ERROR: min='$min' is not a number" >&2
+      usage
+   fi
+
+   if [[ $max =~ [^0-9] ]]; then
+      echo "ERROR: max='$max' is not a number" >&2
+      usage
+   fi
+
+   if [ $min -ge $max ]; then
+      echo "ERROR: min=$min is not less than max=$max"
+      usage
+   fi
+
+   # for loop range, works for numbers
+   #    for i in {0..10} 
+   # but not work for variables
+   #    for i in {$min..$max}
+   # for variables, use C-style instead
+   for (( i = $min; i <= $max; i ++ ))
+   do
+      [ $verbose = Y ] && echo ""
+      [ $verbose = Y ] && echo "checking spot $i"
+
+      # pad the number in the file name to make 'ls /tmp/termpos.*' easy to sort
+      padded=`printf '%03d' $i`
+      posfile=/tmp/termpos.$user.$term_ip.$padded 
+      # posfile content
+      #    pid
+      #    tty
+      #    width height
+
+      if [ -e $posfile ]; then
+         pid=$(get_nth_line 1 $posfile)
+         [ $verbose = Y ] && echo "found posfile $posfile, pid=$pid"
+
+         if ! [ "X$pid" = "X" ]; then
+            if ps -p $pid >/dev/null; then
+               [ $verbose = Y ] && echo "term at position $i is running, pid=$pid."             
+               if [ ${seen[$pid]+_} ]; then
+                  # +_: This is a shorthand way to check if the key $pid exists in the seen array.
+                  # when you use + with an array element, it evaluates to a non-empty string 
+                  # (e.g., _) if the key exists, or an empty string if it doesn't.
+                  [ $verbose = Y ] && echo "already seen pid=$pid in ${seen[$pid]}. use $i"
+               elif [ "$term_pid" = "$pid" ]; then
+                  # this file has term_pid
+                  [ $verbose = Y ] && echo "seen term_pid=$term_pid in $posfile. keep spot $i"
+               else
+                  [ $verbose = Y ] && echo "we will check next spot"
+                  seen[$pid]=$posfile
+                  continue
+               fi
+            else 
+               [ $verbose = Y ] && echo  "pid=$pid in $posfile is not running.  use sport $i"
+            fi
+         else
+            [ $verbose = Y ] && "$posfile is empty. we can use sport $i"
+         fi
+      fi
+
+      # found a spot
+      x=`expr 30 \* $i`
+      y=`expr 30 \* $i`
+
+      # https://superuser.com/questions/1162451
+      # printf '\033[3;'"$offset;$offset"'t'
+      [ $verbose = Y ] && echo "termpos: setting position to x=$x, y=$y, width=$width, height=$height"
+      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
+
+      echo "$term_pid" > $posfile
+      echo "$term_tty" >> $posfile
+      echo "$width $height" >> $posfile
+      
+      found=$i
+      break
+   done
+      
+   if [ "X$found" = "X" ]; then
+      echo "$prog: no available spot found"
+   else
+      [ $verbose = Y ] && echo "spot found at $found"
+      [ $verbose = Y ] && echo "saved to $posfile"
+   fi
+fi

@@ -20,6 +20,10 @@ chknfs() {
    echo All Done
 }
 
+chk_nfs() {
+   chknfs "$@"
+}
+
 get_bash_source() {
    TP_BASH_SOURCE_FOUND=N
    unset TP_BASH_SOURCE_DIR
@@ -914,13 +918,14 @@ myandroid() {
 clear() {
    # https://superuser.com/questions/555554
    /usr/bin/clear
-   printf "\033[03J" # this is needed for putty
+   printf "\033[03J" # this is needed for putty. also for cygwin and gitbash.
 
    if [[ $UNAME =~ MINGW ]]; then
       # this gitbash
       if [ "X$TERM_PROGRAM" = "Xvscode" ]; then
          echo "click control+k to clear"
       fi
+
    fi
 }
 
@@ -942,16 +947,15 @@ gittop() {
    cd "$gitdir"
 }
 
-# if you need to auto place PUTTY, 
-#    1. set PLACE_PUTTY to Y in site-spec/profile or $HOME/.profile
-#    2. config ~/.tpsup/putty_client.txt
-#    3. once login or after 'su -', run 'puttypos auto' or 'siteenv'
+# if you need to auto place TERM, 
+#    1. set RUN_TERMPOS to Y in site-spec/profile or $HOME/.profile
+#    2. config ~/.tpsup/termpos.cfg
+#    3. once login or after 'su -', run 'termpos auto' or 'siteenv'
 if [[ $- == *i* ]]; then
    # this is interactive shell
-   if [ "X$PLACE_PUTTY" = "XY" ]; then
-      puttypos auto || : # '|| :' is to ignore the error and set return code to 0.
-      pa () {
-         ( set -x; puttypos auto )      
-      }
+   if [ "X$RUN_TERMPOS" = "XY" ]; then
+      termpos auto || : # '|| :' is to ignore the error and set return code to 0.
    fi
 fi
+
+tpa () { ( set -x; termpos auto; ) }
