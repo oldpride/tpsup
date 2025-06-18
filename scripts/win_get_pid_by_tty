@@ -62,5 +62,8 @@ fi
 #  tian    2392    1068 pty0     17:10:28 ps -ef
 #  tian    2393    1068 pty0     17:10:28 /usr/bin/grep
 
-[ $verbose = Y ] && echo >&2 "cmd=ps -ef | awk \"{ if (\\\$4 == \\\"$short_tty\\\" && (\\\$6 ~ /^-bash/ || \\\$7 ~ /^-bash/)) print \\\$2 }\" | head -n 1"
-ps -ef | awk "{ if (\$4 == \"$short_tty\" && (\$6 ~ /^-bash/ || \$7 ~ /^-bash/)) print \$2 }" | head -n 1
+# the bash can be either: -bash or /usr/bin/bash.
+# the command position can be either 6 or 7.
+cmd='ps -ef | awk "{ if (\$4 == \"'$short_tty'\" && (\$6 ~ /^-bash|^.usr.bin.bash/ || \$7 ~ /^-bash|^.usr.bin.bash/)) print \$2 }" | head -n 1'
+[ $verbose = Y ] && echo >&2 "cmd=$cmd"
+eval "$cmd"
