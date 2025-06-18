@@ -66,7 +66,7 @@ fi
 # the command position can be either 6 or 7.
 ps_output=$(ps -ef)
 [ $verbose = Y ] && echo >&2 "ps_output=$ps_output"
-cmd='echo "$ps_output" | awk "{ if (\$4 == \"'$short_tty'\" && (\$6 ~ /^-bash|^.usr.bin.bash/ || \$7 ~ /^-bash|^.usr.bin.bash/)) print \$2 }" | head -n 1'
+cmd='echo "$ps_output" | awk "{ if (\$4 == \"'$short_tty'\" && (\$6 ~ /^-bash|^.usr.bin.bash/ || \$7 ~ /^-bash|^.usr.bin.bash/)) print \$2 }"'
 [ $verbose = Y ] && echo >&2 "cmd=$cmd"
 # eval "$cmd"
 pids=$(eval "$cmd")
