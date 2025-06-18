@@ -101,7 +101,7 @@ elif [ -d /c ]; then
 fi
 
 # for now, we can handle cygwin on pc, putty on pc that logs into a linux server.
-if [ $IS_CYGWIN = Y ]; then
+if [ $IS_CYGWIN = Y -o $IS_GITBASH = Y ]; then
    # cygwin on pc
    term_login=$user
    term_tty=`tty`
@@ -109,12 +109,7 @@ if [ $IS_CYGWIN = Y ]; then
 
    # find the pid of the mintty process that is using this tty
    # note: cygwin's 'ps' comamnd does not support -t option. so we have to use "ps -ef"
-   # tian@tianpc2:/cygdrive/c/Users/tian$ ps -ef |grep pty0
-   #  tian    1068    1067 pty0       Jun 12 -bash
-   #  tian    2392    1068 pty0     17:10:28 ps -ef
-   #  tian    2393    1068 pty0     17:10:28 /usr/bin/grep
-
-   term_pid=$(ps -ef | awk "{ if (\$4 == \"$short_tty\" && (\$6 ~ /^-bash/ || \$7 ~ /^-bash/)) print \$2 }" | head -n 1)
+   term_pid=$(win_get_pid_by_tty $short_tty)
 
    term_ip="127.0.0.1"  # cygwin on pc, we assume the term client is on the same machine
 else
@@ -179,7 +174,20 @@ if [ "$1" = "resetall" ]; then
 
       [ $verbose = Y ] && echo "resetting position $pos in file $posfile"
       pid=$(get_nth_line 1 $posfile|cut -d' ' -f1)
-      tty=$(ps -p $pid -o tty=)
+      
+      if [ $IS_CYGWIN = Y -o $IS_GITBASH = Y ]; then
+         # for cygwin, 'ps -p $pid -o tty=' does not work. we have to parse 
+         # the output get the tty.
+         # tian@tianpc2:/cygdrive/c/Users/tian$ ps -p 1068 -f
+         #      UID     PID    PPID  TTY        STIME COMMAND
+         #     tian    1068    1067 pty0       Jun 12 -bash
+
+         tty=$(ps -p $pid -f | awk '{if ($2 == "'$pid'") print $4}')
+      
+      else
+         # for linux, we can use ps -p $pid -o tty= to get the tty
+         tty=$(ps -p $pid -o tty=)
+      fi
       if [ "X$tty" = "X" ]; then
          [ $verbose = Y ] && echo "ERROR: cannot get tty for pid=$pid in file $posfile; likely the process is dead."
          continue

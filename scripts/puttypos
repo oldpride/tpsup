@@ -1,0 +1,6 @@
+$!/bin/bash
+
+cat >&2 <<END
+    puttypos is replaced by termpos
+END
+exit 1
