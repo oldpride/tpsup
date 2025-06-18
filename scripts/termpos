@@ -253,6 +253,7 @@ elif [ "$1" = "auto" ]; then
 
    # loop through the file to find the line that matches the "term_login,term_ip"
    target="$term_login,$term_ip"
+   target=${target,,}  # convert to lower case
 
    [ $verbose = Y ] && echo "searching a pattern in $termpos_cfg matching '$target'"
 
@@ -261,11 +262,18 @@ elif [ "$1" = "auto" ]; then
    tmpfile=/tmp/termpos.$term_login.$term_ip.tmp
    /bin/rm -f $tmpfile
    cat $termpos_cfg | while read line; do
+      # skip empty lines and comments
+      if [[ -z "$line" || "$line" =~ ^# ]]; then
+         continue
+      fi
+      
       # echo "line=$line"
       pattern=$(echo $line | awk '{print $1}')
+      pattern=${pattern,,}  # convert to lower case
       # to make sure the pattern is case-insensitive, we convert both target 
       # and pattern to lower case using ${var,,} syntax.
-      if [[ ^{$target,,} =~ ${pattern,,} ]]; then
+      [ $verbose = Y ] && echo "checking pattern='$pattern' against target='$target'"
+      if [[ $target =~ ^$pattern$ ]]; then
          # found the line that matches term_login
          [ $verbose = Y ] && echo "pattern='$pattern' matched '$target' in line: $line"
          echo "$line" |cut -d"#" -f1 > $tmpfile  # remove comments
