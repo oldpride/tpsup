@@ -263,7 +263,9 @@ elif [ "$1" = "auto" ]; then
    cat $termpos_cfg | while read line; do
       # echo "line=$line"
       pattern=$(echo $line | awk '{print $1}')
-      if [[ ^$target =~ $pattern ]]; then
+      # to make sure the pattern is case-insensitive, we convert both target 
+      # and pattern to lower case using ${var,,} syntax.
+      if [[ ^{$target,,} =~ ${pattern,,} ]]; then
          # found the line that matches term_login
          [ $verbose = Y ] && echo "pattern='$pattern' matched '$target' in line: $line"
          echo "$line" |cut -d"#" -f1 > $tmpfile  # remove comments
