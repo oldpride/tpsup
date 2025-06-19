@@ -1,7 +1,5 @@
 @echo off
 
-
-
 set "prog=%~n0"
 
 if "%1"=="" goto usage
@@ -87,6 +85,9 @@ if "%type%" == "cyg" (
         "!cygwin_path!" -i /Cygwin-Terminal.ico -p !x!,!y! -
         set /a "x+=30"
         set /a "y+=30"
+
+        @REM sleep in between to avoid launching too many terminals at once
+        timeout /t 2 /nobreak >nul
     )
 
     @REM restore HOME

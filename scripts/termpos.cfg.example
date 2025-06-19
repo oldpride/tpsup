@@ -1,0 +1,17 @@
+# ~/.tpsup/termpos.cfg format is
+# term_type,login,ip min_pos max_pos width height
+
+# for putty, use default as term_type
+default,mylogin,192.168.1.62 0 2
+default,mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2  # this can be a regex pattern
+
+# for cygwin, use cygwin as term_type
+cygwin,mylogin,127.0.0.1  0 7 86 27
+
+# for gitbash, use gitbash as term_type
+gitbash,mylogin,127.0.1 8 10 86 27
+
+
+# note: login may not always be the user.for example,
+#       on pc putty, I log into linux with myuserid, then I "su - myappid".
+#       in this case, putty_login is myuserid, not myappid.

@@ -115,9 +115,21 @@ for my $line (@lines) {
       print STDERR "a: ", Dumper( \@a );
    }
 
+   if ( !$a[5] ) {
+      # this happened once. trying to figure out why.
+      print STDERR "missing 5th (starting 0th) field at line: $line\n";
+      next;
+   }
+
    # the command is either -bash, /usr/bin/bash
-   if ( $a[5] !~ m:^(-bash|/usr/bin/bash):
-      && ( !$a[6] || $a[6] !~ m:^(-bash|/usr/bin/bash): ) )
+   if (
+      $a[5] !~ m:^(-bash|/usr/bin/bash):
+      && (
+           !$a[6]
+         || $a[6] !~ m:^(-bash|/usr
+      /bin/bash):
+      )
+     )
    {
       next;    # not a bash process, skip it
    }

@@ -37,9 +37,11 @@ usage:
    -v                verbose mode.
 
    termpos_cfg format is
-      login,ip min_pos max_pos width height
-      mylogin,192.168.1.62 0 9 100 30
-      mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2
+      term,login,ip min_pos max_pos width height
+      default,mylogin,192.168.1.62 0 9 100 30
+      default,mylogin,192[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]* 0 2
+      cygwin,tian,127.0.0.1 0 7 86 27
+      gitbash,tian,127.0.0.1 8 10 86 27
 
       # "login,ip" can be a regex pattern.
       # width and height are optional, if not set, use default $default_width,$default_height.
@@ -50,6 +52,7 @@ examples:
    $prog 0 9
    $prog 10 12
    $prog -s 100,30 auto
+   $prog resetall
 
 EOF
    exit 1
@@ -87,17 +90,20 @@ fi
 
 IS_CYGWIN=N
 IS_GITBASH=N
+term_type=default
 
 if [ -d /cygdrive ]; then
    # we are in a cygwin terminal
    IS_CYGWIN=Y
    [ $verbose = Y ] && echo "we are in a cygwin terminal"
    termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+   term_type=cygwin
 elif [ -d /c ]; then
    # we are in git bash terminal
    IS_GITBASH=Y
    [ $verbose = Y ] && echo "we are in a git bash terminal"
    termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+   term_type=gitbash
 fi
 
 # for now, we can handle cygwin on pc, putty on pc that logs into a linux server.
@@ -235,7 +241,7 @@ elif [ "$1" = "auto" ]; then
       usage
    fi
    
-   [ $verbose = Y ] && echo "in 'auto' mode, we use termpos_cfg=$termpos_cfg"
+   [ $verbose = Y ] && echo "in auto mode, we use termpos_cfg=$termpos_cfg"
 
    if ! [ -f "$termpos_cfg" ]; then
       [ $verbose = Y ] && echo "ERROR: term client file $termpos_cfg does not exist" >&2
@@ -252,41 +258,38 @@ elif [ "$1" = "auto" ]; then
    #       in this case, term_login is myuserid, not myappid.
 
    # loop through the file to find the line that matches the "term_login,term_ip"
-   target="$term_login,$term_ip"
+   target="$term_type,$term_login,$term_ip"
    target=${target,,}  # convert to lower case
 
    [ $verbose = Y ] && echo "searching a pattern in $termpos_cfg matching '$target'"
 
-   # while loop cannot pass back the variable to the parent shell
-   # therefore, we save the result to a tmpfile
-   tmpfile=/tmp/termpos.$term_login.$term_ip.tmp
-   /bin/rm -f $tmpfile
-   cat $termpos_cfg | while read line; do
-      # skip empty lines and comments
-      if [[ -z "$line" || "$line" =~ ^# ]]; then
-         continue
-      fi
-      
-      # echo "line=$line"
-      pattern=$(echo $line | awk '{print $1}')
-      pattern=${pattern,,}  # convert to lower case
-      # to make sure the pattern is case-insensitive, we convert both target 
-      # and pattern to lower case using ${var,,} syntax.
-      [ $verbose = Y ] && echo "checking pattern='$pattern' against target='$target'"
-      if [[ $target =~ ^$pattern$ ]]; then
-         # found the line that matches term_login
-         [ $verbose = Y ] && echo "pattern='$pattern' matched '$target' in line: $line"
-         echo "$line" |cut -d"#" -f1 > $tmpfile  # remove comments
-         break
-      fi
-   done
+   # the "cat|while read" cannot preserve the variable in while loop.
+   # so we use a subshell to read the file and preserve the variable.
+   line=$(
+      cat $termpos_cfg | ( while read line; 
+         do
+            # skip empty lines and comments
+            if [[ -z "$line" || "$line" =~ ^# ]]; then
+               continue
+            fi
+            
+            # echo "line=$line"
+            pattern=$(echo $line | awk '{print $1}')
+            pattern=${pattern,,}  # convert to lower case
+            # to make sure the pattern is case-insensitive, we convert both target 
+            # and pattern to lower case using ${var,,} syntax.
+            [ $verbose = Y ] && echo >&2 "checking pattern='$pattern' against target='$target'"
+            if [[ $target =~ ^$pattern$ ]]; then
+               # found the line that matches term_login
+               [ $verbose = Y ] && echo >&2 "pattern='$pattern' matched '$target' in line: $line"
+               echo "$line" |cut -d"#" -f1 # remove comments
+               break
+            fi
+         done; 
+      )
+   )
 
-   # read the line from the tmpfile
-   if [ -f $tmpfile ]; then
-      line=$(cat $tmpfile)
-      [ $verbose = Y ] && echo "found line: $line"
-      rm -f $tmpfile
-   else
+   if [ "X$line" = "X" ]; then
       [ $verbose = Y ] && echo "ERROR: no term client found in $termpos_cfg for target='$target'" >&2
       exit 1
    fi
@@ -337,6 +340,8 @@ else
       echo "ERROR: min=$min is not less than max=$max"
       usage
    fi
+
+   declare -A seen  # associative array to keep track of seen pids
 
    # for loop range, works for numbers
    #    for i in {0..10} 

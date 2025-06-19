@@ -73,49 +73,19 @@ pids=$(eval "$cmd")
 pid_count=$(echo "$pids" | wc -w)
 [ $verbose = Y ] && echo >&2 "pid_count=$pid_count pids=$pids"
 
-# if we found more than one pid, we will run the command again
-# we will pick the pid that showed up twice. The other pid is the temporary one.
-
 if [ $pid_count -eq 0 ]; then
    [ $verbose = Y ] && echo >&2 "Error: no process found for tty '$tty'"
    exit 1
 elif [ $pid_count -eq 1 ]; then
    echo $pids
    exit 0
-else
-   [ $verbose = Y ] && echo >&2 "Warning: found $pid_count processes for tty '$tty'. we need to run the command again to filter out the temporary pid."
-   ps_output=$(ps -ef)
-   [ $verbose = Y ] && echo >&2 "ps_output=$ps_output"
-   pids2=$(eval "$cmd")
-   pid_count2=$(echo "$pids2" | wc -w)
-   if [ $pid_count2 -eq 1 ]; then
-      echo $pids2
-      exit 0
-   elif [ $pid_count2 -eq 0 ]; then
-      [ $verbose = Y ] && echo >&2 "Error: no process found for tty '$tty' after filtering"
-      exit 1
-   else
-      # now both pids and pids2 have more than one pid.
-      [ $verbose = Y ] && echo >&2 "pid_count2=$pid_count2 pids2=$pids2"
-
-      # use an associate array to record the occurrence of each pid
-      declare -A seen_pid
-      for pid in $pids; 
-      do
-         seen_pid[$pid]=1
-      done
-
-      for pid in $pids2;
-      do
-         # if the pid is already seen, we will print it
-         if [[ -n ${seen_pid[$pid]} ]]; then
-            echo $pid
-            exit 0
-         else
-            continue
-         fi
-      done
-      [ $verbose = Y ] && echo >&2 "Error: no process found for tty '$tty' after filtering again"
-      exit 1      
-   fi
 fi
+
+# more than one process found, we use the pid that is also ppid.
+# build an associative array to store the ppid by pid
+declare -A ppid_map
+cmd='echo "$ps_output" | awk "{ if (\$4 == \"'$short_tty'\" && (\$6 ~ /^-bash|^.usr.bin.bash/ || \$7 ~ /^-bash|^.usr.bin.bash/)) print \$2, \$3 }"'
+[ $verbose = Y ] && echo >&2 "cmd=$cmd"
+eval "$cmd" | while read -r pid ppid; do
+   ppid_map["$pid"]="$ppid"
+done
