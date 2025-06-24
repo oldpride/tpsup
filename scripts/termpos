@@ -83,7 +83,7 @@ if [ "X$size" != "X" ]; then
       width=$(echo $size | cut -d, -f1)
       height=$(echo $size | cut -d, -f2)
    else
-      echo "ERROR: size='$size' is not in the format width,height" >&2
+      echo "$prog: ERROR: size='$size' is not in the format width,height" >&2
       usage
    fi
 fi
@@ -133,7 +133,7 @@ else
 
    WHO=$(tpwho current 2>/dev/null)
    if [ $? -ne 0 ]; then
-      [ $verbose = Y ] && echo "tpwho command failed. not a tty. quit" >&2
+      [ $verbose = Y ] && echo "$prog: tpwho command failed. not a tty. quit" >&2
       exit 1
    fi
 
@@ -151,7 +151,7 @@ if [ $verbose = Y ]; then
 fi
 
 if [ "X$term_ip" = "X" ]; then
-   [ $verbose = Y ] && echo "ERROR: cannot get term client IP from 'who' command." >&2
+   [ $verbose = Y ] && echo "$prog: ERROR: cannot get term client IP from 'who' command." >&2
    exit 1
 fi
 
@@ -231,7 +231,7 @@ if [ "$1" = "resetall" ]; then
       [ $verbose = Y ] && echo "termpos: setting term at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
 
-      echo ""
+      [ $verbose = Y ] && echo ""
    done
    
 elif [ "$1" = "auto" ]; then
@@ -319,7 +319,7 @@ elif [ "$1" = "auto" ]; then
 else
    # termpos min max
    if [ $# -ne 2 ]; then
-      echo "wrong number of args" >&2
+      echo "$prog: wrong number of args" >&2
       usage
    fi
 
@@ -327,17 +327,17 @@ else
    max=$2
 
    if [[ $min =~ [^0-9] ]]; then
-      echo "ERROR: min='$min' is not a number" >&2
+      echo "$prog: ERROR: min='$min' is not a number" >&2
       usage
    fi
 
    if [[ $max =~ [^0-9] ]]; then
-      echo "ERROR: max='$max' is not a number" >&2
+      echo "$prog: ERROR: max='$max' is not a number" >&2
       usage
    fi
 
    if [ $min -ge $max ]; then
-      echo "ERROR: min=$min is not less than max=$max"
+      echo "$prog: ERROR: min=$min is not less than max=$max"
       usage
    fi
 
