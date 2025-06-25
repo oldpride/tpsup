@@ -959,3 +959,4 @@ if [[ $- == *i* ]]; then
 fi
 
 tpa () { ( set -x; termpos auto; ) }
+tpr () { ( set -x; termpos resetall; ) }
