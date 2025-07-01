@@ -9,6 +9,7 @@ usage:
    find the rpm name for a file
 
    note: Ubuntu doesn't use rpm.
+   use findpkg on Ubuntu.
 
 examples:
 
@@ -21,6 +22,12 @@ EOF
 if [ $# -eq 0 ]; then
    echo "wrong number of args"
    usage
+fi
+
+# check whether this is ubuntu. if yes, suggest using findpkg
+if [ -f /etc/lsb-release ]; then
+   echo "This is Ubuntu. Please use findpkg instead of $0."
+   exit 1
 fi
 
 # sometimes 3rd party (anaconda) lib gets linked to rpm command, causing error
