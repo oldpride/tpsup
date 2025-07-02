@@ -60,7 +60,10 @@ usage("wrong number of args") if @ARGV != 1;
 my ($pattern) = @ARGV;
 
 # check whether the config directory exists
--d $openvpn_dir or usage("config directory $openvpn_dir does not exist");
+if (! -d $openvpn_dir) {
+   print "config directory $openvpn_dir does not exist\n";
+   exit 1;
+}
 
 # list the files
 my @files = glob("$openvpn_dir/$pattern*.ovpn");
