@@ -1,0 +1,99 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;    # this sorts the Dumper output!
+$Data::Dumper::Terse    = 1;
+
+use Getopt::Long;
+use Carp;
+use File::Basename;
+
+# try not use any TPSUP:: modules as if they break, this script breaks too.
+
+my $prog = $0;
+$prog =~ s:.*/::;
+
+my $openvpn_dir="/etc/openvpn";
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print STDERR << "END";
+usage:
+
+   $prog cfg_pattern
+
+   pattern is Glob pattern, not RegEx
+
+   -v               verbose mode
+   -l               list the matched files only
+   -n               dry run mode (do not actually run openvpn)
+
+   config files are under $openvpn_dir
+
+examples:
+
+   $prog        sg*
+   $prog   -l   sg*
+
+END
+
+   exit 1;
+}
+
+my $verbose = 0;
+my $list_only = 0;
+my $dryrun = 0;
+
+GetOptions( 
+   'v|verbose+' => \$verbose, 
+   'l|list'     => \$list_only, 
+   'n|dry-run'  => \$dryrun,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($pattern) = @ARGV;
+
+# check whether the config directory exists
+-d $openvpn_dir or usage("config directory $openvpn_dir does not exist");
+
+# list the files
+my @files = glob("$openvpn_dir/$pattern*.ovpn");
+@files or usage("no files matched the pattern '$pattern' in $openvpn_dir");
+
+if ($list_only) {
+   print "$_\n" for @files;
+   exit 0;
+} elsif ($verbose) {
+   print "matched files:\n";
+   print "$_\n" for @files;
+}
+
+if (@files > 1) {
+   print "more than one file matched the pattern '$pattern' in $openvpn_dir\n";
+   if (!$verbose) {
+      # if not verbose, we didn't print the matched files before, 
+      # so we print them now
+      print "matched files:\n";
+      print "$_\n" for @files;
+      print "\n";
+   }
+   exit 1;
+}
+
+my $cmd =  "sudo openvpn $files[0]";
+print "running: $cmd\n";
+
+if ($dryrun) {
+   print "dry run mode, not executing\n";
+} else {
+   system($cmd);
+}
+
+
+
