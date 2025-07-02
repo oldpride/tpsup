@@ -8,8 +8,9 @@ usage:
 
    find the rpm name for a file
 
-   note: Ubuntu doesn't use rpm.
-   use findpkg on Ubuntu.
+   note:
+   use findrpm on rhel/centos/fedora.
+   use findpkg on ubuntu/debian.
 
 examples:
 
@@ -24,11 +25,22 @@ if [ $# -eq 0 ]; then
    usage
 fi
 
-# check whether this is ubuntu. if yes, suggest using findpkg
-if [ -f /etc/lsb-release ]; then
-   echo "This is Ubuntu. Please use findpkg instead of $0."
+# check whether /etc/os-release ID=...
+if ! [ -f /etc/os-release ]; then
+   echo "this OS is not linux because /etc/os-release does not exist"
    exit 1
 fi
+
+ID=$(grep -i '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+if [[ $ID =~ ^(rhel|centos|fedora)$ ]]; then
+   echo "this is a $ID system"
+elif [[ $ID =~ ^(ubuntu|debian)$ ]]; then
+   echo "ERROR: this is an ubuntu/debian system. use findpkg instead"
+else
+   echo "ERROR: this is not a rhel/centos/fedora or ubuntu/debian system"
+   exit 1
+fi
+
 
 # sometimes 3rd party (anaconda) lib gets linked to rpm command, causing error
 unset LD_LIBRARY_PATH
