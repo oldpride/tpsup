@@ -15,7 +15,7 @@ use File::Basename;
 my $prog = $0;
 $prog =~ s:.*/::;
 
-my $openvpn_dir="/etc/openvpn";
+my $openvpn_dir = "/etc/openvpn";
 
 sub usage {
    my ($message) = @_;
@@ -37,7 +37,7 @@ usage:
 
 examples:
 
-   $prog        sg*
+   $prog        sg*tcp
    $prog   -l   sg*
 
 END
@@ -45,13 +45,13 @@ END
    exit 1;
 }
 
-my $verbose = 0;
+my $verbose   = 0;
 my $list_only = 0;
-my $dryrun = 0;
+my $dryrun    = 0;
 
-GetOptions( 
-   'v|verbose+' => \$verbose, 
-   'l|list'     => \$list_only, 
+GetOptions(
+   'v|verbose+' => \$verbose,
+   'l|list'     => \$list_only,
    'n|dry-run'  => \$dryrun,
 ) || usage("cannot parse command line: $!");
 
@@ -74,10 +74,10 @@ if ($list_only) {
    print "$_\n" for @files;
 }
 
-if (@files > 1) {
+if ( @files > 1 ) {
    print "more than one file matched the pattern '$pattern' in $openvpn_dir\n";
-   if (!$verbose) {
-      # if not verbose, we didn't print the matched files before, 
+   if ( !$verbose ) {
+      # if not verbose, we didn't print the matched files before,
       # so we print them now
       print "matched files:\n";
       print "$_\n" for @files;
@@ -86,7 +86,7 @@ if (@files > 1) {
    exit 1;
 }
 
-my $cmd =  "sudo openvpn $files[0]";
+my $cmd = "sudo openvpn $files[0]";
 print "running: $cmd\n";
 
 if ($dryrun) {
@@ -94,6 +94,3 @@ if ($dryrun) {
 } else {
    system($cmd);
 }
-
-
-

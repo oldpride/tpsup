@@ -47,6 +47,8 @@ elif [[ $ID =~ ^(ubuntu|debian)$ ]]; then
    for i in $@
    do
       echo "---- match by filename, search in /var/lib/dpkg/info/*.list, case-insensitive ----"
+      # 'set -x' will print *.list files, too much output. so we use echo instead.
+      # (set -x; grep -Fi "$i" /var/lib/dpkg/info/*.list |sed 's:/var/lib/dpkg/info/::;s/.list:/: /')
       echo "grep -Fi '$i' /var/lib/dpkg/info/*.list |sed 's:/var/lib/dpkg/info/::;s/.list:/: /'"
       grep -Fi "$i" /var/lib/dpkg/info/*.list |sed 's:/var/lib/dpkg/info/::;s/.list:/: /'
 
