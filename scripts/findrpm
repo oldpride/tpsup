@@ -39,6 +39,13 @@ echo "this is a $ID system"
 if [[ $ID =~ ^(rhel|centos|fedora)$ ]]; then
    for i in $@
    do
+      echo "rpm --filesbypkg -aq|egrep -i 'Si'"
+
+      (set -x; rpm --filesbypkg -aq|egrep -i "$i")
+   done
+elif [[ $ID =~ ^(ubuntu|debian)$ ]]; then
+   for i in $@
+   do
       echo "---- match by filename, search in /var/lib/dpkg/info/*.list, case-insensitive ----"
       grep -Fi "$i" /var/lib/dpkg/info/*.list |sed 's:/var/lib/dpkg/info/::;s/.list:/: /'
 
@@ -49,14 +56,6 @@ if [[ $ID =~ ^(rhel|centos|fedora)$ ]]; then
       #echo ""
       #echo "---- match by file name, case-sensitive ----"
       #(set -x; dpkg -S "$i")
-   done
-elif [[ $ID =~ ^(ubuntu|debian)$ ]]; then
- 
-   for i in $@
-   do
-      echo "rpm --filesbypkg -aq|egrep -i 'Si'"
-
-      (set -x; rpm --filesbypkg -aq|egrep -i "$i")
    done
 else
    echo "ERROR: we only support rhel/centos/fedora or ubuntu/debian system"
