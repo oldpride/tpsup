@@ -4,13 +4,13 @@ usage () {
    cat <<EOF
 usage:
 
-   $0 file
+   $0 file1 file2 ...
 
-   find the rpm name for a file
+   find the rpm/dpkg name for a file
 
    note:
-   use findrpm on rhel/centos/fedora.
-   use findpkg on ubuntu/debian.
+      rhel/centos/fedora use rpm.
+      ubuntu/debian use dpkg.
 
 examples:
 
@@ -25,6 +25,9 @@ if [ $# -eq 0 ]; then
    usage
 fi
 
+# sometimes 3rd party (anaconda) lib gets linked to rpm command, causing error
+unset LD_LIBRARY_PATH
+
 # check whether /etc/os-release ID=...
 if ! [ -f /etc/os-release ]; then
    echo "this OS is not linux because /etc/os-release does not exist"
@@ -32,25 +35,32 @@ if ! [ -f /etc/os-release ]; then
 fi
 
 ID=$(grep -i '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+echo "this is a $ID system"
 if [[ $ID =~ ^(rhel|centos|fedora)$ ]]; then
-   echo "this is a $ID system"
+   for i in $@
+   do
+      echo "---- match by filename, search in /var/lib/dpkg/info/*.list, case-insensitive ----"
+      grep -Fi "$i" /var/lib/dpkg/info/*.list |sed 's:/var/lib/dpkg/info/::;s/.list:/: /'
+
+      echo ""
+      echo "---- match by pkg name, case-sensitive ----"
+      (set -x; dpkg -l "$i")
+
+      #echo ""
+      #echo "---- match by file name, case-sensitive ----"
+      #(set -x; dpkg -S "$i")
+   done
 elif [[ $ID =~ ^(ubuntu|debian)$ ]]; then
-   echo "ERROR: this is an ubuntu/debian system. use findpkg instead"
+ 
+   for i in $@
+   do
+      echo "rpm --filesbypkg -aq|egrep -i 'Si'"
+
+      (set -x; rpm --filesbypkg -aq|egrep -i "$i")
+   done
 else
-   echo "ERROR: this is not a rhel/centos/fedora or ubuntu/debian system"
+   echo "ERROR: we only support rhel/centos/fedora or ubuntu/debian system"
    exit 1
 fi
 
-
-# sometimes 3rd party (anaconda) lib gets linked to rpm command, causing error
-unset LD_LIBRARY_PATH
-
-for i in $@
-do
-   echo "rpm --filesbypkg -aq|egrep -i 'Si'"
-
-   rpm --filesbypkg -aq|egrep -i "$i"
-
-   echo
-
-done
+echo ""
