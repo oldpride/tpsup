@@ -7,10 +7,11 @@ use Getopt::Long;
 use Carp;
 use TPSUP::AUTOSYS qw(get_dependency load_autosys_cfg);
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
-my $DetailExpire = 24*60*60;
-my $StatusExpire = 24*60*60;
+my $DetailExpire = 24 * 60 * 60;
+my $StatusExpire = 24 * 60 * 60;
 
 sub usage {
    my ($message) = @_;
@@ -117,22 +118,22 @@ my @JobExps;
 my $ExtJobs;
 
 GetOptions(
-   'v|verbose'     => \$verbose,
-   'r|reset'       => \$reset,
-   'rs'            => \$reset_status,
-   'df=s'          => \$DetailFiles,
-   'sf=s'          => \$StatusFiles,
-   'de=s'          => \@DepExps,
-   'je=s'          => \@JobExps,
-   'ej=s'          => \$ExtJobs,
-   'op=s'          => \%value_by_key,
+   'v|verbose' => \$verbose,
+   'r|reset'   => \$reset,
+   'rs'        => \$reset_status,
+   'df=s'      => \$DetailFiles,
+   'sf=s'      => \$StatusFiles,
+   'de=s'      => \@DepExps,
+   'je=s'      => \@JobExps,
+   'ej=s'      => \$ExtJobs,
+   'op=s'      => \%value_by_key,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV != 1;
 
 my ($job) = @ARGV;
 
-my $opt = { 
+my $opt = {
    verbose      => $verbose,
    DetailFiles  => $DetailFiles,
    StatusFiles  => $StatusFiles,
@@ -141,34 +142,40 @@ my $opt = {
    DepExps      => \@DepExps,
    JobExps      => \@JobExps,
    ExtJobs      => $ExtJobs,
+   AutorepOnce  => 1,               # we only run autorep once
    %value_by_key,
 };
 
 if ($reset) {
-   $opt->{DetailExpire} = 30;
-   $opt->{StatusExpire} = 30;
+   $opt->{DetailExpire} = 0;        # seconds. default is 12 hours
+   $opt->{StatusExpire} = 0;        # seconds. default is 12 hours
 } elsif ($reset_status) {
-   $opt->{StatusExpire} = 30;
+   $opt->{StatusExpire} = 0;        # seconds. default is 12 hours
 }
 
-my $dependency = get_dependency($job, $opt);
+my $dependency = get_dependency( $job, $opt );
 
 $verbose && print STDERR "dependency=", Dumper($dependency);
 
 no warnings 'uninitialized';
 
 for my $updown (qw(up self down)) {
-   next if ! exists $dependency->{$updown};
+   next if !exists $dependency->{$updown};
 
-   for my $dep ($updown eq 'up' ? reverse(@{$dependency->{$updown}})
-                                :         @{$dependency->{$updown}}  ) {
-                                  
-      print $updown eq 'up'   ? '-': 
-            $updown eq 'down' ? '+' : '',
-            join('.', @{$dep->{serial}}),
-            ",   $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
-            "$dep->{reason}, ",
-            "$dep->{detail}->{Status}, ",
-            "$dep->{detail}->{LastStart}, $dep->{detail}->{LastEnd}\n";
+   for my $dep (
+      $updown eq 'up'
+      ? reverse( @{ $dependency->{$updown} } )
+      : @{ $dependency->{$updown} }
+     )
+   {
+
+      print $updown eq 'up' ? '-'
+        : $updown eq 'down' ? '+'
+        : '',
+        join( '.', @{ $dep->{serial} } ),
+        ",   $dep->{detail}->{JobName}, $dep->{detail}->{job_type}, ",
+        "$dep->{reason}, ",
+        "$dep->{detail}->{Status}, ",
+        "$dep->{detail}->{LastStart}, $dep->{detail}->{LastEnd}\n";
    }
 }

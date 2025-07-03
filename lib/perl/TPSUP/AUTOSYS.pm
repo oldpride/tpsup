@@ -607,6 +607,7 @@ sub query_jobs_superset {
 
    if ($need_job_detail) {
       if ($DetailFiles) {
+         # these are static files, mainly for testing. we don't check if they are stale.
          for my $file ( split /,/, $DetailFiles ) {
             if ( $cumulative->{seen_file}->{$file} ) {
                next;
@@ -625,12 +626,30 @@ sub query_jobs_superset {
             $new_detail_ref = { %$new_detail_ref, %$new };
          }
       } elsif ($UnivPatterns) {
+         # now we need to run autorep -q -J on the patterns.
+         # as the result is cached, we may need to check if the cache is stale.
 
          # APP1%,APP2%
          my @patterns = split /,/, $UnivPatterns;
 
          for my $pattern (@patterns) {
             if ( $cumulative->{seen_detail_pattern}->{$pattern} ) {
+               # if we are here, it means we had run "autorep -q -J" on this pattern
+               # through get_cache_file().
+
+               # when we run 'adep', we only run autorep -q -J once per pattern.
+               # so we don't check if the file is stale.
+               # 'adep' will set $opt-->{AutorepOnce} to 1.
+               # we cannot use $opt->{CacheExpire} here to archive this because
+               # - if $opt->{CacheExpire} is too long, get_cache_file() will use
+               #   really old file, eg, from an hour ago.
+               # - if $opt->{CacheExpire} is too short, get_cache_file() will
+               #   run autorep -q -J on the same pattern again and again. I
+               #   noticed this in company production environment, where the
+               #   script had to parse thousands of jobs and dozens of prefixes (patterns).
+               #   This caused the same prefixes to be run again and again,.
+               next if $opt->{AutorepOnce};
+
                my $now_sec = time();
                my $mtime   = $cumulative->{detail_pattern_time}->{$pattern};
                $mtime = 0 if !$mtime;
@@ -696,6 +715,8 @@ sub query_jobs_superset {
          my @patterns = split /,/, $UnivPatterns;
 
          for my $pattern (@patterns) {
+            next if $opt->{AutorepOnce};
+
             if ( $cumulative->{seen_status_pattern}->{$pattern} ) {
                my $now_sec = time();
                my $mtime   = $cumulative->{status_pattern_time}->{$pattern};
