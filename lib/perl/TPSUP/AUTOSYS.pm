@@ -1131,6 +1131,8 @@ sub print_job_csv {
    print join( $delimiter, @{ $info->{$job} }{@$fields} ), "\n";
 }
 
+my $cfg_by_file;
+
 sub load_autosys_cfg {
    my ($opt) = @_;
 
@@ -1146,29 +1148,41 @@ sub load_autosys_cfg {
       $cfg_file = $default_cfg_file;
    }
 
-   my $cfg;
-
-   if ( !-f $cfg_file ) {
-      if ( $cfg_file eq $default_cfg_file ) {
-         return $cfg;
-      } else {
-         die "$cfg_file doesn't exist\n";
+   if ( !$cfg_by_file || !exists $cfg_by_file->{$cfg_file} ) {
+      if ( !-f $cfg_file ) {
+         if ( $cfg_file eq $default_cfg_file ) {
+            return {};    # return empty hash if default cfg file doesn't exist
+         } else {
+            die "$cfg_file doesn't exist\n";
+         }
       }
+
+      my $cfg = {};
+
+      my $in_fh = get_in_fh($cfg_file);
+
+      while (<$in_fh>) {
+         my $line = $_;
+         chomp $line;
+         # skip comments
+         next if $line =~ /^\s*#/;
+         # skip empty lines
+         next if $line =~ /^\s*$/;
+
+         if ( $line =~ /^\s*(\S+)\s*?=\s*(.+)$/ ) {
+            $cfg->{$1} = $2;
+         } else {
+            die "unexpected line in $cfg_file: $line\n"
+              . "expecting: key=value, where key is a word, value is a string\n";
+         }
+      }
+
+      close_in_fh($in_fh);
+
+      $cfg_by_file->{$cfg_file} = $cfg;
    }
 
-   my $in_fh = get_in_fh($cfg_file);
-
-   while (<$in_fh>) {
-      my $line = $_;
-      chomp $line;
-      if ( $line =~ /^\s*(\S+)\s*?=\s*(.+)$/ ) {
-         $cfg->{$1} = $2;
-      }
-   }
-
-   close_in_fh($in_fh);
-
-   return $cfg;
+   return $cfg_by_file->{$cfg_file};
 
 }
 
