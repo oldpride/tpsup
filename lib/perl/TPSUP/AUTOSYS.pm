@@ -715,9 +715,9 @@ sub query_jobs_superset {
          my @patterns = split /,/, $UnivPatterns;
 
          for my $pattern (@patterns) {
-            next if $opt->{AutorepOnce};
-
             if ( $cumulative->{seen_status_pattern}->{$pattern} ) {
+               next if $opt->{AutorepOnce};
+
                my $now_sec = time();
                my $mtime   = $cumulative->{status_pattern_time}->{$pattern};
                $mtime = 0 if !$mtime;
