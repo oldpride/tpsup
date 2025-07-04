@@ -115,6 +115,10 @@ uname2term() {
       echo "unsupported UNAME=$UNAME" >&2
    fi
 }
+# we have a "set -a" later in this file, which is supposed to export all functions
+# and variables. But it doesn't work in Cygwin bash at least. (GNU bash,5.2.21).
+# So we export this function explicitly.
+export -f uname2term
 
 kcd() {
    local old new cd
