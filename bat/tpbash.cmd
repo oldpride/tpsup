@@ -76,9 +76,11 @@ exit /b 0
    echo.
    echo    run gitbash, cygwin bash, or wsl bash.
    echo.
-   echo    C:/Windows/System32/bash.exe is WSL bash
-   echo    C:/Program Files/Git/bin/bash.exe is Gitbash
    echo    C:/cygwin64/bin/bash.exe is Cygwin Bash
+   echo    C:/Program Files/Git/bin/bash.exe is Gitbash
+   echo    C:/Windows/System32/bash.exe is WSL bash
+   echo    C:\Users\%USERNAME%\AppData\Local\Microsoft\WindowsApps\bash.exe seems 
+   echo        to be a link to WSL bash.
    echo.
    echo.
    echo example:
