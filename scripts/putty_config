@@ -1,15 +1,19 @@
 #!/bin/bash
 
 # $USERPROFILE is from windows env variable %USERPROFILE%
-file_unresolved='$USERPROFILE/putty_config.reg'
+file_unresolved='$USERPROFILE/.tpsup/putty_config.reg'
+
+prog=$(basename $0)
+dirname=$(dirname $0)
 
 usage () {
+   TPSUP2=$(convertpath -t batch $TPSUP)
    cat >&2 <<EOF
 usage:
 
-   $0 export
-   $0 import
-   $0 check
+   $prog export
+   $prog import
+   $prog check
 
    putty config is stored in windows registry, therefore, when desktop is rebuilt, (for example,
    in citrix environment, desktop is virtual and is moved around without copying over registry),
@@ -28,6 +32,11 @@ usage:
 
    If you get error "...regedit: permission denied", then you need to run cygwin as 
    administrator: right click cygwin icon->Run as Administrator.
+
+   on windows 10, running regedit does not require admin privilege.
+   on windows 11, running regedit requires admin privilege.
+      sudo "$TPSUP2/bat/cygbash.cmd" "$TPSUP2/scripts/putty_config"  export
+      sudo "$TPSUP2/bat/cygbash.cmd" "$TPSUP2/scripts/putty_config"  import
 
 EOF
    exit 1
@@ -55,7 +64,6 @@ fi
 action=$1
 
 UNAME=`uname -a`
-
 if ! [[ $UNAME =~ Cygwin ]]; then
    echo "ERROR: this script can only be run on Cygwin. current UNAME=$UNAME." >&2
    exit 1

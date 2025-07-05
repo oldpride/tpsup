@@ -776,7 +776,9 @@ load_profile_d() {
          continue
       fi
 
-      eval "function $f { . '$dir/$f'; }"
+      # eval "function $f { . '$dir/$f'; }"
+      eval "$f () { . '$dir/$f'; }" # '()'' is more portable than 'function'
+      export -f "$f" # export function to sub-shells
    done
 
    cd - >/dev/null
