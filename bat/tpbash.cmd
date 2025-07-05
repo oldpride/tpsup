@@ -98,14 +98,19 @@ exit /b 0
    echo      %prog% cygwin  --login -i
    echo      %prog% wsl     --login -i
    echo.
-   echo    - run shortcut scripts
+   echo    - shortcut scripts
    echo    gitbash.cmd = %prog% gitbash
-   echo    cygbash.cmd  = %prog% cygwin
-   echo    wslbash.cmd  = %prog% wsl
+   echo    cygbash.cmd = %prog% cygwin
+   echo    wslbash.cmd = %prog% wsl
    echo.   eg.
    echo      gitbash.cmd -c "echo hello world"
    echo      cygbash.cmd  win_lastboot
    echo      wslbash.cmd  lastps
+   echo.
+   echo   - run script in tpsup env
+   echo     gitbash.cmd --login -c "siteenv; tradeday -1"
+   echo     cygbash.cmd --login -c "siteenv; tradeday -1"
+   echo     wslbash.cmd --login -c "siteenv; tradeday -1"
    echo.
 
    REM this is function return; it doesn't exit the script.
