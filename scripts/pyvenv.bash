@@ -12,6 +12,7 @@ usage:
    make or check local venv setup
 
    -v             verbose
+   -n             dryrun
    -s suffix      default is empty, eg. -s torch
 
 EOF
@@ -20,12 +21,14 @@ EOF
 }
 
 verbose=N
+dryrun=N
 suffix=""
 
-while getopts vs: o; do
+while getopts vns: o; do
    case "$o" in
    #d) depot_dir="$OPTARG";;
    v) verbose=Y ;;
+   n) dryrun=Y ;;
    s) suffix="-$OPTARG" ;;
    *)
       echo "unknow switch '$o'"
@@ -117,8 +120,11 @@ elif [ $action = make ]; then
       venv_path=$(cygpath -w "$venv_path")
    fi
 
-   set -x
-   "$python" -m venv "$venv_path"
+   if [ $dryrun = Y ]; then
+      echo "DRYRUN: \"$python\" -m venv \"$venv_path\""
+   else
+      (set -x; "$python" -m venv "$venv_path")
+   fi
 else
    echo "unknown action='$action'" >&2
    usage

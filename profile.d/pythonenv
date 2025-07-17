@@ -133,11 +133,13 @@ sitevenv() {
       cd "$SITEVENV"
    fi
 }
+export -f sitevenv
 
 svenv() {
-   suffix=$1
+   repo=$1
+   # a project ia a directory under SITEBASE/githhub/
 
-   if [ "X$suffix" = "X" ]; then
+   if [ "X$repo" = "X" ]; then
       if ! sitevenv; then
          return
       fi
@@ -145,11 +147,8 @@ svenv() {
       # add path to Chrome.exe and chromedriver.exe
       export PATH="$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/Chrome/Application:$SITEBASE/$OS_TYPE/$OS_MAJOR.$OS_MINOR/chromedriver:$PATH"
       VENV_DIR="$SITEVENV"
-   elif [ $suffix = "list" ]; then
-      ls -d $SITEVENV*
-      return
    else
-      VENV_DIR="$SITEVENV-$suffix"
+      VENV_DIR="$SITEBASE/github/$repo/venv"
       cd "$VENV_DIR" || return
    fi
 
@@ -187,10 +186,12 @@ svenv() {
       return
    fi
 }
+export -f svenv
 
 dvenv() {
    deactivate
 }
+export -f dvenv
 
 if [[ $UNAME =~ Cygwin && $quiet = N ]]; then
    cat <<END
