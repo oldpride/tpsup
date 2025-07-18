@@ -65,12 +65,12 @@ elif [ $action = set ]; then
    #     openvpn --config ~/OpenVPN/config/sg-sng.prod.surfshark.com_tcp.ovpn
    if [ $UNAMETERM = linux ]; then
       startvpn () {
-         sudo openvpn "$MY_VPN_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn"
+         (set -x; sudo openvpn "$MY_VPN_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn")
       }
    elif [ $UNAMETERM = cygwin ] || [ $UNAMETERM = msys ]; then
       startvpn () {
          NATIVE_CFG_DIR=$(convertpath -t batch "$MY_VPN_CFG_DIR")
-         sudo openvpn --config "$NATIVE_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn"
+         (set -x; sudo openvpn --config "$NATIVE_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn")
       }
    else
       echo "$prog: unsupported UNAMETERM='$UNAMETERM' for check action"
