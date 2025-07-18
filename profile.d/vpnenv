@@ -1,0 +1,90 @@
+# for vs code
+local usage prog NATIVE_CFG_DIR UNAMETERM
+
+prog=${FUNCNAME[1]}
+
+usage="
+usage:
+
+   $prog check
+   $prog set
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+action=$1
+
+# ubuntu
+#    config: /etc/openvpn
+#    bin:    /usr/sbin
+# windows
+#    config: %USERPROFILE%\OpenVPN\config
+#    bin:    C:\Program Files\OpenVPN\bin
+
+uname2term
+if [ $UNAMETERM = cygwin ]; then
+   MY_VPN_BIN_DIR="/cygdrive/c/Program Files/OpenVPN/bin"
+   MY_VPN_CFG_DIR=~/OpenVPN/config
+elif [ $UNAMETERM = msys ]; then
+   MY_VPN_BIN_DIR="/c/Program Files/OpenVPN/bin"
+   MY_VPN_CFG_DIR=~/OpenVPN/config
+elif [ $UNAMETERM = linux ]; then
+   MY_VPN_BIN_DIR=/usr/sbin
+   MY_VPN_CFG_DIR=/etc/openvpn
+# elif [ $UNAMETERM = darwin ]; then
+#    MY_VPN_BIN_DIR="/usr/local/sbin"
+#    MY_VPN_CFG_DIR=~/Library/Application\ Support/OpenVPN/config
+else
+   echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
+   return
+fi
+
+export MY_VPN_BIN_DIR
+export MY_VPN_CFG_DIR
+
+
+if [ $action = check ]; then
+   ls -ld "$MY_VPN_BIN_DIR"
+   ls -ld "$MY_VPN_CFG_DIR"
+
+   type myvpn
+   type startvpn
+
+
+elif [ $action = set ]; then
+   export PATH="$MY_VPN_BIN_DIR:$PATH"
+
+   # if linux, 
+   #     sudo openvpn /etc/openvpn/sg-sng.prod.surfshark.com_tcp.ovpn
+   # if windows
+   #     openvpn --config ~/OpenVPN/config/sg-sng.prod.surfshark.com_tcp.ovpn
+   if [ $UNAMETERM = linux ]; then
+      startvpn () {
+         sudo openvpn "$MY_VPN_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn"
+      }
+   elif [ $UNAMETERM = cygwin ] || [ $UNAMETERM = msys ]; then
+      startvpn () {
+         NATIVE_CFG_DIR=$(convertpath -t batch "$MY_VPN_CFG_DIR")
+         sudo openvpn --config "$NATIVE_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn"
+      }
+   else
+      echo "$prog: unsupported UNAMETERM='$UNAMETERM' for check action"
+      return
+   fi
+
+   export -f startvpn
+
+   myvpn () {
+      cd "$MY_VPN_CFG_DIR"
+   }
+   export -f myvpn
+else
+   echo "$prog: unknown action '$action'"
+   echo "$usage"
+fi
+   
