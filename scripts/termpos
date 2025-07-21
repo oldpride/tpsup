@@ -231,6 +231,10 @@ if [ "$1" = "resetall" ]; then
       [ $verbose = Y ] && echo "termpos: setting term at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
 
+      # more about terminal control codes:
+      # https://en.wikipedia.org/wiki/ANSI_escape_code
+      # note: you can use terminal control codes to query cursor position in the terminal,
+      #       but you cannot use it to query terminal's window position on the screen.
       [ $verbose = Y ] && echo ""
    done
    
