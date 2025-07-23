@@ -231,6 +231,12 @@ if [ "$1" = "resetall" ]; then
       [ $verbose = Y ] && echo "termpos: setting term at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
 
+      # restore font size to default. default is set by command line. i used 12pt
+      # \033 is control+v, escape
+      # \007 is control+v, control+g
+      printf "\033]7770;\007" > $tty
+      # printf "\033]7770;9007" > $tty # set font size to 8pt
+
       # more about terminal control codes:
       # https://en.wikipedia.org/wiki/ANSI_escape_code
       # note: you can use terminal control codes to query cursor position in the terminal,
@@ -393,6 +399,12 @@ else
          fi
       fi
 
+      # restore font size to default. default is set by command line. i used 12pt
+      # \033 is control+v, escape
+      # \007 is control+v, control+g, signal the end. ^G is bell.
+      printf "\033]7770;\007" # restore font size to default
+      # printf "\033]7770;9007" # set font size to 8pt
+
       # found a spot
       x=`expr 30 \* $i`
       y=`expr 30 \* $i`
@@ -401,6 +413,8 @@ else
       # printf '\033[3;'"$offset;$offset"'t'
       [ $verbose = Y ] && echo "termpos: setting position to x=$x, y=$y, width=$width, height=$height"
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
+
+      
 
       echo "$term_pid" > $posfile
       echo "$term_tty" >> $posfile
