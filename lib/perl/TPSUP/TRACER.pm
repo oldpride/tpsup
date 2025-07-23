@@ -493,10 +493,11 @@ sub process_cmd {
       if ( $logic eq 'OR' ) {
          $cmd = "$grep '" . join( '|', @patterns ) . "' $files_str";
       } elsif ( $logic =~ /AND/i ) {
-         $patterns[0] = "$grep '$patterns[0]' $files_str";
+         $cmd = "$grep '$patterns[0]' $files_str";
          # $cmd = join( " | egrep ", @patterns );
          # need to wrap the pattern with single quotes
          if ( scalar(@patterns) > 1 ) {
+            $cmd .= " | egrep ";
             $cmd .= join( " | egrep ", map { "'$_'" } @patterns[ 1 .. $#patterns ] );    # array slice
          }
       } else {
