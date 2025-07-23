@@ -496,7 +496,9 @@ sub process_cmd {
          $patterns[0] = "$grep '$patterns[0]' $files_str";
          # $cmd = join( " | egrep ", @patterns );
          # need to wrap the pattern with single quotes
-         $cmd = join( " | $grep ", map { "'$_'" } @patterns );
+         if ( scalar(@patterns) > 1 ) {
+            $cmd = join( " | ", map { "'$_'" } @patterns[ 1 .. $#patterns ] );    # array slice
+         }
       } else {
          croak "unsupported logic='$logic' at cmd = " . Dumper($method_cfg);
       }
