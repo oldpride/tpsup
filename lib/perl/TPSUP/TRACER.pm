@@ -497,7 +497,7 @@ sub process_cmd {
          # $cmd = join( " | egrep ", @patterns );
          # need to wrap the pattern with single quotes
          if ( scalar(@patterns) > 1 ) {
-            $cmd = join( " | ", map { "'$_'" } @patterns[ 1 .. $#patterns ] );    # array slice
+            $cmd .= join( " | egrep ", map { "'$_'" } @patterns[ 1 .. $#patterns ] );    # array slice
          }
       } else {
          croak "unsupported logic='$logic' at cmd = " . Dumper($method_cfg);
