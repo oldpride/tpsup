@@ -427,6 +427,19 @@ sub process_cmd {
    } elsif ( $method_cfg->{type} eq 'cmd' ) {
       $cmd = $method_cfg->{value};
    } elsif ( $method_cfg->{type} eq 'grep_keys' ) {
+      # example:
+      #    'equilend_availability_log' => {
+      #        method => 'cmd',
+      #        method_cfg => {
+      #           type => 'grep_keys',
+      #           value => [
+      #              { key => 'EQLDCORPID', pattern =>        '<corpId>{{opt_value}}</corpId>' }},
+      #              { key => 'EQLDLEID',   pattern => '<legalEntityId>{{opt_value}}</legalEntityId>' }},
+      #           ],
+      #           logic => 'AND',
+      #           file => '/myapp/{{YYYYMMDD}}/*.gz /myapp/{{YYYYMMDD}}/app.log',
+      #        },
+      #    },
       my $files_str = resolve_files( $method_cfg, 'file' );
 
       my $grep_keys = get_value_by_key_case_insensitive( $method_cfg, 'value' );
@@ -481,7 +494,9 @@ sub process_cmd {
          $cmd = "$grep '" . join( '|', @patterns ) . "' $files_str";
       } elsif ( $logic =~ /AND/i ) {
          $patterns[0] = "$grep '$patterns[0]' $files_str";
-         $cmd = join( " | egrep ", @patterns );
+         # $cmd = join( " | egrep ", @patterns );
+         # need to wrap the pattern with single quotes
+         $cmd = join( " | $grep ", map { "'$_'" } @patterns );
       } else {
          croak "unsupported logic='$logic' at cmd = " . Dumper($method_cfg);
       }
