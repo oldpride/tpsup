@@ -58,6 +58,47 @@ EOF
    exit 1
 }
 
+set_terminal () {
+   pos=$1
+   pid=$2
+   x=$3
+   y=$4
+   width=$5
+   height=$6
+   tty=$7
+
+   if [ "X$TERM_PROGRAM" = "Xmintty" ]; then
+      # for mintty we have terminal escape codes to restore font size
+      # default is set by command line. i used 12pt
+      # but this does not work for putty.
+      # mintty covers cygwin and git bash.
+      # \033 is control+v, escape
+      # \007 is control+v, control+g
+      printf "\033]7770;\007" > $tty
+      # printf "\033]7770;9007" > $tty # set font size to 8pt
+   fi
+   
+   # https://superuser.com/questions/1162451
+   # printf '\033[3;'"$offset;$offset"'t'
+   [ $verbose = Y ] && echo "termpos: setting term at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
+   
+   if [ -z "$tty" ]; then
+      # if tty is not set, we use the current terminal
+      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
+   else
+      # if tty is set, we use the specified terminal
+      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
+   fi
+
+   
+
+   # more about terminal control codes:
+   # https://en.wikipedia.org/wiki/ANSI_escape_code
+   # note: you can use terminal control codes to query cursor position in the terminal,
+   #       but you cannot use it to query terminal's window position on the screen.
+
+}
+
 
 verbose=N
 flag=""
@@ -226,21 +267,7 @@ if [ "$1" = "resetall" ]; then
       x=`expr 30 \* $pos`
       y=`expr 30 \* $pos`
 
-      # https://superuser.com/questions/1162451
-      # printf '\033[3;'"$offset;$offset"'t'
-      [ $verbose = Y ] && echo "termpos: setting term at pos=$pos, tty=$tty, pid=$pid, to x=$x, y=$y, width=$width, height=$height"
-      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
-
-      # restore font size to default. default is set by command line. i used 12pt
-      # \033 is control+v, escape
-      # \007 is control+v, control+g
-      printf "\033]7770;\007" > $tty
-      # printf "\033]7770;9007" > $tty # set font size to 8pt
-
-      # more about terminal control codes:
-      # https://en.wikipedia.org/wiki/ANSI_escape_code
-      # note: you can use terminal control codes to query cursor position in the terminal,
-      #       but you cannot use it to query terminal's window position on the screen.
+      set_terminal $pos $pid $x $y $width $height $tty
       [ $verbose = Y ] && echo ""
    done
    
@@ -399,22 +426,11 @@ else
          fi
       fi
 
-      # restore font size to default. default is set by command line. i used 12pt
-      # \033 is control+v, escape
-      # \007 is control+v, control+g, signal the end. ^G is bell.
-      printf "\033]7770;\007" # restore font size to default
-      # printf "\033]7770;9007" # set font size to 8pt
-
       # found a spot
       x=`expr 30 \* $i`
       y=`expr 30 \* $i`
 
-      # https://superuser.com/questions/1162451
-      # printf '\033[3;'"$offset;$offset"'t'
-      [ $verbose = Y ] && echo "termpos: setting position to x=$x, y=$y, width=$width, height=$height"
-      printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
-
-      
+      set_terminal $i $term_pid $x $y $width $height $term_tty
 
       echo "$term_pid" > $posfile
       echo "$term_tty" >> $posfile
