@@ -1,0 +1,126 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+my $prog = $0;
+$prog =~ s:.*/::;
+
+my $HOME = $ENV{HOME} || $ENV{USERPROFILE};
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print <<"END";
+usage:
+
+   $prog my_openvpn_cfg.ovpn
+   
+description:
+
+   delete all routes added by the OpenVPN client configuration
+   file.
+
+   Normally, openvpn client will delete all added routes during
+   shutdown. However, sometimes, this cleanup was not done
+   in abrupt shutdown, eg, crash, or killed by SIGKILL (-9).
+
+   -v               verbose mode
+
+examples:
+
+   $prog $HOME/OpenVPN/config/sg-sng.prod.surfshark.com_tcp.ovpn
+
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions( 'v|verbose' => \$verbose, ) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if @ARGV != 1;
+
+my ($cfg_file) = @ARGV;
+
+if ( !-f $cfg_file ) {
+   die "$prog: ERROR: $cfg_file not founed\n";
+}
+
+open my $ifh, "<$cfg_file" or die "$prog: ERROR: cannot read $cfg_file\n";
+
+my $OS    = `uname -a`;
+my $error = 0;
+
+my $user      = $ENV{USER} || $ENV{USERNAME} || 'unknown';
+my $tmpscript = "C:/users/$user/${prog}_tmp.bat";
+my $ofh;
+if ( $OS =~ /WIN_NT/ ) {
+   # this is windows.
+   # windows sudo will prompt for confirmation for each command.
+   # so we create a script to run all commands at once.
+   open $ofh, ">$tmpscript" or die "$prog: ERROR: cannot create $tmpscript\n";
+   # note this script is not bash.
+}
+
+while ( my $line = <$ifh> ) {
+   # the lines in the opvn file looks like this:
+   # route 3.166.192.0  255.255.255.0
+   # route 13.224.214.0 255.255.255.0
+   # route 52.85.61.0   255.255.255.0
+
+   if ( $line =~ /^\s*route\s+(\S+)\s+(\S+)/ ) {
+      my $range = $1;
+      my $mask  = $2;
+
+      if ( $OS =~ /linux/i ) {
+         # this is linux
+         # Linux has two commands to manage routing table
+         #    "ip route", the modern command.
+         #    "route", the old command.
+         #        route del -net 10.1.0.0 netmask 255.255.0.0
+         my $cmd = "sudo route DEL -net $range netmask $mask";
+         print STDERR "cmd=$cmd\n";
+         system($cmd);
+         if ($?) {
+            print STDERR "cmd=$cmd failed\n";
+            $error++;
+         }
+
+      } elsif ( $OS =~ /WIN_NT/ ) {
+         # this is windows.
+         # Windows uses "route.exe" to manage routing table
+         # sudo route.exe DELETE 3.166.192.0 mask 255.255.255.0
+
+         # print STDERR "deleting route $range mask $mask\n" if $verbose;
+
+         print {$ofh} "route.exe DELETE $range mask $mask\n";
+      } else {
+         die "$prog: ERROR: unsupported OS=$OS\n";
+      }
+   }
+}
+
+close $ifh;
+
+if ( $OS =~ /WIN_NT/ ) {
+   close $ofh;
+   chmod 0755, $tmpscript or die "$prog: ERROR: cannot chmod $tmpscript\n";
+   print STDERR "running script $tmpscript\n";
+   my $cmd = "sudo $tmpscript";
+   print STDERR "cmd=$cmd\n" if $verbose;
+   # run the script
+   system($cmd);
+   if ($?) {
+      die "cmd=$cmd failed\n";
+   }
+   unlink $tmpscript or warn "$prog: WARNING: cannot delete $tmpscript: $!\n";
+}
+
+print STDERR "total $error errors\n";
+exit $error;

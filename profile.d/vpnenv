@@ -46,6 +46,7 @@ fi
 
 export MY_VPN_BIN_DIR
 export MY_VPN_CFG_DIR
+export MY_VPN_CFG_FILE="$MY_VPN_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn"
 
 
 if [ $action = check ]; then
@@ -54,6 +55,7 @@ if [ $action = check ]; then
 
    type myvpn
    type startvpn
+   type delvpnroute
 
 
 elif [ $action = set ]; then
@@ -65,12 +67,12 @@ elif [ $action = set ]; then
    #     openvpn --config ~/OpenVPN/config/sg-sng.prod.surfshark.com_tcp.ovpn
    if [ $UNAMETERM = linux ]; then
       startvpn () {
-         (set -x; sudo openvpn "$MY_VPN_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn")
+         (set -x; sudo openvpn "$MY_VPN_CFG_FILE")
       }
    elif [ $UNAMETERM = cygwin ] || [ $UNAMETERM = msys ]; then
       startvpn () {
-         NATIVE_CFG_DIR=$(convertpath -t batch "$MY_VPN_CFG_DIR")
-         (set -x; sudo openvpn --config "$NATIVE_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn")
+         NATIVE_CFG_FILE=$(convertpath -t batch "$MY_VPN_CFG_FILE")
+         (set -x; sudo openvpn --config "$NATIVE_CFG_FILE")
       }
    else
       echo "$prog: unsupported UNAMETERM='$UNAMETERM' for check action"
@@ -83,6 +85,11 @@ elif [ $action = set ]; then
       cd "$MY_VPN_CFG_DIR"
    }
    export -f myvpn
+
+   delvpnroute () {
+      openvpn_route_del "$MY_VPN_CFG_FILE"
+   }
+   export -f delvpnroute
 else
    echo "$prog: unknown action '$action'"
    echo "$usage"
