@@ -87,10 +87,13 @@ set_terminal () {
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t'
    else
       # if tty is set, we use the specified terminal
+      # note: 
+      #     '> $tty' will not work if we switched user to 
+      #     another user. eg, 'su - appid',
+      #     because the tty is owned by the previous user,
+      #     not writable by the current user.
       printf '\033[3;'"$x;$y"'t\033[8;'"$height;$width"'t' > $tty   
    fi
-
-   
 
    # more about terminal control codes:
    # https://en.wikipedia.org/wiki/ANSI_escape_code
@@ -430,7 +433,7 @@ else
       x=`expr 30 \* $i`
       y=`expr 30 \* $i`
 
-      set_terminal $i $term_pid $x $y $width $height "auto"
+      set_terminal $i $term_pid $x $y $width $height "auto"      
 
       echo "$term_pid" > $posfile
       echo "$term_tty" >> $posfile
