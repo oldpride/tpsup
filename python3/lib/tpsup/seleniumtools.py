@@ -155,6 +155,7 @@ def print_domstack(**opt):
 
 def replay_domstack(domstack2: list, **opt):
     # replay domstack from the beginning
+    # this doesn't change global domstack.
     global driver
     global locator_driver
     global last_element
@@ -1221,7 +1222,8 @@ source_page.html
 
     note that when there is a child iframe/shadow dom, the source*.html doesn't show 
     the child iframe/shadow dom's full content.
-    you need to look at iframe*.html and shadow*.html for that.
+    The content of the child's iframe and shadow dom can be found in iframe*.html 
+    and shadow*.html of that child.
 
     source.html will be different from the original html also because source.html contains
     dynamic content, such as js generated content.
@@ -1314,8 +1316,8 @@ def dump(output_dir: str, scope: str = 'element',  **opt):
     '''
     about the scope:
         element: dump the last element's info
-        iframe:  dump everything about the innest iframe dom of the element.
-        shadow:  dump everything about the innest shadowHost of the element.
+        iframe:  dump everything about the innest iframe dom covering element.
+        shadow:  dump everything about the innest shadowHost covering element.
         page:    dump the whole page.
         all:     dump all scopes: 'element', 'dom', 'page', into separate subdirs.
 
@@ -1372,7 +1374,7 @@ def dump(output_dir: str, scope: str = 'element',  **opt):
         print()
         print(f"locate: dump shadow to {subdir}")
 
-        # dump shadow host if the element is in a shadow dorm,  eg, shadow, or iframe.shadow.
+        # dump shadow host if the element is in a shadow dom,  eg, shadow, or iframe.shadow.
         # but shadow.iframe doesn't count.
         source_file = f"{subdir}/source_shadowhost.html"
         screenshot_file = f"{subdir}/screenshot_shadowhost.png"
@@ -1387,18 +1389,20 @@ def dump(output_dir: str, scope: str = 'element',  **opt):
             shadowHost = result['item']['element']
             domstack2 = result['domstack']
 
-            # remove the last shadow from domstack2
+            # remove the last shadow from domstack2, in order to access the shadow host
             domstack2.pop()
 
             # play domstack2
-            replay_domstack(domstack2)
+            # this doesn't change global domstack.
+            replay_domstack(domstack2) 
 
             # dump shadow host
             with open(source_file, "w", encoding="utf-8") as source_fh:
                 source_fh.write(shadowHost.get_attribute('outerHTML'))
             shadowHost.screenshot(screenshot_file)
 
-            # restore domstack
+            # now we are done with investigating the shadow host, we can dump the shadow content.
+            # first, restore domstack
             replay_domstack(domstack)
 
             dump_deeper(subdir, element=None, scope='shadow', **opt)
@@ -1492,11 +1496,15 @@ def dump_deeper(output_dir: str, element: WebElement = None, scope:str=None, **o
     if element:
         iframe_list = element.find_elements(By.XPATH, './/iframe')
     elif scope and scope == 'shadow':
-        iframe_list = locator_driver.find_elements(By.XPATH, './/iframe')
+        print(f"locator_driver={locator_driver}")
+        # iframe_list = locator_driver.find_elements(By.XPATH, './/iframe')
+        # this gives error: "Message: invalid argument: invalid locator"
+        # because xpath doesn't work under shadow dom.
+        # under shadow dom, we have to use CSS_SELECTOR.
+        iframe_list = locator_driver.find_elements(By.CSS_SELECTOR, 'iframe')
+        print(f"iframe_list={iframe_list}")
     else:
         iframe_list = driver.find_elements(By.XPATH, '//iframe')
-        # driverwait = WebDriverWait(driver, 20)
-        # iframe_list = driverwait.until(EC.presence_of_all_elements_located((By.XPATH, '//iframe')))
 
     dump_state = {
         'output_dir': output_dir,
@@ -1555,19 +1563,21 @@ def dump_deeper(output_dir: str, element: WebElement = None, scope:str=None, **o
     # unlike iframe are always under iframe tag, shadow host can be any tag, 
     # therefore, we need to try every element. 
     # if element.shadow_root exists, it is a shadow host.
+    # note: under shadow dom, XPATH doesn't work, you would get error:
+    #   "Message: invalid argument: invalid locator"
+    # xpath works under element and iframe but for consistency, we use CSS_SELECTOR everywhere.
     if element:
         start_node = element
-        find_path = './/*'
-        # don't forget checking whether this element itself is a shadow host
+        find_css = '*'
         dump_recursively(element, dump_state, 'shadow', **opt)  
     elif scope and scope == 'shadow':
         start_node = locator_driver
-        find_path = '//*'
+        find_css = '*'
     else:
         start_node = driver
-        find_path = '//*'      
+        find_css = '*'    
 
-    for e in start_node.find_elements(By.XPATH, find_path):
+    for e in start_node.find_elements(By.CSS_SELECTOR, find_css):
         dump_recursively(e, dump_state, 'shadow', **opt)
 
     # close all file handlers after we finish
@@ -2533,15 +2543,58 @@ def helper_find_element(path:str):
         return None
 
 helper = {
-    'd': {
-        'desc': 'dump_page',
+    'de': {
+        'desc': 'dump_element',
         'func': dump,
         'args': {
-            'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)
+            'scope': 'element',
+            'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
             # we delay mkdir, till we really need it
         },
         'usage': f'''
         dump the current element. no arg. output to
+        {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+        ''',
+    },
+
+    'dp': {
+        'desc': 'dump_page',
+        'func': dump,
+        'args': {
+            'scope': 'page',
+            'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
+            # we delay mkdir, till we really need it
+        },
+        'usage': f'''
+        dump the current page. no arg. output to
+        {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+        ''',
+    },
+
+    'df': {
+        'desc': 'dump_iframe',
+        'func': dump,
+        'args': {
+            'scope': 'iframe',
+            'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
+            # we delay mkdir, till we really need it
+        },
+        'usage': f'''
+        dump the current page. no arg. output to
+        {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
+        ''',
+    },
+
+    'ds': {
+        'desc': 'dump_page',
+        'func': dump,
+        'args': {
+            'scope': 'shadow',
+            'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
+            # we delay mkdir, till we really need it
+        },
+        'usage': f'''
+        dump the current shadow DOM. no arg. output to
         {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
         ''',
     },
@@ -3297,7 +3350,8 @@ def locate(locator: str, **opt):
     elif locator == "shadow":
         print(f"locate: switch into shadow_root")
         # if the element is found by finde_element_by_xpath/css/id, it
-        # may not be the active element. therefore, we use last_element.
+        # may not be the active element. only clicked element is active.
+        # therefore, we use last_element.
         # element = driver.switch_to.active_element
         element = last_element
         

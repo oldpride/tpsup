@@ -52,8 +52,9 @@
 
 <body>
     <!-- <h1>iframe content</h1> -->
-    <p>some text in iframe1 in lightblue</p>
+    <p>some text in iframe1 in lightblue, outside shadow</p>
     <div id="shadow_host">
+        <p>some text in iframe1's shadow Host. will be covered by shadow - iframe1.shadow1</p>
         <!-- use template without JS to create static shadow root. this is iframe1.shadow1 -->
         <template shadowrootmode="open">
             <style>
@@ -69,8 +70,8 @@
             <iframe id="iframe1.shadow1.iframe1"
                 srcdoc="<p>some text in iframe1.shadow1.iframe1 in lightsalmon using srcdoc</p>"></iframe>
             <div id="nested_shadow_host">
-                <p>some text in iframe1.shadow1's child shadowHost but not its child shadow. it will be overwritten by
-                    shadow</p>
+                <p>some text in iframe1.shadow1's child shadowHost but not its child shadow.
+                    will be covered by shadow</p>
                 <template shadowrootmode="open">
                     <!-- how to style a nested shadow root
                         https://stackoverflow.com/questions/42616238

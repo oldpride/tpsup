@@ -1,0 +1,215 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+use POSIX qw(strftime);
+
+my $prog = $0;
+$prog =~ s:.*/::;
+
+my $HOME = $ENV{HOME} || $ENV{USERPROFILE};
+
+sub usage {
+   my ($message) = @_;
+   print "$message\n" if $message;
+
+   print <<"END";
+usage:
+
+   $prog diff
+   $prog ls
+   $prog rm
+   
+description:
+
+   check what changed in
+      nestat -an
+      nestat -rn
+
+   'ls'    lists the existing snapshots
+   'diff'  compares the two most recent snapshots
+   'rm'    removes all existing snapshots
+
+   -v             verbose mode
+
+   -s1 <file|index>     
+                  specify the first snapshot file. 
+                  if not specified, the script will use the most recent snapshot.
+
+   -s2 <file|index>     
+                  specify the second snapshot file.
+                  if not specified, the script will take a snapshot
+                  and use it as the second snapshot.
+
+   -r             diff route table only
+   -c             diff connection table only
+
+   by default, the script take a snapshot of the connection table (netstat -an) 
+   and a snapshot of the route table (netstat -rn) into separate files,
+   and compare it with the previous snapshot.
+
+examples:
+
+   $prog ls
+   $prog diff
+   $prog diff -r
+   $prog diff -c
+   $prog rmall
+   $prog diff -s1 0
+END
+
+   exit 1;
+}
+
+my $verbose;
+my $s1;
+my $s2;
+my $route_only;
+my $conn_only;
+GetOptions(
+   'v|verbose+' => \$verbose,
+   's1=s'       => \$s1,
+   's2=s'       => \$s2,
+   'r|route'    => \$route_only,
+   'c|conn'     => \$conn_only,
+) || usage("cannot parse command line: $!");
+
+@ARGV == 1 or usage("wrong number of args");
+
+my $action = shift @ARGV;
+$action eq 'diff' or $action eq 'ls' or $action eq 'rmall' or usage("unknown command: $action");
+$route_only && $conn_only and usage("cannot specify both -r and -c");
+
+my $SNAPSHOT_DIR = "$HOME/.netstat_diff";
+mkdir $SNAPSHOT_DIR unless -d $SNAPSHOT_DIR;
+
+my $cmd_by_type = {
+   an => "netstat -an |grep TCP",
+   rn => "netstat -rn",
+};
+
+my @defined_types = sort ( keys %$cmd_by_type );
+
+sub snapshot {
+   # if take snapshots, we take both connection and route snapshots same time
+   my $timestamp = time;
+   my $date_dir  = "$SNAPSHOT_DIR/" . POSIX::strftime( '%Y-%m-%d_%H:%M:%S', localtime($timestamp) );
+
+   mkdir $date_dir;
+
+   for my $type (@defined_types) {
+      my $cmd = $cmd_by_type->{$type};
+
+      my $file = "$date_dir/netstat_${type}.txt";
+
+      print "saving 'netstat_${type}' snapshot to '$file'\n" if $verbose;
+      system( $cmd . " > '$file'" ) == 0 or die "failed to run command '$cmd': $!\n";
+   }
+}
+
+sub list_snapshot_dates {
+   opendir my $dh, $SNAPSHOT_DIR or die "cannot open snapshot directory '$SNAPSHOT_DIR': $!\n";
+   my @dates = grep { -d "$SNAPSHOT_DIR/$_" && $_ !~ /^\./ } readdir $dh;
+   closedir $dh;
+   return sort @dates;
+
+}
+
+sub remove_all_snapshots {
+   my $cmd = "rm -rf $SNAPSHOT_DIR/*";
+   print "removing all snapshots with command: $cmd\n" if $verbose;
+   system($cmd) == 0 or die "failed to run command '$cmd': $!\n";
+}
+
+if ( $action eq 'ls' ) {
+   my @dates = list_snapshot_dates();
+   if ( @dates == 0 ) {
+      print "no snapshots found\n";
+   } else {
+      print "existing snapshots:\n";
+      #  print with index
+      for my $i ( 0 .. $#dates ) {
+         my $date = $dates[$i];
+         print "[$i] - $date:\n";
+      }
+   }
+   exit 0;
+} elsif ( $action eq 'rmall' ) {
+   remove_all_snapshots();
+   exit 0;
+} elsif ( $action eq 'diff' ) {
+   # if s2 is not specified, take a snapshot
+   if ( !$s2 ) {
+      snapshot();
+   }
+
+   my @dates      = list_snapshot_dates();
+   my $date_count = scalar(@dates);
+   if ( $date_count < 2 ) {
+      die
+"need at least two snapshots to do diff. You only have $date_count. Please run '$prog diff' to take a snapshot.\n";
+   }
+
+   # if s1 is not specified, use the second last snapshot
+   if ( !$s1 ) {
+      $s1 = $dates[-2];
+   }
+
+   # if s2 is not specified, use the last snapshot
+   if ( !$s2 ) {
+      $s2 = $dates[-1];
+   }
+   print "using snapshot s1='$s1'\n" if $verbose;
+   print "using snapshot s2='$s2'\n" if $verbose;
+   # if s1 or s2 is an index, convert it to a date
+   if ( $s1 =~ /^\d+$/ ) {
+      my @dates = list_snapshot_dates();
+      if ( $s1 < 0 || $s1 >= @dates ) {
+         die "invalid snapshot index '$s1'\n";
+      }
+      $s1 = $dates[$s1];
+      print "using snapshot s1='$s1'\n" if $verbose;
+   }
+   if ( $s2 =~ /^\d+$/ ) {
+      my @dates = list_snapshot_dates();
+      if ( $s2 < 0 || $s2 >= @dates ) {
+         die "invalid snapshot index '$s2'\n";
+      }
+      $s2 = $dates[$s2];
+      print "using snapshot s2='$s2'\n" if $verbose;
+   }
+
+   if ( $s1 eq $s2 ) {
+      die "cannot compare the same snapshot '$s1'\n";
+   }
+   my @types;
+   if ($route_only) {
+      @types = ('rn');
+   } elsif ($conn_only) {
+      @types = ('an');
+   } else {
+      @types = @defined_types;
+   }
+
+   for my $type (@types) {
+      my $file1 = "$SNAPSHOT_DIR/$s1/netstat_${type}.txt";
+      my $file2 = "$SNAPSHOT_DIR/$s2/netstat_${type}.txt";
+
+      if ( !-e $file1 || !-e $file2 ) {
+         die "snapshot files '$file1' or '$file2' do not exist\n";
+      }
+
+      my $type_cmd = $cmd_by_type->{$type};
+      print "----------------- diffing '$type_cmd' snapshots -------------------\n";
+      my $cmd = "diff '$file1' '$file2'";
+      print "running command: $cmd\n" if $verbose;
+      system($cmd);
+      print "\n\n";
+   }
+   exit 0;
+} else {
+   die "internal error: unknown command '$action'\n";
+}
