@@ -733,31 +733,14 @@ sub get_abs_path {
    #    william@tianpc://linux1.fios-router.home/tian$ tpdist -p server 5555
    #    william@tianpc:/c/Users/william$ tpdist client localhost 5555 //linux1.fios-router.home/tian/test.txt .
 
-   my $is_network_path  = 0;
-   my $is_windows_drive = 0;
-
+   my $is_network_path = 0;
    if ( $path =~ m:^//: ) {
       # eg //linux1.fios-router.home/tian
       $is_network_path = 1;
    }
 
-   # common paths:
-   #    /home/tian/a/b
-   #    /cygdrive/c/users/tian/a/b
-   #    C:/users/tian
-   # network path
-   #    //linux1.fios-router.home/tian/a/b
-   # windows drive
-   #    C:/users/tian/a/b
-
    my @a1 = split /\/+/, $path;
-   if ( !defined( $a1[0] ) ) {
-      # this is a common path or network path, starting with /
-      shift @a1;    # shift away the undef before the first /
-   } else {
-      # this is windows drive, eg, C:/users/tian/a/b
-      $is_windows_drive = 1;
-   }
+   shift @a1;    # shift away the undef before the first /
 
    my @a2;
    for my $e (@a1) {
@@ -774,10 +757,7 @@ sub get_abs_path {
       }
    }
 
-   my $newpath =
-       $is_network_path  ? '//'
-     : $is_windows_drive ? ''
-     :                     '/';
+   my $newpath = $is_network_path ? '//' : '/';
    $newpath .= join( '/', @a2 );
 
    return $newpath;
@@ -826,7 +806,7 @@ sub build_dir_tree {
       for my $p (@globs) {
          my $abs_path;
 
-         if ( $p !~ /$abs_path_pattern/ ) {
+         if ( $p !~ m:^/: ) {
             # this is relative path
             if ( $opt->{RelativeBase} ) {
                $abs_path = get_abs_path("$opt->{RelativeBase}/$p");

@@ -1,0 +1,9 @@
+pwa = pywinauto
+
+    https://pywinauto.readthedocs.io/en/latest/getting_started.html
+
+Accessibility Insights for Windows
+
+    https://accessibilityinsights.io/docs/windows/overview/
+
+    installed under C:\Program Files (x86)\AccessibilityInsights\1.1\
