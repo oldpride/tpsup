@@ -8,3 +8,12 @@ host2$ tpdist -reverse server 6666 /a/b/c b
 
 # local mode
 $ tpdist local /a/b/c b
+
+the path can be absolute or relative, file or directory.
+
+on windows, it can take all forms of paths
+    normal: C:/users/tian/a/b
+    cygwin: /cygdrive/c/users/tian/a/b
+    gitbash: /c/users/tian/a/b
+    network: //host.com
+    /share/a/b
