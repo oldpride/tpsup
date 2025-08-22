@@ -7,3 +7,11 @@ Accessibility Insights for Windows
     https://accessibilityinsights.io/docs/windows/overview/
 
     installed under C:\Program Files (x86)\AccessibilityInsights\1.1\
+
+how to traverse the tree
+    1. find the window 
+        using window.print_control_identifiers() to find the child window's identifier.
+    2.click the child window
+        window.click_input()
+        this will open the child window's tree and more subtrees above the child window.
+    3. repeat step 1 until you find the target control.
