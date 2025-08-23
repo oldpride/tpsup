@@ -2,40 +2,64 @@
 
 # usage: python pwa_test_notepad.py
 import datetime
+import os
 from pywinauto.application import Application
 
 # from pywinauto.controls.win32_controls import 
 from time import sleep
 from tpsup.pwatools import dump_window
 
-
-# app = Application(
-#     # backend="win32", # win32 is the default.
-#     backend="uia", # uia is modern and preferred, but doesn't work for notepad on windows 11
-#     ).start("notepad.exe tianjunk", wait_for_idle=False)
-# sleep(3)
 app = Application(
     # backend="win32", # win32 is the default.
-    backend="uia", # uia is modern and preferred, but doesn't work for notepad on windows 11
+    backend="uia", # uia is modern and preferred.
 )
-try: 
-    app.connect(title_re=".*tianjunk.*", timeout=10)  # Connect to the Notepad window
-except Exception as e:
-    print(f"e={e}")
-    app.start("notepad.exe tianjunk", wait_for_idle=False)
-    app.connect(title_re=".*tianjunk.*", timeout=10)
 
+file_name = "tianjunk.txt"
+title_pattern = f".*{file_name}.*"
+print(f"Connecting to Notepad window with 'title_re=\"{title_pattern}\"'...")
+try: 
+    app.connect(title_re=title_pattern, timeout=10)  # Connect to the Notepad window
+except Exception as e:
+    file = os.path.expandvars(f"%USERPROFILE%/{file_name}")
+    cmd = f"notepad.exe {file}"
+
+    print(f"Failed to connect to Notepad window with 'title_re=\"{title_pattern}\"'.")
+    print(f"Exception={e}")
+    print(f"we will start it with command: {cmd}")
+    
+    # if the file doesn't exist, notepad will prompt to create a new file.
+    # so to automate the test, we create the file using "touch" if the
+    # file doesn't exist.
+    if not os.path.exists(file):
+        print(f"file {file} doesn't exist. creating it.")
+        from pathlib import Path
+        file_path = Path(file)
+        file_path.touch()
+    app.start(cmd, wait_for_idle=False)
+    app.connect(title_re=title_pattern, timeout=10)
+
+print(f"Connected")
 print(f"\ndir(app) = {dir(app)}")
 print(f"\napp.print_control_identifiers()")
-# app.print_control_identifiers() 
+# app.print_control_identifiers() # Application's doesn't have print_control_identifiers method.
 print(f"\napp.windows() = {app.windows()}")
 
-# notepad_window = app.UntitledNotepad
-notepad_window = app.window(class_name="Notepad", title_re=".*tianjunk.*")
+# the following methods work:
+# notepad_window = app.Document # method 1.
+# notepad_window = app.window(class_name="Notepad", title_re=".*tianjunk.*") # method 2.
+notepad_window = app.top_window() # method 3. this is the most general method.
+
+print(f"\nnotepad_window's python class name={type(notepad_window).__name__}")
+print(f"\ndir(notepad_window) = {dir(notepad_window)}")
+print(f"\nnotepad_window.print_control_identifiers()")
+notepad_window.print_control_identifiers()
+
 notepad_window.wait('visible')
 notepad_window.click_input()
 sleep(1)
 dump_window(notepad_window)
+
+exit(0)
 
 '''
    | Pane - ''    (L1250, T75, R1914, B482)
