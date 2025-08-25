@@ -282,8 +282,8 @@ def explore_app(**opt) -> None:
             '''
             result = locate(user_input)
             go_back = result.get('break', False)
-            refresh = result.get('refresh', )
-            if go_back or refresh:
+            relist = result.get('relist', False)
+            if go_back or relist:
                 break
         if go_back:
             break
@@ -291,7 +291,7 @@ def explore_app(**opt) -> None:
 init_ret = {
     'break': False,
     'bad_input': False,
-    'refresh': False
+    'relist': False
 }
 
 def locate(user_input: str, **opt):
@@ -358,6 +358,8 @@ def locate(user_input: str, **opt):
             if current_window is not None:
                 # after a successful click, we refresh our control identifiers tree.
                 refresh_window_specs()
+                ret['relist'] = True
+
     elif long_cmd == 'help':
         if args is not None:
             if args in usage:
@@ -380,8 +382,9 @@ def locate(user_input: str, **opt):
         go_back = True
         ret['break'] = True
     elif long_cmd == 'refresh':
-        print("refreshing the child window list...")
-        ret['refresh'] = True
+        print("refreshing the child window list tree...")
+        refresh_window_specs()
+        ret['relist'] = True
     elif long_cmd == 'script':
         script_file = args
         result = run_script(script_file)
@@ -440,11 +443,11 @@ def run_script(script: Union[str, list], **opt):
         result = locate(line, **opt)
 
         go_back = result.get('break', False)
-        refresh = result.get('refresh', )
+        relist = result.get('relist', False)
         if go_back:
             print("script terminated by quit command")
             break
-        if refresh:
+        if relist:
             refresh_window_specs(**opt)
 
     return ret
