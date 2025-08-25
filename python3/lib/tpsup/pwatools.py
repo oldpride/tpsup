@@ -143,6 +143,11 @@ usage = {
         'usage': '''
             sc script.txt
             script.txt contains multiple commands, one per line.
+            eg:
+            sc myscript.txt
+            where myscript.txt contains:
+            c 9
+            c 30
             ''',
     },
     'steps': {
@@ -155,7 +160,6 @@ usage = {
             example:
                 st
                 c 9
-                refresh
                 c 30
                 END
         ''',
@@ -344,13 +348,16 @@ def locate(user_input: str, **opt):
             try: 
                 current_window.click_input()
                 sleep(1)
-                ret['refresh'] = True
             except pywinauto.timings.TimeoutError as e:
                 print(f"TimeoutError: child spec didn't appear in time.")
                 current_window = None
             except pywinauto.findwindows.ElementNotFoundError as e:
                 print(f"ElementNotFoundError: child spec is not valid, either closed or you need to wait longer.")
                 current_window = None
+
+            if current_window is not None:
+                # after a successful click, we refresh our control identifiers tree.
+                refresh_window_specs()
     elif long_cmd == 'help':
         if args is not None:
             if args in usage:

@@ -8,8 +8,5 @@
 # child 10 is Edit menu
 c 10
 
-# refresh the current specs, ie, print_control_identifiers
-r
-
 # child 29 is the Date/Time in Edit menu
 c 29
