@@ -6,9 +6,8 @@ import re
 import sys
 import argparse
 import textwrap
-from pprint import pprint, pformat
-from pywinauto.application import Application
-from tpsup.pwatools import explore_child
+from pprint import pformat
+from tpsup.pwatools import explore_app
 
 prog = os.path.basename(sys.argv[0]).replace('_cmd.py', '')
 
@@ -52,11 +51,17 @@ parser.add_argument(
     '-v', '--verbose', dest="verbose", action='count', default=0,
     help="verbose mode. -v -v for more verbose")
 
+parser.add_argument(
+    '-d', '--debug', dest="debug", action='count', default=0,
+    help="debug mode. -d -d for more debug information")
+
+
 args = vars(parser.parse_args())
 
 verbose = args['verbose']
+debug = args['debug']
 
-if verbose:
+if verbose or debug:
     print(f'args={pformat(args)}', file=sys.stderr)
 
 if not args['remaining_args'] or len(args['remaining_args']) != 1:
@@ -67,22 +72,17 @@ if not args['remaining_args'] or len(args['remaining_args']) != 1:
     sys.exit(1)
 
 
-opt = {}
+title_re = args['remaining_args'][0]
 
-title_regex = args['remaining_args'][0]
+opt = {
+    'debug': debug,
+    'verbose': verbose,
+    'MatchPatterns': args['MatchPatterns'],
+    'ExcludePatterns': args['ExcludePatterns'],
+    'title_re': title_re,
+}
 
 if verbose:
     print(f'opt={pformat(opt)}', file=sys.stderr)
 
-app = Application(
-    # backend="win32", # win32 is the default.
-    backend="uia", # uia is modern and preferred.
-)
-
-print(f"Connecting app with title_re=\"{title_regex}\"...")
-
-app.connect(title_re=title_regex, timeout=10)
-
-print(f"Connected to app")
-
-explore_child(app)
+explore_app(**opt)
