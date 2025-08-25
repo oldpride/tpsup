@@ -155,7 +155,8 @@ usage = {
             example:
                 st
                 c 9
-                c 15
+                refresh
+                c 30
                 END
         ''',
     },
@@ -191,6 +192,8 @@ def refresh_window_specs(**opt):
     global top_window
     global current_window
 
+    debug = opt.get('debug', False)
+
     top_window_child_specs = get_child_specs(top_window, debug=debug)
 
     window_and_child_specs = []  # list of (window, which, child_spec)
@@ -203,7 +206,8 @@ def refresh_window_specs(**opt):
             current_window_child_specs = get_child_specs(current_window, debug=debug)
         except pywinauto.findwindows.ElementNotFoundError as e:
             print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
-
+            return
+        
         for s in current_window_child_specs:
             window_and_child_specs.append( (current_window, 'current_window', s) )
 
@@ -309,7 +313,6 @@ def locate(user_input: str, **opt):
         return ret
 
     long_cmd = v['long']
-    short_cmd = v['short']
 
     need_args = v.get('need_args', 0)
 
@@ -323,15 +326,14 @@ def locate(user_input: str, **opt):
         return ret
 
     if long_cmd == 'child':
-        num = int(args)
+        idx = int(args)
         max_child_specs = len(window_and_child_specs)
-        if num < 0 or num >= max_child_specs:
-            print(f"invalid num {num}")
+        if idx < 0 or idx >= max_child_specs:
+            print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
             ret['bad_input'] = True
-            return ret
         else:
-            w, which, child_spec = window_and_child_specs[num]
-            print(f"exploring child {num}: {child_spec} from {which}")
+            w, which, child_spec = window_and_child_specs[idx]
+            print(f"exploring child {idx}: {child_spec} from {which}")
             # extract args from child_window(...)
 
             code = f"{which}.{child_spec}"
@@ -342,14 +344,13 @@ def locate(user_input: str, **opt):
             try: 
                 current_window.click_input()
                 sleep(1)
+                ret['refresh'] = True
             except pywinauto.timings.TimeoutError as e:
                 print(f"TimeoutError: child spec didn't appear in time.")
                 current_window = None
             except pywinauto.findwindows.ElementNotFoundError as e:
                 print(f"ElementNotFoundError: child spec is not valid, either closed or you need to wait longer.")
                 current_window = None
-            return ret
-    
     elif long_cmd == 'help':
         if args is not None:
             if args in usage:
@@ -384,7 +385,7 @@ def locate(user_input: str, **opt):
         while True:
             try:
                 line = input()
-                if line.strip().upper() == 'END':
+                if line == 'END':
                     break
                 lines.append(line)
             except EOFError:
@@ -418,17 +419,19 @@ def run_script(script: Union[str, list], **opt):
     ret = init_ret.copy()
 
     for line in lines:
-        line = line.strip()
+        # remove the trailing newline
+        line = line.rstrip('\n')
+        line = line.rstrip('\r') # in case of Windows line ending
+        
+        # skip empty lines and comment lines
         if re.match(r'^\s*$', line):
             continue
         if re.match(r'^\s*#', line):
             continue
-        if line == 'END':
-            break
-        print(f"running command: {line}")
+
+        print(f"running command: '{line}'")
         result = locate(line, **opt)
 
-        ret = 
         go_back = result.get('break', False)
         refresh = result.get('refresh', )
         if go_back:
@@ -436,8 +439,6 @@ def run_script(script: Union[str, list], **opt):
             break
         if refresh:
             refresh_window_specs(**opt)
-
-    
 
     return ret
 

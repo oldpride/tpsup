@@ -1,0 +1,15 @@
+# run
+#     notepad tiantest
+# run
+#     pwaexplore .*tiantest.*
+#     sc this_file_name
+#     eg, sc pwaexplore_test_script.txt
+
+# child 10 is Edit menu
+c 10
+
+# refresh the current specs, ie, print_control_identifiers
+r
+
+# child 29 is the Date/Time in Edit menu
+c 29
