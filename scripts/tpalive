@@ -22,8 +22,8 @@ sub usage {
 usage:
 
    $prog auto
-   $prog long_tty_name
-   $prog short_tty_name
+   $prog long_tty
+   $prog short_tty
 
    -v              verbose mode.
    -i interval     default to $interval
@@ -67,15 +67,15 @@ if ( $osname !~ /linux/i ) {
 }
 
 # make sure we have a real tty
-my $long_tty_name = `tty 2>/dev/null`;
-if ( !$long_tty_name ) {
+my $long_tty = `tty 2>/dev/null`;
+if ( !$long_tty ) {
    $verbose && print STDERR "$prog quit because we don't have a tty\n";
    exit 0;
 }
 
-chomp $long_tty_name;
-my $short_tty_name = $long_tty_name;
-$short_tty_name =~ s:^/dev/::;
+chomp $long_tty;
+my $short_tty = $long_tty;
+$short_tty =~ s:^/dev/::;
 
 # make sure that
 #    1. this session is from a remote connection
@@ -116,7 +116,7 @@ if ($verbose) {
 }
 
 # make sure this is a remote connection
-my $this_tty_ip = $ip_by_tty->{$short_tty_name};
+my $this_tty_ip = $ip_by_tty->{$short_tty};
 if ( !$this_tty_ip ) {
    $verbose && print STDERR "$prog quit because current connection is not a remote connection.\n";
    exit 0;
@@ -125,7 +125,7 @@ if ( !$this_tty_ip ) {
 # make sure there isn't another instance of this script running from the same remote ip
 my $ttys_for_this_ip = $ttys_by_ip->{$this_tty_ip};
 for my $other_tty (@$ttys_for_this_ip) {
-   next if $other_tty eq $short_tty_name;
+   next if $other_tty eq $short_tty;
 
    # check if there is another instance of this script running on $other_tty
    my $ps       = `ps -f -t $other_tty 2>/dev/null`;
@@ -161,24 +161,24 @@ if ($child_pid) {
    $user = 'unknown' if !$user;
 
    while (1) {
-      # user1@host1:/proc/15411-> ps -ef |grep alive
-      # user1 27203 16988 0 12:08:21 pts/11 0:00 /usr/xpg4/bin/grep alive
-      # user1 15411 1235 0 11:08:29 ? 0:00 /usr/bin/perl /home/user1/tpsup/scripts/tpalive /dev/pts/4
-      # user1 17227 1235 0 11:09:37 pts/11 0:00 /usr/bin/perl /home/user1/tpsup/scripts/tpalive /dev/pts/ll
-      # user1@host1:/proc/15411-> ps -p 15411,17227 -o tty
-      # TT
-      # ?
-      # pts/11
+      # # user1@host1:/proc/15411-> ps -ef |grep alive
+      # # user1 27203 16988 0 12:08:21 pts/11 0:00 /usr/xpg4/bin/grep alive
+      # # user1 15411 1235 0 11:08:29 ? 0:00 /usr/bin/perl /home/user1/tpsup/scripts/tpalive /dev/pts/4
+      # # user1 17227 1235 0 11:09:37 pts/11 0:00 /usr/bin/perl /home/user1/tpsup/scripts/tpalive /dev/pts/ll
+      # # user1@host1:/proc/15411-> ps -p 15411,17227 -o tty
+      # # TT
+      # # ?
+      # # pts/11
 
-      my $current_tty = 'tty 2>/dev/null';
+      # my $current_tty = 'tty 2>/dev/null';
 
-      if ( !$current_tty || $current_tty !~ /\// ) {
-         # grand-parent shell process already exited, so will I
-         exit 0;
-      }
+      # if ( !$current_tty || $current_tty !~ /\// ) {
+      #    # grand-parent shell process already exited, so will I
+      #    exit 0;
+      # }
 
       my ( $dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks ) =
-        stat($tty);
+        stat($long_tty);
       my $now = time();
 
       my $mstring = strftime( "%Y%m%d-%T", localtime($mtime) );
