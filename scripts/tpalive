@@ -25,6 +25,9 @@ usage:
    $prog long_tty
    $prog short_tty
 
+   $prog status
+   $prog stop
+
    -v              verbose mode.
    -i interval     default to $interval
 
@@ -35,13 +38,19 @@ usage:
 
    The script will exits after the command shell process exits (after the next check interval).
 
+   'stop' is to stop a previous instance of this script running from the same remote ip.
+   'status' is to check if there is an instance of this script running from the same remote ip.
+
+
 examples:
 
    $prog auto
    $prog /dev/pts/1
    $prog pts/1
 
+   $prog stop
 
+   $prog status
 END
 
    exit 1;
@@ -69,8 +78,11 @@ if ( $osname !~ /linux/i ) {
 my $long_tty;
 my $short_tty;
 
+my $status_only = 0;
+my $stop_only   = 0;
+
 # make sure we have a real tty
-if ( $tty eq 'auto' ) {
+if ( $tty eq 'auto' or $tty eq 'status' or $tty eq 'stop' ) {
    $long_tty = `tty 2>/dev/null`;
    if ( !$long_tty ) {
       $verbose && print STDERR "$prog quit because we don't have a tty\n";
@@ -80,6 +92,12 @@ if ( $tty eq 'auto' ) {
    chomp $long_tty;
    $short_tty = $long_tty;
    $short_tty =~ s:^/dev/::;
+
+   if ( $tty eq 'status' ) {
+      $status_only = 1;
+   } elsif ( $tty eq 'stop' ) {
+      $stop_only = 1;
+   }
 } elsif ( $tty =~ m:^/dev/: ) {
    $long_tty = $tty;
 
@@ -126,14 +144,16 @@ my $ip_by_tty;
 my $ttys_by_ip;
 foreach my $line (@who_lines) {
    my ( $user, $tty, $date, $time, $ip_enclosuer ) = split /\s+/, $line;
-   if ( $user eq $me ) {
-      if ( $ip_enclosuer && $ip_enclosuer =~ /\((.+?)\)/ ) {
-         my $ip = $1;
-         # ip must be a remote ip, not localhost in IPv4 or IPv6 format
-         if ( $ip !~ /^(127\.0\.0\.1|::1)$/ ) {
-            $ip_by_tty->{$tty} = $ip;
-            push @{ $ttys_by_ip->{$ip} }, $tty;
-         }
+
+   # we don't check user because sometimes we run this script after 'su' to another user.
+   # next if $user ne $me;
+
+   if ( $ip_enclosuer && $ip_enclosuer =~ /\((.+?)\)/ ) {
+      my $ip = $1;
+      # ip must be a remote ip, not localhost in IPv4 or IPv6 format
+      if ( $ip !~ /^(127\.0\.0\.1|::1)$/ ) {
+         $ip_by_tty->{$tty} = $ip;
+         push @{ $ttys_by_ip->{$ip} }, $tty;
       }
    }
 }
@@ -152,23 +172,46 @@ if ( !$this_tty_ip ) {
 
 # make sure there isn't another instance of this script running from the same remote ip
 my $ttys_for_this_ip = $ttys_by_ip->{$this_tty_ip};
-for my $other_tty (@$ttys_for_this_ip) {
-   next if $other_tty eq $short_tty;
-
-   # check if there is another instance of this script running on $other_tty
-   my $ps       = `ps -f -t $other_tty 2>/dev/null`;
+for my $t (@$ttys_for_this_ip) {
+   # check if there is an instance of this script running on $t
+   my $ps       = `ps -f -t $t 2>/dev/null`;
    my @ps_lines = split /\n/, $ps;
    shift @ps_lines;    # remove header line
 
    for my $line (@ps_lines) {
       if ( $line =~ /\b$prog\b/ ) {
-         if ($verbose) {
-            print STDERR
-"$prog quit because there is another instance of this script running on the same remote ip '$this_tty_ip' from tty '$other_tty'.\n";
-            print STDERR "ps output on $other_tty=\n$ps\n";
+         if ( $verbose || $status_only || $stop_only ) {
+            print STDERR "$prog an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
+            print STDERR "     ps output on $t=\n$ps\n";
+            if ( $t eq $short_tty ) {
+               print STDERR "     this is the current tty\n";
+            } else {
+               print STDERR "     $t is not current tty=$short_tty\n";
+            }
+
+            if ($stop_only) {
+               my ( $user, $pid ) = ( $line =~ m:^\S+\s+(\d+)\s+: );
+               if ($pid) {
+                  print STDERR "$prog killing pid=$pid\n";
+                  kill 'TERM', $pid;
+                  sleep 1;
+                  kill 'KILL', $pid;
+                  print STDERR "$prog killed pid=$pid\n";
+               } else {
+                  print STDERR "$prog cannot find pid to kill\n";
+               }
+            } else {
+               $verbose && print STDERR "quit\n";
+               exit 0;
+            }
          }
       }
    }
+}
+
+if ( $status_only or $stop_only ) {
+   print STDERR "$prog quit\n";
+   exit 0;
 }
 
 # now we should run the main loop
@@ -216,7 +259,7 @@ if ($child_pid) {
       my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
 
       if ( $idle_seconds > $interval || $verbose ) {
-         print STDERR "$now_string: tpalive at: tty=$tty, pid=$$, host=$hostname, user=$user, \n",
+         print STDERR "$now_string: tpalive at: tty=$long_tty, pid=$$, host=$hostname, user=$user, \n",
            "tty_time_stamp=$mstring, idle_seconds=$idle_seconds, interval=$interval\n";
       }
       sleep 60;
