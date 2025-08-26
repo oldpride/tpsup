@@ -191,6 +191,13 @@ for my $t (@$ttys_for_this_ip) {
 
             if ($stop_only) {
                my ( $user, $pid ) = ( $line =~ m:^\S+\s+(\d+)\s+: );
+
+               # don't kill myself
+               if ( $pid == $$ ) {
+                  print STDERR "$prog not killing myself pid=$pid. skip\n";
+                  next;
+               }
+
                if ($pid) {
                   print STDERR "$prog killing pid=$pid\n";
                   kill 'TERM', $pid;
