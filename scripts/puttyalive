@@ -175,7 +175,7 @@ if ( !$this_tty_ip ) {
 my $ttys_for_this_ip = $ttys_by_ip->{$this_tty_ip};
 
 # make sure there isn't another instance of this script running from the same remote ip
-my $found_tpalive = 0;
+my $found_puttyalive = 0;
 for my $t (@$ttys_for_this_ip) {
    # check if there is an instance of this script running on $t
 
@@ -194,7 +194,7 @@ for my $t (@$ttys_for_this_ip) {
       next if $pid == $$;
 
       if ( $cmd =~ m:$prog\s+: ) {
-         $found_tpalive = 1;
+         $found_puttyalive = 1;
 
          if ( $verbose || $check_only || $stop_only ) {
             print STDERR "$prog: an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
@@ -210,6 +210,7 @@ for my $t (@$ttys_for_this_ip) {
                sleep 1;
                kill 'KILL', $pid;
                print STDERR "$prog: killed pid=$pid\n";
+               sleep 1;
             } else {
                $verbose && print STDERR "$prog:quit\n";
                exit 0;
@@ -220,7 +221,7 @@ for my $t (@$ttys_for_this_ip) {
 }
 
 if ( $check_only or $stop_only ) {
-   if ( !$found_tpalive ) {
+   if ( !$found_puttyalive ) {
       print STDERR "$prog: no instance running from same remote ip.\n";
    }
    exit 0;
