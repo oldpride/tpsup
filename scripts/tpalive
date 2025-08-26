@@ -25,7 +25,7 @@ usage:
    $prog long_tty
    $prog short_tty
 
-   $prog status
+   $prog check
    $prog stop
 
    -v              verbose mode.
@@ -39,7 +39,7 @@ usage:
    The script will exits after the command shell process exits (after the next check interval).
 
    'stop' is to stop a previous instance of this script running from the same remote ip.
-   'status' is to check if there is an instance of this script running from the same remote ip.
+   'check' is to check if there is an instance of this script running from the same remote ip.
 
 
 examples:
@@ -50,7 +50,7 @@ examples:
 
    $prog stop
 
-   $prog status
+   $prog check
 END
 
    exit 1;
@@ -78,11 +78,11 @@ if ( $osname !~ /linux/i ) {
 my $long_tty;
 my $short_tty;
 
-my $status_only = 0;
-my $stop_only   = 0;
+my $check_only = 0;
+my $stop_only  = 0;
 
 # make sure we have a real tty
-if ( $tty eq 'auto' or $tty eq 'status' or $tty eq 'stop' ) {
+if ( $tty eq 'auto' or $tty eq 'check' or $tty eq 'stop' ) {
    $long_tty = `tty 2>/dev/null`;
    if ( !$long_tty ) {
       $verbose && print STDERR "$prog quit because we don't have a tty\n";
@@ -93,8 +93,8 @@ if ( $tty eq 'auto' or $tty eq 'status' or $tty eq 'stop' ) {
    $short_tty = $long_tty;
    $short_tty =~ s:^/dev/::;
 
-   if ( $tty eq 'status' ) {
-      $status_only = 1;
+   if ( $tty eq 'check' ) {
+      $check_only = 1;
    } elsif ( $tty eq 'stop' ) {
       $stop_only = 1;
    }
@@ -193,7 +193,7 @@ for my $t (@$ttys_for_this_ip) {
       if ( $cmd =~ m:$prog\s+: ) {
          $found_tpalive = 1;
 
-         if ( $verbose || $status_only || $stop_only ) {
+         if ( $verbose || $check_only || $stop_only ) {
             print STDERR "$prog: an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
             print STDERR "     $line\n";
             if ( $t eq $short_tty ) {
@@ -216,7 +216,7 @@ for my $t (@$ttys_for_this_ip) {
    }
 }
 
-if ( $status_only or $stop_only ) {
+if ( $check_only or $stop_only ) {
    if ( !$found_tpalive ) {
       print STDERR "$prog: no instance running from same remote ip '$this_tty_ip'.\n";
    }
