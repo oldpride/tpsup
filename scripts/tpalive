@@ -174,12 +174,22 @@ if ( !$this_tty_ip ) {
 my $ttys_for_this_ip = $ttys_by_ip->{$this_tty_ip};
 for my $t (@$ttys_for_this_ip) {
    # check if there is an instance of this script running on $t
-   my $ps       = `ps -f -t $t 2>/dev/null`;
+
+   my $ps = `ps -f -t $t 2>/dev/null`;
+   # UID          PID    PPID  C STIME TTY          TIME CMD
+   # utian        487     486  0 03:01 pts/0    00:00:00 -bash
+   # utian      23715     487  0 13:33 pts/0    00:00:00 ps -t pts/0 -f
+
    my @ps_lines = split /\n/, $ps;
    shift @ps_lines;    # remove header line
 
    for my $line (@ps_lines) {
-      if ( $line =~ /\b$prog\b/ ) {
+      my ( $uid, $pid, $ppid, $c, $stime, $tty2, $time, $cmd ) = split /\s+/, $line, 8;
+
+      # skip my own process
+      next if $pid == $$;
+
+      if ( $cmd =~ m:$prog\s+: ) {
          if ( $verbose || $status_only || $stop_only ) {
             print STDERR "$prog an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
             print STDERR "     ps output on $t=\n$ps\n";
@@ -191,12 +201,6 @@ for my $t (@$ttys_for_this_ip) {
 
             if ($stop_only) {
                my ( $user, $pid ) = ( $line =~ m:^\S+\s+(\d+)\s+: );
-
-               # don't kill myself
-               if ( $pid == $$ ) {
-                  print STDERR "$prog not killing myself pid=$pid. skip\n";
-                  next;
-               }
 
                if ($pid) {
                   print STDERR "$prog killing pid=$pid\n";
