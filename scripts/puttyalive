@@ -11,7 +11,7 @@ use POSIX qw/strftime/;
 my $prog = $0;
 $prog =~ s:.*/::;
 
-my $interval = 480;    # seconds
+my $interval = 540;    # seconds
 
 sub usage {
    my ($message) = @_;
