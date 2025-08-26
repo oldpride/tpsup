@@ -172,6 +172,7 @@ if ( !$this_tty_ip ) {
 
 # make sure there isn't another instance of this script running from the same remote ip
 my $ttys_for_this_ip = $ttys_by_ip->{$this_tty_ip};
+my $found_tpalive    = 0;
 for my $t (@$ttys_for_this_ip) {
    # check if there is an instance of this script running on $t
 
@@ -214,7 +215,9 @@ for my $t (@$ttys_for_this_ip) {
 }
 
 if ( $status_only or $stop_only ) {
-   print STDERR "$prog quit\n";
+   if ( !$found_tpalive ) {
+      print STDERR "$prog no instance running from same remote ip '$this_tty_ip'.\n";
+   }
    exit 0;
 }
 
