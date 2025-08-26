@@ -211,13 +211,15 @@ if ($child_pid) {
 
       my $mstring = strftime( "%Y%m%d-%T", localtime($mtime) );
 
+      my $idle_seconds = $now - $mtime;
+
       my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
 
-      if ( $now - $mtime + $interval > 2 * $interval - 5 || $verbose ) {
-         print STDERR "$now_string: we have to spit some message to keep this terminal alive. ",
-           "tty=$tty, stamp=$mstring, pid=$$, host=$hostname, user=$user, interval=$interval\n";
+      if ( $idle_seconds > $interval || $verbose ) {
+         print STDERR "$now_string: tpalive at: tty=$tty, pid=$$, host=$hostname, user=$user, \n",
+           "tty_time_stamp=$mstring, idle_seconds=$idle_seconds, interval=$interval\n";
       }
-      sleep $interval;
+      sleep 60;
    }
 }
 
