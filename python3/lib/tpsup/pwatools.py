@@ -5,6 +5,7 @@ from time import sleep
 import pywinauto
 from pywinauto.application import Application, WindowSpecification
 from pywinauto.controls.uiawrapper import UIAWrapper
+from tpsup.cmdtools import run_cmd
 
 from typing import Union
 
@@ -112,26 +113,48 @@ def get_control_identifiers(o: Union[WindowSpecification, UIAWrapper]) -> str:
 usage = {
     'child': {
         'short': 'c',
-        'need_args': 1,
+        'need_args': True,
         'usage': '''
             c 1
             ''',
     },
+    'control_identifiers': {
+        'short': 'ci',
+        'no_args': True,
+        'usage': '''
+            get the control identifiers of the current window
+            ci
+        ''',
+    },
     'help': {
         'short': 'h',
+        # can have or not have args
         'usage': '''
             h
             h type
         ''',
     },
+    'python': {
+        'short': 'py',
+        'need_args': True,
+        'usage': '''
+            run a python code.
+            py print("hello world")
+            py dump_window(current_window)
+            py print(dir(current_window))
+            py print(current_window.__dict__)
+        ''',
+    },
     'quit': {
         'short': 'q',
+        'no_args': True,
         'usage': '''
             q
         ''',
     },
     'refresh': {
         'short': 'r',
+        'no_args': True,
         'usage': '''
             refresh the child window list
             r
@@ -139,7 +162,7 @@ usage = {
     },
     'script': {
         'short': 'sc',
-        'need_args': 1,
+        'need_args': True,
         'usage': '''
             sc script.txt
             script.txt contains multiple commands, one per line.
@@ -152,6 +175,7 @@ usage = {
     },
     'steps': {
         'short': 'st',
+        'no_args': True,
         'usage': '''
             st
 
@@ -164,14 +188,30 @@ usage = {
                 END
         ''',
     },
+    'text': {
+        'short': 'tx',
+        'no_args': True,
+        'usage': '''
+            get the text of the current window
+            tx
+        ''',
+    },
+    'top' : {
+        'short': 'top',
+        'no_args': True,
+        'usage': '''
+            get the top window
+            top
+        ''',
+    },
     'type': {
-        'short': 't',
+        'short': 'ty',
         'need_args': 1,
         'usage': '''
-            t hello world
-            t {UP}
-            t {ENTER}
-            t {F5}
+            ty hello world
+            ty {UP}
+            ty {ENTER}
+            ty {F5}
         ''',
     },
 }
@@ -228,14 +268,46 @@ def explore_app(**opt) -> None:
     if title_re is None:
         raise ValueError("title_re is required")
     
-    app = Application(
-        # backend="win32", # win32 is the default.
-        backend="uia", # uia is modern and preferred.
-    )
+    app = None
 
-    print(f"Connecting app with title_re=\"{title_re}\"...")
+    connected = False
+    cmd1 = opt.get('command1', None)
+    if cmd1:
+        print(f"startup command: {cmd1}")
+        app = Application(
+            # backend="win32", # win32 is the default.
+            backend="uia", # uia is modern and preferred.
+        )
+        connected = True
+        app.start(cmd1, wait_for_idle=False)
+        sleep(2)  # wait for the app to start
+    else:
+        app = Application(
+            # backend="win32", # win32 is the default.
+            backend="uia", # uia is modern and preferred.
+        )
 
-    app.connect(title_re=title_re, timeout=10)
+        print(f"Connecting app with title_re=\"{title_re}\"...")
+        
+        try:
+            app.connect(title_re=title_re, timeout=10)
+            connected = True
+        except Exception as e:
+            print(f"Failed to connect to app: {e}")
+
+        if not connected:
+            # try to start it
+            cmd2 = opt.get('command2', None)
+            if cmd2:
+                print(f"Starting app with command: {cmd2}")
+                # run_cmd(cmd2)
+                app.start(cmd2, wait_for_idle=False)
+                sleep(2) # wait for the app to start
+                # print(f"connecting app with title_re=\"{title_re}\"...")
+                # app.connect(title_re=title_re, timeout=10)
+            else:
+                print(f"No startup command provided.")
+                return
 
     print(f"Connected to app")
     print(f"\nexplore_app input's python class name={type(app).__name__}")
@@ -255,6 +327,15 @@ def explore_app(**opt) -> None:
         v['long'] = k
 
     current_window = top_window
+
+    script = opt.get('script', None)
+    if script:
+        print(f"running script file: {script}")
+        result = run_script(script, **opt)
+        if result.get('break', False):
+            return
+    
+    # after running the script, we continue to interactive mode.
     while True:
         refresh_window_specs()
 
@@ -319,12 +400,13 @@ def locate(user_input: str, **opt):
     long_cmd = v['long']
 
     need_args = v.get('need_args', 0)
+    no_args = v.get('no_args', False)
 
     if need_args and not args:
         print(f"command '{command}' needs args")
         ret['bad_input'] = True
         return ret
-    elif not need_args and args:
+    elif no_args and args:
         print(f"command '{command}' doesn't need args")
         ret['bad_input'] = True
         return ret
@@ -359,7 +441,17 @@ def locate(user_input: str, **opt):
                 # after a successful click, we refresh our control identifiers tree.
                 refresh_window_specs()
                 ret['relist'] = True
-
+    elif long_cmd == 'control_identifiers':
+        if current_window is None:
+            print("current_window is None, cannot get control identifiers")
+            ret['bad_input'] = True
+        else:
+            try:
+                ci_string = get_control_identifiers(current_window)
+                print(f"current_window control identifiers:\n{ci_string}")
+            except pywinauto.findwindows.ElementNotFoundError as e:
+                print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
+                ret['bad_input'] = True
     elif long_cmd == 'help':
         if args is not None:
             if args in usage:
@@ -377,6 +469,13 @@ def locate(user_input: str, **opt):
                 v = usage[k]
                 short = v.get('short', k)
                 print(f"{short}-{k}: {v.get('usage', '')}")
+    elif long_cmd == 'python':
+        print(f"running python code: {args}")
+        try:
+            exec(args, globals(), locals())
+        except Exception as e:
+            print(f"Exception: {e}")
+            ret['bad_input'] = True
     elif long_cmd == 'quit':
         print("bye")
         go_back = True
@@ -403,6 +502,20 @@ def locate(user_input: str, **opt):
         print(f"you entered {len(lines)} lines: {lines}")
         result = run_script(lines)
         ret.update(result)
+    elif long_cmd == 'text':
+        if current_window is None:
+            print("current_window is None, cannot get text")
+            ret['bad_input'] = True
+        else:
+            try:
+                texts = current_window.texts()
+                print(f"current_window texts={texts}")
+            except pywinauto.findwindows.ElementNotFoundError as e:
+                print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
+                ret['bad_input'] = True
+    elif long_cmd == 'top':
+        current_window = top_window
+        print("current_window is now top_window")
     elif long_cmd == 'type':
         current_window.type_keys(args, with_spaces=True, pause=0.05)
     else:

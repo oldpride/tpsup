@@ -20,11 +20,14 @@ usage = textwrap.dedent("""
 
 examples = textwrap.dedent(f"""
     examples:
-        run a notepad in windows, 
-            notepad tianjunk
-        
-        {prog} .*tianjunk.*
-                           
+        1:
+            run a notepad in windows, 
+                notepad tianjunk
+            
+            {prog} .*tianjunk.*
+        2:    
+            {prog} -c1 "putty -load wsl" "tianpc2 - PuTTY"
+            {prog} -c2 "putty -load wsl" "tianpc2 - PuTTY"
     """)
 
 parser = argparse.ArgumentParser(
@@ -55,6 +58,17 @@ parser.add_argument(
     '-d', '--debug', dest="debug", action='count', default=0,
     help="debug mode. -d -d for more debug information")
 
+parser.add_argument(
+    '-c1', '--command1', dest="command1", action='store', default=None,
+    help="startup command to run before 1st connecting to the app window")
+
+parser.add_argument(
+    '-c2', '--command2', dest="command2", action='store', default=None,
+    help="startup command to run if 1st connecting to the app window failed")
+
+parser.add_argument(
+    '-sc', '--script', dest="script", action='store', default=None,
+    help="script file to run after connected to the app window")
 
 args = vars(parser.parse_args())
 
@@ -71,18 +85,11 @@ if not args['remaining_args'] or len(args['remaining_args']) != 1:
     print(examples)
     sys.exit(1)
 
-
 title_re = args['remaining_args'][0]
-
-opt = {
-    'debug': debug,
-    'verbose': verbose,
-    'MatchPatterns': args['MatchPatterns'],
-    'ExcludePatterns': args['ExcludePatterns'],
-    'title_re': title_re,
-}
+args['title_re'] = title_re
+del args['remaining_args']
 
 if verbose:
-    print(f'opt={pformat(opt)}', file=sys.stderr)
+    print(f'args={pformat(args)}', file=sys.stderr)
 
-explore_app(**opt)
+explore_app(**args)
