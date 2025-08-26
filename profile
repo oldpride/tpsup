@@ -963,8 +963,8 @@ if [[ $- == *i* ]]; then
       termpos auto || : # '|| :' is to ignore the error and set return code to 0.
    fi
 
-   if [ "X$RUN_TPALIVE" = "XY" ]; then
-      tpalive auto || :
+   if [ "X$RUN_PUTTYALIVE" = "XY" ]; then
+      puttyalive auto || :
    fi
 fi
 
