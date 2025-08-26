@@ -66,16 +66,44 @@ if ( $osname !~ /linux/i ) {
    exit 0;
 }
 
-# make sure we have a real tty
-my $long_tty = `tty 2>/dev/null`;
-if ( !$long_tty ) {
-   $verbose && print STDERR "$prog quit because we don't have a tty\n";
-   exit 0;
-}
+my $long_tty;
+my $short_tty;
 
-chomp $long_tty;
-my $short_tty = $long_tty;
-$short_tty =~ s:^/dev/::;
+# make sure we have a real tty
+if ( $tty eq 'auto' ) {
+   $long_tty = `tty 2>/dev/null`;
+   if ( !$long_tty ) {
+      $verbose && print STDERR "$prog quit because we don't have a tty\n";
+      exit 0;
+   }
+
+   chomp $long_tty;
+   $short_tty = $long_tty;
+   $short_tty =~ s:^/dev/::;
+} elsif ( $tty =~ m:^/dev/: ) {
+   $long_tty = $tty;
+
+   # make sure it is a real tty
+   if ( !-e $long_tty ) {
+      $verbose && print STDERR "$prog quit because tty '$long_tty' doesn't exist\n";
+      exit 0;
+   }
+   $short_tty = $long_tty;
+   $short_tty =~ s:^/dev/::;
+} elsif ( $tty =~ m:^[^/]+/.+: ) {
+   # short tty, eg, pts/0
+   $short_tty = $tty;
+   $long_tty  = "/dev/$short_tty";
+
+   # make sure it is a real tty
+   if ( !-e $long_tty ) {
+      $verbose && print STDERR "$prog quit because tty '$long_tty' doesn't exist\n";
+      exit 0;
+   }
+} else {
+   usage("wrong tty format '$tty'");
+}
+$verbose && print STDERR "long_tty='$long_tty', short_tty='$short_tty'\n";
 
 # make sure that
 #    1. this session is from a remote connection
@@ -186,7 +214,7 @@ if ($child_pid) {
       my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
 
       if ( $now - $mtime + $interval > 2 * $interval - 5 || $verbose ) {
-         print STDERR "$now string we have to spit some message to keep this terminal alive. ",
+         print STDERR "$now_string: we have to spit some message to keep this terminal alive. ",
            "tty=$tty, stamp=$mstring, pid=$$, host=$hostname, user=$user, interval=$interval\n";
       }
       sleep $interval;
