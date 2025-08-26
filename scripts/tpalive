@@ -191,6 +191,8 @@ for my $t (@$ttys_for_this_ip) {
       next if $pid == $$;
 
       if ( $cmd =~ m:$prog\s+: ) {
+         $found_tpalive = 1;
+
          if ( $verbose || $status_only || $stop_only ) {
             print STDERR "$prog an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
             print STDERR "     $line\n";
@@ -216,7 +218,7 @@ for my $t (@$ttys_for_this_ip) {
 
 if ( $status_only or $stop_only ) {
    if ( !$found_tpalive ) {
-      print STDERR "$prog no instance running from same remote ip '$this_tty_ip'.\n";
+      print STDERR "$prog: no instance running from same remote ip '$this_tty_ip'.\n";
    }
    exit 0;
 }
