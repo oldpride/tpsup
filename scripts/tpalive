@@ -11,7 +11,7 @@ use POSIX qw/strftime/;
 my $prog = $0;
 $prog =~ s:.*/::;
 
-my $interval = 540;    # seconds
+my $interval = 480;    # seconds
 
 sub usage {
    my ($message) = @_;
@@ -267,10 +267,15 @@ if ($child_pid) {
 
       my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
 
-      if ( $idle_seconds > $interval || $verbose ) {
-         print STDERR "$prog: now=$now_string, last=$mstring, idle=$idle_seconds, interval=$interval\n",
-           "tty=$long_tty, pid=$$, host=$hostname, user=$user\n";
+      if ( $idle_seconds > $interval ) {
+         print STDERR "\r";
+
+         if ($verbose) {
+            print STDERR "$prog: now=$now_string, last=$mstring, idle=$idle_seconds, interval=$interval\n";
+            print STDERR "       tty=$long_tty, pid=$$, host=$hostname, user=$user\n";
+         }
       }
+
       sleep 30;
    }
 }
