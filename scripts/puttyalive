@@ -11,7 +11,7 @@ use POSIX qw/strftime/;
 my $prog = $0;
 $prog =~ s:.*/::;
 
-my $interval = 540;    # seconds
+my $threshold = 540;    # seconds
 
 sub usage {
    my ($message) = @_;
@@ -29,17 +29,19 @@ usage:
    $prog stop
 
    -v              verbose mode.
-   -i interval     default to $interval seconds.
+   -t threshold    default to $threshold seconds.
 
-   To keep the terminal alive otherwise it would be timed out after 3600 seconds of idle.
-   The check interval is $interval seconds.
+   To keep the terminal alive otherwise it would be timed out after some seconds of idle.
+   The check threshold is $threshold seconds.
 
    When use 'auto', the script will automatically pick the current tty.
 
-   The script will exits after the command shell process exits (after the next check interval).
+   The script will exits after the command shell process exits (after the next check threshold).
 
    'stop' is to stop a previous instance of this script running from the same remote ip.
    'check' is to check if there is an instance of this script running from the same remote ip.
+
+   see tpsup/profile for how to run this script automatically when login.
 
 
 examples:
@@ -59,8 +61,8 @@ END
 my $verbose;
 
 GetOptions(
-   'v|verbose'    => \$verbose,
-   'i|interval=s' => \$interval,
+   'v|verbose'     => \$verbose,
+   't|threshold=s' => \$threshold,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -271,10 +273,10 @@ if ($child_pid) {
 
       my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
 
-      if ( $idle_seconds > $interval ) {
+      if ( $idle_seconds > $threshold ) {
          # print STDERR "\r"; # this may work.
 
-         print STDERR "$prog: now=$now_string, last=$mstring, idle=$idle_seconds, interval=$interval\n";
+         print STDERR "$prog: now=$now_string, last=$mstring, idle=$idle_seconds, threshold=$threshold\n";
          print STDERR "       tty=$long_tty, pid=$$, host=$hostname, user=$user\n";
       }
 

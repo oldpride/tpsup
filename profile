@@ -965,6 +965,12 @@ if [[ $- == *i* ]]; then
 
    if [ "X$RUN_PUTTYALIVE" = "XY" ]; then
       puttyalive auto || :
+      # ways to set RUN_PUTTYALIVE=Y
+      #  1. in user's .profile, export RUN_PUTTYALIVE=Y
+      #  2. in site-spec/profile, export RUN_PUTTYALIVE=Y
+      #  3. in putty session, Connection->SSH->Remote command, 
+      #      export RUN_PUTTYALIVE=Y; bash --rc /mnt/c/users/tian/sitebase/github/sitebase/profile
+      #   or export RUN_PUTTYALIVE=Y; . /mnt/c/users/tian/sitebase/github/sitebase/profile; su - appid
    fi
 fi
 
