@@ -194,7 +194,7 @@ for my $t (@$ttys_for_this_ip) {
          $found_tpalive = 1;
 
          if ( $verbose || $status_only || $stop_only ) {
-            print STDERR "$prog an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
+            print STDERR "$prog: an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
             print STDERR "     $line\n";
             if ( $t eq $short_tty ) {
                print STDERR "     this is the current tty\n";
@@ -206,9 +206,9 @@ for my $t (@$ttys_for_this_ip) {
                kill 'TERM', $pid;
                sleep 1;
                kill 'KILL', $pid;
-               print STDERR "$prog killed pid=$pid\n";
+               print STDERR "$prog: killed pid=$pid\n";
             } else {
-               $verbose && print STDERR "quit\n";
+               $verbose && print STDERR "$prog:quit\n";
                exit 0;
             }
          }
@@ -268,10 +268,10 @@ if ($child_pid) {
       my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
 
       if ( $idle_seconds > $interval || $verbose ) {
-         print STDERR "$now_string: tpalive at: tty=$long_tty, pid=$$, host=$hostname, user=$user, \n",
-           "tty_time_stamp=$mstring, idle_seconds=$idle_seconds, interval=$interval\n";
+         print STDERR "$prog: now=$now_string, last=$mstring, idle=$idle_seconds, interval=$interval\n",
+           "tty=$long_tty, pid=$$, host=$hostname, user=$user\n";
       }
-      sleep 60;
+      sleep 30;
    }
 }
 
