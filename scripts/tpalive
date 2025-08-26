@@ -8,13 +8,12 @@ use strict;
 use Carp;
 use POSIX qw/strftime/;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
-my $interval = 1800;
+my $interval = 540;    # seconds
 
 sub usage {
-   my $real_tty = `tty`;
-
    my ($message) = @_;
 
    print "$message\n" if $message;
@@ -23,7 +22,8 @@ sub usage {
 usage:
 
    $prog auto
-   $prog /dev/pts/...
+   $prog long_tty_name
+   $prog short_tty_name
 
    -v              verbose mode.
    -i interval     default to $interval
@@ -38,7 +38,9 @@ usage:
 examples:
 
    $prog auto
-   $prog $real_tty
+   $prog /dev/pts/1
+   $prog pts/1
+
 
 END
 
@@ -50,46 +52,109 @@ my $verbose;
 GetOptions(
    'v|verbose'    => \$verbose,
    'i|interval=s' => \$interval,
-) || usage ("cannot parse command line: $!");
+) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
 
 my ($tty) = @ARGV;
 
-my $real_tty = `tty 2>/dev/null`;
-if (!$real_tty) {
+# should only run on a linux host
+my $osname = `uname -s`;
+chomp $osname;
+if ( $osname !~ /linux/i ) {
+   $verbose && print STDERR "$prog quit because osname='$osname' is not linux\n";
+   exit 0;
+}
+
+# make sure we have a real tty
+my $long_tty_name = `tty 2>/dev/null`;
+if ( !$long_tty_name ) {
    $verbose && print STDERR "$prog quit because we don't have a tty\n";
    exit 0;
 }
 
-chomp $real_tty;
+chomp $long_tty_name;
+my $short_tty_name = $long_tty_name;
+$short_tty_name =~ s:^/dev/::;
 
-if ($tty eq 'auto') {
-   check_running_instance();
+# make sure that
+#    1. this session is from a remote connection
+#    2. there isn't another instance of this script running from the same remote ip.
+# using 'who' command's output
+# $ who
+# tian    pts/1        2025-08-25 18:27
+# tian    pts/2        2025-08-26 06:51 (::1)
+# tian    pts/3        2025-08-26 07:01 (::1)
+# tian    pts/4        2025-08-26 07:04 (::1)
+# the above output was from WSL.
+# on a linux host, the fourth column, inside the parenthesis, is the client ip address.
 
-   $verbose && print STDERR "running $0 $real_tty in background\n";
+my $me = `whoami`;
+chomp $me;
+my $who       = `who`;
+my @who_lines = split /\n/, $who;
 
-   system("$0 -i $interval $real_tty");
-
-   exit 0;
-} else {
-   if ($tty ne $real_tty) {
-      print STDERR "the specified tty='$tty' is not the real tty '$real_tty'. aborted\n";
-      exit 1;
+my $ip_by_tty;
+my $ttys_by_ip;
+foreach my $line (@who_lines) {
+   my ( $user, $tty, $date, $time, $ip_enclosuer ) = split /\s+/, $line;
+   if ( $user eq $me ) {
+      if ( $ip_enclosuer && $ip_enclosuer =~ /\((.+?)\)/ ) {
+         my $ip = $1;
+         # ip must be a remote ip, not localhost in IPv4 or IPv6 format
+         if ( $ip !~ /^(127\.0\.0\.1|::1)$/ ) {
+            $ip_by_tty->{$tty} = $ip;
+            push @{ $ttys_by_ip->{$ip} }, $tty;
+         }
+      }
    }
-
-   check_running_instance();
 }
+
+if ($verbose) {
+   print STDERR "ip_by_tty=",  Dumper($ip_by_tty);
+   print STDERR "ttys_by_ip=", Dumper($ttys_by_ip);
+}
+
+# make sure this is a remote connection
+my $this_tty_ip = $ip_by_tty->{$short_tty_name};
+if ( !$this_tty_ip ) {
+   $verbose && print STDERR "$prog quit because current connection is not a remote connection.\n";
+   exit 0;
+}
+
+# make sure there isn't another instance of this script running from the same remote ip
+my $ttys_for_this_ip = $ttys_by_ip->{$this_tty_ip};
+for my $other_tty (@$ttys_for_this_ip) {
+   next if $other_tty eq $short_tty_name;
+
+   # check if there is another instance of this script running on $other_tty
+   my $ps       = `ps -f -t $other_tty 2>/dev/null`;
+   my @ps_lines = split /\n/, $ps;
+   shift @ps_lines;    # remove header line
+
+   for my $line (@ps_lines) {
+      if ( $line =~ /\b$prog\b/ ) {
+         if ($verbose) {
+            print STDERR
+"$prog quit because there is another instance of this script running on the same remote ip '$this_tty_ip' from tty '$other_tty'.\n";
+            print STDERR "ps output on $other_tty=\n$ps\n";
+         }
+      }
+   }
+}
+
+# now we should run the main loop
 
 my $child_pid = fork();
 
 if ($child_pid) {
    # this is parent
-      exit 0;
-} elsif ($child_pid == 0) {
+   exit 0;
+} elsif ( $child_pid == 0 ) {
    # this is child
 
-   my $hostname = `hostname`; chomp $hostname;
+   my $hostname = `hostname`;
+   chomp $hostname;
    my $id = `id`;
 
    my ($user) = ( $id =~ m:.+?\((.+?)\): );
@@ -107,48 +172,25 @@ if ($child_pid) {
 
       my $current_tty = 'tty 2>/dev/null';
 
-      if ( !$current_tty || $current_tty !~/\// ) {
+      if ( !$current_tty || $current_tty !~ /\// ) {
          # grand-parent shell process already exited, so will I
          exit 0;
       }
 
-      my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = stat($tty);
+      my ( $dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks ) =
+        stat($tty);
       my $now = time();
 
-      my $mstring = strftime("%Y%m%d-%T", localtime($mtime));
+      my $mstring = strftime( "%Y%m%d-%T", localtime($mtime) );
 
-      my $now_string = strftime("%Y%m%d-%T", localtime($now));
+      my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
 
-      if ($now - $mtime + $interval > 2*$interval -5 || $verbose ) {
+      if ( $now - $mtime + $interval > 2 * $interval - 5 || $verbose ) {
          print STDERR "$now string we have to spit some message to keep this terminal alive. ",
-                      "tty=$tty, stamp=$mstring, pid=$$, host=$hostname, user=$user, interval=$interval\n";
+           "tty=$tty, stamp=$mstring, pid=$$, host=$hostname, user=$user, interval=$interval\n";
       }
       sleep $interval;
    }
 }
 
 exit 0;
-
-###########################################################################
-# subs
-###########################################################################
-
-sub check_running_instance {
-   my $pattern = "$prog .*$real_tty";
-   my $cmd = "/bin/ps -ef | egrep '$pattern' |grep -v grep";
-   my @lines = `$cmd`;
-
-   # user1 2635 15676 0 18:49:06 pts/5 0:00 vi tpalive
-   for my $l (@lines) {
-      my ($pid) = ($l =~ /^\s*\S+\s+(\S+)/);
-
-      if ($pid != $$) {
-         if ($verbose) {
-            print "process pattern '$pattern' is already running:\n$l\nquit\n";
-         }
-
-         exit 0;
-      }
-   }
-}
-   

@@ -270,13 +270,16 @@ def explore_app(**opt) -> None:
     
     app = None
 
+    backend = opt.get('backend', 'uia')
+
     connected = False
     cmd1 = opt.get('command1', None)
     if cmd1:
         print(f"startup command: {cmd1}")
         app = Application(
             # backend="win32", # win32 is the default.
-            backend="uia", # uia is modern and preferred.
+            # backend="uia", # uia is modern and preferred.
+            backend=backend,
         )
         connected = True
         app.start(cmd1, wait_for_idle=False)
@@ -284,7 +287,8 @@ def explore_app(**opt) -> None:
     else:
         app = Application(
             # backend="win32", # win32 is the default.
-            backend="uia", # uia is modern and preferred.
+            # backend="uia", # uia is modern and preferred.
+            backend=backend,
         )
 
         print(f"Connecting app with title_re=\"{title_re}\"...")

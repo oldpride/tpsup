@@ -70,6 +70,10 @@ parser.add_argument(
     '-sc', '--script', dest="script", action='store', default=None,
     help="script file to run after connected to the app window")
 
+parser.add_argument(
+    '-be', '--backend', dest="backend", action='store', default="uia",
+    help="backend to use for the application. can be 'win32' or 'uia'. default is 'uia'")
+
 args = vars(parser.parse_args())
 
 verbose = args['verbose']
