@@ -1,0 +1,284 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Getopt::Long;
+use strict;
+use Carp;
+use POSIX qw/strftime/;
+
+my $prog = $0;
+$prog =~ s:.*/::;
+
+my $interval = 480;    # seconds
+
+sub usage {
+   my ($message) = @_;
+
+   print "$message\n" if $message;
+
+   print <<"END";
+usage:
+
+   $prog auto
+   $prog long_tty
+   $prog short_tty
+
+   $prog check
+   $prog stop
+
+   -v              verbose mode.
+   -i interval     default to $interval seconds.
+
+   To keep the terminal alive otherwise it would be timed out after 3600 seconds of idle.
+   The check interval is $interval seconds.
+
+   When use 'auto', the script will automatically pick the current tty.
+
+   The script will exits after the command shell process exits (after the next check interval).
+
+   'stop' is to stop a previous instance of this script running from the same remote ip.
+   'check' is to check if there is an instance of this script running from the same remote ip.
+
+
+examples:
+
+   $prog auto
+   $prog /dev/pts/1
+   $prog pts/1
+
+   $prog stop
+
+   $prog check
+END
+
+   exit 1;
+}
+
+my $verbose;
+
+GetOptions(
+   'v|verbose'    => \$verbose,
+   'i|interval=s' => \$interval,
+) || usage("cannot parse command line: $!");
+
+usage("wrong number of args") if !@ARGV;
+
+my ($tty) = @ARGV;
+
+# should only run on a linux host
+my $osname = `uname -s`;
+chomp $osname;
+if ( $osname !~ /linux/i ) {
+   $verbose && print STDERR "$prog quit because osname='$osname' is not linux\n";
+   exit 0;
+}
+
+my $long_tty;
+my $short_tty;
+
+my $check_only = 0;
+my $stop_only  = 0;
+
+# make sure we have a real tty
+if ( $tty eq 'auto' or $tty eq 'check' or $tty eq 'stop' ) {
+   $long_tty = `tty 2>/dev/null`;
+   if ( !$long_tty ) {
+      $verbose && print STDERR "$prog quit because we don't have a tty\n";
+
+      exit 0;
+   }
+
+   chomp $long_tty;
+   $short_tty = $long_tty;
+   $short_tty =~ s:^/dev/::;
+
+   if ( $tty eq 'check' ) {
+      $check_only = 1;
+   } elsif ( $tty eq 'stop' ) {
+      $stop_only = 1;
+   }
+} elsif ( $tty =~ m:^/dev/: ) {
+   $long_tty = $tty;
+
+   # make sure it is a real tty
+   if ( !-e $long_tty ) {
+      $verbose && print STDERR "$prog quit because tty '$long_tty' doesn't exist\n";
+      exit 0;
+   }
+   $short_tty = $long_tty;
+   $short_tty =~ s:^/dev/::;
+} elsif ( $tty =~ m:^[^/]+/.+: ) {
+   # short tty, eg, pts/0
+   $short_tty = $tty;
+   $long_tty  = "/dev/$short_tty";
+
+   # make sure it is a real tty
+   if ( !-e $long_tty ) {
+      $verbose && print STDERR "$prog quit because tty '$long_tty' doesn't exist\n";
+      exit 0;
+   }
+} else {
+   usage("wrong tty format '$tty'");
+}
+$verbose && print STDERR "long_tty='$long_tty', short_tty='$short_tty'\n";
+
+# make sure that
+#    1. this session is from a remote connection
+#    2. there isn't another instance of this script running from the same remote ip.
+# using 'who' command's output
+# $ who
+# tian    pts/1        2025-08-25 18:27
+# tian    pts/2        2025-08-26 06:51 (::1)
+# tian    pts/3        2025-08-26 07:01 (::1)
+# tian    pts/4        2025-08-26 07:04 (::1)
+# the above output was from WSL.
+# on a linux host, the fourth column, inside the parenthesis, is the client ip address.
+
+my $me = `whoami`;
+chomp $me;
+my $who       = `who`;
+my @who_lines = split /\n/, $who;
+
+my $ip_by_tty;
+my $ttys_by_ip;
+foreach my $line (@who_lines) {
+   my ( $user, $tty, $date, $time, $ip_enclosuer ) = split /\s+/, $line;
+
+   # we don't check user because sometimes we run this script after 'su' to another user.
+   # next if $user ne $me;
+
+   if ( $ip_enclosuer && $ip_enclosuer =~ /\((.+?)\)/ ) {
+      my $ip = $1;
+      # ip must be a remote ip, not localhost in IPv4 or IPv6 format
+      if ( $ip !~ /^(127\.0\.0\.1|::1)$/ ) {
+         $ip_by_tty->{$tty} = $ip;
+         push @{ $ttys_by_ip->{$ip} }, $tty;
+      }
+   }
+}
+
+if ($verbose) {
+   print STDERR "ip_by_tty=",  Dumper($ip_by_tty);
+   print STDERR "ttys_by_ip=", Dumper($ttys_by_ip);
+}
+
+# make sure this is a remote connection
+my $this_tty_ip = $ip_by_tty->{$short_tty};
+
+if ( !$this_tty_ip ) {
+   $verbose && print STDERR "$prog quit because current connection is not a remote connection.\n";
+   exit 0;
+}
+
+my $ttys_for_this_ip = $ttys_by_ip->{$this_tty_ip};
+
+# make sure there isn't another instance of this script running from the same remote ip
+my $found_tpalive = 0;
+for my $t (@$ttys_for_this_ip) {
+   # check if there is an instance of this script running on $t
+
+   my $ps = `ps -fw -t $t 2>/dev/null`;    # -w is to print full command line
+                                           # UID          PID    PPID  C STIME TTY          TIME CMD
+                                           # utian        487     486  0 03:01 pts/0    00:00:00 -bash
+                                           # utian      23715     487  0 13:33 pts/0    00:00:00 ps -t pts/0 -f
+
+   my @ps_lines = split /\n/, $ps;
+   shift @ps_lines;                        # remove header line
+
+   for my $line (@ps_lines) {
+      my ( $uid, $pid, $ppid, $c, $stime, $tty2, $time, $cmd ) = split /\s+/, $line, 8;
+
+      # skip my own process
+      next if $pid == $$;
+
+      if ( $cmd =~ m:$prog\s+: ) {
+         $found_tpalive = 1;
+
+         if ( $verbose || $check_only || $stop_only ) {
+            print STDERR "$prog: an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
+            print STDERR "     $line\n";
+            if ( $t eq $short_tty ) {
+               print STDERR "     this is the current tty\n";
+            } else {
+               print STDERR "     $t is not current tty=$short_tty\n";
+            }
+
+            if ($stop_only) {
+               kill 'TERM', $pid;
+               sleep 1;
+               kill 'KILL', $pid;
+               print STDERR "$prog: killed pid=$pid\n";
+            } else {
+               $verbose && print STDERR "$prog:quit\n";
+               exit 0;
+            }
+         }
+      }
+   }
+}
+
+if ( $check_only or $stop_only ) {
+   if ( !$found_tpalive ) {
+      print STDERR "$prog: no instance running from same remote ip.\n";
+   }
+   exit 0;
+}
+
+# now we should run the main loop
+
+my $child_pid = fork();
+
+if ($child_pid) {
+   # this is parent
+   exit 0;
+} elsif ( $child_pid == 0 ) {
+   # this is child
+
+   my $hostname = `hostname`;
+   chomp $hostname;
+   my $id = `id`;
+
+   my ($user) = ( $id =~ m:.+?\((.+?)\): );
+   $user = 'unknown' if !$user;
+
+   while (1) {
+      # # user1@host1:/proc/15411-> ps -ef |grep alive
+      # # user1 27203 16988 0 12:08:21 pts/11 0:00 /usr/xpg4/bin/grep alive
+      # # user1 15411 1235 0 11:08:29 ? 0:00 /usr/bin/perl /home/user1/tpsup/scripts/tpalive /dev/pts/4
+      # # user1 17227 1235 0 11:09:37 pts/11 0:00 /usr/bin/perl /home/user1/tpsup/scripts/tpalive /dev/pts/ll
+      # # user1@host1:/proc/15411-> ps -p 15411,17227 -o tty
+      # # TT
+      # # ?
+      # # pts/11
+
+      # my $current_tty = 'tty 2>/dev/null';
+
+      # if ( !$current_tty || $current_tty !~ /\// ) {
+      #    # grand-parent shell process already exited, so will I
+      #    exit 0;
+      # }
+
+      my ( $dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks ) =
+        stat($long_tty);
+      my $now = time();
+
+      my $mstring = strftime( "%Y%m%d-%T", localtime($mtime) );
+
+      my $idle_seconds = $now - $mtime;
+
+      my $now_string = strftime( "%Y%m%d-%T", localtime($now) );
+
+      if ( $idle_seconds > $interval ) {
+         # print STDERR "\r"; # this may work.
+
+         print STDERR "$prog: now=$now_string, last=$mstring, idle=$idle_seconds, interval=$interval\n";
+         print STDERR "       tty=$long_tty, pid=$$, host=$hostname, user=$user\n";
+      }
+
+      sleep 30;
+   }
+}
+
+exit 0;

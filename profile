@@ -962,6 +962,10 @@ if [[ $- == *i* ]]; then
    if [ "X$RUN_TERMPOS" = "XY" ]; then
       termpos auto || : # '|| :' is to ignore the error and set return code to 0.
    fi
+
+   if [ "X$RUN_TPALIVE" = "XY" ]; then
+      tpalive auto || :
+   fi
 fi
 
 tpa () { ( set -x; termpos auto; ) }
