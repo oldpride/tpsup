@@ -192,7 +192,7 @@ for my $t (@$ttys_for_this_ip) {
       if ( $cmd =~ m:$prog\s+: ) {
          if ( $verbose || $status_only || $stop_only ) {
             print STDERR "$prog an instance running from same remote ip '$this_tty_ip' at tty '$t'.\n";
-            print STDERR "     ps output on $t=\n$ps\n";
+            print STDERR "     $line\n";
             if ( $t eq $short_tty ) {
                print STDERR "     this is the current tty\n";
             } else {
