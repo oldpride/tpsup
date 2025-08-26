@@ -200,17 +200,10 @@ for my $t (@$ttys_for_this_ip) {
             }
 
             if ($stop_only) {
-               my ( $user, $pid ) = ( $line =~ m:^\S+\s+(\d+)\s+: );
-
-               if ($pid) {
-                  print STDERR "$prog killing pid=$pid\n";
-                  kill 'TERM', $pid;
-                  sleep 1;
-                  kill 'KILL', $pid;
-                  print STDERR "$prog killed pid=$pid\n";
-               } else {
-                  print STDERR "$prog cannot find pid to kill\n";
-               }
+               kill 'TERM', $pid;
+               sleep 1;
+               kill 'KILL', $pid;
+               print STDERR "$prog killed pid=$pid\n";
             } else {
                $verbose && print STDERR "quit\n";
                exit 0;
