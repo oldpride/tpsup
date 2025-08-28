@@ -7,7 +7,7 @@ from pywinauto.application import Application
 
 # from pywinauto.controls.win32_controls import 
 from time import sleep
-from tpsup.pwatools import dump_window
+from tpsup.pwatools_old import dump_window
 
 app = Application(
     # backend="win32", # win32 is the default.

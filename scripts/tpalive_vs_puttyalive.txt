@@ -1,0 +1,7 @@
+tpalive vs puttyalive
+
+both are to keep the terminal alive on windows when connecting to linux server.
+
+tpalive was designed when connecting using Exceed/xterm.
+
+puttyalive was designed when connecting using putty.
