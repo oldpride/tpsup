@@ -128,10 +128,15 @@ our_cfg = {
 
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" "click_xpath=/html/body/button" sleep=1 "if=xpath=//*[@id='random' and text()='10']" break end_if end_while
 
-    - test exp
-    {{{{prog}}}} exp="a=1;a+1" code="print(a)"  # this will pass - 2
+    - exp vs code
+      exp  (expression) is processed by python's eval().
+      code (statement)  is processed by python's exec().
+    {{{{prog}}}} exp="a=1;a+1" code="print(a)"  # this will pass - because a+1=2 > 0, so exp is true.
+                                                  a=1 is executed first, then a+1 is evaluated.
     {{{{prog}}}} exp="a=1"     code="print(a)"  # this will fail - NameError: name 'a' is not defined
+                                                  a=1 is evaluated, but not executed, so a is not defined.
     {{{{prog}}}} code="a=1"    code="print(a)"  # this will pass - 1
+                                                  a=1 is executed, so a is defined.
 
     - test steps in file
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps_txt="{TPP3}/ptslnm_test_steps_txt.txt" top
@@ -223,7 +228,7 @@ def code(all_cfg, known, **opt):
 
     # result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
     driverEnv = all_cfg["resources"]["selenium"]['driverEnv']
-    followEnv = tpsup.locatetools_new.FollowEnv(driverEnv, **opt)
+    followEnv = tpsup.locatetools_new.FollowEnv(driverEnv.locate_f, **opt)
     result = followEnv.follow(steps, **opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):

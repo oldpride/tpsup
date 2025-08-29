@@ -13,13 +13,13 @@ import tpsup.interactivetools
 
 class FollowEnv:
     def __init__(self,
-                driverEnv,
+                locate_f: callable,
                  **opt):
-        
-        if not hasattr(driverEnv, 'locate_f'):
-            raise RuntimeError(f"driverEnv has no locate_f attribute")
-        
-        self.locate_f = driverEnv.locate_f
+
+        if not callable(locate_f):
+            raise RuntimeError(f"locate_f is not callable")
+
+        self.locate_f = locate_f
         
         # hope we will never need this
         # self.caller_globals = inspect.currentframe().f_back.f_globals
@@ -210,7 +210,7 @@ class FollowEnv:
                     while/while_not=condition ... end_while
                     '''
                     blockend = f"end_{blockstart}"
-                    
+
                     block_stack.append({
                         'blockstart': blockstart,
                         'negation': negation,
