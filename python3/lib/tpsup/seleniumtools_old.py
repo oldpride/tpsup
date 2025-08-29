@@ -3512,7 +3512,7 @@ def locate(locator: str, **opt):
             type_paths.append([ptype, path])
 
             ptype = type2  # to be used in next round
-            paths_string = paths_string[end_pos:]
+            paths_string = paths_string[end_pos:] # leftover string to be processed
 
         path = paths_string  # leftover is a path
         # todo: find a better way to strip endinng space and comma

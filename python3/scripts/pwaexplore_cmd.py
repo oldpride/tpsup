@@ -7,7 +7,7 @@ import sys
 import argparse
 import textwrap
 from pprint import pformat
-from tpsup.pwatools import explore_app
+from tpsup.pwatools import explore
 
 prog = os.path.basename(sys.argv[0]).replace('_cmd.py', '')
 
@@ -93,7 +93,7 @@ title_re = args['remaining_args'][0]
 args['title_re'] = title_re
 del args['remaining_args']
 
-if verbose:
+if verbose or debug:
     print(f'args={pformat(args)}', file=sys.stderr)
 
-explore_app(**args)
+explore(**args)

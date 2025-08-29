@@ -27,8 +27,8 @@ declare -A ext2intepreter
 ext2intepreter=(
    [js]="node"
    [ts]="deno"
-   [py]="python3"
-)
+   [py]="python3"   # if need, make python3 link/copy from python in venv.
+   # [py]="python"  # should be python version 3.
 
 for ext in js ts py; 
 do

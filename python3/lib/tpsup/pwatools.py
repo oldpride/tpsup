@@ -153,7 +153,6 @@ class PwaEnv:
 
         backend = opt.get('backend', 'uia')
 
-        connected = False
         cmd1 = opt.get('command1', None)
         if cmd1:
             print(f"startup command: {cmd1}")
@@ -162,20 +161,49 @@ class PwaEnv:
                 # backend="uia", # uia is modern and preferred.
                 backend=backend,
             )
-            connected = True
-            self.app.start(cmd1, wait_for_idle=False)
+
+            # self.app.start(cmd1, wait_for_idle=False)
+            self.app.start(cmd1)
             sleep(2)  # wait for the app to start
+
+            '''
+            app.start("notepad.exe") 
+            app.top_window()
+            error:
+                    in top_window
+                    raise RuntimeError("No windows for that process could be found")
+
+            likely due to notepad spawning a new process for the window. 
+            therefore, if we try-catch this error, then we can use app.connect to connect to the window.
+            '''
+            try:
+                self.top_window = self.app.top_window()
+            except RuntimeError as e:
+                print(f"RuntimeError: {e}")
+                # if the error is "No windows for that process could be found"
+                if "No windows for that process could be found" in str(e):
+                    print(f"seeing error 'No windows for that process could be found', likely due to app spawning a new process for the window.")
+                    print(f"we will try to connect to the window with title_re=\"{self.title_re}\"")
+            
+            if self.top_window is None:
+                self.app.connect(title_re=self.title_re, timeout=10)
+                print(f"connected")
+                self.top_window = self.app.top_window() # now it should work
+
+            self.current_window = self.top_window
         else:
+            # without cmd1, we can only connect to an existing app window.
             self.app = Application(
                 # backend="win32", # win32 is the default.
                 # backend="uia", # uia is modern and preferred.
                 backend=backend,
             )
 
-            print(f"Connecting app with title_re=\"{title_re}\"...")
-            
+            print(f"Connecting app with title_re=\"{self.title_re}\"...")           
+            connected = False
             try:
                 self.app.connect(title_re=self.title_re, timeout=10)
+                print("connected")
                 connected = True
             except Exception as e:
                 print(f"Failed to connect to app: {e}")
@@ -194,12 +222,10 @@ class PwaEnv:
                     print(f"No startup command provided.")
                     return None
 
-        print(f"Connected to app")
-        print(f"\nexplore_app input's python class name={type(self.app).__name__}")
+            self.top_window = self.app.top_window()
+            self.current_window = self.top_window
 
-        self.top_window = self.app.top_window()
-        self.current_window = self.top_window
-
+        print(f"\nexplore_app input's python class name={type(self.app).__name__}")            
         print(f"top_window's python class name={type(self.top_window).__name__}")
 
         self.top_window.wait('visible')
@@ -287,7 +313,7 @@ class PwaEnv:
                 print(f"exploring child {idx}: {child_spec} from {which}")
                 # extract args from child_window(...)
 
-                code = f"{which}.{child_spec}"
+                code = f"self.{which}.{child_spec}"
                 print(f"code={code}")
                 self.current_window = eval(code, globals(), locals())
                 # w2 = w.child_window( control_type="Document")
@@ -307,7 +333,7 @@ class PwaEnv:
                     self.refresh_window_specs()
                     ret['relist'] = True
         elif long_cmd == 'control_identifiers':
-            if current_window is None:
+            if self.current_window is None:
                 print("current_window is None, cannot get control identifiers")
                 ret['bad_input'] = True
             else:
@@ -323,7 +349,7 @@ class PwaEnv:
                 ret['bad_input'] = True
             else:
                 try:
-                    texts = current_window.texts()
+                    texts = self.current_window.texts()
                     print(f"current_window texts={texts}")
                 except pywinauto.findwindows.ElementNotFoundError as e:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
@@ -334,7 +360,7 @@ class PwaEnv:
         elif long_cmd == 'type':
             self.current_window.type_keys(args, with_spaces=True, pause=0.05)
         else:
-            print(f"invalid input {user_input}")
+            print(f"invalid long_cmd {long_cmd}")
             ret['bad_input'] = True
         
         return ret
@@ -407,7 +433,7 @@ class PwaEnv:
     refresh_states_f = refresh_window_specs
     usage_by_long = usage
 
-def explore_app(**opt):
+def explore(**opt):
     pwa = PwaEnv(**opt)
     pwa.connect(**opt)
     pwa.refresh_window_specs(**opt)

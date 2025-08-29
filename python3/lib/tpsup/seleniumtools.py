@@ -3375,7 +3375,8 @@ def locate(locator: str, **opt):
                 'url': url,
             })
             ret['Success'] = True
-            last_element = None # we don't know what the active element is in the shadow root.
+            # last_element = None # we don't know what the active element is in the shadow root.
+            last_element = locator_driver.find_element(By.CSS_SELECTOR, ':first-child')
     elif m := re.match(r"(iframe|tp_iframe|parentIframe|top|tp_top)$", locator):
         iframe = m.group(1)
         print(f"locate: switch into {iframe}")
