@@ -11,22 +11,23 @@ from tpsup.nettools import is_tcp_open
 import tpsup.pstools
 import tpsup.utilbasic
 import tpsup.interactivetools
+import tpsup.steptools
 
 class Explorer:
     def __init__(self,
-                 appEnv,
+                 locate_f: callable,
+                 display_f: callable = None,
+                 refresh_states_f: callable = None,
+                 app_usage_by_long: dict = None,
                  **opt):
         
-        self.appEnv = appEnv
-
-        # appEnv.locate_f is required.
-        if not appEnv.locate_f:
-            raise ValueError("appEnv.locate_f is required")
+        self.locate_f = locate_f
+        if not callable(self.locate_f):
+            raise TypeError("locate_f must be a callable function")
         
-        self.locate_f = appEnv.locate_f
-        self.display_f = appEnv.display_f
-        # self.prompt_f = appEnv.prompt_f
-        self.refresh_states_f = appEnv.refresh_states_f
+        self.display_f = display_f
+        self.refresh_states_f = refresh_states_f
+
         self.refreshed = False
         # after each refresh_states_f, we set refreshed to True.
         # after each display_f, we set refreshed to False.
@@ -93,14 +94,10 @@ class Explorer:
             },
         }
 
-        # if usage_by_long is in appEnv, merge it.
-        if hasattr(appEnv, 'usage_by_long'):
-            app_usage = getattr(appEnv, 'usage_by_long')
-            if isinstance(app_usage, dict):
-                self.usage_by_long.update(app_usage)
-            else:
-                raise TypeError("appEnv.usage_by_long must be a dict")
-        
+        # if app_usage_by_long is defined, merge it.
+        if app_usage_by_long:
+            self.usage_by_long.update(app_usage_by_long)
+
         self.usage_by_short = {}
         for k, v in self.usage_by_long.items():
             short = v.get('short', None)
@@ -110,6 +107,46 @@ class Explorer:
             v['long'] = k # add long name to each usage item
 
     def run_script(self, script: Union[str, list], **opt):
+        '''
+        if script is a string, it is a file name.
+        if script is a list,   it is a list of steps
+        '''
+        debug = opt.get('debug', False)
+
+        if isinstance(script, str):
+            with open(script, 'r') as f:
+                bigstring = f.readlines()
+        elif isinstance(script, list):
+            bigstring = script
+        else:
+            raise TypeError("script must be a string or a list")
+        
+        ret = self.ret0.copy()
+
+        steps = tpsup.steptools.parse_steps('\n'.join(bigstring), debug=debug)
+
+        for k, v in steps:
+            print(f"running command: '{k}={v}'")
+            result = self.combined_locate(f"{k}={v}", **opt)
+
+            go_back = result.get('break', False)
+            # everytime before we display, we refresh states.
+            # therefore, redisplay and refresh_state are linked.
+            redisplay = result.get('redisplay', False) 
+
+            if redisplay and self.refresh_states_f:
+                # before redisplaying, we refresh states.
+                self.refresh_states_f(**opt)
+            if go_back:
+                print("script terminated by quit command")
+                break
+
+            ret.update(result) # update hash (dict) with hash (dict)
+
+        return ret
+
+
+    def run_script_line_by_line(self, script: Union[str, list], **opt):
         '''
         if script is a string, it is a file name.
         if script is a list,   it is a list of steps
@@ -154,8 +191,7 @@ class Explorer:
 
             ret.update(result) # update hash (dict) with hash (dict)
 
-        return ret
-    
+        return ret    
     
     def get_prompt(self) -> str:
         prompt = ""

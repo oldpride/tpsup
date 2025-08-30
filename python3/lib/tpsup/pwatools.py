@@ -358,6 +358,8 @@ class PwaEnv:
             self.title_recurrent_window = self.top_window
             print("current_window is now top_window")
         elif long_cmd == 'type':
+            # replace \n with {ENTER}
+            args = args.replace('\n', '{ENTER}')
             self.current_window.type_keys(args, with_spaces=True, pause=0.05)
         else:
             print(f"invalid long_cmd {long_cmd}")
@@ -365,7 +367,6 @@ class PwaEnv:
         
         return ret
 
-    
 
     def get_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
         '''
@@ -437,6 +438,12 @@ def explore(**opt):
     pwa = PwaEnv(**opt)
     pwa.connect(**opt)
     pwa.refresh_window_specs(**opt)
-    
-    explorer = tpsup.exploretools.Explorer(pwa, **opt)
+
+    explorer = tpsup.exploretools.Explorer(
+        locate_f=pwa.locate,
+        display_f=pwa.display_f,
+        refresh_states_f=pwa.refresh_window_specs,
+        app_usage_by_long=pwa.usage,
+        **opt
+    )
     explorer.explore(**opt)
