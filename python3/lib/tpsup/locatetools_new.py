@@ -10,6 +10,7 @@ from tpsup.nettools import is_tcp_open
 import tpsup.pstools
 import tpsup.utilbasic
 import tpsup.interactivetools
+from tpsup.logbasic import log_FileFuncLine
 
 class FollowEnv:
     def __init__(self,
@@ -427,6 +428,8 @@ class FollowEnv:
 
             result = {'Success': False}
 
+            print(f"follow2: running step={pformat(step)}")
+
             if opt['interactive']:
                 while True:
                     try:
@@ -438,6 +441,9 @@ class FollowEnv:
                         tpsup.interactivetools.nonstop_step_count = 0   
             else:
                 result = self.locate_f(step, **opt)
+
+            # log_FileFuncLine(f"follow2: step={step} result={pformat(result)}")
+
             
             # for step in self.caller_globals['debuggers']['after']:
             #     # we don't care about the return value but we should avoid
@@ -445,6 +451,8 @@ class FollowEnv:
             #     print(f"follow2: debug_after={step}")
             #     self.locate_f(step, **opt)
             self.locate_f('debug_after', **opt)
+
+            # log_FileFuncLine(f"follow2: step={step} debug_after result={pformat(result)}")
 
             if dryrun:
                 continue
@@ -471,6 +479,8 @@ class FollowEnv:
 
             # copy result to ret
             ret['Success'] = result['Success']
+
+            # log_FileFuncLine(f"follow2: step={step} result={pformat(result)}")
 
             if not result['Success']:
                 print(f"follow2: break, step={step} failed because result['Success'] is False")
@@ -753,7 +763,7 @@ def split_by_else(steps: list, **opt):
     return steps_by_type       
     
 
-def get_defined_locators(locate_func: callable, **opt):
+def decoded_get_defined_locators(locate_func: callable, **opt):
     '''
     get list of locators in locate() function.
     we first get the source code of locate() function, then we extract the locators

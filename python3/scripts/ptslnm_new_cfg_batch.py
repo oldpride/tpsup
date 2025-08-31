@@ -176,7 +176,7 @@ our_cfg = {
 
 def pre_batch(all_cfg, known, **opt):
     # run tpsup.seleniumtools.pre_batch() to set up driver
-    tpsup.seleniumtools.pre_batch(all_cfg, known, **opt)
+    tpsup.seleniumtools_new.pre_batch(all_cfg, known, **opt)
 
 def code(all_cfg, known, **opt):
     # global driver
@@ -209,7 +209,7 @@ def code(all_cfg, known, **opt):
     #     locator_chain.append(locator2)
 
     if run_js:
-        locator_chain2 = tpsup.seleniumtools.locator_chain_to_locator_chain_using_js(locator_chain, trap=trap, debug=debug)
+        locator_chain2 = tpsup.seleniumtools_new.locator_chain_to_locator_chain_using_js(locator_chain, trap=trap, debug=debug)
         steps.extend(locator_chain2)
     else:
         steps.extend(locator_chain)
@@ -251,18 +251,18 @@ def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
         print(all_cfg.get('test_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
         exit(0)
 
-    if re.match(r'locators$', input[0]):
-        for line in tpsup.locatetools.get_defined_locators(locate_func=tpsup.seleniumtools.locate):
-            print(line)
-        exit(0)
+    # if re.match(r'locators$', input[0]):
+    #     for line in tpsup.locatetools_new.decoded_get_defined_locators(locate_func=tpsup.seleniumtools_new.locate_f):
+    #         print(line)
+    #     exit(0)
 
     if re.match(r'(d|download_chrome)driver$', input[0]):
         version = input[1] if len(input) > 1 else None
-        tpsup.seleniumtools.download_chromedriver(driver_version=version)
+        tpsup.seleniumtools_new.download_chromedriver(driver_version=version)
         exit(0)
 
     if re.match(r'check_setup$', input[0]):
-        tpsup.seleniumtools.check_setup(compareVersion=1)
+        tpsup.seleniumtools_new.check_setup(compareVersion=1)
         exit(0)
 
     return {'REMAININGARGS': input}

@@ -14,7 +14,7 @@ from selenium import webdriver
 from tpsup.human import human_delay
 import tpsup.logtools
 from tpsup.logbasic import log_FileFuncLine
-from tpsup.locatetools_new import handle_break,get_defined_locators
+from tpsup.locatetools_new import handle_break
 import tpsup.steptools
 
 from selenium.common.exceptions import \
@@ -1675,6 +1675,8 @@ class SeleniumEnv:
                 except Exception as ex:
                     print(f"locate failed. {ex}")
                     print(f"matched_paths = {pformat(finder.matched_so_far)}")
+                    ret['Success'] = False
+                    element = None
 
                 # restore implicit wait
                 self.driver.implicitly_wait(self.wait_seconds)
@@ -1751,10 +1753,12 @@ class SeleniumEnv:
             #     click -> [('click', None)]
             #     print='' -> [('print', '')]
             parsed = tpsup.steptools.parse_steps(locator)
-            # print(f"parsed={pformat(parsed)}")
+            if len(parsed) != 1:
+                print(f"locator string={locator} parsed={pformat(parsed)}")
+                raise RuntimeError(f"locator string must be a single step, but got {len(parsed)} steps, locator={locator}")
             cmd=parsed[0]['cmd']
             arg=parsed[0]['arg']
-            return self.locate_f2(cmd, arg, **opt)
+            return self.locate_cmd_arg(cmd, arg, **opt)
             # return self.locate(locator, **opt)
         elif type(locator) == dict:
             return self.locate_dict(locator, **opt)
@@ -1799,7 +1803,7 @@ class SeleniumEnv:
             print(f"handle_page_change: locator_driver is None, set it to driver")
             self.locator_driver = self.driver
 
-    def locate_f2(self, cmd: str, arg: str, **opt):
+    def locate_cmd_arg(self, cmd: str, arg: str, **opt):
         dryrun = opt.get("dryrun", 0)
         interactive = opt.get("interactive", 0)
         debug = opt.get("debug", 0)
@@ -1822,6 +1826,9 @@ class SeleniumEnv:
         #      from driver.switch_to.active_element in the next step (of locate()).
 
         ret = {'Success': True, 'break_levels': 0, 'continue_levels': 0}
+
+        if dryrun:
+            return ret
 
         # helper = {}  # interactivity helper
         # if interactive:
@@ -1939,13 +1946,6 @@ class SeleniumEnv:
             else:
                 print(f"locate: run {lang}: {code}")
 
-            # parse 'target'
-            if target:
-                if m := re.match(r"2(print|pformat|element)+$", target):
-                    target = m.group(1)
-                else:
-                    raise RuntimeError(f"unsupported target={target}")
-
             if lang in ['code', 'python', 'exp']:
                 if isExpression or lang == 'exp' or (target and 'element' in target):
                     # we are testing condition, we want to know True/False
@@ -1982,7 +1982,7 @@ class SeleniumEnv:
                 gv['jsr'] = self.driver.execute_script(code)
                 if debug:
                     print(f"locate: gv['jsr']={pformat(gv['jsr'])}") # this is too verbose            
-                if 'element' in target:
+                if target and 'element' in target:
                     '''
                     gv['jsr'] can be an element or a dict with possible keys: 
                     element, shadowHost, iframeElement
@@ -2044,7 +2044,7 @@ class SeleniumEnv:
                     print(f"locate: gv['jsr']={pformat(gv['jsr'])}") # this is too verbose
                     self.last_element = self.driver.switch_to.active_element
 
-                if 'print' in target:
+                if  target and 'print' in target:
                     print(gv['jsr'])
                 
                 # https://stackoverflow.com/questions/37791547
@@ -2305,9 +2305,12 @@ class SeleniumEnv:
                 self.last_element = element
                 ret['Success'] = True
 
-                # which path found the element is saved in element.tpdata
+                # which path found the element is saved in ele
+                # ment.tpdata
             except Exception as ex:
                 print(f"locate failed: {pformat(ex)}")
+                ret['Success'] = False
+                element = None
 
             # restore implicit wait but
             # don't use locator_driver here, because implicit_wait() is not available
@@ -2421,7 +2424,7 @@ class SeleniumEnv:
             if not self.last_element:
                 raise RuntimeError("no element to click")
             
-            if locator == 'click':
+            if cmd == 'click':
                 # we keep the selenium way here, in case the problem is fixed in the future.
                 self.last_element.click()
             else:
@@ -2509,7 +2512,6 @@ class SeleniumEnv:
                         if i > 1:
                             # this is the normal exit point from the for loop
                             print(f"locate: all paths gone in {i} seconds")
-                            ret['Success'] = True
                             break
                 if e:
                     js_print_debug(self.driver, e)
@@ -2541,7 +2543,7 @@ class SeleniumEnv:
         # the following are new features
         # elif m := re.match(r"(impl|expl|script|page|all)*wait=(\d+)", locator):
         elif m := re.match(r"(impl|expl|script|page|all)*wait", cmd):
-            wait_type, value, *_ = m.groups()
+            wait_type, *_ = m.groups()
             value = arg
             if not wait_type:
                 wait_type = 'all'
@@ -2610,10 +2612,13 @@ class SeleniumEnv:
                     print(f"follow: debug_{before_after}={step}")
                     self.locate(step, **opt)
         # elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:consolelog|css|domstack|element|html|iframestack|tag|text|title|timeouts|url|waits|xpath))+)$", locator):
-        elif m := re.match(r"print|debug(?:_before|_after)*$", cmd):
+        elif m := re.match(r"(print|debug(?:_before|_after)*)$", cmd):
             '''
             (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
             and both are on outside.
+            cmd can be 'print', 'debug', 'debug_before', 'debug_after'. 
+            note: cmd cannot be print_before or print_after.
+
             debug_before=url,title,tag => group 1 = debug_before, group 2 = url,title,tag
 
             examples:
@@ -2621,7 +2626,7 @@ class SeleniumEnv:
             '''
             directive, *_ = m.groups()
             keys_string = arg
-            m = re.match("((?:(?:\b|,)(?:consolelog|css|domstack|element|html|iframestack|tag|text|title|timeouts|url|waits|xpath))+)$", keys_string)
+            m = re.match(r"((?:(?:\b|,)(?:consolelog|css|domstack|element|html|iframestack|tag|text|title|timeouts|url|waits|xpath))+)$", keys_string)
             if not m:
                 raise RuntimeError(f"invalid {directive} syntax {arg}")
             keys = keys_string.split(",")
@@ -2740,8 +2745,8 @@ class SeleniumEnv:
                 action = f"print={keys_string}"
                 self.debuggers[before_after] = [action]
                 print(f"locate: debuggers[{before_after}]={pformat(self.debuggers[before_after])}")
-        elif result := handle_break(locator, **opt):
-            raise RuntimeError(f"handle_break() is not expected.")
+        # elif result := handle_break(locator, **opt):
+        #     raise RuntimeError(f"handle_break() is not expected.")
         #     if not dryrun:
         #         # not dryrun, we check the result
         #         # we found the expected break
@@ -2749,8 +2754,8 @@ class SeleniumEnv:
         #         ret['continue_levels'] = result['continue_levels']
         #         # when matched any break statement, we break, no matter 'Success' is True or False.
         else:
-            raise RuntimeError(f"unsupported 'locator={locator}'")
-        
+            raise RuntimeError(f"unsupported 'cmd`={cmd}'")
+
         return ret
 
 
