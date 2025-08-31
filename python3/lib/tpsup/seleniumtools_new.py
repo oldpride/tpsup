@@ -15,6 +15,7 @@ from tpsup.human import human_delay
 import tpsup.logtools
 from tpsup.logbasic import log_FileFuncLine
 from tpsup.locatetools_new import handle_break,get_defined_locators
+import tpsup.steptools
 
 from selenium.common.exceptions import \
     NoSuchElementException, ElementNotInteractableException, \
@@ -956,6 +957,7 @@ class SeleniumEnv:
 
             self.dump_deeper(subdir, element=None, **opt)
         if scope == 'page' or scope == 'all':
+            print(f"output_dir={output_dir}")
             subdir = f"{output_dir}/page"
             os.makedirs(subdir, exist_ok=True)  # this is mkdir -p
             print()
@@ -1736,14 +1738,24 @@ class SeleniumEnv:
         
         return ret
 
-    def locate_f(self, locator: Union[str, dict], **opt):
+    def locate(self, locator: Union[str, dict], **opt):
         """
         locate_f() is a wrapper of locate() and locate_dict()
         if locator is a string, call locate()
         if locator is a dict, call locate_dict()
         """
         if type(locator) == str:
-            return self.locate(locator, **opt)
+            # print(f"locator string={locator}")
+            # for example
+            #     xpath=//div[0] -> [('xpath', '//div[0]')]
+            #     click -> [('click', None)]
+            #     print='' -> [('print', '')]
+            parsed = tpsup.steptools.parse_steps(locator)
+            # print(f"parsed={pformat(parsed)}")
+            cmd=parsed[0]['cmd']
+            arg=parsed[0]['arg']
+            return self.locate_f2(cmd, arg, **opt)
+            # return self.locate(locator, **opt)
         elif type(locator) == dict:
             return self.locate_dict(locator, **opt)
         else:
@@ -1787,7 +1799,7 @@ class SeleniumEnv:
             print(f"handle_page_change: locator_driver is None, set it to driver")
             self.locator_driver = self.driver
 
-    def locate_f2(self, cmd: str, args: str, **opt):
+    def locate_f2(self, cmd: str, arg: str, **opt):
         dryrun = opt.get("dryrun", 0)
         interactive = opt.get("interactive", 0)
         debug = opt.get("debug", 0)
@@ -1850,7 +1862,7 @@ class SeleniumEnv:
         # if not dryrun:
         #     update_locator_driver(**opt)   
         
-        locator = correct_xpath(locator)
+        # locator = correct_xpath(locator)
 
         '''
         examples can be found in github test folder
@@ -1861,12 +1873,12 @@ class SeleniumEnv:
             self.driver = self.get_driver(**opt)
             self.handle_page_change(**opt)
         elif cmd == "kill_procs":
-            procs = args
+            procs = arg
             tpsup.pstools.kill_procs(procs)
         elif cmd == "check_procs":
             tpsup.pstools.check_procs(procs)
         elif cmd in ["url", "url_accept_alert"]:
-            url = args
+            url = arg
             accept_alert = 0
             if cmd == 'url_accept_alert':
                 accept_alert = 1
@@ -1915,7 +1927,7 @@ class SeleniumEnv:
             '''
             # directive, code, *_ = m.groups()
             lang, file, target = m.groups()
-            code = args
+            code = arg
 
             if file:
                 filename = code
@@ -2065,7 +2077,7 @@ class SeleniumEnv:
 
                 dictfile=ptslnm_test_dict_parallel.py
             '''
-            code = args
+            code = arg
 
             if cmd == 'dictfile':
                 filename = code
@@ -2080,12 +2092,12 @@ class SeleniumEnv:
             ret = self.locate_dict(compiled_dict, **opt)
             self.handle_page_change(**opt)
         elif cmd == "tab":
-            count = int(args)
+            count = int(arg)
             print(f"locate: tab {count} times")         
             self.driver.switch_to.active_element.send_keys(Keys.TAB * count)
             self.last_element = self.driver.switch_to.active_element
         elif cmd == "tabback" or cmd == "shifttab":
-            count = int(args)
+            count = int(arg)
             print(f"locate: tab backward (shift+tab) {count} times")
             ac = ActionChains(self.driver)
             ac.key_down(Keys.SHIFT)
@@ -2229,7 +2241,8 @@ class SeleniumEnv:
             css=body > div:nth-child(1) > div:nth-child(2) > div:nth-child(3)
             click_xpath=/body/div[1]/div[2]/div[3]
             '''
-            locator = f"{cmd}={args}" # restore the original locator
+            arg = correct_xpath(arg)
+            locator = f"{cmd}={arg}" # restore the original locator
             m1 = get_locator_compiled_path1().match(locator)
             if not m1:
                 raise RuntimeError(f"invalid locator syntax {locator}")
@@ -2307,11 +2320,11 @@ class SeleniumEnv:
         # the following are from old send_input()
         elif cmd == "sleep":
             # example: sleep=3
-            value = args
+            value = arg
             print(f"locate: sleep {value} seconds")
             time.sleep(int(value))
         elif cmd == "hover":
-            seconds = int(args) # seconds to hover
+            seconds = int(arg) # seconds to hover
             print(f"locate: hover {seconds} seconds")
             if not self.last_element:
                 raise RuntimeError("no element to hover")
@@ -2320,14 +2333,14 @@ class SeleniumEnv:
             # this action should not change the active element
         # elif m := re.match(r"(raw|string|text)=(.+)", locator, re.MULTILINE | re.DOTALL | re.IGNORECASE):
         elif cmd in ["raw", "string", "text"]:
-            value = args
+            value = arg
             if cmd != 'raw':
                 # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
                 value = value.replace("\t", "    ")
             result = self.locate(f"code2element='''{value}'''", **opt)
         elif cmd == "clear_attr":
             # even if only capture group, still add *_; other attr would become list, not scalar
-            attr = args
+            attr = arg
             print(f"locate: clear {attr}")
             element = self.driver.switch_to.active_element
             value = element.get_attribute(attr)
@@ -2355,7 +2368,7 @@ class SeleniumEnv:
             element.send_keys(Keys.CONTROL + "a")
             element.send_keys(Keys.DELETE)
         elif cmd == "is_empty":
-            attr = args
+            attr = arg
             print(
             f"locate: check whether '{attr}' is empty.")
             # the checked element may not be the active element.
@@ -2372,9 +2385,9 @@ class SeleniumEnv:
             ret['Success'] = True
         # elif m := re.match(r"sendkey=(.+?)(,\d+)?$", locator, re.IGNORECASE):
         elif cmd == "sendkey":
-            m = re.match(r"(.+?)(,\d+)?$", args)
+            m = re.match(r"(.+?)(,\d+)?$", arg)
             if not m:
-                raise RuntimeError(f"invalid {cmd} syntax {args}")
+                raise RuntimeError(f"invalid {cmd} syntax {arg}")
             '''
             example:
                 key=enter
@@ -2419,9 +2432,9 @@ class SeleniumEnv:
             self.handle_page_change(**opt)
         # elif m := re.match(r"select=(value|index|text),(.+)", locator):
         elif cmd == "select":
-            m = re.match(r"(value|index|text),(.+)", args)
+            m = re.match(r"(value|index|text),(.+)", arg)
             if not m:
-                raise RuntimeError(f"invalid {cmd} syntax {args}")
+                raise RuntimeError(f"invalid {cmd} syntax {arg}")
             
             attr, string = m.groups()
             
@@ -2446,7 +2459,7 @@ class SeleniumEnv:
         #                     locator, re.MULTILINE | re.DOTALL):
         elif cmd in ["gone_xpath", "gone_css"]:
             # restore original locator
-            locator = f"{cmd}={args}"
+            locator = f"{cmd}={arg}"
             ptype, paths_string = m.groups()
 
             type_paths = []
@@ -2509,13 +2522,11 @@ class SeleniumEnv:
         # elif m := re.match(r"dump(?:_(element|shadow|iframe|page|all))?(?:-(over))?(=.+)?$", locator):
         elif m := re.match(r"dump(?:_(element|shadow|iframe|page|all))?(?:-(over))?", cmd):
             scope, dash_args = m.groups()
-            output_dir = args
+            output_dir = arg
             if not output_dir:
                 # output_dir default to $HOME/dumpdir
                 home_dir = self.get_home_dir()
                 output_dir = os.path.join(home_dir, 'dumpdir')
-            else:
-                output_dir = output_dir[1:] # remove the leading '='
             if not scope:
                 scope = 'element'
             print(f"locate: dump {scope} to {output_dir} with args={dash_args}")
@@ -2531,7 +2542,7 @@ class SeleniumEnv:
         # elif m := re.match(r"(impl|expl|script|page|all)*wait=(\d+)", locator):
         elif m := re.match(r"(impl|expl|script|page|all)*wait", cmd):
             wait_type, value, *_ = m.groups()
-            value = args
+            value = arg
             if not wait_type:
                 wait_type = 'all'
             print(f"locate: set {wait_type} wait type to {value} seconds")
@@ -2609,10 +2620,10 @@ class SeleniumEnv:
                 print=text,tag
             '''
             directive, *_ = m.groups()
-            keys_string = args
-            m = re.match("((?:(?:\b|,)(?:consolelog|css|domstack|element|html|iframestack|tag|text|title|timeouts|url|waits|xpath))+)$", keys_string):
+            keys_string = arg
+            m = re.match("((?:(?:\b|,)(?:consolelog|css|domstack|element|html|iframestack|tag|text|title|timeouts|url|waits|xpath))+)$", keys_string)
             if not m:
-                raise RuntimeError(f"invalid {directive} syntax {args}")
+                raise RuntimeError(f"invalid {directive} syntax {arg}")
             keys = keys_string.split(",")
             '''
             directive: 'print' vs 'debug...'

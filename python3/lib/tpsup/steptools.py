@@ -1,4 +1,5 @@
 import re
+from pprint import pformat
 
 test_input = '''
 step1=1+2
@@ -14,6 +15,7 @@ step4='step4 repeats'
 
 step5='there is # in the string for step5'
 
+# multi-line value can be quoted either from key or value side.
 step6="this is
 multiple lines
 step6"
@@ -29,18 +31,31 @@ step7"
 # empty step
 step9=""
 
-# allow escaped quotes
+# allow escaped quotes. note there is only a single escape char below.
 step10='there can be a \\' in step10'
 step11="there can be a \\" in step11"
 
+# value that contains quotes.
 "step12='single quote should be preserved in step12'"
 'step13="double quote should be preserved in step13"'
+
+# steps without values.
+step14
+
+# quoted step without value.
+"step15"
+
+# multiple steps without values.
+step16 "step17" step18 'step19'
+
+# step with empty value, not the same as no step value.
+step20=''
 
 # basically the steps should be able to be accepted by bash or batch.
 
 '''
 
-# a function to parse the above steps into an array of key-value pairs.
+# a function to parse the above steps into an array of dict of key-value pairs.
 # use regular expression to parse each step.
 # because we need to handle escaped quotes, and multi-line strings, 
 # we need to parse 1 step at a time.
@@ -82,7 +97,7 @@ def parse_steps(input: str, **opt) -> list:
                 seen_comment = False
             if not input:
                 break  
-            
+
         if not input:
             break      
 
@@ -98,17 +113,23 @@ def parse_steps(input: str, **opt) -> list:
                     esc = True
                 elif input[i] == quote:
                     # found the matching quote
-                    step = input[:i+1]
+                    step_string = input[:i+1]
 
                     # remove the surrounding quotes
-                    step = step[1:-1]
+                    step_unquoted = step_string[1:-1]
                     
                     # break the step into key and value
-                    k, v = step.split('=', 1)
+                    k, v, *_ = step_unquoted.split('=', 1) + [None]
 
-                    steps.append((k, v))
+                    s = {
+                        'cmd': k,
+                        'arg': v,
+                        'original': step_string,
+                        }
+
+                    steps.append(s)
                     if debug:
-                        print(f"step={step}, k={k}, v={v}")
+                        print(f"step={step_string}, parsed={pformat(s)}")
 
                     # set input to the rest of the string
                     input = input[i+1:]
@@ -117,16 +138,42 @@ def parse_steps(input: str, **opt) -> list:
                 raise RuntimeError(f"unmatched quote in input: {input}")
         else:
             # step string does not start with a quote
-            # we need to find the first '='
-            m = re.match(r'^([a-zA-Z0-9_.:-]+?)=', input)
+            # we need to find the first space or '='
+            # if space, this is a step without value
+            #    eg, break, continue, refresh
+            # if '=', this is a step with value.
+            #    eg, step99=value
+            # because we allow step without value, we cannot allow space around '='.
+            m = re.match(r'^([a-zA-Z0-9_.:-]+?)(\s|=|$)', input)
             if not m:
                 raise RuntimeError(f"no '=' found in input: {input}")
             k = m.group(1)
-            input_old = input
-            input = input[m.end():]
-            if not input:
-               raise RuntimeError(f"no value found for key: {k}, at input: {input_old}")
             
+            step_string = input[:m.end()]
+
+            # move the 'pointer' to the rest of the string after the key
+            input = input[m.end():]
+
+            if not input or m.group(2).isspace():
+               # end of input after key, imply step without value.
+               v = None
+               s = {
+                   'cmd': k,
+                   'arg': v,
+                   'original': step_string,
+               }
+               steps.append(s)
+               if debug:
+                   print(f"step={step_string}, parsed={pformat(s)}")
+
+            if not input:
+               # end of input. done.
+               break
+            elif m.group(2).isspace():
+               # step without value, continue to next step
+               continue
+           
+            # found '=', now input is the rest of the string after '='
             # now we need to find the end of the value
             if input[0] in ('"', "'"):
                 # step value is quoted
@@ -142,8 +189,10 @@ def parse_steps(input: str, **opt) -> list:
                     elif input[i] == quote:
                         # found the matching quote
                         v = input[:i+1]
+                        step_string += v
 
-                        # print(f"v (with quotes) = {v}")
+                        # remove the surrounding quotes
+                        v = v[1:-1]
 
                         input = input[i+1:]
                         break
@@ -158,17 +207,28 @@ def parse_steps(input: str, **opt) -> list:
                     raise RuntimeError(f"no value found for key: {k}, at input: {input}")
                 v = m.group(1)
                 input = input[m.end():]
+                step_string += v
 
-            steps.append((k, v))
+            s = {
+                'cmd': k,
+                'arg': v,
+                'original': step_string,
+            }
+            steps.append(s)
             if debug:
-                print(f"step={k}={v}, k={k}, v={v}")
+                print(f"step={step_string}, parsed={pformat(s)}")
 
     return steps
 
 def main():
-    steps = parse_steps(test_input, debug=1)
-    for k, v in steps:
-        print(f"{k}={v}")
+    steps = parse_steps(test_input)
+    print(f"steps = {pformat(steps)}")
+
+
+    # a step that not ending with a space or newline.
+    test_input2 = "step40"
+    steps2 = parse_steps(test_input2, debug=1)
+    print(f"steps2 = {pformat(steps2)}")
 
 if __name__ == '__main__':
     main()

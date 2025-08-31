@@ -227,8 +227,8 @@ def code(all_cfg, known, **opt):
     print(f']')
 
     # result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
-    driverEnv = all_cfg["resources"]["selenium"]['driverEnv']
-    followEnv = tpsup.locatetools_new.FollowEnv(driverEnv.locate_f, **opt)
+    driverEnv: tpsup.seleniumtools_new.SeleniumEnv = all_cfg["resources"]["selenium"]['driverEnv']
+    followEnv = tpsup.locatetools_new.FollowEnv(driverEnv.locate, **opt)
     result = followEnv.follow(steps, **opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):

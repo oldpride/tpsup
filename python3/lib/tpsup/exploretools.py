@@ -40,7 +40,7 @@ class Explorer:
         self.usage_by_long = {
             'help': {
                 'short': 'h',
-                # can have or not have args
+                # can have or not have arg
                 'usage': '''
                     h
                     h type
@@ -48,7 +48,7 @@ class Explorer:
             },
             'python': {
                 'short': 'py',
-                'need_args': True,
+                'need_arg': True,
                 'usage': '''
                     run a python code.
                     py print("hello world")
@@ -59,14 +59,14 @@ class Explorer:
             },
             'quit': {
                 'short': 'q',
-                'no_args': True,
+                'no_arg': True,
                 'usage': '''
                     q
                 ''',
             },
             'script': {
                 'short': 'sc',
-                'need_args': True,
+                'need_arg': True,
                 'usage': '''
                     sc script.txt
                     script.txt contains multiple commands, one per line.
@@ -79,7 +79,7 @@ class Explorer:
             },
             'steps': {
                 'short': 'st',
-                'no_args': True,
+                'no_arg': True,
                 'usage': '''
                     st
 
@@ -125,9 +125,9 @@ class Explorer:
 
         steps = tpsup.steptools.parse_steps('\n'.join(bigstring), debug=debug)
 
-        for k, v in steps:
-            print(f"running command: '{k}={v}'")
-            result = self.combined_locate(f"{k}={v}", **opt)
+        for s in steps:
+            print(f"running step = {pformat(s)}")
+            result = self.combined_locate(s, **opt)
 
             go_back = result.get('break', False)
             # everytime before we display, we refresh states.
@@ -146,7 +146,7 @@ class Explorer:
         return ret
 
 
-    def run_script_line_by_line(self, script: Union[str, list], **opt):
+    def decoed_run_script_line_by_line(self, script: Union[str, list], **opt):
         '''
         if script is a string, it is a file name.
         if script is a list,   it is a list of steps
@@ -253,12 +253,12 @@ class Explorer:
                     break
                 
 
-    def combined_locate(self, user_input: str, **opt) -> dict:
+    def combined_locate(self, user_input: Union[str, dict], **opt) -> dict:
         '''
         user input is
-            command [args...]
-        - there is 1 single space between command and args.
-        - args can have front and trailing spaces. 
+            command [arg...]
+        - there is 1 single space between command and arg.
+        - arg can have front and trailing spaces. 
         - command can be long or short form.
             t hello world
             type hello world
@@ -267,46 +267,54 @@ class Explorer:
         '''
         ret = self.ret0.copy()
 
-        # split user_input by 1st space or =.
-        command, args, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
-        print(f"command='{command}', args='{args}'")
-        if command in self.usage_by_short:
-            v = self.usage_by_short.get(command, None)
+        if isinstance(user_input, dict):
+            # already parsed
+            cmd = user_input['cmd']
+            arg = user_input['arg']
+        elif isinstance(user_input, str):
+            # split user_input by 1st space or =.
+            # command, arg, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
+            parsed = tpsup.steptools.parse_steps(user_input)
+            cmd = parsed[0]['cmd']
+            arg = parsed[0]['arg']
+        print(f"cmd='{cmd}', arg='{arg}'")
+        if cmd in self.usage_by_short:
+            v = self.usage_by_short.get(cmd, None)
         else:
-            v = self.usage_by_long.get(command, None)
+            v = self.usage_by_long.get(cmd, None)
 
         if v is None:
-            print(f"unknown command '{command}'")
+            print(f"unknown cmd '{cmd}'")
             ret['bad_input'] = True
             return ret
 
         long_cmd = v['long']
 
-        need_args = v.get('need_args', 0)
-        no_args = v.get('no_args', False)
+        need_arg = v.get('need_arg', 0)
+        no_arg = v.get('no_arg', False)
 
-        if need_args and not args:
-            print(f"command '{command}' needs args")
+        if need_arg and not arg:
+            print(f"cmd '{cmd}' needs arg")
             ret['bad_input'] = True
             return ret
-        elif no_args and args:
-            print(f"command '{command}' doesn't need args")
+        elif no_arg and arg:
+            print(f"cmd '{cmd}' doesn't need arg")
             ret['bad_input'] = True
             return ret
 
         if long_cmd == 'script':
-            self.run_script(args)
+            self.run_script(arg)
         elif long_cmd == 'help':
-            if args is not None:
-                if args in self.usage_by_long:
-                    print(f"help for '{args}':")
-                    print(self.usage_by_long[args]['usage'])
-                elif args in self.usage_by_short:
-                    long_name = self.usage_by_short[args]['long']
-                    print(f"help for '{args}' ({long_name}):")
+            if arg is not None:
+                if arg in self.usage_by_long:
+                    print(f"help for '{arg}':")
+                    print(self.usage_by_long[arg]['usage'])
+                elif arg in self.usage_by_short:
+                    long_name = self.usage_by_short[arg]['long']
+                    print(f"help for '{arg}' ({long_name}):")
                     print(self.usage_by_long[long_name]['usage'])
                 else:
-                    print(f"unknown help topic '{args}'")
+                    print(f"unknown help topic '{arg}'")
             else:
                 print("available commands:")
                 for k in sorted(self.usage_by_long.keys()):
@@ -314,9 +322,9 @@ class Explorer:
                     short = v.get('short', k)
                     print(f"{short}-{k}: {v.get('usage', '')}")
         elif long_cmd == 'python':
-            print(f"running python code: {args}")
+            print(f"running python code: {arg}")
             try:
-                exec(args, globals(), locals())
+                exec(arg, globals(), locals())
             except Exception as e:
                 print(f"Exception: {e}")
                 ret['bad_input'] = True
@@ -333,7 +341,7 @@ class Explorer:
                 self.refresh_states_f()
                 self.refreshed = True
         elif long_cmd == 'script':
-            script_file = args
+            script_file = arg
             result = self.run_script(script_file)
             ret.update(result) # update hash (dict) with hash (dict)
         elif long_cmd == 'steps':
@@ -351,7 +359,7 @@ class Explorer:
             result = self.run_script(lines)
             ret.update(result) # update hash (dict) with hash (dict)
         else:
-            result = self.locate_f(long_cmd, args, self.ret0, **opt)
+            result = self.locate_f(long_cmd, arg, self.ret0, **opt)
 
             ret.update(result) # update hash (dict) with hash (dict)
 
