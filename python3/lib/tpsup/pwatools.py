@@ -10,7 +10,7 @@ from tpsup.cmdtools import run_cmd
 from typing import Union
 import tpsup.exploretools
 
-def dump_window(o: Union[WindowSpecification, UIAWrapper]) -> None:
+def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = None) -> None:
     print(f"\ninput's python class name={type(o).__name__}")
 
     d = {
@@ -85,17 +85,45 @@ class PwaEnv:
         self.window_and_child_specs = []
         self.top_window = None
         self.current_window = None
+        self.init_steps = opt.get('init_steps', [])
         
-        # one of these must be provided: app, title_re
-        if not (self.app or self.title_re):
-            raise ValueError("Either app or title_re must be provided")
+        # # one of these must be provided: app, title_re
+        # if not (self.app or self.title_re):
+        #     raise ValueError("Either app or title_re must be provided")
+        
+        self.backend = opt.get('backend', 'uia')
+
+        if not self.app:
+            self.app = Application(
+                # backend="win32", # win32 is the default.
+                # backend="uia", # uia is modern and preferred.
+                backend=self.backend,
+            )
         
     usage = {
+        'start': {
+            'short': 'start',
+            'need_args': True,
+            'usage': '''
+                start=notepad.exe
+                start="C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+                start="C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+                s="C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+                ''',
+        },
+        'connect': {
+            'short': 'conn',
+            'need_args': True,
+            'usage': '''
+                connect with title_re
+                conn=".*tianjunk.*"
+                ''',
+        },
         'child': {
             'short': 'c',
             'need_args': True,
             'usage': '''
-                c 1
+                c=1
                 ''',
         },
         'control_identifiers': {
@@ -134,104 +162,72 @@ class PwaEnv:
             'short': 'ty',
             'need_args': 1,
             'usage': '''
-                ty hello world
-                ty {UP}
-                ty {ENTER}
-                ty {F5}
+                ty=hello
+                ty="hello world"
+                ty={UP}
+                ty={ENTER}
+                ty={F5}
             ''',
         },
     }
        
-    
+    # def start(self, cmd1: str, **opt) -> Application:
+    #     print(f"startup command: {cmd1}")
+    #     # self.app.start(cmd1, wait_for_idle=False)
+    #     self.app.start(cmd1)
+    #     sleep(2)  # wait for the app to start
 
-    def connect(self, **opt) -> Application:
-        debug = opt.get('debug', False)
-        verbose = opt.get('verbose', 0)
-
-        if self.app:
-            return self.app
-
-        backend = opt.get('backend', 'uia')
-
-        cmd1 = opt.get('command1', None)
-        if cmd1:
-            print(f"startup command: {cmd1}")
-            self.app = Application(
-                # backend="win32", # win32 is the default.
-                # backend="uia", # uia is modern and preferred.
-                backend=backend,
-            )
-
-            # self.app.start(cmd1, wait_for_idle=False)
-            self.app.start(cmd1)
-            sleep(2)  # wait for the app to start
-
-            '''
-            app.start("notepad.exe") 
-            app.top_window()
-            error:
-                    in top_window
-                    raise RuntimeError("No windows for that process could be found")
-
-            likely due to notepad spawning a new process for the window. 
-            therefore, if we try-catch this error, then we can use app.connect to connect to the window.
-            '''
-            try:
-                self.top_window = self.app.top_window()
-            except RuntimeError as e:
-                print(f"RuntimeError: {e}")
-                # if the error is "No windows for that process could be found"
-                if "No windows for that process could be found" in str(e):
-                    print(f"seeing error 'No windows for that process could be found', likely due to app spawning a new process for the window.")
-                    print(f"we will try to connect to the window with title_re=\"{self.title_re}\"")
             
-            if self.top_window is None:
-                self.app.connect(title_re=self.title_re, timeout=10)
-                print(f"connected")
-                self.top_window = self.app.top_window() # now it should work
+    #         if self.top_window is None:
+    #                         cmd1 = opt.get('command1', None)
+    #         if cmd1:
+    #             self.start(cmd1, **opt)
+    #             self.app.connect(title_re=self.title_re, timeout=10)
+    #             print(f"connected")
+    #             self.top_window = self.app.top_window() # now it should work
 
-            self.current_window = self.top_window
-        else:
-            # without cmd1, we can only connect to an existing app window.
-            self.app = Application(
-                # backend="win32", # win32 is the default.
-                # backend="uia", # uia is modern and preferred.
-                backend=backend,
-            )
+    #         self.current_window = self.top_window
+    #     else:
+    #         # without cmd1, we can only connect to an existing app window.
+    #         self.app = Application(
+    #             # backend="win32", # win32 is the default.
+    #             # backend="uia", # uia is modern and preferred.
+    #             backend=backend,
+    #         )
 
-            print(f"Connecting app with title_re=\"{self.title_re}\"...")           
-            connected = False
-            try:
-                self.app.connect(title_re=self.title_re, timeout=10)
-                print("connected")
-                connected = True
-            except Exception as e:
-                print(f"Failed to connect to app: {e}")
+    #         print(f"Connecting app with title_re=\"{self.title_re}\"...")           
+    #         connected = False
+    #         try:
+    #             self.app.connect(title_re=self.title_re, timeout=10)
+    #             print("connected")
+    #             connected = True
+    #         except Exception as e:
+    #             print(f"Failed to connect to app: {e}")
 
-            if not connected:
-                # try to start it
-                cmd2 = opt.get('command2', None)
-                if cmd2:
-                    print(f"Starting app with command: {cmd2}")
-                    # run_cmd(cmd2)
-                    self.app.start(cmd2, wait_for_idle=False)
-                    sleep(2) # wait for the app to start
-                    # print(f"connecting app with title_re=\"{title_re}\"...")
-                    # self.app.connect(title_re=self.title_re, timeout=10)
-                else:
-                    print(f"No startup command provided.")
-                    return None
+    #         if not connected:
+    #             # try to start it
+    #             cmd2 = opt.get('command2', None)
+    #             if cmd2:
+    #                 print(f"Starting app with command: {cmd2}")
+    #                 # run_cmd(cmd2)
+    #                 self.app.start(cmd2, wait_for_idle=False)
+    #                 sleep(2) # wait for the app to start
+    #                 # print(f"connecting app with title_re=\"{title_re}\"...")
+    #                 # self.app.connect(title_re=self.title_re, timeout=10)
+    #             else:
+    #                 print(f"No startup command provided.")
+    #                 return None
 
-            self.top_window = self.app.top_window()
-            self.current_window = self.top_window
+    #         self.top_window = self.app.top_window()
+    #         self.current_window = self.top_window
 
-        print(f"\nexplore_app input's python class name={type(self.app).__name__}")            
-        print(f"top_window's python class name={type(self.top_window).__name__}")
+    #     print(f"\nexplore_app input's python class name={type(self.app).__name__}")            
+    #     print(f"top_window's python class name={type(self.top_window).__name__}")
 
-        self.top_window.wait('visible')
-        self.top_window.click_input()  # ensure the window is focused
-        sleep(1)
-        return self.app
+    #     self.top_window.wait('visible')
+    #     self.top_window.click_input()  # ensure the window is focused
+    #     sleep(1)
+    #     return self.app
 
     def get_windowspec_from_uiawrapper(self, u: UIAWrapper) -> WindowSpecification:
         '''
@@ -296,14 +292,14 @@ class PwaEnv:
             for s in current_window_child_specs:
                 self.window_and_child_specs.append( (self.current_window, 'current_window', s) )
 
-    def locate(self, long_cmd: str, args: str, ret0: dict, **opt):
+    def locate(self, long_cmd: str, arg: str, ret0: dict, **opt):
         debug = opt.get('debug', False)
         verbose = opt.get('verbose', 0)
         
         ret = ret0.copy()
 
         if long_cmd == 'child':
-            idx = int(args)
+            idx = int(arg)
             max_child_specs = len(self.window_and_child_specs)
             if idx < 0 or idx >= max_child_specs:
                 print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
@@ -332,17 +328,58 @@ class PwaEnv:
                     # after a successful click, we refresh our control identifiers tree.
                     self.refresh_window_specs()
                     ret['relist'] = True
+        elif long_cmd == "connect":
+            if arg.startswith("title_re="):
+                title_re = arg[len("title_re="):]
+                self.app.connect(title_re=title_re)
+                self.top_window = self.app.top_window()
+                self.current_window = self.top_window
+                self.top_window.wait('visible')
+                self.top_window.click_input()  # ensure the window is focused
+                sleep(1)
+                print(f"connected to window with title_re={title_re}")
+            else:
+                raise ValueError(f"invalid connect arg {arg}, must start with title_re=")
         elif long_cmd == 'control_identifiers':
             if self.current_window is None:
                 print("current_window is None, cannot get control identifiers")
                 ret['bad_input'] = True
             else:
                 try:
-                    ci_string = self.get_control_identifiers(current_window)
+                    ci_string = self.get_control_identifiers(self.current_window)
                     print(f"current_window control identifiers:\n{ci_string}")
                 except pywinauto.findwindows.ElementNotFoundError as e:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                     ret['bad_input'] = True
+        elif long_cmd == 'start':
+            self.app.start(arg)
+            sleep(2) # wait for the app to start
+                    
+            '''
+            app.start("notepad.exe") 
+            app.top_window()
+            error:
+                    in top_window
+                    raise RuntimeError("No windows for that process could be found")
+
+            likely due to notepad spawning a new process for the window. 
+            therefore, if we try-catch this error, then we can use app.connect to connect to the window.
+            '''
+        
+            try:
+                self.top_window = self.app.top_window()
+            except RuntimeError as e:
+                print(f"RuntimeError: {e}")
+                # if the error is "No windows for that process could be found"
+                if "No windows for that process could be found" in str(e):
+                    print(f"seeing error 'No windows for that process could be found', likely due to app spawning a new process for the window.")
+                    print(f"we will try to connect to the window with title_re=\"{self.title_re}\"")
+
+            if self.top_window is not None:
+                self.current_window = self.top_window
+                self.top_window.wait('visible')
+                self.top_window.click_input()  # ensure the window is focused
+                sleep(1)
         elif long_cmd == 'text':
             if self.current_window is None:
                 print("current_window is None, cannot get text")
@@ -359,8 +396,8 @@ class PwaEnv:
             print("current_window is now top_window")
         elif long_cmd == 'type':
             # replace \n with {ENTER}
-            args = args.replace('\n', '{ENTER}')
-            self.current_window.type_keys(args, with_spaces=True, pause=0.05)
+            arg = arg.replace('\n', '{ENTER}')
+            self.current_window.type_keys(arg, with_spaces=True, pause=0.05)
         else:
             print(f"invalid long_cmd {long_cmd}")
             ret['bad_input'] = True
@@ -436,7 +473,11 @@ class PwaEnv:
 
 def explore(**opt):
     pwa = PwaEnv(**opt)
-    pwa.connect(**opt)
+    
+    for step in pwa.init_steps:
+        long_cmd, arg, *_ = step.split('=', 1) + [None]
+        print(f"init step: {long_cmd}={arg}")
+        pwa.locate(long_cmd, arg, {}, **opt)
     pwa.refresh_window_specs(**opt)
 
     explorer = tpsup.exploretools.Explorer(

@@ -432,6 +432,7 @@ class FollowEnv:
 
             if opt['interactive']:
                 while True:
+                    tpsup.interactivetools.hit_enter_to_continue()
                     try:
                         result = self.locate_f(step, **opt)
                         break

@@ -20,14 +20,11 @@ usage = textwrap.dedent("""
 
 examples = textwrap.dedent(f"""
     examples:
-        1:
-            run a notepad in windows, 
-                notepad tianjunk
-            
-            {prog} .*tianjunk.*
-        2:    
-            {prog} -c1 "putty -load wsl" "tianpc2 - PuTTY"
-            {prog} -c2 "putty -load wsl" "tianpc2 - PuTTY"
+        1: test notepad
+            {prog} start="notepad c:/users/tian/tianjunk" connect="title_re=.*tianjunk.*"
+
+        2: test putty
+            {prog} start="putty -load wsl" "type=siteenv{{ENTER}}" quit
     """)
 
 parser = argparse.ArgumentParser(
@@ -35,14 +32,6 @@ parser = argparse.ArgumentParser(
     description=usage,
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
-
-parser.add_argument(
-    # 'pattern', default=None, action='store', help='regex pattern')
-    '-m', dest='MatchPatterns', default=[], action="append", help='extra MatchPatterns')
-
-parser.add_argument(
-    # 'pattern', default=None, action='store', help='regex pattern')
-    '-x', dest='ExcludePatterns', default=[], action="append", help='extra ExcludePatterns')
 
 parser.add_argument(
     'remaining_args',
@@ -57,14 +46,6 @@ parser.add_argument(
 parser.add_argument(
     '-d', '--debug', dest="debug", action='count', default=0,
     help="debug mode. -d -d for more debug information")
-
-parser.add_argument(
-    '-c1', '--command1', dest="command1", action='store', default=None,
-    help="startup command to run before 1st connecting to the app window")
-
-parser.add_argument(
-    '-c2', '--command2', dest="command2", action='store', default=None,
-    help="startup command to run if 1st connecting to the app window failed")
 
 parser.add_argument(
     '-sc', '--script', dest="script", action='store', default=None,
@@ -82,16 +63,14 @@ debug = args['debug']
 if verbose or debug:
     print(f'args={pformat(args)}', file=sys.stderr)
 
-if not args['remaining_args'] or len(args['remaining_args']) != 1:
+if not args['remaining_args']:
     print("wrong number of positional args")
     print(usage)
     print
     print(examples)
     sys.exit(1)
 
-title_re = args['remaining_args'][0]
-args['title_re'] = title_re
-del args['remaining_args']
+args["init_steps"] = args['remaining_args']
 
 if verbose or debug:
     print(f'args={pformat(args)}', file=sys.stderr)

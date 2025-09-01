@@ -1,0 +1,2 @@
+start="notepad c:/users/tian/tiantest.txt" 
+connect="title_re=.*tiantest.*"

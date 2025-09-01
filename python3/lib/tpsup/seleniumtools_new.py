@@ -2340,7 +2340,7 @@ class SeleniumEnv:
             if cmd != 'raw':
                 # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
                 value = value.replace("\t", "    ")
-            result = self.locate(f"code2element='''{value}'''", **opt)
+            result = self.locate_cmd_arg("code2element", f"'{value}'", **opt)
         elif cmd == "clear_attr":
             # even if only capture group, still add *_; other attr would become list, not scalar
             attr = arg
