@@ -379,6 +379,30 @@ def transpose_lists(lists: list, **opt):
         # discards no data if jagged and fills short nested lists with None
         return list(map(list, itertools.zip_longest(*lists, fillvalue=None)))
 
+def quote_string(input: str, **opt) -> str:
+    '''
+    if input has single quote, use double quote to surround it.
+    if input has double quote, use single quote to surround it.
+    if input has both single and double quote, use double quote to surround it and escape the
+    inner double quote.
+    if input has neither single nor double quote, use single quote to surround it.
+    '''
+
+    # input must be a string.
+    if not isinstance(input, str):
+        raise RuntimeError(f"input must be a string, got {type(input)}, input={pformat(input)}")
+    
+    if not input:
+        return "''"  # return two single quotes
+    
+    if "'" in input and '"' in input:
+        # both single and double quote found
+        input = input.replace('"', r'\"')
+        return f'"{input}"'
+    elif "'" in input:
+        return f'"{input}"'
+    else:
+        return f"'{input}'"
 
 def main():
     # def test_code():

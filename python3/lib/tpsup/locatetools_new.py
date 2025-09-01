@@ -317,7 +317,7 @@ class FollowEnv:
             #     # using locator (step) that has side effect: eg, click, send_keys
             #     print(f"follow2: debug_before={step}")
             #     self.locate_f(step, **opt) 
-            self.locate_f('debug_before', **opt)
+            self.locate_f('debug=before', **opt)
 
             if self.delay:
                 print(f"follow2: delay {self.delay} seconds before next step")
@@ -451,9 +451,7 @@ class FollowEnv:
             #     # using locator (step) that has side effect: eg, click, send_keys
             #     print(f"follow2: debug_after={step}")
             #     self.locate_f(step, **opt)
-            self.locate_f('debug_after', **opt)
-
-            # log_FileFuncLine(f"follow2: step={step} debug_after result={pformat(result)}")
+            self.locate_f('debug=after', **opt)
 
             if dryrun:
                 continue

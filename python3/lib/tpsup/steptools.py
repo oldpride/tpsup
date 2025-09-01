@@ -63,6 +63,10 @@ step20=''
 def parse_steps(input: str, **opt) -> list:
     debug = opt.get('debug', 0)
 
+    # input must be a string.
+    if not isinstance(input, str):
+        raise RuntimeError(f"input must be a string, got {type(input)}, input={pformat(input)}")
+
     steps = []
 
     while input:
@@ -146,7 +150,7 @@ def parse_steps(input: str, **opt) -> list:
             # because we allow step without value, we cannot allow space around '='.
             m = re.match(r'^([a-zA-Z0-9_.:-]+?)(\s|=|$)', input)
             if not m:
-                raise RuntimeError(f"no '=' found in input: {input}")
+                raise RuntimeError(f"no step found in input: {pformat(input)}")
             k = m.group(1)
             
             step_string = input[:m.end()]
@@ -220,15 +224,47 @@ def parse_steps(input: str, **opt) -> list:
 
     return steps
 
+test_single_steps = [
+    'refresh',
+    "js=file2element=test.js",
+    "js=console.log('hello world')",
+    '''
+    js=
+    console.log('hello world2')
+    console.log('hello world3')
+    ''',
+]
+def parse_single_step(input: str) -> dict:
+    if not isinstance(input, str):
+        raise RuntimeError(f"input must be a string, got {type(input)}, input={pformat(input)}")
+    
+    # remove leading spaces
+    input = input.lstrip()
+
+    k, v, *_ = input.split('=', 1) + [None]
+    s = {
+        'cmd': k,
+        'arg': v,
+        'original': input,
+    }
+
+    return s
+
+
 def main():
     steps = parse_steps(test_input)
     print(f"steps = {pformat(steps)}")
 
-
+    print()
     # a step that not ending with a space or newline.
     test_input2 = "step40"
     steps2 = parse_steps(test_input2, debug=1)
     print(f"steps2 = {pformat(steps2)}")
+
+    print()
+    for s in test_single_steps:
+        step = parse_single_step(s)
+        print(f"single step: {s} => {pformat(step)}")
 
 if __name__ == '__main__':
     main()

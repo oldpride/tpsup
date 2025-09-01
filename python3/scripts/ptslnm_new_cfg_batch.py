@@ -34,7 +34,7 @@ our_cfg = {
 
     'test_example': f'''
     the expected results are created wehn using http url to test.
-    ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p dump_all="{HOME}/dumpdir"
+    ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p dump=all="{HOME}/dumpdir"
     diff -r ~/dumpdir {TPP3}/expected/ptslnm_test1/dumpdir
     ''',
 
@@ -68,7 +68,7 @@ our_cfg = {
         {{{{prog}}}} any -cq
 
     - has shadows, no iframes, simple pages to test shadows, default dump scope is element, default dump dir is $HOME/dumpdir
-    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump_page="{HOME}/dumpdir" # without locators, dump whole page
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump=page="{HOME}/dumpdir" # without locators, dump whole page
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" "xpath=id('shadow_host')" "shadow" dump # with locators
 
     - has iframes, no shadows
@@ -87,30 +87,30 @@ our_cfg = {
       gv['jsr'] is a global variable to return js variable to python.
         {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "js=document.testvar=777" "js=return document.testvar" "code=print(gv['jsr'])"
 
-    other js directives: js2element, jsfile, jsfile2element, js2print
-        {{{{prog}}}} url=newtab "jsfile2elementprint={TPP3}/ptslnm_js_test_google.js" debug_after=consolelog click sendkey=Enter sleep=3
+    other js directives: js=2element, js=file, js=file2element, js=2print
+        {{{{prog}}}} url=newtab "js=file2elementprint={TPP3}/ptslnm_js_test_google.js" debug=after=consolelog click sendkey=Enter sleep=3
 
     js error should stop locator chain
-        {{{{prog}}}} url=blank "jsfile2elementprint={TPP3}/ptslnm_js_test_throw.js" debug_after=consolelog click sendkey=Enter sleep=3
+        {{{{prog}}}} url=blank "js=file2elementprint={TPP3}/ptslnm_js_test_throw.js" debug=after=consolelog click sendkey=Enter sleep=3
 
     - test using js to locate. js is much faster.
         in shadow, we can only use css selector to locate
         but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir"
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir2" -js
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug=after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir"
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug=after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir2" -js
     diff -r dumpdir dumpdir2 # should be the same
     
     - test dump scope: element, shadow, iframe, page, all
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump_all 
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump=all 
 
     - test go up and down in shadow and iframe
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span top
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug=after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span top
     
     // vs / in xpath:
         // is short path
         / is full path
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 debug_after=url,consolelog,domstack "xpath=//iframe[1]" "iframe" "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]"
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 debug=after=url,consolelog,domstack "xpath=//iframe[1]" "iframe" "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]"
     
     - dump out dynamically generated html too
       note:
@@ -159,7 +159,7 @@ our_cfg = {
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_alert.html" "xpath=//input[@id='fname']" click string=henry tab=1 url_accept_alert=http://google.com sleep=1
     
     - test clear text field
-    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" "xpath=//textarea[id('message')]" click clear_text code2element='f"abc{{1+1}}"' sleep=10
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" "xpath=//textarea[id('message')]" click clear_text code=2element='f"abc{{1+1}}"' sleep=10
 
     notes for windows cmd.exe, 
         double quotes cannot be escaped, 

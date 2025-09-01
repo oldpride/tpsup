@@ -2,7 +2,7 @@
 
  "xpath=/html[1]/body[1]/iframe[1]" "iframe"  # two steps in one line
 
- debug_after=url,consolelog 
+ debug=after=url,consolelog 
 
  "xpath=id('shadow_host')" "shadow" 
  

@@ -43,7 +43,7 @@ class Explorer:
                 # can have or not have arg
                 'usage': '''
                     h
-                    h type
+                    h=type
                 ''',
             },
             'python': {
@@ -51,10 +51,10 @@ class Explorer:
                 'need_arg': True,
                 'usage': '''
                     run a python code.
-                    py print("hello world")
-                    py dump_window(current_window)
-                    py print(dir(current_window))
-                    py print(current_window.__dict__)
+                    py=print("hello world")
+                    py=dump_window(current_window)
+                    py=print(dir(current_window))
+                    py=print(current_window.__dict__)
                 ''',
             },
             'quit': {
@@ -68,13 +68,13 @@ class Explorer:
                 'short': 'sc',
                 'need_arg': True,
                 'usage': '''
-                    sc script.txt
+                    sc=script.txt
                     script.txt contains multiple commands, one per line.
                     eg:
-                    sc myscript.txt
-                    where myscript.txt contains:
-                    c 9
-                    c 30
+                    sc=mymodule.py
+                    where mymodule.py contains:
+                    c=9
+                    c=30
                     ''',
             },
             'steps': {
@@ -87,8 +87,8 @@ class Explorer:
                     end with END or ^D (Unix) or ^Z (Windows).
                     example:
                         st
-                        c 9
-                        c 30
+                        c=9
+                        c=30
                         END
                 ''',
             },
