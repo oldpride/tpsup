@@ -6,7 +6,7 @@ import pywinauto
 from pywinauto.application import Application, WindowSpecification
 from pywinauto.controls.uiawrapper import UIAWrapper
 from tpsup.cmdtools import run_cmd
-import tpsup.exploretools
+import tpsup.exploretools_deco
 
 from typing import Union
 

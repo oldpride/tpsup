@@ -974,5 +974,6 @@ if [[ $- == *i* ]]; then
    # fi
 fi
 
+paa () { ( set -x; puttyalive auto; ) }
 tpa () { ( set -x; termpos auto; ) }
 tpr () { ( set -x; termpos resetall; ) }

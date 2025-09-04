@@ -1,4 +1,5 @@
 import io
+from pprint import pformat
 import re
 import sys
 from time import sleep
@@ -8,7 +9,9 @@ from pywinauto.controls.uiawrapper import UIAWrapper
 from tpsup.cmdtools import run_cmd
 
 from typing import Union
-import tpsup.exploretools
+import tpsup.exploretools_deco
+import tpsup.locatetools_new
+from tpsup.logbasic import log_FileFuncLine
 
 def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = None) -> None:
     print(f"\ninput's python class name={type(o).__name__}")
@@ -74,8 +77,6 @@ def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = No
             print(f"{k}'s child window={w}, title={w.window_text()}, python={type(w).__name__}, class_name={w.class_name()}")
 
 
-
-
 class PwaEnv:
     def __init__(self, 
                  **opt):
@@ -83,9 +84,9 @@ class PwaEnv:
         self.app: Application = opt.get('app', None)
         self.title_re: str = opt.get('title_re', None)
         self.window_and_child_specs = []
-        self.top_window = None
-        self.current_window = None
-        self.init_steps = opt.get('init_steps', [])
+        self.top_window: WindowSpecification = None
+        self.current_window: WindowSpecification = None
+        # self.init_steps = opt.get('init_steps', [])
         
         # # one of these must be provided: app, title_re
         # if not (self.app or self.title_re):
@@ -100,9 +101,13 @@ class PwaEnv:
                 backend=self.backend,
             )
         
-    usage = {
+        self.locate = tpsup.locatetools_new.Locator(
+            locate_cmd_arg=self.locate_cmd_arg,
+            locate_dict=self.locate_dict,
+        ).locate
+
+    locate_usage_by_cmd = {
         'start': {
-            'short': 'start',
             'need_args': True,
             'usage': '''
                 start=notepad.exe
@@ -134,8 +139,15 @@ class PwaEnv:
                 ci
             ''',
         },
+        'list': {
+            'short': 'l',
+            'no_args': True,
+            'usage': '''
+                list the child windows of the top window and current window
+                l
+            ''',
+        },
         'refresh': {
-            'short': 'r',
             'no_args': True,
             'usage': '''
                 refresh the child window list
@@ -143,7 +155,6 @@ class PwaEnv:
             ''',
         },
         'text': {
-            'short': 'tx',
             'no_args': True,
             'usage': '''
                 get the text of the current window
@@ -151,7 +162,6 @@ class PwaEnv:
             ''',
         },
         'top' : {
-            'short': 'top',
             'no_args': True,
             'usage': '''
                 get the top window
@@ -170,64 +180,6 @@ class PwaEnv:
             ''',
         },
     }
-       
-    # def start(self, cmd1: str, **opt) -> Application:
-    #     print(f"startup command: {cmd1}")
-    #     # self.app.start(cmd1, wait_for_idle=False)
-    #     self.app.start(cmd1)
-    #     sleep(2)  # wait for the app to start
-
-            
-    #         if self.top_window is None:
-    #                         cmd1 = opt.get('command1', None)
-    #         if cmd1:
-    #             self.start(cmd1, **opt)
-    #             self.app.connect(title_re=self.title_re, timeout=10)
-    #             print(f"connected")
-    #             self.top_window = self.app.top_window() # now it should work
-
-    #         self.current_window = self.top_window
-    #     else:
-    #         # without cmd1, we can only connect to an existing app window.
-    #         self.app = Application(
-    #             # backend="win32", # win32 is the default.
-    #             # backend="uia", # uia is modern and preferred.
-    #             backend=backend,
-    #         )
-
-    #         print(f"Connecting app with title_re=\"{self.title_re}\"...")           
-    #         connected = False
-    #         try:
-    #             self.app.connect(title_re=self.title_re, timeout=10)
-    #             print("connected")
-    #             connected = True
-    #         except Exception as e:
-    #             print(f"Failed to connect to app: {e}")
-
-    #         if not connected:
-    #             # try to start it
-    #             cmd2 = opt.get('command2', None)
-    #             if cmd2:
-    #                 print(f"Starting app with command: {cmd2}")
-    #                 # run_cmd(cmd2)
-    #                 self.app.start(cmd2, wait_for_idle=False)
-    #                 sleep(2) # wait for the app to start
-    #                 # print(f"connecting app with title_re=\"{title_re}\"...")
-    #                 # self.app.connect(title_re=self.title_re, timeout=10)
-    #             else:
-    #                 print(f"No startup command provided.")
-    #                 return None
-
-    #         self.top_window = self.app.top_window()
-    #         self.current_window = self.top_window
-
-    #     print(f"\nexplore_app input's python class name={type(self.app).__name__}")            
-    #     print(f"top_window's python class name={type(self.top_window).__name__}")
-
-    #     self.top_window.wait('visible')
-    #     self.top_window.click_input()  # ensure the window is focused
-    #     sleep(1)
-    #     return self.app
 
     def get_windowspec_from_uiawrapper(self, u: UIAWrapper) -> WindowSpecification:
         '''
@@ -292,11 +244,14 @@ class PwaEnv:
             for s in current_window_child_specs:
                 self.window_and_child_specs.append( (self.current_window, 'current_window', s) )
 
-    def locate(self, long_cmd: str, arg: str, ret0: dict, **opt):
+
+    
+    
+    def locate_cmd_arg(self, long_cmd: str, arg: str, **opt):
         debug = opt.get('debug', False)
         verbose = opt.get('verbose', 0)
         
-        ret = ret0.copy()
+        ret = tpsup.locatetools_new.ret0.copy()
 
         if long_cmd == 'child':
             idx = int(arg)
@@ -338,6 +293,7 @@ class PwaEnv:
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
                 print(f"connected to window with title_re={title_re}")
+                self.refresh_window_specs()
             else:
                 raise ValueError(f"invalid connect arg {arg}, must start with title_re=")
         elif long_cmd == 'control_identifiers':
@@ -351,6 +307,10 @@ class PwaEnv:
                 except pywinauto.findwindows.ElementNotFoundError as e:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                     ret['bad_input'] = True
+        elif long_cmd == 'list':
+            self.display_f()
+        elif long_cmd == 'refresh':
+            self.refresh_window_specs()
         elif long_cmd == 'start':
             self.app.start(arg)
             sleep(2) # wait for the app to start
@@ -380,7 +340,9 @@ class PwaEnv:
                 self.top_window.wait('visible')
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
+                self.refresh_window_specs()
         elif long_cmd == 'text':
+            # get the text of the current window
             if self.current_window is None:
                 print("current_window is None, cannot get text")
                 ret['bad_input'] = True
@@ -394,6 +356,8 @@ class PwaEnv:
         elif long_cmd == 'top':
             self.title_recurrent_window = self.top_window
             print("current_window is now top_window")
+            self.current_window = self.top_window
+            self.refresh_window_specs()
         elif long_cmd == 'type':
             # replace \n with {ENTER}
             arg = arg.replace('\n', '{ENTER}')
@@ -404,7 +368,11 @@ class PwaEnv:
         
         return ret
 
-
+    def locate_dict(self, locator: dict, **opt) -> dict:
+        ret = tpsup.locatetools_new.ret0.copy()
+        print("locate_ditct() is not implemented yet")
+        return ret
+        
     def get_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
         '''
         return the list of child specs as strings.
@@ -466,25 +434,75 @@ class PwaEnv:
             print(f"{i}: {which}.{s}")
             i += 1
 
-    # for exploretools.Explorer
-    locate_f = locate
-    refresh_states_f = refresh_window_specs
-    usage_by_long = usage
+# the following is for batch framework - batch.py
+#
+# pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
+# '
+# known' is only available in post_batch, not in pre_batch.
 
-def explore(**opt):
-    pwa = PwaEnv(**opt)
+def pre_batch(all_cfg, known, **opt):
+    # init global variables.
+    # PwaEnv class doesn't need global vars because it is Object-Oriented
+    # but batch.py uses global vars to shorten code which will be eval()/exec()
+    global driverEnv
+
+    log_FileFuncLine(f"running pre_batch()")
+    if all_cfg["resources"]["pwa"].get('driverEnv', None) is None:
+        # driverEnv is created in delayed mode
+        method = all_cfg["resources"]["pwa"]["driver_call"]['method']
+        kwargs = all_cfg["resources"]["pwa"]["driver_call"]["kwargs"]
+        # driverEnv = method(**kwargs)
+        driverEnv = method(**{**kwargs, **opt})
+        # 'host_port' are in **opt
+        all_cfg["resources"]["pwa"]['driverEnv'] = driverEnv
+        log_FileFuncLine(f"driverEnv is created in batch.py's delayed mode")
+
+def post_batch(all_cfg, known, **opt):
+    dryrun = opt.get('dryrun', False)
+    print("")
+    print("--------------------------------")
+
+    if dryrun:
+        print("dryrun, skip post_batch()")
+        return
     
-    for step in pwa.init_steps:
-        long_cmd, arg, *_ = step.split('=', 1) + [None]
-        print(f"init step: {long_cmd}={arg}")
-        pwa.locate(long_cmd, arg, {}, **opt)
-    pwa.refresh_window_specs(**opt)
+    print(f"running post_batch()")
 
-    explorer = tpsup.exploretools.Explorer(
-        locate_f=pwa.locate,
-        display_f=pwa.display_f,
-        refresh_states_f=pwa.refresh_window_specs,
-        app_usage_by_long=pwa.usage,
-        **opt
-    )
-    explorer.explore(**opt)
+    driverEnv = None
+    try: 
+        driverEnv = all_cfg["resources"]["pwa"]["driverEnv"]
+    except Exception as e:
+        print(f"driverEnv is not created, skip cleanup")
+        return
+ 
+
+    # log_FileFuncLine(f"kill chromedriver if it is still running")
+    # tpsup.pstools.kill_procs(procs, **opt)
+
+tpbatch = {
+    'pre_batch': pre_batch,
+    'post_batch': post_batch,
+    "extra_args": {
+        'humanlike': {
+            "switches": ["--humanlike"],
+            "default": False,
+            "action": "store_true",
+            "help": "add some random delay to make it more humanlike",
+        },
+    },
+    "resources": {
+        "pwa": {
+            "method": PwaEnv,
+            # "cfg": {},
+
+            "init_resource": 0,  # delay init until first use. this logic is in batch.py
+        },
+    },
+}
+
+
+def main():
+    pass
+
+if __name__ == "__main__":
+    main()

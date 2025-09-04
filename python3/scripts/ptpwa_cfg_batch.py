@@ -6,7 +6,7 @@ from typing import Union
 import tpsup.envtools
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools_new
+import tpsup.pwatools
 import tpsup.locatetools_new
 import tpsup.pstools
 from pprint import pformat
@@ -18,6 +18,9 @@ TPSUP = os.environ['TPSUP']
 TPSUP = tpsup.envtools.convert_path(TPSUP)
 
 TPP3 = f'{TPSUP}/python3/scripts'
+HTTP_BASE = 'http://localhost:8000'
+FILE_BASE = f'file:///{TPP3}'
+EXAMPLE_BASE = HTTP_BASE
 
 our_cfg = {
     'module': 'tpsup.pwatools',
@@ -26,20 +29,23 @@ our_cfg = {
     #     # 'url'
     # ],
 
-    # 'extra_args': {
-    # },
+    'extra_args': {
+        'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
+    },
 
     'test_example': f'''
     ''',
 
     'usage_example': f'''
+    examples:
+        1: test notepad
+            {{{{prog}}}} start="notepad c:/users/tian/tianjunk" connect="title_re=.*tianjunk.*"
+            {{{{prog}}}} connect="title_re=.*tianjunk.*" -explore
 
-    - notepad example.
-    notepad on windows 11 spawns a new process after start, therefore, we need a connect step.
-    {{{{prog}}}} start="notepad.exe tianjunk" connect="title_re=.*tianjunk.*" 
+        2: test putty
+            {{{{prog}}}} start="putty -load wsl" "type=siteenv{{ENTER}}"
+            {{{{prog}}}} start="putty -load wsl" "type=siteenv{{ENTER}}" -explore
 
-    - putty example,
-    {{{{prog}}}} start="putty -load wsl" type="pwd{{ENTER}}"
     notes for windows cmd.exe, 
         double quotes cannot be escaped, 
         single quote is just a letter, cannot do grouping. 
@@ -53,10 +59,6 @@ our_cfg = {
     },
 }
 
-def pre_batch(all_cfg, known, **opt):
-    # run tpsup.seleniumtools.pre_batch() to set up driver
-    tpsup.seleniumtools_new.pre_batch(all_cfg, known, **opt)
-
 def code(all_cfg, known, **opt):
     # global driver
 
@@ -69,29 +71,13 @@ def code(all_cfg, known, **opt):
     run_js = opt.get('js', 0)
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
+
     allowFile = opt.get('allowFile', 0)
+    explore = opt.get('explore', 0)
 
     # yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
-    steps = []
-
-    locator_chain = known['REMAININGARGS']
-
-    # moved below to seleniumtools
-    # locator_chain = []
-    # for locator in known['REMAININGARGS']:
-    #     # gitbash changes xpath=/html/body to xpath=C:/Program Files/Git/html/body
-    #     # so we need to change it back
-    #     locator2 = re.sub(r'xpath=C:/Program Files/Git', 'xpath=', locator, flags=re.IGNORECASE|re.DOTALL)
-    #     if locator2 != locator:
-    #         print(f'corrected locator from {locator} to {locator2}')
-    #     locator_chain.append(locator2)
-
-    if run_js:
-        locator_chain2 = tpsup.seleniumtools_new.locator_chain_to_locator_chain_using_js(locator_chain, trap=trap, debug=debug)
-        steps.extend(locator_chain2)
-    else:
-        steps.extend(locator_chain)
+    steps = known['REMAININGARGS']
 
     print(f'steps = [')
     for step in steps:
@@ -105,43 +91,17 @@ def code(all_cfg, known, **opt):
             raise Exception(f'unknown step type={step_type}')
     print(f']')
 
-    # result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
-    driverEnv: tpsup.seleniumtools_new.SeleniumEnv = all_cfg["resources"]["selenium"]['driverEnv']
-    followEnv = tpsup.locatetools_new.FollowEnv(driverEnv.locate, **opt)
-    result = followEnv.follow(steps, **opt)
+    driverEnv: tpsup.pwatools.PwaEnv = all_cfg["resources"]["pwa"]['driverEnv']
+    locateEnv = tpsup.locatetools_new.LocateEnv(
+        locate_f=driverEnv.locate, 
+        locate_usage=driverEnv.locate_usage_by_cmd,
+        display_f=driverEnv.display_f,
+        **opt)
+    result = locateEnv.follow(steps, **opt)
+    # if explore mode, enter explore mode at the end of the steps
+    if explore:
+        print("enter explore mode")
+        locateEnv.explore(**opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
-    caller = all_cfg.get('caller', None)
-
-    # if user enter 'example', then we print out usage_example and quit
-    if re.match(r'example$', input[0]):
-        print(all_cfg.get('usage_example', '').replace("{{prog}}", caller))
-        exit(0)
-
-    if re.match(r'(file_example|fe)$', input[0]):
-        print(all_cfg.get('usage_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
-        exit(0)
-    
-    if re.match(r'^(test|test_example)$', input[0]):
-        print(all_cfg.get('test_example', '').replace("{{prog}}", caller))
-        exit(0)
-
-    if re.match(r'(file_test|ft)$', input[0]):
-        print(all_cfg.get('test_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
-        exit(0)
-
-    # if re.match(r'locators$', input[0]):
-    #     for line in tpsup.locatetools_new.decoded_get_defined_locators(locate_func=tpsup.seleniumtools_new.locate_f):
-    #         print(line)
-    #     exit(0)
-
-    if re.match(r'(d|download_chrome)driver$', input[0]):
-        version = input[1] if len(input) > 1 else None
-        tpsup.seleniumtools_new.download_chromedriver(driver_version=version)
-        exit(0)
-
-    if re.match(r'check_setup$', input[0]):
-        tpsup.seleniumtools_new.check_setup(compareVersion=1)
-        exit(0)
-
     return {'REMAININGARGS': input}

@@ -14,7 +14,7 @@ from selenium import webdriver
 from tpsup.human import human_delay
 import tpsup.logtools
 from tpsup.logbasic import log_FileFuncLine
-from tpsup.locatetools_new import handle_break
+import tpsup.locatetools_new
 import tpsup.steptools
 import tpsup.utilbasic
 
@@ -562,7 +562,13 @@ class SeleniumEnv:
             "html", "iframestack", "tag", "text", 
             "title", "timeouts", "url", "waits", "xpath"
         ]
-    
+
+        # self.locate_usage = None
+        self.locate = tpsup.locatetools_new.Locator(
+            locate_cmd_arg=self.locate_cmd_arg,
+            locate_dict=self.locate_dict,
+        ).locate
+
     '''
         iframestack vs domstack
             iframestack is a list of iframe urls starting from current iframe to the top iframe.
@@ -1370,76 +1376,6 @@ class SeleniumEnv:
             print(f"Unsupported path format: {path}. Please use css= or xpath= prefix.")
             return None
 
-    helper = {
-        'de': {
-            'desc': 'dump_element',
-            'func': dump,
-            'args': {
-                'scope': 'element',
-                'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
-                # we delay mkdir, till we really need it
-            },
-            'usage': f'''
-            dump the current element. no arg. output to
-            {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
-            ''',
-        },
-
-        'dp': {
-            'desc': 'dump_page',
-            'func': dump,
-            'args': {
-                'scope': 'page',
-                'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
-                # we delay mkdir, till we really need it
-            },
-            'usage': f'''
-            dump the current page. no arg. output to
-            {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
-            ''',
-        },
-
-        'df': {
-            'desc': 'dump_iframe',
-            'func': dump,
-            'args': {
-                'scope': 'iframe',
-                'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
-                # we delay mkdir, till we really need it
-            },
-            'usage': f'''
-            dump the current page. no arg. output to
-            {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
-            ''',
-        },
-
-        'ds': {
-            'desc': 'dump_page',
-            'func': dump,
-            'args': {
-                'scope': 'shadow',
-                'output_dir': tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0),
-                # we delay mkdir, till we really need it
-            },
-            'usage': f'''
-            dump the current shadow DOM. no arg. output to
-            {tpsup.tmptools.tptmp().get_nowdir(mkdir_now=0)}
-            ''',
-        },
-
-        'p': {
-            'desc': 'find element by path',
-            'func': helper_find_element,
-            'args': {
-                'fromUser': True
-            },
-            'usage': '''
-            test find_element path: xpath or css. Examples
-            p css=#my_element_id
-            p xpath=/a/b
-            ''',
-        },
-    }
 
     def locate_dict(self, step: dict, **opt):
         dryrun = opt.get("dryrun", 0)
@@ -1478,7 +1414,9 @@ class SeleniumEnv:
         #         },
         #     }
 
-        ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
+        # ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
+        ret = tpsup.locatetools_new.ret0.copy()
+        ret['Success'] = False
 
         locator_type = step.get('type', None)
         action = step.get('action', None)
@@ -1748,30 +1686,6 @@ class SeleniumEnv:
         
         return ret
 
-    def locate(self, locator: Union[str, dict], **opt):
-        """
-        locate_f() is a wrapper of locate() and locate_dict()
-        if locator is a string, call locate()
-        if locator is a dict, call locate_dict()
-        """
-        if type(locator) == str:
-            # locator should be a single step. single step will free us from worrying about
-            # quotes in locator string.
-            # for example,
-            #     js=2element=document.querySelector("div[class='myclass']")
-            # if we put it in a multi-step locator string, we need to escape the quotes.
-            parsed = tpsup.steptools.parse_single_step(locator) 
-            if not parsed:
-                raise RuntimeError(f"failed to parse locator string={locator}") 
-            cmd=parsed['cmd']
-            arg=parsed['arg']
-            return self.locate_cmd_arg(cmd, arg, **opt)
-            # return self.locate(locator, **opt)
-        elif type(locator) == dict:
-            return self.locate_dict(locator, **opt)
-        else:
-            raise RuntimeError(f"unsupported locator type {type(locator)}, locator={pformat(locator)}")
-        
 
     def handle_page_change(self, **opt):
         # global locator_driver
@@ -1810,17 +1724,292 @@ class SeleniumEnv:
             print(f"handle_page_change: locator_driver is None, set it to driver")
             self.locator_driver = self.driver
 
-    def locate_cmd_arg(self, cmd: str, arg: str, **opt):
+    locate_usage_by_cmd = {
+        #     cmd that are supported by locate_cmd_arg().
+        #     we listed them here so that they can be programmatically accessed
+        #     by locatetools.py
+
+        "check_procs": {
+            'need_arg': True,
+            'usage': '''
+                check if the processes are running.
+                example:
+                    check_procs=chromedriver
+                ''',
+        },
+        "clear_attr": {
+            'need_arg': True,
+            'usage': '''
+                clear the attribute of the current element.
+                example:
+                    clear_attr=value
+                ''',
+        },
+        "clear_text": {
+            'usage': '''
+                clear the text content of the current element.
+                example:
+                    clear_text
+                ''',
+        },
+        "click": {
+            'siblings': ['tp_click'],
+            'usage': '''
+                click the current element.
+                tp_click() is a wrapper of click() to handle the case when the element is not clickable.
+                example:
+                    click
+                    tp_click
+                ''',
+        },
+        "code": {
+            'need_arg': True,
+            'siblings': ['python', 'exp', 'js'], # siblings are commands that share the same usage.
+            'usage': '''
+                execute python or js code.
+                'code' and 'python' are the same - python code to be executed.
+                'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
+                'js' is javascript code to be executed.
+                example:
+                    code=print("hello world")
+                    python=print("hello world")
+                    js=console.log("hello world")
+                    exp=i==1
+                ''',
+        },
+        "debug": {
+            'usage': '''
+                set or execute debug cmd.
+                example:
+                    debug # execute debug cmd after each step
+                    debug=before # execute debug cmd before each step
+                    debug=after  # execute debug cmd after each step
+                    debug=before=url,title # print url and title before each step
+                ''',
+        },
+        "dump": {
+            'has_dryrun': True,  # the cmd has extra checks in dryrun mode
+            'usage': '''
+                dump the current page source.
+
+                example:
+                    dump    # default is dump element to homedir/dumpdir
+                    dump=C:/users/me/dumpdir
+                    dump=page
+                    dump=iframe
+                    dump=shadow
+                    dump=element
+                    dump=page=C:/users/me/dumpdir
+                ''',
+        },
+        "gone_xpath": {
+            'need_arg': True,
+            'siblings': ['gone_css'],
+            'has_dryrun': True,
+            'usage': '''
+                wait till the element is gone.
+                example:
+                    gone_xpath=//div[@id='myid']
+                    gone_css=#myid
+                ''',
+        },
+        "hover": {
+            'need_arg': True,
+            'usage': '''
+                hover on the last element for a specified seconds.
+                example:
+                    hover=2
+                ''',
+        },
+        "iframe": {
+            'no_arg': True,
+            'siblings': ["tp_iframe", "parentIframe", "top", "tp_top"],
+            'usage': '''
+                switch to the iframe at the last element.
+                example:
+                    iframe
+                    tp_iframe
+                    parentIframe
+                    top
+                    tp_top
+                ''',
+        },
+        'is_empty': {
+            'usage': '''
+                check if the current element is empty.
+                example:
+                    is_empty
+                ''',
+        },
+        'kill_procs': {
+            'need_arg': True,
+            'usage': '''
+                kill the processes.
+                example:
+                    kill_procs=chromedriver
+                ''',
+        },
+        'print': {
+            'need_arg': True,
+            'usage': '''
+                print the argument.
+                example:
+                    print=hello world
+                    print=2element=hello world
+                ''',
+        },
+        'refresh': {
+            'usage': '''
+                refresh the current page.
+                example:
+                    refresh
+                ''',
+        },
+        
+        'select': {
+            'need_arg': True,
+            'usage': '''
+                select an option in a select element by visible text.
+                example:
+                    select=value,1
+                    select=index,0
+                    select=text,hello world
+                ''',
+        },
+        'sendkey': {
+            'need_arg': True,
+            'usage': '''
+                send keys to the current element.
+                example:
+                    sendkey=hello world
+                ''',
+        },
+        'shadow': {
+            'no_arg': True,
+            'usage': '''
+                switch to the shadow root at the last element.
+                example:
+                    shadow
+                ''',
+        },
+        'sleep': {
+            'need_arg': True,
+            'usage': '''
+                sleep for the specified seconds.
+                example:
+                    sleep=2
+                ''',
+        },
+        'start_driver': {
+            'usage': '''
+                start a chrome driver.
+                example:
+                    start_driver
+                ''',
+        },
+        'tab' : {
+            'siblings': ['shifttab'],
+            'need_arg': True,
+            'usage': '''
+                tab the number of times.
+                shifttab is shift+tab.
+                example:
+                    tab=2
+                    shifttab=1
+                ''',
+        },
+        'string': {
+            'siblings': ['text', 'raw_string'],
+            'need_arg': True,
+            'usage': '''
+                send the string to the last element.
+                'string' and 'text' are the same.
+                if not raw_string, tab will be replaced by 4 spaces.
+                example:
+                    string=hello world
+                    text=hello world
+                    raw_string=hello\tworld
+                ''',
+        },
+        'url': {
+            'siblings': ['url_accept_alert'],
+            'need_arg': True,
+            'usage': '''
+                go to the url.
+                example:
+                    url=https://www.example.com
+                ''',
+        },
+        'wait': {
+            'need_arg': True,
+            'usage': '''
+                wait for the specified seconds.
+                there are 4 types of wait
+                example:
+                    wait=10
+                    wait=impl=10
+                    wait=exp=10
+                    wait=page=10
+                    wait=script=10
+                ''',
+        },
+        'xpath': {
+            'need_arg': True,
+            'siblings': ['css', 'click_path', 'click_css'],
+            'has_dryrun': True,
+            'usage': '''
+                find an element by xpath.
+                example:
+                    xpath=//div[@id='myid']
+                ''',
+        },
+    }
+
+    # def parse_usage(self):
+    #     if self.locate_usage is not None:
+    #         # already parsed
+    #         return
+ 
+    #     self.locate_usage = self.locate_usage_by_cmd.copy()
+
+    #     reserved_keys = ['break', 'continue' ]
+
+    #     locate_usage_keys = list(self.locate_usage.keys())
+    #     # get the keys out to avoid dict size change during iteration
+    #     # RuntimeError: dictionary changed size during iteration
+
+    #     for k in locate_usage_keys:
+    #         if k in reserved_keys:
+    #             raise RuntimeError(f"locator {k} in usage is a reserved keyword")
+            
+    #         lu = self.locate_usage[k]
+    #         siblings = lu.get('siblings', [])
+    #         for s in siblings:
+    #             if s in self.locate_usage:
+    #                 raise RuntimeError(f"locator {k}'s sibling {s} is seen multiple times")
+    #             self.locate_usage[s] = lu
+
+    def locate_cmd_arg(self, cmd: str, arg: str, **opt) -> dict:
         dryrun = opt.get("dryrun", 0)
         interactive = opt.get("interactive", 0)
         debug = opt.get("debug", 0)
         verbose = opt.get("verbose", debug)
         isExpression = opt.get("isExpression", 0) # for condtion test, we set isExpression=1, so that we get True/False.
 
-        ret = {'Success': True, 'break_levels': 0, 'continue_levels': 0}
+        # ret = {'Success': True, 'break_levels': 0, 'continue_levels': 0}
+        ret = tpsup.locatetools_new.ret0.copy()
+        ret['Success'] = True
 
-        if dryrun:
-            return ret
+        # self.parse_usage()
+
+        # if cmd not in self.locate_usage:
+        #     raise RuntimeError(f"unsupported locate cmd={cmd}, arg={arg}. Supported cmds are {list(self.locate_usage.keys())}")
+        # usage = self.locate_usage[cmd]
+
+        # if dryrun:
+        #     if not 'has_dryrun' in usage:
+        #         # as the cmd doesn't have extra checks in dryrun mode, we return earlier.
+        #         return ret
 
         # helper = {}  # interactivity helper
         # if interactive:
@@ -1867,12 +2056,8 @@ class SeleniumEnv:
         examples can be found in github test folder
         https://github.com/SeleniumHQ/selenium/tree/trunk/py/test
         '''
-        # copied from old locate()
-        if cmd == "1":
-            pass
-        elif cmd == "check_procs":
-            tpsup.pstools.check_procs(procs)
-
+        if cmd == "check_procs":
+            tpsup.pstools.check_procs(arg)
         elif cmd == "clear_attr":
             # even if only capture group, still add *_; other attr would become list, not scalar
             attr = arg
@@ -2417,8 +2602,7 @@ class SeleniumEnv:
             ret['Success'] = True
         # elif cmd == "js": # see: elif cmd in ['code', 'python', 'exp', 'js']:
         elif cmd == "kill_procs":
-            procs = arg
-            tpsup.pstools.kill_procs(procs)
+            tpsup.pstools.kill_procs(arg)
         # elif cmd == "python": # see: elif cmd in ['code', 'python', 'exp', 'js']:
         elif cmd == "print":
             '''
@@ -2546,15 +2730,8 @@ class SeleniumEnv:
             self.last_element = self.locator_driver.find_element(By.CSS_SELECTOR, ":first-child")
             self.handle_page_change(**opt)
 
-        elif cmd == "start_driver":
-            self.driver = self.get_driver(**opt)
-            self.handle_page_change(**opt)
-        elif cmd in ["raw_string", "string", "text"]:
-            value = arg
-            if cmd != 'raw_string':
-                # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
-                value = value.replace("\t", "    ")
-            result = self.locate_cmd_arg("code", f"2element='{value}'", **opt)
+        
+        
         elif cmd == "select":
             m = re.match(r"(value|index|text),(.+)", arg)
             if not m:
@@ -2648,6 +2825,17 @@ class SeleniumEnv:
             value = arg
             print(f"locate: sleep {value} seconds")
             time.sleep(int(value))
+        elif cmd == "start_driver":
+            self.driver = self.get_driver(**opt)
+            self.handle_page_change(**opt)
+
+        elif cmd in ["string", "text", "raw_string"]:
+            value = arg
+            if cmd != 'raw_string':
+                # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
+                value = value.replace("\t", "    ")
+            result = self.locate_cmd_arg("code", f"2element='{value}'", **opt)
+
         elif cmd == "tab":
             count = int(arg)
             print(f"locate: tab {count} times")         

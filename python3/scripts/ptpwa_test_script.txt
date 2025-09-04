@@ -6,7 +6,7 @@
 #     eg, sc pwaexplore_test_script.txt
 
 # child 10 is Edit menu
-c 10
+c=10
 
 # child 29 is the Date/Time in Edit menu
-c 29
+c=29

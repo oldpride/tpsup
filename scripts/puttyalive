@@ -26,6 +26,9 @@ usage:
    $prog short_tty
 
    $prog check
+   $prog status
+
+   $prog kill
    $prog stop
 
    -v              verbose mode.
@@ -38,8 +41,8 @@ usage:
 
    The script will exits after the command shell process exits (after the next check threshold).
 
-   'stop' is to stop a previous instance of this script running from the same remote ip.
-   'check' is to check if there is an instance of this script running from the same remote ip.
+   'kill' or 'stop' is to stop a previous instance of this script running from the same remote ip.
+   'check' or 'status' is to check if there is an instance of this script running from the same remote ip.
 
    see tpsup/profile for how to run this script automatically when login.
 
@@ -50,9 +53,11 @@ examples:
    $prog /dev/pts/1
    $prog pts/1
 
+   $prog kill
    $prog stop
 
    $prog check
+   $prog status
 END
 
    exit 1;
@@ -96,9 +101,9 @@ if ( $tty eq 'auto' or $tty eq 'check' or $tty eq 'stop' ) {
    $short_tty = $long_tty;
    $short_tty =~ s:^/dev/::;
 
-   if ( $tty eq 'check' ) {
+   if ( $tty eq 'check' or $tty eq 'status' ) {
       $check_only = 1;
-   } elsif ( $tty eq 'stop' ) {
+   } elsif ( $tty eq 'stop' or $tty eq 'kill' ) {
       $stop_only = 1;
    }
 } elsif ( $tty =~ m:^/dev/: ) {
@@ -225,6 +230,13 @@ for my $t (@$ttys_for_this_ip) {
 if ( $check_only or $stop_only ) {
    if ( !$found_puttyalive ) {
       print STDERR "$prog: no instance running from same remote ip.\n";
+   }
+
+   if ($verbose) {
+      my $cmd = "ps auxwww | grep $prog | grep -v grep";
+      print STDERR "$prog: running command: $cmd\n";
+      my $output = `$cmd`;
+      print STDERR $output;
    }
    exit 0;
 }

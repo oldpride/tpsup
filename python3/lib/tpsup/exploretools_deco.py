@@ -145,53 +145,6 @@ class Explorer:
 
         return ret
 
-
-    def decoed_run_script_line_by_line(self, script: Union[str, list], **opt):
-        '''
-        if script is a string, it is a file name.
-        if script is a list,   it is a list of steps
-        '''
-        debug = opt.get('debug', False)
-
-        if isinstance(script, str):
-            with open(script, 'r') as f:
-                lines = f.readlines()
-        elif isinstance(script, list):
-            lines = script
-        else:
-            raise TypeError("script must be a string or a list")
-        
-        ret = self.ret0.copy()
-
-        for line in lines:
-            # remove the trailing newline
-            line = line.rstrip('\n')
-            line = line.rstrip('\r') # in case of Windows line ending
-            
-            # skip empty lines and comment lines
-            if re.match(r'^\s*$', line):
-                continue
-            if re.match(r'^\s*#', line):
-                continue
-
-            print(f"running command: '{line}'")
-            result = self.combined_locate(line, **opt)
-
-            go_back = result.get('break', False)
-            # everytime before we display, we refresh states.
-            # therefore, redisplay and refresh_state are linked.
-            redisplay = result.get('redisplay', False) 
-            
-            if redisplay and self.refresh_states_f:
-                # before redisplaying, we refresh states.
-                self.refresh_states_f(**opt)
-            if go_back:
-                print("script terminated by quit command")
-                break
-
-            ret.update(result) # update hash (dict) with hash (dict)
-
-        return ret    
     
     def get_prompt(self) -> str:
         prompt = ""
@@ -232,13 +185,6 @@ class Explorer:
             self.refreshed = False
 
             while True: # loop until we get valid input
-                # # get user input
-                # if self.prompt_f:
-                #     prompt = self.prompt_f()
-                # else:
-                #     prompt = "command"
-                # user_input = input(f"{prompt}: ")
-
                 prompt = self.get_prompt()
                 user_input = input(f"{prompt}: ")
 
@@ -256,14 +202,12 @@ class Explorer:
     def combined_locate(self, user_input: Union[str, dict], **opt) -> dict:
         '''
         user input is
-            command [arg...]
-        - there is 1 single space between command and arg.
-        - arg can have front and trailing spaces. 
+            command=[arg...]
         - command can be long or short form.
-            t hello world
-            type hello world
-            h type
-            help type 
+            t=hello world
+            type=ello world
+            help
+            help=ype 
         '''
         ret = self.ret0.copy()
 
@@ -274,9 +218,9 @@ class Explorer:
         elif isinstance(user_input, str):
             # split user_input by 1st space or =.
             # command, arg, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
-            parsed = tpsup.steptools.parse_steps(user_input)
-            cmd = parsed[0]['cmd']
-            arg = parsed[0]['arg']
+            parsed = tpsup.steptools.parse_single_step(user_input)
+            cmd = parsed['cmd']
+            arg = parsed['arg']
         print(f"cmd='{cmd}', arg='{arg}'")
         if cmd in self.usage_by_short:
             v = self.usage_by_short.get(cmd, None)

@@ -29,8 +29,9 @@ our_cfg = {
     #     # 'url'
     # ],
 
-    # 'extra_args': {
-    # },
+    'extra_args': {
+        'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
+    },
 
     'test_example': f'''
     the expected results are created wehn using http url to test.
@@ -174,9 +175,9 @@ our_cfg = {
     },
 }
 
-def pre_batch(all_cfg, known, **opt):
-    # run tpsup.seleniumtools.pre_batch() to set up driver
-    tpsup.seleniumtools_new.pre_batch(all_cfg, known, **opt)
+# def pre_batch(all_cfg, known, **opt):
+#     # run tpsup.seleniumtools.pre_batch() to set up driver
+#     tpsup.seleniumtools_new.pre_batch(all_cfg, known, **opt)
 
 def code(all_cfg, known, **opt):
     # global driver
@@ -191,6 +192,7 @@ def code(all_cfg, known, **opt):
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
     allowFile = opt.get('allowFile', 0)
+    explore = opt.get('explore', 0)
 
     # yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
@@ -228,8 +230,15 @@ def code(all_cfg, known, **opt):
 
     # result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
     driverEnv: tpsup.seleniumtools_new.SeleniumEnv = all_cfg["resources"]["selenium"]['driverEnv']
-    followEnv = tpsup.locatetools_new.FollowEnv(driverEnv.locate, **opt)
-    result = followEnv.follow(steps, **opt)
+    locateEnv = tpsup.locatetools_new.LocateEnv(
+        locate_f=driverEnv.locate, 
+        locate_usage=driverEnv.locate_usage_by_cmd,
+        **opt)
+    result = locateEnv.follow(steps, **opt)
+    # if explore mode, enter explore mode at the end of the steps
+    if explore:
+        print("enter explore mode")
+        locateEnv.explore(**opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     caller = all_cfg.get('caller', None)
