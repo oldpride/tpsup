@@ -20,7 +20,7 @@ sub usage {
 
    print "$message\n" if $message;
 
-   print STDERR << "END";
+   print STDERR <<"END";
 usage:
 
    $prog config|cfg  - show configuration
@@ -322,10 +322,9 @@ if ( defined $exclude ) {
    for my $ex (@$excludes) {
       die "missing key='pattern' at ", Dumper($ex) if !exists $ex->{pattern};
 
-      if ( exists $ex->{host} ) {
-         # TODO: rework this logic
-         my $host_pattern = $ex->{host};
-         if ( $hostname !~ /$host_pattern/ && $host_pattern !~ /$hostname/ ) {
+      if ( exists $ex->{host_pattern} ) {
+         my $host_pattern = $ex->{host_pattern};
+         if ( $hostname !~ /$host_pattern/ ) {
             $verbose && print "exclude skipped because hostname='$hostname' and pattern='$host_pattern' not match\n";
             next;
          }
