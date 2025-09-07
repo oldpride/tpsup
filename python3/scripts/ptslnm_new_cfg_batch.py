@@ -230,15 +230,16 @@ def code(all_cfg, known, **opt):
 
     # result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
     driverEnv: tpsup.seleniumtools_new.SeleniumEnv = all_cfg["resources"]["selenium"]['driverEnv']
-    locateEnv = tpsup.locatetools_new.LocateEnv(
-        locate_f=driverEnv.locate, 
-        locate_usage=driverEnv.locate_usage_by_cmd,
-        **opt)
-    result = locateEnv.follow(steps, **opt)
+    # locateEnv = tpsup.locatetools_new.LocateEnv(
+    #     locate_f=driverEnv.locate, 
+    #     locate_usage=driverEnv.locate_usage_by_cmd,
+    #     **opt)
+    # result = locateEnv.follow(steps, **opt)
+    result = driverEnv.follow(steps, **opt)
     # if explore mode, enter explore mode at the end of the steps
     if explore:
         print("enter explore mode")
-        locateEnv.explore(**opt)
+        driverEnv.explore(**opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     caller = all_cfg.get('caller', None)

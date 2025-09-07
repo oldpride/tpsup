@@ -216,6 +216,11 @@ How to use these files:
 '''
 
 class SeleniumEnv:
+    # will be initialized in __init__ using tpsup.locatetools_new.LocateEnv
+    locate: callable = None
+    follow: callable = None
+    explore: callable = None
+
     def __init__(self, host_port: str = 'auto', **opt):
         '''
         ########### start of global variables ###########
@@ -264,11 +269,6 @@ class SeleniumEnv:
         # use the "last_element".
         self.last_element = None
 
-        # run these locators before or after each step
-        self.debuggers = {
-            'before': [],
-            'after': [],
-        }
 
         # dom stack, to keep track of the dom tree: iframe, shadow
         # we update domstack only in locate(), and use it track our 
@@ -564,10 +564,16 @@ class SeleniumEnv:
         ]
 
         # self.locate_usage = None
-        self.locate = tpsup.locatetools_new.Locator(
+        self.locateEnv = tpsup.locatetools_new.LocateEnv(
             locate_cmd_arg=self.locate_cmd_arg,
             locate_dict=self.locate_dict,
-        ).locate
+            locate_usage_by_cmd=self.locate_usage_by_cmd,
+            printables=self.printables,
+        )
+
+        self.locate = self.locateEnv.locate
+        self.follow = self.locateEnv.follow
+        self.explore = self.locateEnv.explore
 
     '''
         iframestack vs domstack
@@ -675,7 +681,7 @@ class SeleniumEnv:
                 if self.debug:
                     os.remove(f)
 
-    def get_driver(self, **opt) -> webdriver.Chrome:
+    def start_driver(self, **opt) -> webdriver.Chrome:
         if not self.driver:
             self.driver = webdriver.Chrome(
                 service=self.driver_service,
@@ -1378,6 +1384,11 @@ class SeleniumEnv:
 
 
     def locate_dict(self, step: dict, **opt):
+        '''
+        locate_dict() is not called directly in this module.
+        It is called by locate() of locatetools_new module.
+        '''
+
         dryrun = opt.get("dryrun", 0)
         interactive = opt.get("interactive", 0)
         debug = opt.get("debug", 0)
@@ -1777,16 +1788,7 @@ class SeleniumEnv:
                     exp=i==1
                 ''',
         },
-        "debug": {
-            'usage': '''
-                set or execute debug cmd.
-                example:
-                    debug # execute debug cmd after each step
-                    debug=before # execute debug cmd before each step
-                    debug=after  # execute debug cmd after each step
-                    debug=before=url,title # print url and title before each step
-                ''',
-        },
+
         "dump": {
             'has_dryrun': True,  # the cmd has extra checks in dryrun mode
             'usage': '''
@@ -1990,6 +1992,10 @@ class SeleniumEnv:
     #             self.locate_usage[s] = lu
 
     def locate_cmd_arg(self, cmd: str, arg: str, **opt) -> dict:
+        '''
+        locate_cmd_arg() is not called directly in this module.
+        It is called by locate() of locatetools_new module.
+        '''
         dryrun = opt.get("dryrun", 0)
         interactive = opt.get("interactive", 0)
         debug = opt.get("debug", 0)
@@ -2259,71 +2265,7 @@ class SeleniumEnv:
                 # hit_enter_to_continue(helper=helper)
 
             self.handle_page_change(**opt)
-        elif cmd == "debug":
-            '''
-            execute before or after each locate() call.
-            examples:
-                with instructions, we set debug steps to be executed before/after each locate() call
-                    debug=before=url,title
-                    debug=after=html,tag
-                without instructions, we execute debug steps before/after each locate() call
-                    debug
-                    debug=before
-                    debug=after
-            note:
-                these debug steps are normally not called by users.
-                they are called by locatortools.py.
-            '''
 
-            # m = re.match(r"(before|after)?(=(.+))?$", arg, re.DOTALL)
-            # if not m:
-            #     raise RuntimeError(f"invalid {cmd} syntax, arg={arg}")
-            
-            # before_after, _, keys_string = m.groups()
-            if not arg:
-                # eg, debug
-                before_after = 'after'
-                keys_string = None
-            elif arg.startswith("before"):
-                # eg, debug=before or debug=before=url,title
-                before_after = 'before'
-                keys_string = arg[6:] # len("before") == 6
-            elif arg.startswith("after"):
-                # eg, debug=after or debug=after=html,tag
-                before_after = 'after'
-                keys_string = arg[5:]
-            else:
-                # eg, debug=url,title
-                before_after = 'after'
-                keys_string = arg
-
-            if not keys_string:
-                if dryrun:
-                    return ret
-                
-                # without instructions, we execute debug steps before/after each locate() call
-                for step in self.debuggers[before_after]:
-                    # we don't care about the return value but we should avoid
-                    # using locator (step) that has side effect: eg, click, send_keys
-                    print(f"follow: debug={before_after}={step}")
-                    self.locate(f"print={step}", **opt)
-            else:
-                if keys_string.startswith('='):
-                    keys_string = keys_string[1:] # remove leading '='
-
-                keys = keys_string.split(",")
-                keys = [k for k in keys if k] # remove empty keys
-
-                # make sure keys are printable
-                for key in keys:
-                    if key not in self.printables:
-                        raise RuntimeError(f"unsupported debug key={key}")
-                    
-                if dryrun:
-                    return ret
-                    
-                print(f"locate: set debug={before_after}={keys}")
-                self.debuggers[before_after] = keys        
         elif cmd in ["dict", "dictfile"]:
             '''
             'dict' is python code of dict locator. see locate_dict() for details.
@@ -2358,7 +2300,9 @@ class SeleniumEnv:
 
             compiled_dict = eval(code)[0]
             print(f"locate: compiled_dict=\n{pformat(compiled_dict)}")
-            ret = self.locate_dict(compiled_dict, **opt)
+            # ret = self.locate_dict(compiled_dict, **opt)
+            result = self.locate(compiled_dict, **opt)
+            ret.update(result)
             self.handle_page_change(**opt)
 
         elif cmd == "dump":
@@ -2826,7 +2770,7 @@ class SeleniumEnv:
             print(f"locate: sleep {value} seconds")
             time.sleep(int(value))
         elif cmd == "start_driver":
-            self.driver = self.get_driver(**opt)
+            self.driver = self.start_driver(**opt)
             self.handle_page_change(**opt)
 
         elif cmd in ["string", "text", "raw_string"]:
@@ -2834,8 +2778,11 @@ class SeleniumEnv:
             if cmd != 'raw_string':
                 # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
                 value = value.replace("\t", "    ")
-            result = self.locate_cmd_arg("code", f"2element='{value}'", **opt)
-
+            result = self.locate({
+                "cmd": "code",
+                "arg": f"2element='{value}'"
+            }, **opt)
+            ret.update(result)
         elif cmd == "tab":
             count = int(arg)
             print(f"locate: tab {count} times")         
@@ -2854,7 +2801,7 @@ class SeleniumEnv:
             print(f"locate: go to url={url}, accept_alert={accept_alert}")
             if not self.driver:
                 # start driver (and browser) only when we really need it
-                self.driver = self.get_driver(**opt)
+                self.driver = self.start_driver(**opt)
             self.tp_get_url(url, accept_alert=accept_alert,
                     interactive=interactive)
             # locator_driver = driver
@@ -2915,7 +2862,7 @@ class SeleniumEnv:
                 return ret
 
             if not self.driver:
-                self.driver = self.get_driver(**opt)
+                self.driver = self.start_driver(**opt)
             if wait_type == 'all' or wait_type == 'expl':
                 # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
                 # explicit wait is done per call (WebDriverWait()).
@@ -4169,7 +4116,7 @@ def test_basic():
 
     # driverEnv = SeleniumEnv("localhost:19999", debug=1)
     driverEnv = SeleniumEnv("auto", debug=0)
-    driver = driverEnv.get_driver()
+    driver = driverEnv.start_driver()
     print(f"driver.title={driver.title}")
 
     url = "http://www.google.com/"
@@ -4372,7 +4319,7 @@ def post_batch(all_cfg, known, **opt):
     
     print(f"running post_batch()")
 
-    driverEnv = None
+    driverEnv: SeleniumEnv = None
     try: 
         driverEnv = all_cfg["resources"]["selenium"]["driverEnv"]
     except Exception as e:
@@ -4384,6 +4331,8 @@ def post_batch(all_cfg, known, **opt):
 
     log_FileFuncLine(f"kill chromedriver if it is still running")
     tpsup.pstools.kill_procs(procs, **opt)
+
+    tpsup.pstools.check_procs(procs, **opt)
 
 tpbatch = {
     'pre_batch': pre_batch,

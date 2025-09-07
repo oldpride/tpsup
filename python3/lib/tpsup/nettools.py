@@ -32,6 +32,9 @@ def wait_tcps_open(host_port_list: list, timeout: int = 60):
             host, port = host_port
         elif hp_type is str:
             host, port = host_port.split(':', 1)
+        elif hp_type is dict:
+            host = host_port['host']
+            port = host_port['port']
         else:
             raise RuntimeError(
                 f"unsupported type of host_port={pformat(host_port)}")

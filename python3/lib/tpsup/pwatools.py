@@ -78,6 +78,10 @@ def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = No
 
 
 class PwaEnv:
+    locate: callable = None
+    follow: callable = None
+    explore: callable = None
+
     def __init__(self, 
                  **opt):
         
@@ -101,10 +105,15 @@ class PwaEnv:
                 backend=self.backend,
             )
         
-        self.locate = tpsup.locatetools_new.Locator(
+        locateEnv = tpsup.locatetools_new.LocateEnv(
             locate_cmd_arg=self.locate_cmd_arg,
             locate_dict=self.locate_dict,
-        ).locate
+            locate_usage_by_cmd=self.locate_usage_by_cmd,
+            display=self.display,
+            **opt)
+        self.locate = locateEnv.locate
+        self.follow = locateEnv.follow
+        self.explore = locateEnv.explore
 
     locate_usage_by_cmd = {
         'start': {
@@ -308,7 +317,7 @@ class PwaEnv:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                     ret['bad_input'] = True
         elif long_cmd == 'list':
-            self.display_f()
+            self.display()
         elif long_cmd == 'refresh':
             self.refresh_window_specs()
         elif long_cmd == 'start':
@@ -428,7 +437,7 @@ class PwaEnv:
             children.append(child_spec)
         return children
     
-    def display_f(self):
+    def display(self):
         i = 0
         for w, which, s in self.window_and_child_specs:
             print(f"{i}: {which}.{s}")

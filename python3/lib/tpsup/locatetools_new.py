@@ -14,29 +14,67 @@ import tpsup.interactivetools
 from tpsup.logbasic import log_FileFuncLine
 import tpsup.steptools
 
+'''
+    user_input vs step vs locator
+        - user_input is what user typed in interactively. so it is a string.
+        - step can be a string or a dict.
+        - locator and step are the same thing.
+
+    locate() vs follow() vs explore()
+        - locate() is to locate a single step (string or dict). 
+        - follow() is to follow a list of steps (string or dict). 
+        - explore() is to interactively explore steps. it deals with user input.
+
+        - locate() can call locate().
+        - follow() can call follow() and locate().
+        - explore() can call explore() and locate().
+
+    locate() vs combined_locate_single_step_user_input() 
+        - locate() only calls caller's locate_cmd_arg() and locate_dict().
+        - combined_locate_single_step_user_input() calls both locatetools' cmd and caller's cmd.
+            locatetools's cmd includes 'help', 'debug', ...
+            caller's cmd, for example, seleniumtools' cmds, 'start_driver', 'xpath', 'click', ...
+'''
+
 ret0 = {
     'Success': True, 
     'bad_input': False, # bad input
-    'break_levels': 0, 
-    'continue_levels': 0
+    'break_levels': 0,   # how many levels of break to upper while-loop
+    'continue_levels': 0, # how many levels of continue to upper while-loop
+    'executed': None, # whether the step was executed. for block step, it may not be executed if condition is not met.
 }
 
 class LocateEnv:
+    locate_cmd_arg: callable = None
+    locate_dict: callable = None
+    display: callable = None
+    locate_usage_by_cmd: dict = None
+    usage_by_long: dict = None
+    usage_by_long_and_short: dict = None
+    
+    printables: list = None
+    debuggers: dict = None
+
     def __init__(self,
-                locate_f: callable,
+                locate_cmd_arg: callable,
+                locate_dict: callable = None,
 
                 # for explore()
-                locate_usage: dict = None,    
-                display_f: callable = None,   
+                locate_usage_by_cmd: dict = None,    
+                display: callable = None,  
+                printables: list = [], 
 
                  **opt):
-
-        if not callable(locate_f):
-            raise RuntimeError(f"locate_f is not callable")
-
-        self.locate_f = locate_f
-        self.display_f = display_f
         
+        debug = opt.get('debug', 0)
+        verbose = opt.get('verbose', 0)
+        
+        self.locate_cmd_arg = locate_cmd_arg
+        self.locate_dict = locate_dict
+
+        self.display = display
+        self.printables = printables
+
         # hope we will never need this
         # self.caller_globals = inspect.currentframe().f_back.f_globals
         # self.caller_locals = inspect.currentframe().f_back.f_locals
@@ -44,7 +82,26 @@ class LocateEnv:
         self.already_checked_syntax = False
         self.delay = 0 # delay between steps
 
+        self.allowed_usage_subkeys = [
+            'has_dryrun',   # whether this cmd has dryrun option to check syntax
+            'need_arg',     # whether this cmd needs an argument
+            'no_arg',       # whether this cmd doesn't take an argument
+            'short',        # short key for the long key
+            'siblings',     # list of sibling keys that share the same usage
+            'usage',        # usage string
+        ]
+
         self.usage_by_long = {
+            "debug": {
+                'usage': '''
+                    set or execute debug cmd.
+                    example:
+                        debug # execute debug cmd after each step
+                        debug=before # execute debug cmd before each step
+                        debug=after  # execute debug cmd after each step
+                        debug=before=url,title # print url and title before each step
+                    ''',
+            },
             'help': {
                 'short': 'h',
                 'usage': '''
@@ -94,20 +151,27 @@ class LocateEnv:
         }
 
         # locate_usage is for explore()
-        if locate_usage:
-            self.usage_by_long.update(locate_usage)
+        if locate_usage_by_cmd:
+            self.usage_by_long.update(locate_usage_by_cmd)
 
         reserved_keys = ['break', 'continue' ]
 
-        locate_usage_keys = list(self.usage_by_long.keys())
+        long_keys = list(self.usage_by_long.keys())
         # get the keys out to avoid dict size change during iteration
         # RuntimeError: dictionary changed size during iteration
 
-        for k in locate_usage_keys:
+        print(f"long_keys={long_keys}")
+
+        for k in long_keys:
             if k in reserved_keys:
-                raise RuntimeError(f"locator {k} in usage is a reserved keyword")
+                raise RuntimeError(f"locator='{k}' in usage is a reserved keyword")
             
-            lu = self.usage_by_long[k]
+            lu:dict = self.usage_by_long[k]
+            
+            # check usage subkeys
+            for subkey in lu.keys():
+                if subkey not in self.allowed_usage_subkeys:
+                    raise RuntimeError(f"locator='{k}' has unsupported usage subkey='{subkey}'")
 
             # add 'siblings' to each locator usage
             siblings = lu.get('siblings', [])
@@ -116,10 +180,20 @@ class LocateEnv:
                     raise RuntimeError(f"locator {k}'s sibling {sibling} is a reserved keyword")
                 if sibling in self.usage_by_long:
                     raise RuntimeError(f"locator {k}'s sibling {sibling} is seen multiple times")
+                # print(f"locator {k} has sibling {sibling}")
                 self.usage_by_long[sibling] = lu.copy()
 
-        self.usage_by_long_and_short = self.usage_by_long.copy()    
+        
+        # if verbose or debug:
+        #     print()
+        #     print(f"usage_by_long={pformat(self.usage_by_long)}")
+
+        # refresh long_keys which now includes siblings
         long_keys = list(self.usage_by_long.keys())
+
+        self.usage_by_long_and_short = self.usage_by_long.copy() 
+
+        # add short keys
         for k in long_keys:
             lu = self.usage_by_long[k]
             short = lu.get('short', None)
@@ -130,6 +204,13 @@ class LocateEnv:
                     raise RuntimeError(f"locator {k} short {short} is seen multiple times")
                 self.usage_by_long_and_short[short] = lu.copy()
                 self.usage_by_long_and_short[short]['short_for'] = k
+
+        # run these locators before or after each step
+        self.debuggers = {
+            'before': [],
+            'after': [],
+        }
+
 
     def follow2(self, steps: list,  **opt) -> dict:
         '''
@@ -423,9 +504,9 @@ class LocateEnv:
             #     # we don't care about the return value but we should avoid
             #     # using locator (step) that has side effect: eg, click, send_keys
             #     print(f"follow2: debug_before={step}")
-            #     self.locate_f(step, **opt) 
+            #     self.locate(step, **opt) 
             if 'debug' in self.usage_by_long:
-                self.locate_f('debug=before', **opt)
+                self.combined_locate_single_step_user_input('debug=before', **opt)
 
             if self.delay:
                 print(f"follow2: delay {self.delay} seconds before next step")
@@ -540,7 +621,7 @@ class LocateEnv:
 
             call_locate = True
             if dryrun:
-                parsed = self.parse_and_check_input(step)
+                parsed = self.parse_and_check_single_step_user_input(step)
                 if not parsed:
                     raise RuntimeError(f"failed to parse step '{step}'")
                 
@@ -556,14 +637,14 @@ class LocateEnv:
                     while True:
                         tpsup.interactivetools.hit_enter_to_continue()
                         try:
-                            result = self.locate_f(step, **opt)
+                            result = self.combined_locate_single_step_user_input(step, **opt)
                             break
                         except Exception as e:
                             print(e)
                             # setting step_count to 0 is to make interactive mode to single step.
                             tpsup.interactivetools.nonstop_step_count = 0   
                 else:
-                    result = self.locate_f(step, **opt)
+                    result = self.combined_locate_single_step_user_input(step, **opt)
 
             # log_FileFuncLine(f"follow2: step={step} result={pformat(result)}")
 
@@ -572,9 +653,9 @@ class LocateEnv:
             #     # we don't care about the return value but we should avoid
             #     # using locator (step) that has side effect: eg, click, send_keys
             #     print(f"follow2: debug_after={step}")
-            #     self.locate_f(step, **opt)
+            #     self.locate(step, **opt)
             if 'debug' in self.usage_by_long:
-                self.locate_f('debug=after', **opt)
+                self.combined_locate_single_step_user_input('debug=after', **opt)
 
             if dryrun:
                 continue
@@ -615,6 +696,7 @@ class LocateEnv:
 
     def follow(self, steps: list, **opt) -> dict:
         dryrun = opt.get('dryrun', 0)
+        verbose = opt.get('verbose', 0)
 
         ret = ret0.copy()
 
@@ -630,6 +712,9 @@ class LocateEnv:
             opt2['interactive'] = 0
             opt2['verbose'] = 0
 
+            if verbose:
+                print()
+                print(f"usage_by_long_and_short={pformat(self.usage_by_long_and_short)}")
             print()
             print(f'follow: begin checking syntax')
             print(f"----------------------------------------------")
@@ -650,13 +735,15 @@ class LocateEnv:
         # neither True or False.  In this case, we want to know the condition test failed.
         debug = opt.get('debug', 0)
         dryrun = opt.get('dryrun', False)
-        ret_init = {'Success': False, 'break_levels':0, 'continue_levels': 0, 'executed': None, 
-                    # 'element': None
-                    }
+        # ret_init = {'Success': False, 'break_levels':0, 'continue_levels': 0, 'executed': None, 
+        #             # 'element': None
+        #             }
 
         if blockstart == 'while':
             while True:
-                ret = ret_init.copy()
+                # ret = ret_init.copy()
+                ret = ret0.copy()
+                ret['Success'] = False
 
                 result = self.if_block(negation, condition, block, **opt)
 
@@ -711,7 +798,9 @@ class LocateEnv:
                     # noramlly if non-control-block failed, an exception is raised.
                     break
         elif blockstart == 'if':
-            ret = ret_init.copy()
+            # ret = ret_init.copy()
+            ret = ret0.copy()
+            ret['Success'] = False
 
             result=self.if_block(negation, condition, block, **opt)
 
@@ -738,9 +827,11 @@ class LocateEnv:
         dryrun = opt.get('dryrun', False)
         debug = opt.get('debug', 0)
 
-        ret = {'Success': False, 'executed': None, 'break_levels': 0, 'continue_levels': 0, 
-            #    'element': None
-               }
+        # ret = {'Success': False, 'executed': None, 'break_levels': 0, 'continue_levels': 0, 
+        #     #    'element': None
+        #        }
+        ret = ret0.copy()
+        ret['Success'] = False
 
         steps_by_type = split_by_else(block, **opt)
      
@@ -754,7 +845,7 @@ class LocateEnv:
             # we should catch exception here, because the condition may fail with exception
             # and it should not be fatal
             try:
-                condition_result = self.locate_f(condition, isExpression=True, **opt)
+                condition_result = self.locate(condition, isExpression=True, **opt)
             except Exception as e:
                 # we want to catch exception=unsupported 'locator=nosuch=1' in dryrun mode, so that 
                 # we can catch syntax error in the condition.
@@ -804,7 +895,8 @@ class LocateEnv:
                 ret['executed'] = to_execute_block
         else:
             # dryrun, for syntax check
-            self.locate_f(condition, isExpression=True, **opt)
+            # self.combined_locate_single_step_user_input(condition, isExpression=True, **opt)
+            self.follow2([condition], isExpression=True, **opt)
             self.follow2(steps_by_type['before-else'], **opt)
 
             if steps_by_type['after-else']:
@@ -823,16 +915,17 @@ class LocateEnv:
         prompt += " -- Enter command: "
         return prompt
 
-    def parse_and_check_input(self, user_input: str) -> dict:
+    def parse_and_check_single_step_user_input(self, user_input: str) -> dict:
         '''
-        parse user input and check it against usage_by_long_and_short
+        parse user input and check it against usage_by_long_and_short.
+        the user_input is a single-step locator.
         '''
         # split user_input by 1st space or =.
         # command, arg, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
         parsed = tpsup.steptools.parse_single_step(user_input)
         cmd = parsed['cmd']
         arg = parsed['arg']
-        print(f"cmd='{cmd}', arg='{arg}'")
+        # print(f"cmd='{cmd}', arg='{arg}'")
         if not cmd in self.usage_by_long_and_short:
             print(f"unknown command '{cmd}'")
             return None
@@ -873,19 +966,26 @@ class LocateEnv:
 
     def explore(self, **opt):
         '''
-        explore interactively
+        explore interactively.
+
+        explore() deals with user input only.
+
+        user_input vs step vs locator
+            - user_input is what user typed in interactively. so it is a string.
+            - step can be a string or a dict.
+            - locator and step are the same thing.
         '''
         prompt = self.get_prompt()
 
         while True:
-            if self.display_f:
-                self.display_f()
+            if self.display:
+                self.display()
 
             while True:
                 user_input = input(f"{prompt}: ")
 
-                # result = self.locate_f(user_input, **opt)
-                result = self.combined_locate(user_input, **opt)
+                # result = self.locate(user_input, **opt)
+                result = self.combined_locate_single_step_user_input(user_input, **opt)
 
                 if result['break_levels']:
                     print(f"explore: break_levels={result['break_levels']}, bye")
@@ -894,10 +994,62 @@ class LocateEnv:
                 if not result['bad_input']:
                     break
 
+    def locate(self, locator: Union[str, dict], **opt):
+        """
+        locate() is a wrapper of locate_cmd_arg() and locate_dict().
+        this function only handles single-step locator.
+            if locator is a string, call locate_cmd_arg()
+            if locator is a dict, call locate_dict()
+        """
+        dryrun = opt.get('dryrun', False)
 
-    def combined_locate(self, user_input: str, **opt) -> dict:
+        if type(locator) == str:
+            # we only expect single-step locator here. 
+            # single step frees us from worrying aboutquotes in locator string.
+            # for example,
+            #     js=2element=document.querySelector("div[class='myclass']")
+            # Had we have it in a multi-step locator string, we would have needed to escape the quotes.
+            # That would have been a pain.
+
+            parsed = tpsup.steptools.parse_single_step(locator)
+            if not parsed:
+                raise RuntimeError(f"failed to parse locator string={locator}") 
+            cmd=parsed['cmd']
+            arg=parsed['arg']
+
+            # print(f"locate_cmd_arg: cmd={cmd}, arg={arg}")
+            if dryrun:
+                return ret0.copy()
+            return self.locate_cmd_arg(cmd, arg, **opt)
+        elif type(locator) == dict:
+            if 'cmd' in locator and 'arg' in locator:
+                # print(f"locate_cmd_arg: locator={pformat(locator)}")
+                if dryrun:
+                    return ret0.copy()
+                return self.locate_cmd_arg(locator['cmd'], locator['arg'], **opt)
+            elif self.locate_dict:
+                # print(f"locate_dict: locator={pformat(locator)}")
+                if dryrun:
+                    return ret0.copy()
+                return self.locate_dict(locator, **opt)
+            else:
+                raise RuntimeError(f"locate_dict function is not defined, cannot handle locator={pformat(locator)}")
+        else:
+            raise RuntimeError(f"unsupported locator type={type(locator)}, locator={pformat(locator)}")
+
+    def combined_locate_single_step_user_input(self, user_input: str, **opt) -> dict:
         '''
-        combined locate_f and handle common steps
+        combined locatetools locate cmds and the callers' locate cmds.
+        for example,
+            'debug', 'help' are defined in locatetools,
+            'start_driver', 'xpath', 'click' are defined in callers (seleniumtools).
+
+        this function only handles single-step user_input.
+
+        user_input vs step vs locator
+            - user_input is what user typed in interactively. so it is a string.
+            - step can be a string or a dict.
+            - locator and step are the same thing.
 
         user input is
             command=[arg...]
@@ -914,16 +1066,77 @@ class LocateEnv:
         
         # split user_input by 1st space or =.
         # command, arg, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
-        parsed = self.parse_and_check_input(user_input)
+        parsed = self.parse_and_check_single_step_user_input(user_input)
         # print(f"parsed input: {pformat(parsed)}")
         if not parsed:
             ret['bad_input'] = True
             return ret
-        cmd = parsed['cmd']
-        arg = parsed['arg']
-        user_input = parsed['updated_user_input']
+        cmd:str = parsed['cmd']
+        arg:str = parsed['arg']
+        user_input:str = parsed['updated_user_input']
 
-        if cmd == 'help':
+        if 1 == 2:
+            pass
+        elif cmd == "debug":
+            '''
+            execute before or after each locate() call.
+            examples:
+                with instructions, we set debug steps to be executed before/after each locate() call
+                    debug=before=url,title
+                    debug=after=html,tag
+                without instructions, we execute debug steps before/after each locate() call
+                    debug
+                    debug=before
+                    debug=after
+            note:
+                these debug steps are normally not called by users.
+                they are called by locatortools.py.
+            '''
+
+            # m = re.match(r"(before|after)?(=(.+))?$", arg, re.DOTALL)
+            # if not m:
+            #     raise RuntimeError(f"invalid {cmd} syntax, arg={arg}")
+            
+            # before_after, _, keys_string = m.groups()
+            if not arg:
+                # eg, debug
+                before_after = 'after'
+                keys_string = None
+            elif arg.startswith("before"):
+                # eg, debug=before or debug=before=url,title
+                before_after = 'before'
+                keys_string = arg[6:] # len("before") == 6
+            elif arg.startswith("after"):
+                # eg, debug=after or debug=after=html,tag
+                before_after = 'after'
+                keys_string = arg[5:]
+            else:
+                # eg, debug=url,title
+                before_after = 'after'
+                keys_string = arg
+
+            if not keys_string:                
+                # without instructions, we execute debug steps before/after each locate() call
+                for step in self.debuggers[before_after]:
+                    # we don't care about the return value but we should avoid
+                    # using locator (step) that has side effect: eg, click, send_keys
+                    print(f"follow: debug={before_after}={step}")
+                    self.locate(f"print={step}", **opt)
+            else:
+                if keys_string.startswith('='):
+                    keys_string = keys_string[1:] # remove leading '='
+
+                keys = keys_string.split(",")
+                keys = [k for k in keys if k] # remove empty keys
+
+                # make sure keys are printable
+                for key in keys:
+                    if key not in self.printables:
+                        raise RuntimeError(f"unsupported debug key={key}")
+                    
+                print(f"locate: set debug={before_after}={keys}")
+                self.debuggers[before_after] = keys        
+        elif cmd == 'help':
             if arg is not None:
                 if arg in self.usage_by_long_and_short:
                     print(f"help for '{arg}':")
@@ -933,7 +1146,7 @@ class LocateEnv:
             else:
                 print("available commands:")
                 for k in sorted(self.usage_by_long.keys()):
-                    v = self.usage_by_long[k]
+                    v: dict = self.usage_by_long[k]
                     short = v.get('short', k)
                     print(f"{short}-{k}: {v.get('usage', '')}")
         elif cmd == "steps_txt":
@@ -978,8 +1191,9 @@ class LocateEnv:
             print(f"you entered:\n{one_string}")
             result = self.run_script(one_string)
             ret.update(result) # update hash (dict) with hash (dict)
+
         else:
-            result = self.locate_f(user_input, **opt)
+            result = self.locate(user_input, **opt)
             ret.update(result) # update hash (dict) with hash (dict)
 
         return ret
@@ -1022,43 +1236,15 @@ class LocateEnv:
         ret.update(result) # update hash (dict) with hash (dict)
         return ret
 
-class Locator:
-    '''
-    Locator class is a wrapper of locate_cmd_arg() and locate_dict()
-    '''
-    def __init__(self, locate_cmd_arg: callable, locate_dict: callable):
-        self.locate_cmd_arg = locate_cmd_arg
-        self.locate_dict = locate_dict
-        
-    def locate(self, locator: Union[str, dict], **opt):
-        """
-        locate() is a wrapper of locate_cmd_arg() and locate_dict()
-        if locator is a string, call locate_cmd_arg()
-        if locator is a dict, call locate_dict()
-        """
-        if type(locator) == str:
-            # locator should be a single step. single step will free us from worrying about
-            # quotes in locator string.
-            # for example,
-            #     js=2element=document.querySelector("div[class='myclass']")
-            # if we put it in a multi-step locator string, we need to escape the quotes.
+# class Locator:
+#     '''
+#     Locator class is a wrapper of locate_cmd_arg() and locate_dict()
+#     '''
+#     def __init__(self, locate_cmd_arg: callable, locate_dict: callable):
+#         self.locate_cmd_arg = locate_cmd_arg
+#         self.locate_dict = locate_dict
 
-            
-            parsed = tpsup.steptools.parse_single_step(locator) 
-            if not parsed:
-                raise RuntimeError(f"failed to parse locator string={locator}") 
-            cmd=parsed['cmd']
-            arg=parsed['arg']
-            
-            return self.locate_cmd_arg(cmd, arg, **opt)
-            # return self.locate(locator, **opt)
-        elif type(locator) == dict:
-            if 'cmd' in locator and 'arg' in locator:
-                return self.locate_cmd_arg(locator['cmd'], locator['arg'], **opt)
-            else:
-                return self.locate_dict(locator, **opt)
-        else:
-            raise RuntimeError(f"unsupported locator type {type(locator)}, locator={pformat(locator)}")
+
 
 def split_by_else(steps: list, **opt):
     '''
@@ -1137,30 +1323,6 @@ def split_by_else(steps: list, **opt):
     }
     
     return steps_by_type       
-    
-
-def decoded_get_defined_locators(locate_func: callable, **opt):
-    '''
-    get list of locators in locate() function.
-    we first get the source code of locate() function, then we extract the locators
-    from 'if' and 'elif' statements.    
-    '''
-    import inspect
-    import re
-
-    source = inspect.getsource(locate_func)
-    # print(f"source={source}")
-
-    locators = []
-    # extract all the 'if' and 'elif' statements from the source code
-    # we use re.DOTALL to match newline
-    for m in re.finditer(r"^    (if|elif) (m :=.+?locator)", source, re.MULTILINE | re.DOTALL):
-
-        locators.append(m.group(2))
-    for m in re.finditer(r"^    (if|elif) (locator == .+?):", source, re.MULTILINE | re.DOTALL):
-        locators.append(m.group(2))
-
-    return locators
 
 
 def handle_break(step: str, **opt):
