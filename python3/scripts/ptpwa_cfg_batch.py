@@ -29,9 +29,9 @@ our_cfg = {
     #     # 'url'
     # ],
 
-    'extra_args': {
-        'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
-    },
+    # 'extra_args': {
+    #     'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
+    # },
 
     'test_example': f'''
     ''',

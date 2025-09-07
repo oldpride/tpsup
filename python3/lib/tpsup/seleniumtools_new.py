@@ -4405,6 +4405,13 @@ tpbatch = {
             'action': 'store_true',
             'help': "allow file:// url; otherwise, we get 'origin' error in console log when switch iframe. but this is security risk. use for testing only",
         },
+
+        'explore': {
+            'switches': ['-explore', '--explore'],
+            'action': 'store_true',
+            'default': False,
+            'help': "enter explore mode at the end of the steps"
+        },
     },
     "resources": {
         "selenium": {

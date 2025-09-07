@@ -1637,6 +1637,12 @@ tpbatch = {
             "action": "store_true",
             "help": f"kill {procs}",
         },
+        'explore': {
+            'switches': ['-explore', '--explore'],
+            'action': 'store_true',
+            'default': False,
+            'help': "enter explore mode at the end of the steps"
+        },
     },
     'resources': {
         'appium': {

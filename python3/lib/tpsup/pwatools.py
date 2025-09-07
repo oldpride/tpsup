@@ -498,7 +498,13 @@ tpbatch = {
             "action": "store_true",
             "help": "add some random delay to make it more humanlike",
         },
-    },
+        'explore': {
+            'switches': ['-explore', '--explore'],
+            'action': 'store_true',
+            'default': False,
+            'help': "enter explore mode at the end of the steps"
+        },
+    },  
     "resources": {
         "pwa": {
             "method": PwaEnv,
