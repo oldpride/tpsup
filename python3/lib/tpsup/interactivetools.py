@@ -9,12 +9,19 @@ usage_by_subject = {
     ''',
 }
 
+
+        
+
 nonstop_step_count = 0
 
 def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None, verbose=0):
     # helper example, see seleniumtools.py
     # helper = {
-    #     'd' : ["dump page", dump, {'driver':driver, 'outputdir_dir' : tmpdir} ],
+    #     'd' : {
+    #           "desc" : "dump page",
+    #           "func" : dump,
+    #           "args" : {'driver':driver, 'outputdir_dir' : tmpdir}
+    #     }
     # }
     global nonstop_step_count
 
@@ -111,3 +118,55 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None
                 print("don't understand, try again")
 
     return ret
+
+class Pause:
+    nonstop_step_count = 0
+
+    usage = '''
+        Enter:       run next step
+        number:      run multiple steps
+        q|quit:      exit program
+        s|skip:      skip current step
+        h|help:      print help
+    '''
+
+    def __init__(self, explore: callable = None, **opt):
+        self.explore = explore
+        self.prompt = f"Enter=1 step; number=steps; q=quit; s=skip; h=help;"
+        if self.explore is not None:
+            self.prompt += " e=explore;"
+            self.usage += "        e|explore:   enter explore mode"
+        self.prompt += " : "
+
+    def pause(self, message:str = None, **opt):
+        if message is not None:
+            print(message)
+
+        while True:  
+            answer = input(self.prompt)
+            answer = answer.strip()
+
+            ret = {'skip': 0}   
+            if answer == "":
+                # if answer is just Enter, then continue
+                return ret
+            elif m := re.match(r"(\d+)$", answer):
+                self.nonstop_step_count = int(answer)
+                return ret
+            elif answer == "q" or answer == "quit":
+                print("quit")
+                quit(0)  # same as exit
+            elif answer == "s" or answer == "skip":
+                print("skip")
+                ret['skip'] = 1
+                return ret
+            elif answer == "h" or answer == "help":
+                print(self.usage)
+            elif answer == "e" or answer == "explore":
+                if self.explore is not None:
+                    print("enter explore mode")
+                    self.explore(**opt)
+                else:
+                    print("no explore function defined")
+            else:
+                print(f"unsupported answer='{answer}', try again")

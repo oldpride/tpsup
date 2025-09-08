@@ -119,6 +119,14 @@ class LocateEnv:
                     exp="1==1" # this is a line of python code that is an expression.
                 ''',
         },
+        'explore': {
+            'no_arg': True,
+            'usage': '''
+                enter explore mode.
+                example:
+                    explore
+                ''',
+        },
         'help': {
             'short': 'h',
             'usage': '''
@@ -277,6 +285,8 @@ class LocateEnv:
         # the current frame's globals and locals
         self.caller_globals = inspect.currentframe().f_back.f_globals
         self.caller_locals = inspect.currentframe().f_back.f_locals
+
+        self.pause = tpsup.interactivetools.Pause(explore=self.explore, **opt).pause
 
     def follow2(self, steps: list,  **opt) -> dict:
         '''
@@ -714,7 +724,8 @@ class LocateEnv:
 
             if interactive:
                 while True:
-                    tpsup.interactivetools.hit_enter_to_continue()
+                    # tpsup.interactivetools.hit_enter_to_continue()
+                    self.pause()
                     try:
                         result = self.locate(step, **opt)
                         break
@@ -1064,11 +1075,14 @@ class LocateEnv:
             while True:
                 user_input = input(f"{prompt}: ")
 
-                result = self.locate(user_input, **opt)
-                # result = self.combined_locate_cmd_arg(user_input, **opt)
+                try:
+                    result = self.locate(user_input, **opt)
+                except Exception as e:
+                    print(f"{e}")
+                    continue
 
                 if result['break_levels']:
-                    print(f"explore: break_levels={result['break_levels']}, bye")
+                    print(f"explore: break_levels={result['break_levels']}, going back")
                     return
 
                 if not result['bad_input']:
@@ -1202,6 +1216,8 @@ class LocateEnv:
             except Exception as e:
                 print(f"eval failed with exception={e}")
                 ret['Success'] = False
+        elif cmd == 'explore':
+            self.explore(**opt)
         elif cmd == 'help':
             if arg is not None:
                 if arg in self.combined_usage_by_long_and_short:

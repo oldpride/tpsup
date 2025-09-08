@@ -221,6 +221,12 @@ class SeleniumEnv:
     follow: callable = None
     explore: callable = None
 
+    printables = [
+        "consolelog", "css", "domstack", "element", 
+        "html", "iframestack", "tag", "text", 
+        "title", "timeouts", "url", "waits", "xpath"
+    ]
+
     def __init__(self, host_port: str = 'auto', **opt):
         '''
         ########### start of global variables ###########
@@ -556,12 +562,6 @@ class SeleniumEnv:
         #     log_FileFuncLine("started driver")
 
         #     self.driver.driverEnv = self  # monkey patching for convenience
-    
-        self.printables = [
-            "consolelog", "css", "domstack", "element", 
-            "html", "iframestack", "tag", "text", 
-            "title", "timeouts", "url", "waits", "xpath"
-        ]
 
         # self.locate_usage = None
         self.locateEnv = tpsup.locatetools_new.LocateEnv(
@@ -1850,8 +1850,10 @@ class SeleniumEnv:
         },
         'print': {
             'need_arg': True,
-            'usage': '''
+            'usage': f'''
                 print the argument.
+
+                available variables: {printables}
                 example:
                     print=hello world
                     print=2element=hello world
