@@ -7,6 +7,8 @@ import time
 from typing import Union
 import tpsup.cmdtools
 import tpsup.envtools
+# from tpsup.exectools import exec_into_globals, multiline_eval
+import tpsup.exectools
 from tpsup.nettools import is_tcp_open
 import tpsup.pstools
 import tpsup.utilbasic
@@ -56,6 +58,9 @@ class LocateEnv:
     caller_printables: list = []
     debuggers: dict = {}
 
+    already_checked_syntax = False # whether we have checked the syntax of all locators
+    delay = 0 # delay in seconds before each step
+
     allowed_usage_subkeys = [
         'has_dryrun',   # whether this cmd has dryrun option to check syntax
         'need_arg',     # whether this cmd needs an argument
@@ -76,6 +81,44 @@ class LocateEnv:
                     debug=before=url,title # print url and title before each step
                 ''',
         },
+        'delay': {
+            'need_arg': True,
+            'usage': '''
+                set delay in seconds before each step.
+                initially, delay=0.
+                example:
+                    delay=5 # set delay to 5 seconds
+                ''',
+        },
+        'exp': {
+            'usage': '''
+                execute python expression which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
+                'exp' is the same as 'code', except that 'exp' expects a True/False result.
+
+                without arg,
+                    enter python code from stdin, end with END
+                with arg,
+                    if arg starts with "file=", then it is a file name that contains python code.
+                    otherwise, it is a line of python code.
+                
+                in any case, the last line should be an expression that returns True/False or equivalent.
+
+                the execution context (namespace) is the caller's context (namespace),
+                example:
+                    exp # enter python code from stdin, end with END
+                        import os
+                        print(os.listdir('.'))
+                        1==1
+                        END
+
+                    exp
+                        file=c:/users/me/exp.py
+                        END
+
+                    exp=file=file.py # this load a file that contains python code, the last line should be an expression.
+                    exp="1==1" # this is a line of python code that is an expression.
+                ''',
+        },
         'help': {
             'short': 'h',
             'usage': '''
@@ -83,8 +126,33 @@ class LocateEnv:
                 example:
                     help
                     h
-                    h steps_py
+                    h=steps_py
             ''',
+        },
+        'python': {
+            'usage': '''
+                run python code.
+                if no arg,
+                    enter python code from stdin, end with END
+                with arg,
+                    if arg starts with "file=", then it is a file name that contains python code.
+                    otherwise, it is a line of python code.
+
+                the execution context (namespace) is the caller's context (namespace),
+                example:
+                    python # enter python code from stdin, end with END
+                        import os
+                        print(os.listdir('.'))
+                        END
+
+                    python
+                        file=c:/users/me
+                        END
+
+                    python=file=file.py # this load a file that contains python code
+
+                    python="print('hello world')" # this is a line of python code
+                    ''',
         },
         'quit': {
             'short': 'q',
@@ -96,32 +164,29 @@ class LocateEnv:
             ''',
         },
         'steps': {
-            'no_arg': True,
             'usage': '''
-                enter steps to follow, end with END
-                example:
-                    file=c:/users/me/steps.txt # this load a file that contains steps
-                    type=pwd{END}
-                    END
+                without arg,
+                    enter steps from stdin, end with END
+                with arg,
+                    if arg starts with "file=", then it is a file name that contains steps.
+                    otherwise, it is a list of steps in string.
 
+                then follow the steps.
+                example:
+                    steps # enter steps from stdin, end with END
+                        file=c:/users/me/steps.txt # this load a file that contains steps
+                        END
+
+                    steps
+                        type=pwd{ENTER}
+                        END
+
+                    steps=file=c:/users/me/steps.txt
+
+                    steps=xpath=/a/b,xpath=/c/d click
             ''',
         },
-        'steps_txt': {
-            'siblings': ['steps_py', 'script'], # siblings are commands that share the same usage.
-            'need_arg': True,
-            'usage': '''
-                file that contains steps
-                    steps_txt=file.txt
-                        this is a text file that contains steps, just like command line.
-                        steps can be in multiple lines.
-                        multiple steps can be in a single line. (we use shell-like syntax)
-                        there can be blank and comment lines (starting with #).
-                    steps_py=file.py
-                        this is a python file that contains steps, but is a python list of steps.
-                    
-                    'script' is an alias of steps_txt
-                ''',
-        },
+        
     }
 
     def __init__(self,
@@ -145,9 +210,6 @@ class LocateEnv:
 
         if printables:
             self.caller_printables = printables
-
-        self.already_checked_syntax = False
-        self.delay = 0 # delay between steps
 
         if locate_usage_by_cmd:
             self.caller_usage_by_cmd = locate_usage_by_cmd
@@ -211,6 +273,10 @@ class LocateEnv:
             'after': [],
         }
 
+        # because we want to eval and exec in caller's context (namespace), we save
+        # the current frame's globals and locals
+        self.caller_globals = inspect.currentframe().f_back.f_globals
+        self.caller_locals = inspect.currentframe().f_back.f_locals
 
     def follow2(self, steps: list,  **opt) -> dict:
         '''
@@ -411,81 +477,81 @@ class LocateEnv:
                             f"expected_blockend={blockend}, block_stack={block_stack}")
                     continue
 
-                if m := re.match(r"\s*steps_(txt|py)=(.+)", step):
-                    '''
-                    file that contains steps
-                        steps_txt=file.txt
-                            this is a text file that contains steps, just like command line.
-                            steps can be in multiple lines.
-                            multiple steps can be in a single line. (we use shell-like syntax)
-                            there can be blank and comment lines (starting with #).
-                        steps_py=file.py
-                            this is a python file that contains steps, but is a python list of steps.
-                    '''
-                    file_type, file_name = m.groups()
+                # if m := re.match(r"\s*steps_(txt|py)=(.+)", step):
+                #     '''
+                #     file that contains steps
+                #         steps_txt=file.txt
+                #             this is a text file that contains steps, just like command line.
+                #             steps can be in multiple lines.
+                #             multiple steps can be in a single line. (we use shell-like syntax)
+                #             there can be blank and comment lines (starting with #).
+                #         steps_py=file.py
+                #             this is a python file that contains steps, but is a python list of steps.
+                #     '''
+                #     file_type, file_name = m.groups()
 
-                    steps2 = []
-                    if file_type == 'txt':
-                        with open(file_name) as fh:
-                            # lines = fh.readlines()
-                            # for line in lines:
-                            #     # skip comment part of line
-                            #     # for example,
-                            #     #     # this is a comment
-                            #     #     click_xpath=/a/b # this is a comment
-                            #     #     css=#c # this is not a comment
-                            #     if m := re.match(r"(.*?)\s(#.*?)", line):
-                            #         # there is a comment at the end of the line; remove it.
-                            #         line = m.group(1)
-                            #     if m := re.match(r"#", line):
-                            #         # comment starts at the beginning of the line; skip the whole line.
-                            #         continue
-                            #     if not line.strip():
-                            #         # empty line; skip it.
-                            #         continue
+                #     steps2 = []
+                #     if file_type == 'txt':
+                #         with open(file_name) as fh:
+                #             # lines = fh.readlines()
+                #             # for line in lines:
+                #             #     # skip comment part of line
+                #             #     # for example,
+                #             #     #     # this is a comment
+                #             #     #     click_xpath=/a/b # this is a comment
+                #             #     #     css=#c # this is not a comment
+                #             #     if m := re.match(r"(.*?)\s(#.*?)", line):
+                #             #         # there is a comment at the end of the line; remove it.
+                #             #         line = m.group(1)
+                #             #     if m := re.match(r"#", line):
+                #             #         # comment starts at the beginning of the line; skip the whole line.
+                #             #         continue
+                #             #     if not line.strip():
+                #             #         # empty line; skip it.
+                #             #         continue
                                 
-                            #     # split the line using shell syntax
-                            #     steps_in_this_line = shlex.split(line)
-                            #     if debug:
-                            #         print(f"follow2: parsed line={line} to {steps_in_this_line}")
-                            #     steps2.extend(steps_in_this_line)
-                            string = fh.read()
-                            steps2 = tpsup.steptools_new.parse_steps(string, debug=debug)
+                #             #     # split the line using shell syntax
+                #             #     steps_in_this_line = shlex.split(line)
+                #             #     if debug:
+                #             #         print(f"follow2: parsed line={line} to {steps_in_this_line}")
+                #             #     steps2.extend(steps_in_this_line)
+                #             string = fh.read()
+                #             steps2 = tpsup.steptools_new.parse_steps(string, debug=debug)
 
-                            print(f"follow2: parsed txt file {file_name} to steps2={steps2}")
-                    else:
-                        # file_type == 'py':
-                        string = None
-                        with open(file_name) as fh:
-                            string = fh.read()
-                        if not string:
-                            print(f"file {file_name} is empty")
-                        else:
-                            try:
-                                steps2 = eval(string)   
-                            except Exception as e:
-                                raise RuntimeError(f"failed to eval file {file_name}: {e}")
+                #             print(f"follow2: parsed txt file {file_name} to steps2={steps2}")
+                #     else:
+                #         # file_type == 'py':
+                #         string = None
+                #         with open(file_name) as fh:
+                #             string = fh.read()
+                #         if not string:
+                #             print(f"file {file_name} is empty")
+                #         else:
+                #             try:
+                #                 steps2 = eval(string)   
+                #             except Exception as e:
+                #                 raise RuntimeError(f"failed to eval file {file_name}: {e}")
                             
-                            # we expect the steps to be a list
-                            if type(steps2) != list:
-                                raise RuntimeError(f"steps in python file {file_name} is not a list")
+                #             # we expect the steps to be a list
+                #             if type(steps2) != list:
+                #                 raise RuntimeError(f"steps in python file {file_name} is not a list")
                             
-                            print(f"follow2: parsed py file {file_name} to steps2={steps2}")
+                #             print(f"follow2: parsed py file {file_name} to steps2={steps2}")
                                 
-                    result = self.follow2(steps2, **opt)
-                    if dryrun:
-                        continue
-                    if not result['Success']:
-                        print(f"follow2: run steps_{file_type}={file_name} failed")
-                        return result
-                    continue
+                #     result = self.follow2(steps2, **opt)
+                #     if dryrun:
+                #         continue
+                #     if not result['Success']:
+                #         print(f"follow2: run steps_{file_type}={file_name} failed")
+                #         return result
+                #     continue
 
-                if m := re.match(r"delay=(\d+)$", step):
-                    delay = int(m.group(1))
-                    print(f"follow2: delay={delay}")
-                    if not dryrun:
-                        self.delay = delay
-                    continue
+                # if m := re.match(r"delay=(\d+)$", step):
+                #     delay = int(m.group(1))
+                #     print(f"follow2: delay={delay}")
+                #     if not dryrun:
+                #         self.delay = delay
+                #     continue
 
                 # there are other string steps that are not related to block, we will handle them later.
             else:
@@ -650,14 +716,14 @@ class LocateEnv:
                 while True:
                     tpsup.interactivetools.hit_enter_to_continue()
                     try:
-                        result = self.handle_one_step(step, **opt)
+                        result = self.locate(step, **opt)
                         break
                     except Exception as e:
                         print(e)
                         # setting step_count to 0 is to make interactive mode to single step.
                         tpsup.interactivetools.nonstop_step_count = 0
             else:
-                result = self.handle_one_step(step, **opt)
+                result = self.locate(step, **opt)
 
             # log_FileFuncLine(f"follow2: step={step} result={pformat(result)}")
 
@@ -927,30 +993,6 @@ class LocateEnv:
                 prompt += f"{k} "
         prompt += " -- Enter command: "
         return prompt
-    
-    def handle_one_step(self, step: Union[str, dict], **opt) -> dict:
-        dryrun = opt.get('dryrun', False)
-
-        '''
-        handle a single step, which can be a string (user_input) or a dict.
-        the user_input's cmd can be from locatetools or the callers.
-        '''
-        if isinstance(step, str):
-            # handle user_input
-            step2 = self.parse_and_check_single_step_user_input(step)
-            if dryrun:
-                return step2.copy()
-
-            return self.combined_locate_cmd_arg(step2['cmd'], step2['arg'], **opt)
-        elif isinstance(step, dict):
-            # handle step dict
-            step2 = step
-        else:
-            raise RuntimeError(f"unsupported step type={type(step)}, step={pformat(step)}")
-        
-        
-        
-        return self.locate(step2, **opt)
 
     def parse_and_check_single_step_user_input(self, user_input: str) -> dict:
         '''
@@ -1141,68 +1183,93 @@ class LocateEnv:
                 keys = [k for k in keys if k] # remove empty keys   
                 # make sure keys are printable
                 for key in keys:
-                    if key not in self.locatetools_printables:
+                    if key not in self.caller_printables:
                         raise RuntimeError(f"unsupported debug key={key}")
                 print(f"locate: set debug={before_after}={keys}")
                 self.debuggers[before_after] = keys        
+        elif cmd == 'delay':
+            self.delay = int(arg)
+        elif cmd == 'exp':
+            if arg is not None:
+                one_string = arg
+            else:
+                one_string = self.get_stdin(**opt)
+            try:
+                # ret['Success'] = tpsup.exectools.multiline_eval(one_string, self.globals(), locals())
+                ret['Success'] = tpsup.exectools.multiline_eval(one_string, 
+                                                                self.caller_globals, 
+                                                                self.caller_locals)
+            except Exception as e:
+                print(f"eval failed with exception={e}")
+                ret['Success'] = False
         elif cmd == 'help':
             if arg is not None:
-                if arg in self.locatetools_usage_by_long_and_short:
+                if arg in self.combined_usage_by_long_and_short:
                     print(f"help for '{arg}':")
-                    print(self.locatetools_usage_by_long[arg]['usage'])
+                    print(self.combined_usage_by_long_and_short[arg]['usage'])
                 else:
                     print(f"unknown help topic '{arg}'")
             else:
                 print("available commands:")
-                for k in sorted(self.locatetools_usage_by_long.keys()):
-                    v: dict = self.locatetools_usage_by_long[k]
+                for k in sorted(self.combined_usage_by_long.keys()):
+                    v: dict = self.combined_usage_by_long[k]
                     short = v.get('short', k)
                     print(f"{short}-{k}: {v.get('usage', '')}")
-        elif cmd == "steps_txt":
-            result = self.run_script(arg)
-            ret.update(result) # update hash (dict) with hash (dict)
-        elif cmd == 'steps_py':
-            print(f"running python code: {arg}")
+        elif cmd == 'python':
+            if arg is not None:
+                one_string = arg
+            else:
+                one_string = self.get_stdin(**opt)
             try:
-                exec(arg, globals(), locals())
+                # exec(one_string, globals(), locals())
+                # result = tpsup.exectools.exec_into_globals(one_string, globals(), locals())
+                result = tpsup.exectools.exec_into_globals(one_string, 
+                                                            self.caller_globals, 
+                                                            self.caller_locals)
+                print(f"result: {result}")
+                if result is not None and isinstance(result, dict) and 'Success' in result:    
+                    ret.update(result) # update hash (dict) with hash (dict)
             except Exception as e:
                 print(f"Exception: {e}")
+                ret['Success'] = False
                 ret['bad_input'] = True
         elif cmd == 'quit':
             print("bye")
             go_back = True
             ret['break_levels'] = 1
-        # elif long_cmd == 'refresh':
-        #     if not self.refresh_states_f:
-        #         print("refresh_states_f is not defined")
-        #         ret['bad_input'] = True
-        #     else:
-        #         print("refreshing the child window list tree...")
-        #         self.refresh_states_f()
-        #         self.refreshed = True
-        # elif long_cmd == 'script':
-        #     script_file = arg
-        #     result = self.run_script(script_file)
-        #     ret.update(result) # update hash (dict) with hash (dict)
         elif cmd == 'steps':
-            print("enter multiple commands, one per line. end with END or ^D (Unix) or ^Z (Windows).")
-            lines = []
-            while True:
-                try:
-                    line = input()
-                    if line == 'END':
-                        break
-                    lines.append(line)
-                except EOFError:
-                    break
-            # print(f"you entered {len(lines)} lines: {lines}")
-            one_string = "\n".join(lines)
-            print(f"you entered:\n{one_string}")
-            result = self.run_script(one_string)
+            if arg is not None:
+                one_string = arg
+            else:
+                one_string = self.get_stdin(**opt)
+
+            result = self.run_steps(one_string)
             ret.update(result) # update hash (dict) with hash (dict)
+        # elif cmd == 'steps_py':
+        #     try:
+        #         exec(arg, globals(), locals())
+        #     except Exception as e:
+        #         print(f"Exception: {e}")
+        #         ret['bad_input'] = True
         else:
             raise RuntimeError(f"unknown locatetools cmd '{cmd}'")
         return ret
+    
+    def get_stdin(self, **opt) -> str:
+        print("Enter multiple lines; end with END or ^D (Unix) or ^Z (Windows).")
+        lines = []
+        while True:
+            try:
+                line = input()
+                if line == 'END':
+                    break
+                lines.append(line)
+            except EOFError:
+                break
+        # print(f"you entered {len(lines)} lines: {lines}")
+        one_string = "\n".join(lines)
+        print(f"you entered:\n{one_string}")
+        return one_string
     
     def combined_locate_cmd_arg(self, cmd:str, arg:str, **opt) -> dict:
         '''
@@ -1227,26 +1294,34 @@ class LocateEnv:
         ret.update(result) # update hash (dict) with hash (dict)
         return ret
 
-    def run_script(self, script: str, **opt) -> dict:
+    def run_steps(self, script: str, **opt) -> dict:
         '''
-        run a script file or a list of steps
+        run a steps file or a list of steps.
+        we didn't name it as run_script because script could mean steps or python script.
+
+        if the string starts with "file=", then it is a file name.
+        otherwise, it is a list of steps in string.
+
+        examples:
+            file=steps.txt
+            xpath=/a/b,xpath=/c/d click
         '''
         ret = ret0.copy()
         
         if not isinstance(script, str):
-            raise RuntimeError(f"run_script: script should be a string, not {type(script)}")
+            raise RuntimeError(f"run_steps: unsupported script type={type(script)}, should be str")
 
         # remove leading spaces
         script = script.lstrip()
         if script.startswith("file="):
             # this is a file name
             file_name = script[len("file="):].strip()
-            print(f"run_script: reading script from file {file_name}")
+            print(f"run_steps: reading script from file {file_name}")
             try:
                 with open(file_name) as fh:
                     script = fh.read()
             except Exception as e:
-                print(f"run_script: failed to read script from file {file_name}: {e}")
+                print(f"run_steps: failed to read script from file {file_name}: {e}")
                 ret['Success'] = False
                 ret['bad_input'] = True
                 return ret
@@ -1254,13 +1329,13 @@ class LocateEnv:
         try:
             parsed = tpsup.steptools.parse_steps(script)
         except Exception as e:
-            print(f"run_script: failed to parse script: {e}")
+            print(f"run_steps: failed to parse script: {e}")
             ret['Success'] = False
             ret['bad_input'] = True
             return ret
         # steps are the 'original' of each parsed step.
         steps = [p['original'] for p in parsed]
-        print(f"run_script: parsed script to {len(steps)} steps: {steps}")
+        print(f"run_steps: parsed script to {len(steps)} steps: {steps}")
         result = self.follow(steps, **opt)
         ret.update(result) # update hash (dict) with hash (dict)
         return ret

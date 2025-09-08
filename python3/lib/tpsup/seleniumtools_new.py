@@ -1775,17 +1775,14 @@ class SeleniumEnv:
         },
         "code": {
             'need_arg': True,
-            'siblings': ['python', 'exp', 'js'], # siblings are commands that share the same usage.
+            'siblings': ['js'], # siblings are commands that share the same usage.
             'usage': '''
                 execute python or js code.
-                'code' and 'python' are the same - python code to be executed.
-                'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
+                'code' means python.
                 'js' is javascript code to be executed.
                 example:
                     code=print("hello world")
-                    python=print("hello world")
                     js=console.log("hello world")
-                    exp=i==1
                 ''',
         },
 
@@ -1957,7 +1954,7 @@ class SeleniumEnv:
         },
         'xpath': {
             'need_arg': True,
-            'siblings': ['css', 'click_path', 'click_css'],
+            'siblings': ['css', 'click_xpath', 'click_css'],
             'has_dryrun': True,
             'usage': '''
                 find an element by xpath.
@@ -2115,13 +2112,12 @@ class SeleniumEnv:
             # a click may change the page
             self.handle_page_change(**opt)
 
-        elif cmd in ['code', 'python', 'exp', 'js']:
+        elif cmd in ['code', 'exp', 'js']:
             '''
-            'code' and 'python' are the same - python code to be executed.
+            'code' is python code to be executed.
             'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
             examples
                 code=print("hello world")
-                python=print("hello world")
                 exp=i==1
                 js=console.log("hello world")
                 js=file=filename.js
@@ -2156,38 +2152,41 @@ class SeleniumEnv:
             if dryrun:
                 return ret
 
-            if lang in ['code', 'python', 'exp']:
-                if isExpression or lang == 'exp' or (target and 'element' in target):
-                    # we are testing condition, we want to know True/False
-                    # cc = compile(code, '<string>', 'single')
-                    code_run_fine = False
-                    try:
-                        # ret['Success'] = -eval(cc)
-                        result = multiline_eval(code, globals(), locals())
-                        code_run_fine = True
-                        print(f"lang={lang} returns {result}")
-                    except Exception as e:
-                        print(f"eval failed with exception={e}")
-                        ret['Success'] = False
+            if lang in ['code', 
+                        # 'exp'
+                        ]:
+                # if isExpression or lang == 'exp' or (target and 'element' in target):
+                #     # we are testing condition, we want to know True/False
+                #     # cc = compile(code, '<string>', 'single')
+                #     code_run_fine = False
+                #     try:
+                #         # ret['Success'] = -eval(cc)
+                #         result = multiline_eval(code, globals(), locals())
+                #         code_run_fine = True
+                #         print(f"lang={lang} returns {result}")
+                #     except Exception as e:
+                #         print(f"eval failed with exception={e}")
+                #         ret['Success'] = False
 
-                    if code_run_fine:
-                        if target:
-                            if 'element' in target:
-                                element = self.driver.switch_to.active_element
-                                element.send_keys(result)
-                                self.last_element = element
-                            elif 'print' in target:
-                                print(result)
-                            elif 'pformat' in target:
-                                print(pformat(result))
-                            else:
-                                raise RuntimeError(f"lang={lang} doesn't support target={target}.")
-                            # note 'result' could be a empty string, which is False in python.
-                            # therefore we don't use 'result' to set ret['Success']
-                        else:
-                            ret['Success'] = result
-                else:
-                    exec_into_globals(code, globals(), locals())              
+                #     if code_run_fine:
+                #         if target:
+                #             if 'element' in target:
+                #                 element = self.driver.switch_to.active_element
+                #                 element.send_keys(result)
+                #                 self.last_element = element
+                #             elif 'print' in target:
+                #                 print(result)
+                #             elif 'pformat' in target:
+                #                 print(pformat(result))
+                #             else:
+                #                 raise RuntimeError(f"lang={lang} doesn't support target={target}.")
+                #             # note 'result' could be a empty string, which is False in python.
+                #             # therefore we don't use 'result' to set ret['Success']
+                #         else:
+                #             ret['Success'] = result
+                # else:
+                #     exec_into_globals(code, globals(), locals()) 
+                exec_into_globals(code, globals(), locals())             
             elif lang == 'js':
                 gv['jsr'] = self.driver.execute_script(code)
                 if debug:
@@ -2337,10 +2336,10 @@ class SeleniumEnv:
                 scope = 'element'
                 output_dir = arg
             else:
-                m = re.match(r"(element|shadow|iframe|page|all)?(?=(.+))?$", arg)
+                m = re.match(r"(?:(element|shadow|iframe|page|all)=)?(.+)?$", arg)
 
                 if not m:
-                    raise RuntimeError(f"invalid {cmd} syntax, arg={arg}")
+                    raise RuntimeError(f"invalid cmd={cmd} syntax, arg={arg}")
                 
                 scope, output_dir = m.groups()
             print(f"locate: dump {scope} to {output_dir}")
@@ -2849,14 +2848,16 @@ class SeleniumEnv:
             default:
                 all timeouts are set to self.wait_seconds, which defaults to 10 seconds.
             '''
-            m = re.match(r"(impl|expl|script|page|all)?=(\d+)$", arg)
+            m = re.match(r"(?:(impl|expl|script|page|all)=)?(\d+)$", arg)
             if not m:
-                raise RuntimeError(f"invalid {cmd} syntax, arg={arg}")
+                raise RuntimeError(f"invalid cmd={cmd} syntax, arg={arg}")
             wait_type, value = m.groups()
+            seconds = int(value)
 
             if not wait_type:
                 wait_type = 'all'
-            print(f"locate: set {wait_type} wait type to {value} seconds")
+
+            print(f"locate: set wait_type={wait_type} wait type to {seconds} seconds")
 
             if dryrun:
                 return ret
@@ -2868,18 +2869,18 @@ class SeleniumEnv:
                 # explicit wait is done per call (WebDriverWait()).
                 # As we are not calling WebDriverWait() here, we only set the global variable,
                 # so that it can be used when we call WebDriverWait() in the future.
-                self.wait_seconds = int(value)
+                self.wait_seconds = seconds
 
             if wait_type == 'all' or wait_type == 'impl':
                 # driver.implicitly_wait() only set the implicit wait for the driver, 
                 # affect all find_element() calls right away.
                 # implicit wait is done once per session (driver), not per call.
                 # selenium's default implicit wait is 0, meaning no wait.
-                self.driver.implicitly_wait(self.wait_seconds)
+                self.driver.implicitly_wait(seconds)
 
             if wait_type == 'all' or wait_type == 'script':
                 # set script timeout
-                self.driver.set_script_timeout(int(value))
+                self.driver.set_script_timeout(seconds)
 
             if wait_type == 'all' or wait_type == 'page':
                 # set page load timeout
@@ -2902,7 +2903,7 @@ class SeleniumEnv:
                 "therefore, we need to add extra sleep time after page is loaded. "
                 "other wait (implicitly wait and explicit wait) is set in 'wait=int' keyvaule",
                 '''
-                self.driver.set_page_load_timeout(int(value))
+                self.driver.set_page_load_timeout(seconds)
 
         elif cmd in ["xpath", "css", "click_xpath", "click_css"]:
             '''

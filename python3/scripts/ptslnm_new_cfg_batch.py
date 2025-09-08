@@ -29,9 +29,9 @@ our_cfg = {
     #     # 'url'
     # ],
 
-    'extra_args': {
-        'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
-    },
+    # 'extra_args': {
+    #     'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
+    # },
 
     'test_example': f'''
     the expected results are created wehn using http url to test.
@@ -123,11 +123,14 @@ our_cfg = {
     {{{{prog}}}} url=newtab "sleep=2" "xpath=/iframe[1]" iframe "xpath=//a[@aria-label='Gmail ']" dump="{HOME}/dumpdir"
 
     - test block steps
-    {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
+    # {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=exp="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
+ 
+    {{{{prog}}}} python="i=0" python="print(f'i={{i}}')" while=exp="i<3" python="i=i+1" python="print(f'i={{i}}')" sleep=1 end_while
 
-    {{{{prog}}}} if_not=exp="a=0;1/a" code="print('negate False worked')" end_if
+    
+    {{{{prog}}}} if_not=exp="a=0;1/a" python="print('negate False worked')" end_if
 
-    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" "click_xpath=/html/body/button" sleep=1 "if=xpath=//*[@id='random' and text()='10']" break end_if end_while
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=exp="i<4" code="i=i+1" "click_xpath=/html/body/button" sleep=1 "if=xpath=//*[@id='random' and text()='10']" break end_if end_while
 
     - exp vs code
       exp  (expression) is processed by python's eval().
