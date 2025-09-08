@@ -29,9 +29,10 @@ import tpsup.steptools
         - follow() can call follow() and locate().
         - explore() can call explore() and locate().
 
-    locate() vs combined_locate_single_step_user_input() 
-        - locate() only calls caller's locate_cmd_arg() and locate_dict().
-        - combined_locate_single_step_user_input() calls both locatetools' cmd and caller's cmd.
+    locate() vs combined_locate_cmd_arg(), locatetools_locate_cmd_arg(), caller_locate_cmd_arg()
+        - locate() is the main interface to locate a step (string or dict).
+        - locate() calls combined_locate_cmd_arg() and caller_locate_dict().
+        - combined_locate_cmd_arg() calls locatetools_locate_cmd_arg() and caller_locate_cmd_arg().
             locatetools's cmd includes 'help', 'debug', ...
             caller's cmd, for example, seleniumtools' cmds, 'start_driver', 'xpath', 'click', ...
 '''
@@ -45,22 +46,90 @@ ret0 = {
 }
 
 class LocateEnv:
-    locate_cmd_arg: callable = None
-    locate_dict: callable = None
-    display: callable = None
-    locate_usage_by_cmd: dict = None
-    usage_by_long: dict = None
-    usage_by_long_and_short: dict = None
+    caller_locate_cmd_arg: callable = None
+    caller_locate_dict: callable = None
+    caller_display: callable = None
+    caller_usage_by_cmd: dict = {}
+    combined_usage_by_long: dict = {}
+    combined_usage_by_long_and_short: dict = {}
     
-    printables: list = None
-    debuggers: dict = None
+    caller_printables: list = []
+    debuggers: dict = {}
+
+    allowed_usage_subkeys = [
+        'has_dryrun',   # whether this cmd has dryrun option to check syntax
+        'need_arg',     # whether this cmd needs an argument
+        'no_arg',       # whether this cmd doesn't take an argument
+        'short',        # short key for the long key
+        'siblings',     # list of sibling keys that share the same usage
+        'usage',        # usage string
+    ]
+
+    locatetools_usage_by_long = {
+        "debug": {
+            'usage': '''
+                set or execute debug cmd.
+                example:
+                    debug # execute debug cmd after each step
+                    debug=before # execute debug cmd before each step
+                    debug=after  # execute debug cmd after each step
+                    debug=before=url,title # print url and title before each step
+                ''',
+        },
+        'help': {
+            'short': 'h',
+            'usage': '''
+                show this help message
+                example:
+                    help
+                    h
+                    h steps_py
+            ''',
+        },
+        'quit': {
+            'short': 'q',
+            'usage': '''
+                quit the program
+                example:
+                    quit
+                    q
+            ''',
+        },
+        'steps': {
+            'no_arg': True,
+            'usage': '''
+                enter steps to follow, end with END
+                example:
+                    file=c:/users/me/steps.txt # this load a file that contains steps
+                    type=pwd{END}
+                    END
+
+            ''',
+        },
+        'steps_txt': {
+            'siblings': ['steps_py', 'script'], # siblings are commands that share the same usage.
+            'need_arg': True,
+            'usage': '''
+                file that contains steps
+                    steps_txt=file.txt
+                        this is a text file that contains steps, just like command line.
+                        steps can be in multiple lines.
+                        multiple steps can be in a single line. (we use shell-like syntax)
+                        there can be blank and comment lines (starting with #).
+                    steps_py=file.py
+                        this is a python file that contains steps, but is a python list of steps.
+                    
+                    'script' is an alias of steps_txt
+                ''',
+        },
+    }
 
     def __init__(self,
                 locate_cmd_arg: callable,
                 locate_dict: callable = None,
 
                 # for explore()
-                locate_usage_by_cmd: dict = None,    
+                locate_usage_by_cmd: dict = {},    
                 display: callable = None,  
                 printables: list = [], 
 
@@ -69,94 +138,29 @@ class LocateEnv:
         debug = opt.get('debug', 0)
         verbose = opt.get('verbose', 0)
         
-        self.locate_cmd_arg = locate_cmd_arg
-        self.locate_dict = locate_dict
+        self.caller_locate_cmd_arg = locate_cmd_arg
+        self.caller_locate_dict = locate_dict
 
-        self.display = display
-        self.printables = printables
+        self.caller_display = display
 
-        # hope we will never need this
-        # self.caller_globals = inspect.currentframe().f_back.f_globals
-        # self.caller_locals = inspect.currentframe().f_back.f_locals
+        if printables:
+            self.caller_printables = printables
 
         self.already_checked_syntax = False
         self.delay = 0 # delay between steps
 
-        self.allowed_usage_subkeys = [
-            'has_dryrun',   # whether this cmd has dryrun option to check syntax
-            'need_arg',     # whether this cmd needs an argument
-            'no_arg',       # whether this cmd doesn't take an argument
-            'short',        # short key for the long key
-            'siblings',     # list of sibling keys that share the same usage
-            'usage',        # usage string
-        ]
-
-        self.usage_by_long = {
-            "debug": {
-                'usage': '''
-                    set or execute debug cmd.
-                    example:
-                        debug # execute debug cmd after each step
-                        debug=before # execute debug cmd before each step
-                        debug=after  # execute debug cmd after each step
-                        debug=before=url,title # print url and title before each step
-                    ''',
-            },
-            'help': {
-                'short': 'h',
-                'usage': '''
-                    show this help message
-                    example:
-                        help
-                        h
-                        h steps_py
-                ''',
-            },
-            'quit': {
-                'short': 'q',
-                'usage': '''
-                    quit the program
-                    example:
-                        quit
-                        q
-                ''',
-            },
-            'steps': {
-                'no_arg': True,
-                'usage': '''
-                    enter steps to follow, end with END
-                    example:
-                        file=c:/users/me/steps.txt # this load a file that contains steps
-                        type=pwd{END}
-                        END
-
-                ''',
-            },
-            'steps_txt': {
-                'siblings': ['steps_py', 'script'], # siblings are commands that share the same usage.
-                'need_arg': True,
-                'usage': '''
-                    file that contains steps
-                        steps_txt=file.txt
-                            this is a text file that contains steps, just like command line.
-                            steps can be in multiple lines.
-                            multiple steps can be in a single line. (we use shell-like syntax)
-                            there can be blank and comment lines (starting with #).
-                        steps_py=file.py
-                            this is a python file that contains steps, but is a python list of steps.
-                        
-                        'script' is an alias of steps_txt
-                    ''',
-            },
-        }
-
-        # locate_usage is for explore()
         if locate_usage_by_cmd:
-            self.usage_by_long.update(locate_usage_by_cmd)
+            self.caller_usage_by_cmd = locate_usage_by_cmd
+        self.combined_usage_by_long.update(self.caller_usage_by_cmd)
+
+        for k, v in self.locatetools_usage_by_long.items():
+            if k in self.combined_usage_by_long:
+                raise RuntimeError(f"locator='{k}' is defined in both caller and locatetools")
+            self.combined_usage_by_long[k] = v
 
         reserved_keys = ['break', 'continue' ]
 
-        long_keys = list(self.usage_by_long.keys())
+        long_keys = list(self.combined_usage_by_long.keys())
         # get the keys out to avoid dict size change during iteration
         # RuntimeError: dictionary changed size during iteration
 
@@ -166,7 +170,7 @@ class LocateEnv:
             if k in reserved_keys:
                 raise RuntimeError(f"locator='{k}' in usage is a reserved keyword")
             
-            lu:dict = self.usage_by_long[k]
+            lu:dict = self.combined_usage_by_long[k]
             
             # check usage subkeys
             for subkey in lu.keys():
@@ -178,32 +182,28 @@ class LocateEnv:
             for sibling in siblings:
                 if sibling in reserved_keys:
                     raise RuntimeError(f"locator {k}'s sibling {sibling} is a reserved keyword")
-                if sibling in self.usage_by_long:
+                if sibling in self.combined_usage_by_long:
                     raise RuntimeError(f"locator {k}'s sibling {sibling} is seen multiple times")
                 # print(f"locator {k} has sibling {sibling}")
-                self.usage_by_long[sibling] = lu.copy()
+                self.combined_usage_by_long[sibling] = lu.copy()
 
-        
-        # if verbose or debug:
-        #     print()
-        #     print(f"usage_by_long={pformat(self.usage_by_long)}")
-
+        # now combined_usage_by_long is ready
         # refresh long_keys which now includes siblings
-        long_keys = list(self.usage_by_long.keys())
+        long_keys = list(self.combined_usage_by_long.keys())
 
-        self.usage_by_long_and_short = self.usage_by_long.copy() 
+        self.combined_usage_by_long_and_short = self.combined_usage_by_long.copy() 
 
         # add short keys
         for k in long_keys:
-            lu = self.usage_by_long[k]
+            lu = self.combined_usage_by_long[k]
             short = lu.get('short', None)
             if short:
                 if short in reserved_keys:
                     raise RuntimeError(f"locator {k} short {short} is a reserved keyword")
-                if short in self.usage_by_long_and_short:
+                if short in self.combined_usage_by_long_and_short:
                     raise RuntimeError(f"locator {k} short {short} is seen multiple times")
-                self.usage_by_long_and_short[short] = lu.copy()
-                self.usage_by_long_and_short[short]['short_for'] = k
+                self.combined_usage_by_long_and_short[short] = lu.copy()
+                self.combined_usage_by_long_and_short[short]['short_for'] = k
 
         # run these locators before or after each step
         self.debuggers = {
@@ -505,8 +505,8 @@ class LocateEnv:
             #     # using locator (step) that has side effect: eg, click, send_keys
             #     print(f"follow2: debug_before={step}")
             #     self.locate(step, **opt) 
-            if 'debug' in self.usage_by_long:
-                self.combined_locate_single_step_user_input('debug=before', **opt)
+            if 'debug' in self.combined_usage_by_long:
+                self.combined_locate_cmd_arg('debug', 'before', **opt)
 
             if self.delay:
                 print(f"follow2: delay {self.delay} seconds before next step")
@@ -619,32 +619,45 @@ class LocateEnv:
 
             print(f"follow2: running step={pformat(step)}")
 
-            call_locate = True
-            if dryrun:
-                parsed = self.parse_and_check_single_step_user_input(step)
-                if not parsed:
-                    raise RuntimeError(f"failed to parse step '{step}'")
+            # call_locate = True
+            # if dryrun:
+            #     parsed = self.parse_and_check_single_step_user_input(step)
+            #     if not parsed:
+            #         raise RuntimeError(f"failed to parse step '{step}'")
                 
-                usage_dict = parsed['usage_dict']
-                if not usage_dict.get("has_dryrun", False):
-                    # step cmd's function may have dryrun to check syntax. 
-                    # if its usage_dict does have has_dryrun, we proceed to call the cmd with dryrun flag.
-                    # if its usage_dict doesn't have has_dryrun, we can return here.
-                    call_locate = False
+            #     usage_dict = parsed['usage_dict']
+            #     if not usage_dict.get("has_dryrun", False):
+            #         # step cmd's function may have dryrun to check syntax. 
+            #         # if its usage_dict does have has_dryrun, we proceed to call the cmd with dryrun flag.
+            #         # if its usage_dict doesn't have has_dryrun, we can return here.
+            #         call_locate = False
             
-            if call_locate:
-                if interactive:
-                    while True:
-                        tpsup.interactivetools.hit_enter_to_continue()
-                        try:
-                            result = self.combined_locate_single_step_user_input(step, **opt)
-                            break
-                        except Exception as e:
-                            print(e)
-                            # setting step_count to 0 is to make interactive mode to single step.
-                            tpsup.interactivetools.nonstop_step_count = 0   
-                else:
-                    result = self.combined_locate_single_step_user_input(step, **opt)
+            # if call_locate:
+            #     if interactive:
+            #         while True:
+            #             tpsup.interactivetools.hit_enter_to_continue()
+            #             try:
+            #                 result = self.combined_locate_single_step_user_input(step, **opt)
+            #                 break
+            #             except Exception as e:
+            #                 print(e)
+            #                 # setting step_count to 0 is to make interactive mode to single step.
+            #                 tpsup.interactivetools.nonstop_step_count = 0   
+            #     else:
+            #         result = self.combined_locate_single_step_user_input(step, **opt)
+
+            if interactive:
+                while True:
+                    tpsup.interactivetools.hit_enter_to_continue()
+                    try:
+                        result = self.handle_one_step(step, **opt)
+                        break
+                    except Exception as e:
+                        print(e)
+                        # setting step_count to 0 is to make interactive mode to single step.
+                        tpsup.interactivetools.nonstop_step_count = 0
+            else:
+                result = self.handle_one_step(step, **opt)
 
             # log_FileFuncLine(f"follow2: step={step} result={pformat(result)}")
 
@@ -654,8 +667,8 @@ class LocateEnv:
             #     # using locator (step) that has side effect: eg, click, send_keys
             #     print(f"follow2: debug_after={step}")
             #     self.locate(step, **opt)
-            if 'debug' in self.usage_by_long:
-                self.combined_locate_single_step_user_input('debug=after', **opt)
+            if 'debug' in self.combined_usage_by_long:
+                self.combined_locate_cmd_arg('debug', 'after', **opt)
 
             if dryrun:
                 continue
@@ -714,7 +727,7 @@ class LocateEnv:
 
             if verbose:
                 print()
-                print(f"usage_by_long_and_short={pformat(self.usage_by_long_and_short)}")
+                print(f"usage_by_long_and_short={pformat(self.combined_usage_by_long_and_short)}")
             print()
             print(f'follow: begin checking syntax')
             print(f"----------------------------------------------")
@@ -905,8 +918,8 @@ class LocateEnv:
     
     def get_prompt(self) -> str:
         prompt = "\nAvailable commands: "
-        for k in sorted(self.usage_by_long.keys()):
-            v = self.usage_by_long[k]
+        for k in sorted(self.combined_usage_by_long.keys()):
+            v = self.combined_usage_by_long[k]
             short = v.get('short', None)
             if short:
                 prompt += f"{short}-{k} "
@@ -914,11 +927,36 @@ class LocateEnv:
                 prompt += f"{k} "
         prompt += " -- Enter command: "
         return prompt
+    
+    def handle_one_step(self, step: Union[str, dict], **opt) -> dict:
+        dryrun = opt.get('dryrun', False)
+
+        '''
+        handle a single step, which can be a string (user_input) or a dict.
+        the user_input's cmd can be from locatetools or the callers.
+        '''
+        if isinstance(step, str):
+            # handle user_input
+            step2 = self.parse_and_check_single_step_user_input(step)
+            if dryrun:
+                return step2.copy()
+
+            return self.combined_locate_cmd_arg(step2['cmd'], step2['arg'], **opt)
+        elif isinstance(step, dict):
+            # handle step dict
+            step2 = step
+        else:
+            raise RuntimeError(f"unsupported step type={type(step)}, step={pformat(step)}")
+        
+        
+        
+        return self.locate(step2, **opt)
 
     def parse_and_check_single_step_user_input(self, user_input: str) -> dict:
         '''
         parse user input and check it against usage_by_long_and_short.
         the user_input is a single-step locator.
+        if user input was a short command, it will be converted to its long command.
         '''
         # split user_input by 1st space or =.
         # command, arg, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
@@ -926,16 +964,16 @@ class LocateEnv:
         cmd = parsed['cmd']
         arg = parsed['arg']
         # print(f"cmd='{cmd}', arg='{arg}'")
-        if not cmd in self.usage_by_long_and_short:
+        if not cmd in self.combined_usage_by_long_and_short:
             print(f"unknown command '{cmd}'")
             return None
 
-        u:dict = self.usage_by_long_and_short[cmd]
+        u:dict = self.combined_usage_by_long_and_short[cmd]
         # print(f"usage dict: {pformat(u)}")
         if 'short_for' in u:
             # this is a short command, so map to its long command
             long_cmd = u['short_for']
-            u = self.usage_by_long[long_cmd]
+            u = self.combined_usage_by_long[long_cmd]
             # print(f"parsed input1: {pformat(parsed)}")
 
             # replace short cmd with long cmd in user_input
@@ -978,14 +1016,14 @@ class LocateEnv:
         prompt = self.get_prompt()
 
         while True:
-            if self.display:
-                self.display()
+            if self.caller_display:
+                self.caller_display()
 
             while True:
                 user_input = input(f"{prompt}: ")
 
-                # result = self.locate(user_input, **opt)
-                result = self.combined_locate_single_step_user_input(user_input, **opt)
+                result = self.locate(user_input, **opt)
+                # result = self.combined_locate_cmd_arg(user_input, **opt)
 
                 if result['break_levels']:
                     print(f"explore: break_levels={result['break_levels']}, bye")
@@ -996,10 +1034,16 @@ class LocateEnv:
 
     def locate(self, locator: Union[str, dict], **opt):
         """
-        locate() is a wrapper of locate_cmd_arg() and locate_dict().
-        this function only handles single-step locator.
-            if locator is a string, call locate_cmd_arg()
-            if locator is a dict, call locate_dict()
+        locate() hanles both locatetools cmd and caller cmd of a single-step locator (step).
+            if locator (step) is a string, 
+                it will parse and check the string,
+                    if it is a locatetools cmd, it will call locatetools cmd.
+                    if it is a caller cmd, call caller_locate_cmd_arg().
+            if locator (step) is a dict, 
+                if the dict has cmd and arg, 
+                    if it is a locatetools cmd, it will call locatetools cmd.
+                    if it is a caller cmd, call caller_locate_cmd_arg().
+                otherwise, it will call caller_locate_dict() if it is defined.
         """
         dryrun = opt.get('dryrun', False)
 
@@ -1011,7 +1055,8 @@ class LocateEnv:
             # Had we have it in a multi-step locator string, we would have needed to escape the quotes.
             # That would have been a pain.
 
-            parsed = tpsup.steptools.parse_single_step(locator)
+            # parsed = tpsup.steptools.parse_single_step(locator)
+            parsed = self.parse_and_check_single_step_user_input(locator)
             if not parsed:
                 raise RuntimeError(f"failed to parse locator string={locator}") 
             cmd=parsed['cmd']
@@ -1020,60 +1065,28 @@ class LocateEnv:
             # print(f"locate_cmd_arg: cmd={cmd}, arg={arg}")
             if dryrun:
                 return ret0.copy()
-            return self.locate_cmd_arg(cmd, arg, **opt)
+            return self.combined_locate_cmd_arg(cmd, arg, **opt)
         elif type(locator) == dict:
             if 'cmd' in locator and 'arg' in locator:
                 # print(f"locate_cmd_arg: locator={pformat(locator)}")
                 if dryrun:
                     return ret0.copy()
-                return self.locate_cmd_arg(locator['cmd'], locator['arg'], **opt)
-            elif self.locate_dict:
+                return self.combined_locate_cmd_arg(locator['cmd'], locator['arg'], **opt)
+            elif self.caller_locate_dict:
                 # print(f"locate_dict: locator={pformat(locator)}")
                 if dryrun:
                     return ret0.copy()
-                return self.locate_dict(locator, **opt)
+                return self.caller_locate_dict(locator, **opt)
             else:
                 raise RuntimeError(f"locate_dict function is not defined, cannot handle locator={pformat(locator)}")
         else:
             raise RuntimeError(f"unsupported locator type={type(locator)}, locator={pformat(locator)}")
 
-    def combined_locate_single_step_user_input(self, user_input: str, **opt) -> dict:
+    def locatetools_locate_cmd_arg(self, cmd:str, arg:str, **opt) -> dict:
         '''
-        combined locatetools locate cmds and the callers' locate cmds.
-        for example,
-            'debug', 'help' are defined in locatetools,
-            'start_driver', 'xpath', 'click' are defined in callers (seleniumtools).
-
-        this function only handles single-step user_input.
-
-        user_input vs step vs locator
-            - user_input is what user typed in interactively. so it is a string.
-            - step can be a string or a dict.
-            - locator and step are the same thing.
-
-        user input is
-            command=[arg...]
-        - command can be long or short form.
-            t=hello world
-            type=ello world
-            help
-            help=ype 
+        handle locatetools cmds only.
         '''
         ret = ret0.copy()
-
-        if not isinstance(user_input, str):
-            raise RuntimeError(f"combined_locate: user_input should be a string, not {type(user_input)}")
-        
-        # split user_input by 1st space or =.
-        # command, arg, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
-        parsed = self.parse_and_check_single_step_user_input(user_input)
-        # print(f"parsed input: {pformat(parsed)}")
-        if not parsed:
-            ret['bad_input'] = True
-            return ret
-        cmd:str = parsed['cmd']
-        arg:str = parsed['arg']
-        user_input:str = parsed['updated_user_input']
 
         if 1 == 2:
             pass
@@ -1105,7 +1118,7 @@ class LocateEnv:
             elif arg.startswith("before"):
                 # eg, debug=before or debug=before=url,title
                 before_after = 'before'
-                keys_string = arg[6:] # len("before") == 6
+                keys_string = arg[6:]
             elif arg.startswith("after"):
                 # eg, debug=after or debug=after=html,tag
                 before_after = 'after'
@@ -1114,39 +1127,35 @@ class LocateEnv:
                 # eg, debug=url,title
                 before_after = 'after'
                 keys_string = arg
-
             if not keys_string:                
                 # without instructions, we execute debug steps before/after each locate() call
                 for step in self.debuggers[before_after]:
                     # we don't care about the return value but we should avoid
                     # using locator (step) that has side effect: eg, click, send_keys
-                    print(f"follow: debug={before_after}={step}")
+                    print(f"locatetools: debug={before_after}={step}")
                     self.locate(f"print={step}", **opt)
             else:
                 if keys_string.startswith('='):
                     keys_string = keys_string[1:] # remove leading '='
-
                 keys = keys_string.split(",")
-                keys = [k for k in keys if k] # remove empty keys
-
+                keys = [k for k in keys if k] # remove empty keys   
                 # make sure keys are printable
                 for key in keys:
-                    if key not in self.printables:
+                    if key not in self.locatetools_printables:
                         raise RuntimeError(f"unsupported debug key={key}")
-                    
                 print(f"locate: set debug={before_after}={keys}")
                 self.debuggers[before_after] = keys        
         elif cmd == 'help':
             if arg is not None:
-                if arg in self.usage_by_long_and_short:
+                if arg in self.locatetools_usage_by_long_and_short:
                     print(f"help for '{arg}':")
-                    print(self.usage_by_long[arg]['usage'])
+                    print(self.locatetools_usage_by_long[arg]['usage'])
                 else:
                     print(f"unknown help topic '{arg}'")
             else:
                 print("available commands:")
-                for k in sorted(self.usage_by_long.keys()):
-                    v: dict = self.usage_by_long[k]
+                for k in sorted(self.locatetools_usage_by_long.keys()):
+                    v: dict = self.locatetools_usage_by_long[k]
                     short = v.get('short', k)
                     print(f"{short}-{k}: {v.get('usage', '')}")
         elif cmd == "steps_txt":
@@ -1191,11 +1200,31 @@ class LocateEnv:
             print(f"you entered:\n{one_string}")
             result = self.run_script(one_string)
             ret.update(result) # update hash (dict) with hash (dict)
-
         else:
-            result = self.locate(user_input, **opt)
-            ret.update(result) # update hash (dict) with hash (dict)
+            raise RuntimeError(f"unknown locatetools cmd '{cmd}'")
+        return ret
+    
+    def combined_locate_cmd_arg(self, cmd:str, arg:str, **opt) -> dict:
+        '''
+        combined locatetools locate cmds and the callers' locate cmds.
+        for example,
+            'debug', 'help' are defined in locatetools,
+            'start_driver', 'xpath', 'click' are defined in callers (seleniumtools).
 
+        this function only handles single-step cmd and arg.
+
+        this function assumes caller already checked the syntax of cmd and arg.
+        '''
+        ret = ret0.copy()
+
+        if cmd in self.locatetools_usage_by_long.keys():
+            # this is a locatetools cmd
+            result = self.locatetools_locate_cmd_arg(cmd, arg, **opt)
+        else:
+            # this is not a locatetools cmd, so it must be a caller cmd.
+            result = self.caller_locate_cmd_arg(cmd, arg, **opt)
+            
+        ret.update(result) # update hash (dict) with hash (dict)
         return ret
 
     def run_script(self, script: str, **opt) -> dict:
