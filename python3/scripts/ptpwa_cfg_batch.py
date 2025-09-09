@@ -7,7 +7,7 @@ import tpsup.envtools
 import tpsup.csvtools
 import tpsup.htmltools
 import tpsup.pwatools
-import tpsup.locatetools_new
+import tpsup.locatetools
 import tpsup.pstools
 from pprint import pformat
 

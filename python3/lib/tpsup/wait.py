@@ -14,7 +14,7 @@ def wait_for_max_try(maxTry, runFunction, *param):
 
 
 def test_actions():
-    import tpsup.seleniumtools
+    import tpsup.seleniumtools_old
     from urllib.parse import urlparse
     from selenium.webdriver.common.by import By
     from selenium.common.exceptions import NoSuchElementException

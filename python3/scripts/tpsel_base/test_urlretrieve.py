@@ -3,11 +3,11 @@ import sys
 import urllib.request
 from pprint import pformat
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 from tpsup.utilbasic import tplog
 
 
-def run(seleniumEnv: tpsup.seleniumtools.SeleniumEnv, **opt):
+def run(seleniumEnv: tpsup.seleniumtools_old.SeleniumEnv, **opt):
     verbose = opt.get('verbose', 0)
     mod_file = opt.get('mod_file', 'mod_file')
 

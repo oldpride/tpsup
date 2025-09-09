@@ -6,9 +6,9 @@ from typing import Union
 import tpsup.envtools
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.seleniumtools
-import tpsup.appiumtools
-import tpsup.locatetools
+import tpsup.seleniumtools_old
+import tpsup.appiumtools_old
+import tpsup.locatetools_old
 from tpsup.logbasic import log_FileFuncLine
 import tpsup.pstools
 from pprint import pformat
@@ -113,15 +113,15 @@ def code(all_cfg, known, **opt):
 
     locate_func = None
     if module == 'selenium':
-        locate_func = tpsup.seleniumtools.locate
+        locate_func = tpsup.seleniumtools_old.locate
     elif module == 'appium':
-        locate_func = tpsup.appiumtools.locate
+        locate_func = tpsup.appiumtools_old.locate
     elif module == 'local':
         locate_func = locate
     else:
         raise Exception(f"unknown module={module}")
 
-    followEnv = tpsup.locatetools.FollowEnv(str_action=locate_func, **opt)
+    followEnv = tpsup.locatetools_old.FollowEnv(str_action=locate_func, **opt)
     result = followEnv.follow(steps, **opt)
 
 

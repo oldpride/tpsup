@@ -9,8 +9,7 @@ from pywinauto.controls.uiawrapper import UIAWrapper
 from tpsup.cmdtools import run_cmd
 
 from typing import Union
-import tpsup.exploretools_deco
-import tpsup.locatetools_new
+import tpsup.locatetools
 from tpsup.logbasic import log_FileFuncLine
 
 def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = None) -> None:
@@ -105,7 +104,7 @@ class PwaEnv:
                 backend=self.backend,
             )
         
-        locateEnv = tpsup.locatetools_new.LocateEnv(
+        locateEnv = tpsup.locatetools.LocateEnv(
             locate_cmd_arg=self.locate_cmd_arg,
             locate_dict=self.locate_dict,
             locate_usage_by_cmd=self.locate_usage_by_cmd,
@@ -260,7 +259,7 @@ class PwaEnv:
         debug = opt.get('debug', False)
         verbose = opt.get('verbose', 0)
         
-        ret = tpsup.locatetools_new.ret0.copy()
+        ret = tpsup.locatetools.ret0.copy()
 
         if long_cmd == 'child':
             idx = int(arg)
@@ -378,7 +377,7 @@ class PwaEnv:
         return ret
 
     def locate_dict(self, locator: dict, **opt) -> dict:
-        ret = tpsup.locatetools_new.ret0.copy()
+        ret = tpsup.locatetools.ret0.copy()
         print("locate_ditct() is not implemented yet")
         return ret
         

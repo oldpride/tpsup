@@ -234,6 +234,7 @@ test_single_steps = [
     console.log('hello world3')
     ''',
 ]
+
 def parse_single_step(input: str) -> dict:
     if not isinstance(input, str):
         raise RuntimeError(f"input must be a string, got {type(input)}, input={pformat(input)}")

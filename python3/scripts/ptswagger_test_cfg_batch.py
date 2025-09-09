@@ -3,7 +3,7 @@ import tpsup.envtools
 import tpsup.csvtools
 import tpsup.htmltools
 
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.pstools
 import tpsup.swaggertools
 

@@ -10,8 +10,8 @@ import tpsup.envtools
 import json
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.appiumtools_new
-import tpsup.locatetools_new
+import tpsup.appiumtools_old
+import tpsup.locatetools_old
 import tpsup.pstools
 from pprint import pformat
 # from selenium import webdriver
@@ -27,12 +27,12 @@ EXAMPLE_BASE = HTTP_BASE
 our_cfg = {
     # this loads specified module's 'tpbatch', which contains
     #    pre_batch(), post_batch(), 'extra_args', ...
-    'module': 'tpsup.appiumtools_new',
+    'module': 'tpsup.appiumtools',
 
     # appiumEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
 
     'usage_example': f'''
-    {tpsup.appiumtools_new.diagarm}
+    {tpsup.appiumtools_old.diagarm}
 
     Note: we won't mention adb_device_name on command line because
         1. appium server will auto find the device from "adb devices"
@@ -81,17 +81,16 @@ our_cfg = {
         in the "Selected Element tab", copy thee "id" or "xpath"
        
     {{{{prog}}}} -emu --humanlike '''
-                     'start_driver '
                      'home sleep=3 id=com.google.android.apps.nexuslauncher:id/overview_actions_view click '
-                     'string=Amazon sendkey=enter sleep=8 '
-                     'dump=page={HOME}/dumpdir/page_source.html '
+                     'string=Amazon enter sleep=8 '
+                     'dump_page={HOME}/dumpdir/page_source.html '
                      'xpath="//*[@content-desc]" '
     # 'context=webview dump_element=stdout '
                      f'''
     
     - test install/uninstall app
       test if-else block
-    {{{{prog}}}} -emu start_driver \\
+    {{{{prog}}}} -emu \\
         if=existsapp=org.nativescript.test02ngchallenge \\
             removeapp=org.nativescript.test02ngchallenge \\
         else \\
@@ -103,7 +102,7 @@ our_cfg = {
         adb uninstall org.nativescript.test02ngchallenge
     
     - test webview context
-    {{{{prog}}}} -emu start_driver context=webview
+    {{{{prog}}}} -emu context=webview
     todo: this is not working yet. we may need to launch an webview app first
     
     - find package name
@@ -118,41 +117,39 @@ our_cfg = {
         b20ec9c org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - run the package's activity
-    {{{{prog}}}} -emu start_driver run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity print=currentActivity
+    {{{{prog}}}} run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity print=currentActivity
 
     - home, back
-    {{{{prog}}}} -emu start_driver print=currentactivity home run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity back
+    {{{{prog}}}} -emu print=currentactivity home run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity back
 
     - start an app
-    {{{{prog}}}} -emu start_driver ensureapp=org.nativescript.test02ngchallenge \\
+    {{{{prog}}}} -emu ensureapp=org.nativescript.test02ngchallenge \\
         run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity
 
     - click an element, clear text, enter text, click button
       note: I had to use "xpath=//android.widget.EditText[matches(text(), '.*')]" instead of "xpath=//android.widget.EditText"
             will need to find out why
-    {{{{prog}}}} -emu start_driver\\
+    {{{{prog}}}} -emu \\
         run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity \\
         "xpath=//android.widget.EditText[matches(text(), '.*')]" click clear \\
-        string="hello world" \\
+        text="hello world" \\
         css=android.widget.Button click \\
-        "xpath=//*[@id='com.google.android.youtube:id/fullscreen_button']" click \\
+        xpath=//*[@id='com.google.android.youtube:id/fullscreen_button']" click \\
         record_screen
 
     - download a Youtube video - there is no sound 
-    {{{{prog}}}} -emu start_driver \\
+    {{{{prog}}}} -emu \\
         home wait=5 sleep=3 \\
         xpath="//android.widget.FrameLayout[@resource-id='com.google.android.apps.nexuslauncher:id/overview_actions_view']" \\
         click sleep=3 \\
         xpath="//android.view.View[@content-desc='Home']" sleep=3 \\
-        string="https://youtu.be/3EaKUrU5qjA?si=p0DVT0wFL-s5rWas" \\
-        action=search sleep=10 \\
-        xpath="//android.widget.ImageView[@content-desc='Enter fullscreen']" \\
-        click sleep=5 \\
+        text="https://youtu.be/3EaKUrU5qjA?si=p0DVT0wFL-s5rWas" search sleep=10 \\
+        xpath="//android.widget.ImageView[@content-desc='Enter fullscreen']" click sleep=5 \\
         record
 
     the above method is not reliable. the following way is more reliable but more manually.
     open the video youtube in emulator, with disired settings, then
-    {{{{prog}}}} -emu start_driver record_screen
+    {{{{prog}}}} -emu record_screen
 
     - run with localhost http server to test webview context
         note: 
@@ -167,14 +164,14 @@ our_cfg = {
         run chrome on emulator and go to http://10.0.2.2:8000/iframe_over_shadow_test_main.html
         - it took about 10 seconds for WEBVIEW context to be available.
         - once chrome is launched, even if it is in background, WEBVIEW context is available.
-        {{{{prog}}}} -emu start_driver \\
+        {{{{prog}}}} -emu \\
             home       sleep=5  print=context  # contexts=['NATIVE_APP'] \\
             run=chrome sleep=10 print=context  # contexts=['NATIVE_APP', 'WEBVIEW_chrome'] \\
             context=webview print=context      # contexts=['NATIVE_APP', 'WEBVIEW_chrome']
 
         simplied steps to bring up WEBVIEW app (chrome)
-        {{{{prog}}}} -emu start_driver \\
-            start_http_server \\
+        {{{{prog}}}} -emu \\
+            start_http_server start_driver \\
             url="http://10.0.2.2:8000" \\
             print=context  # contexts=['NATIVE_APP', 'WEBVIEW_chrome']
         
@@ -195,7 +192,7 @@ our_cfg = {
 
 def pre_batch(all_cfg, known, **opt):
     # call the default pre_batch() from tpsup.appiumtools
-    tpsup.appiumtools_new.pre_batch(all_cfg, known, **opt)
+    tpsup.appiumtools_old.pre_batch(all_cfg, known, **opt)
 
 
 def code(all_cfg, known, **opt):
@@ -207,19 +204,24 @@ def code(all_cfg, known, **opt):
     dryrun = opt.get('dryrun', 0)
     run_js = opt.get('js', 0)
     trap = opt.get('trap', 0)
-    explore = opt.get('explore', 0)
 
     yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
     steps = known['REMAININGARGS']
     print(f'steps = {pformat(steps)}')
 
-    driverEnv: tpsup.appiumtools_new.AppiumEnv = all_cfg["resources"]["appium"]['driverEnv']
-    result = driverEnv.follow(steps, **opt)
-    # if explore mode, enter explore mode at the end of the steps
-    if explore:
-        print("enter explore mode")
-        driverEnv.explore(**opt)
+    followEnv = tpsup.locatetools_old.FollowEnv(str_action=tpsup.appiumtools_old.locate,
+                                            **opt)
+    result = followEnv.follow(steps, **opt)
+
+    if verbose:
+        print(f'result = {pformat(result)}')
+
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
+    if re.match(r'locators$', input[0]):
+        for line in tpsup.locatetools_old.get_defined_locators(locate_func=tpsup.appiumtools_old.locate):
+            print(line)
+        exit(0)
+
     return {'REMAININGARGS': input}

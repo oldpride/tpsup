@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 from urllib.parse import urlparse
-from shutil import which
+import shutil
 
 import lxml.etree
 from appium import webdriver
@@ -27,11 +27,11 @@ from selenium.webdriver import ActionChains
 import tpsup.envtools
 import tpsup.filetools
 
-from tpsup.locatetools import handle_break
+import tpsup.locatetools
 from tpsup.logbasic import log_FileFuncLine
 from tpsup.nettools import is_tcp_open, wait_tcps_open
 import tpsup.pstools
-import tpsup.seleniumtools
+import tpsup.seleniumtools_old
 import tpsup.tmptools
 from tpsup.human import human_delay
 import os.path
@@ -67,24 +67,27 @@ diagarm = '''
     to 
 '''
 
-driver: webdriver.Remote = None # not webdriver.Chrome!
-# we use this to control both explicit and implicit wait. 
-# more detail about explicit and implicit wait, see other comments in this file.
-wait_seconds = 10 # seconds
+# global variables
+gv = {}
 
-# "last_element" is the last element we concerned.
-# note: this may not be the active element. For example, if the previous step
-# used xpath to find an element, the element is the "last_element", but only
-# if we click on it, it become active.
-# however, if we just want to get attribute or dump the element, we can just
-# use the "last_element".
-last_element = None
+# driver: webdriver.Remote = None # not webdriver.Chrome!
+# # we use this to control both explicit and implicit wait. 
+# # more detail about explicit and implicit wait, see other comments in this file.
+# wait_seconds = 10 # seconds
 
-# run these locators before or after each step
-debuggers = {
-    'before': [],
-    'after': [],
-}
+# # "last_element" is the last element we concerned.
+# # note: this may not be the active element. For example, if the previous step
+# # used xpath to find an element, the element is the "last_element", but only
+# # if we click on it, it become active.
+# # however, if we just want to get attribute or dump the element, we can just
+# # use the "last_element".
+# last_element = None
+
+# # run these locators before or after each step
+# debuggers = {
+#     'before': [],
+#     'after': [],
+# }
 
 # appium starting emulator
 #   https://appium.io/docs/en/writing-running-appium/running-tests/
@@ -106,7 +109,7 @@ def start_proc(proc: str, **opt):
     (host, port) = host_port.split(":", 1)
     if is_tcp_open(host, port):
         log_FileFuncLine(f"{proc}_host_port={host_port} is already open")
-        return {'status': 'started', 'error': 0, 'host_port': host_port}
+        return {'status': 'open', 'error': 0, 'host_port': host_port}
     else:
         log_FileFuncLine(f"{proc}_host_port={host_port} is not open")
 
@@ -125,7 +128,8 @@ def start_proc(proc: str, **opt):
     # https://developer.android.com/studio/run/emulator-commandline
     # https://stackoverflow.com/questions/42604543/launch-emulator-from-appium-python-client
     if proc == 'emulator':
-        # andorid studio -> virtual device manager -> select emulator -> edit -> name it to below
+        # android studio -> virtual device manager -> select emulator -> edit -> name it to below
+        # emulator and its name is saved under c/Users/tian/.android/avd dir
         emulator_name = "myemulator"
         cmd = f"{os.environ['ANDROID_HOME']}/emulator/emulator -netdelay none -netspeed full " \
               f"-avd {emulator_name} -port {port}"
@@ -136,8 +140,14 @@ def start_proc(proc: str, **opt):
         #             # f"--log={self.appium_log}","
         log_FileFuncLine(f"cmd = {cmd}")
         with open(log, "w+") as log_ofh:
-            subprocess.Popen(
-                cmd, shell=True, stderr=subprocess.STDOUT, stdout=log_ofh)
+            # run cmd and check if it started successfully
+            # subprocess.Popen(
+            #     cmd, shell=True, stderr=subprocess.STDOUT, stdout=log_ofh)
+            p = subprocess.Popen(cmd, shell=True, stderr=subprocess.STDOUT, stdout=log_ofh)
+            time.sleep(1) # give it a second to start
+            if p.poll() is not None:
+                raise RuntimeError(f"failed to start {cmd}, see log={log}")
+
         return {'status': 'started', 'error': 0, 'host_port': host_port}
     else:
         # appium server args
@@ -207,6 +217,31 @@ Note: there are many host:port pairs involved
         '''
 
 class AppiumEnv:
+    # will come from locatetools_new
+    locate: callable = None
+    follow: callable = None
+    explore: callable = None
+
+    driver: webdriver.Remote = None
+
+    # we use this to control both explicit and implicit wait. 
+    # more detail about explicit and implicit wait, see other comments in this file.
+    wait_seconds:int = 10 # seconds
+
+    # "last_element" is the last element we concerned.
+    # note: this may not be the active element. For example, if the previous step
+    # used xpath to find an element, the element is the "last_element", but only
+    # if we click on it, it become active.
+    # however, if we just want to get attribute or dump the element, we can just
+    # use the "last_element".
+    last_element:WebElement = None
+
+    printables = ['contexts', 'currentActivity', 'html', 
+                  'tag', 'text', 'title', 'timeouts', 
+                  'url', 'xpath']
+
+    need_wait: List[dict] = []
+
     def __init__(self, 
                  host_port: str, 
                  base_path: str = '/wd/hub',
@@ -254,21 +289,39 @@ class AppiumEnv:
                 exit(0)
 
         self.is_emulator = is_emulator
-        need_wait = []
+
         if self.is_emulator:
             log_FileFuncLine(f"emulator_log={self.emulator_log}")
             
-        self.appium_exe = which('appium')
+        # check appium executable
+        self.appium_exe = shutil.which('appium')
         if self.appium_exe:
             log_FileFuncLine(f"appium is {self.appium_exe}")
         else:
             raise RuntimeError(f"appium is not in PATH={os.environ['PATH']}\nnormally C:/tools/nodejs/appium")
-        
-        log_FileFuncLine(f"appium_log={self.appium_log}")
 
+        # check adb executable
+        self.adb_exe = shutil.which('adb')
+        if self.adb_exe:
+            log_FileFuncLine(f"adb is {self.adb_exe}")
+        else:
+            log_FileFuncLine(f"adb is not in PATH={os.environ['PATH']}; we will try to add it.")
+            # add ANDROID_HOME/platform-tools to PATH and try again
+            if 'ANDROID_HOME' in os.environ:
+                platform_tools = f"{os.environ['ANDROID_HOME']}/platform-tools"
+                os.environ['PATH'] += os.pathsep + platform_tools
+
+                # check again
+                self.adb_exe = shutil.which('adb')
+                if self.adb_exe:
+                    log_FileFuncLine(f"adb is {self.adb_exe}")
+                else:
+                    raise RuntimeError(f"adb is not in PATH={os.environ['PATH']}\nnormally C:/tools/android-sdk/platform-tools")
+            else:
+                raise RuntimeError(f"\nadb is not in PATH={os.environ['PATH']}\nand ANDROID_HOME is not set")
         self.driver: webdriver.Remote = None
 
-        static_setup = tpsup.seleniumtools.get_static_setup(**opt)
+        static_setup = tpsup.seleniumtools_old.get_static_setup(**opt)
         chromedriver_path = static_setup.get('chromedriver', None)
         if not chromedriver_path:
             raise RuntimeError(f"chromedriver is not set in static_setup={static_setup}")
@@ -301,6 +354,14 @@ class AppiumEnv:
 
         self.opt = opt
         
+        locateEnv = tpsup.locatetools.LocateEnv(
+            locate_cmd_arg=self.locate_cmd_arg,
+            locate_usage_by_cmd=self.locate_usage_by_cmd,
+            **opt)
+        self.locate = locateEnv.locate
+        self.follow = locateEnv.follow
+        self.explore = locateEnv.explore
+
         log_FileFuncLine(f"capabilities = {pformat(self.capabilities)}")
         # https://www.youtube.com/watch?v=h8vvUcLo0d0
 
@@ -309,39 +370,45 @@ class AppiumEnv:
         # we only set up driverEnv, not initializing driver.
         # we initialize driver when get_driver() is called on demand.
 
-    def get_emulator(self):
+
+    def start_emulator(self):
         print()
         print(f"starting emulator if not already started")
         response = start_proc('emulator', log=self.emulator_log, **self.opt)
-        if response.get('status', None) == "started":
-            print(f"emulator is already started at {response.get('host_port')}, log={self.emulator_log}")
+        status = response.get('status', None)
+        if status == "open":
+            log_FileFuncLine(f"emulator is already started at {response.get('host_port')}, log={self.emulator_log}")
+        elif status == "started":
+            log_FileFuncLine(f"emulator is started but need to wait for {response.get('host_port')} to be ready")
+            self.need_wait.append({
+                'host_port': response.get('host_port'),
+                'app': 'emulator'
+            })
         else:
             raise RuntimeError(f"emulator is being started. log={self.emulator_log}")
 
         return response
 
-    def get_driver(self) -> webdriver.Remote:
-        need_wait = []
-
+    def start_driver(self, **opt) -> webdriver.Remote:
         if self.is_emulator:
-            response = self.get_emulator()
-            log_FileFuncLine(f"emulator response = {pformat(response)}")
-            if response.get('status', None) == "started":
-                need_wait.append(response.get("host_port"))
+            self.start_emulator()
 
         print()
         print(f"starting appium server if not already started")
         response = start_proc('appium', log=self.appium_log, base_path=self.base_path, **self.opt)
+        status = response.get('status', None)
+        if status == "open":
+            log_FileFuncLine(f"appium server is already started at {response.get('host_port')}, log={self.appium_log}")
+        elif status == "started":
+            self.need_wait.append({
+                'host_port': response.get('host_port'),
+                'app': 'appium'
+            })
+    
         log_FileFuncLine(f"appium response = {pformat(response)}")
         self.service: AppiumService = response.get('service', None)
-        if response.get('status', None) == "started":
-            need_wait.append(response.get("host_port"))
-
-        if need_wait:
-            proc_wait_seconds = 60
-            log_FileFuncLine(f"wait max {proc_wait_seconds} seconds for: {need_wait}")
-            if not wait_tcps_open(need_wait, timeout=proc_wait_seconds):
-                raise RuntimeError(f"one of port is not ready: {need_wait}")
+        
+        self.wait_open(60)
             
         print(f"starting webdriver session (appium.webdriver). this is not a separate process.")
         # https://appium.io/docs/en/latest/quickstart/test-py/
@@ -385,6 +452,22 @@ class AppiumEnv:
             self.driver.driverEnv = self  # monkey patching for convenience   
         return self.driver
 
+    def wait_open(self, max_wait: int)-> bool:
+        if not self.need_wait:
+            print("no need to wait")
+            return True
+
+        print(f"wait up to {max_wait} seconds for:")
+        for item in self.need_wait:
+            print(f"    {item['app']} at {item['host_port']} to be open")
+        
+        # get host_port list to wait
+        host_port_list = []
+        for item in self.need_wait:
+            host_port_list.append(item['host_port'])
+
+        return wait_tcps_open(host_port_list, timeout=max_wait)
+
     def close_env(self):
         if self.driver:
             self.driver.quit()
@@ -398,11 +481,11 @@ class AppiumEnv:
         print(f"service.is_listening={self.service.is_listening}")
         return (self.driver.session_id and self.service.is_listening and self.service.is_running)
     
-    def get_home_dir(self) -> str:
-        return self.home_dir
+    # def get_home_dir(self) -> str:
+    #     return self.home_dir
     
-    def get_downloads_dir(self) -> str:
-        return self.downloads_dir
+    # def get_downloads_dir(self) -> str:
+    #     return self.downloads_dir
 
     def clean(self):
         # remove driver log and chromedir
@@ -418,184 +501,720 @@ class AppiumEnv:
                 if self.debug:
                     os.remove(f)
 
-driverEnv: Union[AppiumEnv, None] = None
+    locate_usage_by_cmd = {
+        'action': {
+            'usage': '''
+            examples:
+                action    # default to search
+                action=search
+                ''',
+        },
+        'back': {
+            'no_arg': True,
+            'usage': 'click back button',
+        },
+        'check_procs': {
+            'no_arg': True,
+            'usage': '''
+            check if process is running, eg, adb, emulator (qemu), appium (node), chromedriver
+            ''',
+        },
+        'clear': {
+            'no_arg': True,
+            'usage': '''
+            clear the content of last_element
+            ''',
+        },
+        'click': {
+            'no_arg': True,
+            'siblings': ['doubleclick'], # siblings cmd share the same usage
+            'usage': '''
+            click the last_element
+            ''',
+        },
+        'code': {
+            'need_arg': True,
+            'has_dryrun': True,
+            'siblings': ['js'], # siblings cmd share the same usage
+            'usage': '''
+            code=python code
+            python=python code
+            exp=python expression which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
+            js=javascript code
+            js=file=filename.js
+            js=file2element=filename.js
 
-def get_driverEnv(**args) -> AppiumEnv:
-    global driverEnv
+            examples:
+                code=print("hello world")
+                python=print("hello world")
+                exp=i==1
+                js=console.log("hello world")
+                js=file=filename.js
+                code=2print="1+1"
+                code=file=filename.py
+                js=file2element=filename.js
+                js=2element="return document.querySelector('body')"
+            ''',
+        },
+        'context': {
+            'need_arg': True,
+            'has_dryrun': True,
+            'usage': '''
+            switch context.
+            examples:
+                context=native
+                context=webview
 
-    if not driverEnv:
-        driverEnv = AppiumEnv(**args)
-    return driverEnv
+            to print current context
+                print=contexts (plural for print)
+            ''',
+        },
+        'dump': {
+            'need_arg': True,
+            'usage': '''
+            dump=element|page=path
+            element|page is optional, default is element
+            path is optional, default path is ~/dumpdir
+            examples:
+                dump
+                dump=element
+                dump=page
+                dump=element=./mydumpdir
+                dump=page=./mydumpdir
+            ''',
+        },
+        'ensureapp': {
+            'need_arg': True,
+            'siblings': ["existsapp", "installapp", "reinstallapp", "removeapp"],
+            'usage': '''
+            ensure app is installed; if not, install it
+            example
+                ensureapp=com.example.myapp
+                existsapp=com.example.myapp
+                installapp=com.example.myapp
+            ''',
+        },
+        'home': {
+            'no_arg': True,
+            'usage': 'click home button',
+        },
+        'kill_procs': {
+            'no_arg': True,
+            'usage': '''
+            kill process, eg, adb, emulator (qemu), appium (node), chromedriver
+            ''',
+        },
+        'print': {
+            'need_arg': True,
+            'has_dryrun': True,
+            'usage': '''
+            print=key1,key2,...
+            key can be one of:
+                contexts
+                currentActivity
+                html
+                tag
+                text
+                title
+                timeouts
+                url
+                xpath (last_element's xpath)
+            ''',
+        },
+        'record': {
+            'usage': '''
+            record=video_file
+            start recording the screen to video_file
+            if video_file is not specified, it will be saved in ~/downloads/record_screen.mp4
+            example:
+                record
+                record=c:/users/me/downloads/myrecord.mp4
+            ''',
+        },
+        'refresh': {
+            'no_arg': True,
+            'usage': 'refresh the current page',
+        },
+        'run': {
+            'has_dryrun': True,
+            'usage': '''
+            run=app/activity
+            example:
+                run        # default to chrome
+                run=chrome
+                run=com.android.chrome/com.google.android.apps.chrome.Main
+            ''',
+        },
+        'screenshot': {
 
-def get_driver(**args) -> webdriver.Remote:
-    global driver
+            'usage': '''
+            take a screenshot
+            example:
+            screenshot
+            screenshot=downloads_dir
+            if downloads_dir is not specified, it will be saved in ~/downloads
+            ''',
+        },
+        'sendkey': {
+            'need_arg': True,
+            'has_dryrun': True,
+            'usage': '''
+            send key to device. key is from androidkey.AndroidKey. 
+            eg, ENTER,
+            ''',
+            },
+        'sleep': {
+            'need_arg': True,
+            'usage': 'sleep=3',
+        },
+        'start_driver': {
+            'no_arg': True,
+            'usage': 'start the driver if not already started',
+        },
+        'start_emulator': {
+            'no_arg': True,
+            'usage': 'start the emulator if not already started',
+        },
+        'string': {
+            'need_arg': True,
+            'usage': '''
+            string=value
+            rawstring=value
+            value can be multi-line.
 
-    if not driver:
-        driverEnv = get_driverEnv(**args)
-        driver = driverEnv.get_driver()
-    return driver
+            for non-rawstring, tab will be replaced with 4 spaces.
+            ''',
+        },
+        'swipe': {
+            'need_arg': True,
+            'usage': '''
+            swipe=direction,size
+            direction can be one of: left, right, up, down
+            size is optional, can be one of: small, medium, large
+            default size is medium
+            examples:
+                swipe=up    # default size is medium
+                swipe=down,small
+                swipe=small,down
+                swipe=left,large
+                swipe=right,large
+            ''',
+        },
+        'url': {
+            'need_arg': True,
+            'usage': 'url=http://example.com',
+        },
+        'wait': {
+            'need_arg': True,
+            'usage': '''wait=impl=10
+            wait=expl=10
+            wait=page=10
+            wait=all=10
+            ''',
+        },
+        'wait_open': {
+            'need_arg': True,
+            'usage': 'wait_open=30  # wait up to 30 seconds for needed host:port to be open',
+        },
+        'xpath': {
+            'need_arg': True,
+            'has_dryrun': True,
+            'siblings': ['css', 'id'],
+            'usage': '''
+            xpath=//tag[@attr='value']
+            css=.class or tag.class or tag#id
+            id=id_value
+            ''',
+        },
+    }
 
-def get_emulator(**args) :
-    global driverEnv
+    def locate_cmd_arg(self, cmd: str, arg: str, **opt) -> dict:
+        '''
+        locate_cmd_arg() is not called directly in this file.
+        it is a component of locate() in locatetools_new.py
+        '''
+        dryrun = opt.get("dryrun", 0)
+        # interactive = opt.get("interactive", 0)
+        debug = opt.get("debug", 0)
+        verbose = opt.get("verbose", debug)
+        isExpression = opt.get("isExpression", 0) # for condtion test, we set isExpression=1, so that we get True/False.
 
-    if not driverEnv:
-        driverEnv = AppiumEnv(**args)
-    return driverEnv.get_emulator()
+        # global driver
+        # global last_element
+        # global wait_seconds
+        # global debuggers
 
+        ret = tpsup.locatetools.ret0.copy()
+        ret['Success'] = True # set default to True
 
-def locate(locator: str, **opt):
-    dryrun = opt.get("dryrun", 0)
-    interactive = opt.get("interactive", 0)
-    debug = opt.get("debug", 0)
-    verbose = opt.get("verbose", debug)
-    isExpression = opt.get("isExpression", 0) # for condtion test, we set isExpression=1, so that we get True/False.
+        '''
+        examples can be found in github test folder
+        https://github.com/appium/python-client/tree/master/test
+        '''
 
-    global driver
-    global last_element
-    global wait_seconds
-    global debuggers
-
-    helper = opt.get("helper", {})
-
-    ret = {'Success': False, 'break_levels': 0, 'continue_levels': 0}
-
-    '''
-    examples can be found in github test folder
-    https://github.com/appium/python-client/tree/master/test
-    '''
-
-    if m := re.match(r"(start_driver)$", locator):
-        print(f"locate: start driver")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver = get_driver(**opt)
-            # update_locator_driver(**opt)
-            ret['Success'] = True
-    elif m := re.match(r"(start_emulator)$", locator):
-        print(f"locate: start emulator")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            get_emulator()
-            ret['Success'] = True
-    elif m := re.match(r"kill_procs$", locator):   
-        print(f"locate: kill_procs: {procs}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            tpsup.pstools.kill_procs(procs)
-            ret['Success'] = True
-    elif m := re.match(r"check_procs$", locator):   
-        print(f"locate: check_procs: {procs}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            tpsup.pstools.check_procs(procs)
-            ret['Success'] = True
-    elif m := re.match(r"(ensureapp|existsapp|installapp|reinstallapp|removeapp)=(.+)$", locator, flags=re.IGNORECASE):
-        action, app, *_ = m.groups()
-        print(f"locate: {action}={app}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver = get_driver(**opt)
-            if action == 'ensureapp':
-                if driver.is_app_installed(app):
-                    ret['Success'] = True
-                else:
-                    driver.install_app(app)
-                    ret['Success'] = True
-            elif action == 'existsapp':
-                ret['Success'] = driver.is_app_installed(app)
-            elif action == 'installapp':
-                driver.install_app(app)
-                ret['Success'] = True
-            elif action == 'reinstallapp':
-                driver.remove_app(app)
-                driver.install_app(app)
-                ret['Success'] = True
+        if cmd == 'action':
+            if not arg:
+                arg = 'Search'
+            # driverEnv = get_driverEnv(**opt)
+            # if driverEnv.is_emulator:
+            if self.is_emulator:
+                # this is for emulator, there is no virtual keyboard,
+                # we can not click the search button on the emulator,
+                # so we type Enter key
+                self.locate(f"sendkey=enter", **opt)
             else:
-                driver.remove_app(app)
-                ret['Success'] = True
+                # this is for real device, there is a virtual keyboard,
+                # we click the search button on the virtual keyboard
+                self.driver.execute_script(
+                    'mobile: performEditorAction', {'action': arg})
+        elif cmd == 'back':
+            self.driver.back()
+        elif cmd == 'check_procs':
+            tpsup.pstools.check_procs(procs)
+        elif cmd == 'clear':
+            if not self.last_element:
+                raise RuntimeError("last_element is None")
+            self.last_element.clear()
+        elif cmd == 'click':
+            self.last_element.click()
+        elif cmd in ['code', 'python', 'exp', 'js']:
+            lang = cmd
+            '''
+            'code' and 'python' are the same - python code to be executed.
+            'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
+            examples
+                code=print("hello world")
+                python=print("hello world")
+                exp=i==1
+                js=console.log("hello world")
+                js=file=filename.js
+                code=2print="1+1"
+                code=file=filename.py
+                js=file2element=filename.js
+                js=2element="return document.querySelector('body')"
+            '''
 
-    elif m := re.match(r"url=(.+)$", locator, flags=re.IGNORECASE):
-        url, *_ = m.groups()
-        print(f"locate: url={url}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver = get_driver(**opt)
-            driver.get(url)
-            ret['Success'] = True
-    elif m := re.match(r"\s*(xpath|css|id)=(.+)", locator):
-        tag, value, *_ = m.groups()
-        # AppiumBy.ID is the "resource-id" in uiautomator.
-        # we can use dump_page to get the resource-id.
-        # example:
-        #    <android.widget.TextView index="1" package="com.android.quicksearchbox"
-        #      class="android.widget.TextView" text=""
-        #      resource-id="com.android.quicksearchbox:id/search_widget_text"
-        #      checkable="false" checked="false" clickable="true" enabled="true"
-        #      focusable="true" focused="false" long-clickable="false"
-        #      password="false" scrollable="false" selected="false"
-        #      bounds="[143,130][664,217]" displayed="true"
-        #    />
-        # resource-id = package_name + element_id
-        # here
-        #    package_name = com.android.quicksearchbox
-        #    element_id = search_widget_tex
-        print(f"follow(): {tag}={value}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if dryrun:
-            if tag == 'xpath':
-                print(f"validate xpath={value}")
-                lxml.etree.XPath(value)
-        else:
-            driver = get_driver(**opt)
-            if tag == 'id':
-                element = driver.find_element(AppiumBy.ID, value)
-            elif tag == 'xpath':
-                element = driver.find_element(AppiumBy.XPATH, value)
-            elif tag == 'css':
-                element = driver.find_element(AppiumBy.CSS_SELECTOR, value)
+            m = re.match(r"(file)?(.*?)=(.+)", arg, re.MULTILINE | re.DOTALL)
+            if not m:
+                raise RuntimeError(f"invalid {lang} argument {arg}")
+            file, target, code = m.groups()
 
-            print(f"found element={element}")
-            last_element = element
-            ret['Success'] = True
-    elif m := re.match(r"sleep=(\d+)", locator):
-        value, *_ = m.groups()
-        print(f"follow(): sleep {value} seconds")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            time.sleep(int(value))      
-            ret['Success'] = True
-    elif m := re.match(r"(impl|expl|page)*wait=(\d+)", locator):
-        # implicit wait
-        wait_type, value, *_ = m.groups()
-        if not wait_type:
-            wait_type = 'all'
-        print(f"locate: set {wait_type} wait type to {value} seconds")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver = get_driver(**opt)
+            if file:
+                # code is a file name, read the file content
+                filename = code
+                if filename.startswith('~'):
+                    filename = os.path.expanduser(filename)
+                
+                elif not os.path.isabs(filename):
+                    # relative path, relative to current working dir
+                    filename = os.path.abspath(filename)
 
+                if not os.path.exists(filename):
+                    raise RuntimeError(f"{lang} file {filename} doesn't exist")
+
+                with open(filename) as f:
+                    code = f.read()
+                print(f"locate: read {lang} from file {filename}:\n{code}")
+            else:
+                print(f"locate: run {lang}: {code}")
+
+            # parse 'target'
+            if target:
+                if m := re.match(r"2(print|pformat|element)+$", target):
+                    target = m.group(1)
+                else:
+                    raise RuntimeError(f"unsupported target={target}")
+            
+            if dryrun:
+                return ret
+            
+            if lang in ['code', 'python', 'exp']:
+                if isExpression or lang == 'exp' or (target and 'element' in target):
+                    # we are testing condition, we want to know True/False
+                    # cc = compile(code, '<string>', 'single')
+                    code_run_fine = False
+                    try:
+                        # ret['Success'] = -eval(cc)
+                        result = multiline_eval(code, globals(), locals())
+                        code_run_fine = True
+                        print(f"lang={lang} returns {result}")
+                    except Exception as e:
+                        print(f"eval failed with exception={e}")
+                        ret['Success'] = False
+
+                    if code_run_fine:
+                        if target:
+                            if 'element' in target:
+                                element = self.driver.switch_to.active_element
+                                element.send_keys(result)
+                                self.last_element = element
+                            elif 'print' in target:
+                                print(result)
+                            elif 'pformat' in target:
+                                print(pformat(result))
+                            else:
+                                raise RuntimeError(f"lang={lang} doesn't support target={target}.")
+                            # note 'result' could be a empty string, which is False in python.
+                            # therefore we don't use 'result' to set ret['Success']
+                        else:
+                            ret['Success'] = result
+                else:
+                    exec_into_globals(code, globals(), locals())
+            elif lang == 'js':
+                gv['jsr'] = self.driver.execute_script(code)
+                if debug:
+                    print(f"locate: jsr={pformat(gv['jsr'])}") # this is too verbose
+                if 'element' in target:
+                    '''
+                    jsr can be an element or a dict with possible keys: 
+                    element, shadowHost, iframeElement
+                    '''
+                    if type(gv['jsr']) == dict:
+                        '''
+                        keys in the dict
+                            'element' and 'iframeElement' can not be in the same dict.
+                            'element' and 'shadowHost' can be in the same dict.
+                            'shadowHosts' and 'iframeElement' can be in the same dict: shaodowHosts first, then iframe.
+                                this is because every 'iframe' will end a piece of js. see locator_chain_to_js_list().
+                                therefore, we parse shadowHosts first, to make sure shadowHosts in the front of iframe
+                                in domstack.
+                        '''
+
+                        # print(f"locate: jsr={pformat(jsr)}") # this is too verbose
+                        print("locate: jsr=", end="")
+                        for key in gv['jsr']:
+                            print(f" {key}={type(gv['jsr'][key])}")
+                        if "element" in gv['jsr']:
+                            element = gv['jsr']['element']
+                            self.last_element = element
+
+                    elif isinstance(gv['jsr'], WebElement):
+                        # jsr is an instance of element
+                        print(f'locate: jsr={type(gv['jsr'])}')
+                        self.last_element = gv['jsr']
+                    else:
+                        print(f"locate: jsr is not an element nor a dict, but {type(gv['jsr'])}")
+                        self.last_element = self.driver.switch_to.active_element
+                else:
+                    print(f"locate: jsr={pformat(gv['jsr'])}") # this is too verbose
+                    self.last_element = self.driver.switch_to.active_element
+
+                if 'print' in target:
+                    print(gv['jsr'])
+
+                # https://stackoverflow.com/questions/37791547
+                # https://stackoverflow.com/questions/23408668
+                # last_iframe = driver.execute_script("return window.frameElement")
+                # # pause to confirm
+                # print(f"last_iframe={last_iframe}")
+   
+        elif cmd == 'context':
+            if arg not in ['native', 'webview']:
+                raise RuntimeError(f"unsupported context={arg}, must be native or webview")
+
+            if dryrun:
+                return ret
+
+            contexts = self.driver.contexts
+            context = None
+            for c in contexts:
+                if arg == 'native':
+                    if m := re.match(r'native', c, re.IGNORECASE):
+                        context = c
+                        break
+                else:
+                    if m := re.match(r'webview', c, re.IGNORECASE):
+                        context = c
+                        break
+            if context:
+                print(f"found context={context} among {pformat(contexts)}")
+            else:
+                raise RuntimeError(
+                    f'no matching context among {pformat(contexts)}')
+            # when switch to webview context, appium needs a chromedriver
+            # selenium.common.exceptions.WebDriverException: Message: An unknown
+            # server-side error occurred while processing the command.
+            # Original error: No Chromedriver found that can automate Chrome
+            # '83.0.4103'. ...
+            self.driver.switch_to.context(context)
+        elif cmd == 'doubleclick':
+            doubleclick(self.driver, element, **opt)
+        elif cmd == 'dump':
+            '''
+            dump=scope=path
+            default scope is 'element'
+            scope can be 'page' or 'element'
+
+            path is the directory to save the dump.
+            default path is ~/dumpdir
+            '''
+            if not arg:
+                scope = 'element'
+                path = f"{self.home_dir}/dumpdir"
+            else:
+                m = re.match(r"(page|element)?(?:=(.+))?", arg)
+                if not m:
+                    raise RuntimeError(f"invalid dump argument {arg}")
+                
+                scope, path, *_ = m.groups()
+                if not scope:
+                    scope = 'element'
+
+                if not path:
+                    path = f"{self.home_dir}/dumpdir"
+        
+            dump(self.driver, self.last_element, scope, path, verbose=verbose)
+
+        elif cmd in ["ensureapp", "existsapp", "installapp", "reinstallapp", "removeapp"]:
+            app = arg
+            if classmethod == 'ensureapp':
+                if not self.driver.is_app_installed(app):
+                    self.driver.install_app(app)
+                else:
+                    print(f"app {app} is already installed")
+            elif cmd == 'existsapp':
+                ret['Success'] = self.driver.is_app_installed(app)
+            elif cmd == 'installapp':
+                self.driver.install_app(app)
+            elif cmd == 'reinstallapp':
+                self.driver.remove_app(app)
+                self.driver.install_app(app)
+            else:
+                self.driver.remove_app(app)
+        elif cmd == 'home':
+            self.driver.press_keycode(nativekey.AndroidKey.HOME)
+        elif cmd == 'kill_procs':
+            tpsup.pstools.kill_procs(procs)
+        elif cmd == 'print':
+            keys = arg.split(",")
+            '''
+            print=contexts,currentActivity,html,tag,text,title,timeouts,url,xpath
+            '''
+            # check key is printable
+            for key in keys:
+                if key not in self.printables:
+                    raise RuntimeError(f"unsupported print key={key}")
+
+            print(f"locate: get property {keys}")
+
+            if dryrun:
+                return ret
+                      
+            for key in keys:
+                if key == 'contexts':
+                    print(f'contexts={self.driver.contexts}')
+                elif key == 'currentactivity':
+                    print(f'current_activity={self.driver.current_activity}')
+                elif key== 'html':
+                    if self.last_element:
+                        html = self.last_element.get_attribute('outerHTML')
+                        print(f'element_html=element.outerHTML={html}')
+                elif key == 'tag':
+                    # get element type
+                    if self.last_element:
+                        tag = self.last_element.tag_name
+                        print(f'element_tag_name=element.tag_name={tag}')
+                elif key == 'text':
+                    if self.last_element:
+                        text = self.last_element.text
+                        print(f'element.text={text}')
+                elif key.lower() == 'title':
+                    title = self.driver.title
+                    print(f'driver.title={title}')
+                elif key.lower() == 'timeouts' or key == 'waits':
+                    # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
+                    # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
+                    print(f'    explicit_wait={self.wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
+                    print(f'    implicit_wait={self.driver.timeouts.implicit_wait}') # when we call find_element()
+                    print(f'    page_load_timeout={self.driver.timeouts.page_load}') # driver.get()
+                    print(f'    script_timeout={self.driver.timeouts.script}') # driver.execute_script()
+                elif key == 'url':
+                    '''
+                    https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
+                    javascript: URLs can be used anywhere a URL is a navigation target. 
+                    This includes, but is not limited to:
+                        The href attribute of an <a> or <area> element.
+                        The action attribute of a <form> element.
+                        The src attribute of an <iframe> element.
+                        The window.location JavaScript property.
+                        The browser address bar itself.
+
+                    url has mutliple meanings:
+                        the url of the current page
+                        the url that you go next if you click a link, eg, <a href="url">
+                    more accurately, we care about the following urls, from big to small:
+                        url = driver.current_url # this driver's url, the top level url of the current page.
+                        url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
+                        url = driver.execute_script("return window.location.href") # this is my (current) iframe url
+                        url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
+                    '''
+                    element_url = None
+                    if self.last_element:
+                        # the following are the same
+                        # element_url = driver.execute_script("return arguments[0].src", last_element)
+                        element_url = self.last_element.get_attribute('src')
+
+                        print(f'    element_url=element.get_attribute("src")={element_url}')
+                    else:
+                        print(f'    element_url is not available because last_element is None')
+
+                    # https://stackoverflow.com/questions/938180
+                    iframe_url = self.driver.execute_script("return window.location.href")
+                    print(f'    current_iframe_url=window.location.href={iframe_url}')
+                    '''
+                    1. the following returns the same as above
+                        iframe_current = driver.execute_script("return window.location.toString()")
+                        print(f'    iframe_current=window.location.toString()={iframe_current}')
+                    2. all iframe defined by srcdoc will return "about:srcdoc", eg
+                        <iframe srcdoc="<p>hello</p>"></iframe>
+                    3. people normally use iframe url to id an iframe, but it is not reliable for
+                    srcdoc iframe.
+                    '''
+                    driver_url = self.driver.current_url
+                    print(f'    driver_url=driver.current_url={driver_url}')
+
+                    # https://stackoverflow.com/questions/938180
+                    parent_url = self.driver.execute_script("return document.referrer")
+                    print(f'    parent_iframe_url=document.referrer={parent_url}')
+                elif key == 'xpath':
+                    print("xpath is not implemented yet")
+                #     if last_element:
+                #         xpath = js_get(last_element, 'xpath', **opt)
+                #         print(f'element_xpath={xpath}')
+                #     else:
+                #         print(f'element_xpath is not available because last_element is None')
+        elif cmd == 'record':
+            '''
+            record to a file
+            record=filename
+            examples:
+                record      # default to ~/downloads/record_screen.mp4
+                record=C:/Users/me/downloads/record_screen.mp4
+            '''
+            if not arg:
+                # downloads_dir = get_driverEnv().get_downloads_dir()
+                downloads_dir = self.downloads_dir
+                video_file = os.path.join(downloads_dir, 'record_screen.mp4')
+            else:
+                video_file = arg
+
+            # make dir if not exist
+            os.makedirs(os.path.dirname(video_file), exist_ok=True)
+
+            self.driver.start_recording_screen()
+
+            # we use adb to check screen stillness, to avoid
+            # screenshots interfere with screen recording
+            adb_wait_screen(until='still')
+
+            video_base64 = self.driver.stop_recording_screen()
+
+            with open(video_file, "wb") as f:
+                f.write(base64.b64decode(video_base64))
+
+            print(f"recorded video file is at {video_file}")        
+        elif cmd == 'refresh':
+            self.driver.refresh()
+        # elif m := re.match(r"run=(chrome)$", locator, re.IGNORECASE):
+        elif cmd == 'run':
+            '''
+            run=package_name/activity_name
+            run=chrome  # shortcut for run=com.android.chrome/com.google.android.apps.chrome.Main
+            run=com.android.chrome/com.google.android.apps.chrome.Main
+            '''
+            if not arg or arg == 'chrome':
+                arg = f"run=com.android.chrome/com.google.android.apps.chrome.Main"
+            
+            m = re.match(r"(.+?)/(.+)", arg)
+            if not m:
+                raise ValueError(f"Invalid run argument: {arg}")
+
+            pkg, activity= m.groups()
+            
+            if dryrun:
+                return ret
+
+            self.driver.execute_script(
+                'mobile: startActivity',
+                {
+                    'component': f'{pkg}/{activity}',
+                },
+            )
+        elif cmd == 'screenshot':
+            if arg:
+                downloads_dir = arg
+            else:
+                downloads_dir = self.downloads_dir
+            filename = f"screenshot.png"
+            path = os.path.join(downloads_dir, f"{filename}")
+        
+            # make dir if not exist
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            self.driver.get_screenshot_as_file(path)
+        elif cmd == 'sendkey':
+            value = arg.upper()
+            # https://stackoverflow.com/questions/74188556
+            androidkey = nativekey.AndroidKey
+
+            keycode = androidkey.__dict__.get(value, None)
+            if not keycode:
+                raise RuntimeError(f"key={value} is not supported")
+            
+            if dryrun:
+                return ret
+            
+            if debug:
+                print(f"key={value}, keycode={keycode}")
+
+            # selenium's send_keys is element.send_keys(), using the element as the target.
+            # appium's send_keys is driver.press_keycode(), using the driver as the target.
+            self.driver.press_keycode(keycode)
+        elif cmd == "sleep":
+            time.sleep(int(arg))
+        elif cmd == 'start_driver': 
+            self.driver = self.start_driver(**opt)
+        elif cmd == 'start_emulator':
+            self.start_emulator()
+        elif cmd == 'string' or cmd == 'rawstring':
+            if cmd != 'rawstring':
+                # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
+                arg = arg.replace("\t", "    ")
+            result = self.locate(f"code=2element='''{arg}'''", **opt)
+            ret.update(result)
+        elif cmd == 'swipe':
+            swipe(self.driver, arg, **opt)
+        elif cmd == "url":
+            url = arg
+            self.driver.get(url)
+        elif cmd == 'wait':
+            '''
+            wait=impl=10
+            wait=expl=10
+            wait=page=10
+            wait=all=10
+            '''
+            m = re.match(r"(?:(impl|expl|page|all)=)?(\d+)$", arg)
+            if not m:
+                raise RuntimeError(f"invalid cmd={cmd} syntax, arg={arg}")
+            wait_type, value = m.groups()
+            seconds = int(value)
+
+            if not wait_type:
+                wait_type = 'all'
+            
             if wait_type == 'all' or wait_type == 'expl':
                 # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
                 # explicit wait is done per call (WebDriverWait()).
                 # As we are not calling WebDriverWait() here, we only set the global variable,
                 # so that it can be used when we call WebDriverWait() in the future.
-                wait_seconds = int(value)
+                self.wait_seconds = seconds
 
             if wait_type == 'all' or wait_type == 'impl':
                 # driver.implicitly_wait() only set the implicit wait for the driver, 
                 # affect all find_element() calls right away.
                 # implicit wait is done once per session (driver), not per call.
                 # selenium's default implicit wait is 0, meaning no wait.
-                driver.implicitly_wait(wait_seconds)
+                self.driver.implicitly_wait(self.wait_seconds)
 
             # scrpt timeout is not supported in appium
             # if wait_type == 'all' or wait_type == 'script':
@@ -605,7 +1224,7 @@ def locate(locator: str, **opt):
             if wait_type == 'all' or wait_type == 'page':
                 # set page load timeout
                 '''
-                this for chromedriver; other driver use implicitly_wait()
+                this is for chromedriver; other driver use implicitly_wait()
                 The default value for implicitly_waits is 0, which means
                 (and always has meant) "fail findElement immediately if
                 the element can't be found."
@@ -627,508 +1246,97 @@ def locate(locator: str, **opt):
                 # but this only works in webview context, https://github.com/appium/appium/issues/11609
                 # todo, turn on below in webview
                 # driver.set_page_load_timeout(int(value)*1000)
-            ret['Success'] = True
-    # elif m := re.match(r"(home|enter|backspace)$", locator, re.IGNORECASE):
-    #     value, *_ = m.groups()
-    #     print(f"follow(): {value}")
-    #     locate(f"sendkey={value}", **opt)
-    #     ret['Success'] = True
-    elif m := re.match(r"sendkey=(.+)", locator, re.IGNORECASE):
-        value, *_ = m.groups()
-        print(f"follow(): sendkey={value}")
+                pass
+        elif cmd == "wait_open":
+            '''
+            wait for all needed app open
+            examples:
+                wait_open=60  # wait up to 60 seconds for all needed app open
+            '''
+            ret['Success'] = self.wait_open(int(arg))
+        elif cmd in ["xpath", "css", "id"]:
+            tag = cmd
+            value = arg
+            # AppiumBy.ID is the "resource-id" in uiautomator.
+            # we can use dump_page to get the resource-id.
+            # example:
+            #    <android.widget.TextView index="1" package="com.android.quicksearchbox"
+            #      class="android.widget.TextView" text=""
+            #      resource-id="com.android.quicksearchbox:id/search_widget_text"
+            #      checkable="false" checked="false" clickable="true" enabled="true"
+            #      focusable="true" focused="false" long-clickable="false"
+            #      password="false" scrollable="false" selected="false"
+            #      bounds="[143,130][664,217]" displayed="true"
+            #    />
+            # resource-id = package_name + element_id
+            # here
+            #    package_name = com.android.quicksearchbox
+            #    element_id = search_widget_tex
+            if dryrun:
+                if tag == 'xpath':
+                    print(f"validate xpath={value}")
+                    lxml.etree.XPath(value)
+                return ret
+            else:
+                if tag == 'id':
+                    element = self.driver.find_element(AppiumBy.ID, value)
+                elif tag == 'xpath':
+                    element = self.driver.find_element(AppiumBy.XPATH, value)
+                elif tag == 'css':
+                    element = self.driver.find_element(AppiumBy.CSS_SELECTOR, value)
 
-        value = value.upper()
-        # https://stackoverflow.com/questions/74188556
-        androidkey = nativekey.AndroidKey
+                print(f"found element={element}")
+                self.last_element = element
+        # elif locator == 'tap2':
+        #     print(f"follow(): tap2")
+        #     if interactive:
+        #         hit_enter_to_continue(helper=helper)
+        #     if not dryrun:
+        #         print(f"element = {element}")
+        #         print(f"element.id = {element.id}")
+        #         tap2(driver, element, **opt)
+        #         ret['Success'] = True
+        else:
+            raise RuntimeError(f"unsupported 'cmd={cmd}'")
 
-        keycode = androidkey.__dict__.get(value, None)
-        if not keycode:
-            raise RuntimeError(f"key={value} is not supported")
+        return ret
+
+    def locate_dict(self, step: dict, **opt) -> dict:
+        '''
+        locate_dict() is not called directly in this file.
+        it is a component of locate() in locatetools_new.py
+        '''
+        ret = tpsup.locatetools.ret0.copy()
+        ret['Success'] = False
         
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            if debug:
-                print(f"key={value}, keycode={keycode}")
+        raise NotImplementedError("locate_dict() is not implemented yet")
 
-            # selenium's send_keys is element.send_keys(), using the element as the target.
-            # appium's send_keys is driver.press_keycode(), using the driver as the target.
-            driver = get_driver(**opt)
-            driver.press_keycode(keycode)
-            ret['Success'] = True
-    elif m := re.match(r"(home|back)$", locator, re.IGNORECASE):
-        value, *_ = m.groups()
-        print(f"follow(): {value}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver = get_driver(**opt)
-            if value.lower() == 'home':
-                driver.press_keycode(nativekey.AndroidKey.HOME)
-            elif value.lower() == 'back':
-                driver.back()
-            # this didn't work
-            # elif value.lower == 'appswitch':
-            #     driver.press_keycode(nativekey.AndroidKey.APP_SWITCH)
-            ret['Success'] = True
+# driverEnv: Union[AppiumEnv, None] = None
 
-    elif m := re.match(r"(raw|text|string)=(.+)", locator, re.MULTILINE | re.DOTALL | re.IGNORECASE):
-        string_type, value, *_ = m.groups()
-        if string_type.lower() != 'raw':
-            # replace tab with 4 spaces, because tab will move cursor to the next element.nUX
-            value = value.replace("\t", "    ")
-        result = locate(f"code2element='''{value}'''", **opt)
-        ret['Success'] = result['Success']
-    elif locator == 'clear':
-        print(f"follow(): clear")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            if not last_element:
-                raise RuntimeError("last_element is None")
-            last_element.clear()
-            ret['Success'] = True
-    elif m := re.match(r"(code|python|exp|js)(file)?(.*?)=(.+)", locator, re.MULTILINE | re.DOTALL):
-        '''
-        'code' and 'python' are the same - python code to be executed.
-        'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
-        examples
-            code=print("hello world")
-            python=print("hello world")
-            exp=i==1
-            js=console.log("hello world")
-            jsfile=filename.js
-            code2print="1+1"
-            codefile=filename.py
-            jsfile2element=filename.js
-            js2element="return document.querySelector('body')"
-        '''
-        # directive, code, *_ = m.groups()
-        lang, file, target, code, *_ = m.groups()
+# def get_driverEnv(**args) -> AppiumEnv:
+#     global driverEnv
 
-        if file:
-            print(f"locate: read {lang} from file {code}")
-            with open(code) as f:
-                code = f.read()
-        else:
-            print(f"locate: run {lang}: {code}")
+#     if not driverEnv:
+#         driverEnv = AppiumEnv(**args)
+#     return driverEnv
 
-        # parse 'target'
-        if target:
-            if m := re.match(r"2(print|pformat|element)+$", target):
-                target = m.group(1)
-            else:
-                raise RuntimeError(f"unsupported target={target}")
-           
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            if lang in ['code', 'python', 'exp']:
-                if isExpression or lang == 'exp' or (target and 'element' in target):
-                    # we are testing condition, we want to know True/False
-                    # cc = compile(code, '<string>', 'single')
-                    code_run_fine = False
-                    try:
-                        # ret['Success'] = -eval(cc)
-                        result = multiline_eval(code, globals(), locals())
-                        code_run_fine = True
-                        print(f"lang={lang} returns {result}")
-                    except Exception as e:
-                        print(f"eval failed with exception={e}")
-                        ret['Success'] = False
+# def get_driver(**args) -> webdriver.Remote:
+#     global driver
 
-                    if code_run_fine:
-                        if target:
-                            if 'element' in target:
-                                element = driver.switch_to.active_element
-                                element.send_keys(result)
-                                last_element = element
-                            elif 'print' in target:
-                                print(result)
-                            elif 'pformat' in target:
-                                print(pformat(result))
-                            else:
-                                raise RuntimeError(f"lang={lang} doesn't support target={target}.")
-                            # note 'result' could be a empty string, which is False in python.
-                            # therefore we don't use 'result' to set ret['Success']
-                            ret['Success'] = True
-                        else:
-                            ret['Success'] = result
-                else:
-                    exec_into_globals(code, globals(), locals())
-                    ret['Success'] = True # hard code to True for now               
-            elif lang == 'js':
-                jsr = driver.execute_script(code)
-                if debug:
-                    print(f"locate: jsr={pformat(jsr)}") # this is too verbose            
-                if 'element' in target:
-                    '''
-                    jsr can be an element or a dict with possible keys: 
-                    element, shadowHost, iframeElement
-                    '''
-                    if type(jsr) == dict:
-                        '''
-                        keys in the dict
-                            'element' and 'iframeElement' can not be in the same dict.
-                            'element' and 'shadowHost' can be in the same dict.
-                            'shadowHosts' and 'iframeElement' can be in the same dict: shaodowHosts first, then iframe.
-                                this is because every 'iframe' will end a piece of js. see locator_chain_to_js_list().
-                                therefore, we parse shadowHosts first, to make sure shadowHosts in the front of iframe
-                                in domstack.
-                        '''
+#     if not driver:
+#         driverEnv = get_driverEnv(**args)
+#         driver = driverEnv.get_driver()
+#     return driver
 
-                        # print(f"locate: jsr={pformat(jsr)}") # this is too verbose
-                        print("locate: jsr=", end="")
-                        for key in jsr:
-                            print(f" {key}={type(jsr[key])}")
-                        
-                        if "element" in jsr:
-                            element = jsr['element']
-                            last_element = element
-                                            
-                    elif isinstance(jsr, WebElement):
-                        # jsr is an instance of element
-                        print(f'locate: jsr={type(jsr)}')
-                        last_element = jsr
-                    else:
-                        print(f"locate: jsr is not an element nor a dict, but {type(jsr)}")
-                        last_element = driver.switch_to.active_element
-                else:
-                    print(f"locate: jsr={pformat(jsr)}") # this is too verbose
-                    last_element = driver.switch_to.active_element
+# def get_emulator(**args) :
+#     global driverEnv
 
-                if 'print' in target:
-                    print(jsr)
-                
-                # https://stackoverflow.com/questions/37791547
-                # https://stackoverflow.com/questions/23408668
-                # last_iframe = driver.execute_script("return window.frameElement")
-                # # pause to confirm
-                # print(f"last_iframe={last_iframe}")
-                # hit_enter_to_continue(helper=helper)
+#     if not driverEnv:
+#         driverEnv = AppiumEnv(**args)
+#     return driverEnv.get_emulator()
 
-                ret['Success'] = True
-    elif m := re.match(r"dump_(page|element)=(.+)", locator):
-        scope, path, *_ = m.groups()
-        print(f"follow(): dump {scope} to dir={path}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # print(f"before dump, element.__getattribute__('id') = {element.__getattribute__('id')}")
-            dump(driver, last_element, scope, path, verbose=verbose)
-            ret['Success'] = True
-    elif m := re.match(r"Search", locator, flags=re.IGNORECASE):
-        locate(f"action=Search", **opt)
-        ret['Success'] = True
-    elif m := re.match(r"action=(Search)", locator, flags=re.IGNORECASE):
-        value, *_ = m.groups()
-        print(f"follow(): perform action={value}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver = get_driver(**opt)
-            driverEnv = get_driverEnv(**opt)
-            if driverEnv.is_emulator:
-                # this is for emulator, there is no virtual keyboard,
-                # we can not click the search button on the emulator,
-                # so we type Enter key
-                locate(f"sendkey=enter", **opt)
-            else:
-                # this is for real device, there is a virtual keyboard,
-                # we click the search button on the virtual keyboard
-                driver.execute_script(
-                    'mobile: performEditorAction', {'action': value})
-            ret['Success'] = True
-    elif m := re.match(r"context=(native|webview)", locator):
-        value, *_ = m.groups()
-        print(f"follow(): switch to context matching {value}")
 
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            contexts = driver.contexts
-            context = None
-            for c in contexts:
-                if value == 'native':
-                    if m := re.match(r'native', c, re.IGNORECASE):
-                        context = c
-                        break
-                else:
-                    if m := re.match(r'webview', c, re.IGNORECASE):
-                        context = c
-                        break
-            if context:
-                print(f"found context={context} among {pformat(contexts)}")
-            else:
-                raise RuntimeError(
-                    f'no matching context among {pformat(contexts)}')
-            # when switch to webview context, appium needs a chromedriver
-            # selenium.common.exceptions.WebDriverException: Message: An unknown
-            # server-side error occurred while processing the command.
-            # Original error: No Chromedriver found that can automate Chrome
-            # '83.0.4103'. ...
-            driver.switch_to.context(context)
-            ret['Success'] = True
-    elif locator == 'click':
-        print(f"follow(): click")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            last_element.click()
-            ret['Success'] = True
-    elif locator == 'doubleclick':
-        print(f"follow(): doubleclick")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            print(f"element = {element}")
-            print(f"element.id = {element.id}")
-            doubleclick(driver, element, **opt)
-            ret['Success'] = True
-    # elif locator == 'tap2':
-    #     print(f"follow(): tap2")
-    #     if interactive:
-    #         hit_enter_to_continue(helper=helper)
-    #     if not dryrun:
-    #         print(f"element = {element}")
-    #         print(f"element.id = {element.id}")
-    #         tap2(driver, element, **opt)
-    #         ret['Success'] = True
-    elif locator == 'refresh':
-        print(f"follow(): refresh driver")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver.refresh()
-            ret['Success'] = True
-    elif m := re.match(r"run=(chrome)$", locator, re.IGNORECASE):
-        value, *_ = m.groups()
-        print(f"follow(): run {value}")
-        locate(f"run=com.android.chrome/com.google.android.apps.chrome.Main", **opt)
-       
-        ret['Success'] = True
-    elif m := re.match(r"run=(.+?)/(.+)", locator, re.IGNORECASE):
-        pkg, activity, *_ = m.groups()
-        print(f"follow(): run pkg='{pkg}', activity='{activity}'")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            driver = get_driver(**opt)
-            driver.execute_script(
-                'mobile: startActivity',
-                {
-                    'component': f'{pkg}/{activity}',
-                },
-            )
-            ret['Success'] = True
 
-    elif m := re.match(r"swipe=(.+)", locator):
-        param, *_ = m.groups()
-        print(f"follow(): swipe {param}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            swipe(driver, param, **opt)
-    elif m := re.match(r"debug_(before|after)$", locator):
-        '''
-        "debug_before" vs "debug_before=step1,step2"
-
-        "debug_before", ie, without steps, is to execute all debuggers['before'].
-        "debug_before=step1,step2" is to update debuggers['before'], not execute them.
-        '''
-        ret['Success'] = True # hard code to True for now
-
-        before_after, *_ = m.groups()
-
-        if not dryrun:
-            for step in debuggers[before_after]:
-                # we don't care about the return value but we should avoid
-                # using locator (step) that has side effect: eg, click, send_keys
-                print(f"follow: debug_{before_after}={step}")
-                locate(step, **opt)
-    elif m := re.match(r"(print|debug(?:_before|_after)*)=((?:(?:\b|,)(?:context|currentActivity|css|element|tag|text|title|timeouts|url|waits|xpath))+)$", 
-                       locator, flags=re.IGNORECASE):
-        '''
-        (?...) is non-capturing group. therefore, there are only 2 capturing groups in above regex,
-        and both are on outside.
-        debug_before=url,title,tag => group 1 = debug_before, group 2 = url,title,tag
-
-        examples:
-            print=text,tag
-        '''
-        ret['Success'] = True
-        directive, keys_string = m.groups()
-        keys = keys_string.split(",")
-        '''
-        directive: 'print' vs 'debug...'
-            'print' is excuted right here and only once.
-            'debug' is saved in debuggers[] and executed later, before or after each locate() call.
-        '''
-        if directive == 'print':
-            print(f"locate: print {keys}")
-            if not dryrun:
-                for key in keys:
-                    if not dryrun:
-                        driver = get_driver(**opt)
-                        if key.lower() == 'context':
-                            contexts = driver.contexts
-                            print(f'contexts={contexts}')
-                        elif key.lower() == 'currentactivity':
-                            current_activity = driver.current_activity
-                            print(f'current_activity={current_activity}')
-                        elif key.lower() == 'html':
-                            if last_element:
-                                html = last_element.get_attribute('outerHTML')
-                                print(f'element_html=element.outerHTML={html}')   
-                            else:
-                                print(f'element_html is not available because last_element is None')
-                        elif key.lower() == 'tag':
-                            # get element type
-                            if last_element:
-                                tag = last_element.tag_name
-                                print(f'element_tag_name=element.tag_name={tag}')
-                        elif key.lower() == 'text':
-                            if last_element:
-                                text = last_element.text
-                                print(f'element.text={text}')
-                        elif key.lower() == 'title':
-                            title = driver.title
-                            print(f'driver.title={title}')
-                        elif key.lower() == 'timeouts' or key == 'waits':
-                            # https://www.selenium.dev/selenium/docs/api/py/webdriver_chrome/selenium.webdriver.chrome.webdriver.html
-                            # https://www.selenium.dev/selenium/docs/api/java/org/openqa/selenium/WebDriver.Timeouts.html
-                            print(f'    explicit_wait={wait_seconds}')    # we will run WebDriverWait(driver, wait_seconds)
-                            print(f'    implicit_wait={driver.timeouts.implicit_wait}') # when we call find_element()
-                            print(f'    page_load_timeout={driver.timeouts.page_load}') # driver.get()
-                            print(f'    script_timeout={driver.timeouts.script}') # driver.execute_script()
-                        elif key.lower() == 'url':
-                            '''
-                            https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/javascript
-                            javascript: URLs can be used anywhere a URL is a navigation target. 
-                            This includes, but is not limited to:
-                                The href attribute of an <a> or <area> element.
-                                The action attribute of a <form> element.
-                                The src attribute of an <iframe> element.
-                                The window.location JavaScript property.
-                                The browser address bar itself.
-
-                            url has mutliple meanings:
-                                the url of the current page
-                                the url that you go next if you click a link, eg, <a href="url">
-                            more accurately, we care about the following urls, from big to small:
-                                url = driver.current_url # this driver's url, the top level url of the current page.
-                                url = driver.execute_script("return document.referrer") # this is the url of the parent iframe
-                                url = driver.execute_script("return window.location.href") # this is my (current) iframe url
-                                url = element.get_attribute('src') # if element is iframe, this is child (future) iframe's url
-                            '''
-                            element_url = None
-                            if last_element:
-                                # the following are the same
-                                # element_url = driver.execute_script("return arguments[0].src", last_element)
-                                element_url = last_element.get_attribute('src')
-
-                                print(f'    element_url=element.get_attribute("src")={element_url}')
-                            else:
-                                print(f'    element_url is not available because last_element is None')
-
-                            # https://stackoverflow.com/questions/938180
-                            iframe_url = driver.execute_script("return window.location.href")
-                            print(f'    current_iframe_url=window.location.href={iframe_url}')
-                            '''
-                            1. the following returns the same as above
-                                iframe_current = driver.execute_script("return window.location.toString()")
-                                print(f'    iframe_current=window.location.toString()={iframe_current}')
-                            2. all iframe defined by srcdoc will return "about:srcdoc", eg
-                                <iframe srcdoc="<p>hello</p>"></iframe>
-                            3. people normally use iframe url to id an iframe, but it is not reliable for
-                            srcdoc iframe.
-                            '''
-                            driver_url = driver.current_url
-                            print(f'    driver_url=driver.current_url={driver_url}')
-
-                            # https://stackoverflow.com/questions/938180
-                            parent_url = driver.execute_script("return document.referrer")
-                            print(f'    parent_iframe_url=document.referrer={parent_url}')
-                        elif key.lower() == 'xpath':
-                            print("xpath is not implemented yet")
-                        #     if last_element:
-                        #         xpath = js_get(last_element, 'xpath', **opt)
-                        #         print(f'element_xpath={xpath}')
-                        #     else:
-                        #         print(f'element_xpath is not available because last_element is None')
-        else:
-            # now for debugs
-            if directive == 'debug_before':
-                before_after = 'before'
-            else:
-                # directive == 'debug_after' or directive == 'debug'
-                before_after = 'after'
-
-            print(f"locate: set debug_{before_after}={keys_string}")
-
-            if not dryrun:
-                action = f"print={keys_string}"
-                debuggers[before_after] = [action]
-                print(f"locate: debuggers[{before_after}]={pformat(debuggers[before_after])}")
-    elif result := handle_break(locator, **opt):
-        if not dryrun:
-            # not dryrun, we check the result
-            # we found the expected break
-            ret['break_levels'] = result['break_levels']
-            ret['continue_levels'] = result['continue_levels']
-            # when matched any break statement, we break, no matter 'Success' is True or False.
-    elif locator.lower() == 'record':
-        print(f"follow(): record")
-        downloads_dir = get_driverEnv().get_downloads_dir()
-        video_file = os.path.join(downloads_dir, 'record_screen.mp4')
-        locate(f"record={video_file}", **opt)
-        ret['Success'] = True
-    elif m := re.match(r"record=(.+)", locator):
-        video_file, *_ = m.groups()
-        print(f"follow(): record to {video_file}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # make dir if not exist
-            os.makedirs(os.path.dirname(video_file), exist_ok=True)
-
-            driver = get_driver(**opt)
-            driver.start_recording_screen()
-
-            # we use adb to check screen stillness, to avoid
-            # screenshots interfere with screen recording
-            adb_wait_screen(until='still')
-
-            video_base64 = driver.stop_recording_screen()
-
-            with open(video_file, "wb") as f:
-                f.write(base64.b64decode(video_base64))
-
-            print(f"recorded video file is at {video_file}")
-
-            ret['Success'] = True
-    elif locator == 'screenshot':
-        print(f"follow(): screenshot")
-        downloads_dir = get_driverEnv().get_downloads_dir()
-        filename = f"screenshot.png"
-        path = os.path.join(downloads_dir, f"{filename}")
-        locate(f"screenshot={path}", **opt) 
-    elif m := re.match(r"screenshot=(.+)$", locator):
-        path, *_ = m.groups()
-        print(f"follow(): screenshot to {path}")
-        if interactive:
-            hit_enter_to_continue(helper=helper)
-        if not dryrun:
-            # make dir if not exist
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-
-            driver = get_driver(**opt)
-            driver.get_screenshot_as_file(path)
-            ret['Success'] = True
-    else:
-        raise RuntimeError(f"unsupported 'locator={locator}'")
-
-    return ret
 
 
 def dump(driver: webdriver.Remote, element: WebElement, scope: str, path: str, **opt):
@@ -1241,36 +1449,71 @@ def doubleclick(driver: webdriver.Remote, element: WebElement, **opt):
     actions.double_click(element).perform()
 
 def swipe(driver: webdriver.Remote, param: str, **opt):
+    '''
+    param: direction,distance
+    direction is one of up, down, left, right.
+    size is small, medium, large, default is medium.
+    examples: 
+        up    # default size is medium
+        down,small
+        small,down
+        left,large
+    '''
+
+    # check param
+    if not param:
+        raise RuntimeError("swipe: param is empty")
+    param = param.lower()
+    
     window_size = driver.get_window_size()
     width = window_size['width']
     height = window_size['height']
     print(f"swipe: window_size={window_size}")
 
-    # actions = TouchAction(driver)
-    # actions = ActionChains(driver)
 
     if 'small' in param:
-        factor = 0.55
+        size='small'
+        size_factor = 0.55
     elif 'large' in param:
         factor = 0.9
     else:
-        # default, a little less than 1 page
-        factor = 0.7
+        size='medium'
+        # medium or unspecified, the default, a little less than 1 page
+        size_factor = 0.7
 
     # top-left corner is (0, 0)
     if 'up' in param:
-        driver.swipe(width * 0.5, height * factor,
-                     width * 0.5, height(1 - factor))
+        direction = 'up'
+        from_x = width * 0.5
+        from_y = height * size_factor
+        to_x = width * 0.5
+        to_y = height * (1 - size_factor)
     elif 'down' in param:
-        driver.swipe(width * 0.5, height * (1 - factor),
-                     width * 0.5, height * factor)
+        direction = 'down'
+        from_x = width * 0.5
+        from_y = height * (1 - size_factor)
+        to_x = width * 0.5
+        to_y = height * size_factor
     elif 'left' in param:
-        driver.swipe(width * factor, height * 0.5,
-                     width * (1 - factor), height * 0.5)
+        direction = 'left'
+        from_x = width * size_factor
+        from_y = height * 0.5
+        to_x = width * (1 - size_factor)
+        to_y = height * 0.5
     elif 'right' in param:
-        driver.swipe(width * (1 - factor), height *
-                     0.5, width * factor, height * 0.5)
+        direction = 'right'
+        from_x = width * (1 - size_factor)
+        from_y = height * 0.5
+        to_x = width * size_factor
+        to_y = height * 0.5
+    else:
+        raise RuntimeError(f"invalid swipe param={param}, missing direction")
 
+    print(f"swipe: window width={width}, height={height}, swipe param={param}, \n",
+          f"       direction={direction}, size={size}, size_factor={size_factor}\n",
+          f"       from ({from_x},{from_y}) to ({to_x},{to_y})")
+    driver.swipe(from_x, from_y, to_x, to_y, 800)
+    
 
 procs = [
             "qemu-system-x86_64.exe", 
@@ -1304,7 +1547,7 @@ def pre_batch(all_cfg, known, **opt):
     # init global variables.
     # AppiumEnv class doesn't need global vars because it is Object-Oriented
     # but batch.py uses global vars to shorten code which will be eval()/exec()
-    global driverEnv
+    # global driverEnv
 
     log_FileFuncLine(f"running pre_batch()")
     if all_cfg["resources"]["appium"].get('driverEnv', None) is None:
@@ -1329,11 +1572,21 @@ def post_batch(all_cfg, known, **opt):
     
     print(f"running post_batch()")
 
-    if driver:
+    driverEnv:AppiumEnv = None
+    try: 
+        driverEnv = all_cfg["resources"]["appium"]["driverEnv"]
+    except Exception as e:
+        print(f"driverEnv is not created, skip cleanup")
+        return
+    if driverEnv and driverEnv.driver:
         print(f"driver is still alive, quit it")
-        driver.quit()
+        driverEnv.driver.quit()
 
     # no need to close driverEnv because it it doesn't have much resource to close
+
+    # don't kill procs because it takes too long to restart emulator and appium server.
+    # log_FileFuncLine(f"kill chromedriver if it is still running")
+    # tpsup.pstools.kill_procs(procs, **opt)
 
     tpsup.pstools.check_procs(procs, **opt)
 
@@ -1399,6 +1652,12 @@ tpbatch = {
             "action": "store_true",
             "help": f"kill {procs}",
         },
+        'explore': {
+            'switches': ['-explore', '--explore'],
+            'action': 'store_true',
+            'default': False,
+            'help': "enter explore mode at the end of the steps"
+        },
     },
     'resources': {
         'appium': {
@@ -1416,7 +1675,7 @@ tpbatch = {
 
 def main():
     driverEnv = AppiumEnv(host_port='localhost:4723', is_emulator=True)
-    driver = driverEnv.get_driver()
+    driver = driverEnv.start_driver()
 
     print(f"click home button")
 

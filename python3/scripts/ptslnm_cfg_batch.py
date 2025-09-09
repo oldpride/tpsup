@@ -8,7 +8,6 @@ import tpsup.csvtools
 import tpsup.htmltools
 import tpsup.seleniumtools
 import tpsup.locatetools
-import tpsup.locatetools
 import tpsup.pstools
 from pprint import pformat
 
@@ -16,7 +15,13 @@ HOME = tpsup.envtools.get_home_dir()
 TPSUP = os.environ['TPSUP']
 
 # convert to native path, eg, /cygdrive/c/User/tian/... to C:/User/tian/...
-TPSUP = tpsup.envtools.convert_path(TPSUP)
+TPSUP = tpsup.envtools.convert_path(TPSUP,
+                                    target_type='native',
+                                    # verbose=1,
+                                    )
+
+print(f'using TPSUP={TPSUP}')
+# exit(0)
 
 TPP3 = f'{TPSUP}/python3/scripts'
 HTTP_BASE = 'http://localhost:8000'
@@ -31,11 +36,12 @@ our_cfg = {
     # ],
 
     # 'extra_args': {
+    #     'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
     # },
 
     'test_example': f'''
     the expected results are created wehn using http url to test.
-    ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p dump_all="{HOME}/dumpdir"
+    ptslnm url="{HTTP_BASE}//iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" "css=iframe" iframe css=p dump=all="{HOME}/dumpdir"
     diff -r ~/dumpdir {TPP3}/expected/ptslnm_test1/dumpdir
     ''',
 
@@ -69,7 +75,7 @@ our_cfg = {
         {{{{prog}}}} any -cq
 
     - has shadows, no iframes, simple pages to test shadows, default dump scope is element, default dump dir is $HOME/dumpdir
-    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump_page="{HOME}/dumpdir" # without locators, dump whole page
+    {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump=page="{HOME}/dumpdir" # without locators, dump whole page
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" "xpath=id('shadow_host')" "shadow" dump # with locators
 
     - has iframes, no shadows
@@ -81,37 +87,37 @@ our_cfg = {
 
     - test a static page with nested iframes, same origin vs cross origin (has dice.com iframe)
       many website doesn't allow iframe, eg, google, youtube, but dice.com allows iframe. 
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" xpath=//iframe[1] iframe xpath=//iframe[1] iframe xpath=//h1[1] dump
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" xpath=//iframe[1] iframe "css=#shadow_host" shadow dump
     {{{{prog}}}} url="{HTTP_BASE}/iframe_test1.html" xpath=//iframe[1] iframe xpath=//iframe[2] iframe xpath=//div[1] dump
     - test using js as steps. 
       variable value can either be persisted in python or in js's window or document (ie, window.documnt) object.
-      'jsr' is a special code to return js variable to python.
-        {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "js=document.testvar=777" "js=return document.testvar" "code=print(jsr)"
-      
-    other js directives: js2element, jsfile, jsfile2element, js2print
-        {{{{prog}}}} url=newtab "jsfile2elementprint={TPP3}/ptslnm_js_test_google.js" debug_after=consolelog click sendkey=Enter sleep=3
+      gv['jsr'] is a global variable to return js variable to python.
+        {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "js=document.testvar=777" "js=return document.testvar" "python=print(gv['jsr'])"
+
+    other js directives: js=2element, js=file, js=file2element, js=2print
+        {{{{prog}}}} url=newtab "js=file2elementprint={TPP3}/ptslnm_js_test_google.js" debug=after=consolelog click sendkey=Enter sleep=3
 
     js error should stop locator chain
-        {{{{prog}}}} url=blank "jsfile2elementprint={TPP3}/ptslnm_js_test_throw.js" debug_after=consolelog click sendkey=Enter sleep=3
+        {{{{prog}}}} url=blank "js=file2elementprint={TPP3}/ptslnm_js_test_throw.js" debug=after=consolelog click sendkey=Enter sleep=3
 
     - test using js to locate. js is much faster.
         in shadow, we can only use css selector to locate
         but once in iframe, even if an iframe inside an shadow root, we can use xpath again.
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir"
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir2" -js
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug=after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir"
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug=after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span dump="{HOME}/dumpdir2" -js
     diff -r dumpdir dumpdir2 # should be the same
     
     - test dump scope: element, shadow, iframe, page, all
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump_all 
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" "xpath=/html[1]/body[1]/iframe[1]" "iframe" "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=iframe iframe css=p dump=all 
 
     - test go up and down in shadow and iframe
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug_after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span top
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" sleep=1 "xpath=/html[1]/body[1]/iframe[1]" "iframe" debug=after=url,consolelog "xpath=id('shadow_host')" "shadow" "css=#nested_shadow_host" "shadow" css=span top
     
     // vs / in xpath:
         // is short path
         / is full path
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 debug_after=url,consolelog,domstack "xpath=//iframe[1]" "iframe" "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]"
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 debug=after=url,consolelog,domstack "xpath=//iframe[1]" "iframe" "xpath=//iframe[2]" "iframe" "xpath=//iframe[1]" "iframe" "xpath=/html/body/div[1]/p[1]"
     
     - dump out dynamically generated html too
       note:
@@ -123,16 +129,26 @@ our_cfg = {
     {{{{prog}}}} url=newtab "sleep=2" "xpath=/iframe[1]" iframe "xpath=//a[@aria-label='Gmail ']" dump="{HOME}/dumpdir"
 
     - test block steps
-    {{{{prog}}}} code="i=0" code="print(f'i={{i}}')" while=code="i<3" code="i=i+1" code="print(f'i={{i}}')" sleep=1 end_while
+    # {{{{prog}}}} python="i=0" python="print(f'i={{i}}')" while=exp="i<3" python="i=i+1" python="print(f'i={{i}}')" sleep=1 end_while
+ 
+    {{{{prog}}}} python="i=0" python="print(f'i={{i}}')" while=exp="i<3" python="i=i+1" python="print(f'i={{i}}')" sleep=1 end_while
 
-    {{{{prog}}}} if_not=exp="a=0;1/a" code="print('negate False worked')" end_if_not
+    
+    {{{{prog}}}} if_not=exp="a=0;1/a" python="print('negate False worked')" end_if
 
-    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 code="i=0" while=code="i<4" code="i=i+1" "click_xpath=/html/body/button" sleep=1 "if=xpath=//*[@id='random' and text()='10']" break end_if end_while
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_block.html" wait=1 python="i=0" while=exp="i<4" python="i=i+1" "click_xpath=/html/body/button" sleep=1 "if=xpath=//*[@id='random' and text()='10']" break end_if end_while
 
-    - test exp
-    {{{{prog}}}} exp="a=1;a+1" code="print(a)"  # this will pass - 2
-    {{{{prog}}}} exp="a=1"     code="print(a)"  # this will fail - NameError: name 'a' is not defined
-    {{{{prog}}}} code="a=1"    code="print(a)"  # this will pass - 1
+    - exp vs python vs code
+      exp    (expression) is processed by python's eval(), implemented in tpsup.locatetools.
+      python (statement)  is processed by python's exec(), implemented in tpsup.locatetools.
+      code   (expression) is processed by python's eval(), implemented in tpsup.seleniumtools.
+             the main purpose of 'code' is to send the output to element.
+    {{{{prog}}}} exp="a=1;a+1" python="print(a)"  # this will pass - because a+1=2 > 0, so exp is true.
+                                                  a=1 is executed first, then a+1 is evaluated.
+    {{{{prog}}}} exp="a=1"     python="print(a)"  # this will fail - NameError: name 'a' is not defined
+                                                  a=1 is evaluated, but not executed, so a is not defined.
+    {{{{prog}}}} python="a=1"    python="print(a)"  # this will pass - 1
+                                                  a=1 is executed, so a is defined.
 
     - test steps in file
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps_txt="{TPP3}/ptslnm_test_steps_txt.txt" top
@@ -155,7 +171,7 @@ our_cfg = {
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_alert.html" "xpath=//input[@id='fname']" click string=henry tab=1 url_accept_alert=http://google.com sleep=1
     
     - test clear text field
-    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" "xpath=//textarea[id('message')]" click clear_text code2element='f"abc{{1+1}}"' sleep=10
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" "xpath=//textarea[id('message')]" click clear_text code=2element='f"abc{{1+1}}"' sleep=10
 
     notes for windows cmd.exe, 
         double quotes cannot be escaped, 
@@ -170,9 +186,9 @@ our_cfg = {
     },
 }
 
-def pre_batch(all_cfg, known, **opt):
-    # run tpsup.seleniumtools.pre_batch() to set up driver
-    tpsup.seleniumtools.pre_batch(all_cfg, known, **opt)
+# def pre_batch(all_cfg, known, **opt):
+#     # run tpsup.seleniumtools.pre_batch() to set up driver
+#     tpsup.seleniumtools_new.pre_batch(all_cfg, known, **opt)
 
 def code(all_cfg, known, **opt):
     # global driver
@@ -187,6 +203,7 @@ def code(all_cfg, known, **opt):
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
     allowFile = opt.get('allowFile', 0)
+    explore = opt.get('explore', 0)
 
     # yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
@@ -223,10 +240,17 @@ def code(all_cfg, known, **opt):
     print(f']')
 
     # result = tpsup.seleniumtools.check_syntax_then_follow(steps, **opt)
-    followEnv = tpsup.locatetools.FollowEnv(str_action=tpsup.seleniumtools.locate, 
-                                            dict_action=tpsup.seleniumtools.locate_dict,
-                                            **opt)
-    result = followEnv.follow(steps, **opt)
+    driverEnv: tpsup.seleniumtools.SeleniumEnv = all_cfg["resources"]["selenium"]['driverEnv']
+    # locateEnv = tpsup.locatetools_new.LocateEnv(
+    #     locate_f=driverEnv.locate, 
+    #     locate_usage=driverEnv.locate_usage_by_cmd,
+    #     **opt)
+    # result = locateEnv.follow(steps, **opt)
+    result = driverEnv.follow(steps, **opt)
+    # if explore mode, enter explore mode at the end of the steps
+    if explore:
+        print("enter explore mode")
+        driverEnv.explore(**opt)
 
 def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
     caller = all_cfg.get('caller', None)
@@ -248,10 +272,10 @@ def parse_input_sub(input: Union[str, list], all_cfg: dict, **opt):
         print(all_cfg.get('test_example', '').replace("{{prog}}", f'{caller} -af').replace(HTTP_BASE, FILE_BASE))
         exit(0)
 
-    if re.match(r'locators$', input[0]):
-        for line in tpsup.locatetools.get_defined_locators(locate_func=tpsup.seleniumtools.locate):
-            print(line)
-        exit(0)
+    # if re.match(r'locators$', input[0]):
+    #     for line in tpsup.locatetools_new.decoded_get_defined_locators(locate_func=tpsup.seleniumtools_new.locate_f):
+    #         print(line)
+    #     exit(0)
 
     if re.match(r'(d|download_chrome)driver$', input[0]):
         version = input[1] if len(input) > 1 else None
