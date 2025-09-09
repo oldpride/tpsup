@@ -31,7 +31,7 @@ import tpsup.locatetools
 from tpsup.logbasic import log_FileFuncLine
 from tpsup.nettools import is_tcp_open, wait_tcps_open
 import tpsup.pstools
-import tpsup.seleniumtools_old
+import tpsup.seleniumtools
 import tpsup.tmptools
 from tpsup.human import human_delay
 import os.path
@@ -321,7 +321,7 @@ class AppiumEnv:
                 raise RuntimeError(f"\nadb is not in PATH={os.environ['PATH']}\nand ANDROID_HOME is not set")
         self.driver: webdriver.Remote = None
 
-        static_setup = tpsup.seleniumtools_old.get_static_setup(**opt)
+        static_setup = tpsup.seleniumtools.get_static_setup(**opt)
         chromedriver_path = static_setup.get('chromedriver', None)
         if not chromedriver_path:
             raise RuntimeError(f"chromedriver is not set in static_setup={static_setup}")

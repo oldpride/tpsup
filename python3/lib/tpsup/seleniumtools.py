@@ -42,7 +42,6 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 from tpsup.nettools import is_tcp_open
 import tpsup.pstools
-from tpsup.seleniumtools_old import dump_recursively, handle_page_change
 import tpsup.tmptools
 import os.path
 
