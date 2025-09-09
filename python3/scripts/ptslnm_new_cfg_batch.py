@@ -15,7 +15,13 @@ HOME = tpsup.envtools.get_home_dir()
 TPSUP = os.environ['TPSUP']
 
 # convert to native path, eg, /cygdrive/c/User/tian/... to C:/User/tian/...
-TPSUP = tpsup.envtools.convert_path(TPSUP)
+TPSUP = tpsup.envtools.convert_path(TPSUP,
+                                    target_type='native',
+                                    # verbose=1,
+                                    )
+
+print(f'using TPSUP={TPSUP}')
+# exit(0)
 
 TPP3 = f'{TPSUP}/python3/scripts'
 HTTP_BASE = 'http://localhost:8000'

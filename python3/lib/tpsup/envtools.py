@@ -548,7 +548,7 @@ def find_path_type(path: str, **opt):
 
 def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = False,
                  source_type: Literal['cygwin', 'gitbash', 'batch'] = None,
-                 target_type: Literal['cygwin', 'gitbash', 'batch'] = None,
+                 target_type: Literal['cygwin', 'gitbash', 'batch', 'native'] = None,
                  **opt):
     verbose = opt.get('verbose', 0)
 
@@ -566,6 +566,13 @@ def convert_path(source_path: str, is_env_var: bool = False, change_env: bool = 
 
     if verbose:
         print(f"source_type={source_type}")
+
+    if target_type == 'native':
+        myenv = get_env(**opt)
+        if myenv.isWindows:
+            target_type = 'batch'
+        else:
+            target_type = 'gitbash'
 
     if target_type is None:
         myenv = get_env(**opt)

@@ -2114,7 +2114,7 @@ class SeleniumEnv:
             # a click may change the page
             self.handle_page_change(**opt)
 
-        elif cmd in ['code', 'exp', 'js']:
+        elif cmd in ['code', 'js']:
             '''
             'code' is python code to be executed.
             'exp' is python code which returns True/False or equivalent (eg, 1 vs 0, "abc" vs "").
@@ -2131,13 +2131,15 @@ class SeleniumEnv:
 
             # lang, file, target = m.groups()
             lang = cmd
-            if m := re.match(r"(file)?(?:2(print|pformat|element)+)?=(.+)", arg, re.DOTALL|re.MULTILINE):
+            if m := re.match(r"(file)?(?:2(print|pformat|element)+=)?(.+)", arg, re.DOTALL|re.MULTILINE):
                 # print(f"\nMatched\n")
                 file, target, code = m.groups()
             else:
                 file = None
                 target = None
                 code = arg
+
+            # print(f"locate: lang={lang}, is_file={file}, target={target}")
 
             if file:
                 filename = code
@@ -2149,7 +2151,7 @@ class SeleniumEnv:
                 with open(filename) as f:
                     code = f.read()
 
-            print(f"\nlocate: run {lang}, file={file}, target={target}, code=\n{code}\n")
+            print(f"\nlocate: run {lang}, is_file={file}, target={target}, code=\n{code}\n")
 
             if dryrun:
                 return ret
@@ -2157,38 +2159,38 @@ class SeleniumEnv:
             if lang in ['code', 
                         # 'exp'
                         ]:
-                # if isExpression or lang == 'exp' or (target and 'element' in target):
-                #     # we are testing condition, we want to know True/False
-                #     # cc = compile(code, '<string>', 'single')
-                #     code_run_fine = False
-                #     try:
-                #         # ret['Success'] = -eval(cc)
-                #         result = multiline_eval(code, globals(), locals())
-                #         code_run_fine = True
-                #         print(f"lang={lang} returns {result}")
-                #     except Exception as e:
-                #         print(f"eval failed with exception={e}")
-                #         ret['Success'] = False
+                if target and 'element' in target:
+                    # we are testing condition, we want to know True/False
+                    # cc = compile(code, '<string>', 'single')
+                    code_run_fine = False
+                    try:
+                        # ret['Success'] = -eval(cc)
+                        result = multiline_eval(code, globals(), locals())
+                        code_run_fine = True
+                        print(f"lang={lang} returns {result}")
+                    except Exception as e:
+                        print(f"eval failed with exception={e}")
+                        ret['Success'] = False
 
-                #     if code_run_fine:
-                #         if target:
-                #             if 'element' in target:
-                #                 element = self.driver.switch_to.active_element
-                #                 element.send_keys(result)
-                #                 self.last_element = element
-                #             elif 'print' in target:
-                #                 print(result)
-                #             elif 'pformat' in target:
-                #                 print(pformat(result))
-                #             else:
-                #                 raise RuntimeError(f"lang={lang} doesn't support target={target}.")
-                #             # note 'result' could be a empty string, which is False in python.
-                #             # therefore we don't use 'result' to set ret['Success']
-                #         else:
-                #             ret['Success'] = result
-                # else:
-                #     exec_into_globals(code, globals(), locals()) 
-                exec_into_globals(code, globals(), locals())             
+                    if code_run_fine:
+                        if target:
+                            if 'element' in target:
+                                element = self.driver.switch_to.active_element
+                                element.send_keys(result)
+                                self.last_element = element
+                            elif 'print' in target:
+                                print(result)
+                            elif 'pformat' in target:
+                                print(pformat(result))
+                            else:
+                                raise RuntimeError(f"lang={lang} doesn't support target={target}.")
+                            # note 'result' could be a empty string, which is False in python.
+                            # therefore we don't use 'result' to set ret['Success']
+                        else:
+                            ret['Success'] = result
+                else:
+                    exec_into_globals(code, globals(), locals()) 
+                           
             elif lang == 'js':
                 gv['jsr'] = self.driver.execute_script(code)
                 if debug:
@@ -2820,7 +2822,9 @@ class SeleniumEnv:
             #     time.sleep(2)
             #     driver_url = driver.current_url
             # driver_url = driver.current_url
-            self.last_element = self.driver.switch_to.active_element
+
+            # the following got error: no element found
+            # self.last_element = self.driver.switch_to.active_element
         elif cmd == "wait":
             '''
             set different wait timeouts.

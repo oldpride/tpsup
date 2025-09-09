@@ -693,7 +693,7 @@ class LocateEnv:
 
             result = {'Success': False}
 
-            print(f"follow2: running step={pformat(step)}")
+            print(f"follow2: run step={pformat(step)}")
 
             # call_locate = True
             # if dryrun:
