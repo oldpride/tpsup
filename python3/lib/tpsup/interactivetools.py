@@ -121,6 +121,7 @@ def hit_enter_to_continue(initial_steps=0, helper: dict = {}, message:str = None
 
 class Pause:
     nonstop_step_count = 0
+    ret0 = {'skip': 0} 
 
     usage = '''
         Enter:       run next step
@@ -138,21 +139,36 @@ class Pause:
             self.usage += "        e|explore:   enter explore mode"
         self.prompt += " : "
 
+
+
     def pause(self, message:str = None, **opt):
         if message is not None:
             print(message)
 
+        if self.nonstop_step_count > 0:
+            self.nonstop_step_count -=1
+            return self.ret0.copy()
+        
         while True:  
             answer = input(self.prompt)
             answer = answer.strip()
 
-            ret = {'skip': 0}   
+            ret = self.ret0.copy()
+
             if answer == "":
                 # if answer is just Enter, then continue
                 return ret
             elif m := re.match(r"(\d+)$", answer):
                 self.nonstop_step_count = int(answer)
                 return ret
+            elif answer == "e" or answer == "explore":
+                if self.explore is not None:
+                    print("enter explore mode")
+                    self.explore(**opt)
+                else:
+                    print("no explore function defined")
+            elif answer == "h" or answer == "help":
+                print(self.usage)
             elif answer == "q" or answer == "quit":
                 print("quit")
                 quit(0)  # same as exit
@@ -160,13 +176,5 @@ class Pause:
                 print("skip")
                 ret['skip'] = 1
                 return ret
-            elif answer == "h" or answer == "help":
-                print(self.usage)
-            elif answer == "e" or answer == "explore":
-                if self.explore is not None:
-                    print("enter explore mode")
-                    self.explore(**opt)
-                else:
-                    print("no explore function defined")
             else:
                 print(f"unsupported answer='{answer}', try again")

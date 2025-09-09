@@ -2358,9 +2358,7 @@ class SeleniumEnv:
 
         # elif cmd == "exp": # see:elif cmd in ['code', 'python', 'exp', 'js']:
         elif cmd in ["gone_xpath", "gone_css"]:
-            # restore original locator
-            locator = f"{cmd}={arg}"
-            ptype, paths_string = m.groups()
+            ptype, paths_string = cmd, arg
 
             type_paths = []
             while m2 := re.match(r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*gone_(xpath|css)=",

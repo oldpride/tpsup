@@ -723,9 +723,13 @@ class LocateEnv:
             #         result = self.combined_locate_single_step_user_input(step, **opt)
 
             if interactive:
+                need_skip = False
                 while True:
                     # tpsup.interactivetools.hit_enter_to_continue()
-                    self.pause()
+                    pause_result = self.pause()
+                    if pause_result['skip']:
+                        need_skip = True
+                        break
                     try:
                         result = self.locate(step, **opt)
                         break
@@ -733,6 +737,10 @@ class LocateEnv:
                         print(e)
                         # setting step_count to 0 is to make interactive mode to single step.
                         tpsup.interactivetools.nonstop_step_count = 0
+
+                if need_skip:
+                    print(f"follow2: step {step} is skipped due to interactive skip")
+                    continue
             else:
                 result = self.locate(step, **opt)
 
