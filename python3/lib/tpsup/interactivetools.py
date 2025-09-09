@@ -131,10 +131,14 @@ class Pause:
         h|help:      print help
     '''
 
-    def __init__(self, explore: callable = None, **opt):
-        self.explore = explore
+    def __init__(self, 
+                 explore_f: callable = None, 
+                 # we use explore_f instead of explore to avoid confusion with opt['explore']
+
+                 **opt):
+        self.explore_f = explore_f
         self.prompt = f"Enter=1 step; number=steps; q=quit; s=skip; h=help;"
-        if self.explore is not None:
+        if self.explore_f is not None:
             self.prompt += " e=explore;"
             self.usage += "        e|explore:   enter explore mode"
         self.prompt += " : "
@@ -162,9 +166,9 @@ class Pause:
                 self.nonstop_step_count = int(answer)
                 return ret
             elif answer == "e" or answer == "explore":
-                if self.explore is not None:
+                if self.explore_f is not None:
                     print("enter explore mode")
-                    self.explore(**opt)
+                    self.explore_f(**opt)
                 else:
                     print("no explore function defined")
             elif answer == "h" or answer == "help":

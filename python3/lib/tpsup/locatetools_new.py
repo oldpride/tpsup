@@ -61,6 +61,9 @@ class LocateEnv:
     already_checked_syntax = False # whether we have checked the syntax of all locators
     delay = 0 # delay in seconds before each step
 
+    real_step_count = 0 # how many steps have been executed
+    dryrun_step_count =0
+
     allowed_usage_subkeys = [
         'has_dryrun',   # whether this cmd has dryrun option to check syntax
         'need_arg',     # whether this cmd needs an argument
@@ -245,15 +248,15 @@ class LocateEnv:
             # check usage subkeys
             for subkey in lu.keys():
                 if subkey not in self.allowed_usage_subkeys:
-                    raise RuntimeError(f"locator='{k}' has unsupported usage subkey='{subkey}'")
+                    raise RuntimeError(f"cmd='{k}' has unsupported usage subkey='{subkey}'")
 
             # add 'siblings' to each locator usage
             siblings = lu.get('siblings', [])
             for sibling in siblings:
                 if sibling in reserved_keys:
-                    raise RuntimeError(f"locator {k}'s sibling {sibling} is a reserved keyword")
+                    raise RuntimeError(f"cmd='{k}' sibling {sibling} is a reserved keyword")
                 if sibling in self.combined_usage_by_long:
-                    raise RuntimeError(f"locator {k}'s sibling {sibling} is seen multiple times")
+                    raise RuntimeError(f"cmd='{k}' sibling {sibling} is seen multiple times")
                 # print(f"locator {k} has sibling {sibling}")
                 self.combined_usage_by_long[sibling] = lu.copy()
 
@@ -286,7 +289,7 @@ class LocateEnv:
         self.caller_globals = inspect.currentframe().f_back.f_globals
         self.caller_locals = inspect.currentframe().f_back.f_locals
 
-        self.pause = tpsup.interactivetools.Pause(explore=self.explore, **opt).pause
+        self.pause = tpsup.interactivetools.Pause(explore_f=self.explore, **opt).pause
 
     def follow2(self, steps: list,  **opt) -> dict:
         '''
@@ -693,7 +696,10 @@ class LocateEnv:
 
             result = {'Success': False}
 
-            print(f"follow2: run step={pformat(step)}")
+            if dryrun:
+                print(f"follow2-#{self.dryrun_step_count}: run step={pformat(step)}")
+            else:
+                print(f"follow2-#{self.real_step_count}: run step={pformat(step)}")
 
             # call_locate = True
             # if dryrun:
@@ -743,6 +749,11 @@ class LocateEnv:
                     continue
             else:
                 result = self.locate(step, **opt)
+
+            if dryrun:
+                self.dryrun_step_count += 1
+            else:
+                self.real_step_count += 1
 
             # log_FileFuncLine(f"follow2: step={step} result={pformat(result)}")
 
@@ -1122,7 +1133,7 @@ class LocateEnv:
             # parsed = tpsup.steptools.parse_single_step(locator)
             parsed = self.parse_and_check_single_step_user_input(locator)
             if not parsed:
-                raise RuntimeError(f"failed to parse locator string={locator}") 
+                raise RuntimeError(f"failed to parse locator={locator}") 
             cmd=parsed['cmd']
             arg=parsed['arg']
 

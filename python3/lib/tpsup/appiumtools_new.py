@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 from urllib.parse import urlparse
-from shutil import which
+import shutil
 
 import lxml.etree
 from appium import webdriver
@@ -293,14 +293,32 @@ class AppiumEnv:
         if self.is_emulator:
             log_FileFuncLine(f"emulator_log={self.emulator_log}")
             
-        self.appium_exe = which('appium')
+        # check appium executable
+        self.appium_exe = shutil.which('appium')
         if self.appium_exe:
             log_FileFuncLine(f"appium is {self.appium_exe}")
         else:
             raise RuntimeError(f"appium is not in PATH={os.environ['PATH']}\nnormally C:/tools/nodejs/appium")
-        
-        log_FileFuncLine(f"appium_log={self.appium_log}")
 
+        # check adb executable
+        self.adb_exe = shutil.which('adb')
+        if self.adb_exe:
+            log_FileFuncLine(f"adb is {self.adb_exe}")
+        else:
+            log_FileFuncLine(f"adb is not in PATH={os.environ['PATH']}; we will try to add it.")
+            # add ANDROID_HOME/platform-tools to PATH and try again
+            if 'ANDROID_HOME' in os.environ:
+                platform_tools = f"{os.environ['ANDROID_HOME']}/platform-tools"
+                os.environ['PATH'] += os.pathsep + platform_tools
+
+                # check again
+                self.adb_exe = shutil.which('adb')
+                if self.adb_exe:
+                    log_FileFuncLine(f"adb is {self.adb_exe}")
+                else:
+                    raise RuntimeError(f"adb is not in PATH={os.environ['PATH']}\nnormally C:/tools/android-sdk/platform-tools")
+            else:
+                raise RuntimeError(f"\nadb is not in PATH={os.environ['PATH']}\nand ANDROID_HOME is not set")
         self.driver: webdriver.Remote = None
 
         static_setup = tpsup.seleniumtools.get_static_setup(**opt)
@@ -517,7 +535,7 @@ class AppiumEnv:
         'code': {
             'need_arg': True,
             'has_dryrun': True,
-            'siblings': ['python', 'exp', 'js'],
+            'siblings': ['js'], # siblings cmd share the same usage
             'usage': '''
             code=python code
             python=python code
@@ -548,7 +566,7 @@ class AppiumEnv:
                 context=webview
 
             to print current context
-                print=context
+                print=contexts (plural for print)
             ''',
         },
         'dump': {
@@ -1175,22 +1193,21 @@ class AppiumEnv:
             wait=page=10
             wait=all=10
             '''
-            m = re.match(r"(impl|expl|page|all)*=(\d+)", arg, re.IGNORECASE)
+            m = re.match(r"(?:(impl|expl|page|all)=)?(\d+)$", arg)
             if not m:
-                raise RuntimeError(f"wait=impl|expl|page|all=seconds, got {arg}")
-            wait_type, value, *_ = m.groups()
+                raise RuntimeError(f"invalid cmd={cmd} syntax, arg={arg}")
+            wait_type, value = m.groups()
+            seconds = int(value)
+
             if not wait_type:
                 wait_type = 'all'
-            print(f"locate: set {wait_type} wait type to {value} seconds")
-            if dryrun:
-                return ret
-
+            
             if wait_type == 'all' or wait_type == 'expl':
                 # explicit wait is set when we call WebDriverWait(driver, wait_seconds).
                 # explicit wait is done per call (WebDriverWait()).
                 # As we are not calling WebDriverWait() here, we only set the global variable,
                 # so that it can be used when we call WebDriverWait() in the future.
-                self.wait_seconds = int(value)
+                self.wait_seconds = seconds
 
             if wait_type == 'all' or wait_type == 'impl':
                 # driver.implicitly_wait() only set the implicit wait for the driver, 
@@ -1497,8 +1514,6 @@ def swipe(driver: webdriver.Remote, param: str, **opt):
           f"       from ({from_x},{from_y}) to ({to_x},{to_y})")
     driver.swipe(from_x, from_y, to_x, to_y, 800)
     
-
-
 
 procs = [
             "qemu-system-x86_64.exe", 

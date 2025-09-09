@@ -117,7 +117,7 @@ class PwaEnv:
 
     locate_usage_by_cmd = {
         'start': {
-            'need_args': True,
+            'need_arg': True,
             'usage': '''
                 start=notepad.exe
                 start="C:\\Program Files\\Mozilla Firefox\\firefox.exe"
@@ -127,7 +127,7 @@ class PwaEnv:
         },
         'connect': {
             'short': 'conn',
-            'need_args': True,
+            'need_arg': True,
             'usage': '''
                 connect with title_re
                 conn=".*tianjunk.*"
@@ -135,14 +135,14 @@ class PwaEnv:
         },
         'child': {
             'short': 'c',
-            'need_args': True,
+            'need_arg': True,
             'usage': '''
                 c=1
                 ''',
         },
         'control_identifiers': {
             'short': 'ci',
-            'no_args': True,
+            'no_arg': True,
             'usage': '''
                 get the control identifiers of the current window
                 ci
@@ -150,28 +150,28 @@ class PwaEnv:
         },
         'list': {
             'short': 'l',
-            'no_args': True,
+            'no_arg': True,
             'usage': '''
                 list the child windows of the top window and current window
                 l
             ''',
         },
         'refresh': {
-            'no_args': True,
+            'no_arg': True,
             'usage': '''
                 refresh the child window list
                 r
             ''',
         },
         'text': {
-            'no_args': True,
+            'no_arg': True,
             'usage': '''
                 get the text of the current window
                 tx
             ''',
         },
         'top' : {
-            'no_args': True,
+            'no_arg': True,
             'usage': '''
                 get the top window
                 top
@@ -179,7 +179,7 @@ class PwaEnv:
         },
         'type': {
             'short': 'ty',
-            'need_args': 1,
+            'need_arg': 1,
             'usage': '''
                 ty=hello
                 ty="hello world"

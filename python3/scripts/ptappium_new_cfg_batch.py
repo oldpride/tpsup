@@ -133,9 +133,9 @@ our_cfg = {
     {{{{prog}}}} -emu start_driver\\
         run=org.nativescript.test02ngchallenge/com.tns.NativeScriptActivity \\
         "xpath=//android.widget.EditText[matches(text(), '.*')]" click clear \\
-        text="hello world" \\
+        string="hello world" \\
         css=android.widget.Button click \\
-        xpath=//*[@id='com.google.android.youtube:id/fullscreen_button']" click \\
+        "xpath=//*[@id='com.google.android.youtube:id/fullscreen_button']" click \\
         record_screen
 
     - download a Youtube video - there is no sound 
@@ -144,8 +144,10 @@ our_cfg = {
         xpath="//android.widget.FrameLayout[@resource-id='com.google.android.apps.nexuslauncher:id/overview_actions_view']" \\
         click sleep=3 \\
         xpath="//android.view.View[@content-desc='Home']" sleep=3 \\
-        text="https://youtu.be/3EaKUrU5qjA?si=p0DVT0wFL-s5rWas" search sleep=10 \\
-        xpath="//android.widget.ImageView[@content-desc='Enter fullscreen']" click sleep=5 \\
+        string="https://youtu.be/3EaKUrU5qjA?si=p0DVT0wFL-s5rWas" \\
+        action=search sleep=10 \\
+        xpath="//android.widget.ImageView[@content-desc='Enter fullscreen']" \\
+        click sleep=5 \\
         record
 
     the above method is not reliable. the following way is more reliable but more manually.
