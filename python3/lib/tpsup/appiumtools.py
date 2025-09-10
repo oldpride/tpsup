@@ -1525,11 +1525,15 @@ procs = [
             # appium server
             # C:\Users\tian>ps -ef |grep node.exe
             # 1/25/2025 7:49:56 PM      10056 C:\tools\nodejs\node.exe C:\tools\nodejs\node_modules\appium\build\lib\main.js --address 127.0.0.1 --port 4723 --log-no-colors --base-path /wd/hub --log C:/Users/tian/appium\appium.log --log-level debug
+            # when I start appium server manually, node.exe is started.
 
             "adb", 
             # adb server
             # C:\Users\tian>ps |grep adb
             # 1/25/2025 7:50:52 PM       1936 adb -L tcp:5037 fork-server server --reply-fd 560
+            # when I start emulator, adb server will be started automatically if it is not running.
+            # if I start emulator but adb server is not running, need to check whether adb command
+            # is in PATH.
 
             "chromedriver", 
             # chromedriver

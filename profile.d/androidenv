@@ -7,7 +7,13 @@ else
    echo "ANDROID_HOME=$ANDROID_HOME"
 fi
 
-PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+echo "adding to PATH android sdk tools
+$ANDROID_HOME_TERM_SPECIFIC/cmdline-tools/latest/bin
+$ANDROID_HOME_TERM_SPECIFIC/platform-tools
+$ANDROID_HOME_TERM_SPECIFIC/emulator
+"
+
+PATH="$ANDROID_HOME_TERM_SPECIFIC/cmdline-tools/latest/bin:$ANDROID_HOME_TERM_SPECIFIC/platform-tools:$ANDROID_HOME_TERM_SPECIFIC/emulator:$PATH"
 
 local BUILD_TOOLS
 BUILD_TOOLS=`/bin/ls -d $ANDROID_HOME/build-tools/*|tail -1`
