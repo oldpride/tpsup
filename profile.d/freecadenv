@@ -1,0 +1,80 @@
+# for vs code
+local usage prog BIN_DIRS NPM_DIRS DIR
+
+prog=${FUNCNAME[1]}
+
+usage="
+usage:
+
+   $prog check
+   $prog set
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+action=$1
+
+# 
+
+uname2term
+
+if [ $UNAMETERM = cygwin ]; then
+   FREECAD_HOME="C:/Program Files/FreeCAD 1.0" # PYTHONPATH needs windows style path
+   FREECAD_HOME_TERM_SPECIFIC="/cygdrive/c/Program Files/FreeCAD 1.0"
+elif [ $UNAMETERM = msys -o $UNAMETERM = vscode ]; then
+   FREECAD_HOME="C:/Program Files/FreeCAD 1.0"
+   FREECAD_HOME_TERM_SPECIFIC="/c/Program Files/FreeCAD 1.0"
+else
+   echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
+   return
+fi
+
+BIN_DIRS="$FREECAD_HOME_TERM_SPECIFIC/bin"
+LIB_DIRS="$FREECAD_HOME/Ext" # for PYTHONPATH
+
+if [ $action = check ]; then
+   echo ""
+   echo "current installations: "
+   #split DIRS by :
+   echo "$FREECAD_HOME" | tr ":" "\n" | while read DIR; do
+      # $DIR may contain space, so we need to quote it
+      ls -ld "$DIR"
+   done
+
+elif [ $action = set ]; then
+   echo "adding freecad bin folder to PATH: $BIN_DIRS"
+   export PATH="$BIN_DIRS:$PATH"
+
+   echo "adding freecad lib folder to PYTHONPATH: $LIB_DIRS"
+   if [ "X$PYTHONPATH" = "X" ]; then
+      export PYTHONPATH="$LIB_DIRS"
+   else
+      if [ $UNAMETERM = cygwin -o $UNAMETERM = msys -o $UNAMETERM = vscode ]; then
+         export PYTHONPATH="$LIB_DIRS;$PYTHONPATH"
+      else
+         echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
+         return
+      fi
+   fi
+
+   reduce PATH
+   reduce PYTHONPATH
+else
+   echo "$prog: unknown action=$action"
+   echo "$usage"
+   return
+fi
+
+myfreecadhome () {
+   if [ "X$FREECAD_HOME" = "X" ]; then
+      echo "FREECAD_HOME is not defined."
+      return
+   fi
+
+   cd "$FREECAD_HOME"
+}

@@ -5,7 +5,8 @@ use strict;
 use Data::Dumper;
 use Getopt::Long;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 
 my $delimiter = ":";
 
@@ -54,20 +55,21 @@ GetOptions(
    'e'         => \$is_env_var,
    'q|quiet'   => \$quiet,
    'd=s'       => \$delimiter,
-   ) || usage ("cannot parse command line: $!");
+) || usage("cannot parse command line: $!");
 usage("wrong number of args") if !@ARGV;
 
-my $UNAME = `uname`; chomp $UNAME;
+my $UNAME = `uname`;
+chomp $UNAME;
 
 for my $arg (@ARGV) {
    my $old_path;
-   
+
    print STDERR "\n" if !$quiet;
-    
+
    if ($is_env_var) {
       print STDERR "reducing $arg ...\n" if !$quiet;
       $old_path = $ENV{$arg};
-      if (!defined $old_path) {
+      if ( !defined $old_path ) {
          print STDERR "$arg is not defined in env. skipped\n" if !$quiet;
          next;
       }
@@ -79,34 +81,40 @@ for my $arg (@ARGV) {
 
    print STDERR "old_path=$old_path\n" if !$quiet;
 
-   my $d2 = ($arg eq 'PYTHONPATH' && $UNAME =~ /^CYGWIN/i) ? ';' : $delimiter;
-   my @old = split /$d2/, $old_path, -1;   # use -1 to preserve trailing empty value.
-   
+   #my $d2 = ($arg eq 'PYTHONPATH' && $UNAME =~ /^CYGWIN/i) ? ';' : $delimiter; # this works
+
+   # the following is more robust
+   my $d2 = (
+      $old_path =~ /;/                         # if multiple paths are separated by semi-colon, use semi-colon
+        || $old_path =~ /^[A-Za-z]:[\/\\]/i    # or starts with C:/ or C:\, use semi-colon
+   ) ? ';' : $delimiter;
+   my @old = split /$d2/, $old_path, -1;       # use -1 to preserve trailing empty value.
+
    my $seen;
-   
+
    my @new;
-   
-   my $i=0;
-   
+
+   my $i = 0;
+
    my $changed = 0;
 
    for my $p (@old) {
-      if ($seen->{$p}) {
+      if ( $seen->{$p} ) {
          print STDERR "dropping duplicate at $i: '$p'\n" if !$quiet;
-         $changed ++;
+         $changed++;
       } else {
          $seen->{$p}++;
          push @new, $p;
       }
-   
+
       $i++;
    }
-   
-   my $new_path = join($d2, @new);
-   
+
+   my $new_path = join( $d2, @new );
+
    print STDERR "new_path=$new_path\n" if !$quiet;
 
-   if (!$changed) {
+   if ( !$changed ) {
       print STDERR "no change. skipped\n" if !$quiet;
       next;
    }
