@@ -662,10 +662,6 @@ class AppiumEnv:
             send key to device. key is from androidkey.AndroidKey. 
             eg, ENTER,
             ''',
-            },
-        'sleep': {
-            'need_arg': True,
-            'usage': 'sleep=3',
         },
         'start_driver': {
             'no_arg': True,
@@ -1169,8 +1165,6 @@ class AppiumEnv:
             # selenium's send_keys is element.send_keys(), using the element as the target.
             # appium's send_keys is driver.press_keycode(), using the driver as the target.
             self.driver.press_keycode(keycode)
-        elif cmd == "sleep":
-            time.sleep(int(arg))
         elif cmd == 'start_driver': 
             self.driver = self.start_driver(**opt)
         elif cmd == 'start_emulator':

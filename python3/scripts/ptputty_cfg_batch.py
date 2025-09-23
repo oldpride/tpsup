@@ -10,6 +10,7 @@ import tpsup.uiatools
 import tpsup.locatetools
 import tpsup.pstools
 from pprint import pformat
+import tpsup.sitetools
 
 HOME = tpsup.envtools.get_home_dir()
 TPSUP = os.environ['TPSUP']
@@ -25,9 +26,10 @@ EXAMPLE_BASE = HTTP_BASE
 our_cfg = {
     'module': 'tpsup.uiatools',
 
-    # 'position_args': [
-    #     # 'url'
-    # ],
+    'position_args': [
+        'session_name',
+        'instance_count',
+    ],
 
     # 'extra_args': {
     #     'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
@@ -38,17 +40,8 @@ our_cfg = {
 
     'usage_example': f'''
     examples:
-        1: test notepad
-            {{{{prog}}}} start="notepad c:/users/tian/tianjunk" connect="title_re=.*tianjunk.*"
-            {{{{prog}}}} connect="title_re=.*tianjunk.*" -explore
-
-        2: test putty
-            {{{{prog}}}} start="putty -load wsl" "type=siteenv{{ENTER}}"
-            {{{{prog}}}} start="putty -load wsl" "type=siteenv{{ENTER}}" -explore
-
-    notes for windows cmd.exe, 
-        double quotes cannot be escaped, 
-        single quote is just a letter, cannot do grouping. 
+        1. test with session name wsl
+            {{{{prog}}}} wsl 3
     ''',
 
     'show_progress': 1,
@@ -72,12 +65,51 @@ def code(all_cfg, known, **opt):
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
 
-    allowFile = opt.get('allowFile', 0)
+    session_name = opt['session_name']
+    instance_count = opt['instance_count']
     explore = opt.get('explore', 0)
 
     # yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
-    steps = known['REMAININGARGS']
+    # get program name
+    caller = opt['caller']
+
+    # remove .new, .old from caller
+    caller = caller.split('.')[0]
+    print(f'caller = {caller}')
+    siteEnv = tpsup.sitetools.SiteEnv()
+    siteEnv.load_env(caller, debug=debug)
+    prompt_pattern = siteEnv.get_env('prompt_matured')
+    if not prompt_pattern:
+        raise RuntimeError("prompt_matured not set in site env file")
+
+    # steps = known['REMAININGARGS']
+    steps = [
+        f'start=putty -load {session_name}',
+
+        # # wait for user to type ENTER to continue
+        # 'readstdin=answer=hit ENTER to continue',
+
+        'while=exp=1',
+        # get the text from the putty window title
+        'texts=titlevar',
+        # f'if=exp=titlevar.endwith("/home/utian$")',
+        f'if=exp=re.match(r"{prompt_pattern}", titlevar[0])',
+        'break',
+        'else',
+        'sleep=2',
+        'end_if',
+        'end_while',
+
+        # loop to open the rest instances without user interaction
+        'python=i=1',
+        f'while=exp=i<{instance_count}',
+        f'start=putty -load {session_name}',
+        'type=siteenv{ENTER}',
+        f'python=i=i+1',
+        f'sleep=2',
+        f'end_while',
+    ]
 
     print(f'steps = [')
     for step in steps:

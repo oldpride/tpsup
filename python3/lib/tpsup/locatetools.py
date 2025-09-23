@@ -174,6 +174,24 @@ class LocateEnv:
                     q
             ''',
         },
+        'readstdin': {
+            'need_arg': True,
+            'usage': '''
+                get user input from stdin and save to the var (global var).
+                example:
+                    readstdin=varname=prompt text
+                    readstdin=answer="please hit ENTER to continue"
+                    readstdin=x=please enter a number
+                ''',
+        },
+        'sleep': {
+            'need_arg': True,
+            'usage': '''
+                sleep for the specified seconds.
+                example:
+                    sleep=2
+                ''',
+        },
         'steps': {
             'usage': '''
                 without arg,
@@ -197,7 +215,6 @@ class LocateEnv:
                     steps=xpath=/a/b,xpath=/c/d click
             ''',
         },
-        
     }
 
     def __init__(self,
@@ -226,7 +243,10 @@ class LocateEnv:
             self.caller_usage_by_cmd = locate_usage_by_cmd
         self.combined_usage_by_long.update(self.caller_usage_by_cmd)
 
+        # print(f"locatetools: caller_usage_by_cmd={pformat(self.caller_usage_by_cmd)}")
+
         for k, v in self.locatetools_usage_by_long.items():
+            # print(f"locatetools: usage_by_long[{k}]={pformat(v)}")
             if k in self.combined_usage_by_long:
                 raise RuntimeError(f"locator='{k}' is defined in both caller and locatetools")
             self.combined_usage_by_long[k] = v
@@ -1272,6 +1292,23 @@ class LocateEnv:
             print("bye")
             go_back = True
             ret['break_levels'] = 1
+        elif cmd == 'readstdin':
+            '''
+            arg is in fomrat varname=prompt
+            '''
+            varname, varprompt = arg.split("=", 1)
+            print(varprompt)
+            line = input()
+            print(f"you entered {line}")
+            self.caller_globals[varname] = line
+            # result = tpsup.exectools.exec_into_globals(one_string, 
+            #                                         self.caller_globals, 
+            #                                         self.caller_locals)
+        elif cmd == "sleep":
+            # example: sleep=3
+            value = arg
+            print(f"locate: sleep {value} seconds")
+            time.sleep(int(value))        
         elif cmd == 'steps':
             if arg is not None:
                 one_string = arg

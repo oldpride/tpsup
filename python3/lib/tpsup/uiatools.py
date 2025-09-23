@@ -162,11 +162,15 @@ class UiaEnv:
                 r
             ''',
         },
-        'text': {
-            'no_arg': True,
+        'texts': {
             'usage': '''
-                get the text of the current window
-                tx
+                get the texts of the current window.
+                if variable is given, store the texts in the list, a global var.
+                texts
+                texts=varname
+            examples:
+                texts
+                texts=txt_list                
             ''',
         },
         'top' : {
@@ -349,15 +353,23 @@ class UiaEnv:
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
                 self.refresh_window_specs()
-        elif long_cmd == 'text':
-            # get the text of the current window
+        elif long_cmd == 'texts':
+            '''
+            texts
+            texts=list_var
+            '''
+            # get the texts of the current window
             if self.current_window is None:
-                print("current_window is None, cannot get text")
-                ret['bad_input'] = True
+                print("current_window is None, cannot get texts") 
             else:
                 try:
                     texts = self.current_window.texts()
                     print(f"current_window texts={texts}")
+
+                    if arg:
+                        print(f"cannot store texts (list) to global variable {arg}")
+                        # store the texts in the global variable
+                        globals()[arg] = texts
                 except pywinauto.findwindows.ElementNotFoundError as e:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                     ret['bad_input'] = True

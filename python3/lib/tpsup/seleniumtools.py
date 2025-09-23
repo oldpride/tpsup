@@ -1892,14 +1892,6 @@ class SeleniumEnv:
                     shadow
                 ''',
         },
-        'sleep': {
-            'need_arg': True,
-            'usage': '''
-                sleep for the specified seconds.
-                example:
-                    sleep=2
-                ''',
-        },
         'start_driver': {
             'usage': '''
                 start a chrome driver.
@@ -2764,11 +2756,6 @@ class SeleniumEnv:
             ac.key_up(Keys.SHIFT)
             ac.perform()
             self.last_element = self.driver.switch_to.active_element       
-        elif cmd == "sleep":
-            # example: sleep=3
-            value = arg
-            print(f"locate: sleep {value} seconds")
-            time.sleep(int(value))
         elif cmd == "start_driver":
             self.driver = self.start_driver(**opt)
             self.handle_page_change(**opt)
