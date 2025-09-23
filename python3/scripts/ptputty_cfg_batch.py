@@ -111,6 +111,7 @@ def code(all_cfg, known, **opt):
         'texts=titlevar',
         'end_while',
 
+        'sleep=1',
         f'type={mature_command}' + '{ENTER}',
         'sleep=2',
 
