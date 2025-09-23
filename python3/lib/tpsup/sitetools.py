@@ -7,6 +7,8 @@ class SiteEnv:
         debug = opt.get('debug', 0)
 
         self.sitespec = os.environ.get('SITESPEC', None)
+        self.tpsup = os.environ.get('TPSUP', None)
+
         if not self.sitespec:
             raise RuntimeError("SITESPEC environment variable not set")
         
@@ -21,15 +23,19 @@ class SiteEnv:
     def load_env(self, progname:str, **opt):
         debug = opt.get('debug', 0)
 
-        envfile = f'{self.sitespec}/env/{progname}.env'
+        for envfile in [ 
+            f'{self.sitespec}/env/{progname}.env',
+            f'{self.tpsup}/env/{progname}.env', ]:
+            if debug:
+                print(f"load_env: expected env file: {envfile}")
 
-        if debug:
-            print(f"load_env: expected env file: {envfile}")
-
-        if os.path.isfile(envfile):
-            dotenv.load_dotenv(envfile)
-        elif debug:
-            print(f"Warning: envfile {envfile} not found, skipped loading env file.")
+            if os.path.isfile(envfile):
+                dotenv.load_dotenv(envfile)
+                if debug:
+                    print(f"loaded env file: {envfile}")
+                break
+            elif debug:
+                print(f"Warning: envfile {envfile} not found, skipped loading env file.")
 
     def get_env(self, varname:str, default=None):
         return os.getenv(varname, default)

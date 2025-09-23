@@ -79,9 +79,16 @@ def code(all_cfg, known, **opt):
     print(f'caller = {caller}')
     siteEnv = tpsup.sitetools.SiteEnv()
     siteEnv.load_env(caller, debug=debug)
-    prompt_pattern = siteEnv.get_env('prompt_matured')
-    if not prompt_pattern:
-        raise RuntimeError("prompt_matured not set in site env file")
+
+    # get prompt pattern from env
+    mature_prompt = siteEnv.get_env('mature_prompt')
+    if not mature_prompt:
+        raise RuntimeError("mature_prompt not set in site env file")
+
+    # get mature command from env
+    mature_command = siteEnv.get_env('mature_command')
+    if not mature_command:
+        raise RuntimeError("mature_command not set in site env file")
 
     # steps = known['REMAININGARGS']
     steps = [
@@ -94,7 +101,7 @@ def code(all_cfg, known, **opt):
         # get the text from the putty window title
         'texts=titlevar',
         # f'if=exp=titlevar.endwith("/home/utian$")',
-        f'if=exp=re.match(r"{prompt_pattern}", titlevar[0])',
+        f'if=exp=re.match(r"{mature_prompt}", titlevar[0])',
         'break',
         'else',
         'sleep=2',
@@ -105,10 +112,11 @@ def code(all_cfg, known, **opt):
         'python=i=1',
         f'while=exp=i<{instance_count}',
         f'start=putty -load {session_name}',
-        'type=siteenv{ENTER}',
+        f'type={mature_command}' + '{ENTER}',
         f'python=i=i+1',
         f'sleep=2',
         f'end_while',
+        'type=paa{ENTER}',
     ]
 
     print(f'steps = [')
