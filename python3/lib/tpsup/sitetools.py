@@ -8,24 +8,30 @@ class SiteEnv:
 
         self.sitespec = os.environ.get('SITESPEC', None)
         self.tpsup = os.environ.get('TPSUP', None)
+        self.homedir = tpsup.envtools.get_home_dir()
 
-        if not self.sitespec:
-            raise RuntimeError("SITESPEC environment variable not set")
+        # if not self.sitespec:
+        #     raise RuntimeError("SITESPEC environment variable not set")
         
-        # convert to native path, eg, /cygdrive/c/User/tian/... to C:/User/tian/...
-        self.sitespec = tpsup.envtools.convert_path(self.sitespec, target='native')
-        if not os.path.isdir(self.sitespec):
-            raise RuntimeError(f"SITESPEC path not valid: {self.sitespec}")
+        # # convert to native path, eg, /cygdrive/c/User/tian/... to C:/User/tian/...
+        # self.sitespec = tpsup.envtools.convert_path(self.sitespec, target='native')
+        # if not os.path.isdir(self.sitespec):
+        #     raise RuntimeError(f"SITESPEC path not valid: {self.sitespec}")
 
-        if debug:
-            print(f"sitespec = {self.sitespec}")
+        # if debug:
+        #     print(f"sitespec = {self.sitespec}")
     
     def load_env(self, progname:str, **opt):
         debug = opt.get('debug', 0)
 
         for envfile in [ 
             f'{self.sitespec}/env/{progname}.env',
-            f'{self.tpsup}/env/{progname}.env', ]:
+            f'{self.tpsup}/env/{progname}.env', 
+            f'{self.homedir}/.tpsup/env/{progname}.env',
+            ]:
+
+            envfile = tpsup.envtools.convert_path(envfile, target='native')
+
             if debug:
                 print(f"load_env: expected env file: {envfile}")
 
