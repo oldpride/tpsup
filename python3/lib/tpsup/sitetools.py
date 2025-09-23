@@ -25,9 +25,9 @@ class SiteEnv:
         debug = opt.get('debug', 0)
 
         for envfile in [ 
-            f'{self.sitespec}/env/{progname}.env',
-            f'{self.tpsup}/env/{progname}.env', 
             f'{self.homedir}/.tpsup/env/{progname}.env',
+            f'{self.sitespec}/env/{progname}.env',
+            f'{self.tpsup}/env/{progname}.env',     
             ]:
 
             envfile = tpsup.envtools.convert_path(envfile, target='native')

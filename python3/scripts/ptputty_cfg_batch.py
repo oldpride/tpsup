@@ -80,10 +80,10 @@ def code(all_cfg, known, **opt):
     siteEnv = tpsup.sitetools.SiteEnv()
     siteEnv.load_env(caller, debug=debug)
 
-    # get prompt pattern from env
-    mature_prompt = siteEnv.get_env('mature_prompt')
-    if not mature_prompt:
-        raise RuntimeError("mature_prompt not set in site env file")
+    # # get prompt pattern from env
+    # mature_prompt = siteEnv.get_env('mature_prompt')
+    # if not mature_prompt:
+    #     raise RuntimeError("mature_prompt not set in site env file")
 
     # get mature command from env
     mature_command = siteEnv.get_env('mature_command')
@@ -97,16 +97,22 @@ def code(all_cfg, known, **opt):
         # # wait for user to type ENTER to continue
         # 'readstdin=answer=hit ENTER to continue',
 
-        'while=exp=1',
         # get the text from the putty window title
         'texts=titlevar',
-        # f'if=exp=titlevar.endwith("/home/utian$")',
-        f'if=exp=re.match(r"{mature_prompt}", titlevar[0])',
-        'break',
-        'else',
+
+        # normally only the first window of the same session has the original title 
+        #    "... - PuTTY"
+        # if we see it, it means the putty window is not yet "matured" waiting
+        # for user to type the command to login.
+        # we loop here until the title changes, meaning the putty window is "matured"
+        # and ready for next command.
+        'while=exp=titlevar[0].endwith(" - PuTTY")',
         'sleep=2',
-        'end_if',
+        'texts=titlevar',
         'end_while',
+
+        f'type={mature_command}' + '{ENTER}',
+        'sleep=2',
 
         # loop to open the rest instances without user interaction
         'python=i=1',
