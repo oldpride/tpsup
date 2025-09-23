@@ -6,7 +6,7 @@ from typing import Union
 import tpsup.envtools
 import tpsup.csvtools
 import tpsup.htmltools
-import tpsup.pwatools
+import tpsup.uiatools
 import tpsup.locatetools
 import tpsup.pstools
 from pprint import pformat
@@ -23,7 +23,7 @@ FILE_BASE = f'file:///{TPP3}'
 EXAMPLE_BASE = HTTP_BASE
 
 our_cfg = {
-    'module': 'tpsup.pwatools',
+    'module': 'tpsup.uiatools',
 
     # 'position_args': [
     #     # 'url'
@@ -91,7 +91,7 @@ def code(all_cfg, known, **opt):
             raise Exception(f'unknown step type={step_type}')
     print(f']')
 
-    driverEnv: tpsup.pwatools.PwaEnv = all_cfg["resources"]["pwa"]['driverEnv']
+    driverEnv: tpsup.uiatools.UiaEnv = all_cfg["resources"]["uia"]['driverEnv']
     result = driverEnv.follow(steps, **opt)
     # if explore mode, enter explore mode at the end of the steps
     if explore:

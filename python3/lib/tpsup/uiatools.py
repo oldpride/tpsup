@@ -76,7 +76,7 @@ def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = No
             print(f"{k}'s child window={w}, title={w.window_text()}, python={type(w).__name__}, class_name={w.class_name()}")
 
 
-class PwaEnv:
+class UiaEnv:
     locate: callable = None
     follow: callable = None
     explore: callable = None
@@ -450,19 +450,19 @@ class PwaEnv:
 
 def pre_batch(all_cfg, known, **opt):
     # init global variables.
-    # PwaEnv class doesn't need global vars because it is Object-Oriented
+    # UiaEnv class doesn't need global vars because it is Object-Oriented
     # but batch.py uses global vars to shorten code which will be eval()/exec()
     global driverEnv
 
     log_FileFuncLine(f"running pre_batch()")
-    if all_cfg["resources"]["pwa"].get('driverEnv', None) is None:
+    if all_cfg["resources"]["uia"].get('driverEnv', None) is None:
         # driverEnv is created in delayed mode
-        method = all_cfg["resources"]["pwa"]["driver_call"]['method']
-        kwargs = all_cfg["resources"]["pwa"]["driver_call"]["kwargs"]
+        method = all_cfg["resources"]["uia"]["driver_call"]['method']
+        kwargs = all_cfg["resources"]["uia"]["driver_call"]["kwargs"]
         # driverEnv = method(**kwargs)
         driverEnv = method(**{**kwargs, **opt})
         # 'host_port' are in **opt
-        all_cfg["resources"]["pwa"]['driverEnv'] = driverEnv
+        all_cfg["resources"]["uia"]['driverEnv'] = driverEnv
         log_FileFuncLine(f"driverEnv is created in batch.py's delayed mode")
 
 def post_batch(all_cfg, known, **opt):
@@ -478,7 +478,7 @@ def post_batch(all_cfg, known, **opt):
 
     driverEnv = None
     try: 
-        driverEnv = all_cfg["resources"]["pwa"]["driverEnv"]
+        driverEnv = all_cfg["resources"]["uia"]["driverEnv"]
     except Exception as e:
         print(f"driverEnv is not created, skip cleanup")
         return
@@ -505,8 +505,8 @@ tpbatch = {
         },
     },  
     "resources": {
-        "pwa": {
-            "method": PwaEnv,
+        "uia": {
+            "method": UiaEnv,
             # "cfg": {},
 
             "init_resource": 0,  # delay init until first use. this logic is in batch.py

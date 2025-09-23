@@ -21,7 +21,8 @@ usage:
 
    $prog diff
    $prog ls
-   $prog rm
+   $prog rmall
+   $prog snap
    
 description:
 
@@ -29,9 +30,11 @@ description:
       nestat -an
       nestat -rn
 
-   'ls'    lists the existing snapshots
-   'diff'  compares the two most recent snapshots
-   'rm'    removes all existing snapshots
+   'diff'   compares the two most recent snapshots
+   'ls'     lists the existing snapshots
+   'rm'     removes all existing snapshots
+   'snap'   takes a new snapshot. 
+            this can be used as the baseline for future comparisons.
 
    -v             verbose mode
 
@@ -54,6 +57,7 @@ description:
 examples:
 
    $prog ls
+   $prog snap
    $prog diff
    $prog diff -r
    $prog diff -c
@@ -80,7 +84,7 @@ GetOptions(
 @ARGV == 1 or usage("wrong number of args");
 
 my $action = shift @ARGV;
-$action eq 'diff' or $action eq 'ls' or $action eq 'rmall' or usage("unknown command: $action");
+$action eq 'diff' or $action eq 'ls' or $action eq 'rmall' or $action eq 'snap' or usage("unknown command: $action");
 $route_only && $conn_only and usage("cannot specify both -r and -c");
 
 my $SNAPSHOT_DIR = "$HOME/.netstat_diff";
@@ -139,6 +143,9 @@ if ( $action eq 'ls' ) {
    exit 0;
 } elsif ( $action eq 'rmall' ) {
    remove_all_snapshots();
+   exit 0;
+} elsif ( $action eq 'snap' ) {
+   snapshot();
    exit 0;
 } elsif ( $action eq 'diff' ) {
    # if s2 is not specified, take a snapshot

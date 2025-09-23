@@ -41,7 +41,7 @@ if [ $action = check ]; then
    echo ""
    echo "current installations: "
    #split DIRS by :
-   echo "$FREECAD_HOME" | tr ":" "\n" | while read DIR; do
+   echo "$FREECAD_HOME_TERM_SPECIFIC" | tr ":" "\n" | while read DIR; do
       # $DIR may contain space, so we need to quote it
       ls -ld "$DIR"
    done
