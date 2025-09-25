@@ -85,10 +85,13 @@ class UiaEnv:
                  **opt):
         
         self.app: Application = opt.get('app', None)
+        self.desktop = opt.get('desktop', None)
         self.title_re: str = opt.get('title_re', None)
+        self.title: str = opt.get('title', None)
         self.window_and_child_specs = []
-        self.top_window: WindowSpecification = None
-        self.current_window: WindowSpecification = None
+        self.current_window: WindowSpecification = None # a sub-window of the top_window
+        self.top_window: WindowSpecification = None # top window of the connected app
+
         # self.init_steps = opt.get('init_steps', [])
         
         # # one of these must be provided: app, title_re
@@ -103,6 +106,9 @@ class UiaEnv:
                 # backend="uia", # uia is modern and preferred.
                 backend=self.backend,
             )
+
+        if not self.desktop:
+            self.desktop = pywinauto.Desktop(backend=self.backend)
         
         locateEnv = tpsup.locatetools.LocateEnv(
             locate_cmd_arg=self.locate_cmd_arg,
@@ -127,15 +133,18 @@ class UiaEnv:
         'connect': {
             'short': 'conn',
             'need_arg': True,
+            'has_dryrun': True,
             'usage': '''
-                connect with title_re
-                conn=".*tianjunk.*"
+                connect with title_re, title
+                conn=title_re=.*tianjunk.*
+                conn=title="tianjunk - Notepad"
                 ''',
         },
-        'child': {
+        'click': {
             'short': 'c',
             'need_arg': True,
             'usage': '''
+                click on a child by its index in the list command.
                 c=1
                 ''',
         },
@@ -145,6 +154,16 @@ class UiaEnv:
             'usage': '''
                 get the control identifiers of the current window
                 ci
+            ''',
+        },
+        'desktop': {
+            'short': 'desk',
+            'usage': '''
+                list all top windows of the desktop.
+                'connect' command can be used to connect to one of the top windows.
+                examples:
+                    desk         # list all top windows of the desktop
+                    desk=notepad # list all top windows of the desktop whose title contains 'notepad'
             ''',
         },
         'list': {
@@ -162,6 +181,23 @@ class UiaEnv:
                 r
             ''',
         },
+        'search': {
+            'need_arg': True,
+            'sibilings': ['act'],
+            'has_dryrun': 1,
+            'usage': '''
+                search=control_type=title_pattern
+                   act=control_type=title_pattern
+                
+                search for or act on the matched.
+
+                control_type can be 'Window', 'Button', or 'any', case-insensitive
+
+                examples:
+                    search=window=Remote side unexpectedly closed
+                       act=any=Remote side unexpectedly closed
+            ''',
+        },
         'texts': {
             'usage': '''
                 get the texts of the current window.
@@ -173,11 +209,34 @@ class UiaEnv:
                 texts=txt_list                
             ''',
         },
+        'title': {
+            'siblings': ['title_re'],
+            'usage': '''
+                set or get title or title_re.
+                    - set: set the title or title_re for the next 'start' command.
+                    - get: get the current value of title or title_re.
+                    - unset: set title or title_re to None
+                note: 'connect' has a arg for title or title_re, different from this command.
+                examples:
+                    title="notepad - Notepad"
+                    title_re=.*notepad.*
+                    title
+                    title_re
+                    title=unset
+                    title_re=unset
+
+            ''',
+        },
         'top' : {
             'no_arg': True,
             'usage': '''
-                get the top window
+                get the top window of the connected application.
                 top
+
+                note: 
+                    - only pywinauto.Application has top_window().
+                    - pywinauto.Desktop doesn't have top_window().
+                    - desktop has top windows which we can connect to.
             ''',
         },
         'type': {
@@ -256,16 +315,69 @@ class UiaEnv:
             for s in current_window_child_specs:
                 self.window_and_child_specs.append( (self.current_window, 'current_window', s) )
 
+    def recursive_child(self, w: WindowSpecification, 
+                        action_list: list[dict] = [],
+                        depth=0, max_depth=5, **opt) -> list[str]:
+        '''
+        recursively get child specs up to max_depth, without clicking it, because 
+        clicking may have side effects.
 
-    
+        action_list is a list of dict,
+            {
+                'control_type': 'Button', # or 'Window', default to None meaning any type
+                'title_re': 'please', # default to None meaning any title
+                'action': 'click' # or 'print', default to 'print' the child spec
+            }
+        '''
+
+        debug = opt.get('debug', False)
+        
+        if depth > max_depth:
+            return []
+
+        # Get the child specs
+        child_specs = self.get_child_specs(w, debug=debug)
+
+        for cs in child_specs:
+            # Check if the child spec matches the action list
+            for action in action_list:
+                if 'title_re' in action:
+                    title_re = action['title_re']
+                    title = w.child_window(**cs).window_text()
+                    if not re.search(title_re, title, re.I):
+                        continue
+                if 'control_type' in action:
+                    expected_ct = action['control_type'].lower()
+                    if expected_ct != 'any' and expected_ct != cs.get('control_type', '').lower():
+                        continue
+                act = action.get('action', 'print')
+                if act == 'print':
+                    print(f"child spec: {cs}")
+                elif act == 'click':
+                    try:
+                        w.child_window(**cs).click_input()
+                        sleep(1)
+                    except pywinauto.timings.TimeoutError as e:
+                        print(f"TimeoutError: child spec didn't appear in time.")
+                        continue
+                    except pywinauto.findwindows.ElementNotFoundError as e:
+                        print(f"ElementNotFoundError: child spec is not valid, either closed or you need to wait longer.")
+                        continue
+
+            # Recursively get the child specs
+            self.recursive_child(cs, action_list=action_list, depth=depth+1, max_depth=max_depth, **opt)
+
+        return []
+
     
     def locate_cmd_arg(self, long_cmd: str, arg: str, **opt):
         debug = opt.get('debug', False)
         verbose = opt.get('verbose', 0)
+        dryrun = opt.get('dryrun', False)
         
         ret = tpsup.locatetools.ret0.copy()
 
-        if long_cmd == 'child':
+        if long_cmd == 'click':
             idx = int(arg)
             max_child_specs = len(self.window_and_child_specs)
             if idx < 0 or idx >= max_child_specs:
@@ -296,18 +408,40 @@ class UiaEnv:
                     self.refresh_window_specs()
                     ret['relist'] = True
         elif long_cmd == "connect":
-            if arg.startswith("title_re="):
-                title_re = arg[len("title_re="):]
-                self.app.connect(title_re=title_re)
+            '''
+            connect with title_re, title
+            connect=title_re=.*tianjunk.*
+            connect=title="tianjunk - Notepad"
+            '''
+            k,v = arg.split('=', 1)
+            if k == 'title_re' or k == 'title':
+                print(f"connecting to window with {k}={v}")
+
+                # remove quotes if any
+                if (v.startswith('"') and v.endswith('"')) or \
+                   (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                elif (v.startswith('"') and not v.endswith('"')) or \
+                     (v.startswith("'") and not v.endswith("'")):
+                    raise ValueError(f"unmatched quote in {k}={v}")
+
+                if dryrun:
+                    return ret
+                
+                if k == 'title_re':
+                    result = self.app.connect(title_re=v)
+                else:
+                    result = self.app.connect(title=v)
+                print(f"after connected, result={result}")
                 self.top_window = self.app.top_window()
                 self.current_window = self.top_window
                 self.top_window.wait('visible')
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
-                print(f"connected to window with title_re={title_re}")
+                print(f"connected to window with {k}={v}, top_window={self.top_window}")
                 self.refresh_window_specs()
             else:
-                raise ValueError(f"invalid connect arg {arg}, must start with title_re=")
+                raise ValueError(f"invalid connect arg {arg}, must start with title_re= or title=")
         elif long_cmd == 'control_identifiers':
             if self.current_window is None:
                 print("current_window is None, cannot get control identifiers")
@@ -319,14 +453,65 @@ class UiaEnv:
                 except pywinauto.findwindows.ElementNotFoundError as e:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                     ret['bad_input'] = True
+        elif long_cmd == 'desktop':
+            '''
+            list all top windows of the desktop.
+            'connect' command can be used to connect to one of the top windows.
+            examples:
+                desk         # list all top windows of the desktop
+                desk=notepad # list all top windows of the desktop whose title contains 'notepad'
+            '''
+            title_filter = arg if arg else None
+            print(f"listing all top windows of the desktop, title_filter={title_filter}")
+            top_windows: list[pywinauto.WindowSpecification] = self.desktop.windows()
+            for w in top_windows:
+                title = w.window_text()
+                if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
+                    print(f"desktop top window, conn=title={title}")
         elif long_cmd == 'list':
             self.display()
         elif long_cmd == 'refresh':
             self.refresh_window_specs()
+        elif long_cmd == 'search' or long_cmd == 'act':
+            '''
+                arg is like
+                search=window=Remote side unexpectedly closed
+                any=Remote side unexpectedly closed
+
+            '''
+            control_type, title_re = arg.split('=', 1)
+            # start searching from desktop windows
+            desktop_top_windows = self.desktop.windows()
+            for w in desktop_top_windows:
+                # drill into each top window
+                try:
+                    ws = self.get_windowspec_from_uiawrapper(w)
+                except pywinauto.findwindows.ElementNotFoundError as e:
+                    print(f"ElementNotFoundError: desktop top window is not valid, either closed or you need to wait longer.")
+                    continue
+                child_specs = self.get_child_specs(ws)
+                
+             
+
         elif long_cmd == 'start':
+            '''
+            when the start command spawns a new process for the window,
+            app.top_window() may not work because it only works for the original process.
+            we will have to connect to the window with title_re or title.
+            but if title is not unique, we may connect to the wrong window.
+            to mimimize this error, we try to connect to the new top window of the 
+            desktop (note: desktop vs app).
+            to find out the new window, we need to save the list of top windows
+            before and after the start command.
+            '''
+
+            # save the list of top windows of the desktop before starting the app
+            desktop_top_windows_before: list[pywinauto.WindowSpecification] = self.desktop.windows()
             self.app.start(arg)
             sleep(2) # wait for the app to start
-                    
+
+            # save the list of top windows of the desktop after starting the app
+            desktop_top_windows_after: list[pywinauto.WindowSpecification] = self.desktop.windows()
             '''
             app.start("notepad.exe") 
             app.top_window()
@@ -335,9 +520,16 @@ class UiaEnv:
                     raise RuntimeError("No windows for that process could be found")
 
             likely due to notepad spawning a new process for the window. 
-            therefore, if we try-catch this error, then we can use app.connect to connect to the window.
+            therefore, if we try-catch this error, then we can use the following ways to
+            connect to the window:
+                1. use Desktop.windows() to find the new top window of the desktop
+                2. use app.connect() to connect by title_re or title if given.
             '''
-        
+
+            # reset top_window and current_window before calling 'start'
+            self.top_window = None
+            self.current_window = None
+
             try:
                 self.top_window = self.app.top_window()
             except RuntimeError as e:
@@ -345,11 +537,66 @@ class UiaEnv:
                 # if the error is "No windows for that process could be found"
                 if "No windows for that process could be found" in str(e):
                     print(f"seeing error 'No windows for that process could be found', likely due to app spawning a new process for the window.")
-                    print(f"we will try to connect to the window with title_re=\"{self.title_re}\"")
+                    print(f"we will search for it in new windows of the desktop.")
 
-            if self.top_window is not None:
+            if self.top_window :
+                print(f"after start, top_window={self.top_window}")
                 self.current_window = self.top_window
                 self.top_window.wait('visible')
+                self.top_window.click_input()  # ensure the window is focused
+                sleep(1)
+                self.refresh_window_specs()
+            else:
+                print(f"search for the new top window of the desktop.")
+                # app.start() lost track of the child process.
+                # we try to find the new top window of the desktop
+                new_top_windows = []
+                for w_after in desktop_top_windows_after:
+                    if not any(w_after.handle == w_before.handle for w_before in desktop_top_windows_before):
+                        new_top_windows.append(w_after)
+                if len(new_top_windows) == 0:
+                    print(f"no new top window found after running start command.")
+
+                    # we don't set failure here, because we may run 'connect' later to connect to the window.
+                    # ret['success'] = False
+                    return ret
+                print(f"new top windows found after running start command:")
+                for w in new_top_windows:
+                    print(f"    {w}, title={w.window_text()}, {pformat(w)}")
+
+                # filter new_top_windows with different criteria
+                if self.title:
+                    filtered_windows = [w for w in new_top_windows if w.window_text() == self.title]
+                    if not filtered_windows:
+                        print(f"no new top window found after running start command with title={self.title}")
+                        return ret
+                    else:
+                        new_top_windows = filtered_windows 
+                        # narrow down to filtered windows, prepare for next filter
+
+                if self.title_re:
+                    filtered_windows = [w for w in new_top_windows if re.search(self.title_re, w.window_text(), re.IGNORECASE)]
+                    if not filtered_windows:
+                        print(f"no new top window found after running start command with title_re={self.title_re}")
+                        return ret
+                    else:
+                        new_top_windows = filtered_windows
+                        # narrow down to filtered windows, prepare for next filter
+
+                if len(new_top_windows) > 1:
+                    print(f"multiple new top windows found after running start command, please refine title or title_re to narrow down:")
+                    for w in new_top_windows:
+                        print(f"    {w}, title={w.window_text()}")
+                    return ret
+                    
+                self.current_window = self.top_window
+
+                # AttributeError: 'UIAWrapper' object has no attribute 'wait'
+                # self.top_window.wait('visible')
+                if isinstance(self.top_window, UIAWrapper):
+                    self.top_window = self.get_windowspec_from_uiawrapper(self.top_window)
+                self.top_window.wait('visible')
+                
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
                 self.refresh_window_specs()
@@ -373,11 +620,52 @@ class UiaEnv:
                 except pywinauto.findwindows.ElementNotFoundError as e:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                     ret['bad_input'] = True
+        elif long_cmd == 'title' or long_cmd == 'title_re':
+            '''
+            title="notepad - Notepad"
+            title_re=.*notepad.*
+            title
+            title_re
+            title=unset
+            title_re=unset
+            '''
+            if not arg:
+                # get title or title_re
+                if long_cmd == 'title':
+                    print(f"self.title={self.title}")
+                else:
+                    print(f"self.title_re={self.title_re}")
+            if arg:
+                # set title or title_re
+                v = arg
+                # remove quotes if any
+                if (v.startswith('"') and v.endswith('"')) or \
+                   (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                elif (v.startswith('"') and not v.endswith('"')) or \
+                     (v.startswith("'") and not v.endswith("'")):
+                    raise ValueError(f"unmatched quote in {long_cmd}={v}")
+                
+                if v == 'unset':
+                    v = None
+
+                if long_cmd == 'title':
+                    self.title = v
+                    print(f"set title to {self.title}")
+                else:
+                    self.title_re = v
+                    print(f"set title_re to {self.title_re}")
         elif long_cmd == 'top':
-            self.title_recurrent_window = self.top_window
-            print("current_window is now top_window")
-            self.current_window = self.top_window
-            self.refresh_window_specs()
+            '''
+            top
+            '''
+            if self.top_window is None:
+                print("top_window is None, cannot get top window. Did you start or connect to an app?")
+                ret['bad_input'] = True
+            else:
+                print("current_window is now top_window")
+                self.current_window = self.top_window
+                self.refresh_window_specs()
         elif long_cmd == 'type':
             # replace \n with {ENTER}
             arg = arg.replace('\n', '{ENTER}')

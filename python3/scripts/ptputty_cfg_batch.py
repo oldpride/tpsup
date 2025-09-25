@@ -2,26 +2,9 @@
 import os
 import re
 from typing import Union
-
-import tpsup.envtools
-import tpsup.csvtools
-import tpsup.htmltools
 import tpsup.uiatools
-import tpsup.locatetools
-import tpsup.pstools
 from pprint import pformat
 import tpsup.sitetools
-
-HOME = tpsup.envtools.get_home_dir()
-TPSUP = os.environ['TPSUP']
-
-# convert to native path, eg, /cygdrive/c/User/tian/... to C:/User/tian/...
-TPSUP = tpsup.envtools.convert_path(TPSUP)
-
-TPP3 = f'{TPSUP}/python3/scripts'
-HTTP_BASE = 'http://localhost:8000'
-FILE_BASE = f'file:///{TPP3}'
-EXAMPLE_BASE = HTTP_BASE
 
 our_cfg = {
     'module': 'tpsup.uiatools',
@@ -80,15 +63,11 @@ def code(all_cfg, known, **opt):
     siteEnv = tpsup.sitetools.SiteEnv()
     siteEnv.load_env(caller, debug=debug)
 
-    # # get prompt pattern from env
-    # mature_prompt = siteEnv.get_env('mature_prompt')
-    # if not mature_prompt:
-    #     raise RuntimeError("mature_prompt not set in site env file")
 
-    # get mature command from env
-    mature_command = siteEnv.get_env('mature_command')
-    if not mature_command:
-        raise RuntimeError("mature_command not set in site env file")
+    # get siteenv command from env
+    siteenv_command = siteEnv.get_env('siteenv_command')
+    if not siteenv_command:
+        raise RuntimeError("siteenv_command not set in site env file")
 
     # steps = known['REMAININGARGS']
     steps = [
@@ -112,14 +91,14 @@ def code(all_cfg, known, **opt):
         'end_while',
 
         'sleep=1',
-        f'type={mature_command}' + '{ENTER}',
+        f'type={siteenv_command}' + '{ENTER}',
         'sleep=2',
 
         # loop to open the rest instances without user interaction
         'python=i=1',
         f'while=exp=i<{instance_count}',
         f'start=putty -load {session_name}',
-        f'type={mature_command}' + '{ENTER}',
+        f'type={siteenv_command}' + '{ENTER}',
         f'python=i=i+1',
         f'sleep=2',
         f'end_while',

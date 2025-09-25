@@ -358,7 +358,10 @@ class LocateEnv:
         ret['Success'] = False
 
         if not steps:
-            raise RuntimeError(f"steps is empty")
+            # raise RuntimeError(f"steps is empty")
+            print(f"follow2: steps is empty, nothing to do")
+            ret['Success'] = True
+            return ret
 
         for step in steps:
             if debug:

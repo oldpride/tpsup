@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# $ sudo sc stop "Surfshark Service"
+
+# SERVICE_NAME: Surfshark Service
+#         TYPE               : 10  WIN32_OWN_PROCESS
+#         STATE              : 3  STOP_PENDING
+#                                 (STOPPABLE, NOT_PAUSABLE, ACCEPTS_SHUTDOWN)
+#         WIN32_EXIT_CODE    : 0  (0x0)
+#         SERVICE_EXIT_CODE  : 0  (0x0)
+#         CHECKPOINT         : 0x0
+#         WAIT_HINT          : 0x0
+#
+# $ sudo sc stop "Surfshark Service"
+# [SC] ControlService FAILED 1062:
+# The service has not been started.
+
+sudo sc stop "Surfshark Service"

@@ -3,31 +3,16 @@ import os
 import re
 from typing import Union
 
-import tpsup.envtools
-import tpsup.csvtools
-import tpsup.htmltools
 import tpsup.uiatools
-import tpsup.locatetools
-import tpsup.pstools
 from pprint import pformat
-
-HOME = tpsup.envtools.get_home_dir()
-TPSUP = os.environ['TPSUP']
-
-# convert to native path, eg, /cygdrive/c/User/tian/... to C:/User/tian/...
-TPSUP = tpsup.envtools.convert_path(TPSUP)
-
-TPP3 = f'{TPSUP}/python3/scripts'
-HTTP_BASE = 'http://localhost:8000'
-FILE_BASE = f'file:///{TPP3}'
-EXAMPLE_BASE = HTTP_BASE
+import tpsup.sitetools
 
 our_cfg = {
     'module': 'tpsup.uiatools',
 
-    # 'position_args': [
-    #     # 'url'
-    # ],
+    'position_args': [
+        'instance_count',
+    ],
 
     # 'extra_args': {
     #     'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
@@ -38,22 +23,7 @@ our_cfg = {
 
     'usage_example': f'''
     examples:
-        1: test notepad
-            {{{{prog}}}} start="notepad c:/users/tian/tianjunk" connect="title_re=.*tianjunk.*"
-            {{{{prog}}}} connect="title_re=.*tianjunk.*" -explore
-
-        2: test putty
-            {{{{prog}}}} start="putty -load wsl" "type=siteenv{{ENTER}}"
-            {{{{prog}}}} start="putty -load wsl" "type=siteenv{{ENTER}}" -explore
-
-        3. test app that spawns another process so that app.start() loses track of the window.
-           in this case, the script should search for the new window.
-           {{{{prog}}}} start="notepad" type=hello{{ENTER}} # this takes two minutes
-           {{{{prog}}}} start="C:/cygwin64/bin/mintty.exe -i /Cygwin-Terminal.ico -title 123 -" type=siteenv{{ENTER}}
-
-    notes for windows cmd.exe, 
-        double quotes cannot be escaped, 
-        single quote is just a letter, cannot do grouping. 
+        {{{{prog}}}} 3
     ''',
 
     'show_progress': 1,
@@ -77,15 +47,49 @@ def code(all_cfg, known, **opt):
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
 
-    allowFile = opt.get('allowFile', 0)
+    instance_count = opt['instance_count']
     explore = opt.get('explore', 0)
 
     # yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
-    if re.match(r'^any$', known['REMAININGARGS'][0], re.I):
-        steps = []
-    else:
-        steps = known['REMAININGARGS']
+    # get program name
+    caller = opt['caller']
+
+    # remove .new, .old from caller
+    caller = caller.split('.')[0]
+    print(f'caller = {caller}')
+    siteEnv = tpsup.sitetools.SiteEnv()
+    siteEnv.load_env(caller, debug=debug)
+
+    # get siteenv command from env
+    siteenv_command = siteEnv.get_env('siteenv_command')
+    if not siteenv_command:
+        raise RuntimeError("siteenv_command not set in site env file")
+
+    # find where is cygwin mintty.exe
+    cygwin_paths = [
+        "C:/cygwin64/bin/mintty.exe",
+        "C:/Program Files/cygwin64/bin/mintty.exe"
+    ]
+
+    mintty_path = None
+    for p in cygwin_paths:
+        if os.path.isfile(p):
+            mintty_path = p
+            break
+
+    # steps = known['REMAININGARGS']
+    steps = [
+        
+        'python=i=0',
+        f'while=exp=i<{instance_count}',
+        f'start={mintty_path} -i /Cygwin-Terminal.ico -title 123 -',
+        f'sleep=2',
+        f'type={siteenv_command}' + '{ENTER}',
+        f'python=i=i+1',
+        f'sleep=2',
+        f'end_while',
+    ]
 
     print(f'steps = [')
     for step in steps:

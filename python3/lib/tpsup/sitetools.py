@@ -35,7 +35,7 @@ class SiteEnv:
             if debug:
                 print(f"load_env: expected env file: {envfile}")
 
-            if os.path.isfile(envfile):
+            if os.path.isfile(envfile) and os.access(envfile, os.R_OK):
                 dotenv.load_dotenv(envfile)
                 if debug:
                     print(f"loaded env file: {envfile}")
