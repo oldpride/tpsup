@@ -81,6 +81,10 @@ class UiaEnv:
     follow: callable = None
     explore: callable = None
 
+    search_action: str = 'print' # print, click, type=...  default is print
+    search_title_re: str = None
+    search_type: str = 'any' # search control_type: any, Window, Button, Edit, etc.
+
     def __init__(self, 
                  **opt):
         
@@ -121,14 +125,13 @@ class UiaEnv:
         self.explore = locateEnv.explore
 
     locate_usage_by_cmd = {
-        'start': {
-            'need_arg': True,
+        'children': {
+            'short': 'ch',
+            'no_arg': True,
             'usage': '''
-                start=notepad.exe
-                start="C:\\Program Files\\Mozilla Firefox\\firefox.exe"
-                start="C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
-                s="C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
-                ''',
+                list all child windows of the current window.
+                ch
+            ''',
         },
         'connect': {
             'short': 'conn',
@@ -140,12 +143,22 @@ class UiaEnv:
                 conn=title="tianjunk - Notepad"
                 ''',
         },
-        'click': {
+        'child': {
             'short': 'c',
             'need_arg': True,
             'usage': '''
-                click on a child by its index in the list command.
-                c=1
+                click the child window by index.
+                examples:
+                c=13
+                ''',
+        },
+        'click': {
+            'short': 'cl',
+            'no_arg': True,
+            'usage': '''
+                click the the current window.
+                examples:
+                click
                 ''',
         },
         'control_identifiers': {
@@ -183,20 +196,75 @@ class UiaEnv:
         },
         'search': {
             'need_arg': True,
-            'sibilings': ['act'],
             'has_dryrun': 1,
             'usage': '''
-                search=control_type=title_pattern
-                   act=control_type=title_pattern
-                
-                search for or act on the matched.
+                search=scope
 
-                control_type can be 'Window', 'Button', or 'any', case-insensitive
+                search for windows matching the criteria.
+                (similar to unix 'find' command)
+
+                scope can be:
+                    desktop  - search all desktop windows
+                    top      - search only the top window of the connected app
+                    current  - search only the current window of the connected app
 
                 examples:
-                    search=window=Remote side unexpectedly closed
-                       act=any=Remote side unexpectedly closed
+                    search=desktop
+                    search=top
+                    search=current
+
+                see also:
+                    search_act
+                    search_title_re
+                    search_type
             ''',
+        },
+        'search_act': {
+            'short': 'sa',
+            'usage': '''
+                set action for search results.
+                default is 'print'.
+                without arg, we print the current action.
+                examples:
+                    act      # print current action
+                    act=print  # set action to print
+                    act=click  # set action to click
+                    act=type=Y{ENTER}
+            ''',
+        },
+        'search_title_re': {
+            'short': 'str',
+            'usage': '''
+                set search title_re for search results.
+                default is None.
+                without arg, we print the current title_re.
+                examples:
+                    search_title_re      # print current title_re
+                    search_title_re=.*   # set title_re to .*
+                    search_title_re=.*notepad.*  # set title_re to .*notepad.*
+            ''',
+        },
+        'search_type': {
+            'short': 'sty',
+            'usage': '''
+                set search control_type for search results.
+                default is 'any'.
+                without arg, we print the current control_type.
+                examples:
+                    search_type      # print current control_type
+                    search_type=any  # set control_type to any
+                    search_type=Window  # set control_type to Window
+                    search_type=Button  # set control_type to Button
+            ''',
+        },
+        'start': {
+            'need_arg': True,
+            'usage': '''
+                start=notepad.exe
+                start="C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+                start="C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+                s="C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+                ''',
         },
         'texts': {
             'usage': '''
@@ -315,61 +383,97 @@ class UiaEnv:
             for s in current_window_child_specs:
                 self.window_and_child_specs.append( (self.current_window, 'current_window', s) )
 
-    def recursive_child(self, w: WindowSpecification, 
-                        action_list: list[dict] = [],
-                        depth=0, max_depth=5, **opt) -> list[str]:
-        '''
-        recursively get child specs up to max_depth, without clicking it, because 
-        clicking may have side effects.
+    # def recursive_child(self, w: WindowSpecification, 
+    #                     action_list: list[dict] = [],
+    #                     depth=0, max_depth=5, **opt) -> list[str]:
+    #     '''
+    #     recursively get child specs up to max_depth, without clicking it, because 
+    #     clicking may have side effects.
 
-        action_list is a list of dict,
-            {
-                'control_type': 'Button', # or 'Window', default to None meaning any type
-                'title_re': 'please', # default to None meaning any title
-                'action': 'click' # or 'print', default to 'print' the child spec
-            }
-        '''
+    #     action_list is a list of dict,
+    #         {
+    #             'control_type': 'Button', # or 'Window', default to None meaning any type
+    #             'title_re': 'please', # default to None meaning any title
+    #             'action': 'click' # or 'print', default to 'print' the child spec
+    #         }
+    #     '''
 
-        debug = opt.get('debug', False)
+    #     debug = opt.get('debug', False)
         
-        if depth > max_depth:
-            return []
+    #     if depth > max_depth:
+    #         return []
 
-        # Get the child specs
-        child_specs = self.get_child_specs(w, debug=debug)
+    #     # Get the child specs
+    #     child_specs = self.get_child_specs(w, debug=debug)
 
-        for cs in child_specs:
-            # Check if the child spec matches the action list
-            for action in action_list:
-                if 'title_re' in action:
-                    title_re = action['title_re']
-                    title = w.child_window(**cs).window_text()
-                    if not re.search(title_re, title, re.I):
-                        continue
-                if 'control_type' in action:
-                    expected_ct = action['control_type'].lower()
-                    if expected_ct != 'any' and expected_ct != cs.get('control_type', '').lower():
-                        continue
-                act = action.get('action', 'print')
-                if act == 'print':
-                    print(f"child spec: {cs}")
-                elif act == 'click':
-                    try:
-                        w.child_window(**cs).click_input()
-                        sleep(1)
-                    except pywinauto.timings.TimeoutError as e:
-                        print(f"TimeoutError: child spec didn't appear in time.")
-                        continue
-                    except pywinauto.findwindows.ElementNotFoundError as e:
-                        print(f"ElementNotFoundError: child spec is not valid, either closed or you need to wait longer.")
-                        continue
+    #     for cs in child_specs:
+    #         # Check if the child spec matches the action list
+    #         for action in action_list:
+    #             if 'title_re' in action:
+    #                 title_re = action['title_re']
+    #                 title = w.child_window(**cs).window_text()
+    #                 if not re.search(title_re, title, re.I):
+    #                     continue
+    #             if 'control_type' in action:
+    #                 expected_ct = action['control_type'].lower()
+    #                 if expected_ct != 'any' and expected_ct != cs.get('control_type', '').lower():
+    #                     continue
+    #             act = action.get('action', 'print')
+    #             if act == 'print':
+    #                 print(f"child spec: {cs}")
+    #             elif act == 'click':
+    #                 self.click_window(cs, **opt)
+    #         # Recursively get the child specs
+    #         self.recursive_child(cs, action_list=action_list, depth=depth+1, max_depth=max_depth, **opt)
 
-            # Recursively get the child specs
-            self.recursive_child(cs, action_list=action_list, depth=depth+1, max_depth=max_depth, **opt)
+    #     return []
 
-        return []
+    def search_process_window(self, w: WindowSpecification, **opt) -> bool:
+        '''
+        process a window in search mode, according to 
+        - control_type
+        - title_re
+        '''
+        debug = opt.get('debug', False)
+        title = w.window_text()
+        ct = w.element_info.control_type
+        if self.search_title_re is not None:
+            if not re.search(self.search_title_re, title, re.IGNORECASE):
+                return False
+            elif debug:
+                print(f"matched title_re {self.search_title_re} with title {title}")
+        if not self.search_type:
+            if self.search_type.lower() == 'any' or self.search_type.lower() == ct.lower():
+                print(f"matched control_type {self.search_type} with control_type {ct}")
+            elif debug:
+                print(f"control_type {ct} doesn't match {self.search_type}")
+                return False
 
-    
+        # if we reach here, we have a match
+        if not self.search_action or self.search_action.lower() == 'print':
+            print(f"search matched window: {w}, title={title}, control_type={ct}")
+        elif self.search_action.lower() == 'click':
+            self.click_window(w, **opt)
+        elif self.search_action.lower().startswith('type='):
+            to_type = self.search_action[5:]
+            print(f"typing '{to_type}' into window: {w}, title={title}, control_type={ct}")
+            w.type_keys(to_type, with_spaces=True, set_foreground=True)
+            sleep(1)
+        else:
+            print(f"unknown search action {self.search_action}")
+            raise ValueError(f"unknown search action {self.search_action}")
+    def click_window(self, w: WindowSpecification, **opt) -> bool:
+        try:
+            w.click_input()
+            sleep(1)
+        except pywinauto.timings.TimeoutError as e:
+            print(f"TimeoutError: child spec didn't appear in time.")
+            return False
+        except pywinauto.findwindows.ElementNotFoundError as e:
+            print(f"ElementNotFoundError: child spec is not valid, either closed or you need to wait longer.")
+            return False
+        return True
+
     def locate_cmd_arg(self, long_cmd: str, arg: str, **opt):
         debug = opt.get('debug', False)
         verbose = opt.get('verbose', 0)
@@ -377,7 +481,21 @@ class UiaEnv:
         
         ret = tpsup.locatetools.ret0.copy()
 
-        if long_cmd == 'click':
+        if long_cmd == 'children':
+            if self.current_window is None:
+                print("current_window is None, cannot list children")
+                ret['bad_input'] = True
+            else:
+                for descendant_window in self.current_window.descendants():
+                    print(f"desc window={pformat(descendant_window)}, "
+                          f"title={descendant_window.window_text()}, "
+                          f"control_type={descendant_window.element_info.control_type}, "
+                          f"python={type(descendant_window).__name__}, "
+                          f"class_name={descendant_window.class_name()}")
+                    # print(f"dir(descendant_window)={dir(descendant_window)}")
+                    # print(f"element_info={pformat(descendant_window.element_info)}")
+                    # print(f"dir(element_info)={dir(descendant_window.element_info)}")
+        elif long_cmd == 'child':
             idx = int(arg)
             max_child_specs = len(self.window_and_child_specs)
             if idx < 0 or idx >= max_child_specs:
@@ -391,16 +509,22 @@ class UiaEnv:
                 code = f"self.{which}.{child_spec}"
                 print(f"code={code}")
                 self.current_window = eval(code, globals(), locals())
-                # w2 = w.child_window( control_type="Document")
                 
-                try: 
-                    self.current_window.click_input()
-                    sleep(1)
-                except pywinauto.timings.TimeoutError as e:
-                    print(f"TimeoutError: child spec didn't appear in time.")
-                    self.current_window = None
-                except pywinauto.findwindows.ElementNotFoundError as e:
-                    print(f"ElementNotFoundError: child spec is not valid, either closed or you need to wait longer.")
+                # if not self.click_window(self.current_window, **opt):
+                #     self.current_window = None
+
+                # if self.current_window is not None:
+                #     # after a successful click, we refresh our control identifiers tree.
+                #     self.refresh_window_specs()
+                #     ret['relist'] = True
+                result = self.locate_cmd_arg('click', '', **opt)
+                ret.update(result)
+        elif long_cmd == 'click':
+            if self.current_window is None:
+                print("current_window is None, cannot click")
+                ret['bad_input'] = True
+            else:
+                if not self.click_window(self.current_window, **opt):
                     self.current_window = None
 
                 if self.current_window is not None:
@@ -472,27 +596,114 @@ class UiaEnv:
             self.display()
         elif long_cmd == 'refresh':
             self.refresh_window_specs()
-        elif long_cmd == 'search' or long_cmd == 'act':
+        elif long_cmd == 'search':
             '''
-                arg is like
-                search=window=Remote side unexpectedly closed
-                any=Remote side unexpectedly closed
-
+            search=scope
             '''
-            control_type, title_re = arg.split('=', 1)
-            # start searching from desktop windows
-            desktop_top_windows = self.desktop.windows()
-            for w in desktop_top_windows:
-                # drill into each top window
-                try:
-                    ws = self.get_windowspec_from_uiawrapper(w)
-                except pywinauto.findwindows.ElementNotFoundError as e:
-                    print(f"ElementNotFoundError: desktop top window is not valid, either closed or you need to wait longer.")
-                    continue
-                child_specs = self.get_child_specs(ws)
-                
-             
+            scope = arg
 
+            if scope == 'desktop':
+                # start searching from desktop windows
+                desktop_top_windows = self.desktop.windows()
+                for tw in desktop_top_windows:
+                    # drill into each top window
+                    for descendant_window in tw.descendants():
+                        if debug:
+                            print(f"descendant_window={pformat(descendant_window)}, "
+                                f"title={descendant_window.window_text()}, "
+                                f"control_type={descendant_window.element_info.control_type}, "
+                                f"python={type(descendant_window).__name__}, "
+                                f"class_name={descendant_window.class_name()}")
+                            self.search_process_window(descendant_window)
+            elif scope == 'top':
+                if self.top_window is None:
+                    print("top_window is None, cannot search")
+                    ret['bad_input'] = True
+                else:
+                    for descendant_window in self.top_window.descendants():
+                        if debug:
+                            print(f"descendant_window={pformat(descendant_window)}, "
+                                f"title={descendant_window.window_text()}, "
+                                f"control_type={descendant_window.element_info.control_type}, "
+                                f"python={type(descendant_window).__name__}, "
+                                f"class_name={descendant_window.class_name()}")
+                        self.search_process_window(descendant_window)
+            elif scope == 'current':
+                if self.current_window is None:
+                    print("current_window is None, cannot search")
+                    ret['bad_input'] = True
+                else:
+                    for descendant_window in self.current_window.descendants():
+                        if debug:
+                            print(f"descendant_window={pformat(descendant_window)}, "
+                                f"title={descendant_window.window_text()}, "
+                                f"control_type={descendant_window.element_info.control_type}, "
+                                f"python={type(descendant_window).__name__}, "
+                                f"class_name={descendant_window.class_name()}")
+                        self.search_process_window(descendant_window)
+            else:
+                print(f"invalid search scope {scope}, must be one of desktop, top, current")
+                ret['bad_input'] = True
+
+        elif long_cmd == 'search_act':
+            '''
+            set action for search results.
+            default is 'print'.
+            without arg, we print the current action.
+            examples:
+                act      # print current action
+                act=print  # set action to print
+                act=click  # set action to click
+                act=type=Y{ENTER}
+            '''
+            if not arg:
+                print(f"current action = {self.search_action}")
+            elif arg == 'unset':
+                self.search_action = None
+                print(f"unset action")
+            else:
+                self.search_action = arg
+                print(f"set action = {self.search_action}")
+        elif long_cmd == 'search_title_re':
+            '''
+            set search title_re for search results.
+            default is None.
+            without arg, we print the current title_re.
+            examples:
+                search_title_re      # print current title_re
+                search_title_re=.*   # set title_re to .*
+                search_title_re=.*notepad.*  # set title_re to .*notepad.*
+            '''
+            if not arg:
+                print(f"current search_title_re = {self.search_title_re}")
+            elif arg == 'unset':
+                self.search_title_re = None
+                print(f"unset search_title_re")
+            else:
+                self.search_title_re = arg
+                print(f"set search_title_re = {self.search_title_re}")
+        elif long_cmd == 'search_type':
+            '''
+            set search control_type for search results.
+            default is 'any'.
+            without arg, we print the current control_type.
+            examples:
+                search_type      # print current control_type
+                search_type=any  # set control_type to any
+                search_type=Window  # set control_type to Window
+                search_type=Button  # set control_type to Button
+            '''
+            if not arg:
+                print(f"current search_type = {self.search_type}")
+            elif arg == 'unset':
+                self.search_type = 'any'
+                print(f"unset search_type, set to default 'any'")
+            elif arg.lower() in ['any', 'window', 'button']:
+                self.search_type = arg.lower()
+                print(f"set search_type = {self.search_type}")
+            else:
+                print(f"invalid search_type {arg}, must be one of any, Window, Button")
+                ret['bad_input'] = True
         elif long_cmd == 'start':
             '''
             when the start command spawns a new process for the window,
@@ -688,6 +899,8 @@ class UiaEnv:
         '''
 
         debug = opts.get('debug', False)
+        use_original_spec = opts.get('use_original_spec', False)
+
         ci_string = self.get_control_identifiers(w)
         children = []
         multiline = ci_string
@@ -695,6 +908,7 @@ class UiaEnv:
         # note this is a multi-line match because title can contain \r which is a line break.
 
         #    |    | child_window(title="Maximize", control_type="Button")
+
         while m := re.match(r".*?(child_window\(.+?\))", multiline, re.MULTILINE|re.DOTALL):
             child_spec = m.groups()[0]
             multiline = multiline[m.end():] # leftover string to be processed
@@ -708,6 +922,12 @@ class UiaEnv:
                 - there can be escaped quotes in the title.
                 - also we should reduce the length of title to at most 30 characters.
             '''
+
+            if use_original_spec:
+                children.append(child_spec)
+                continue
+
+            # now use_original_spec is False
             title_match = re.search(r'title="((?:[^"\\]|\\.)*)"', child_spec, re.DOTALL)
             if title_match:
                 full_title = title_match.groups()[0]

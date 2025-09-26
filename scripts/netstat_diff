@@ -10,7 +10,8 @@ use POSIX qw(strftime);
 my $prog = $0;
 $prog =~ s:.*/::;
 
-my $HOME = $ENV{HOME} || $ENV{USERPROFILE};
+my $HOME     = $ENV{HOME} || $ENV{USERPROFILE};
+my $vpn_file = "$HOME/OpenVPN/config/prod.ovpn";
 
 sub usage {
    my ($message) = @_;
@@ -50,6 +51,11 @@ description:
    -r             diff route table only
    -c             diff connection table only
 
+   -fv            filter out new connections that already routed by vpn.
+                  this is useful when you are using vpn and want to see
+                  what new connections are made outside of the vpn.
+                  vpn config file is assumed to be at $vpn_file.
+
    by default, the script take a snapshot of the connection table (netstat -an) 
    and a snapshot of the route table (netstat -rn) into separate files,
    and compare it with the previous snapshot.
@@ -63,6 +69,11 @@ examples:
    $prog diff -c
    $prog rmall
    $prog diff -s1 0
+
+   # diff between snapshot 43 and 44.
+   # filter out the routes in vpn file $vpn_file from the new connections. 
+   # if we are denied web acccess because of our region, we can add the new connections into vpn file.
+   $prog diff -fv -s1 43 -s2 44
 END
 
    exit 1;
@@ -73,12 +84,14 @@ my $s1;
 my $s2;
 my $route_only;
 my $conn_only;
+my $filter_vpn;
 GetOptions(
-   'v|verbose+' => \$verbose,
-   's1=s'       => \$s1,
-   's2=s'       => \$s2,
-   'r|route'    => \$route_only,
-   'c|conn'     => \$conn_only,
+   'v|verbose+'    => \$verbose,
+   's1=s'          => \$s1,
+   's2=s'          => \$s2,
+   'r|route'       => \$route_only,
+   'c|conn'        => \$conn_only,
+   'fv|filter-vpn' => \$filter_vpn,
 ) || usage("cannot parse command line: $!");
 
 @ARGV == 1 or usage("wrong number of args");
@@ -96,37 +109,6 @@ my $cmd_by_type = {
 };
 
 my @defined_types = sort ( keys %$cmd_by_type );
-
-sub snapshot {
-   # if take snapshots, we take both connection and route snapshots same time
-   my $timestamp = time;
-   my $date_dir  = "$SNAPSHOT_DIR/" . POSIX::strftime( '%Y-%m-%d_%H:%M:%S', localtime($timestamp) );
-
-   mkdir $date_dir;
-
-   for my $type (@defined_types) {
-      my $cmd = $cmd_by_type->{$type};
-
-      my $file = "$date_dir/netstat_${type}.txt";
-
-      print "saving 'netstat_${type}' snapshot to '$file'\n" if $verbose;
-      system( $cmd . " > '$file'" ) == 0 or die "failed to run command '$cmd': $!\n";
-   }
-}
-
-sub list_snapshot_dates {
-   opendir my $dh, $SNAPSHOT_DIR or die "cannot open snapshot directory '$SNAPSHOT_DIR': $!\n";
-   my @dates = grep { -d "$SNAPSHOT_DIR/$_" && $_ !~ /^\./ } readdir $dh;
-   closedir $dh;
-   return sort @dates;
-
-}
-
-sub remove_all_snapshots {
-   my $cmd = "rm -rf $SNAPSHOT_DIR/*";
-   print "removing all snapshots with command: $cmd\n" if $verbose;
-   system($cmd) == 0 or die "failed to run command '$cmd': $!\n";
-}
 
 if ( $action eq 'ls' ) {
    my @dates = list_snapshot_dates();
@@ -213,10 +195,125 @@ if ( $action eq 'ls' ) {
       print "----------------- diffing '$type_cmd' snapshots -------------------\n";
       my $cmd = "diff '$file1' '$file2'";
       print "running command: $cmd\n" if $verbose;
-      system($cmd);
-      print "\n\n";
+      my @lines = `$cmd`;
+      print "@lines\n";
+
+      if ( $filter_vpn && $type eq 'an' && @lines > 0 ) {
+         # parse vpn config file
+         my $vpn_subnets = parse_vpn_config($vpn_file);
+         print "parsed vpn config file '$vpn_file':\n" if $verbose;
+         print Dumper($vpn_subnets)                    if $verbose;
+
+         # filter out new connections that are routed by vpn
+         my @filtered_lines;
+         for my $line (@lines) {
+            chomp $line;
+            #  >   TCP    172.19.107.120:49754   63.179.220.4:443       TIME_WAIT
+            #  >   TCP    172.19.107.120:50762   34.36.137.203:443      ESTABLISHED
+            if ( $line =~ /^\s*>\s+TCP\s+([0-9.]+):([0-9]+)\s+([0-9.]+):([0-9]+)\s+(\S+)/ ) {
+               # new connection
+               my ( $src_ip, $src_port, $dst_ip, $dst_port, $state ) = ( $1, $2, $3, $4, $5 );
+               if ( is_vpn_routed( $src_ip, $dst_ip, $vpn_subnets, { verbose => $verbose } ) ) {
+                  print "filtering out vpn routed connection line: $line\n";
+               } else {
+                  # other diff lines, keep them
+                  push @filtered_lines, $line;
+               }
+            }
+         }
+
+         if ( @filtered_lines == 0 ) {
+            print "all new connections are routed by vpn. no new connections outside of vpn.\n";
+         } else {
+            print "new connections outside of vpn:\n";
+            print join( "\n", @filtered_lines ), "\n";
+         }
+      }
    }
    exit 0;
 } else {
    die "internal error: unknown command '$action'\n";
+}
+
+############################################
+# subs
+############################################
+
+sub snapshot {
+   # if take snapshots, we take both connection and route snapshots same time
+   my $timestamp = time;
+   my $date_dir  = "$SNAPSHOT_DIR/" . POSIX::strftime( '%Y-%m-%d_%H:%M:%S', localtime($timestamp) );
+
+   mkdir $date_dir;
+
+   for my $type (@defined_types) {
+      my $cmd = $cmd_by_type->{$type};
+
+      my $file = "$date_dir/netstat_${type}.txt";
+
+      print "saving 'netstat_${type}' snapshot to '$file'\n" if $verbose;
+      system( $cmd . " > '$file'" ) == 0 or die "failed to run command '$cmd': $!\n";
+   }
+}
+
+sub list_snapshot_dates {
+   opendir my $dh, $SNAPSHOT_DIR or die "cannot open snapshot directory '$SNAPSHOT_DIR': $!\n";
+   my @dates = grep { -d "$SNAPSHOT_DIR/$_" && $_ !~ /^\./ } readdir $dh;
+   closedir $dh;
+   return sort @dates;
+
+}
+
+sub remove_all_snapshots {
+   my $cmd = "rm -rf $SNAPSHOT_DIR/*";
+   print "removing all snapshots with command: $cmd\n" if $verbose;
+   system($cmd) == 0 or die "failed to run command '$cmd': $!\n";
+}
+
+sub parse_vpn_config {
+   my ($file) = @_;
+   open my $fh, '<', $file or die "cannot open vpn config file '$file': $!\n";
+   my @lines = <$fh>;
+   close $fh;
+
+   my @subnets;
+   for my $line (@lines) {
+      chomp $line;
+
+      if ( $line =~ /^\s*route\s+(\d+\.\d+\.\d+\.\d+)\s+(\d+\.\d+\.\d+\.\d+)/ ) {
+         my ( $subnet, $netmask ) = ( $1, $2 );
+
+         # trim line
+         $line =~ s/^\s+//;
+         $line =~ s/\s+$//;
+
+         # 0 in subnet means any, wildcard
+         # change 0 to [0-9]{1,3}, to make it regex
+         my $subnet_pattern = $subnet;
+         $subnet_pattern =~ s/\b0\b/[0-9]{1,3}/g;
+
+         push @subnets, { line => $line, subnet => $subnet, netmask => $netmask, subnet_pattern => $subnet_pattern };
+      }
+   }
+
+   return \@subnets;
+}
+
+sub is_vpn_routed {
+   my ( $src_ip, $dst_ip, $vpn_subnets, $opt ) = @_;
+   my $verbose = $opt->{verbose} || 0;
+
+   for my $subnet (@$vpn_subnets) {
+      my $pattern = $subnet->{subnet_pattern};
+      if ( $dst_ip =~ /^$pattern$/ ) {
+         print("dst_ip=$dst_ip matches vpn subnet pattern '$pattern'\n")
+           if $verbose;
+         return 1;
+      } else {
+         print("dst_ip=$dst_ip does not match vpn subnet pattern '$pattern'\n")
+           if $verbose;
+      }
+   }
+
+   return 0;
 }

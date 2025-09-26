@@ -46,7 +46,7 @@ fi
 
 export MY_VPN_BIN_DIR
 export MY_VPN_CFG_DIR
-export MY_VPN_CFG_FILE="$MY_VPN_CFG_DIR/sg-sng.prod.surfshark.com_tcp.ovpn"
+export MY_VPN_CFG_FILE="$MY_VPN_CFG_DIR/prod.ovpn"
 
 
 if [ $action = check ]; then
@@ -62,9 +62,9 @@ elif [ $action = set ]; then
    export PATH="$MY_VPN_BIN_DIR:$PATH"
 
    # if linux, 
-   #     sudo openvpn /etc/openvpn/sg-sng.prod.surfshark.com_tcp.ovpn
+   #     sudo openvpn /etc/openvpn/prod.ovpnn
    # if windows
-   #     openvpn --config ~/OpenVPN/config/sg-sng.prod.surfshark.com_tcp.ovpn
+   #     openvpn --config ~/OpenVPN/config/prod.ovpnn
    if [ $UNAMETERM = linux ]; then
       startvpn () {
          (set -x; sudo openvpn "$MY_VPN_CFG_FILE")
