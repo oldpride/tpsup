@@ -4,6 +4,7 @@ from pprint import pformat
 import re
 import shlex
 import time
+import traceback
 from typing import Union
 import tpsup.cmdtools
 import tpsup.envtools
@@ -14,7 +15,8 @@ import tpsup.pstools
 import tpsup.utilbasic
 import tpsup.interactivetools
 from tpsup.logbasic import log_FileFuncLine
-import tpsup.steptools
+# import tpsup.steptools
+import tpsup.keyvaluetools
 
 '''
     user_input vs step vs locator
@@ -760,7 +762,7 @@ class LocateEnv:
                         need_skip = True
                         break
                     try:
-                        result = self.locate(step, **opt)
+                        result = self.locate(step, **opt) # locate() is for single step only.
                         break
                     except Exception as e:
                         print(e)
@@ -771,7 +773,7 @@ class LocateEnv:
                     print(f"follow2: step {step} is skipped due to interactive skip")
                     continue
             else:
-                result = self.locate(step, **opt)
+                result = self.locate(step, **opt) # locate() is for single step only.
 
             if dryrun:
                 self.dryrun_step_count += 1
@@ -1044,7 +1046,7 @@ class LocateEnv:
                 prompt += f"{short}-{k} "
             else:
                 prompt += f"{k} "
-        prompt += " -- Enter command: "
+        prompt += " -- Enter single command: "
         return prompt
 
     def parse_and_check_single_step_user_input(self, user_input: str) -> dict:
@@ -1054,10 +1056,12 @@ class LocateEnv:
         if user input was a short command, it will be converted to its long command.
         '''
         # split user_input by 1st space or =.
-        # command, arg, *_ = re.split(r'\s|=', user_input, maxsplit=1) + [None] * 2
-        parsed = tpsup.steptools.parse_single_step(user_input)
-        cmd = parsed['cmd']
-        arg = parsed['arg']
+
+        if '=' in user_input:
+            cmd, arg = user_input.split('=', 1)
+        else:
+            cmd = user_input
+            arg = None
         # print(f"cmd='{cmd}', arg='{arg}'")
         if not cmd in self.combined_usage_by_long_and_short:
             print(f"unknown command '{cmd}'")
@@ -1115,12 +1119,14 @@ class LocateEnv:
                 self.caller_display()
 
             while True:
-                user_input = input(f"{prompt}: ")
+                user_input = input(f"{prompt}")
 
                 try:
-                    result = self.locate(user_input, **opt)
+                    result = self.locate(user_input, **opt) # locate() is for single-step locator
                 except Exception as e:
-                    print(f"{e}")
+                    print(f"Exception occurred: {e}")
+                    # print stack trace
+                    traceback.print_exc()
                     continue
 
                 if result['break_levels']:
@@ -1156,7 +1162,7 @@ class LocateEnv:
             # parsed = tpsup.steptools.parse_single_step(locator)
             parsed = self.parse_and_check_single_step_user_input(locator)
             if not parsed:
-                raise RuntimeError(f"failed to parse locator={locator}") 
+                raise RuntimeError(f"failed to parse single-step locator={locator}")
             cmd=parsed['cmd']
             arg=parsed['arg']
 
@@ -1402,14 +1408,15 @@ class LocateEnv:
                 return ret
         parsed = []
         try:
-            parsed = tpsup.steptools.parse_steps(script)
+            # parsed = tpsup.steptools.parse_steps(script)
+            parsed = tpsup.keyvaluetools.parse_keyvalue(script)
         except Exception as e:
             print(f"run_steps: failed to parse script: {e}")
             ret['Success'] = False
             ret['bad_input'] = True
             return ret
         # steps are the 'original' of each parsed step.
-        steps = [p['original'] for p in parsed]
+        steps = [p['token'] for p in parsed]
         print(f"run_steps: parsed script to {len(steps)} steps: {steps}")
         result = self.follow(steps, **opt)
         ret.update(result) # update hash (dict) with hash (dict)

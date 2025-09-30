@@ -821,13 +821,21 @@ if [[ $TERM =~ ^xterm|^vt ]]; then
 
    if [[ $UNAME =~ Msys|Cygwin || ${HOSTNAME} =~ linux1 ]]; then
       # bash head string ${MYVAR::3}
-      # bas tail string  ${MYVAR: -3} # must have a space !!!
+      # bash tail string  ${MYVAR: -3} # must have a space !!!
+      #    but if MYVAR has less than 3 chars, it will return 0 chars.
+      #    the following solution works for both cases
+      # bash tail string  ${MYVAR:${#MYVAR}<3?0:-3
+      #    see https://stackoverflow.com/questions/19858600/
       # PROMPT_COMMAND only controls the terminal frame title.
       # we shorten the PWD part so that we can see the important part in task bar.
       if [[ $(sfc 2>&1 | tr -d '\0') =~ SCANNOW ]]; then
-         PROMPT_COMMAND='echo -ne "\033]0;admin:${PWD: -15}\007"'
+         # sfc is used to test if we are in admin cmd.exe
+         #    tian@tianpc2:/cygdrive/c/Users/tian$ sfc
+         #    You must be an administrator running a console session in order to
+         #    use the sfc utility.
+         PROMPT_COMMAND='echo -ne "\033]0;admin:${PWD:${#PWD}<15?0:-15}\007"'
       else
-         PROMPT_COMMAND='echo -ne "\033]0;${PWD: -15}\007"'
+         PROMPT_COMMAND='echo -ne "\033]0;${PWD:${#PWD}<15?0:-15}\007"'
       fi
    else
       PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME::10}:${PWD: -15}\007"'

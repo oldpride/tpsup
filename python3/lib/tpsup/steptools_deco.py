@@ -48,11 +48,22 @@ step14
 # multiple steps without values.
 step16 "step17" step18 'step19'
 
+# multiple steps with values.
+step20=123 step21="456" step22='789'
+
 # step with empty value, not the same as no step value.
-step20=''
+step23=''
 
 # basically the steps should be able to be accepted by bash or batch.
 
+'''
+
+test_input_with_comma_and_space = '''
+step1=1+2
+step2="123 456" , "step3=abc def"
+step2="123 456"   "step3=abc def"
+step4=123 step5=456,step6=789
+title_re=.*/Users/tian backend=win32
 '''
 
 # a function to parse the above steps into an array of dict of key-value pairs.
@@ -62,6 +73,7 @@ step20=''
 
 def parse_steps(input: str, **opt) -> list:
     debug = opt.get('debug', 0)
+    separator = opt.get('separator', '\s+')
 
     # input must be a string.
     if not isinstance(input, str):
@@ -74,13 +86,13 @@ def parse_steps(input: str, **opt) -> list:
         if debug > 1:
             print(f"input = {input}")
 
-        
         # skip leading spaces - this could be multiple lines of spaces, including \n
         # note space and comment are intertwined.
         # therefore, we need to loop until we see neither space nor comment.
         seen_space = True
         seen_comment = True
         while seen_space or seen_comment:
+            # if m := re.match(fr'^{separator}', input, re.MULTILINE):
             if m := re.match(r'^\s+', input, re.MULTILINE):
                 seen_space = True
                 input = input[m.end():]
@@ -148,7 +160,12 @@ def parse_steps(input: str, **opt) -> list:
             # if '=', this is a step with value.
             #    eg, step99=value
             # because we allow step without value, we cannot allow space around '='.
+            # m = re.match(fr'^([a-zA-Z0-9_.:-]+?)({separator}|=|$)', input)
             m = re.match(r'^([a-zA-Z0-9_.:-]+?)(\s|=|$)', input)
+            # a key ending with space or '=' or end of input.
+            #    - if ending with space, this is a step without value.
+            #    - if ending with '=', this is a step with value.
+            #    - if ending with end of input, this is a step without value.
             if not m:
                 raise RuntimeError(f"no step found in input: {pformat(input)}")
             k = m.group(1)
@@ -205,8 +222,8 @@ def parse_steps(input: str, **opt) -> list:
             else:
                 # step value is not quoted
                 #   step99=value
-                # value is the rest of line after =.
-                m = re.match(r'^(.*)', input)
+                # value is after =, the rest of line or until whitespace
+                m = re.match(r'^(.*)?(\s|$)', input)
                 if not m:
                     raise RuntimeError(f"no value found for key: {k}, at input: {input}")
                 v = m.group(1)
@@ -266,6 +283,12 @@ def main():
     for s in test_single_steps:
         step = parse_single_step(s)
         print(f"single step: {s} => {pformat(step)}")
+
+    # print()
+    # steps3 = parse_steps(test_input_with_comma_and_space, separator=r'(\s|,)+', 
+    #                     #  debug=1
+    #                      )
+    # print(f"steps3 = {pformat(steps3)}")
 
 if __name__ == '__main__':
     main()

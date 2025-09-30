@@ -15,7 +15,6 @@ from tpsup.human import human_delay
 import tpsup.logtools
 from tpsup.logbasic import log_FileFuncLine
 import tpsup.locatetools
-import tpsup.steptools
 import tpsup.utilbasic
 
 from selenium.common.exceptions import \

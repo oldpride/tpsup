@@ -11,6 +11,7 @@ from tpsup.cmdtools import run_cmd
 from typing import Union
 import tpsup.locatetools
 from tpsup.logbasic import log_FileFuncLine
+import tpsup.keyvaluetools
 
 def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = None) -> None:
     print(f"\ninput's python class name={type(o).__name__}")
@@ -75,15 +76,10 @@ def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = No
         for w in x.children():
             print(f"{k}'s child window={w}, title={w.window_text()}, python={type(w).__name__}, class_name={w.class_name()}")
 
-
 class UiaEnv:
     locate: callable = None
     follow: callable = None
     explore: callable = None
-
-    search_action: str = 'print' # print, click, type=...  default is print
-    search_title_re: str = None
-    search_type: str = 'any' # search control_type: any, Window, Button, Edit, etc.
 
     def __init__(self, 
                  **opt):
@@ -102,7 +98,7 @@ class UiaEnv:
         # if not (self.app or self.title_re):
         #     raise ValueError("Either app or title_re must be provided")
         
-        self.backend = opt.get('backend', 'uia')
+        self.backend = 'uia'
 
         if not self.app:
             self.app = Application(
@@ -125,6 +121,19 @@ class UiaEnv:
         self.explore = locateEnv.explore
 
     locate_usage_by_cmd = {
+        'backend': {
+            'usage': '''
+                get or set the backend to win32 or uia. default is uia.
+                examples:
+                backend     # get the current backend
+                backend=uia
+                backend=win32
+
+                changing backend 
+                - change 'app' and 'desktop' to use the new backend.
+                - will not trigger re-connect, use 'connect' command to re-connect.
+            ''',
+        },
         'children': {
             'short': 'ch',
             'no_arg': True,
@@ -132,16 +141,6 @@ class UiaEnv:
                 list all child windows of the current window.
                 ch
             ''',
-        },
-        'connect': {
-            'short': 'conn',
-            'need_arg': True,
-            'has_dryrun': True,
-            'usage': '''
-                connect with title_re, title
-                conn=title_re=.*tianjunk.*
-                conn=title="tianjunk - Notepad"
-                ''',
         },
         'child': {
             'short': 'c',
@@ -159,7 +158,7 @@ class UiaEnv:
                 click the the current window.
                 examples:
                 click
-                ''',
+            ''',
         },
         'control_identifiers': {
             'short': 'ci',
@@ -167,6 +166,25 @@ class UiaEnv:
             'usage': '''
                 get the control identifiers of the current window
                 ci
+            ''',
+        },
+        'connect': {
+            'short': 'conn',
+            'need_arg': True,
+            'has_dryrun': True,
+            'usage': '''
+                connect with title_re, title
+                examples:
+                conn=title_re=.*tianjunk.* 
+                conn=title="tianjunk - Notepad"
+                conn=title_re=.*/Users/tian # for cygwin mintty
+                ''',
+        },
+        'current': {
+            'no_arg': True,
+            'usage': '''
+                print the current window spec.
+                current
             ''',
         },
         'desktop': {
@@ -179,12 +197,71 @@ class UiaEnv:
                     desk=notepad # list all top windows of the desktop whose title contains 'notepad'
             ''',
         },
+        'find': {
+            'need_arg': True,
+            'has_dryrun': 1,
+            'usage': '''
+                find=criterias
+
+                find=scope=<scope> title_re=<title_re> title=<title> type=<control_type> class=<class_name> action=<action>
+
+                search for windows matching the criteria.
+                (similar to unix 'find' command)
+
+                scope can be:
+                    desktop  - search all desktop windows
+                    top      - search only the top window of the connected app, this is the default scope.
+                    current  - search only the current window of the connected app
+
+                title_re can be:
+                    .*      - match any title
+                    notepad - match title containing 'notepad'
+
+                title is the exact title to match.
+
+                type is the control_type to match, eg, Window, Button, Edit, Text, etc.
+
+                class is the class_name to match, eg, Notepad, Edit, etc.
+
+                action can be:
+                    print   - print the find results
+                    click   - click the find results
+                    type    - type text into the find results
+
+                examples:
+                    find=title_re=.*tianjunk.* type=any action=print
+                    find=scope=desktop title_re=.*notepad.* type=Window action=print
+                    find=scope=top title_re=.*notepad.* type=Button action=click
+                    find=scope=current title_re=.*notepad.* type=Edit action=type=hello{ENTER}
+
+            ''',
+        },        
         'list': {
-            'short': 'l',
+            'short': 'li',
             'no_arg': True,
             'usage': '''
                 list the child windows of the top window and current window
                 l
+            ''',
+        },
+        'locate': {
+            'short': 'lo',
+            'need_arg': True,
+            'usage': '''
+                locate=child_index=<index>
+                locate=top=child_spec
+                locate=current=child_spec
+
+                locate the child window by index or child_spec.
+                    'child_index' is the index from 'list' command.
+                    'child_spec',eg, title="OK", control_type="Button", title_re=".*Notepad.*".
+                    'top' means the top window of the connected app.
+                    'current' means the current window of the connected app.
+                examples:
+                    locate=child_index=3
+                    locate=top=title="Untitled - Notepad"
+                    locate=top=title_re=".*Notepad.*", control_type="Button"
+                    locate=current=title_re=".*Notepad.*"
             ''',
         },
         'refresh': {
@@ -194,69 +271,7 @@ class UiaEnv:
                 r
             ''',
         },
-        'search': {
-            'need_arg': True,
-            'has_dryrun': 1,
-            'usage': '''
-                search=scope
 
-                search for windows matching the criteria.
-                (similar to unix 'find' command)
-
-                scope can be:
-                    desktop  - search all desktop windows
-                    top      - search only the top window of the connected app
-                    current  - search only the current window of the connected app
-
-                examples:
-                    search=desktop
-                    search=top
-                    search=current
-
-                see also:
-                    search_act
-                    search_title_re
-                    search_type
-            ''',
-        },
-        'search_act': {
-            'short': 'sa',
-            'usage': '''
-                set action for search results.
-                default is 'print'.
-                without arg, we print the current action.
-                examples:
-                    act      # print current action
-                    act=print  # set action to print
-                    act=click  # set action to click
-                    act=type=Y{ENTER}
-            ''',
-        },
-        'search_title_re': {
-            'short': 'str',
-            'usage': '''
-                set search title_re for search results.
-                default is None.
-                without arg, we print the current title_re.
-                examples:
-                    search_title_re      # print current title_re
-                    search_title_re=.*   # set title_re to .*
-                    search_title_re=.*notepad.*  # set title_re to .*notepad.*
-            ''',
-        },
-        'search_type': {
-            'short': 'sty',
-            'usage': '''
-                set search control_type for search results.
-                default is 'any'.
-                without arg, we print the current control_type.
-                examples:
-                    search_type      # print current control_type
-                    search_type=any  # set control_type to any
-                    search_type=Window  # set control_type to Window
-                    search_type=Button  # set control_type to Button
-            ''',
-        },
         'start': {
             'need_arg': True,
             'usage': '''
@@ -298,7 +313,7 @@ class UiaEnv:
         'top' : {
             'no_arg': True,
             'usage': '''
-                get the top window of the connected application.
+                switch current window to top window.
                 top
 
                 note: 
@@ -318,6 +333,7 @@ class UiaEnv:
                 ty={F5}
             ''',
         },
+
     }
 
     def get_windowspec_from_uiawrapper(self, u: UIAWrapper) -> WindowSpecification:
@@ -428,7 +444,9 @@ class UiaEnv:
 
     #     return []
 
-    def search_process_window(self, w: WindowSpecification, **opt) -> bool:
+    def find_process_one_window(self, w: WindowSpecification, 
+                              mc: dict, # match criteria
+                              **opt) -> bool:
         '''
         process a window in search mode, according to 
         - control_type
@@ -437,31 +455,58 @@ class UiaEnv:
         debug = opt.get('debug', False)
         title = w.window_text()
         ct = w.element_info.control_type
-        if self.search_title_re is not None:
-            if not re.search(self.search_title_re, title, re.IGNORECASE):
+        if 'title_re' in mc:
+            if re.search(mc['title_re'], title, re.IGNORECASE):
+                if debug:
+                    print(f"matched title_re {mc['title_re']} with title {title}")
+            else:
+                if debug:
+                    print(f"title {title} doesn't match title_re {mc['title_re']}")
                 return False
-            elif debug:
-                print(f"matched title_re {self.search_title_re} with title {title}")
-        if not self.search_type:
-            if self.search_type.lower() == 'any' or self.search_type.lower() == ct.lower():
-                print(f"matched control_type {self.search_type} with control_type {ct}")
-            elif debug:
-                print(f"control_type {ct} doesn't match {self.search_type}")
+            
+        if 'title' in mc:
+            if mc['title'].lower() == 'any' or mc['title'].lower() == title.lower():
+                if debug:
+                    print(f"matched title {mc['title']} with title {title}")
+            else:
+                if debug:
+                    print(f"title {title} doesn't match title {mc['title']}")
                 return False
 
-        # if we reach here, we have a match
-        if not self.search_action or self.search_action.lower() == 'print':
-            print(f"search matched window: {w}, title={title}, control_type={ct}")
-        elif self.search_action.lower() == 'click':
+        if 'control_type' in mc:
+            if mc['control_type'].lower() == 'any' or mc['control_type'].lower() == ct.lower():
+                if debug:
+                    print(f"matched control_type {mc['control_type']} with control_type {ct}")
+            else:
+                if debug:
+                    print(f"control_type {ct} doesn't match {mc['control_type']}")
+                return False
+            
+        if 'class_name' in mc:
+            class_name = w.class_name()
+            if mc['class_name'].lower() == 'any' or mc['class_name'].lower() == class_name.lower():
+                if debug:
+                    print(f"matched class_name {mc['class_name']} with class_name {class_name}")
+            else:
+                if debug:
+                    print(f"class_name {class_name} doesn't match {mc['class_name']}")
+                return False
+
+        # if we reach here, we have a match. always print it.
+        print(f"search matched window: {w}, title={title}, control_type={ct}")
+
+        if not 'action' in mc or mc['action'].lower() == 'print':
+            pass # already printed above 
+        elif mc['action'].lower() == 'click':
             self.click_window(w, **opt)
-        elif self.search_action.lower().startswith('type='):
-            to_type = self.search_action[5:]
+        elif mc['action'].lower().startswith('type='):
+            to_type = mc['action'][5:]
             print(f"typing '{to_type}' into window: {w}, title={title}, control_type={ct}")
             w.type_keys(to_type, with_spaces=True, set_foreground=True)
             sleep(1)
         else:
-            print(f"unknown search action {self.search_action}")
-            raise ValueError(f"unknown search action {self.search_action}")
+            raise ValueError(f"unknown search action {mc['action']}")
+
     def click_window(self, w: WindowSpecification, **opt) -> bool:
         try:
             w.click_input()
@@ -481,7 +526,28 @@ class UiaEnv:
         
         ret = tpsup.locatetools.ret0.copy()
 
-        if long_cmd == 'children':
+        if long_cmd == 'backend':
+            if not arg in (None, 'win32', 'uia'):
+                raise ValueError(f"backend must be win32 or uia, got {arg}")
+            if dryrun:
+                # syntax check is done now.
+                return ret
+            if arg is None:
+                print(f"current backend is {self.backend}")
+            else:
+                if arg == self.backend:
+                    print(f"backend is already {self.backend}, no change.")
+                else:
+                    print(f"changing backend from {self.backend} to {arg}")
+                    self.backend = arg
+                    self.app = Application(backend=self.backend)
+                    self.desktop = pywinauto.Desktop(backend=self.backend)
+                    self.top_window = None
+                    self.current_window = None
+                    self.window_and_child_specs = []
+                    print(f"'app', 'desktop' will be re-initialized with the new backend.")
+                    # note: changing backend will not trigger re-connect, use 'connect' command to re
+        elif long_cmd == 'children':
             if self.current_window is None:
                 print("current_window is None, cannot list children")
                 ret['bad_input'] = True
@@ -502,11 +568,11 @@ class UiaEnv:
                 print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
                 ret['bad_input'] = True
             else:
-                w, which, child_spec = self.window_and_child_specs[idx]
-                print(f"exploring child {idx}: {child_spec} from {which}")
+                w, which, criteria_dict = self.window_and_child_specs[idx]
+                print(f"exploring child {idx}: {criteria_dict} from {which}")
                 # extract args from child_window(...)
 
-                code = f"self.{which}.{child_spec}"
+                code = f"self.{which}.{criteria_dict}"
                 print(f"code={code}")
                 self.current_window = eval(code, globals(), locals())
                 
@@ -531,41 +597,53 @@ class UiaEnv:
                     # after a successful click, we refresh our control identifiers tree.
                     self.refresh_window_specs()
                     ret['relist'] = True
-        elif long_cmd == "connect":
+        elif long_cmd == 'connect':
             '''
             connect with title_re, title
             connect=title_re=.*tianjunk.*
             connect=title="tianjunk - Notepad"
             '''
-            k,v = arg.split('=', 1)
-            if k == 'title_re' or k == 'title':
-                print(f"connecting to window with {k}={v}")
-
-                # remove quotes if any
-                if (v.startswith('"') and v.endswith('"')) or \
-                   (v.startswith("'") and v.endswith("'")):
-                    v = v[1:-1]
-                elif (v.startswith('"') and not v.endswith('"')) or \
-                     (v.startswith("'") and not v.endswith("'")):
-                    raise ValueError(f"unmatched quote in {k}={v}")
-
-                if dryrun:
-                    return ret
-                
+            kv_pairs = tpsup.keyvaluetools.parse_keyvalue(arg)
+            conn_param_dict = {}
+            for kv in kv_pairs:
+                k = kv['key']
+                v = kv['value']
+                original = kv['original']
                 if k == 'title_re':
-                    result = self.app.connect(title_re=v)
+                    if 'title' in conn_param_dict:
+                        raise ValueError(f"cannot have both title and title_re in {original}")
+                    conn_param_dict['title_re'] = v
+                elif k == 'title':
+                    if 'title_re' in conn_param_dict:
+                        raise ValueError(f"cannot have both title and title_re in {original}")
+                    conn_param_dict['title'] = v
                 else:
-                    result = self.app.connect(title=v)
-                print(f"after connected, result={result}")
-                self.top_window = self.app.top_window()
-                self.current_window = self.top_window
-                self.top_window.wait('visible')
-                self.top_window.click_input()  # ensure the window is focused
-                sleep(1)
-                print(f"connected to window with {k}={v}, top_window={self.top_window}")
-                self.refresh_window_specs()
-            else:
-                raise ValueError(f"invalid connect arg {arg}, must start with title_re= or title=")
+                    raise ValueError(f"invalid connect arg {original}, must be title_re= or title=")
+                
+            if 'title_re' not in conn_param_dict and 'title' not in conn_param_dict:
+                raise ValueError(f"connect arg must have title_re= or title=")
+            
+            # at this point, syntax check is done.
+            if dryrun:
+                return ret
+            
+            print(f"connecting to window with {conn_param_dict}, backend={self.backend}")
+            self.app = Application(backend=self.backend)
+            print(f"app={pformat(self.app)}")
+
+            # if k == 'title_re':
+            #     result = self.app.connect(title_re=v)
+            # else:
+            #     result = self.app.connect(title=v)
+            result = self.app.connect(**conn_param_dict)
+            print(f"after connected, result={result}")
+            self.top_window = self.app.top_window()
+            self.top_window.wait('visible')
+            self.current_window = self.top_window
+            self.top_window.click_input()  # ensure the window is focused
+            sleep(1)
+            print(f"connected to window with {conn_param_dict}, top_window={self.top_window}")
+            self.refresh_window_specs()
         elif long_cmd == 'control_identifiers':
             if self.current_window is None:
                 print("current_window is None, cannot get control identifiers")
@@ -577,6 +655,20 @@ class UiaEnv:
                 except pywinauto.findwindows.ElementNotFoundError as e:
                     print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                     ret['bad_input'] = True
+        elif long_cmd == 'current':
+            '''
+            print the current state:
+            top_window
+            current_window
+            '''
+            print(f"app.process={self.app.process}")
+
+            if self.top_window is None:
+                print("top_window is None")
+            else:
+                print(f"top_window={self.get_window_spec(self.top_window)}")
+                print(f"current_window={self.get_window_spec(self.current_window)}")
+                print(f"top_window.process_id()={self.top_window.process_id() if self.top_window else None}")
         elif long_cmd == 'desktop':
             '''
             list all top windows of the desktop.
@@ -590,120 +682,209 @@ class UiaEnv:
             top_windows: list[pywinauto.WindowSpecification] = self.desktop.windows()
             for w in top_windows:
                 title = w.window_text()
+                if debug:
+                    print(f"desktop top window={pformat(w)}")
                 if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
                     print(f"desktop top window, conn=title={title}")
-        elif long_cmd == 'list':
-            self.display()
-        elif long_cmd == 'refresh':
-            self.refresh_window_specs()
-        elif long_cmd == 'search':
+        elif long_cmd == 'find':
             '''
-            search=scope
+            find=criterias
+            find=scope=<scope> title_re=<title_re> title=<title> type=<control_type> class=<class_name> action=<action>
+
+            separator is space.
             '''
-            scope = arg
+            # parse arg into a dict
+            criteria_list = tpsup.keyvaluetools.parse_keyvalue(arg)
+            criteria_dict = {}
+
+            for c in criteria_list:
+                k = c['key']
+                v = c['value']
+                original = c['original']
+
+                scope = 'top' # default scope
+                if k == 'scope':
+                    if v not in ['desktop', 'top', 'current']:
+                        raise ValueError(f"invalid scope={v} in criteria={original}, must be one of desktop, top, current")
+                    scope = v
+                elif k == 'title_re':
+                    if 'title' in criteria_dict:
+                        raise ValueError(f"cannot have both title and title_re in criteria={original}")
+                    criteria_dict['title_re'] = v
+                elif k == 'title':
+                    if 'title_re' in criteria_dict:
+                        raise ValueError(f"cannot have both title and title_re in criteria={original}")
+                    criteria_dict['title'] = v
+                elif k == 'type':
+                    criteria_dict['control_type'] = v
+                elif k == 'class':
+                    criteria_dict['class_name'] = v
+                elif k == 'action':
+                    if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
+                        raise ValueError(f"invalid action={v} in criteria={original}, must be one of print, click, type=...")
+                    criteria_dict['action'] = v
+                else:
+                    raise ValueError(f"invalid criteria key={k} in criteria={original}")
+                
+                # at this point, syntax check is done.
+                if dryrun:
+                    return ret
 
             if scope == 'desktop':
-                # start searching from desktop windows
-                desktop_top_windows = self.desktop.windows()
-                for tw in desktop_top_windows:
-                    # drill into each top window
-                    for descendant_window in tw.descendants():
-                        if debug:
-                            print(f"descendant_window={pformat(descendant_window)}, "
-                                f"title={descendant_window.window_text()}, "
-                                f"control_type={descendant_window.element_info.control_type}, "
-                                f"python={type(descendant_window).__name__}, "
-                                f"class_name={descendant_window.class_name()}")
-                            self.search_process_window(descendant_window)
+                search_windows = self.desktop.windows()
             elif scope == 'top':
                 if self.top_window is None:
                     print("top_window is None, cannot search")
                     ret['bad_input'] = True
-                else:
-                    for descendant_window in self.top_window.descendants():
-                        if debug:
-                            print(f"descendant_window={pformat(descendant_window)}, "
-                                f"title={descendant_window.window_text()}, "
-                                f"control_type={descendant_window.element_info.control_type}, "
-                                f"python={type(descendant_window).__name__}, "
-                                f"class_name={descendant_window.class_name()}")
-                        self.search_process_window(descendant_window)
-            elif scope == 'current':
+                    return ret
+                search_windows = [self.top_window]
+            else:  # current
                 if self.current_window is None:
                     print("current_window is None, cannot search")
                     ret['bad_input'] = True
-                else:
-                    for descendant_window in self.current_window.descendants():
-                        if debug:
-                            print(f"descendant_window={pformat(descendant_window)}, "
-                                f"title={descendant_window.window_text()}, "
-                                f"control_type={descendant_window.element_info.control_type}, "
-                                f"python={type(descendant_window).__name__}, "
-                                f"class_name={descendant_window.class_name()}")
-                        self.search_process_window(descendant_window)
-            else:
-                print(f"invalid search scope {scope}, must be one of desktop, top, current")
-                ret['bad_input'] = True
+                    return ret
+                search_windows = [self.current_window]
 
-        elif long_cmd == 'search_act':
+            print(f"searching windows in scope={scope} with criteria={criteria_dict}")
+            print(f"\n-------------- search results begin --------------")
+            for w in search_windows:
+                # recursively search the window and its descendants
+                self.find_process_one_window(w, criteria_dict, **opt)
+                for dw in w.descendants():
+                    self.find_process_one_window(dw, criteria_dict, **opt)
+            print(f"-------------- search results end ----------------\n")
+        elif long_cmd == 'list':
+                self.display()
+        elif long_cmd == 'locate':
             '''
-            set action for search results.
-            default is 'print'.
-            without arg, we print the current action.
+            locate=child_index=<index>
+            locate=top=child_spec
+            locate=current=child_spec
+
+            locate the child window by index or child_spec.
+                'child_index' is the index from 'list' command.
+                'child_spec',eg, title="OK", control_type="Button", title_re=".*Notepad.*".
+                'top' means the top window of the connected app.
+                'current' means the current window of the connected app.
             examples:
-                act      # print current action
-                act=print  # set action to print
-                act=click  # set action to click
-                act=type=Y{ENTER}
+                locate=child_index=3
+                locate=top=title="Untitled - Notepad"
+                locate=top=title=OK control_type=Button
+                locate=top=title_re=".*Notepad.*" control_type="Button"
+                locate=current=title_re=".*Notepad.*"
+
+            keys can be:
+                title
+                title_re
+                control_type
+                class_name
+
+            quotes around title value are optional.
             '''
-            if not arg:
-                print(f"current action = {self.search_action}")
-            elif arg == 'unset':
-                self.search_action = None
-                print(f"unset action")
-            else:
-                self.search_action = arg
-                print(f"set action = {self.search_action}")
-        elif long_cmd == 'search_title_re':
-            '''
-            set search title_re for search results.
-            default is None.
-            without arg, we print the current title_re.
-            examples:
-                search_title_re      # print current title_re
-                search_title_re=.*   # set title_re to .*
-                search_title_re=.*notepad.*  # set title_re to .*notepad.*
-            '''
-            if not arg:
-                print(f"current search_title_re = {self.search_title_re}")
-            elif arg == 'unset':
-                self.search_title_re = None
-                print(f"unset search_title_re")
-            else:
-                self.search_title_re = arg
-                print(f"set search_title_re = {self.search_title_re}")
-        elif long_cmd == 'search_type':
-            '''
-            set search control_type for search results.
-            default is 'any'.
-            without arg, we print the current control_type.
-            examples:
-                search_type      # print current control_type
-                search_type=any  # set control_type to any
-                search_type=Window  # set control_type to Window
-                search_type=Button  # set control_type to Button
-            '''
-            if not arg:
-                print(f"current search_type = {self.search_type}")
-            elif arg == 'unset':
-                self.search_type = 'any'
-                print(f"unset search_type, set to default 'any'")
-            elif arg.lower() in ['any', 'window', 'button']:
-                self.search_type = arg.lower()
-                print(f"set search_type = {self.search_type}")
-            else:
-                print(f"invalid search_type {arg}, must be one of any, Window, Button")
-                ret['bad_input'] = True
+            if '=' not in arg:
+                raise ValueError(f"invalid locate arg {arg}, must contain '='")
+            k,v = arg.split('=', 1)
+
+            if k not in ['child_index', 'top', 'current']:
+                raise ValueError(f"invalid locate arg {arg}, must start with child_index=, top= or current=")
+
+            
+            if k == 'child_index':
+                if dryrun:
+                    return ret
+                
+                idx = int(v)
+                max_child_specs = len(self.window_and_child_specs)
+                if idx < 0 or idx >= max_child_specs:
+                    print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
+                    ret['bad_input'] = True
+                else:
+                    w, which, criteria_dict = self.window_and_child_specs[idx]
+                    print(f"exploring child {idx}: {criteria_dict} from {which}")
+                    # extract args from child_window(...)
+
+                    code = f"self.{which}.{criteria_dict}"
+                    print(f"code={code}")
+                    self.current_window = eval(code, globals(), locals())
+                    
+                    # if not self.click_window(self.current_window, **opt):
+                    #     self.current_window = None
+
+                    # if self.current_window is not None:
+                    #     # after a successful click, we refresh our control identifiers tree.
+                    #     self.refresh_window_specs()
+                    result = self.locate_cmd_arg('click', '', **opt)
+                    ret.update(result)
+            elif k == 'top' or k == 'current':
+                if k == 'top':
+                    if self.top_window is None:
+                        print("top_window is None, cannot locate")
+                        ret['bad_input'] = True
+                        return ret
+                    base_window = self.top_window
+                else:
+                    if self.current_window is None:
+                        print("current_window is None, cannot locate")
+                        ret['bad_input'] = True
+                        return ret
+                    base_window = self.current_window
+                print(f"locating child_spec {v} from {k}")
+                
+                '''
+                child_spec is a string like 
+                    title="OK" control_type="Button", 
+                    title_re=.*Notepad.*
+                    title="Untitled - Notepad" control_type=Edit
+                
+                keys can be:
+                    title
+                    title_re
+                    control_type
+                    class_name
+
+                quotes around title value are optional.
+
+                we need to parse the string into a dict.
+                '''
+                parts = tpsup.keyvaluetools.parse_keyvalue(v)
+
+                criteria_dict = {}
+                for p in parts:
+                    k, v = p.split('=', 1)
+                    k = k.strip()
+                    v = v.strip()
+
+                    # remove ", " if it is in the front of key
+                    # eg, in title=OK, control_type=Button
+                    k = re.sub(r',\s*', '', k)
+
+                    if k not in ['title', 'title_re', 'control_type', 'class_name']:
+                        raise ValueError(f"invalid child_spec key {k}, must be one of title, title_re, control_type, class_name")
+                    # remove quotes if any
+                    if (v.startswith('"') and v.endswith('"')) or \
+                        (v.startswith("'") and v.endswith("'")):
+                        v = v[1:-1]
+                    elif (v.startswith('"') and not v.endswith('"')) or \
+                            (v.startswith("'") and not v.endswith("'")):
+                        raise ValueError(f"unmatched quote in {k}={v}")
+                    criteria_dict[k.strip()] = v.strip()
+                print(f"parsed child_spec = {criteria_dict}")
+                # syntax check is done at this point.
+                if dryrun:
+                    return ret
+                
+                self.current_window = base_window.child_window(**criteria_dict)
+                if not self.click_window(self.current_window, **opt):
+                    self.current_window = None
+                if self.current_window is not None:
+                    # after a successful click, we refresh our control identifiers tree.
+                    self.refresh_window_specs()
+                    ret['relist'] = True
+                else:
+                    print(f"failed to locate child_spec {criteria_dict} from {k}")
+                    ret['bad_input'] = True
+        elif long_cmd == 'refresh':
+            self.refresh_window_specs()
         elif long_cmd == 'start':
             '''
             when the start command spawns a new process for the window,
@@ -891,6 +1072,52 @@ class UiaEnv:
         ret = tpsup.locatetools.ret0.copy()
         print("locate_ditct() is not implemented yet")
         return ret
+
+    def get_window_spec(self, w: WindowSpecification, **opts) -> dict:
+        '''
+        return the window spec as a dict.
+        example:
+            {
+                'title': 'Untitled - Notepad',
+                'control_type': 'Window',
+                'class_name': 'Notepad',
+                'title_re': '.*Notepad.*'
+            }
+        '''
+
+        debug = opts.get('debug', 0)
+        full_title = w.window_text()
+        ct = w.element_info.control_type
+        cn = w.element_info.class_name
+        title_re = None
+
+        # title_re is a shorter version of title, in particular, if title is too long.
+        # when we come up with title_re, we try to remove escaped chars, quotes, ...
+        short_titles = re.split(r'\t|\n|\r|\{|\}|\]|\[|\\r', full_title)
+        debug and print(f"short_titles={short_titles}")
+
+        # if short_titles length is 1, it means no \r in title.
+        # if short_titles length > 1, it means there are \r in title.
+        # in that case, we should pick the longest substring.
+        if len(short_titles) > 1:
+            debug and print(f"full_title={full_title}, short_titles={short_titles}")
+            
+            # method1. 
+            # pick the longest substring
+            longest_short_title = max(short_titles, key=len)
+            debug and print(f"longest_short_title={longest_short_title}")
+            
+            longest_short_title = longest_short_title[:30] # truncate to at most 30 characters
+            
+            # replace the title part in child_spec
+            title_re=f".*{longest_short_title}.*"
+
+        return {
+            'title': full_title,
+            'control_type': ct,
+            'class_name': cn,
+            'title_re': title_re,
+        }
         
     def get_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
         '''
