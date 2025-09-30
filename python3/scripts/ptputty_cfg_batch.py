@@ -66,8 +66,7 @@ def code(all_cfg, known, **opt):
 
     # get siteenv command from env
     siteenv_command = siteEnv.get_env('siteenv_command')
-    if not siteenv_command:
-        raise RuntimeError("siteenv_command not set in site env files")
+    print(f'siteenv_command={siteenv_command}')
 
     # steps = known['REMAININGARGS']
     steps = [
