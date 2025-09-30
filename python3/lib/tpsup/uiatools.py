@@ -1310,7 +1310,7 @@ def clean_text(s: str, **opt) -> str:
         s = s[:max_len] + "...(truncated)"
 
     # remove weird chars
-    s = re.sub(r'[^0-9a-zA-Z \'\"\\~!@#%^&*:<>.,()=\t\r\n_-]', newchar, s, flags=re.DOTALL)
+    s = re.sub(r'[^0-9a-zA-Z \'\"\\~!@#%^&*:<>.,()=\t_-]', newchar, s, flags=re.DOTALL)
     return s
 
 # the following is for batch framework - batch.py
