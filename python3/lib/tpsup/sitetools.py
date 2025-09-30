@@ -45,7 +45,6 @@ class SiteEnv:
                 dotenv.load_dotenv(envfile)
                 if debug:
                     print(f"loaded env file: {envfile}")
-                break
             elif debug:
                 print(f"Warning: envfile {envfile} not found, skipped loading env file.")
 
