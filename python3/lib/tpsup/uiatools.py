@@ -531,8 +531,8 @@ class UiaEnv:
         # if we reach here, we have a match. always print it with top window info
         top_title = search_top_window.window_text()
         top_ct = search_top_window.element_info.control_type
-        print(f"under top window: title={top_title}, control_type={top_ct}")
-        print(f"  matched window: title={title}, control_type={ct}")
+        print(f"under top window: title={disable_control_chars(top_title)}, control_type={top_ct}")
+        print(f"  matched window: title={disable_control_chars(title)}, control_type={disable_control_chars(ct)}")
 
         if level2_dict:
             scope2 = level2_dict['scope2']
@@ -553,7 +553,7 @@ class UiaEnv:
             print(f"\n-------------- level 2 search results begin --------------")
             for w2 in search_windows:
                 if debug:
-                    print(f"w2 title={w2.window_text()}, control_type={w2.element_info.control_type}")
+                    print(f"w2 title={disable_control_chars(w2.window_text())}, control_type={w2.element_info.control_type}")
                 # recursively search level 2 windows
                 self.find_process_one_window(w2, mc2, search_top_window, None, **opt)
             print(f"-------------- level 2 search results end ----------------\n")
@@ -566,7 +566,7 @@ class UiaEnv:
             self.click_window(w1, **opt)
         elif mc1['action'].lower().startswith('type='):
             to_type = mc1['action'][5:]
-            print(f"typing '{to_type}' into window: {w1}, title={title}, control_type={ct}")
+            print(f"typing '{to_type}' into window: {w1}, title={disable_control_chars(title)}, control_type={disable_control_chars(ct)}")
             w1.type_keys(to_type, with_spaces=True, set_foreground=True)
             sleep(1)
         else:
@@ -750,7 +750,7 @@ class UiaEnv:
                 if debug:
                     print(f"desktop top window={pformat(w)}")
                 if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
-                    print(f"desktop top window, conn=title={title}")
+                    print(f"desktop top window, conn=title={disable_control_chars(title)}")
         elif long_cmd == 'find':
             '''
             find=criterias
@@ -1297,6 +1297,14 @@ class UiaEnv:
         for w, which, s in self.window_and_child_specs:
             print(f"{i}: {which}.{s}")
             i += 1
+
+def disable_control_chars(s: str, **opt) -> str:
+    '''
+    convert all weird chars into '.' for better display.
+    '''
+    newchar = opt.get('newchar', '.')
+    s = re.sub(r'[^0-9a-zA-Z~!@#%^&*:<>.,]', newchar, s, flags=re.DOTALL)
+    return s
 
 # the following is for batch framework - batch.py
 #
