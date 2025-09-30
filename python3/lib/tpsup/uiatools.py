@@ -12,6 +12,7 @@ from typing import Union
 import tpsup.locatetools
 from tpsup.logbasic import log_FileFuncLine
 import tpsup.keyvaluetools
+import threading
 
 def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = None) -> None:
     print(f"\ninput's python class name={type(o).__name__}")
@@ -212,7 +213,7 @@ class UiaEnv:
                     title=<title>
                     title_re=<title_re>  
                     type=<control_type>  
-                    sibliing
+                    timeout=<seconds>
             
                 2nd level criterias
                     scope2=<scope2>
@@ -240,6 +241,10 @@ class UiaEnv:
                     all   - search the matched level 1 windows' top-window's descendants.
                             basically adding siblings, uncles, cousins, etc, in addition to children.
                             this is the default.
+
+                timeout
+                    the maximum time to search for each top-level window.
+                    default is 5 seconds.
 
                 title_re/title2 can be:
                     .*      - match any title
@@ -496,38 +501,38 @@ class UiaEnv:
         if 'title_re' in mc1:
             if re.search(mc1['title_re'], title, re.IGNORECASE):
                 if debug:
-                    print(f"matched title_re {mc1['title_re']} with title {title}")
+                    print(f"matched title_re={mc1['title_re']} with title={title}")
             else:
                 if debug:
-                    print(f"title {title} doesn't match title_re {mc1['title_re']}")
+                    print(f"title={title} doesn't match title_re={mc1['title_re']}")
                 return False
             
         if 'title' in mc1:
             if mc1['title'].lower() == 'any' or mc1['title'].lower() == title.lower():
                 if debug:
-                    print(f"matched title {mc1['title']} with title {title}")
+                    print(f"matched actual title={mc1['title']} with expected title={title}")
             else:
                 if debug:
-                    print(f"title {title} doesn't match title {mc1['title']}")
+                    print(f"actual title={title} doesn't match expected title={mc1['title']}")
                 return False
 
         if 'control_type' in mc1:
             if mc1['control_type'].lower() == 'any' or mc1['control_type'].lower() == ct.lower():
                 if debug:
-                    print(f"matched control_type {mc1['control_type']} with control_type {ct}")
+                    print(f"matched actual control_type={mc1['control_type']} with expected control_type={ct}")
             else:
                 if debug:
-                    print(f"control_type {ct} doesn't match {mc1['control_type']}")
+                    print(f"actual control_type={ct} doesn't match expected control_type={mc1['control_type']}")
                 return False
             
         if 'class_name' in mc1:
             class_name = w1.class_name()
             if mc1['class_name'].lower() == 'any' or mc1['class_name'].lower() == class_name.lower():
                 if debug:
-                    print(f"matched class_name {mc1['class_name']} with class_name {class_name}")
+                    print(f"matched actual class_name={mc1['class_name']} with expected class_name={class_name}")
             else:
                 if debug:
-                    print(f"class_name {class_name} doesn't match {mc1['class_name']}")
+                    print(f"actual class_name={class_name} doesn't match expected class_name={mc1['class_name']}")
                 return False
 
         # if we reach here, we have a match. always print it with top window info
@@ -769,6 +774,7 @@ class UiaEnv:
             scope2 = None
 
             action = None
+            timeout = 5 # seconds
 
             for c in criteria_list:
                 k = c['key']
@@ -783,6 +789,14 @@ class UiaEnv:
                     if v not in ['child', 'all']:
                         raise ValueError(f"invalid scope2={v} in criteria={original}, must be one of child, all")                
                     scope2 = v
+                elif k == 'timeout':
+                    try:
+                        to = int(v)
+                        if to <= 0:
+                            raise ValueError
+                    except ValueError:
+                        raise ValueError(f"invalid timeout={v} in criteria={original}, must be a positive integer")
+                    timeout = to
                 elif k == 'title_re':
                     if 'title' in criteria_dict1:
                         raise ValueError(f"cannot have both title and title_re in criteria={original}")
@@ -861,8 +875,22 @@ class UiaEnv:
                     search_top_window = self.top_window
                 # recursively search the window and its descendants
                 self.find_process_one_window(w, criteria_dict1, search_top_window, level2_dict, **opt)
-                for dw in w.descendants():
-                    self.find_process_one_window(dw, criteria_dict1, search_top_window, level2_dict, **opt)
+                
+                def long_search():
+                    count = 0
+                    for dw in w.descendants():
+                        self.find_process_one_window(dw, criteria_dict1, search_top_window, level2_dict, **opt)
+                        count += 1
+                        if count %50 == 0:
+                            print(f"checked {count} descendant windows...")
+
+                thread = threading.Thread(target=long_search)
+                thread.start()
+                thread.join(timeout=timeout)
+                if thread.is_alive():
+                    w_title = clean_text(w.window_text())
+                    w_ct = w.element_info.control_type
+                    print(f"search timeout after {timeout}s, skipping children of window title={w_title}, control_type={w_ct}")
             print(f"-------------- search results end ----------------\n")
         elif long_cmd == 'list':
                 self.display()
