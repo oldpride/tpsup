@@ -60,14 +60,14 @@ def code(all_cfg, known, **opt):
     # remove .new, .old from caller
     caller = caller.split('.')[0]
     print(f'caller = {caller}')
-    siteEnv = tpsup.sitetools.SiteEnv()
-    siteEnv.load_env(caller, debug=debug)
+    siteEnv = tpsup.sitetools.SiteEnv(caller)
+    siteEnv.load_env(debug=debug)
 
 
     # get siteenv command from env
     siteenv_command = siteEnv.get_env('siteenv_command')
     if not siteenv_command:
-        raise RuntimeError("siteenv_command not set in site env file")
+        raise RuntimeError("siteenv_command not set in site env files")
 
     # steps = known['REMAININGARGS']
     steps = [
