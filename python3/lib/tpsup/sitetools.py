@@ -35,11 +35,7 @@ class SiteEnv:
         debug = opt.get('debug', 0)
 
         for envfile in self.envfiles:
-
             envfile = tpsup.envtools.convert_path(envfile, target='native')
-
-            if debug:
-                print(f"load_env: expected env file: {envfile}")
 
             if os.path.isfile(envfile) and os.access(envfile, os.R_OK):
                 dotenv.load_dotenv(envfile)
