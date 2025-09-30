@@ -44,7 +44,7 @@ def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = No
         # if window_text() method exists, print it
         if hasattr(x, "window_text"):
             if callable(x.window_text):
-                print(f"{k}'s window_text={x.window_text()}")
+                print(f"{k}'s window_text={clean_text(x.window_text())}")
             else:
                 print(f"{k}'s window_text is not callable")
         else:
@@ -74,7 +74,7 @@ def dump_window(o: Union[WindowSpecification, UIAWrapper], app: Application = No
         x= d[k]
         print(f"\n{k}'s child windows")
         for w in x.children():
-            print(f"{k}'s child window={w}, title={w.window_text()}, python={type(w).__name__}, class_name={w.class_name()}")
+            print(f"{k}'s child window={w}, title={clean_text(w.window_text())}, python={type(w).__name__}, class_name={w.class_name()}")
 
 class UiaEnv:
     locate: callable = None
@@ -489,8 +489,10 @@ class UiaEnv:
         - title_re
         '''
         debug = opt.get('debug', False)
-        title = w1.window_text()
+        title = clean_text(w1.window_text())
         ct = w1.element_info.control_type
+        if debug:
+            print(f"checking window: title={title}, control_type={ct}, mc1={mc1}, level2_dict={level2_dict}")
         if 'title_re' in mc1:
             if re.search(mc1['title_re'], title, re.IGNORECASE):
                 if debug:
@@ -529,10 +531,10 @@ class UiaEnv:
                 return False
 
         # if we reach here, we have a match. always print it with top window info
-        top_title = search_top_window.window_text()
+        top_title = clean_text(search_top_window.window_text())
         top_ct = search_top_window.element_info.control_type
-        print(f"under top window: title={disable_control_chars(top_title)}, control_type={top_ct}")
-        print(f"  matched window: title={disable_control_chars(title)}, control_type={disable_control_chars(ct)}")
+        print(f"under top window: title={top_title}, control_type={top_ct}")
+        print(f"  matched window: title={title}, control_type={ct}")
 
         if level2_dict:
             scope2 = level2_dict['scope2']
@@ -553,7 +555,7 @@ class UiaEnv:
             print(f"\n-------------- level 2 search results begin --------------")
             for w2 in search_windows:
                 if debug:
-                    print(f"w2 title={disable_control_chars(w2.window_text())}, control_type={w2.element_info.control_type}")
+                    print(f"w2 title={clean_text(w2.window_text())}, control_type={w2.element_info.control_type}")
                 # recursively search level 2 windows
                 self.find_process_one_window(w2, mc2, search_top_window, None, **opt)
             print(f"-------------- level 2 search results end ----------------\n")
@@ -566,7 +568,7 @@ class UiaEnv:
             self.click_window(w1, **opt)
         elif mc1['action'].lower().startswith('type='):
             to_type = mc1['action'][5:]
-            print(f"typing '{to_type}' into window: {w1}, title={disable_control_chars(title)}, control_type={disable_control_chars(ct)}")
+            print(f"typing '{to_type}' into window: {w1}, title={clean_text(title)}, control_type={clean_text(ct)}")
             w1.type_keys(to_type, with_spaces=True, set_foreground=True)
             sleep(1)
         else:
@@ -619,7 +621,7 @@ class UiaEnv:
             else:
                 for descendant_window in self.current_window.descendants():
                     print(f"desc window={pformat(descendant_window)}, "
-                          f"title={descendant_window.window_text()}, "
+                          f"title={clean_text(descendant_window.window_text())}, "
                           f"control_type={descendant_window.element_info.control_type}, "
                           f"python={type(descendant_window).__name__}, "
                           f"class_name={descendant_window.class_name()}")
@@ -746,19 +748,11 @@ class UiaEnv:
             print(f"listing all top windows of the desktop, title_filter={title_filter}")
             top_windows: list[pywinauto.WindowSpecification] = self.desktop.windows()
             for w in top_windows:
-                title = w.window_text()
+                title = clean_text(w.window_text())
                 if debug:
                     print(f"desktop top window={pformat(w)}")
                 if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
-                    max_len = 300
-                    if len(title) > max_len:
-                        printable_title = title[:max_len] + "...(truncated)"
-                    else:
-                        printable_title = title
-
-                    printable_title = disable_control_chars(printable_title)
-
-                    print(f"desktop top window, conn=title={printable_title}")
+                    print(f"desktop top window, conn=title={title}")
         elif long_cmd == 'find':
             '''
             find=criterias
@@ -1071,7 +1065,7 @@ class UiaEnv:
                     return ret
                 print(f"new top windows found after running start command:")
                 for w in new_top_windows:
-                    print(f"    {w}, title={w.window_text()}, {pformat(w)}")
+                    print(f"    {w}, title={clean_text(w.window_text())}, {pformat(w)}")
 
                 # filter new_top_windows with different criteria
                 if self.title:
@@ -1095,7 +1089,7 @@ class UiaEnv:
                 if len(new_top_windows) > 1:
                     print(f"multiple new top windows found after running start command, please refine title or title_re to narrow down:")
                     for w in new_top_windows:
-                        print(f"    {w}, title={w.window_text()}")
+                        print(f"   title={clean_text(w.window_text())}, control_type={w.element_info.control_type}, {pformat(w)}")
                     return ret
                     
                 self.current_window = self.top_window
@@ -1306,12 +1300,17 @@ class UiaEnv:
             print(f"{i}: {which}.{s}")
             i += 1
 
-def disable_control_chars(s: str, **opt) -> str:
+def clean_text(s: str, **opt) -> str:
     '''
     convert all weird chars into '.' for better display.
     '''
     newchar = opt.get('newchar', '.')
-    s = re.sub(r'[^0-9a-zA-Z~!@#%^&*:<>.,()\r\n_-]', newchar, s, flags=re.DOTALL)
+    max_len = opt.get('max_len', 300)
+    if len(s) > max_len:
+        s = s[:max_len] + "...(truncated)"
+
+    # remove weird chars
+    s = re.sub(r'[^0-9a-zA-Z \'\"\\~!@#%^&*:<>.,()=\t\r\n_-]', newchar, s, flags=re.DOTALL)
     return s
 
 # the following is for batch framework - batch.py
