@@ -51,6 +51,9 @@ our_cfg = {
            {{{{prog}}}} start="notepad" type=hello{{ENTER}} # this takes two minutes
            {{{{prog}}}} start="C:/cygwin64/bin/mintty.exe -i /Cygwin-Terminal.ico -title 123 -" type=siteenv{{ENTER}}
 
+        4. explore
+            {{{{prog}}}} any -explore
+            
     notes for windows cmd.exe, 
         double quotes cannot be escaped, 
         single quote is just a letter, cannot do grouping. 

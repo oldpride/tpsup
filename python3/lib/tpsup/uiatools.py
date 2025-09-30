@@ -201,27 +201,58 @@ class UiaEnv:
             'need_arg': True,
             'has_dryrun': 1,
             'usage': '''
-                find=criterias
-
-                find=scope=<scope> title_re=<title_re> title=<title> type=<control_type> class=<class_name> action=<action>
-
                 search for windows matching the criteria.
-                (similar to unix 'find' command)
+                similar to unix 'find' command.
+                    find=criterias
+
+                criterias are key=value pairs separated by space.
+                    action=<action>
+                    class=<class_name>
+                    scope=<scope> 
+                    title=<title>
+                    title_re=<title_re>  
+                    type=<control_type>  
+                    sibliing
+            
+                2nd level criterias
+                    scope2=<scope2>
+                    title2=<title2>
+                    title_re2=<title_re2>
+                    type2=<control_type2>
+                    class2=<class_name2>
+                2nd level criteria is needed when, 
+                    for example, we want to close a error popup.
+                        find=title="Close" control_type="Button"
+                    but this critera is too broad, because there may be many buttons with title="Close".
+                    therefore, we need to narrow down with
+                        find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
+
+                'action' will act on level 2 matched windows if level 2 criteria is given;
+                otherwise, 'action' will act on level 1 matched windows.
 
                 scope can be:
                     desktop  - search all desktop windows
                     top      - search only the top window of the connected app, this is the default scope.
                     current  - search only the current window of the connected app
+                scope2 can be:
+                    child - search the child windows of the matched level 1 windows.
+                            somehow I always got empty list.
+                    all   - search the matched level 1 windows' top-window's descendants.
+                            basically adding siblings, uncles, cousins, etc, in addition to children.
+                            this is the default.
 
-                title_re can be:
+                title_re/title2 can be:
                     .*      - match any title
                     notepad - match title containing 'notepad'
 
-                title is the exact title to match.
+                title/title2 
+                    the exact title to match.
 
-                type is the control_type to match, eg, Window, Button, Edit, Text, etc.
+                type/type2
+                    is the control_type to match, eg, Window, Button, Edit, Text, etc.
 
-                class is the class_name to match, eg, Notepad, Edit, etc.
+                class/class2
+                    the class_name to match, eg, Notepad, Edit, etc.
 
                 action can be:
                     print   - print the find results
@@ -233,6 +264,9 @@ class UiaEnv:
                     find=scope=desktop title_re=.*notepad.* type=Window action=print
                     find=scope=top title_re=.*notepad.* type=Button action=click
                     find=scope=current title_re=.*notepad.* type=Edit action=type=hello{ENTER}
+                    find=title_re=".*Connection timed out.*" scope=desktop # find putty error dialog
+                    find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
+                    find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button" action=click
 
             ''',
         },        
@@ -444,8 +478,10 @@ class UiaEnv:
 
     #     return []
 
-    def find_process_one_window(self, w: WindowSpecification, 
-                              mc: dict, # match criteria
+    def find_process_one_window(self, w1: WindowSpecification, 
+                              mc1: dict, # match criteria
+                              search_top_window: WindowSpecification,
+                              level2_dict: dict, # level 2 match criteria
                               **opt) -> bool:
         '''
         process a window in search mode, according to 
@@ -453,59 +489,88 @@ class UiaEnv:
         - title_re
         '''
         debug = opt.get('debug', False)
-        title = w.window_text()
-        ct = w.element_info.control_type
-        if 'title_re' in mc:
-            if re.search(mc['title_re'], title, re.IGNORECASE):
+        title = w1.window_text()
+        ct = w1.element_info.control_type
+        if 'title_re' in mc1:
+            if re.search(mc1['title_re'], title, re.IGNORECASE):
                 if debug:
-                    print(f"matched title_re {mc['title_re']} with title {title}")
+                    print(f"matched title_re {mc1['title_re']} with title {title}")
             else:
                 if debug:
-                    print(f"title {title} doesn't match title_re {mc['title_re']}")
+                    print(f"title {title} doesn't match title_re {mc1['title_re']}")
                 return False
             
-        if 'title' in mc:
-            if mc['title'].lower() == 'any' or mc['title'].lower() == title.lower():
+        if 'title' in mc1:
+            if mc1['title'].lower() == 'any' or mc1['title'].lower() == title.lower():
                 if debug:
-                    print(f"matched title {mc['title']} with title {title}")
+                    print(f"matched title {mc1['title']} with title {title}")
             else:
                 if debug:
-                    print(f"title {title} doesn't match title {mc['title']}")
+                    print(f"title {title} doesn't match title {mc1['title']}")
                 return False
 
-        if 'control_type' in mc:
-            if mc['control_type'].lower() == 'any' or mc['control_type'].lower() == ct.lower():
+        if 'control_type' in mc1:
+            if mc1['control_type'].lower() == 'any' or mc1['control_type'].lower() == ct.lower():
                 if debug:
-                    print(f"matched control_type {mc['control_type']} with control_type {ct}")
+                    print(f"matched control_type {mc1['control_type']} with control_type {ct}")
             else:
                 if debug:
-                    print(f"control_type {ct} doesn't match {mc['control_type']}")
+                    print(f"control_type {ct} doesn't match {mc1['control_type']}")
                 return False
             
-        if 'class_name' in mc:
-            class_name = w.class_name()
-            if mc['class_name'].lower() == 'any' or mc['class_name'].lower() == class_name.lower():
+        if 'class_name' in mc1:
+            class_name = w1.class_name()
+            if mc1['class_name'].lower() == 'any' or mc1['class_name'].lower() == class_name.lower():
                 if debug:
-                    print(f"matched class_name {mc['class_name']} with class_name {class_name}")
+                    print(f"matched class_name {mc1['class_name']} with class_name {class_name}")
             else:
                 if debug:
-                    print(f"class_name {class_name} doesn't match {mc['class_name']}")
+                    print(f"class_name {class_name} doesn't match {mc1['class_name']}")
                 return False
 
-        # if we reach here, we have a match. always print it.
-        print(f"search matched window: {w}, title={title}, control_type={ct}")
+        # if we reach here, we have a match. always print it with top window info
+        top_title = search_top_window.window_text()
+        top_ct = search_top_window.element_info.control_type
+        print(f"under top window: title={top_title}, control_type={top_ct}")
+        print(f"  matched window: title={title}, control_type={ct}")
 
-        if not 'action' in mc or mc['action'].lower() == 'print':
+        if level2_dict:
+            scope2 = level2_dict['scope2']
+            mc2 = level2_dict['criteria_dict2']
+            if scope2 == 'child':
+                if debug:
+                    print(f"w1.descendants()={pformat(w1.descendants())}")
+                    print(f"w1.children()={pformat(w1.children())}")
+                search_windows = w1.descendants()
+            elif scope2 == 'all':
+                if debug:
+                    print(f"search_top_window.descendants()={pformat(search_top_window.descendants())}")
+                search_windows = search_top_window.descendants()
+            else:
+                raise ValueError(f"unknown scope2={scope2}")
+            
+            print(f"searching level 2 windows in scope2={scope2} with criteria={mc2}")
+            print(f"\n-------------- level 2 search results begin --------------")
+            for w2 in search_windows:
+                if debug:
+                    print(f"w2 title={w2.window_text()}, control_type={w2.element_info.control_type}")
+                # recursively search level 2 windows
+                self.find_process_one_window(w2, mc2, search_top_window, None, **opt)
+            print(f"-------------- level 2 search results end ----------------\n")
+            return True
+            
+
+        if mc1.get('action', None) == None or mc1['action'].lower() == 'print':
             pass # already printed above 
-        elif mc['action'].lower() == 'click':
-            self.click_window(w, **opt)
-        elif mc['action'].lower().startswith('type='):
-            to_type = mc['action'][5:]
-            print(f"typing '{to_type}' into window: {w}, title={title}, control_type={ct}")
-            w.type_keys(to_type, with_spaces=True, set_foreground=True)
+        elif mc1['action'].lower() == 'click':
+            self.click_window(w1, **opt)
+        elif mc1['action'].lower().startswith('type='):
+            to_type = mc1['action'][5:]
+            print(f"typing '{to_type}' into window: {w1}, title={title}, control_type={ct}")
+            w1.type_keys(to_type, with_spaces=True, set_foreground=True)
             sleep(1)
         else:
-            raise ValueError(f"unknown search action {mc['action']}")
+            raise ValueError(f"unknown search action {mc1['action']}")
 
     def click_window(self, w: WindowSpecification, **opt) -> bool:
         try:
@@ -568,11 +633,11 @@ class UiaEnv:
                 print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
                 ret['bad_input'] = True
             else:
-                w, which, criteria_dict = self.window_and_child_specs[idx]
-                print(f"exploring child {idx}: {criteria_dict} from {which}")
+                w, which, criteria_dict1 = self.window_and_child_specs[idx]
+                print(f"exploring child {idx}: {criteria_dict1} from {which}")
                 # extract args from child_window(...)
 
-                code = f"self.{which}.{criteria_dict}"
+                code = f"self.{which}.{criteria_dict1}"
                 print(f"code={code}")
                 self.current_window = eval(code, globals(), locals())
                 
@@ -695,63 +760,107 @@ class UiaEnv:
             '''
             # parse arg into a dict
             criteria_list = tpsup.keyvaluetools.parse_keyvalue(arg)
-            criteria_dict = {}
+            criteria_dict1 = {}
+            criteria_dict2 = {}
+
+            scope1 = 'top' # default scope
+            scope2 = None
+
+            action = None
 
             for c in criteria_list:
                 k = c['key']
                 v = c['value']
                 original = c['original']
 
-                scope = 'top' # default scope
                 if k == 'scope':
                     if v not in ['desktop', 'top', 'current']:
                         raise ValueError(f"invalid scope={v} in criteria={original}, must be one of desktop, top, current")
-                    scope = v
+                    scope1 = v
+                elif k == 'scope2':
+                    if v not in ['child', 'all']:
+                        raise ValueError(f"invalid scope2={v} in criteria={original}, must be one of child, all")                
+                    scope2 = v
                 elif k == 'title_re':
-                    if 'title' in criteria_dict:
+                    if 'title' in criteria_dict1:
                         raise ValueError(f"cannot have both title and title_re in criteria={original}")
-                    criteria_dict['title_re'] = v
+                    criteria_dict1['title_re'] = v
+                elif k == 'title_re2':
+                    if 'title2' in criteria_dict2:
+                        raise ValueError(f"cannot have both title2 and title_re2 in criteria={original}")
+                    criteria_dict2['title_re'] = v
                 elif k == 'title':
-                    if 'title_re' in criteria_dict:
+                    if 'title_re' in criteria_dict1:
                         raise ValueError(f"cannot have both title and title_re in criteria={original}")
-                    criteria_dict['title'] = v
+                    criteria_dict1['title'] = v
+                elif k == 'title2':
+                    if 'title_re' in criteria_dict2:
+                        raise ValueError(f"cannot have both title2 and title_re2 in criteria={original}")
+                    criteria_dict2['title'] = v
                 elif k == 'type':
-                    criteria_dict['control_type'] = v
+                    criteria_dict1['control_type'] = v
+                elif k == 'type2':
+                    criteria_dict2['control_type'] = v
                 elif k == 'class':
-                    criteria_dict['class_name'] = v
+                    criteria_dict1['class_name'] = v
+                elif k == 'class2':
+                    criteria_dict2['class_name'] = v
                 elif k == 'action':
                     if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
                         raise ValueError(f"invalid action={v} in criteria={original}, must be one of print, click, type=...")
-                    criteria_dict['action'] = v
+                    action = v
                 else:
                     raise ValueError(f"invalid criteria key={k} in criteria={original}")
-                
-                # at this point, syntax check is done.
-                if dryrun:
-                    return ret
+            
+            if debug:
+                print(f"parsed criteria_dict1={criteria_dict1},\n criteria_dict2={criteria_dict2}, scope={scope1}")
 
-            if scope == 'desktop':
+            if scope2 and not criteria_dict2:
+                raise ValueError(f"scope2={scope2} is given, but no level 2 criteria is given.")
+            if criteria_dict2 and not scope2:
+                scope2 = 'all' # default scope2
+
+            if scope2:
+                criteria_dict2['action'] = action
+                level2_dict = {
+                    'scope2': scope2,
+                    'criteria_dict2': criteria_dict2,
+                }
+            else:
+                criteria_dict1['action'] = action
+                level2_dict = None
+                
+            # at this point, syntax check is done.
+            if dryrun:
+                return ret
+
+            if scope1 == 'desktop':
                 search_windows = self.desktop.windows()
-            elif scope == 'top':
+            elif scope1 == 'top':
                 if self.top_window is None:
-                    print("top_window is None, cannot search")
+                    print("top_window is None, cannot search in 'top' scope")
                     ret['bad_input'] = True
                     return ret
                 search_windows = [self.top_window]
             else:  # current
                 if self.current_window is None:
-                    print("current_window is None, cannot search")
+                    print("current_window is None, cannot search in 'current' scope")
                     ret['bad_input'] = True
                     return ret
                 search_windows = [self.current_window]
 
-            print(f"searching windows in scope={scope} with criteria={criteria_dict}")
+            print(f"searching windows in scope={scope1} with criteria={criteria_dict1}, level2_dict={level2_dict}")
             print(f"\n-------------- search results begin --------------")
             for w in search_windows:
+                if scope1 in ['top', 'desktop']:
+                    search_top_window = w
+                else:
+                    # scope == 'current'
+                    search_top_window = self.top_window
                 # recursively search the window and its descendants
-                self.find_process_one_window(w, criteria_dict, **opt)
+                self.find_process_one_window(w, criteria_dict1, search_top_window, level2_dict, **opt)
                 for dw in w.descendants():
-                    self.find_process_one_window(dw, criteria_dict, **opt)
+                    self.find_process_one_window(dw, criteria_dict1, search_top_window, level2_dict, **opt)
             print(f"-------------- search results end ----------------\n")
         elif long_cmd == 'list':
                 self.display()
@@ -799,11 +908,11 @@ class UiaEnv:
                     print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
                     ret['bad_input'] = True
                 else:
-                    w, which, criteria_dict = self.window_and_child_specs[idx]
-                    print(f"exploring child {idx}: {criteria_dict} from {which}")
+                    w, which, criteria_dict1 = self.window_and_child_specs[idx]
+                    print(f"exploring child {idx}: {criteria_dict1} from {which}")
                     # extract args from child_window(...)
 
-                    code = f"self.{which}.{criteria_dict}"
+                    code = f"self.{which}.{criteria_dict1}"
                     print(f"code={code}")
                     self.current_window = eval(code, globals(), locals())
                     
@@ -848,7 +957,7 @@ class UiaEnv:
                 '''
                 parts = tpsup.keyvaluetools.parse_keyvalue(v)
 
-                criteria_dict = {}
+                criteria_dict1 = {}
                 for p in parts:
                     k, v = p.split('=', 1)
                     k = k.strip()
@@ -867,13 +976,13 @@ class UiaEnv:
                     elif (v.startswith('"') and not v.endswith('"')) or \
                             (v.startswith("'") and not v.endswith("'")):
                         raise ValueError(f"unmatched quote in {k}={v}")
-                    criteria_dict[k.strip()] = v.strip()
-                print(f"parsed child_spec = {criteria_dict}")
+                    criteria_dict1[k.strip()] = v.strip()
+                print(f"parsed child_spec = {criteria_dict1}")
                 # syntax check is done at this point.
                 if dryrun:
                     return ret
                 
-                self.current_window = base_window.child_window(**criteria_dict)
+                self.current_window = base_window.child_window(**criteria_dict1)
                 if not self.click_window(self.current_window, **opt):
                     self.current_window = None
                 if self.current_window is not None:
@@ -881,7 +990,7 @@ class UiaEnv:
                     self.refresh_window_specs()
                     ret['relist'] = True
                 else:
-                    print(f"failed to locate child_spec {criteria_dict} from {k}")
+                    print(f"failed to locate child_spec {criteria_dict1} from {k}")
                     ret['bad_input'] = True
         elif long_cmd == 'refresh':
             self.refresh_window_specs()
