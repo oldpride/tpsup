@@ -750,7 +750,15 @@ class UiaEnv:
                 if debug:
                     print(f"desktop top window={pformat(w)}")
                 if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
-                    print(f"desktop top window, conn=title={disable_control_chars(title)}")
+                    max_len = 300
+                    if len(title) > max_len:
+                        printable_title = title[:max_len] + "...(truncated)"
+                    else:
+                        printable_title = title
+
+                    printable_title = disable_control_chars(printable_title)
+
+                    print(f"desktop top window, conn=title={printable_title}")
         elif long_cmd == 'find':
             '''
             find=criterias
@@ -1303,7 +1311,7 @@ def disable_control_chars(s: str, **opt) -> str:
     convert all weird chars into '.' for better display.
     '''
     newchar = opt.get('newchar', '.')
-    s = re.sub(r'[^0-9a-zA-Z~!@#%^&*:<>.,]', newchar, s, flags=re.DOTALL)
+    s = re.sub(r'[^0-9a-zA-Z~!@#%^&*:<>.,()\r\n_-]', newchar, s, flags=re.DOTALL)
     return s
 
 # the following is for batch framework - batch.py
