@@ -881,7 +881,7 @@ class UiaEnv:
                     for dw in w.descendants():
                         self.find_process_one_window(dw, criteria_dict1, search_top_window, level2_dict, **opt)
                         count += 1
-                        if count %50 == 0:
+                        if count %100 == 0:
                             print(f"checked {count} descendant windows...")
 
                 thread = threading.Thread(target=long_search)
