@@ -6,7 +6,8 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 
-my $prog = $0; $prog =~ s:.*/::;
+my $prog = $0;
+$prog =~ s:.*/::;
 my $default_maxdepth = 100;
 
 sub usage {
@@ -14,7 +15,7 @@ sub usage {
 
    print "$message\n" if $message;
 
-   print STDERR << "END";
+   print STDERR <<"END";
 usage:
 
    $prog old_pattern new_string path1 path2 ...
@@ -27,6 +28,8 @@ usage:
 
    'path1 path2 ...'
                    can be both file and directory
+
+   -c              copy mode. copy files instead of move
 
    -m pattern      only files with name matching this pattern
 
@@ -82,6 +85,7 @@ END
 my $verbose;
 
 my @paths;
+my $copy;
 my $perl_substitution;
 my $force;
 my $default_yes;
@@ -93,17 +97,18 @@ my $dryrun;
 my $recursive;
 
 GetOptions(
-   'v|verbose'  =>  \$verbose,
-   'f'          =>  \$force,
-   'n'          =>  \$dryrun,
-   'y'          =>  \$default_yes,
-   'r'          =>  \$recursive,
-   's=s'        =>  \$perl_substitution,
-   'i'          =>  \$insensitive,
-   'm=s'        =>  \$MatchPattern,
-   'x=s'        =>  \$ExcludePattern,
-   'maxdepth=s' =>  \$maxdepth,
-) || usage ("cannot parse command line: $!");
+   'v|verbose'  => \$verbose,
+   'f'          => \$force,
+   'n'          => \$dryrun,
+   'c'          => \$copy,
+   'y'          => \$default_yes,
+   'r'          => \$recursive,
+   's=s'        => \$perl_substitution,
+   'i'          => \$insensitive,
+   'm=s'        => \$MatchPattern,
+   'x=s'        => \$ExcludePattern,
+   'maxdepth=s' => \$maxdepth,
+) || usage("cannot parse command line: $!");
 
 my $substitution;
 
@@ -118,7 +123,7 @@ if ($perl_substitution) {
    $substitution = "s!$old!$new!g";
 }
 
-my $warn = $verbose ? "use" : "no";
+my $warn     = $verbose ? "use" : "no";
 my $compiled = eval "$warn warnings; no strict; sub { my (\$path)=\@_; \$path =~ $substitution; return \$path }";
 die "failed to compile '$substitution'" if $@;
 
@@ -149,17 +154,17 @@ if ($ExcludePattern) {
 my $error;
 
 for my $path (@ARGV) {
-   if (! -e $path) {
+   if ( !-e $path ) {
       print "$path not found\n";
-      $error ++;
+      $error++;
       next;
    }
 
-   my $res = move_file($path, $path, $opt);
+   my $res = move_file( $path, $path, $copy, $opt );
    $error += $res->{error};
 
    if ($recursive) {
-      my $ref = recursive_path($res->{new_path}, 1, $opt);
+      my $ref = recursive_path( $res->{new_path}, 1, $copy, $opt );
       $error += $ref->{error};
    }
 }
@@ -173,24 +178,24 @@ exit $error;
 ################################################################
 
 sub recursive_path {
-   my ($path, $level, $opt) = @_;
+   my ( $path, $level, $copy, $opt ) = @_;
 
    my $ret;
    $ret->{error} = 0;
 
-   if (! -e $path) {
+   if ( !-e $path ) {
       return $ret;
    }
 
-   if (-d $path) {
+   if ( -d $path ) {
       # this is a dir
 
-      $level ++;
+      $level++;
 
       my $max_level = defined $opt->{RecursiveMax} ? $opt->{RecursiveMax} : $default_maxdepth;
 
-      if ($level > $max_level) {
-         if (defined $opt->{RecursiveMax}) {
+      if ( $level > $max_level ) {
+         if ( defined $opt->{RecursiveMax} ) {
             # this is user-defined limit - it is intentional, so return without complain
             return $ret;
          } else {
@@ -200,39 +205,39 @@ sub recursive_path {
       }
 
       my $dfh;
-      opendir($dfh, $path);
+      opendir( $dfh, $path );
 
-      if (!$dfh) {
+      if ( !$dfh ) {
          print STDERR "cannot open dir $path\n";
-         $ret->{error} ++;
+         $ret->{error}++;
       } else {
          my @files_in_dir = readdir($dfh);
 
-         for my $f (sort @files_in_dir) {
+         for my $f ( sort @files_in_dir ) {
             next if $f eq '.' || $f eq '..';
 
-            my $res = move_file($f, "$path/$f", $opt);
+            my $res = move_file( $f, "$path/$f", $copy, $opt );
 
             $ret->{error} += $res->{error};
-            
-            my $ref = recursive_path("$path/$res->{new_path}", $level, $opt);
+
+            my $ref = recursive_path( "$path/$res->{new_path}", $level, $copy, $opt );
 
             $ret->{error} += $ref->{error};
          }
       }
-   } 
+   }
 
    return $ret;
 }
 
 sub move_file {
-   my ($path, $full_path, $opt) = @_;
+   my ( $path, $full_path, $copy, $opt ) = @_;
 
    my $new_path;
-   if ($opt->{MatchPattern} && $full_path !~ /$opt->{MatchPattern}/) {
+   if ( $opt->{MatchPattern} && $full_path !~ /$opt->{MatchPattern}/ ) {
       # keep the old path, ie, no change
       $new_path = $path;
-   } elsif ($opt->{ExcludePattern} && $full_path =~ /$opt->{ExcludePattern}/) {
+   } elsif ( $opt->{ExcludePattern} && $full_path =~ /$opt->{ExcludePattern}/ ) {
       # keep the old path, ie, no change
       $new_path = $path;
    } else {
@@ -244,15 +249,16 @@ sub move_file {
       error    => 0,
    };
 
-   if ($new_path eq $path) {
+   if ( $new_path eq $path ) {
       # if no change, we return
       return $res;
    }
 
-   my $cmd = "/bin/mv -f \"$path\" \"$new_path\"";
+   # my $cmd = "/bin/mv -f \"$path\" \"$new_path\"";
+   my $cmd = ( $copy ? "cp -r" : "mv -f" ) . " \"$full_path\" \"$new_path\"";
 
-   if (-e $new_path) {
-      print "cmd='$cmd' cancelled because '$new_path' already exsits\n";   
+   if ( -e $new_path ) {
+      print "cmd='$cmd' cancelled because '$new_path' already exsits\n";
       $res->{new_path} = $path;
       $res->{error}    = 1;
       return $res;
@@ -262,17 +268,17 @@ sub move_file {
 
    my $will_do = 0;
 
-   if ($opt->{force}) {
-      $will_do ++;
+   if ( $opt->{force} ) {
+      $will_do++;
    } else {
       print "Do you want to make this change? Y/N [$opt->{DefaultAnswer}]\n";
       my $answer = readline(*STDIN);
 
-      if ($answer =~ /^\s*[yY]/) {
-         $will_do ++;
-      } elsif ($answer =~ /^\s*$/ && $opt->{DefaultAnswer} eq 'Y') {
+      if ( $answer =~ /^\s*[yY]/ ) {
+         $will_do++;
+      } elsif ( $answer =~ /^\s*$/ && $opt->{DefaultAnswer} eq 'Y' ) {
          # if user only hit return key, we use the default as answer
-         $will_do ++;
+         $will_do++;
       }
    }
 
@@ -286,16 +292,15 @@ sub move_file {
          print "executed\n";
 
          if ($rc) {
-            $res->{new_path} = $path;  # if command failed, use old path to continue traversing dir
+            $res->{new_path} = $path;    # if command failed, use old path to continue traversing dir
             $res->{error}    = 1;
-         } 
+         }
       }
    } else {
       print "your answer is not yes. skipped.\n";
-      $res->{new_path} = $path;      # if no change, use old path to continue traversing dir
+      $res->{new_path} = $path;    # if no change, use old path to continue traversing dir
       $res->{error}    = 0;
    }
 
    return $res;
 }
-
