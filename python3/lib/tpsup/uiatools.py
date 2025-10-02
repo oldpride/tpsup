@@ -135,12 +135,23 @@ class UiaEnv:
                 - will not trigger re-connect, use 'connect' command to re-connect.
             ''',
         },
-        'children': {
-            'short': 'ch',
-            'no_arg': True,
+        'descendants': {
+            'short': 'desc',
+            'has_dryrun': 1,
             'usage': '''
-                list all child windows of the current window.
-                ch
+                list all descendant windows of the top window. 
+                showing parent-child relationship using indentation.
+                some children will only show after you click parent.
+                attributes:
+                    maxdepth:     max depth of children, default 5
+                    timeout:       default 2s
+                example:
+                    desktop
+                    conn=title="Program Manager"
+
+                    desc                # default max depth=5
+                    desc=maxdepth=1    # only the children of top window
+                    desc=timeout=2
             ''',
         },
         'child': {
@@ -350,10 +361,9 @@ class UiaEnv:
             ''',
         },
         'top' : {
-            'no_arg': True,
             'usage': '''
-                switch current window to top window.
-                top
+                top           # switch current window to top window.
+                top=<index>   # switch current window to the top window by index from 'desktop' command.
 
                 note: 
                     - only pywinauto.Application has top_window().
@@ -440,9 +450,9 @@ class UiaEnv:
 
     # def recursive_child(self, w: WindowSpecification, 
     #                     action_list: list[dict] = [],
-    #                     depth=0, max_depth=5, **opt) -> list[str]:
+    #                     depth=0, maxdepth=5, **opt) -> list[str]:
     #     '''
-    #     recursively get child specs up to max_depth, without clicking it, because 
+    #     recursively get child specs up to maxdepth, without clicking it, because 
     #     clicking may have side effects.
 
     #     action_list is a list of dict,
@@ -455,7 +465,7 @@ class UiaEnv:
 
     #     debug = opt.get('debug', False)
         
-    #     if depth > max_depth:
+    #     if depth > maxdepth:
     #         return []
 
     #     # Get the child specs
@@ -479,7 +489,7 @@ class UiaEnv:
     #             elif act == 'click':
     #                 self.click_window(cs, **opt)
     #         # Recursively get the child specs
-    #         self.recursive_child(cs, action_list=action_list, depth=depth+1, max_depth=max_depth, **opt)
+    #         self.recursive_child(cs, action_list=action_list, depth=depth+1, maxdepth=maxdepth, **opt)
 
     #     return []
 
@@ -619,20 +629,67 @@ class UiaEnv:
                     self.window_and_child_specs = []
                     print(f"'app', 'desktop' will be re-initialized with the new backend.")
                     # note: changing backend will not trigger re-connect, use 'connect' command to re
-        elif long_cmd == 'children':
-            if self.current_window is None:
-                print("current_window is None, cannot list children")
+        elif long_cmd == 'descendants':
+            '''
+            attributes:
+                    maxdepth:     max depth of children, default 5
+                    timeout:       default 2s
+                example:
+                    desc                # default max depth=5
+                    desc=maxdepth=1    # only the children of top window
+                    desc=timeout=2
+            '''
+            # parse the attributes
+            maxdepth=5
+            timeout=2
+
+            if arg:
+                # prarse keyvalue
+                kv_list = tpsup.keyvaluetools.parse_keyvalue(arg)
+                for kv in kv_list:
+                    k = kv['key']
+                    v = kv['value']
+
+                    if k == 'maxdepth':
+                        maxdepth = int(v)
+                    elif k == 'timeout':
+                        timeout = int(v)
+
+            if dryrun:
+                # syntax check is done
+                return ret
+
+            if self.top_window is None:
+                print("top_window is None, cannot list descendants")
                 ret['bad_input'] = True
             else:
-                for descendant_window in self.current_window.descendants():
-                    print(f"desc window={pformat(descendant_window)}, "
-                          f"title={clean_text(descendant_window.window_text())}, "
-                          f"control_type={descendant_window.element_info.control_type}, "
-                          f"python={type(descendant_window).__name__}, "
-                          f"class_name={descendant_window.class_name()}")
-                    # print(f"dir(descendant_window)={dir(descendant_window)}")
-                    # print(f"element_info={pformat(descendant_window.element_info)}")
-                    # print(f"dir(element_info)={dir(descendant_window.element_info)}")
+                # start with top window and recursively print descendants
+                def recursive_descendants(w: WindowSpecification, depth=0):
+                    indent = '  ' * depth
+                    title = clean_text(w.window_text())
+                    ct = w.element_info.control_type
+                    print(f"{indent}title={title}, control_type={ct}, class_name={w.class_name()}")
+
+                    if depth >= maxdepth:
+                        if w.children():
+                            # only print if there are more children
+                            print(f"{indent}(there are more children under but we reached maxdepth={maxdepth}.)")
+                        return
+                    for child in w.children():
+                        recursive_descendants(child, depth+1)
+
+                if self.top_window is not None:
+                    recursive_descendants(self.top_window)
+
+                # for descendant_window in self.current_window.descendants():
+                #     print(f"desc window={pformat(descendant_window)}, "
+                #           f"title={clean_text(descendant_window.window_text())}, "
+                #           f"control_type={descendant_window.element_info.control_type}, "
+                #           f"python={type(descendant_window).__name__}, "
+                #           f"class_name={descendant_window.class_name()}")
+                #     # print(f"dir(descendant_window)={dir(descendant_window)}")
+                #     # print(f"element_info={pformat(descendant_window.element_info)}")
+                #     # print(f"dir(element_info)={dir(descendant_window.element_info)}")
         elif long_cmd == 'child':
             idx = int(arg)
             max_child_specs = len(self.window_and_child_specs)
@@ -752,12 +809,19 @@ class UiaEnv:
             title_filter = arg if arg else None
             print(f"listing all top windows of the desktop, title_filter={title_filter}")
             top_windows: list[pywinauto.WindowSpecification] = self.desktop.windows()
+            self.top_windows_selector = []
+            i = 0
             for w in top_windows:
                 title = clean_text(w.window_text())
                 if debug:
                     print(f"desktop top window={pformat(w)}")
                 if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
-                    print(f"desktop top window, conn=title={title}")
+                    self.top_windows_selector.append(
+                        {'window': w, 'title': title, 'control_type': w.element_info.control_type, 'class_name': w.class_name()}
+                    )
+                    print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={w.element_info.control_type}, class_name={w.class_name()}")
+                    i += 1
+            print(f"\nuse top=<index> or connect=title=... to connect to one of the top windows.")
         elif long_cmd == 'find':
             '''
             find=criterias
@@ -1189,14 +1253,63 @@ class UiaEnv:
         elif long_cmd == 'top':
             '''
             top
+            top=<index>
             '''
-            if self.top_window is None:
-                print("top_window is None, cannot get top window. Did you start or connect to an app?")
-                ret['bad_input'] = True
+            if not arg:
+                # set current_window to top_window
+                if self.top_window is None:
+                    print("top_window is None")
+                else:
+                    self.current_window = self.top_window
+                    print(f"set current_window to top_window")
+                    self.refresh_window_specs()
+                    ret['relist'] = True
             else:
-                print("current_window is now top_window")
-                self.current_window = self.top_window
-                self.refresh_window_specs()
+                # set current_window to the top window of the desktop with index arg
+                if not self.top_windows_selector:
+                    print("top_windows_selector is empty, please run 'desktop' command first")
+                    ret['bad_input'] = True
+                else:
+                    try:
+                        idx = int(arg)
+                    except ValueError:
+                        print(f"invalid index {arg}, must be an integer")
+                        ret['bad_input'] = True
+                        return ret
+                    max_idx = len(self.top_windows_selector) - 1
+                    if idx < 0 or idx > max_idx:
+                        print(f"invalid index {idx}, must be between 0 and {max_idx}")
+                        ret['bad_input'] = True
+                    else:
+                        w = self.top_windows_selector[idx]['window']
+                        title = self.top_windows_selector[idx]['title']
+                        print(f"setting current_window and top_window to top window of the desktop with index {idx}, title={title}")
+                        
+                        # the following line causes error:
+                        #     AttributeError: 'UIAWrapper' object has no attribute 'wait'
+                        # self.current_window = w
+                        # self.top_window = w
+                        
+                        # the following causes error:
+                        #     Please use start or connect before trying anything else
+                        # if isinstance(w, UIAWrapper):
+                        #     w = self.get_windowspec_from_uiawrapper(w)
+                        # self.current_window = w
+                        # self.top_window = w
+
+                        self.top_window = self.app.connect(handle=w.handle).window(handle=w.handle)
+                        self.current_window = self.top_window
+
+                        try:
+                            self.current_window.wait('visible')
+                            self.current_window.click_input()  # ensure the window is focused
+                            sleep(1)
+                            
+                            self.refresh_window_specs()
+                            ret['relist'] = True
+                        except pywinauto.findwindows.ElementNotFoundError as e:
+                            print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
+                            ret['bad_input'] = True
         elif long_cmd == 'type':
             # replace \n with {ENTER}
             arg = arg.replace('\n', '{ENTER}')
