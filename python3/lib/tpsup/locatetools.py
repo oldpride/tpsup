@@ -1120,6 +1120,7 @@ class LocateEnv:
 
             while True:
                 user_input = input(f"{prompt}")
+                print()
 
                 try:
                     result = self.locate(user_input, **opt) # locate() is for single-step locator

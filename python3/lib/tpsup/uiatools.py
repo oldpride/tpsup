@@ -82,6 +82,9 @@ class UiaEnv:
     follow: callable = None
     explore: callable = None
 
+    descendants: list = []  # list of dict with keys: window, title, control_type, class_name 
+                            # of the current top window.
+
     def __init__(self, 
                  **opt):
         
@@ -139,28 +142,35 @@ class UiaEnv:
             'short': 'desc',
             'has_dryrun': 1,
             'usage': '''
-                list all descendant windows of the top window. 
+                list all descendant windows of the current window. 
                 showing parent-child relationship using indentation.
                 some children will only show after you click parent.
                 attributes:
-                    maxdepth:     max depth of children, default 5
-                    timeout:       default 2s
+                    depth:     max depth of children, default 5
+                    count:     max number of descendants to list, default 100
+                    timeout:      default 2s
                 example:
                     desktop
                     conn=title="Program Manager"
 
-                    desc                # default max depth=5
-                    desc=maxdepth=1    # only the children of top window
+                    desc             # default depth=5
+                    desc=depth=1     # only the children of top window
                     desc=timeout=2
+                to list descendants of top window, use 'top' command to switch 
+                    current window to top window first.
             ''',
         },
         'child': {
             'short': 'c',
             'need_arg': True,
             'usage': '''
-                click the child window by index.
+                child=index
+                child=spec
+                locate a child index from the descendants list or a spec.
+                this makes the located child the current window, but not click it.
                 examples:
-                c=13
+                    c=13
+                    c=title="Untitled - Notepad" control_type="Edit"
                 ''',
         },
         'click': {
@@ -223,7 +233,11 @@ class UiaEnv:
                     scope=<scope> 
                     title=<title>
                     title_re=<title_re>  
-                    type=<control_type>  
+                    type=<control_type>
+                    pid=<process_id>
+                    auto_id=<automation_id>
+
+                    # search setting
                     timeout=<seconds>
             
                 2nd level criterias
@@ -232,6 +246,7 @@ class UiaEnv:
                     title_re2=<title_re2>
                     type2=<control_type2>
                     class2=<class_name2>
+                    auto_id2=<automation_id2>
                 2nd level criteria is needed when, 
                     for example, we want to close a error popup.
                         find=title="Close" control_type="Button"
@@ -244,8 +259,8 @@ class UiaEnv:
 
                 scope can be:
                     desktop  - search all desktop windows
-                    top      - search only the top window of the connected app, this is the default scope.
-                    current  - search only the current window of the connected app
+                    top      - search only the top window and its children of the connected app, this is the default scope.
+                    current  - search only the current window and its children of the connected app
                 scope2 can be:
                     child - search the child windows of the matched level 1 windows.
                             somehow I always got empty list.
@@ -284,6 +299,8 @@ class UiaEnv:
                     find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
                     find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button" action=click
 
+                if search scope was desktop, you can use 'connect=title=...' to connect to the matched top window.
+                
             ''',
         },        
         'list': {
@@ -292,26 +309,6 @@ class UiaEnv:
             'usage': '''
                 list the child windows of the top window and current window
                 l
-            ''',
-        },
-        'locate': {
-            'short': 'lo',
-            'need_arg': True,
-            'usage': '''
-                locate=child_index=<index>
-                locate=top=child_spec
-                locate=current=child_spec
-
-                locate the child window by index or child_spec.
-                    'child_index' is the index from 'list' command.
-                    'child_spec',eg, title="OK", control_type="Button", title_re=".*Notepad.*".
-                    'top' means the top window of the connected app.
-                    'current' means the current window of the connected app.
-                examples:
-                    locate=child_index=3
-                    locate=top=title="Untitled - Notepad"
-                    locate=top=title_re=".*Notepad.*", control_type="Button"
-                    locate=current=title_re=".*Notepad.*"
             ''',
         },
         'refresh': {
@@ -420,92 +417,40 @@ class UiaEnv:
 
         return control_identifiers_string
 
-    # def get_prompt(self) -> str:
-    #     prompt = ""
-    #     for k in sorted(self.usage.keys()):
-    #         v = self.usage[k]
-    #         short = v.get('short', k)
-    #         prompt += f"{short}-{k} "
-    #     return prompt
 
 
-    def refresh_window_specs(self, **opt):
-        debug = opt.get('debug', False)
-
-        top_window_child_specs = self.get_child_specs(self.top_window, debug=debug)
-        self.window_and_child_specs = []  # list of (window, which, child_spec)
-        for s in top_window_child_specs:
-            self.window_and_child_specs.append( (self.top_window, 'top_window', s) )
-
-        if self.current_window and self.current_window != self.top_window:
-            current_window_child_specs = []
-            try:
-                current_window_child_specs = self.get_child_specs(self.current_window, debug=debug)
-            except pywinauto.findwindows.ElementNotFoundError as e:
-                print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
-                return
-            
-            for s in current_window_child_specs:
-                self.window_and_child_specs.append( (self.current_window, 'current_window', s) )
-
-    # def recursive_child(self, w: WindowSpecification, 
-    #                     action_list: list[dict] = [],
-    #                     depth=0, maxdepth=5, **opt) -> list[str]:
-    #     '''
-    #     recursively get child specs up to maxdepth, without clicking it, because 
-    #     clicking may have side effects.
-
-    #     action_list is a list of dict,
-    #         {
-    #             'control_type': 'Button', # or 'Window', default to None meaning any type
-    #             'title_re': 'please', # default to None meaning any title
-    #             'action': 'click' # or 'print', default to 'print' the child spec
-    #         }
-    #     '''
-
+    # def refresh_window_specs(self, **opt):
     #     debug = opt.get('debug', False)
-        
-    #     if depth > maxdepth:
-    #         return []
 
-    #     # Get the child specs
-    #     child_specs = self.get_child_specs(w, debug=debug)
+    #     top_window_child_specs = self.get_child_specs(self.top_window, debug=debug)
+    #     self.window_and_child_specs = []  # list of (window, which, child_spec)
+    #     for s in top_window_child_specs:
+    #         self.window_and_child_specs.append( (self.top_window, 'top_window', s) )
 
-    #     for cs in child_specs:
-    #         # Check if the child spec matches the action list
-    #         for action in action_list:
-    #             if 'title_re' in action:
-    #                 title_re = action['title_re']
-    #                 title = w.child_window(**cs).window_text()
-    #                 if not re.search(title_re, title, re.I):
-    #                     continue
-    #             if 'control_type' in action:
-    #                 expected_ct = action['control_type'].lower()
-    #                 if expected_ct != 'any' and expected_ct != cs.get('control_type', '').lower():
-    #                     continue
-    #             act = action.get('action', 'print')
-    #             if act == 'print':
-    #                 print(f"child spec: {cs}")
-    #             elif act == 'click':
-    #                 self.click_window(cs, **opt)
-    #         # Recursively get the child specs
-    #         self.recursive_child(cs, action_list=action_list, depth=depth+1, maxdepth=maxdepth, **opt)
+    #     if self.current_window and self.current_window != self.top_window:
+    #         current_window_child_specs = []
+    #         try:
+    #             current_window_child_specs = self.get_child_specs(self.current_window, debug=debug)
+    #         except pywinauto.findwindows.ElementNotFoundError as e:
+    #             print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
+    #             return
+            
+    #         for s in current_window_child_specs:
+    #             self.window_and_child_specs.append( (self.current_window, 'current_window', s) )
 
-    #     return []
 
     def find_process_one_window(self, w1: WindowSpecification, 
                               mc1: dict, # match criteria
                               search_top_window: WindowSpecification,
                               level2_dict: dict, # level 2 match criteria
-                              **opt) -> bool:
+                              **opt) -> int: # return number of matches
         '''
         process a window in search mode, according to 
-        - control_type
-        - title_re
         '''
         debug = opt.get('debug', False)
         title = clean_text(w1.window_text())
         ct = w1.element_info.control_type
+        class_name = w1.class_name()
         if debug:
             print(f"checking window: title={title}, control_type={ct}, mc1={mc1}, level2_dict={level2_dict}")
         if 'title_re' in mc1:
@@ -515,8 +460,8 @@ class UiaEnv:
             else:
                 if debug:
                     print(f"title={title} doesn't match title_re={mc1['title_re']}")
-                return False
-            
+                return 0
+
         if 'title' in mc1:
             if mc1['title'].lower() == 'any' or mc1['title'].lower() == title.lower():
                 if debug:
@@ -524,7 +469,7 @@ class UiaEnv:
             else:
                 if debug:
                     print(f"actual title={title} doesn't match expected title={mc1['title']}")
-                return False
+                return 0
 
         if 'control_type' in mc1:
             if mc1['control_type'].lower() == 'any' or mc1['control_type'].lower() == ct.lower():
@@ -533,23 +478,45 @@ class UiaEnv:
             else:
                 if debug:
                     print(f"actual control_type={ct} doesn't match expected control_type={mc1['control_type']}")
-                return False
-            
+                return 0
+
         if 'class_name' in mc1:
-            class_name = w1.class_name()
             if mc1['class_name'].lower() == 'any' or mc1['class_name'].lower() == class_name.lower():
                 if debug:
                     print(f"matched actual class_name={mc1['class_name']} with expected class_name={class_name}")
             else:
                 if debug:
                     print(f"actual class_name={class_name} doesn't match expected class_name={mc1['class_name']}")
-                return False
+                return 0
+
+        if 'process_id' in mc1:
+            pid = w1.process_id()
+            if int(mc1['process_id']) == pid:
+                if debug:
+                    print(f"matched actual process_id={mc1['process_id']} with expected process_id={pid}")
+            else:
+                if debug:
+                    print(f"actual process_id={pid} doesn't match expected process_id={mc1['process_id']}")
+                return 0
+
+        if 'automation_id' in mc1:
+            auto_id = w1.element_info.automation_id
+            if mc1['automation_id'].lower() == 'any' or mc1['automation_id'].lower() == auto_id.lower():
+                if debug:
+                    print(f"matched actual automation_id={mc1['automation_id']} with expected automation_id={auto_id}")
+            else:
+                if debug:
+                    print(f"actual automation_id={auto_id} doesn't match expected automation_id={mc1['automation_id']}")
+                return 0
 
         # if we reach here, we have a match. always print it with top window info
         top_title = clean_text(search_top_window.window_text())
         top_ct = search_top_window.element_info.control_type
-        print(f"under top window: title={top_title}, control_type={top_ct}")
-        print(f"  matched window: title={title}, control_type={ct}")
+        top_class = search_top_window.class_name()
+        top_pid = search_top_window.process_id()
+
+        print(f"\nunder top window: title=\"{top_title}\" control_type={top_ct} class_name={top_class} pid={top_pid}")
+        print(f"  matched window: title=\"{title}\" control_type={ct} class_name={class_name}")
 
         if level2_dict:
             scope2 = level2_dict['scope2']
@@ -568,14 +535,19 @@ class UiaEnv:
             
             print(f"searching level 2 windows in scope2={scope2} with criteria={mc2}")
             print(f"\n-------------- level 2 search results begin --------------")
+            match_count = 0
             for w2 in search_windows:
                 if debug:
-                    print(f"w2 title={clean_text(w2.window_text())}, control_type={w2.element_info.control_type}")
+                    print(f"w2 title=\"{clean_text(w2.window_text())}\" control_type={w2.element_info.control_type} class_name={w2.class_name()}")
                 # recursively search level 2 windows
-                self.find_process_one_window(w2, mc2, search_top_window, None, **opt)
+                match_count += self.find_process_one_window(w2, mc2, search_top_window, None, **opt)
             print(f"-------------- level 2 search results end ----------------\n")
-            return True
-            
+
+            # if we have level 2 criteria, 'action' has been already processed in 
+            # above recursive calls.
+            return match_count 
+        else:
+            match_count = 1
 
         if mc1.get('action', None) == None or mc1['action'].lower() == 'print':
             pass # already printed above 
@@ -583,11 +555,13 @@ class UiaEnv:
             self.click_window(w1, **opt)
         elif mc1['action'].lower().startswith('type='):
             to_type = mc1['action'][5:]
-            print(f"typing '{to_type}' into window: {w1}, title={clean_text(title)}, control_type={clean_text(ct)}")
+            print(f"typing '{to_type}' into window: {w1}, title=\"{clean_text(title)}\" control_type={clean_text(ct)} class_name={class_name}")
             w1.type_keys(to_type, with_spaces=True, set_foreground=True)
             sleep(1)
         else:
             raise ValueError(f"unknown search action {mc1['action']}")
+        
+        return match_count
 
     def click_window(self, w: WindowSpecification, **opt) -> bool:
         try:
@@ -632,15 +606,17 @@ class UiaEnv:
         elif long_cmd == 'descendants':
             '''
             attributes:
-                    maxdepth:     max depth of children, default 5
+                    depth:     max depth of children, default 5
                     timeout:       default 2s
+                    count:     max number of descendants to list, default 100
                 example:
-                    desc                # default max depth=5
-                    desc=maxdepth=1    # only the children of top window
+                    desc               # default depth=5 from current window
+                    desc=depth=1       # only the children of top window
                     desc=timeout=2
             '''
             # parse the attributes
             maxdepth=5
+            maxcount=100
             timeout=2
 
             if arg:
@@ -650,25 +626,48 @@ class UiaEnv:
                     k = kv['key']
                     v = kv['value']
 
-                    if k == 'maxdepth':
+                    if k == 'depth':
                         maxdepth = int(v)
                     elif k == 'timeout':
                         timeout = int(v)
+                    elif k == 'count':
+                        maxcount = int(v)
+                    else:
+                        raise ValueError(f"invalid descendants attribute {kv['original']}")
 
             if dryrun:
                 # syntax check is done
                 return ret
 
             if self.top_window is None:
-                print("top_window is None, cannot list descendants")
+                print("ERROR: top_window is None, cannot list descendants.")
+                print("       use desktop and top/connect command first to connect to an app's top window.")
                 ret['bad_input'] = True
             else:
+                # we use self.* as global variables.
+                self.descendants = []
+                self.i = 0
                 # start with top window and recursively print descendants
-                def recursive_descendants(w: WindowSpecification, depth=0):
+                def recursive_descendants(w: WindowSpecification, depth:int):
                     indent = '  ' * depth
                     title = clean_text(w.window_text())
                     ct = w.element_info.control_type
-                    print(f"{indent}title={title}, control_type={ct}, class_name={w.class_name()}")
+                    class_name = w.class_name()
+                    auto_id = w.element_info.automation_id
+                    print(f"{indent}{self.i} - title=\"{title}\" control_type={ct} class_name={class_name} auto_id={auto_id}")
+                    self.i += 1
+
+                    if self.i >= maxcount:
+                        print(f"(reached maxcount={maxcount}, stop listing more descendants.)")
+                        return
+                    
+                    self.descendants.append({
+                        'window': w,
+                        'title': title,
+                        'control_type': ct,
+                        'class_name': class_name,
+                        'auto_id': auto_id
+                    })
 
                     if depth >= maxdepth:
                         if w.children():
@@ -676,11 +675,13 @@ class UiaEnv:
                             print(f"{indent}(there are more children under but we reached maxdepth={maxdepth}.)")
                         return
                     for child in w.children():
-                        recursive_descendants(child, depth+1)
+                        recursive_descendants(child, depth=depth+1)
 
-                if self.top_window is not None:
-                    recursive_descendants(self.top_window)
+                recursive_descendants(self.current_window, depth=0)
 
+                print(f"\nuse 'child=<index>' to locate a descendant window and set it as current_window.")
+                print(f"use 'top' to switch current_window to top_window.")
+                print(f"use 'click' to click the current_window.")
                 # for descendant_window in self.current_window.descendants():
                 #     print(f"desc window={pformat(descendant_window)}, "
                 #           f"title={clean_text(descendant_window.window_text())}, "
@@ -690,30 +691,26 @@ class UiaEnv:
                 #     # print(f"dir(descendant_window)={dir(descendant_window)}")
                 #     # print(f"element_info={pformat(descendant_window.element_info)}")
                 #     # print(f"dir(element_info)={dir(descendant_window.element_info)}")
-        elif long_cmd == 'child':
-            idx = int(arg)
-            max_child_specs = len(self.window_and_child_specs)
-            if idx < 0 or idx >= max_child_specs:
-                print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
-                ret['bad_input'] = True
-            else:
-                w, which, criteria_dict1 = self.window_and_child_specs[idx]
-                print(f"exploring child {idx}: {criteria_dict1} from {which}")
-                # extract args from child_window(...)
+        # elif long_cmd == 'child':
+        #     idx = int(arg)
+        #     # max_child_specs = len(self.window_and_child_specs)
+        #     num_descendants = len(self.descendants)
+        #     if idx < 0 or idx >= num_descendants:
+        #         print(f"invalid idx {idx}, must be between 0 and {num_descendants-1}")
+        #         ret['bad_input'] = True
+        #     else:
+        #         # w, which, criteria_dict1 = self.window_and_child_specs[idx]
+        #         # print(f"exploring child {idx}: {criteria_dict1} from {which}")
+        #         # # extract args from child_window(...)
 
-                code = f"self.{which}.{criteria_dict1}"
-                print(f"code={code}")
-                self.current_window = eval(code, globals(), locals())
+        #         # code = f"self.{which}.{criteria_dict1}"
+        #         # print(f"code={code}")
+        #         # self.current_window = eval(code, globals(), locals())
                 
-                # if not self.click_window(self.current_window, **opt):
-                #     self.current_window = None
-
-                # if self.current_window is not None:
-                #     # after a successful click, we refresh our control identifiers tree.
-                #     self.refresh_window_specs()
-                #     ret['relist'] = True
-                result = self.locate_cmd_arg('click', '', **opt)
-                ret.update(result)
+        #         # result = self.locate_cmd_arg('click', '', **opt)
+        #         # ret.update(result)
+        #         self.current_window = self.descendants[idx]['window']
+        #         print(f"switched current_window to child {idx}: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
         elif long_cmd == 'click':
             if self.current_window is None:
                 print("current_window is None, cannot click")
@@ -721,11 +718,12 @@ class UiaEnv:
             else:
                 if not self.click_window(self.current_window, **opt):
                     self.current_window = None
+                    self.descendants = []  # clear descendants because current_window is gone or changed.
 
-                if self.current_window is not None:
-                    # after a successful click, we refresh our control identifiers tree.
-                    self.refresh_window_specs()
-                    ret['relist'] = True
+                # if self.current_window is not None:
+                #     # after a successful click, we refresh our control identifiers tree.
+                #     self.refresh_window_specs()
+                #     ret['relist'] = True
         elif long_cmd == 'connect':
             '''
             connect with title_re, title
@@ -772,7 +770,7 @@ class UiaEnv:
             self.top_window.click_input()  # ensure the window is focused
             sleep(1)
             print(f"connected to window with {conn_param_dict}, top_window={self.top_window}")
-            self.refresh_window_specs()
+            # self.refresh_window_specs()
         elif long_cmd == 'control_identifiers':
             if self.current_window is None:
                 print("current_window is None, cannot get control identifiers")
@@ -793,11 +791,14 @@ class UiaEnv:
             print(f"app.process={self.app.process}")
 
             if self.top_window is None:
-                print("top_window is None")
+                print("ERROR: top_window is None")
+                print("       use desktop and top/connect command first to connect to an app's top window.")
+                ret['bad_input'] = True
             else:
                 print(f"top_window={self.get_window_spec(self.top_window)}")
                 print(f"current_window={self.get_window_spec(self.current_window)}")
                 print(f"top_window.process_id()={self.top_window.process_id() if self.top_window else None}")
+        
         elif long_cmd == 'desktop':
             '''
             list all top windows of the desktop.
@@ -813,13 +814,24 @@ class UiaEnv:
             i = 0
             for w in top_windows:
                 title = clean_text(w.window_text())
+                control_type = w.element_info.control_type
+                class_name = w.class_name()
+                pid = w.process_id()
+                auto_id = w.element_info.automation_id
                 if debug:
                     print(f"desktop top window={pformat(w)}")
                 if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
                     self.top_windows_selector.append(
-                        {'window': w, 'title': title, 'control_type': w.element_info.control_type, 'class_name': w.class_name()}
+                        {
+                            'window': w, 
+                            'title': title, 
+                            'control_type': control_type, 
+                            'class_name': class_name, 
+                            'pid': pid,
+                            'auto_id': auto_id,
+                        }
                     )
-                    print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={w.element_info.control_type}, class_name={w.class_name()}")
+                    print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={control_type}, class_name={class_name}, pid={pid}, auto_id={auto_id}")
                     i += 1
             print(f"\nuse top=<index> or connect=title=... to connect to one of the top windows.")
         elif long_cmd == 'find':
@@ -889,6 +901,18 @@ class UiaEnv:
                     if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
                         raise ValueError(f"invalid action={v} in criteria={original}, must be one of print, click, type=...")
                     action = v
+                elif k == 'pid':
+                    try:
+                        pid = int(v)
+                        if pid <= 0:
+                            raise ValueError
+                    except ValueError:
+                        raise ValueError(f"invalid pid={v} in criteria={original}, must be a positive integer")
+                    criteria_dict1['process_id'] = pid
+                elif k == 'auto_id':
+                    criteria_dict1['automation_id'] = v
+                elif k == 'auto_id2':
+                    criteria_dict2['automation_id'] = v
                 else:
                     raise ValueError(f"invalid criteria key={k} in criteria={original}")
             
@@ -918,7 +942,8 @@ class UiaEnv:
                 search_windows = self.desktop.windows()
             elif scope1 == 'top':
                 if self.top_window is None:
-                    print("top_window is None, cannot search in 'top' scope")
+                    print("ERROR: top_window is None, cannot search in 'top' scope")
+                    print("       use desktop and top/connect command first to connect to an app's top window.")
                     ret['bad_input'] = True
                     return ret
                 search_windows = [self.top_window]
@@ -938,12 +963,12 @@ class UiaEnv:
                     # scope == 'current'
                     search_top_window = self.top_window
                 # recursively search the window and its descendants
-                self.find_process_one_window(w, criteria_dict1, search_top_window, level2_dict, **opt)
-                
+                self.match_count = self.find_process_one_window(w, criteria_dict1, search_top_window, level2_dict, **opt)
+
                 def long_search():
                     count = 0
                     for dw in w.descendants():
-                        self.find_process_one_window(dw, criteria_dict1, search_top_window, level2_dict, **opt)
+                        self.match_count += self.find_process_one_window(dw, criteria_dict1, search_top_window, level2_dict, **opt)
                         count += 1
                         if count %100 == 0 and debug:
                             print(f"checked {count} descendant windows...")          
@@ -954,85 +979,62 @@ class UiaEnv:
                 if thread.is_alive():
                     w_title = clean_text(w.window_text())
                     w_ct = w.element_info.control_type
-                    print(f"search timeout after {timeout}s, skipping children of window title={w_title}, control_type={w_ct}")
+                    w_class = w.class_name()
+                    w_auto_id = w.element_info.automation_id
+                    w_pid = w.process_id()
+                    print(f"search timeout after {timeout}s, skipping children of window title={w_title}, control_type={w_ct}, class_name={w_class}, auto_id={w_auto_id}, pid={w_pid}")
             print(f"-------------- search results end ----------------\n")
+            if self.match_count > 0:
+                if scope1 == 'desktop':
+                    print(f"scope1=desktop, use desktop+top or connect command to connect to the matched top window.")
         elif long_cmd == 'list':
                 self.display()
-        elif long_cmd == 'locate':
+        elif long_cmd == 'child':
             '''
-            locate=child_index=<index>
-            locate=top=child_spec
-            locate=current=child_spec
-
-            locate the child window by index or child_spec.
-                'child_index' is the index from 'list' command.
-                'child_spec',eg, title="OK", control_type="Button", title_re=".*Notepad.*".
-                'top' means the top window of the connected app.
-                'current' means the current window of the connected app.
-            examples:
-                locate=child_index=3
-                locate=top=title="Untitled - Notepad"
-                locate=top=title=OK control_type=Button
-                locate=top=title_re=".*Notepad.*" control_type="Button"
-                locate=current=title_re=".*Notepad.*"
-
-            keys can be:
-                title
-                title_re
-                control_type
-                class_name
-
-            quotes around title value are optional.
+                child=<index>       # if integer, switch current_window to the 'descendants' index.
+                child=top           # switch current_window to top_window
+                child=child_spec    # switch current_window to top_window's child window matching child_spec.
             '''
-            if '=' not in arg:
-                raise ValueError(f"invalid locate arg {arg}, must contain '='")
-            k,v = arg.split('=', 1)
 
-            if k not in ['child_index', 'top', 'current']:
-                raise ValueError(f"invalid locate arg {arg}, must start with child_index=, top= or current=")
-
+            if self.top_window is None:
+                print("ERROR: top_window is None, cannot locate")
+                print("       use desktop and top/connect command first to connect to an app's top window.")
+                ret['bad_input'] = True
+                return ret
             
-            if k == 'child_index':
-                if dryrun:
-                    return ret
-                
-                idx = int(v)
-                max_child_specs = len(self.window_and_child_specs)
-                if idx < 0 or idx >= max_child_specs:
-                    print(f"invalid idx {idx}, must be between 0 and {max_child_specs-1}")
+            if self.descendants is None:
+                print("ERROR: descendants is None, please run 'descendants' command first.")
+                ret['bad_input'] = True
+                return ret
+            
+            # if arg is integer, switch to that index in window_and_child_specs
+            if arg.isdigit():
+                idx = int(arg)
+                # max_child_specs = len(self.window_and_child_specs)
+                num_descendants = len(self.descendants)
+                if idx < 0 or idx >= num_descendants:
+                    print(f"invalid idx {idx}, must be between 0 and {num_descendants-1}")
                     ret['bad_input'] = True
                 else:
-                    w, which, criteria_dict1 = self.window_and_child_specs[idx]
-                    print(f"exploring child {idx}: {criteria_dict1} from {which}")
-                    # extract args from child_window(...)
+                    # w, which, criteria_dict1 = self.window_and_child_specs[idx]
+                    # print(f"exploring child {idx}: {criteria_dict1} from {which}")
+                    # # extract args from child_window(...)
 
-                    code = f"self.{which}.{criteria_dict1}"
-                    print(f"code={code}")
-                    self.current_window = eval(code, globals(), locals())
+                    # code = f"self.{which}.{criteria_dict1}"
+                    # print(f"code={code}")
+                    # self.current_window = eval(code, globals(), locals())
                     
-                    # if not self.click_window(self.current_window, **opt):
-                    #     self.current_window = None
+                    # result = self.locate_cmd_arg('click', '', **opt)
+                    # ret.update(result)
+                    self.current_window = self.descendants[idx]['window']
+                    self.descendants = []  # clear descendants because current_window is changed.
+                    print(f"switched current_window to child {idx}: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
 
-                    # if self.current_window is not None:
-                    #     # after a successful click, we refresh our control identifiers tree.
-                    #     self.refresh_window_specs()
-                    result = self.locate_cmd_arg('click', '', **opt)
-                    ret.update(result)
-            elif k == 'top' or k == 'current':
-                if k == 'top':
-                    if self.top_window is None:
-                        print("top_window is None, cannot locate")
-                        ret['bad_input'] = True
-                        return ret
-                    base_window = self.top_window
-                else:
-                    if self.current_window is None:
-                        print("current_window is None, cannot locate")
-                        ret['bad_input'] = True
-                        return ret
-                    base_window = self.current_window
-                print(f"locating child_spec {v} from {k}")
-                
+            elif arg.lower() == 'top':
+                self.current_window = self.top_window
+                self.descendants = []  # clear descendants because current_window is changed.
+                print(f"switched current_window to top_window: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
+            else:
                 '''
                 child_spec is a string like 
                     title="OK" control_type="Button", 
@@ -1075,19 +1077,23 @@ class UiaEnv:
                 # syntax check is done at this point.
                 if dryrun:
                     return ret
-                
-                self.current_window = base_window.child_window(**criteria_dict1)
+
+                self.current_window = self.top_window.child_window(**criteria_dict1)
                 if not self.click_window(self.current_window, **opt):
                     self.current_window = None
-                if self.current_window is not None:
-                    # after a successful click, we refresh our control identifiers tree.
-                    self.refresh_window_specs()
-                    ret['relist'] = True
-                else:
+                    self.descendants = []  # clear descendants because current_window is gone or changed.
                     print(f"failed to locate child_spec {criteria_dict1} from {k}")
                     ret['bad_input'] = True
-        elif long_cmd == 'refresh':
-            self.refresh_window_specs()
+                # if self.current_window is not None:
+                #     # after a successful click, we refresh our control identifiers tree.
+                #     self.refresh_window_specs()
+                #     ret['relist'] = True
+                # else:
+                
+                    # print(f"failed to locate child_spec {criteria_dict1} from {k}")
+                    # ret['bad_input'] = True
+        # elif long_cmd == 'refresh':
+        #     self.refresh_window_specs()
         elif long_cmd == 'start':
             '''
             when the start command spawns a new process for the window,
@@ -1137,10 +1143,11 @@ class UiaEnv:
             if self.top_window :
                 print(f"after start, top_window={self.top_window}")
                 self.current_window = self.top_window
+                self.descendants = []  # clear descendants because current_window is changed.
                 self.top_window.wait('visible')
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
-                self.refresh_window_specs()
+                # self.refresh_window_specs()
             else:
                 print(f"search for the new top window of the desktop.")
                 # app.start() lost track of the child process.
@@ -1185,6 +1192,7 @@ class UiaEnv:
                     return ret
                     
                 self.current_window = self.top_window
+                self.descendants = []  # clear descendants because current_window is changed.
 
                 # AttributeError: 'UIAWrapper' object has no attribute 'wait'
                 # self.top_window.wait('visible')
@@ -1194,7 +1202,7 @@ class UiaEnv:
                 
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
-                self.refresh_window_specs()
+                # self.refresh_window_specs()
         elif long_cmd == 'texts':
             '''
             texts
@@ -1258,12 +1266,14 @@ class UiaEnv:
             if not arg:
                 # set current_window to top_window
                 if self.top_window is None:
-                    print("top_window is None")
+                    print("ERROR: top_window is None")
+                    print("       use desktop and top/connect command first to connect to an app's top window.")
                 else:
                     self.current_window = self.top_window
+                    self.descendants = []  # clear descendants because current_window is changed.
                     print(f"set current_window to top_window")
-                    self.refresh_window_specs()
-                    ret['relist'] = True
+                    # self.refresh_window_specs()
+                    # ret['relist'] = True
             else:
                 # set current_window to the top window of the desktop with index arg
                 if not self.top_windows_selector:
@@ -1297,16 +1307,18 @@ class UiaEnv:
                         # self.current_window = w
                         # self.top_window = w
 
+                        # we have to connect to the window because it is a separate process.
                         self.top_window = self.app.connect(handle=w.handle).window(handle=w.handle)
                         self.current_window = self.top_window
+                        self.descendants = []  # clear descendants because current_window is changed.
 
                         try:
                             self.current_window.wait('visible')
                             self.current_window.click_input()  # ensure the window is focused
                             sleep(1)
                             
-                            self.refresh_window_specs()
-                            ret['relist'] = True
+                            # self.refresh_window_specs()
+                            # ret['relist'] = True
                         except pywinauto.findwindows.ElementNotFoundError as e:
                             print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                             ret['bad_input'] = True
@@ -1338,7 +1350,7 @@ class UiaEnv:
         '''
 
         debug = opts.get('debug', 0)
-        full_title = w.window_text()
+        full_title = clean_text(w.window_text())
         ct = w.element_info.control_type
         cn = w.element_info.class_name
         title_re = None
