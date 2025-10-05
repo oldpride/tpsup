@@ -118,7 +118,6 @@ class UiaEnv:
             locate_cmd_arg=self.locate_cmd_arg,
             locate_dict=self.locate_dict,
             locate_usage_by_cmd=self.locate_usage_by_cmd,
-            display=self.display,
             **opt)
         self.locate = locateEnv.locate
         self.follow = locateEnv.follow
@@ -318,22 +317,6 @@ class UiaEnv:
                 
             ''',
         },        
-        'list': {
-            'short': 'li',
-            'no_arg': True,
-            'usage': '''
-                list the child windows of the top window and current window
-                l
-            ''',
-        },
-        'refresh': {
-            'no_arg': True,
-            'usage': '''
-                refresh the child window list
-                r
-            ''',
-        },
-
         'start': {
             'need_arg': True,
             'usage': '''
@@ -387,10 +370,11 @@ class UiaEnv:
             'short': 'ty',
             'need_arg': 1,
             'usage': '''
+                type keyboard keys into the current window.
                 ty=hello
-                ty="hello world"
+                ty="hello world{ENTER}"
+                typ="hello{SPACE}world{ENTER}"   # sometimespace needs to be explicit
                 ty={UP}
-                ty={ENTER}
                 ty={F5}
             ''',
         },
@@ -431,27 +415,6 @@ class UiaEnv:
         control_identifiers_string = redirected_output.getvalue()
 
         return control_identifiers_string
-
-
-
-    # def refresh_window_specs(self, **opt):
-    #     debug = opt.get('debug', False)
-
-    #     top_window_child_specs = self.get_child_specs(self.top_window, debug=debug)
-    #     self.window_and_child_specs = []  # list of (window, which, child_spec)
-    #     for s in top_window_child_specs:
-    #         self.window_and_child_specs.append( (self.top_window, 'top_window', s) )
-
-    #     if self.current_window and self.current_window != self.top_window:
-    #         current_window_child_specs = []
-    #         try:
-    #             current_window_child_specs = self.get_child_specs(self.current_window, debug=debug)
-    #         except pywinauto.findwindows.ElementNotFoundError as e:
-    #             print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
-    #             return
-            
-    #         for s in current_window_child_specs:
-    #             self.window_and_child_specs.append( (self.current_window, 'current_window', s) )
 
 
     def find_process_one_window(self, w1: WindowSpecification, 
@@ -618,6 +581,194 @@ class UiaEnv:
                     self.window_and_child_specs = []
                     print(f"'app', 'desktop' will be re-initialized with the new backend.")
                     # note: changing backend will not trigger re-connect, use 'connect' command to re
+        elif long_cmd == 'child':
+            '''
+                child=<index>       # if integer, switch current_window to the 'descendants' index.
+                child=top           # switch current_window to top_window
+                child=child_spec    # switch current_window to top_window's child window matching child_spec.
+            '''
+
+            if self.top_window is None:
+                print("ERROR: top_window is None, cannot locate")
+                print("       use desktop and top/connect command first to connect to an app's top window.")
+                ret['bad_input'] = True
+                return ret
+            
+            if self.descendants is None:
+                print("ERROR: descendants is None, please run 'descendants' command first.")
+                ret['bad_input'] = True
+                return ret
+            
+            # if arg is integer, switch to that index in window_and_child_specs
+            if arg.isdigit():
+                idx = int(arg)
+                # max_child_specs = len(self.window_and_child_specs)
+                num_descendants = len(self.descendants)
+                if idx < 0 or idx >= num_descendants:
+                    print(f"invalid idx {idx}, must be between 0 and {num_descendants-1}")
+                    ret['bad_input'] = True
+                else:
+                    self.current_window = self.descendants[idx]['window']
+                    self.descendants = None  # clear descendants because current_window is changed.
+                    print(f"switched current_window to child {idx}: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
+
+            elif arg.lower() == 'top':
+                self.current_window = self.top_window
+                self.descendants = None  # clear descendants because current_window is changed.
+                print(f"switched current_window to top_window: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
+            else:
+                '''
+                child_spec is a string like 
+                    title="OK" control_type="Button", 
+                    title_re=.*Notepad.*
+                    title="Untitled - Notepad" control_type=Edit
+                
+                keys can be:
+                    title
+                    title_re
+                    control_type
+                    class_name
+
+                quotes around title value are optional.
+
+                we need to parse the string into a dict.
+                '''
+                parts = tpsup.keyvaluetools.parse_keyvalue(v)
+
+                criteria_dict1 = {}
+                for p in parts:
+                    k, v = p.split('=', 1)
+                    k = k.strip()
+                    v = v.strip()
+
+                    # remove ", " if it is in the front of key
+                    # eg, in title=OK, control_type=Button
+                    k = re.sub(r',\s*', '', k)
+
+                    if k not in ['title', 'title_re', 'control_type', 'class_name']:
+                        raise ValueError(f"invalid child_spec key {k}, must be one of title, title_re, control_type, class_name")
+                    # remove quotes if any
+                    if (v.startswith('"') and v.endswith('"')) or \
+                        (v.startswith("'") and v.endswith("'")):
+                        v = v[1:-1]
+                    elif (v.startswith('"') and not v.endswith('"')) or \
+                            (v.startswith("'") and not v.endswith("'")):
+                        raise ValueError(f"unmatched quote in {k}={v}")
+                    criteria_dict1[k.strip()] = v.strip()
+                print(f"parsed child_spec = {criteria_dict1}")
+                # syntax check is done at this point.
+                if dryrun:
+                    return ret
+
+                self.current_window = self.top_window.child_window(**criteria_dict1)
+                if not self.click_window(self.current_window, **opt):
+                    self.current_window = None
+                    self.descendants = None  # clear descendants because current_window is gone or changed.
+                    print(f"failed to locate child_spec {criteria_dict1} from {k}")
+                    ret['success'] = True
+        elif long_cmd == 'child2':
+            '''
+            legacy version of child command, following after descendants2 command.
+            '''
+            if self.descendants2 is None:
+                print("Error: you need to run 'descendants2' command first")
+                ret['success'] = False
+            else:
+                idx = int(arg)
+                # max_child_specs = len(self.window_and_child_specs)
+                num_descendants2 = len(self.descendants2)
+                if idx < 0 or idx >= num_descendants2:
+                    print(f"invalid idx {idx}, must be between 0 and {num_descendants2-1}")
+                    ret['bad_input'] = True
+                    ret['success'] = False
+                else:
+                    criteria_dict = self.descendants2[idx]
+                    print(f"set current_window to current_window's child {idx}: {criteria_dict}")
+                    # extract args from child_window(...)
+
+                    code = f"self.current_window.{criteria_dict}"
+                    print(f"code={code}")
+                    self.current_window = eval(code, globals(), locals())
+                    print(f"use 'click' command to click the current_window.")
+                    print(f"use 'desc2' command to list the descendants2 of the current_window.")
+        elif long_cmd == 'click':
+            if self.current_window is None:
+                print("current_window is None, cannot click")
+                ret['bad_input'] = True
+            else:
+                if not self.click_window(self.current_window, **opt):
+                    self.current_window = None
+                    self.descendants = []  # clear descendants because current_window is gone or changed.
+        elif long_cmd == 'connect':
+            '''
+            connect with title_re, title
+            connect=title_re=.*tianjunk.*
+            connect=title="tianjunk - Notepad"
+            '''
+            kv_pairs = tpsup.keyvaluetools.parse_keyvalue(arg)
+            conn_param_dict = {}
+            for kv in kv_pairs:
+                k = kv['key']
+                v = kv['value']
+                original = kv['original']
+                if k == 'title_re':
+                    if 'title' in conn_param_dict:
+                        raise ValueError(f"cannot have both title and title_re in {original}")
+                    conn_param_dict['title_re'] = v
+                elif k == 'title':
+                    if 'title_re' in conn_param_dict:
+                        raise ValueError(f"cannot have both title and title_re in {original}")
+                    conn_param_dict['title'] = v
+                else:
+                    raise ValueError(f"invalid connect arg {original}, must be title_re= or title=")
+                
+            if 'title_re' not in conn_param_dict and 'title' not in conn_param_dict:
+                raise ValueError(f"connect arg must have title_re= or title=")
+            
+            # at this point, syntax check is done.
+            if dryrun:
+                return ret
+            
+            print(f"connecting to window with {conn_param_dict}, backend={self.backend}")
+            self.app = Application(backend=self.backend)
+            print(f"app={pformat(self.app)}")
+            result = self.app.connect(**conn_param_dict)
+            print(f"after connected, result={result}")
+            self.top_window = self.app.top_window()
+            self.top_window.wait('visible')
+            self.current_window = self.top_window
+            self.top_window.click_input()  # ensure the window is focused
+            sleep(1)
+            print(f"connected to window with {conn_param_dict}, top_window={self.top_window}")
+            # self.refresh_window_specs()
+        elif long_cmd == 'control_identifiers':
+            if self.current_window is None:
+                print("current_window is None, cannot get control identifiers")
+                ret['bad_input'] = True
+            else:
+                try:
+                    ci_string = self.get_control_identifiers(self.current_window)
+                    print(f"current_window control identifiers:\n{ci_string}")
+                except pywinauto.findwindows.ElementNotFoundError as e:
+                    print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
+                    ret['bad_input'] = True
+        elif long_cmd == 'current':
+            '''
+            print the current state:
+            top_window
+            current_window
+            '''
+            print(f"app.process={self.app.process}")
+
+            if self.top_window is None:
+                print("ERROR: top_window is None")
+                print("       use desktop and top/connect command first to connect to an app's top window.")
+                ret['bad_input'] = True
+            else:
+                print(f"top_window={self.get_window_spec(self.top_window)}")
+                print(f"current_window={self.get_window_spec(self.current_window)}")
+                print(f"top_window.process_id()={self.top_window.process_id() if self.top_window else None}")
+
         elif long_cmd == 'descendants':
             '''
             attributes:
@@ -697,15 +848,6 @@ class UiaEnv:
                 print(f"\nuse 'child=<index>' to locate a descendant window and set it as current_window.")
                 print(f"use 'top' to switch current_window to top_window.")
                 print(f"use 'click' to click the current_window.")
-                # for descendant_window in self.current_window.descendants():
-                #     print(f"desc window={pformat(descendant_window)}, "
-                #           f"title={clean_text(descendant_window.window_text())}, "
-                #           f"control_type={descendant_window.element_info.control_type}, "
-                #           f"python={type(descendant_window).__name__}, "
-                #           f"class_name={descendant_window.class_name()}")
-                #     # print(f"dir(descendant_window)={dir(descendant_window)}")
-                #     # print(f"element_info={pformat(descendant_window.element_info)}")
-                #     # print(f"dir(element_info)={dir(descendant_window.element_info)}")
         elif long_cmd == 'descendants2':
             '''
             legacy version of descendants command by extracting from self.window_and_child_specs
@@ -723,120 +865,7 @@ class UiaEnv:
                     print(f"{i} - {s}")
                     i += 1
             print(f"\nuse 'child2=<index>' to locate a descendant window and set it as current_window.")
-
-        elif long_cmd == 'child2':
-            '''
-            legacy version of child command, following after descendants2 command.
-            '''
-            if self.descendants2 is None:
-                print("Error: you need to run 'descendants2' command first")
-                ret['success'] = False
-            else:
-                idx = int(arg)
-                # max_child_specs = len(self.window_and_child_specs)
-                num_descendants2 = len(self.descendants2)
-                if idx < 0 or idx >= num_descendants2:
-                    print(f"invalid idx {idx}, must be between 0 and {num_descendants2-1}")
-                    ret['bad_input'] = True
-                    ret['success'] = False
-                else:
-                    criteria_dict = self.descendants2[idx]
-                    print(f"set current_window to current_window's child {idx}: {criteria_dict}")
-                    # extract args from child_window(...)
-
-                    code = f"self.current_window.{criteria_dict}"
-                    print(f"code={code}")
-                    self.current_window = eval(code, globals(), locals())
-                    print(f"use 'click' command to click the current_window.")
-                    print(f"use 'desc2' command to list the descendants2 of the current_window.")
-        elif long_cmd == 'click':
-            if self.current_window is None:
-                print("current_window is None, cannot click")
-                ret['bad_input'] = True
-            else:
-                if not self.click_window(self.current_window, **opt):
-                    self.current_window = None
-                    self.descendants = []  # clear descendants because current_window is gone or changed.
-
-                # if self.current_window is not None:
-                #     # after a successful click, we refresh our control identifiers tree.
-                #     self.refresh_window_specs()
-                #     ret['relist'] = True
-        elif long_cmd == 'connect':
-            '''
-            connect with title_re, title
-            connect=title_re=.*tianjunk.*
-            connect=title="tianjunk - Notepad"
-            '''
-            kv_pairs = tpsup.keyvaluetools.parse_keyvalue(arg)
-            conn_param_dict = {}
-            for kv in kv_pairs:
-                k = kv['key']
-                v = kv['value']
-                original = kv['original']
-                if k == 'title_re':
-                    if 'title' in conn_param_dict:
-                        raise ValueError(f"cannot have both title and title_re in {original}")
-                    conn_param_dict['title_re'] = v
-                elif k == 'title':
-                    if 'title_re' in conn_param_dict:
-                        raise ValueError(f"cannot have both title and title_re in {original}")
-                    conn_param_dict['title'] = v
-                else:
-                    raise ValueError(f"invalid connect arg {original}, must be title_re= or title=")
-                
-            if 'title_re' not in conn_param_dict and 'title' not in conn_param_dict:
-                raise ValueError(f"connect arg must have title_re= or title=")
-            
-            # at this point, syntax check is done.
-            if dryrun:
-                return ret
-            
-            print(f"connecting to window with {conn_param_dict}, backend={self.backend}")
-            self.app = Application(backend=self.backend)
-            print(f"app={pformat(self.app)}")
-
-            # if k == 'title_re':
-            #     result = self.app.connect(title_re=v)
-            # else:
-            #     result = self.app.connect(title=v)
-            result = self.app.connect(**conn_param_dict)
-            print(f"after connected, result={result}")
-            self.top_window = self.app.top_window()
-            self.top_window.wait('visible')
-            self.current_window = self.top_window
-            self.top_window.click_input()  # ensure the window is focused
-            sleep(1)
-            print(f"connected to window with {conn_param_dict}, top_window={self.top_window}")
-            # self.refresh_window_specs()
-        elif long_cmd == 'control_identifiers':
-            if self.current_window is None:
-                print("current_window is None, cannot get control identifiers")
-                ret['bad_input'] = True
-            else:
-                try:
-                    ci_string = self.get_control_identifiers(self.current_window)
-                    print(f"current_window control identifiers:\n{ci_string}")
-                except pywinauto.findwindows.ElementNotFoundError as e:
-                    print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
-                    ret['bad_input'] = True
-        elif long_cmd == 'current':
-            '''
-            print the current state:
-            top_window
-            current_window
-            '''
-            print(f"app.process={self.app.process}")
-
-            if self.top_window is None:
-                print("ERROR: top_window is None")
-                print("       use desktop and top/connect command first to connect to an app's top window.")
-                ret['bad_input'] = True
-            else:
-                print(f"top_window={self.get_window_spec(self.top_window)}")
-                print(f"current_window={self.get_window_spec(self.current_window)}")
-                print(f"top_window.process_id()={self.top_window.process_id() if self.top_window else None}")
-        
+                    
         elif long_cmd == 'desktop':
             '''
             list all top windows of the desktop.
@@ -1025,113 +1054,6 @@ class UiaEnv:
             if self.match_count > 0:
                 if scope1 == 'desktop':
                     print(f"scope1=desktop, use desktop+top or connect command to connect to the matched top window.")
-        elif long_cmd == 'list':
-                self.display()
-        elif long_cmd == 'child':
-            '''
-                child=<index>       # if integer, switch current_window to the 'descendants' index.
-                child=top           # switch current_window to top_window
-                child=child_spec    # switch current_window to top_window's child window matching child_spec.
-            '''
-
-            if self.top_window is None:
-                print("ERROR: top_window is None, cannot locate")
-                print("       use desktop and top/connect command first to connect to an app's top window.")
-                ret['bad_input'] = True
-                return ret
-            
-            if self.descendants is None:
-                print("ERROR: descendants is None, please run 'descendants' command first.")
-                ret['bad_input'] = True
-                return ret
-            
-            # if arg is integer, switch to that index in window_and_child_specs
-            if arg.isdigit():
-                idx = int(arg)
-                # max_child_specs = len(self.window_and_child_specs)
-                num_descendants = len(self.descendants)
-                if idx < 0 or idx >= num_descendants:
-                    print(f"invalid idx {idx}, must be between 0 and {num_descendants-1}")
-                    ret['bad_input'] = True
-                else:
-                    # w, which, criteria_dict1 = self.window_and_child_specs[idx]
-                    # print(f"exploring child {idx}: {criteria_dict1} from {which}")
-                    # # extract args from child_window(...)
-
-                    # code = f"self.{which}.{criteria_dict1}"
-                    # print(f"code={code}")
-                    # self.current_window = eval(code, globals(), locals())
-                    
-                    # result = self.locate_cmd_arg('click', '', **opt)
-                    # ret.update(result)
-                    self.current_window = self.descendants[idx]['window']
-                    self.descendants = None  # clear descendants because current_window is changed.
-                    print(f"switched current_window to child {idx}: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
-
-            elif arg.lower() == 'top':
-                self.current_window = self.top_window
-                self.descendants = None  # clear descendants because current_window is changed.
-                print(f"switched current_window to top_window: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
-            else:
-                '''
-                child_spec is a string like 
-                    title="OK" control_type="Button", 
-                    title_re=.*Notepad.*
-                    title="Untitled - Notepad" control_type=Edit
-                
-                keys can be:
-                    title
-                    title_re
-                    control_type
-                    class_name
-
-                quotes around title value are optional.
-
-                we need to parse the string into a dict.
-                '''
-                parts = tpsup.keyvaluetools.parse_keyvalue(v)
-
-                criteria_dict1 = {}
-                for p in parts:
-                    k, v = p.split('=', 1)
-                    k = k.strip()
-                    v = v.strip()
-
-                    # remove ", " if it is in the front of key
-                    # eg, in title=OK, control_type=Button
-                    k = re.sub(r',\s*', '', k)
-
-                    if k not in ['title', 'title_re', 'control_type', 'class_name']:
-                        raise ValueError(f"invalid child_spec key {k}, must be one of title, title_re, control_type, class_name")
-                    # remove quotes if any
-                    if (v.startswith('"') and v.endswith('"')) or \
-                        (v.startswith("'") and v.endswith("'")):
-                        v = v[1:-1]
-                    elif (v.startswith('"') and not v.endswith('"')) or \
-                            (v.startswith("'") and not v.endswith("'")):
-                        raise ValueError(f"unmatched quote in {k}={v}")
-                    criteria_dict1[k.strip()] = v.strip()
-                print(f"parsed child_spec = {criteria_dict1}")
-                # syntax check is done at this point.
-                if dryrun:
-                    return ret
-
-                self.current_window = self.top_window.child_window(**criteria_dict1)
-                if not self.click_window(self.current_window, **opt):
-                    self.current_window = None
-                    self.descendants = None  # clear descendants because current_window is gone or changed.
-                    print(f"failed to locate child_spec {criteria_dict1} from {k}")
-                    ret['bad_input'] = True
-                # if self.current_window is not None:
-                #     # after a successful click, we refresh our control identifiers tree.
-                #     self.refresh_window_specs()
-                #     ret['relist'] = True
-                # else:
-                
-                    # print(f"failed to locate child_spec {criteria_dict1} from {k}")
-                    # ret['bad_input'] = True
-        # elif long_cmd == 'refresh':
-        #     self.refresh_window_specs()
         elif long_cmd == 'start':
             '''
             when the start command spawns a new process for the window,
@@ -1240,7 +1162,6 @@ class UiaEnv:
                 
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
-                # self.refresh_window_specs()
         elif long_cmd == 'texts':
             '''
             texts
@@ -1269,6 +1190,8 @@ class UiaEnv:
             title_re
             title=unset
             title_re=unset
+
+            set title or title_re for 'start' command to use.
             '''
             if not arg:
                 # get title or title_re
@@ -1311,8 +1234,6 @@ class UiaEnv:
                     self.descendants = None  # clear descendants because current_window is changed.
                     print(f"set current_window to top_window")
                     print(f"use 'desc' + 'child' to explore descendants of current_window")
-                    # self.refresh_window_specs()
-                    # ret['relist'] = True
             else:
                 # set current_window to the top window of the desktop with index arg
                 if not self.top_windows_selector:
@@ -1359,14 +1280,14 @@ class UiaEnv:
                             self.current_window.click_input()  # ensure the window is focused
                             sleep(1)
                             print(f"use 'desc' + 'child' to explore descendants of current_window")
-                            
-                            # self.refresh_window_specs()
-                            # ret['relist'] = True
                         except pywinauto.findwindows.ElementNotFoundError as e:
                             print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                             ret['bad_input'] = True
                             ret['success'] = False
         elif long_cmd == 'type':
+            '''
+            type=string
+            '''
             # replace \n with {ENTER}
             arg = arg.replace('\n', '{ENTER}')
             self.current_window.type_keys(arg, with_spaces=True, pause=0.05)
@@ -1429,6 +1350,7 @@ class UiaEnv:
         
     def get_ci_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
         '''
+        get child specs from control_identifiers() output.
         return the list of child specs as strings.
         each child spec is like: child_window(title="Maximize", control_type="Button")
         '''
@@ -1490,12 +1412,6 @@ class UiaEnv:
                     # child_spec = child_spec.replace(f'title="{full_title}",','') # remove title part entirely
             children.append(child_spec)
         return children
-    
-    def display(self):
-        i = 0
-        for w, which, s in self.window_and_child_specs:
-            print(f"{i}: {which}.{s}")
-            i += 1
 
 def clean_text(s: str, **opt) -> str:
     '''
