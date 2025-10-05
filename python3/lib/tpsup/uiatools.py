@@ -6,7 +6,7 @@ from time import sleep
 import pywinauto
 from pywinauto.application import Application, WindowSpecification
 from pywinauto.controls.uiawrapper import UIAWrapper
-from tpsup.cmdtools import run_cmd
+
 
 from typing import Union
 import tpsup.locatetools
@@ -138,28 +138,6 @@ class UiaEnv:
                 - will not trigger re-connect, use 'connect' command to re-connect.
             ''',
         },
-        'descendants': {
-            'short': 'desc',
-            'has_dryrun': 1,
-            'usage': '''
-                list all descendant windows of the current window. 
-                showing parent-child relationship using indentation.
-                some children will only show after you click parent.
-                attributes:
-                    depth:     max depth of children, default 5
-                    count:     max number of descendants to list, default 100
-                    timeout:      default 2s
-                example:
-                    desktop
-                    conn=title="Program Manager"
-
-                    desc             # default depth=5
-                    desc=depth=1     # only the children of top window
-                    desc=timeout=2
-                to list descendants of top window, use 'top' command to switch 
-                    current window to top window first.
-            ''',
-        },
         'child': {
             'short': 'c',
             'need_arg': True,
@@ -172,6 +150,13 @@ class UiaEnv:
                     c=13
                     c=title="Untitled - Notepad" control_type="Edit"
                 ''',
+        },
+        'child2': {
+            'short': 'c2',
+            'need_arg': True,
+            'usage': '''
+                legacy version of child command, following after descendants2 command.
+            ''',
         },
         'click': {
             'short': 'cl',
@@ -207,6 +192,36 @@ class UiaEnv:
             'usage': '''
                 print the current window spec.
                 current
+            ''',
+        },
+        'descendants': {
+            'short': 'desc',
+            'has_dryrun': 1,
+            'usage': '''
+                list all descendant windows of the current window. 
+                showing parent-child relationship using indentation.
+                some children will only show after you click parent.
+                attributes:
+                    depth:     max depth of children, default 5
+                    count:     max number of descendants to list, default 100
+                    timeout:      default 2s
+                example:
+                    desktop
+                    conn=title="Program Manager"
+
+                    desc             # default depth=5
+                    desc=depth=1     # only the children of top window
+                    desc=timeout=2
+                to list descendants of top window, use 'top' command to switch 
+                    current window to top window first.
+            ''',
+        },
+        'descendants2': {
+            'short': 'desc2',
+            'has_dryrun': 1,
+            'usage': '''
+                legacy version of descendants command by extracting from self.window_and_child_specs
+                from control_identifiers() output.
             ''',
         },
         'desktop': {
@@ -691,26 +706,49 @@ class UiaEnv:
                 #     # print(f"dir(descendant_window)={dir(descendant_window)}")
                 #     # print(f"element_info={pformat(descendant_window.element_info)}")
                 #     # print(f"dir(element_info)={dir(descendant_window.element_info)}")
-        # elif long_cmd == 'child':
-        #     idx = int(arg)
-        #     # max_child_specs = len(self.window_and_child_specs)
-        #     num_descendants = len(self.descendants)
-        #     if idx < 0 or idx >= num_descendants:
-        #         print(f"invalid idx {idx}, must be between 0 and {num_descendants-1}")
-        #         ret['bad_input'] = True
-        #     else:
-        #         # w, which, criteria_dict1 = self.window_and_child_specs[idx]
-        #         # print(f"exploring child {idx}: {criteria_dict1} from {which}")
-        #         # # extract args from child_window(...)
+        elif long_cmd == 'descendants2':
+            '''
+            legacy version of descendants command by extracting from self.window_and_child_specs
+            from control_identifiers() output.
+            '''
+            if self.current_window is None:
+                print("current_window is None, cannot list descendants2")
+                print("use 'desktop' + 'top' or 'connect' command first to connect to an app's top window.")
+                ret['success'] = False
+            else:
+                self.descendants2 = self.get_ci_child_specs(self.current_window, debug=debug)
+                # print the descendants2
+                i = 0
+                for s in self.descendants2:
+                    print(f"{i} - {s}")
+                    i += 1
+            print(f"\nuse 'child2=<index>' to locate a descendant window and set it as current_window.")
 
-        #         # code = f"self.{which}.{criteria_dict1}"
-        #         # print(f"code={code}")
-        #         # self.current_window = eval(code, globals(), locals())
-                
-        #         # result = self.locate_cmd_arg('click', '', **opt)
-        #         # ret.update(result)
-        #         self.current_window = self.descendants[idx]['window']
-        #         print(f"switched current_window to child {idx}: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
+        elif long_cmd == 'child2':
+            '''
+            legacy version of child command, following after descendants2 command.
+            '''
+            if self.descendants2 is None:
+                print("Error: you need to run 'descendants2' command first")
+                ret['success'] = False
+            else:
+                idx = int(arg)
+                # max_child_specs = len(self.window_and_child_specs)
+                num_descendants2 = len(self.descendants2)
+                if idx < 0 or idx >= num_descendants2:
+                    print(f"invalid idx {idx}, must be between 0 and {num_descendants2-1}")
+                    ret['bad_input'] = True
+                    ret['success'] = False
+                else:
+                    criteria_dict = self.descendants2[idx]
+                    print(f"set current_window to current_window's child {idx}: {criteria_dict}")
+                    # extract args from child_window(...)
+
+                    code = f"self.current_window.{criteria_dict}"
+                    print(f"code={code}")
+                    self.current_window = eval(code, globals(), locals())
+                    print(f"use 'click' command to click the current_window.")
+                    print(f"use 'desc2' command to list the descendants2 of the current_window.")
         elif long_cmd == 'click':
             if self.current_window is None:
                 print("current_window is None, cannot click")
@@ -1027,12 +1065,12 @@ class UiaEnv:
                     # result = self.locate_cmd_arg('click', '', **opt)
                     # ret.update(result)
                     self.current_window = self.descendants[idx]['window']
-                    self.descendants = []  # clear descendants because current_window is changed.
+                    self.descendants = None  # clear descendants because current_window is changed.
                     print(f"switched current_window to child {idx}: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
 
             elif arg.lower() == 'top':
                 self.current_window = self.top_window
-                self.descendants = []  # clear descendants because current_window is changed.
+                self.descendants = None  # clear descendants because current_window is changed.
                 print(f"switched current_window to top_window: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
             else:
                 '''
@@ -1081,7 +1119,7 @@ class UiaEnv:
                 self.current_window = self.top_window.child_window(**criteria_dict1)
                 if not self.click_window(self.current_window, **opt):
                     self.current_window = None
-                    self.descendants = []  # clear descendants because current_window is gone or changed.
+                    self.descendants = None  # clear descendants because current_window is gone or changed.
                     print(f"failed to locate child_spec {criteria_dict1} from {k}")
                     ret['bad_input'] = True
                 # if self.current_window is not None:
@@ -1143,7 +1181,7 @@ class UiaEnv:
             if self.top_window :
                 print(f"after start, top_window={self.top_window}")
                 self.current_window = self.top_window
-                self.descendants = []  # clear descendants because current_window is changed.
+                self.descendants = None  # clear descendants because current_window is changed.
                 self.top_window.wait('visible')
                 self.top_window.click_input()  # ensure the window is focused
                 sleep(1)
@@ -1192,7 +1230,7 @@ class UiaEnv:
                     return ret
                     
                 self.current_window = self.top_window
-                self.descendants = []  # clear descendants because current_window is changed.
+                self.descendants = None  # clear descendants because current_window is changed.
 
                 # AttributeError: 'UIAWrapper' object has no attribute 'wait'
                 # self.top_window.wait('visible')
@@ -1270,8 +1308,9 @@ class UiaEnv:
                     print("       use desktop and top/connect command first to connect to an app's top window.")
                 else:
                     self.current_window = self.top_window
-                    self.descendants = []  # clear descendants because current_window is changed.
+                    self.descendants = None  # clear descendants because current_window is changed.
                     print(f"set current_window to top_window")
+                    print(f"use 'desc' + 'child' to explore descendants of current_window")
                     # self.refresh_window_specs()
                     # ret['relist'] = True
             else:
@@ -1279,17 +1318,20 @@ class UiaEnv:
                 if not self.top_windows_selector:
                     print("top_windows_selector is empty, please run 'desktop' command first")
                     ret['bad_input'] = True
+                    ret['success'] = False
                 else:
                     try:
                         idx = int(arg)
                     except ValueError:
                         print(f"invalid index {arg}, must be an integer")
                         ret['bad_input'] = True
+                        ret['success'] = False
                         return ret
                     max_idx = len(self.top_windows_selector) - 1
                     if idx < 0 or idx > max_idx:
                         print(f"invalid index {idx}, must be between 0 and {max_idx}")
                         ret['bad_input'] = True
+                        ret['success'] = False
                     else:
                         w = self.top_windows_selector[idx]['window']
                         title = self.top_windows_selector[idx]['title']
@@ -1310,18 +1352,20 @@ class UiaEnv:
                         # we have to connect to the window because it is a separate process.
                         self.top_window = self.app.connect(handle=w.handle).window(handle=w.handle)
                         self.current_window = self.top_window
-                        self.descendants = []  # clear descendants because current_window is changed.
+                        self.descendants = None  # clear descendants because current_window is changed.
 
                         try:
                             self.current_window.wait('visible')
                             self.current_window.click_input()  # ensure the window is focused
                             sleep(1)
+                            print(f"use 'desc' + 'child' to explore descendants of current_window")
                             
                             # self.refresh_window_specs()
                             # ret['relist'] = True
                         except pywinauto.findwindows.ElementNotFoundError as e:
                             print(f"ElementNotFoundError: current_window is not valid, either closed or you need to wait longer.")
                             ret['bad_input'] = True
+                            ret['success'] = False
         elif long_cmd == 'type':
             # replace \n with {ENTER}
             arg = arg.replace('\n', '{ENTER}')
@@ -1383,7 +1427,7 @@ class UiaEnv:
             'title_re': title_re,
         }
         
-    def get_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
+    def get_ci_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
         '''
         return the list of child specs as strings.
         each child spec is like: child_window(title="Maximize", control_type="Button")
