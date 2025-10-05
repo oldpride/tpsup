@@ -243,24 +243,26 @@ class UiaEnv:
 
                 criterias are key=value pairs separated by space.
                     action=<action>
+                    auto_id=<automation_id>
                     class=<class_name>
+                    pid=<process_id>
                     scope=<scope> 
                     title=<title>
                     title_re=<title_re>  
                     type=<control_type>
-                    pid=<process_id>
-                    auto_id=<automation_id>
 
                     # search setting
                     timeout=<seconds>
             
                 2nd level criterias
-                    scope2=<scope2>
-                    title2=<title2>
-                    title_re2=<title_re2>
-                    type2=<control_type2>
-                    class2=<class_name2>
-                    auto_id2=<automation_id2>
+                    action2=<action>
+                    auto_id2=<automation_id>
+                    class2=<class_name>
+                    scope2=<scope> 
+                    title2=<title>
+                    title_re2=<title_re>  
+                    type2=<control_type>
+
                 2nd level criteria is needed when, 
                     for example, we want to close a error popup.
                         find=title="Close" control_type="Button"
@@ -268,8 +270,15 @@ class UiaEnv:
                     therefore, we need to narrow down with
                         find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
 
-                'action' will act on level 2 matched windows if level 2 criteria is given;
-                otherwise, 'action' will act on level 1 matched windows.
+                action can be:
+                    click   - click the find results
+                    type    - type text into the find results
+
+                class/class2
+                    the class_name to match, eg, Notepad, Edit, etc.
+
+                pid
+                    the process_id of the window to match
 
                 scope can be:
                     desktop  - search all desktop windows
@@ -296,14 +305,6 @@ class UiaEnv:
                 type/type2
                     is the control_type to match, eg, Window, Button, Edit, Text, etc.
 
-                class/class2
-                    the class_name to match, eg, Notepad, Edit, etc.
-
-                action can be:
-                    print   - print the find results
-                    click   - click the find results
-                    type    - type text into the find results
-
                 examples:
                     find=title_re=.*tianjunk.* type=any action=print
                     find=scope=desktop title_re=.*notepad.* type=Window action=print
@@ -313,8 +314,7 @@ class UiaEnv:
                     find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
                     find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button" action=click
 
-                if search scope was desktop, you can use 'connect=title=...' to connect to the matched top window.
-                
+                if search scope was desktop, you can use 'connect=title=...' to connect to the matched top window.       
             ''',
         },        
         'start': {
@@ -488,13 +488,20 @@ class UiaEnv:
                 return 0
 
         # if we reach here, we have a match. always print it with top window info
-        top_title = clean_text(search_top_window.window_text())
-        top_ct = search_top_window.element_info.control_type
-        top_class = search_top_window.class_name()
-        top_pid = search_top_window.process_id()
+        print()
+        print(f"under top window={self.get_window_spec(search_top_window, format="str")}")
+        print(f"  matched window={self.get_window_spec(w1, format="str")}")
 
-        print(f"\nunder top window: title=\"{top_title}\" control_type={top_ct} class_name={top_class} pid={top_pid}")
-        print(f"  matched window: title=\"{title}\" control_type={ct} class_name={class_name}")
+        if action := mc1.get('action', None):
+            if action == 'click':
+                self.click_window(w1, **opt)
+            elif action.startswith('type='):
+                to_type = mc1['action'][5:]
+                print(f"typing '{to_type}' into window: {w1}, title=\"{clean_text(title)}\" control_type={clean_text(ct)} class_name={class_name}")
+                w1.type_keys(to_type, with_spaces=True, set_foreground=True)
+                sleep(1)
+            else:
+                raise ValueError(f"unknown search action {mc1['action']}")
 
         if level2_dict:
             scope2 = level2_dict['scope2']
@@ -527,17 +534,7 @@ class UiaEnv:
         else:
             match_count = 1
 
-        if mc1.get('action', None) == None or mc1['action'].lower() == 'print':
-            pass # already printed above 
-        elif mc1['action'].lower() == 'click':
-            self.click_window(w1, **opt)
-        elif mc1['action'].lower().startswith('type='):
-            to_type = mc1['action'][5:]
-            print(f"typing '{to_type}' into window: {w1}, title=\"{clean_text(title)}\" control_type={clean_text(ct)} class_name={class_name}")
-            w1.type_keys(to_type, with_spaces=True, set_foreground=True)
-            sleep(1)
-        else:
-            raise ValueError(f"unknown search action {mc1['action']}")
+
         
         return match_count
 
@@ -904,7 +901,6 @@ class UiaEnv:
         elif long_cmd == 'find':
             '''
             find=criterias
-            find=scope=<scope> title_re=<title_re> title=<title> type=<control_type> class=<class_name> action=<action>
 
             separator is space.
             '''
@@ -916,7 +912,11 @@ class UiaEnv:
             scope1 = 'top' # default scope
             scope2 = None
 
-            action = None
+            action1 = None
+            action2 = None
+
+            pid = None
+
             timeout = 5 # seconds
 
             for c in criteria_list:
@@ -924,7 +924,33 @@ class UiaEnv:
                 v = c['value']
                 original = c['original']
 
-                if k == 'scope':
+                if k == 'action':
+                    if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
+                        raise ValueError(f"invalid action={v} in criteria={original}, must be one of print, click, type=...")
+                    action1 = v
+                    criteria_dict1['action'] = action1
+                elif k == 'action2':
+                    if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
+                        raise ValueError(f"invalid action2={v} in criteria={original}, must be one of print, click, type=...")
+                    action2 = v
+                    criteria_dict2['action'] = action2
+                elif k == 'auto_id':
+                    criteria_dict1['automation_id'] = v
+                elif k == 'auto_id2':
+                    criteria_dict2['automation_id'] = v
+                elif k == 'class':
+                    criteria_dict1['class_name'] = v
+                elif k == 'class2':
+                    criteria_dict2['class_name'] = v
+                elif k == 'pid':
+                    try:
+                        pid = int(v)
+                        if pid <= 0:
+                            raise ValueError
+                    except ValueError:
+                        raise ValueError(f"invalid pid={v} in criteria={original}, must be a positive integer")
+                    criteria_dict1['process_id'] = pid
+                elif k == 'scope':
                     if v not in ['desktop', 'top', 'current']:
                         raise ValueError(f"invalid scope={v} in criteria={original}, must be one of desktop, top, current")
                     scope1 = v
@@ -960,26 +986,6 @@ class UiaEnv:
                     criteria_dict1['control_type'] = v
                 elif k == 'type2':
                     criteria_dict2['control_type'] = v
-                elif k == 'class':
-                    criteria_dict1['class_name'] = v
-                elif k == 'class2':
-                    criteria_dict2['class_name'] = v
-                elif k == 'action':
-                    if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
-                        raise ValueError(f"invalid action={v} in criteria={original}, must be one of print, click, type=...")
-                    action = v
-                elif k == 'pid':
-                    try:
-                        pid = int(v)
-                        if pid <= 0:
-                            raise ValueError
-                    except ValueError:
-                        raise ValueError(f"invalid pid={v} in criteria={original}, must be a positive integer")
-                    criteria_dict1['process_id'] = pid
-                elif k == 'auto_id':
-                    criteria_dict1['automation_id'] = v
-                elif k == 'auto_id2':
-                    criteria_dict2['automation_id'] = v
                 else:
                     raise ValueError(f"invalid criteria key={k} in criteria={original}")
             
@@ -991,14 +997,17 @@ class UiaEnv:
             if criteria_dict2 and not scope2:
                 scope2 = 'all' # default scope2
 
+            if scope1 != 'desktop' and pid is not None:
+                raise ValueError(f"pid can only be used with scope=desktop, got scope={scope1}")
+
             if scope2:
-                criteria_dict2['action'] = action
+                # criteria_dict2['action'] = action
                 level2_dict = {
                     'scope2': scope2,
                     'criteria_dict2': criteria_dict2,
                 }
             else:
-                criteria_dict1['action'] = action
+                # criteria_dict1['action'] = action
                 level2_dict = None
                 
             # at this point, syntax check is done.
@@ -1049,7 +1058,7 @@ class UiaEnv:
                     w_class = w.class_name()
                     w_auto_id = w.element_info.automation_id
                     w_pid = w.process_id()
-                    print(f"search timeout after {timeout}s, skipping children of window title={w_title}, control_type={w_ct}, class_name={w_class}, auto_id={w_auto_id}, pid={w_pid}")
+                    print(f"search timeout after {timeout}s, skipping children of window={self.get_window_spec(w)}")
             print(f"-------------- search results end ----------------\n")
             if self.match_count > 0:
                 if scope1 == 'desktop':
@@ -1302,7 +1311,7 @@ class UiaEnv:
         print("locate_ditct() is not implemented yet")
         return ret
 
-    def get_window_spec(self, w: WindowSpecification, **opts) -> dict:
+    def get_window_spec(self, w: WindowSpecification, format:str = "dict", **opts) -> Union[dict, str]:
         '''
         return the window spec as a dict.
         example:
@@ -1318,6 +1327,8 @@ class UiaEnv:
         full_title = clean_text(w.window_text())
         ct = w.element_info.control_type
         cn = w.element_info.class_name
+        pid = w.process_id()
+        auto_id = w.element_info.automation_id
         title_re = None
 
         # title_re is a shorter version of title, in particular, if title is too long.
@@ -1341,12 +1352,26 @@ class UiaEnv:
             # replace the title part in child_spec
             title_re=f".*{longest_short_title}.*"
 
-        return {
-            'title': full_title,
-            'control_type': ct,
-            'class_name': cn,
-            'title_re': title_re,
-        }
+        if format == 'dict':
+            return {
+                'title': full_title,
+                'title_re': title_re,
+                'control_type': ct,
+                'class_name': cn,
+                'auto_id': auto_id,
+                'pid': pid,
+            }
+        elif format == 'str':
+            '''
+            return the window spec as a string.
+            example:
+                title_re=".*Notepad.*", 
+                title="Untitled - Notepad", control_type="Window", class_name="Notepad", auto_id="", pid=12345
+            '''
+            return f'title_re="{title_re}", title="{full_title}", control_type="{ct}", class_name="{cn}", auto_id="{auto_id}", pid={pid}'
+        else:
+            raise ValueError(f"invalid format {format}, must be dict or str")
+      
         
     def get_ci_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
         '''

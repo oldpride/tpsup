@@ -56,7 +56,7 @@ def code(all_cfg, known, **opt):
     then locate the Close button of the popup, and click it.
     '''
     steps = [
-        f'find=title_re=".*PuTTY.*Error.*" scope=desktop timeout=3 title2="OK" type2=Button action=click',
+        f'find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" type2=Button action2=click',
     ]
 
     print(f'steps = [')
