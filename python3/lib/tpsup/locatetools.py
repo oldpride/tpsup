@@ -52,7 +52,6 @@ ret0 = {
 class LocateEnv:
     caller_locate_cmd_arg: callable = None
     caller_locate_dict: callable = None
-    caller_display: callable = None
     caller_usage_by_cmd: dict = {}
     combined_usage_by_long: dict = {}
     combined_usage_by_long_and_short: dict = {}
@@ -225,8 +224,7 @@ class LocateEnv:
 
                 # for explore()
                 locate_usage_by_cmd: dict = {},    
-                display: callable = None,  
-                printables: list = [], 
+                printables: list = [],
 
                  **opt):
         
@@ -235,8 +233,6 @@ class LocateEnv:
         
         self.caller_locate_cmd_arg = locate_cmd_arg
         self.caller_locate_dict = locate_dict
-
-        self.caller_display = display
 
         if printables:
             self.caller_printables = printables
@@ -1115,9 +1111,6 @@ class LocateEnv:
         prompt = self.get_prompt()
 
         while True:
-            if self.caller_display:
-                self.caller_display()
-
             while True:
                 user_input = input(f"{prompt}")
                 print()
