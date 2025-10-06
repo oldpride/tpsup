@@ -56,6 +56,9 @@ def code(all_cfg, known, **opt):
     then locate the Close button of the popup, and click it.
     '''
     steps = [
+        # we need 2 clicks
+        # 1st click the popup window, to bring it to front
+        # 2nd click the Close button of the popup window
         f'find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" type2=Button action2=click',
     ]
 

@@ -184,6 +184,7 @@ class UiaEnv:
                 conn=title_re=.*tianjunk.* 
                 conn=title="tianjunk - Notepad"
                 conn=title_re=.*/Users/tian # for cygwin mintty
+                conn=pid=1234  # process id of the top window
                 ''',
         },
         'current': {
@@ -230,7 +231,11 @@ class UiaEnv:
                 'connect' command can be used to connect to one of the top windows.
                 examples:
                     desk         # list all top windows of the desktop
-                    desk=notepad # list all top windows of the desktop whose title contains 'notepad'
+                    desk=title_re=.*notepad.*  # list all top windows with title matching the title_re
+                    desk=re=.*notepad.*  # same as above
+                    desk=title="Program Manager"
+                    desk=class=Shell_TrayWnd # class name of Windows taskbar
+                    desk=pid=1234  # process id of the top window
             ''',
         },
         'find': {
@@ -268,8 +273,7 @@ class UiaEnv:
                         find=title="Close" control_type="Button"
                     but this critera is too broad, because there may be many buttons with title="Close".
                     therefore, we need to narrow down with
-                        find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
-
+                        find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" type2=Button action2=click
                 action can be:
                     click   - click the find results
                     type    - type text into the find results
@@ -312,8 +316,7 @@ class UiaEnv:
                     find=scope=current title_re=.*notepad.* type=Edit action=type=hello{ENTER}
                     find=title_re=".*Connection timed out.*" scope=desktop # find putty error dialog
                     find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
-                    find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button" action=click
-
+                    find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" type2=Button action2=click
                 if search scope was desktop, you can use 'connect=title=...' to connect to the matched top window.       
             ''',
         },        
@@ -625,6 +628,8 @@ class UiaEnv:
                     title_re
                     control_type
                     class_name
+                    pid
+                    auto_id
 
                 quotes around title value are optional.
 
@@ -699,8 +704,10 @@ class UiaEnv:
         elif long_cmd == 'connect':
             '''
             connect with title_re, title
-            connect=title_re=.*tianjunk.*
-            connect=title="tianjunk - Notepad"
+            conn=title_re=.*tianjunk.*
+            conn=title="tianjunk - Notepad"
+            conn=class=Notepad
+            conn=pid=1234  # process id of the top window
             '''
             kv_pairs = tpsup.keyvaluetools.parse_keyvalue(arg)
             conn_param_dict = {}
@@ -716,6 +723,10 @@ class UiaEnv:
                     if 'title_re' in conn_param_dict:
                         raise ValueError(f"cannot have both title and title_re in {original}")
                     conn_param_dict['title'] = v
+                elif k == 'pid':
+                    conn_param_dict['process'] = int(v)
+                elif k == 'class':
+                    conn_param_dict['class_name'] = v
                 else:
                     raise ValueError(f"invalid connect arg {original}, must be title_re= or title=")
                 
@@ -869,10 +880,50 @@ class UiaEnv:
             'connect' command can be used to connect to one of the top windows.
             examples:
                 desk         # list all top windows of the desktop
-                desk=notepad # list all top windows of the desktop whose title contains 'notepad'
+                desk=title_re=.*notepad.*  # list all top windows with title matching the title_re
+                desk=title="Program Manager"
+                desk=class=Shell_TrayWnd # class name of Windows taskbar
+                desk=pid=1234  # process id of the top window
+                desk=auto_id=some_id  # automation id of the top window
             '''
-            title_filter = arg if arg else None
-            print(f"listing all top windows of the desktop, title_filter={title_filter}")
+            # parse arg for match criteria
+            if arg:
+                criteria_list = tpsup.keyvaluetools.parse_keyvalue(arg)
+            else:
+                criteria_list = []
+            criteria_dict = {}
+
+            for c in criteria_list:
+                k = c['key']
+                v = c['value']
+                original = c['original']
+                if k not in ['auto_id', 'class', 'pid', 'title', 'title_re', 're', 'type']:
+                    raise ValueError(f"invalid desktop arg {original}, must be title_re=, title=, class=, pid=, auto_id=")
+
+                if k == 'auto_id':
+                    criteria_dict['automation_id'] = v
+                elif k == 'class':
+                    criteria_dict['class_name'] = v
+                elif k == 'type':
+                    criteria_dict['control_type'] = v
+                elif k == 'pid':
+                    try:
+                        pid = int(v)
+                        if pid <= 0:
+                            raise ValueError
+                    except ValueError:
+                        raise ValueError(f"invalid pid={v} in {original}, must be a positive integer")
+                    criteria_dict['process_id'] = pid
+                elif k == 'title':
+                    criteria_dict['title'] = v
+                elif k == 'title_re' or k == 're':
+                    if 'title' in criteria_dict:
+                        raise ValueError(f"cannot have both title and title_re in {original}")
+                    criteria_dict['title_re'] = v
+                else:
+                    raise ValueError(f"invalid desktop arg {original}, must be title_re=, title=, class=, pid=, auto_id=")
+            
+            print(f"listing all top windows of the desktop, match criteria={criteria_dict}")
             top_windows: list[pywinauto.WindowSpecification] = self.desktop.windows()
             self.top_windows_selector = []
             i = 0
@@ -884,19 +935,42 @@ class UiaEnv:
                 auto_id = w.element_info.automation_id
                 if debug:
                     print(f"desktop top window={pformat(w)}")
-                if title_filter is None or re.search(title_filter, title, re.IGNORECASE):
-                    self.top_windows_selector.append(
-                        {
-                            'window': w, 
-                            'title': title, 
-                            'control_type': control_type, 
-                            'class_name': class_name, 
-                            'pid': pid,
-                            'auto_id': auto_id,
-                        }
-                    )
-                    print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={control_type}, class_name={class_name}, pid={pid}, auto_id={auto_id}")
-                    i += 1
+
+                # apply match criteria
+                if 'automation_id' in criteria_dict:
+                    if criteria_dict['automation_id'].lower() != 'any' and \
+                        criteria_dict['automation_id'].lower() != auto_id.lower():
+                        continue
+                if 'class_name' in criteria_dict:
+                    if criteria_dict['class_name'].lower() != 'any' and \
+                        criteria_dict['class_name'].lower() != class_name.lower():
+                        continue
+                if 'control_type' in criteria_dict:
+                    if criteria_dict['control_type'].lower() != 'any' and \
+                        criteria_dict['control_type'].lower() != control_type.lower():
+                        continue
+                if 'process_id' in criteria_dict:
+                    if int(criteria_dict['process_id']) != pid:
+                        continue
+                if 'title' in criteria_dict:
+                    if criteria_dict['title'].lower() != 'any' and \
+                        criteria_dict['title'].lower() != title.lower():
+                        continue
+                if 'title_re' in criteria_dict:
+                    if not re.search(criteria_dict['title_re'], title, re.IGNORECASE):
+                        continue       
+                self.top_windows_selector.append(
+                    {
+                        'window': w, 
+                        'title': title, 
+                        'control_type': control_type, 
+                        'class_name': class_name, 
+                        'pid': pid,
+                        'auto_id': auto_id,
+                    }
+                )
+                print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={control_type}, class_name={class_name}, pid={pid}, auto_id={auto_id}")
+                i += 1
             print(f"\nuse top=<index> or connect=title=... to connect to one of the top windows.")
         elif long_cmd == 'find':
             '''
