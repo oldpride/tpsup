@@ -5,6 +5,7 @@ from typing import Union
 import tpsup.uiatools
 from pprint import pformat
 import tpsup.sitetools
+import tpsup.pstools
 
 our_cfg = {
     'module': 'tpsup.uiatools',
@@ -64,13 +65,19 @@ def code(all_cfg, known, **opt):
     if action == 'add':
         # get siteenv command from env
         putty_key_files = siteEnv.get_env('putty_key_files')
-        putty_key_passphrase = siteEnv.get_env('putty_key_passphrase', '')
+        putty_key_passphrase = siteEnv.get_env('putty_key_passphrase')
         if not putty_key_files:
             raise Exception(f'putty_key_files not defined in site env {caller}')
         
+        # check whether pageant.exe is already running
+        pageant_running = tpsup.pstools.check_procs(['pageant.exe'])
+        if pageant_running:
+            print(f'pageant.exe is already running. "pkill.cmd pageant.exe" to stop it first.')
+            exit(0)
+        
         steps = [
             # start pageant with putty_key_files
-            f'start=path=pageant.exe {putty_key_files}',
+            f'start=pageant.exe {putty_key_files}',
 
             # connect to pageant window
             'connect=title=Pageant',

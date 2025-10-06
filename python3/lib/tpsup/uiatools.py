@@ -179,12 +179,21 @@ class UiaEnv:
             'need_arg': True,
             'has_dryrun': True,
             'usage': '''
-                connect with title_re, title
+                connect with title_re, title, pid, auto_id, class, type
                 examples:
+                optionally run 'desktop' command to list top windows first.
                 conn=title_re=.*tianjunk.* 
+                conn=re=.*tianjunk.*   # same as above
                 conn=title="tianjunk - Notepad"
                 conn=title_re=.*/Users/tian # for cygwin mintty
                 conn=pid=1234  # process id of the top window
+                    note: some processes may not have a top window, you would get 
+                        RuntimeError: No windows for that process could be found
+                conn=auto_id=2 # automation_id
+                conn=class=Notepad # class_name
+                conn=type=Window # control_type
+                
+                
                 ''',
         },
         'current': {
@@ -705,9 +714,11 @@ class UiaEnv:
             '''
             connect with title_re, title
             conn=title_re=.*tianjunk.*
+            conn=re=.*tianjunk.*    # same as above
             conn=title="tianjunk - Notepad"
             conn=class=Notepad
             conn=pid=1234  # process id of the top window
+            conn=auto_id=2 # automation_id
             '''
             kv_pairs = tpsup.keyvaluetools.parse_keyvalue(arg)
             conn_param_dict = {}
@@ -715,7 +726,13 @@ class UiaEnv:
                 k = kv['key']
                 v = kv['value']
                 original = kv['original']
-                if k == 'title_re':
+                if k == 'auto_id':
+                    conn_param_dict['automation_id'] = v
+                elif k == 'class_name' or k == 'class':
+                    conn_param_dict['class_name'] = v
+                elif k == 'pid':
+                    conn_param_dict['process'] = int(v)
+                elif k == 'title_re' or k == 're':
                     if 'title' in conn_param_dict:
                         raise ValueError(f"cannot have both title and title_re in {original}")
                     conn_param_dict['title_re'] = v
@@ -723,16 +740,11 @@ class UiaEnv:
                     if 'title_re' in conn_param_dict:
                         raise ValueError(f"cannot have both title and title_re in {original}")
                     conn_param_dict['title'] = v
-                elif k == 'pid':
-                    conn_param_dict['process'] = int(v)
-                elif k == 'class':
-                    conn_param_dict['class_name'] = v
+                elif k == 'type' or k == 'control_type':
+                    conn_param_dict['control_type'] = v              
                 else:
-                    raise ValueError(f"invalid connect arg {original}, must be title_re= or title=")
+                    raise ValueError(f"invalid connect key={k} in arg={original}")
                 
-            if 'title_re' not in conn_param_dict and 'title' not in conn_param_dict:
-                raise ValueError(f"connect arg must have title_re= or title=")
-            
             # at this point, syntax check is done.
             if dryrun:
                 return ret
@@ -1152,6 +1164,7 @@ class UiaEnv:
             # save the list of top windows of the desktop before starting the app
             desktop_top_windows_before: list[pywinauto.WindowSpecification] = self.desktop.windows()
             self.app.start(arg)
+            print(f"started app with command: {arg}. sleeping for 2 seconds...")
             sleep(2) # wait for the app to start
 
             # save the list of top windows of the desktop after starting the app
@@ -1174,14 +1187,27 @@ class UiaEnv:
             self.top_window = None
             self.current_window = None
 
-            try:
-                self.top_window = self.app.top_window()
-            except RuntimeError as e:
-                print(f"RuntimeError: {e}")
-                # if the error is "No windows for that process could be found"
-                if "No windows for that process could be found" in str(e):
-                    print(f"seeing error 'No windows for that process could be found', likely due to app spawning a new process for the window.")
-                    print(f"we will search for it in new windows of the desktop.")
+            print(f"after start, connecting to the new top window of the app's process.")
+            # app.top_window() can take long time if the the new app spawn another process.
+            # therefore, we set timeout here
+            timeout = 5
+            
+            def slow_func():
+                try:
+                    self.top_window = self.app.top_window()
+                except RuntimeError as e:
+                    print(f"RuntimeError: {e}")
+                    # if the error is "No windows for that process could be found"
+                    if "No windows for that process could be found" in str(e):
+                        print(f"seeing error 'No windows for that process could be found', likely due to app spawning a new process for the window.")
+                        print(f"we will search for it in new windows of the desktop.")
+
+            thread = threading.Thread(target=slow_func)
+            thread.start()
+            thread.join(timeout=timeout)
+            if thread.is_alive():
+                print(f"self.app.top_window() timeout after {timeout}s")
+                self.top_window = None
 
             if self.top_window :
                 print(f"after start, top_window={self.top_window}")

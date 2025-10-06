@@ -106,15 +106,20 @@ def kill_procs(procs: list, **opt):
         print(f"cmd={cmd}")
         os.system(cmd)
 
-def check_procs(procs: list, kill=False, **opt):
+def check_procs(procs: list, kill=False, **opt) -> list:
+    running_procs = []
     for proc in procs:
-        print(f"check whether {proc} is still running")
+        print(f"check whether {proc} is running")
         if tpsup.pstools.ps_grep(f"{proc}", printOutput=1):
-            print(f"saw leftover {proc}\n")
+            print(f"{proc} is running\n")
+            running_procs.append(proc)
+            # default not to kill it because it takes time to start up
+            if kill:
+                kill_procs([proc], **opt)
+        else:
+            print(f"{proc} is NOT running\n")
 
-        # try not to kill it because it takes time to start up
-        if kill:
-            kill_procs([proc], **opt)
+    return running_procs
 
 def main():
 
