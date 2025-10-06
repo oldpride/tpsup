@@ -44,6 +44,7 @@ def code(all_cfg, known, **opt):
 
     dryrun = opt.get('dryrun', 0)
     debug = opt.get('debug', 0)
+    action = opt['action']
 
     explore = opt.get('explore', 0)
 
@@ -51,29 +52,34 @@ def code(all_cfg, known, **opt):
 
     # steps = known['REMAININGARGS']
 
+    # get program name
+    caller = opt['caller']
+
     # remove .new, .old from caller
     caller = caller.split('.')[0]
     print(f'caller = {caller}')
     siteEnv = tpsup.sitetools.SiteEnv(caller)
     siteEnv.load_env(debug=debug)
 
+    if action == 'add':
+        # get siteenv command from env
+        putty_key_files = siteEnv.get_env('putty_key_files')
+        putty_key_passphrase = siteEnv.get_env('putty_key_passphrase', '')
+        if not putty_key_files:
+            raise Exception(f'putty_key_files not defined in site env {caller}')
+        
+        steps = [
+            # start pageant with putty_key_files
+            f'start=path=pageant.exe {putty_key_files}',
 
-    # get siteenv command from env
-    putty_key_files = siteEnv.get_env('putty_key_files')
-    putty_key_passphrase = siteEnv.get_env('putty_key_passphrase', '')
-    if not putty_key_files:
-        raise Exception(f'putty_key_files not defined in site env {caller}')
-    
-    steps = [
-        # start pageant with putty_key_files
-        f'start=path=pageant.exe {putty_key_files}',
+            # connect to pageant window
+            'connect=title=Pageant',
 
-        # connect to pageant window
-        'connect=title=Pageant',
-
-        # input passphrase + Enter
-        f'type={putty_key_passphrase}' + '{ENTER}',
-    ]
+            # input passphrase + Enter
+            f'type={putty_key_passphrase}' + '{ENTER}',
+        ]
+    else:
+        raise Exception(f'unknown action={action}, must be add')
 
     print(f'steps = [')
     for step in steps:
