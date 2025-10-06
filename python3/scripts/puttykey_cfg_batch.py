@@ -80,7 +80,7 @@ def code(all_cfg, known, **opt):
             f'start=pageant.exe {putty_key_files}',
 
             # connect to pageant window
-            'connect=title=Pageant',
+            'connect=title_re=Pageant.*',
 
             # input passphrase + Enter
             f'type={putty_key_passphrase}' + '{ENTER}',
