@@ -644,7 +644,7 @@ class UiaEnv:
 
                 we need to parse the string into a dict.
                 '''
-                parts = tpsup.keyvaluetools.parse_keyvalue(v)
+                parts = tpsup.keyvaluetools.parse_keyvalue(arg)
 
                 criteria_dict1 = {}
                 for p in parts:
@@ -981,7 +981,7 @@ class UiaEnv:
                         'auto_id': auto_id,
                     }
                 )
-                print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={control_type}, class_name={class_name}, pid={pid}, auto_id={auto_id}")
+                print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={control_type} class_name={class_name} pid={pid} auto_id={auto_id}")
                 i += 1
             print(f"\nuse top=<index> or connect=title=... to connect to one of the top windows.")
         elif long_cmd == 'find':
@@ -1468,7 +1468,7 @@ class UiaEnv:
                 title_re=".*Notepad.*", 
                 title="Untitled - Notepad", control_type="Window", class_name="Notepad", auto_id="", pid=12345
             '''
-            return f'title_re="{title_re}", title="{full_title}", control_type="{ct}", class_name="{cn}", auto_id="{auto_id}", pid={pid}'
+            return f'title_re="{title_re}" title="{full_title}" control_type={ct} class_name={cn} auto_id={auto_id} pid={pid}'
         else:
             raise ValueError(f"invalid format {format}, must be dict or str")
       
