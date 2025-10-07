@@ -603,14 +603,16 @@ class UiaEnv:
                 ret['bad_input'] = True
                 return ret
             
-            if self.descendants is None:
-                print("ERROR: descendants is None, please run 'descendants' command first.")
-                ret['bad_input'] = True
-                return ret
+
             
             # if arg is integer, switch to that index in window_and_child_specs
             if arg.isdigit():
                 idx = int(arg)
+
+                if self.descendants is None:
+                    print("ERROR: descendants is None, please run 'descendants' command first.")
+                    ret['bad_input'] = True
+                    return ret
                 # max_child_specs = len(self.window_and_child_specs)
                 num_descendants = len(self.descendants)
                 if idx < 0 or idx >= num_descendants:
@@ -840,7 +842,7 @@ class UiaEnv:
                     ct = w.element_info.control_type
                     class_name = w.class_name()
                     auto_id = w.element_info.automation_id
-                    print(f"{indent}{self.i} - title=\"{title}\" control_type={ct} class_name={class_name} auto_id={auto_id}")
+                    print(f"{indent}{self.i} - {self.get_window_spec(w, format='str')}")
                     self.i += 1
 
                     if self.i >= maxcount:
@@ -1451,6 +1453,12 @@ class UiaEnv:
             
             # replace the title part in child_spec
             title_re=f".*{longest_short_title}.*"
+        else:
+            # no \r in title
+            if len(full_title) > 30:
+                title_re = f".*{full_title[:30]}.*"
+            else:
+                title_re = full_title
 
         if format == 'dict':
             return {
