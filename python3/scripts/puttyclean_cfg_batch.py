@@ -56,10 +56,14 @@ def code(all_cfg, known, **opt):
     then locate the Close button of the popup, and click it.
     '''
     steps = [
-        # we need 2 clicks
-        # 1st click the popup window, to bring it to front
-        # 2nd click the Close button of the popup window
-        f'find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" type2=Button action2=click',
+        'backend=win32',  # the move command only works with win32 backend
+
+        # we need to move the popup window to top-left corner first,
+        #    otherwise, clicking it may switch desktop, causing all windows minimized.
+        # we also need 2 clicks
+        #    1st click the popup window, to bring it to front
+        #    2nd click the Close button of the popup window
+        f'find=title_re=".*PuTTY.*Error.*" scope=desktop action=move=topleft action=click timeout=3 title2="OK" action2=click',
     ]
 
     print(f'steps = [')

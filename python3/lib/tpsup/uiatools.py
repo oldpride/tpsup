@@ -6,6 +6,8 @@ from time import sleep
 import pywinauto
 from pywinauto.application import Application, WindowSpecification
 from pywinauto.controls.uiawrapper import UIAWrapper
+import win32api
+import win32con
 
 
 from typing import Union
@@ -245,6 +247,7 @@ class UiaEnv:
                     desk=title="Program Manager"
                     desk=class=Shell_TrayWnd # class name of Windows taskbar
                     desk=pid=1234  # process id of the top window
+                    desk=backend=win32  # list top windows using win32 backend
             ''',
         },
         'find': {
@@ -282,10 +285,11 @@ class UiaEnv:
                         find=title="Close" control_type="Button"
                     but this critera is too broad, because there may be many buttons with title="Close".
                     therefore, we need to narrow down with
-                        find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" type2=Button action2=click
-                action can be:
-                    click   - click the find results
-                    type    - type text into the find results
+                        find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" action2=click
+                action can be multiple:
+                    click         - click the find results
+                    move=position - move the find results to position
+                    type          - type text into the find results
 
                 class/class2
                     the class_name to match, eg, Notepad, Edit, etc.
@@ -319,16 +323,37 @@ class UiaEnv:
                     is the control_type to match, eg, Window, Button, Edit, Text, etc.
 
                 examples:
-                    find=title_re=.*tianjunk.* type=any action=print
-                    find=scope=desktop title_re=.*notepad.* type=Window action=print
+                    find=title_re=.*tianjunk.*
+                    find=scope=desktop title_re=.*notepad.* type=Window
                     find=scope=top title_re=.*notepad.* type=Button action=click
                     find=scope=current title_re=.*notepad.* type=Edit action=type=hello{ENTER}
-                    find=title_re=".*Connection timed out.*" scope=desktop # find putty error dialog
-                    find=title_re=".*Connection timed out.*" scope=desktop title2="Close" type2="Button"
-                    find=title_re=".*PuTTY.*Error.*" scope=desktop  action=click timeout=3 title2="OK" type2=Button action2=click
+
+                    the following is to close putty error popup windows:
+                        - to create the error popup, run putty to connect to a non-existing host
+                        backend=win32   # the move command only works with win32 backend
+                        find=title_re=".*PuTTY.*Error.*" scope=desktop action action=move=topleft timeout=3 title2="OK" action2=click
                 if search scope was desktop, you can use 'connect=title=...' to connect to the matched top window.       
             ''',
-        },        
+        },      
+        'move': {
+            'need_arg': True,
+            'has_dryrun': 1,
+            'usage': '''
+                this only works after command backend=win32
+
+                move the current window to (x,y) position.
+                'center' or 'c' - move to center of screen
+                'topleft' or 'tl' - move to top left corner of screen
+                'topright' or 'tr' - move to top right corner of screen
+                'bottomleft' or 'bl' - move to bottom left corner of screen
+                'bottomright' or 'br' - move to bottom right corner of screen
+
+                examples:
+                    move=center
+                    move=tl
+                    move=100,200
+                ''',
+        },  
         'start': {
             'need_arg': True,
             'usage': '''
@@ -438,82 +463,86 @@ class UiaEnv:
         process a window in search mode, according to 
         '''
         debug = opt.get('debug', False)
-        title = clean_text(w1.window_text())
-        ct = w1.element_info.control_type
-        class_name = w1.class_name()
+        indent = opt.get('indent', '')  
+        w1_spec = self.get_window_spec(w1)
         if debug:
-            print(f"checking window: title={title}, control_type={ct}, mc1={mc1}, level2_dict={level2_dict}")
+            print(f"checking window: w1={w1_spec}")
         if 'title_re' in mc1:
-            if re.search(mc1['title_re'], title, re.IGNORECASE):
+            if re.search(mc1['title_re'], w1_spec['title'], re.IGNORECASE):
                 if debug:
-                    print(f"matched title_re={mc1['title_re']} with title={title}")
+                    print(f"matched title_re={mc1['title_re']} with title={w1_spec['title']}")
             else:
                 if debug:
-                    print(f"title={title} doesn't match title_re={mc1['title_re']}")
+                    print(f"title={w1_spec['title']} doesn't match title_re={mc1['title_re']}")
                 return 0
 
         if 'title' in mc1:
-            if mc1['title'].lower() == 'any' or mc1['title'].lower() == title.lower():
+            if mc1['title'].lower() == w1_spec['title'].lower():
                 if debug:
-                    print(f"matched actual title={mc1['title']} with expected title={title}")
+                    print(f"matched actual title={mc1['title']} with expected title={w1_spec['title']}")
             else:
                 if debug:
-                    print(f"actual title={title} doesn't match expected title={mc1['title']}")
+                    print(f"actual title={w1_spec['title']} doesn't match expected title={mc1['title']}")
                 return 0
 
         if 'control_type' in mc1:
-            if mc1['control_type'].lower() == 'any' or mc1['control_type'].lower() == ct.lower():
+            if mc1['control_type'].lower() == w1_spec['control_type'].lower():
                 if debug:
-                    print(f"matched actual control_type={mc1['control_type']} with expected control_type={ct}")
+                    print(f"matched actual control_type={mc1['control_type']} with expected control_type={w1_spec['control_type']}")
             else:
                 if debug:
-                    print(f"actual control_type={ct} doesn't match expected control_type={mc1['control_type']}")
+                    print(f"actual control_type={w1_spec['control_type']} doesn't match expected control_type={mc1['control_type']}")
                 return 0
 
         if 'class_name' in mc1:
-            if mc1['class_name'].lower() == 'any' or mc1['class_name'].lower() == class_name.lower():
+            if mc1['class_name'].lower() == w1_spec['class_name'].lower():
                 if debug:
-                    print(f"matched actual class_name={mc1['class_name']} with expected class_name={class_name}")
+                    print(f"matched actual class_name={mc1['class_name']} with expected class_name={w1_spec['class_name']}")
             else:
                 if debug:
-                    print(f"actual class_name={class_name} doesn't match expected class_name={mc1['class_name']}")
+                    print(f"actual class_name={w1_spec['class_name']} doesn't match expected class_name={mc1['class_name']}")
                 return 0
 
         if 'process_id' in mc1:
-            pid = w1.process_id()
-            if int(mc1['process_id']) == pid:
+            if int(mc1['process_id']) == w1_spec['process_id']:
                 if debug:
-                    print(f"matched actual process_id={mc1['process_id']} with expected process_id={pid}")
+                    print(f"matched actual process_id={mc1['process_id']} with expected process_id={w1_spec['process_id']}")
             else:
                 if debug:
-                    print(f"actual process_id={pid} doesn't match expected process_id={mc1['process_id']}")
+                    print(f"actual process_id={w1_spec['process_id']} doesn't match expected process_id={mc1['process_id']}")
                 return 0
 
         if 'automation_id' in mc1:
-            auto_id = w1.element_info.automation_id
-            if mc1['automation_id'].lower() == 'any' or mc1['automation_id'].lower() == auto_id.lower():
+            if mc1['automation_id'].lower() == w1_spec['automation_id'].lower():
                 if debug:
-                    print(f"matched actual automation_id={mc1['automation_id']} with expected automation_id={auto_id}")
+                    print(f"matched actual automation_id={mc1['automation_id']} with expected automation_id={w1_spec['automation_id']}")
             else:
                 if debug:
-                    print(f"actual automation_id={auto_id} doesn't match expected automation_id={mc1['automation_id']}")
+                    print(f"actual automation_id={w1_spec['automation_id']} doesn't match expected automation_id={mc1['automation_id']}")
                 return 0
 
         # if we reach here, we have a match. always print it with top window info
         print()
-        print(f"under top window={self.get_window_spec(search_top_window, format="str")}")
-        print(f"  matched window={self.get_window_spec(w1, format="str")}")
+        if level2_dict:
+            print(f"---------------- level 1 match ----------------")
+        print(f"{indent}under top window={self.get_window_spec(search_top_window, format='str', indent=indent)}")
+        print(f"{indent}  matched window={self.get_window_spec(w1, format='str', indent=indent)}")
 
-        if action := mc1.get('action', None):
-            if action == 'click':
-                self.click_window(w1, **opt)
-            elif action.startswith('type='):
-                to_type = mc1['action'][5:]
-                print(f"typing '{to_type}' into window: {w1}, title=\"{clean_text(title)}\" control_type={clean_text(ct)} class_name={class_name}")
-                w1.type_keys(to_type, with_spaces=True, set_foreground=True)
-                sleep(1)
-            else:
-                raise ValueError(f"unknown search action {mc1['action']}")
+        if actions := mc1.get('actions', None):
+            for action in actions:
+                if action == 'click':
+                    self.click_window(w1, **opt)
+                elif action.startswith('move='):
+                    position = action[5:]
+                    print(f"moving window: w1={w1_spec} to position={position}")
+                    self.move(w1, position, **opt)
+                elif action.startswith('type='):
+                    to_type = action[5:]
+                    print(f"typing '{to_type}' into window: w1={w1_spec}")
+                    w1.type_keys(to_type, with_spaces=True, set_foreground=True)
+                    sleep(1)
+                else:
+                    raise ValueError(f"unknown search action={action} in criteria={mc1}")
 
         if level2_dict:
             scope2 = level2_dict['scope2']
@@ -530,24 +559,20 @@ class UiaEnv:
             else:
                 raise ValueError(f"unknown scope2={scope2}")
             
-            print(f"searching level 2 windows in scope2={scope2} with criteria={mc2}")
-            print(f"\n-------------- level 2 search results begin --------------")
+            print(f"\n    searching level 2 windows in scope2={scope2} with criteria={mc2}")
+            
             match_count = 0
             for w2 in search_windows:
                 if debug:
-                    print(f"w2 title=\"{clean_text(w2.window_text())}\" control_type={w2.element_info.control_type} class_name={w2.class_name()}")
+                    print(f"w2 = {self.get_window_spec(w2)}")
                 # recursively search level 2 windows
-                match_count += self.find_process_one_window(w2, mc2, search_top_window, None, **opt)
-            print(f"-------------- level 2 search results end ----------------\n")
-
+                match_count += self.find_process_one_window(w2, mc2, search_top_window, None, indent='    ', **opt)
+            
             # if we have level 2 criteria, 'action' has been already processed in 
             # above recursive calls.
             return match_count 
         else:
-            match_count = 1
-
-
-        
+            match_count = 1        
         return match_count
 
     def click_window(self, w: WindowSpecification, **opt) -> bool:
@@ -603,8 +628,6 @@ class UiaEnv:
                 ret['bad_input'] = True
                 return ret
             
-
-            
             # if arg is integer, switch to that index in window_and_child_specs
             if arg.isdigit():
                 idx = int(arg)
@@ -621,12 +644,12 @@ class UiaEnv:
                 else:
                     self.current_window = self.descendants[idx]['window']
                     self.descendants = None  # clear descendants because current_window is changed.
-                    print(f"switched current_window to child {idx}: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
+                    print(f"switched current_window to child {idx}: {self.get_window_spec(self.current_window, format='str')}")
 
             elif arg.lower() == 'top':
                 self.current_window = self.top_window
                 self.descendants = None  # clear descendants because current_window is changed.
-                print(f"switched current_window to top_window: title=\"{clean_text(self.current_window.window_text())}\", control_type={self.current_window.element_info.control_type}, class_name={self.current_window.class_name()}")
+                print(f"switched current_window to top_window: {self.get_window_spec(self.current_window, format='str')}")
             else:
                 '''
                 child_spec is a string like 
@@ -674,11 +697,10 @@ class UiaEnv:
                     return ret
 
                 self.current_window = self.top_window.child_window(**criteria_dict1)
-                if not self.click_window(self.current_window, **opt):
-                    self.current_window = None
-                    self.descendants = None  # clear descendants because current_window is gone or changed.
-                    print(f"failed to locate child_spec {criteria_dict1} from {k}")
-                    ret['success'] = True
+                # if not self.click_window(self.current_window, **opt):
+                #     self.current_window = None
+                #     self.descendants = None  # clear descendants because current_window is gone or changed.
+                #     print(f"failed to locate child_spec {criteria_dict1} from {k}")
         elif long_cmd == 'child2':
             '''
             legacy version of child command, following after descendants2 command.
@@ -838,24 +860,14 @@ class UiaEnv:
                 # start with top window and recursively print descendants
                 def recursive_descendants(w: WindowSpecification, depth:int):
                     indent = '  ' * depth
-                    title = clean_text(w.window_text())
-                    ct = w.element_info.control_type
-                    class_name = w.class_name()
-                    auto_id = w.element_info.automation_id
-                    print(f"{indent}{self.i} - {self.get_window_spec(w, format='str')}")
+                    print(f"{indent}{self.i} - {self.get_window_spec(w, format='str', indent=indent)}")
                     self.i += 1
 
                     if self.i >= maxcount:
                         print(f"(reached maxcount={maxcount}, stop listing more descendants.)")
                         return
                     
-                    self.descendants.append({
-                        'window': w,
-                        'title': title,
-                        'control_type': ct,
-                        'class_name': class_name,
-                        'auto_id': auto_id
-                    })
+                    self.descendants.append(self.get_window_spec(w, format='dict'))
 
                     if depth >= maxdepth:
                         if w.children():
@@ -899,6 +911,7 @@ class UiaEnv:
                 desk=class=Shell_TrayWnd # class name of Windows taskbar
                 desk=pid=1234  # process id of the top window
                 desk=auto_id=some_id  # automation id of the top window
+                desk=backend=win32  # list top windows using win32 backend
             '''
             # parse arg for match criteria
             if arg:
@@ -915,7 +928,7 @@ class UiaEnv:
                     raise ValueError(f"invalid desktop arg {original}, must be title_re=, title=, class=, pid=, auto_id=")
 
                 if k == 'auto_id':
-                    criteria_dict['automation_id'] = v
+                    criteria_dict['automation_id'] = v                    
                 elif k == 'class':
                     criteria_dict['class_name'] = v
                 elif k == 'type':
@@ -942,48 +955,28 @@ class UiaEnv:
             self.top_windows_selector = []
             i = 0
             for w in top_windows:
-                title = clean_text(w.window_text())
-                control_type = w.element_info.control_type
-                class_name = w.class_name()
-                pid = w.process_id()
-                auto_id = w.element_info.automation_id
-                if debug:
-                    print(f"desktop top window={pformat(w)}")
-
+                spec_dict = self.get_window_spec(w, format='dict')
                 # apply match criteria
                 if 'automation_id' in criteria_dict:
-                    if criteria_dict['automation_id'].lower() != 'any' and \
-                        criteria_dict['automation_id'].lower() != auto_id.lower():
+                    if criteria_dict['automation_id'].lower() != spec_dict['automation_id'].lower():
                         continue
                 if 'class_name' in criteria_dict:
-                    if criteria_dict['class_name'].lower() != 'any' and \
-                        criteria_dict['class_name'].lower() != class_name.lower():
+                    if criteria_dict['class_name'].lower() != spec_dict['class_name'].lower():
                         continue
                 if 'control_type' in criteria_dict:
-                    if criteria_dict['control_type'].lower() != 'any' and \
-                        criteria_dict['control_type'].lower() != control_type.lower():
+                    if criteria_dict['control_type'].lower() != spec_dict['control_type'].lower():
                         continue
                 if 'process_id' in criteria_dict:
-                    if int(criteria_dict['process_id']) != pid:
+                    if int(criteria_dict['process_id']) != spec_dict['process_id']:
                         continue
                 if 'title' in criteria_dict:
-                    if criteria_dict['title'].lower() != 'any' and \
-                        criteria_dict['title'].lower() != title.lower():
+                    if criteria_dict['title'].lower() != spec_dict['title'].lower():
                         continue
                 if 'title_re' in criteria_dict:
-                    if not re.search(criteria_dict['title_re'], title, re.IGNORECASE):
-                        continue       
-                self.top_windows_selector.append(
-                    {
-                        'window': w, 
-                        'title': title, 
-                        'control_type': control_type, 
-                        'class_name': class_name, 
-                        'pid': pid,
-                        'auto_id': auto_id,
-                    }
-                )
-                print(f"{i} - top window, conn=title=\"{title}\"\n    control_type={control_type} class_name={class_name} pid={pid} auto_id={auto_id}")
+                    if not re.search(criteria_dict['title_re'], spec_dict['title'], re.IGNORECASE):
+                        continue
+                self.top_windows_selector.append(spec_dict)
+                print(f"{i} - {self.get_window_spec(w, format='str')}")
                 i += 1
             print(f"\nuse top=<index> or connect=title=... to connect to one of the top windows.")
         elif long_cmd == 'find':
@@ -994,16 +987,11 @@ class UiaEnv:
             '''
             # parse arg into a dict
             criteria_list = tpsup.keyvaluetools.parse_keyvalue(arg)
-            criteria_dict1 = {}
-            criteria_dict2 = {}
+            criteria_dict1 = {'actions': []}
+            criteria_dict2 = {'actions': []}
 
             scope1 = 'top' # default scope
             scope2 = None
-
-            action1 = None
-            action2 = None
-
-            pid = None
 
             timeout = 5 # seconds
 
@@ -1013,15 +1001,13 @@ class UiaEnv:
                 original = c['original']
 
                 if k == 'action':
-                    if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
-                        raise ValueError(f"invalid action={v} in criteria={original}, must be one of print, click, type=...")
-                    action1 = v
-                    criteria_dict1['action'] = action1
+                    if v not in ['click'] and not re.match(r'(move|type)=.*', v):
+                        raise ValueError(f"invalid {k}={v} in criteria={original}, must be one of click, move=, type=...")
+                    criteria_dict1['actions'].append(v)
                 elif k == 'action2':
-                    if v.lower() not in ['print', 'click'] and not v.lower().startswith('type='):
-                        raise ValueError(f"invalid action2={v} in criteria={original}, must be one of print, click, type=...")
-                    action2 = v
-                    criteria_dict2['action'] = action2
+                    if v not in ['click'] and not re.match(r'(move|type)=.*', v):
+                        raise ValueError(f"invalid {k}={v} in criteria={original}, must be one of click, move=, type=...")
+                    criteria_dict2['actions'].append(v)
                 elif k == 'auto_id':
                     criteria_dict1['automation_id'] = v
                 elif k == 'auto_id2':
@@ -1089,13 +1075,11 @@ class UiaEnv:
                 raise ValueError(f"pid can only be used with scope=desktop, got scope={scope1}")
 
             if scope2:
-                # criteria_dict2['action'] = action
                 level2_dict = {
                     'scope2': scope2,
                     'criteria_dict2': criteria_dict2,
                 }
             else:
-                # criteria_dict1['action'] = action
                 level2_dict = None
                 
             # at this point, syntax check is done.
@@ -1141,16 +1125,13 @@ class UiaEnv:
                 thread.start()
                 thread.join(timeout=timeout)
                 if thread.is_alive():
-                    w_title = clean_text(w.window_text())
-                    w_ct = w.element_info.control_type
-                    w_class = w.class_name()
-                    w_auto_id = w.element_info.automation_id
-                    w_pid = w.process_id()
                     print(f"search timeout after {timeout}s, skipping children of window={self.get_window_spec(w)}")
             print(f"-------------- search results end ----------------\n")
             if self.match_count > 0:
                 if scope1 == 'desktop':
                     print(f"scope1=desktop, use desktop+top or connect command to connect to the matched top window.")
+        elif long_cmd == 'move':
+            self.move(self.current_window, arg, **opt)
         elif long_cmd == 'start':
             '''
             when the start command spawns a new process for the window,
@@ -1259,7 +1240,7 @@ class UiaEnv:
                 if len(new_top_windows) > 1:
                     print(f"multiple new top windows found after running start command, please refine title or title_re to narrow down:")
                     for w in new_top_windows:
-                        print(f"   title={clean_text(w.window_text())}, control_type={w.element_info.control_type}, {pformat(w)}")
+                        print(f"    {self.get_window_spec(w, format='str')}")
                     return ret
                     
                 self.current_window = self.top_window
@@ -1427,11 +1408,26 @@ class UiaEnv:
 
         debug = opts.get('debug', 0)
         full_title = clean_text(w.window_text())
-        ct = w.element_info.control_type
-        cn = w.element_info.class_name
+
+        auto_id = None
+        ct = None
+        try:
+            auto_id = w.element_info.automation_id
+            ct = w.element_info.control_type
+        except Exception as e:
+            '''
+            when backend is win32, we may get exception here:
+            Exception occurred: ('[WinError 87] The parameter is incorrect.process: %d', 4644)
+            AccessDenied
+            '''
+            if debug:
+                print(f"Error getting element_info for window {full_title}: {e}")
+
+        cn = w.class_name()
         pid = w.process_id()
-        auto_id = w.element_info.automation_id
         title_re = None
+        is_enabled = w.is_enabled()
+        is_visible = w.is_visible()
 
         # title_re is a shorter version of title, in particular, if title is too long.
         # when we come up with title_re, we try to remove escaped chars, quotes, ...
@@ -1462,12 +1458,14 @@ class UiaEnv:
 
         if format == 'dict':
             return {
+                'auto_id': auto_id,
+                'class_name': cn,
+                'control_type': ct,
+                'is_visible': is_visible,
+                'pid': pid,
                 'title': full_title,
                 'title_re': title_re,
-                'control_type': ct,
-                'class_name': cn,
-                'auto_id': auto_id,
-                'pid': pid,
+                'window': w,  # include the WindowSpecification object itself
             }
         elif format == 'str':
             '''
@@ -1476,11 +1474,70 @@ class UiaEnv:
                 title_re=".*Notepad.*", 
                 title="Untitled - Notepad", control_type="Window", class_name="Notepad", auto_id="", pid=12345
             '''
-            return f'title_re="{title_re}" title="{full_title}" control_type={ct} class_name={cn} auto_id={auto_id} pid={pid}'
+            indent = opts.get('indent', '')
+            return f'title="{full_title}"\n{indent}    title_re="{title_re}" control_type={ct}\n{indent}    class_name={cn} auto_id={auto_id} pid={pid}\n{indent}    is_visible={is_visible} is_enabled={is_enabled}'
         else:
             raise ValueError(f"invalid format {format}, must be dict or str")
-      
+
+    def move(self, w: WindowSpecification, location, **opt):
+        '''
+        move the current_window to the specified position.
+        position can be:
+            - 'center', 'c'
+            - 'topleft', 'tl'
+            - 'topright', 'tr'
+            - 'bottomleft', 'bl'
+            - 'bottomright', 'br'
+            - 'x,y' where x and y are integers
+        '''
+        dryrun = opt.get('dryrun', False)
+
+
+        shortcuts = [
+            'center', 'c',
+            'topleft', 'tl',
+            'topright', 'tr',
+            'bottomleft', 'bl',
+            'bottomright', 'br'
+        ]
+        if  re.search(r'^\d+,\d+$', location) or location.lower() not in shortcuts:
+            raise ValueError(f"invalid move location {location}, must be either (x,y) or one of {shortcuts}")
+
+        if dryrun:
+            # syntax check is done.
+            return
         
+        self.screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
+        self.screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
+        rect = w.rectangle()
+        width = rect.width()
+        height = rect.height()
+        if location.lower() in ['center', 'c']:
+            new_x = int((self.screen_width - width) / 2)
+            new_y = int((self.screen_height - height) / 2)
+        elif location.lower() in ['topleft', 'tl']:
+            new_x = 0
+            new_y = 0
+        elif location.lower() in ['topright', 'tr']:
+            new_x = self.screen_width - width
+            new_y = 0
+        elif location.lower() in ['bottomleft', 'bl']:
+            new_x = 0
+            new_y = self.screen_height - height
+        elif location.lower() in ['bottomright', 'br']:
+            new_x = self.screen_width - width
+            new_y = self.screen_height - height
+        elif re.search(r'^\d+,\d+$', location):
+            parts = location.split(',')
+            new_x = int(parts[0])
+            new_y = int(parts[1])
+        else:
+            raise ValueError(f"invalid move position {location}, must be one of {shortcuts}")
+        
+        print(f"moving window to {location} at ({new_x}, {new_y})")
+        w.move_window(new_x, new_y)
+
+
     def get_ci_child_specs(self, w: WindowSpecification, **opts) -> list[str]:
         '''
         get child specs from control_identifiers() output.
@@ -1556,7 +1613,7 @@ def clean_text(s: str, **opt) -> str:
         s = s[:max_len] + "...(truncated)"
 
     # remove weird chars
-    s = re.sub(r'[^0-9a-zA-Z \'\"\\~!@#%^&*:<>.,()=\t_-]', newchar, s, flags=re.DOTALL)
+    s = re.sub(r'[^0-9a-zA-Z \'\"\\~!@#%^&*:<>.,()\[\]{}/=\t_-]', newchar, s, flags=re.DOTALL)
     return s
 
 # the following is for batch framework - batch.py
