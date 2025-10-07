@@ -1,1 +1,1 @@
-@call ptuia.cmd any -explore
+@call ptuia.bat any -explore
