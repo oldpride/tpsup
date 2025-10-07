@@ -648,16 +648,16 @@ class UiaEnv:
 
                 criteria_dict1 = {}
                 for p in parts:
-                    k, v = p.split('=', 1)
-                    k = k.strip()
-                    v = v.strip()
+                    k = p['key']
+                    v = p['value']
+                    original = p['original']
 
                     # remove ", " if it is in the front of key
                     # eg, in title=OK, control_type=Button
                     k = re.sub(r',\s*', '', k)
 
                     if k not in ['title', 'title_re', 'control_type', 'class_name']:
-                        raise ValueError(f"invalid child_spec key {k}, must be one of title, title_re, control_type, class_name")
+                        raise ValueError(f"invalid child_spec key={k} in {original}, must be one of title, title_re, control_type, class_name")
                     # remove quotes if any
                     if (v.startswith('"') and v.endswith('"')) or \
                         (v.startswith("'") and v.endswith("'")):
