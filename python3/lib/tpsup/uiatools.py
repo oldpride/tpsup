@@ -134,9 +134,9 @@ class UiaEnv:
                 backend=uia
                 backend=win32
 
-                changing backend 
-                - change 'app' and 'desktop' to use the new backend.
-                - will not trigger re-connect, use 'connect' command to re-connect.
+                changing backend will
+                - trigger 'app' and 'desktop' to use the new backend.
+                - not trigger re-connect, use 'connect' command to re-connect.
             ''',
         },
         'child': {
@@ -247,11 +247,15 @@ class UiaEnv:
                     desk=title="Program Manager"
                     desk=class=Shell_TrayWnd # class name of Windows taskbar
                     desk=pid=1234  # process id of the top window
-                    desk=backend=win32  # list top windows using win32 backend
+                note:
+                    in win32 mode, 
+                    - you will see more top windows, including some system windows.
+                    - control_type, automation_id are often not available.
+                    - is_visible and is_enabled are often false.
             ''',
         },
         'find': {
-            'need_arg': True,
+            'need_arg': 1,
             'has_dryrun': 1,
             'usage': '''
                 search for windows matching the criteria.
@@ -338,8 +342,10 @@ class UiaEnv:
         'move': {
             'need_arg': True,
             'has_dryrun': 1,
+            'short': 'mv',
             'usage': '''
-                this only works after command backend=win32
+                this only works after command backend=win32.
+                you may need to 'click' the current window first to bring it to front.
 
                 move the current window to (x,y) position.
                 'center' or 'c' - move to center of screen
@@ -531,14 +537,15 @@ class UiaEnv:
         if actions := mc1.get('actions', None):
             for action in actions:
                 if action == 'click':
+                    print(f"{indent}    clicking window.")
                     self.click_window(w1, **opt)
                 elif action.startswith('move='):
                     position = action[5:]
-                    print(f"moving window: w1={w1_spec} to position={position}")
+                    print(f"{indent}    moving window to position={position}")
                     self.move(w1, position, **opt)
                 elif action.startswith('type='):
                     to_type = action[5:]
-                    print(f"typing '{to_type}' into window: w1={w1_spec}")
+                    print(f"{indent}    typing '{to_type}' into window.")
                     w1.type_keys(to_type, with_spaces=True, set_foreground=True)
                     sleep(1)
                 else:
@@ -643,11 +650,13 @@ class UiaEnv:
                     ret['bad_input'] = True
                 else:
                     self.current_window = self.descendants[idx]['window']
+                    self.current_window.draw_outline(colour='red')
                     self.descendants = None  # clear descendants because current_window is changed.
                     print(f"switched current_window to child {idx}: {self.get_window_spec(self.current_window, format='str')}")
 
             elif arg.lower() == 'top':
                 self.current_window = self.top_window
+                self.current_window.draw_outline(colour='red')
                 self.descendants = None  # clear descendants because current_window is changed.
                 print(f"switched current_window to top_window: {self.get_window_spec(self.current_window, format='str')}")
             else:
@@ -697,6 +706,7 @@ class UiaEnv:
                     return ret
 
                 self.current_window = self.top_window.child_window(**criteria_dict1)
+                self.current_window.draw_outline(colour='red')
                 # if not self.click_window(self.current_window, **opt):
                 #     self.current_window = None
                 #     self.descendants = None  # clear descendants because current_window is gone or changed.
@@ -724,6 +734,8 @@ class UiaEnv:
                     code = f"self.current_window.{criteria_dict}"
                     print(f"code={code}")
                     self.current_window = eval(code, globals(), locals())
+                    self.current_window.draw_outline(colour='red')
+                    self.descendants2 = None  # clear descendants2 because current_window is changed.
                     print(f"use 'click' command to click the current_window.")
                     print(f"use 'desc2' command to list the descendants2 of the current_window.")
         elif long_cmd == 'click':
@@ -781,6 +793,7 @@ class UiaEnv:
             self.top_window = self.app.top_window()
             self.top_window.wait('visible')
             self.current_window = self.top_window
+            self.current_window.draw_outline(colour='red')
             self.top_window.click_input()  # ensure the window is focused
             sleep(1)
             print(f"connected to window with {conn_param_dict}, top_window={self.top_window}")
@@ -1132,6 +1145,7 @@ class UiaEnv:
                     print(f"scope1=desktop, use desktop+top or connect command to connect to the matched top window.")
         elif long_cmd == 'move':
             self.move(self.current_window, arg, **opt)
+
         elif long_cmd == 'start':
             '''
             when the start command spawns a new process for the window,
@@ -1195,6 +1209,7 @@ class UiaEnv:
             if self.top_window :
                 print(f"after start, top_window={self.top_window}")
                 self.current_window = self.top_window
+                self.current_window.draw_outline(colour='red')
                 self.descendants = None  # clear descendants because current_window is changed.
                 self.top_window.wait('visible')
                 self.top_window.click_input()  # ensure the window is focused
@@ -1244,6 +1259,7 @@ class UiaEnv:
                     return ret
                     
                 self.current_window = self.top_window
+                self.current_window.draw_outline(colour='red')
                 self.descendants = None  # clear descendants because current_window is changed.
 
                 # AttributeError: 'UIAWrapper' object has no attribute 'wait'
@@ -1323,6 +1339,7 @@ class UiaEnv:
                     print("       use desktop and top/connect command first to connect to an app's top window.")
                 else:
                     self.current_window = self.top_window
+                    self.current_window.draw_outline(colour='red')
                     self.descendants = None  # clear descendants because current_window is changed.
                     print(f"set current_window to top_window")
                     print(f"use 'desc' + 'child' to explore descendants of current_window")
@@ -1365,11 +1382,13 @@ class UiaEnv:
                         # we have to connect to the window because it is a separate process.
                         self.top_window = self.app.connect(handle=w.handle).window(handle=w.handle)
                         self.current_window = self.top_window
+                        self.current_window.draw_outline(colour='red')
                         self.descendants = None  # clear descendants because current_window is changed.
 
                         try:
-                            self.current_window.wait('visible')
+                            # self.current_window.wait('visible')
                             self.current_window.click_input()  # ensure the window is focused
+                            self.current_window.draw_outline(colour='red')
                             sleep(1)
                             print(f"use 'desc' + 'child' to explore descendants of current_window")
                         except pywinauto.findwindows.ElementNotFoundError as e:
@@ -1492,7 +1511,6 @@ class UiaEnv:
         '''
         dryrun = opt.get('dryrun', False)
 
-
         shortcuts = [
             'center', 'c',
             'topleft', 'tl',
@@ -1506,6 +1524,10 @@ class UiaEnv:
         if dryrun:
             # syntax check is done.
             return
+        
+        # make sure we are using win32 backend for move
+        if self.backend != 'win32':
+            raise ValueError(f"move command only works with win32 backend, current backend is {self.backend}")
         
         self.screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
         self.screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
