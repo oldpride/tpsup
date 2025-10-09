@@ -2715,7 +2715,7 @@ class SeleniumEnv:
             self.last_element = element
             
             # a key press may change the page
-            handle_page_change(**opt)
+            self.handle_page_change(**opt)
 
         elif cmd == "shadow":
             print(f"locate: switch into shadow_root")
