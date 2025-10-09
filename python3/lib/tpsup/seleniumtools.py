@@ -573,6 +573,19 @@ class SeleniumEnv:
         self.follow = self.locateEnv.follow
         self.explore = self.locateEnv.explore
 
+    def cleanLog(self):
+        # remove driver log and chromedir
+        for f in [self.driverlog, self.chromedir]:
+            log_FileFuncLine(f"removing {f}")
+            try:
+                shutil.rmtree(f)
+            except FileNotFoundError:
+                if self.debug:
+                    log_FileFuncLine(f"{f} not found")
+            except NotADirectoryError:
+                if self.debug:
+                    os.remove(f)
+                    
     '''
         iframestack vs domstack
             iframestack is a list of iframe urls starting from current iframe to the top iframe.
