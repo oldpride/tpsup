@@ -125,6 +125,8 @@ class UiaEnv:
         self.follow = locateEnv.follow
         self.explore = locateEnv.explore
 
+        self.outline = False  # outline mode off by default.
+
     locate_usage_by_cmd = {
         'backend': {
             'usage': '''
@@ -359,7 +361,16 @@ class UiaEnv:
                     move=tl
                     move=100,200
                 ''',
-        },  
+        }, 
+        'outline': {
+            'usage': '''
+                outline      # show current outline status
+                outline=yes  # or true, 1, to turn on outline
+                outline=no   # or false, 0, to turn off outline
+                draw an outline of the current window.
+                ''',
+        },
+
         'start': {
             'need_arg': True,
             'usage': '''
@@ -650,13 +661,15 @@ class UiaEnv:
                     ret['bad_input'] = True
                 else:
                     self.current_window = self.descendants[idx]['window']
-                    self.current_window.draw_outline(colour='red')
+                    if self.outline:
+                        self.current_window.draw_outline(colour='red')
                     self.descendants = None  # clear descendants because current_window is changed.
                     print(f"switched current_window to child {idx}: {self.get_window_spec(self.current_window, format='str')}")
 
             elif arg.lower() == 'top':
                 self.current_window = self.top_window
-                self.current_window.draw_outline(colour='red')
+                if self.outline:
+                    self.current_window.draw_outline(colour='red')
                 self.descendants = None  # clear descendants because current_window is changed.
                 print(f"switched current_window to top_window: {self.get_window_spec(self.current_window, format='str')}")
             else:
@@ -706,7 +719,8 @@ class UiaEnv:
                     return ret
 
                 self.current_window = self.top_window.child_window(**criteria_dict1)
-                self.current_window.draw_outline(colour='red')
+                if self.outline:
+                    self.current_window.draw_outline(colour='red')
                 # if not self.click_window(self.current_window, **opt):
                 #     self.current_window = None
                 #     self.descendants = None  # clear descendants because current_window is gone or changed.
@@ -734,7 +748,8 @@ class UiaEnv:
                     code = f"self.current_window.{criteria_dict}"
                     print(f"code={code}")
                     self.current_window = eval(code, globals(), locals())
-                    self.current_window.draw_outline(colour='red')
+                    if self.outline:
+                        self.current_window.draw_outline(colour='red')
                     self.descendants2 = None  # clear descendants2 because current_window is changed.
                     print(f"use 'click' command to click the current_window.")
                     print(f"use 'desc2' command to list the descendants2 of the current_window.")
@@ -793,7 +808,8 @@ class UiaEnv:
             self.top_window = self.app.top_window()
             self.top_window.wait('visible')
             self.current_window = self.top_window
-            self.current_window.draw_outline(colour='red')
+            if self.outline:
+                self.current_window.draw_outline(colour='red')
             self.top_window.click_input()  # ensure the window is focused
             sleep(1)
             print(f"connected to window with {conn_param_dict}, top_window={self.top_window}")
@@ -1146,6 +1162,16 @@ class UiaEnv:
         elif long_cmd == 'move':
             self.move(self.current_window, arg, **opt)
 
+        elif long_cmd == 'outline':
+            if arg is None:
+                print(f"outline status={self.outline}")
+            elif arg.lower() in ['yes', 'y', 'on', 'true', '1']:
+                self.outline = True
+            elif arg.lower() in ['no', 'n', 'off', 'false', '0']:
+                self.outline = False
+            else:
+                print(f"invalid outline arg {arg}, must be one of yes/no, y/n, on/off, true/false, 1/0")
+                ret['bad_input'] = True
         elif long_cmd == 'start':
             '''
             when the start command spawns a new process for the window,
@@ -1209,7 +1235,8 @@ class UiaEnv:
             if self.top_window :
                 print(f"after start, top_window={self.top_window}")
                 self.current_window = self.top_window
-                self.current_window.draw_outline(colour='red')
+                if self.outline:
+                    self.current_window.draw_outline(colour='red')
                 self.descendants = None  # clear descendants because current_window is changed.
                 self.top_window.wait('visible')
                 self.top_window.click_input()  # ensure the window is focused
@@ -1259,7 +1286,8 @@ class UiaEnv:
                     return ret
                     
                 self.current_window = self.top_window
-                self.current_window.draw_outline(colour='red')
+                if self.outline:
+                    self.current_window.draw_outline(colour='red')
                 self.descendants = None  # clear descendants because current_window is changed.
 
                 # AttributeError: 'UIAWrapper' object has no attribute 'wait'
@@ -1339,7 +1367,8 @@ class UiaEnv:
                     print("       use desktop and top/connect command first to connect to an app's top window.")
                 else:
                     self.current_window = self.top_window
-                    self.current_window.draw_outline(colour='red')
+                    if self.outline:
+                        self.current_window.draw_outline(colour='red')
                     self.descendants = None  # clear descendants because current_window is changed.
                     print(f"set current_window to top_window")
                     print(f"use 'desc' + 'child' to explore descendants of current_window")
@@ -1382,13 +1411,14 @@ class UiaEnv:
                         # we have to connect to the window because it is a separate process.
                         self.top_window = self.app.connect(handle=w.handle).window(handle=w.handle)
                         self.current_window = self.top_window
-                        self.current_window.draw_outline(colour='red')
+                        if self.outline:
+                            self.current_window.draw_outline(colour='red')
                         self.descendants = None  # clear descendants because current_window is changed.
 
                         try:
-                            # self.current_window.wait('visible')
                             self.current_window.click_input()  # ensure the window is focused
-                            self.current_window.draw_outline(colour='red')
+                            if self.outline:
+                                self.current_window.draw_outline(colour='red')
                             sleep(1)
                             print(f"use 'desc' + 'child' to explore descendants of current_window")
                         except pywinauto.findwindows.ElementNotFoundError as e:
