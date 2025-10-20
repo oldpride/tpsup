@@ -26,16 +26,27 @@ uname2term
 if [ $UNAMETERM = cygwin ]; then
    FREECAD_HOME="C:/Program Files/FreeCAD 1.0" # PYTHONPATH needs windows style path
    FREECAD_HOME_TERM_SPECIFIC="/cygdrive/c/Program Files/FreeCAD 1.0"
+   LIB_DIRS="$FREECAD_HOME/bin;$FREECAD_HOME/Ext" # for PYTHONPATH
 elif [ $UNAMETERM = msys -o $UNAMETERM = vscode ]; then
    FREECAD_HOME="C:/Program Files/FreeCAD 1.0"
    FREECAD_HOME_TERM_SPECIFIC="/c/Program Files/FreeCAD 1.0"
+   LIB_DIRS="$FREECAD_HOME/bin;$FREECAD_HOME/Ext" # for PYTHONPATH
 else
    echo "$prog: unsupported UNAMETERM='$UNAMETERM'"
    return
 fi
 
 BIN_DIRS="$FREECAD_HOME_TERM_SPECIFIC/bin"
-LIB_DIRS="$FREECAD_HOME/Ext" # for PYTHONPATH
+
+#FreeCAD module is in bin folder
+
+chk_freecad_executables () {
+   for EXE in FreeCAD FreeCADCmd
+   do
+      (set -x; which $EXE)
+   done
+
+}
 
 if [ $action = check ]; then
    echo ""
@@ -45,6 +56,8 @@ if [ $action = check ]; then
       # $DIR may contain space, so we need to quote it
       ls -ld "$DIR"
    done
+
+   chk_freecad_executables
 
 elif [ $action = set ]; then
    echo "adding freecad bin folder to PATH: $BIN_DIRS"
@@ -64,11 +77,14 @@ elif [ $action = set ]; then
 
    reduce PATH
    reduce PYTHONPATH
+
+   chk_freecad_executables
 else
    echo "$prog: unknown action=$action"
    echo "$usage"
    return
 fi
+
 
 myfreecadhome () {
    if [ "X$FREECAD_HOME" = "X" ]; then

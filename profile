@@ -344,6 +344,12 @@ EOF
 
 export PERL_BINARY=perl
 
+# if USER is like "AD-ENT+myname", then, remove the "AD-ENT+"" part
+if [[ $USER =~ \+ ]]; then
+   # this is AD user, remove the AD part
+   export USER=$(echo $USER | cut -d+ -f2)
+fi
+
 PS1='$USER@$HOSTNAME:$PWD$ '
 export PS1
 
@@ -440,12 +446,6 @@ elif [[ $UNAME =~ Linux|Darwin ]]; then
    fi
 else
    echo "UNAME='$UNAME' is not supported"
-fi
-
-# if USER is like "AD-ENT+myname", then, remove the "AD-ENT+"" part
-if [[ $USER =~ \+ ]]; then
-   # this is AD user, remove the AD part
-   export USER=$(echo $USER | cut -d+ -f2)
 fi
 
 export TPJSLIB=$TPSUP/js/lib
