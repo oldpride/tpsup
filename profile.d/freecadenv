@@ -36,12 +36,12 @@ else
    return
 fi
 
-BIN_DIRS="$FREECAD_HOME_TERM_SPECIFIC/bin"
+BIN_DIRS="$FREECAD_HOME_TERM_SPECIFIC/bin:$FREECAD_HOME_TERM_SPECIFIC/bin/Scripts"
 
 #FreeCAD module is in bin folder
 
 chk_freecad_executables () {
-   for EXE in FreeCAD FreeCADCmd
+   for EXE in FreeCAD FreeCADCmd python
    do
       (set -x; which $EXE)
    done

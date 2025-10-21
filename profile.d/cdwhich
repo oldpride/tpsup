@@ -1,0 +1,28 @@
+local usage prog BIN_DIRS NPM_DIRS DIR
+
+prog=${FUNCNAME[1]}
+
+usage="
+usage:
+
+   $prog executable
+
+   cd to the installation folder of the executable
+
+"
+
+if [ $# -ne 1 ]; then
+   echo "$prog: wrong number of args"
+   echo "$usage"
+   return
+fi
+
+action=$1
+
+path=$(which $action 2>/dev/null)
+if [ $? -ne 0 ]; then
+   echo "$prog: cannot find executable '$action' in PATH"
+   return
+fi
+dir=$(dirname "$path")
+cd "$dir" || return

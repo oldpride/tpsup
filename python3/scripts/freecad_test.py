@@ -4,21 +4,23 @@ import sys
 import importlib
 import os
 import traceback
-import argparse
-import textwrap
 from pprint import pformat
 prog = os.path.basename(sys.argv[0])
 
-usage = """ 
+usage = f""" 
 Check freecad python
 
 usage:
-    freecadcmd is a python-like command, you can run
+    set up env
         freecadenv set
+        which freecadcmd
+        which python # this python should be under freecad installation.
+
+    freecadcmd is a python-like command, you can run
         freecadcmd test.py
 
     so we can run it with chkpython.py
-        freecadcmd chkpython.py
+        freecadcmd {prog}
 
     it will print out
         - python search path
@@ -34,14 +36,40 @@ python_version = sys.version.replace('\n', ' ')
 print(f"python version={python_version}")
 
 # print python search path
-print("python search path:")
+print("python search path, sys.path:")
 for p in sys.path:
     print(f"    {p}")
+print()
+
+# print PYTHONPATH env variable. this is different from sys.path
+pythonpath = os.environ.get('PYTHONPATH', '')
+print(f"PYTHONPATH={pythonpath}")
+print()
+
 # try to import the module
 module_names = [
-    'FreeCAD',
-    # 'FreeCAD' is the main module, but it is not a file.
-    # we cannot get its file location.
+    
+    # the following files are .pyd files. 'pyd' files are like .dll files.
+    # therefore vscode can import them but pylance cannot find their source code.
+    # so pylance will report "import could not be resolved" error.
+    # a workaround is to create a stub file (.pyi) for each module using
+    # mypy's stubgen tool or our enhanced ptstubgen.py script.    
+    'FreeCAD',  # I made a stub file FreeCAD.pyi for it using ptstubgen.py.
+    'Part',
+    'Sketcher',
+    'FreeCADGui',
+
+    # FreeCAD GUI is built on top of PySide2.
+    'PySide2',
+
+    # test PyQt
+    'PyQt',
+    'PyQt2',
+
+    'pip',   # pip command does not exist under freecad, but pip module should exist
+    'mypy',  # this has stubgen
+
+
 ]
 
 for module_name in module_names:
@@ -54,7 +82,7 @@ for module_name in module_names:
     except Exception as e:
         print(f"module {module_name} import failed: {e}")
         traceback.print_exc()
-        sys.exit(1)
+        continue
 
     try:
         module_version = imported.__version__

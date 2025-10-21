@@ -86,7 +86,7 @@ sub get_entry_by_cfg {
    if ( !$entry_type ) {
       $entry_name = $entry;
    } elsif ( $entry_type eq 'CODE' ) {
-      $entry_name = $entry->($cfg,$dict,$opt);
+      $entry_name = $entry->( $cfg, $dict, $opt );
    } else {
       croak "unsupported entry type: $entry_type";
    }
@@ -159,8 +159,8 @@ sub swagger {
 
       my $entry_name = get_entry_by_cfg( $cfg, $dict, $opt );
 
-      my $method     = $cfg->{method} ? $cfg->{method} : 'GET';
-      my $Accept     = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
+      my $method = $cfg->{method} ? $cfg->{method} : 'GET';
+      my $accept = $cfg->{accept} ? $cfg->{accept} : 'application/json';
 
       # there are two places mentioning json
       #    --header 'Content-Type: application/json'
@@ -178,7 +178,7 @@ sub swagger {
       # my $command = qq($flag_string -w '\nhttp_code: \%{http_code}\n' -X $method --header "Accept: $Accept");
       # ideally we should use -w '\n' to print http code into a separate line - the last line,
       # but windows cmd.exe cannot handle line continuation.
-      my $command = qq($flag_string -w "http_code: \%{http_code}" -X $method --header "Accept: $Accept");
+      my $command = qq($flag_string -w "http_code: \%{http_code}" -X $method --header "Accept: $accept");
 
       if ($entry_name) {
          $command = "tpentry -- /usr/bin/curl -u tpentry{$entry_name}{user}:tpentry{$entry_name}{decoded} $command";
@@ -211,8 +211,8 @@ sub swagger {
 
       $command .= qq( "$base_url/$sub_url");
 
-      # if ( $Accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
-      #    # 'Accept' is from caller of cfg
+      # if ( $accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
+      #    # 'accept' is from caller of cfg
       #    # 'json' is from cfg
       #    # 'nojson' is from caller - likely from command line
       #    $command .= " |python -m json.tool";
@@ -243,8 +243,8 @@ sub swagger {
                $lines[-1] = $1;
             }
 
-            if ( $Accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
-               # 'Accept' is from caller of cfg
+            if ( $accept =~ /json/ && $cfg->{json} && !$opt->{nojson} ) {
+               # 'accept' is from caller of cfg
                # 'json' is from cfg
                # 'nojson' is from caller - likely from command line
                my $json_cmd = "python -m json.tool";
@@ -286,7 +286,7 @@ my $swagger_syntax = {
       num_args  => { type => 'SCALAR', pattern  => qr/^(\d+|[+*])$/ },
       json      => { type => 'SCALAR', pattern  => qr/^\d+$/ },
       method    => { type => 'SCALAR', pattern  => qr/^(GET|POST|DELETE)$/ },
-      Accept    => { type => 'SCALAR' },
+      accept    => { type => 'SCALAR' },
       comment   => { type => 'SCALAR' },
       validator => { type => [ 'SCALAR', 'CODE' ] },
       post_data => { type => 'SCALAR' },
@@ -314,7 +314,7 @@ sub tpbatch_parse_hash_cfg {
          my $base_cfg = $hash_cfg->{cfg}->{$base};
 
          for my $op ( sort ( keys %{ $base_cfg->{op} } ) ) {
-            my $cfg = $base_cfg->{op}->{$op};  
+            my $cfg = $base_cfg->{op}->{$op};
             # push down meta to lower level
             my @upper_keys = qw(base_urls entry entry_func);
             @{$cfg}{@upper_keys} = @{ $hash_cfg->{cfg}->{$base} }{@upper_keys};
@@ -337,9 +337,9 @@ sub tpbatch_parse_hash_cfg {
 
             $example .= "      $cfg->{comment}\n" if defined $cfg->{comment};
 
-            my $Accept = $cfg->{Accept} ? $cfg->{Accept} : 'application/json';
+            my $accept = $cfg->{accept} ? $cfg->{accept} : 'application/json';
 
-            if ( ( $Accept =~ /json/ || $cfg->{json} ) && !$opt->{nojson} ) {
+            if ( ( $accept =~ /json/ || $cfg->{json} ) && !$opt->{nojson} ) {
                $example .= "      expect json in output\n";
             } else {
                $example .= "      not expect json in output\n";
@@ -364,7 +364,7 @@ sub tpbatch_parse_hash_cfg {
 
             my $method = $cfg->{method} || 'GET';
             $example .= "      method: $method\n";
-            
+
             my $sub_ui;    # web user interface for manual operation
             if ( $cfg->{sub_ui} ) {
                $sub_ui = $cfg->{sub_ui};
@@ -379,7 +379,7 @@ sub tpbatch_parse_hash_cfg {
                # add base_url to cfg, so that the entry function can use it
                $cfg->{base_url} = $base_url;
                my $login = get_entry_by_cfg( $cfg, {}, $opt );
-               if ( $login ) {
+               if ($login) {
                   $example .= "         entry: $login\n";
                } else {
                   $example .= "         entry: none\n";
