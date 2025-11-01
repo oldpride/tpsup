@@ -14,9 +14,9 @@ our_cfg = {
         'instance_count',
     ],
 
-    # 'extra_args': {
-    #     'explore': {'switches': ['-explore', '--explore'], 'action': 'store_true', 'default': False, 'help': "enter explore mode at the end of the steps"},
-    # },
+    'extra_args': {
+        'skip_pageant_check': {'switches': ['-spc', '--skip_pageant_check'], 'action': 'store_true', 'default': False, 'help': "skip pageant.exe check"},
+    },
 
     'test_example': f'''
     ''',
@@ -50,7 +50,7 @@ def code(all_cfg, known, **opt):
 
     session_name = opt['session_name']
     instance_count = opt['instance_count']
-    explore = opt.get('explore', 0)
+    skip_pageant_check = opt.get('skip_pageant_check', 0)
 
     # yyyy, mm, dd = datetime.datetime.now().strftime("%Y,%m,%d").split(',')
 
@@ -67,6 +67,12 @@ def code(all_cfg, known, **opt):
     # get siteenv command from env
     siteenv_command = siteEnv.get_env('siteenv_command')
     print(f'siteenv_command={siteenv_command}')
+
+    # check whether pageant.exe is already running. if not, we exit.
+    pageant_running = tpsup.pstools.check_procs(['pageant.exe'])
+    if not pageant_running and not skip_pageant_check:
+        print(f'pageant.exe is not running. "start pageant.exe" to start it first.')
+        exit(0)
 
     # steps = known['REMAININGARGS']
     steps = [

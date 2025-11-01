@@ -69,6 +69,8 @@ module_names = [
     'pip',   # pip command does not exist under freecad, but pip module should exist
     'mypy',  # this has stubgen
 
+    'logging',  # standard module
+
 
 ]
 

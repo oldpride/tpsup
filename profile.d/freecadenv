@@ -78,6 +78,9 @@ elif [ $action = set ]; then
    reduce PATH
    reduce PYTHONPATH
 
+   # add freecad to PS1
+   export PS1="(freecad) $PS1"
+   
    chk_freecad_executables
 else
    echo "$prog: unknown action=$action"
