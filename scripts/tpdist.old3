@@ -89,7 +89,7 @@ Usage:
      $prog client remote_host remote_port remote_path1 remote_path2 ... local_dir
 
    reversed mode: server waits to take in data; client pushes.
-     $prog server local_port -reverse remote_path1 remote_path2 ... local_dir
+     $prog server local_port  -reverse remote_port remote_path1 remote_path2 ... local_dir
      $prog client remote_host remoe_port -reverse
 
    If remote path is a relative path, it will be relative to remote user's home dir.
