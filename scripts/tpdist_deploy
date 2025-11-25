@@ -55,6 +55,15 @@ usage:
 
    -ncu              not check user (owner)
 
+   variables in config file can be resolved using
+      {{USER}}        current user
+      {{HOME}}        home directory of current user
+      {{OS_FAMILY}}   os family, e.g. Linux, Windows
+      {{V_MAJOR}}     major version number of OS
+      {{V_MINOR}}     minor version number of OS
+      {{V_PATCH}}     patch version number of OS
+      {{CLIENT_IP}}   client ip address (when available)
+
 examples:
 
    $prog        config
