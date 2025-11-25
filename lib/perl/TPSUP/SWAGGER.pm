@@ -251,7 +251,7 @@ sub swagger {
                # python on linux could be python or python3. we use the first one found in PATH.
                my $python_cmd;
                for my $cmd ( 'python3', 'python' ) {
-                  my $which_cmd = "which $cmd 2 > /dev/null";
+                  my $which_cmd = "which $cmd 2>/dev/null";
                   my $which_out = `$which_cmd`;
                   if ( $which_out =~ /(\S+)/ ) {
                      $python_cmd = $1;
