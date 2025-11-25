@@ -247,7 +247,21 @@ sub swagger {
                # 'accept' is from caller of cfg
                # 'json' is from cfg
                # 'nojson' is from caller - likely from command line
-               my $json_cmd = "python -m json.tool";
+
+               # python on linux could be python or python3. we use the first one found in PATH.
+               my $python_cmd;
+               for my $cmd ( 'python3', 'python' ) {
+                  my $which_cmd = "which $cmd 2 > /dev/null";
+                  my $which_out = `$which_cmd`;
+                  if ( $which_out =~ /(\S+)/ ) {
+                     $python_cmd = $1;
+                     last;
+                  }
+               }
+               if ( !$python_cmd ) {
+                  croak "cannot find python or python3 in PATH, needed for json parsing";
+               }
+               my $json_cmd = "$python_cmd -m json.tool";
                open my $ofh, "|$json_cmd" or die "cmd=$json_cmd failed: $!";
                print $ofh @lines;
                close $ofh;
