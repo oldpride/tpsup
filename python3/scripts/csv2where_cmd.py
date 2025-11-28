@@ -86,7 +86,7 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
                     conditions.append(f"{key}='{value}'")
                 else:
                     conditions.append(f"{key}={value}")
-            where_clause = '( ' + ' and '.join(conditions) + ' )'
+            where_clause = '(' + ' and '.join(conditions) + ')'
             where_clauses.append(where_clause)
     return ' or \n'.join(where_clauses)
 def main():
