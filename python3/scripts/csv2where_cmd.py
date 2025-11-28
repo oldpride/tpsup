@@ -89,8 +89,7 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
                                 value = -float(value)
 
                             if m2 :=re.search(r'round([0-9])', type_hint, re.IGNORECASE):
-                                digits = int(m2.group(1))
-                                value = round(float(value), digits) 
+                                key = f"round({key},{m2.group(1)})"
                                 
                 if add_quotes:
                     conditions.append(f"{key}='{value}'")

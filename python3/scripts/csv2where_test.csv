@@ -1,4 +1,4 @@
-t.id(number),t.name,t.age(number),t.score(abs)
-1,Alice,30,"(100,111)"
-2,Bob,25,222
-3,Charlie,35,333.5
+t.id(number),t.name,t.age(number),t.score(abs),myFloat(abs round0)
+1,Alice,30,"(100,111)","(123,456)"
+2,Bob,25,222,789
+3,Charlie,35,333.5,111
