@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# this wrapper script created (copied) by tpsup/scripts/cmd_maker.bash
-# example usage see tpsup/python3/scripts/Makefile
+# wrapper script 
 # the original script is tpsup/scripts/cmd_generic.bash.
 # tpsup/scripts/cmd_maker.bash will copy tpsup/scripts/cmd_generic.bash to target's directory
 # and rename it to <target>
@@ -23,12 +22,11 @@ dir=$(dirname "$0")
 UNAME=$(uname -a)
 
 # associate array of extension to interpreter
-declare -A ext2intepreters
-ext2intepreters=(
+declare -A ext2intepreter
+ext2intepreter=(
    [js]="node"
    [ts]="deno"
-   [py]="python3 python"   # if need, make python3 link/copy from python in venv.
-   # [py]="python"  # should be python version 3.
+   [py]="python3"
 )
 
 for ext in js ts py; 
@@ -36,14 +34,8 @@ do
    file="$dir/${prog}_cmd.$ext"
 
    if [[ -f "$file" ]]; then
-      interpreters=${ext2intepreters[$ext]}
-      for interpreter in `echo $interpreters`
-      do
-         if which $interpreter >/dev/null 2>&1; then
-            break
-         fi
-      done
-            
+      interpreter=${ext2intepreter[$ext]}
+
       if [[ "$UNAME" =~ Cygwin ]]; then
          file=$(cygpath --windows "$file")
          if [[ "$interpreter" == "deno" ]]; then
