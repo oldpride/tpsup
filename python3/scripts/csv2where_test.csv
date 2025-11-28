@@ -1,4 +1,4 @@
-t.id(number),t.name,t.age(number)
-1,Alice,30
-2,Bob,25
-3,Charlie,35
+t.id(number),t.name,t.age(number),t.score(abs)
+1,Alice,30,"(100,111)"
+2,Bob,25,222
+3,Charlie,35,333.5
