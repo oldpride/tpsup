@@ -53,7 +53,12 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
         for row in reader:
             conditions = []
             for key, value in row.items():
+                # remove leading/trailing spaces and hidden characters
+                # first, replace hidden characters with space
+                key = re.sub(r'[^a-zA-Z0-9_.()]', ' ', key)
+                # then strip spaces
                 key = key.strip()
+                
                 value = value.strip()
                 if debug:
                     print(f"key: '{key}', value: '{value}'")
