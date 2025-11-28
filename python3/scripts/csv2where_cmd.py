@@ -71,7 +71,7 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
                     type_hint = m.group(2)
 
                     if type_hint:
-                        if re.search(r'number|int|float|abs|neg', type_hint, re.IGNORECASE):
+                        if re.search(r'number|int|float|abs|neg|round', type_hint, re.IGNORECASE):
                             add_quotes = False
 
                             # remove ',' from value, eg, '1,234' to '1234'
@@ -84,9 +84,14 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
                             if re.search(r'abs', type_hint, re.IGNORECASE):
                                 key = f"abs({key})"
                                 value = abs(float(value))
+
                             elif re.search(r'neg', type_hint, re.IGNORECASE):
                                 value = -float(value)
 
+                            if m2 :=re.search(r'round([0-9])', type_hint, re.IGNORECASE):
+                                digits = int(m2.group(1))
+                                value = round(float(value), digits) 
+                                
                 if add_quotes:
                     conditions.append(f"{key}='{value}'")
                 else:
