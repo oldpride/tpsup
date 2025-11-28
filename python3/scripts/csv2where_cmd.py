@@ -1,27 +1,40 @@
 '''
 this script takes a CSV file as input and converts each row into a SQL where clause.
 for example, a CSV file like this:
-    id,name,age
+    t.id(number),t.name,t.age(number)
     1,Alice,30
     2,Bob,25
     3,Charlie,35
 will be converted to:
-    (id='1' and name='Alice' and age='30') or 
-    (id='2' and name='Bob' and age='25') or 
-    (id='3' and name='Charlie' and age='35')
+    (t.id=1 and t.name='Alice' and t.age=30) or
+    (t.id=2 and t.name='Bob' and t.age=25) or
+    (t.id=3 and t.name='Charlie' and t.age=35)
+
 '''
 
 import argparse
 import csv
 import os
+import re
 import sys
 
 prog = os.path.basename(__file__).replace('_cmd.py', '')
 
 usage = f'''
+this script takes a CSV file as input and converts each row into a SQL where clause.
+for example, a CSV file like this:
+    t.id(number),t.name,t.age(number)
+    1,Alice,30
+    2,Bob,25
+    3,Charlie,35
+will be converted to:
+    (t.id=1 and t.name='Alice' and t.age=30) or
+    (t.id=2 and t.name='Bob' and t.age=25) or
+    (t.id=3 and t.name='Charlie' and t.age=35)
+
 usage:
     {prog} [options] csvfile
-    
+
     Convert CSV file to SQL where clause.
 '''
 examples = f'''
@@ -37,6 +50,15 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True):
         for row in reader:
             conditions = []
             for key, value in row.items():
+                add_quotes = True
+
+                # is key is t.id(number), convert key to t.id, and don't add quotes around value
+                if m := re.match(r'^([a-zA-Z_][a-zA-Z0-9_.]*)\s*\((.*)\)$', key):
+                    key = m.group(1)
+                    type_hint = m.group(2).lower()
+                    if type_hint in ('number', 'int', 'float'):
+                        add_quotes = False
+
                 if add_quotes:
                     conditions.append(f"{key}='{value}'")
                 else:
@@ -58,14 +80,6 @@ def main():
         '-s', '--sep',
         default=',',
         help='CSV separator character (default: ,)')
-    parser.add_argument(
-        '-q', '--quotechar',
-        default='"',
-        help='CSV quote character (default: ")')
-    parser.add_argument(
-        '--no-quotes',
-        action='store_true',
-        help='Do not add quotes around values in the where clause')
     args = parser.parse_args()
 
     if not args.csvfile:
@@ -76,8 +90,7 @@ def main():
     where_clause = csv2where(
         args.csvfile,
         sep=args.sep,
-        quotechar=args.quotechar,
-        add_quotes=not args.no_quotes)
+        )
     print(where_clause)
 if __name__ == '__main__':
     main()
