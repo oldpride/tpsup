@@ -53,13 +53,15 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
         for row in reader:
             conditions = []
             for key, value in row.items():
+                key = key.strip()
+                value = value.strip()
                 if debug:
                     print(f"key: '{key}', value: '{value}'")
 
                 add_quotes = True
 
                 # is key is t.id(number), convert key to t.id, and don't add quotes around value
-                if m := re.match(r'^([a-zA-Z_][a-zA-Z0-9_.]*)\s*\((.*)\)\s*$', key):
+                if m := re.match(r'^([a-zA-Z_][a-zA-Z0-9_.]*)\s*\((.*)\)$', key):
                     key = m.group(1)
                     type_hint = m.group(2)
 
