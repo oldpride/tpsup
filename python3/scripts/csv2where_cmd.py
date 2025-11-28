@@ -34,6 +34,8 @@ will be converted to:
 usage:
     {prog} [options] csvfile
 
+    -debug    Enable debug mode
+
     Convert CSV file to SQL where clause.
 '''
 examples = f'''
@@ -42,14 +44,17 @@ examples:
     {prog} -q csv2where_test.csv
     {prog} -s ';' csv2where_test.csv
 '''
-def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True):
+def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
     where_clauses = []
-    with open(csvfile, 'r', newline='', encoding='utf-8') as f:
+    # remove DOS line ending if any
+    # with open(csvfile, 'r', newline='', encoding='utf-8') as f:
+    with open(csvfile, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter=sep, quotechar=quotechar)
         for row in reader:
             conditions = []
             for key, value in row.items():
-                print(f"key: '{key}', value: '{value}'")
+                if debug:
+                    print(f"key: '{key}', value: '{value}'")
 
                 add_quotes = True
 
@@ -94,6 +99,10 @@ def main():
         '-s', '--sep',
         default=',',
         help='CSV separator character (default: ,)')
+    parser.add_argument(
+        '-debug',
+        action='store_true',
+        help='Enable debug mode')
     args = parser.parse_args()
 
     if not args.csvfile:
@@ -104,6 +113,7 @@ def main():
     where_clause = csv2where(
         args.csvfile,
         sep=args.sep,
+        debug=args.debug
         )
     print(where_clause)
 if __name__ == '__main__':
