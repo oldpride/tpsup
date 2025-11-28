@@ -47,8 +47,8 @@ examples:
 def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
     where_clauses = []
     # remove DOS line ending if any
-    # with open(csvfile, 'r', newline='', encoding='utf-8') as f:
-    with open(csvfile, 'r', encoding='utf-8') as f:
+    with open(csvfile, 'r', newline='', encoding='utf-8') as f:
+    # with open(csvfile, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter=sep, quotechar=quotechar)
         for row in reader:
             conditions = []
@@ -59,7 +59,7 @@ def csv2where(csvfile, sep=',', quotechar='"', add_quotes=True, debug=False):
                 add_quotes = True
 
                 # is key is t.id(number), convert key to t.id, and don't add quotes around value
-                if m := re.match(r'^([a-zA-Z_][a-zA-Z0-9_.]*)\s*\((.*)\)$', key):
+                if m := re.match(r'^([a-zA-Z_][a-zA-Z0-9_.]*)\s*\((.*)\)\s*$', key):
                     key = m.group(1)
                     type_hint = m.group(2)
 
