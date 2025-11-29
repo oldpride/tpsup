@@ -1,15 +1,14 @@
 '''
 this script takes a CSV file as input and converts each row into a SQL where clause.
 for example, a CSV file like this:
-    t.id(number),t.name,t.age(number)
-    1,Alice,30
-    2,Bob,25
-    3,Charlie,35
+    t.id(number),t.name,t.age(number),t.score(abs),myFloat(abs round0)
+    1,Alice,30,"(100,111)","(123,456)"
+    2,Bob,25,222,789
+    3,Charlie,35,333.5,111
 will be converted to:
-    (t.id=1 and t.name='Alice' and t.age=30) or
-    (t.id=2 and t.name='Bob' and t.age=25) or
-    (t.id=3 and t.name='Charlie' and t.age=35)
-
+    (t.id=1 and t.name='Alice' and t.age=30 and abs(t.score)=100111.0 and round(abs(myFloat),0)=123456.0) or
+    (t.id=2 and t.name='Bob' and t.age=25 and abs(t.score)=222.0 and round(abs(myFloat),0)=789.0) or
+    (t.id=3 and t.name='Charlie' and t.age=35 and abs(t.score)=333.5 and round(abs(myFloat),0)=111.0)
 '''
 
 import argparse
