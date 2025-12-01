@@ -47,6 +47,7 @@ def code(all_cfg, known, **opt):
     run_js = opt.get('js', 0)
     trap = opt.get('trap', 0)
     debug = opt.get('debug', 0)
+    explore = opt.get('explore', 0)
 
     session_name = opt['session_name']
     instance_count = opt['instance_count']
