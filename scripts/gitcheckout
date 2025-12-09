@@ -21,6 +21,9 @@ examples:
    \$ $prog 1234444 profile
    \$ ls -l profile.old3
 
+   $ git last myscript.py
+   ls -l myscript.old3.py   # try to preserve extension
+
 EOF
 
    exit 1
@@ -33,7 +36,18 @@ fi
 
 commit=$1
 old_path=$2
-new_path="${old_path}.old3"
+   
+# if "." in file name, try to preserve the  extension
+if [[ "$old_path" != *.* ]]; then
+   extension=""
+   filename="$old_path"
+   new_path="${filename}_old3"
+else
+   extension="${old_path##*.}"
+   filename="${old_path%.*}"
+   new_path="${filename}_old3.${extension}"
+fi
+   
 # use native LD_LIBRARY_PATH as third path LD_LIBRARY_PATH (eg Anaconda3's) can contain expired certificate
 unset LD_LIBRARY_PATH
 export PATH=/usr/bin:$PATH
