@@ -8,14 +8,15 @@ usage:
 
    add a new element to env var, eg, PATH
 
-   -r add path to rear. default to front
-   -e var change this env var. default to PATH
-   -v verbose mode
+   -e var   change this env var. default to PATH
+   -r       add path to rear. default to front
+   -v       verbose mode
 
    example:
       $prog /usr/local/bin
       $prog -r /usr/local/bin
       $prog -e LD_LIBRARY_PATH /usr/local/lib
+      $prog -e PYTHONPATH \`pwd\`/macro
 
 "
 
@@ -58,10 +59,30 @@ if [ "$verbose" = "Y" ]; then
    echo "old $var: $($old)"
 fi
 
+# convert path to full path
+value=$(readlink -f "$value")
+
+sep=:
+# if we are in windows and the enve var is not PATH, we should
+#    1. use ; as separator
+#    2. use native path
+if [ "$var" != "PATH" ]; then
+   uname=$(uname)
+   # cygwin: CYGWIN_NT-10.0-26200
+   # gitbash: MINGW64_NT-10.0-26200
+   # vscode: MINGW_64_NT-10.0-26200
+   # antigravity: MINGW_64_NT-10.0-26200
+   if [[  $uname =~ _NT- ]]; then
+      sep=';'
+      value=$(convertpath -t batch "$value")
+   fi
+fi
+
+
 if [ "$rear" = "Y" ]; then
-   new="$($old):$value"
+   new="$($old)$sep$value"
 else
-   new="$value:$($old)"
+   new="$value$sep$($old)"
 fi
 
 # reduce $var
