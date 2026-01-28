@@ -254,6 +254,15 @@ def main():
 
     print("")
 
+    print("--------------------")
+    code = """
+    from tpsup.envtools import get_home_dir
+    print(f"home_dir = {get_home_dir()}")
+    """
+    print(f"test import of get_home_dir")
+    exec_into_globals(code, globals(), locals())
+    # exec(code, globals(), locals())
+
     # keep test code in a function so that IDE can check syntax
 
     def test_code():
@@ -264,6 +273,8 @@ def main():
 
     test_lines(test_code)
 
+    print("--------------------")
+
     a = 1
     source = '''
     print("a test line")
@@ -272,7 +283,8 @@ def main():
 
     print(
         (f'test eval_block(source) = {eval_block(source, globals(), locals())}'))
-
+    print(
+        (f'test eval_block(source) with EvalAddReturn=True = {eval_block(source, globals(), locals(), EvalAddReturn=True)}'))   
     # the downside of using array instead of function to manage test codes
     # is missing syntax check.
     test_codes = [
@@ -297,6 +309,8 @@ def main():
                 f"compile('''{t}''') = {test_compile(t, globals(), locals())}")
         except Exception as e:
             print(f"compile('''{t}'''): {e}")
+
+    
 
 
 if __name__ == "__main__":
