@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '7.6';
+my $version = '7.7';
 my ($expected_peer_protocol) = ( $version =~ /^(\d+)/ );
 
 use warnings;
@@ -23,9 +23,15 @@ my $prog = $0;
 $prog =~ s:.*/::;
 
 # we cannot copy root dir
-# root dirs: /, //, C:, C:/, /cygdrive/c, /cygdrive/c/,
-my $root_dir_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)$';
-my $abs_path_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)';
+# root dirs:
+#    /,
+#    //abc.com, C:, C:/, # windows
+#   /cygdrive/c, /cygdrive/c/,  # cygwin
+#   /c/, /c  # gitbash
+# my $root_dir_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)$';
+# my $abs_path_pattern = '^([a-zA-Z]:[/]*|[/]+|[/]+cygdrive[/]+[^/]+[/]*)';
+my $root_dir_pattern = '^/$|^//[^/]+$|^[a-zA-Z]:[/]*$|^/cygdrive/[^/]+[/]*$|^/[a-zA-Z][/]$';
+my $abs_path_pattern = '^/|^[a-zA-Z]:($|/)';
 
 my @crctab = (
    0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
@@ -751,7 +757,7 @@ sub get_abs_path {
    #    C:/users/tian/a/b
 
    my @a1 = split /\/+/, $path;
-   if ( !defined( $a1[0] ) ) {
+   if ( !defined( $a1[0] ) || $a1[0] eq '' ) {
       # this is a common path or network path, starting with /
       shift @a1;    # shift away the undef before the first /
    } else {

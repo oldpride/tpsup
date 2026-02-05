@@ -98,10 +98,18 @@ expected_kv_list =  [
     'original': "step4='step4 repeats'",
     'token': 'step4=step4 repeats',
     'value': 'step4 repeats'},
-    {'key': 'step5',
-    'original': "step5='there is a # in the string for step5'",
-    'token': 'step5=there is a # in the string for step5',
+    {'key': 'step5_1',
+    'original': "step5_1='there is a # in the string for step5'",
+    'token': 'step5_1=there is a # in the string for step5',
     'value': 'there is a # in the string for step5'},
+    {'key': 'step5_2',
+    'original': 'step5_2=css="#nested_shadow_host"',
+    'token': 'step5_2=css=#nested_shadow_host',
+    'value': 'css=#nested_shadow_host'},
+    {'key': 'step5_3',
+    'original': 'step5_3=css=#nested_shadow_host"',
+    'token': 'step5_3=css=#nested_shadow_host',
+    'value': 'css=#nested_shadow_host'},
     {'key': 'step6',
     'original': 'step6="this is\nmultiple lines\nstep6"',
     'token': 'step6=this is\nmultiple lines\nstep6',
@@ -164,8 +172,9 @@ expected_kv_list =  [
     {'key': 'step23',
     'original': 'step23=C:/"Program Files"/myapp',
     'token': 'step23=C:/Program Files/myapp',
-    'value': 'C:/Program Files/myapp'},
-  ]
+    'value': 'C:/Program Files/myapp'}
+]
+
 
 # a function to parse the above steps into an array of dict of key-value pairs.
 def parse_keyvalue(input: str, **opt):
@@ -252,14 +261,14 @@ def main():
     else:
         print(f"length match: {len(kv_list)}")
 
-        all_match = True
-        for i, kv in enumerate(kv_list):
-            expected = expected_kv_list[i]
-            if kv != expected:
-                print(f"mismatch at index {i}: got {kv}, expected {expected}")
-                all_match = False
-        if all_match:
-            print("all match!")
+    all_match = True
+    for i, kv in enumerate(kv_list):
+        expected = expected_kv_list[i]
+        if kv != expected:
+            print(f"mismatch at index {i}: got {kv}, expected {expected}")
+            all_match = False
+    if all_match:
+        print("all match!")
     
 if __name__ == '__main__':
     main()

@@ -10,6 +10,15 @@
     'string=myid',
     
     'print=element',
+
+    # confirm text is myid
+    'code=assert last_element.text == "myid"',
+
+    'code=idtext=last_element.text',
+    'if_not=last_element.text=="myid"',
+    'return',
+    'end_if',
+       
     'sleep=1',
     
     "tab=4",

@@ -1388,9 +1388,9 @@ class LocateEnv:
 
         # remove leading spaces
         script = script.lstrip()
-        if script.startswith("file="):
+        if script.startswith("file_txt="):
             # this is a file name
-            file_name = script[len("file="):].strip()
+            file_name = script[len("file_txt="):].strip()
             print(f"run_steps: reading script from file {file_name}")
             try:
                 with open(file_name) as fh:
@@ -1400,17 +1400,30 @@ class LocateEnv:
                 ret['Success'] = False
                 ret['bad_input'] = True
                 return ret
-        parsed = []
-        try:
-            # parsed = tpsup.steptools.parse_steps(script)
-            parsed = tpsup.keyvaluetools.parse_keyvalue(script)
-        except Exception as e:
-            print(f"run_steps: failed to parse script: {e}")
-            ret['Success'] = False
-            ret['bad_input'] = True
-            return ret
-        # steps are the 'original' of each parsed step.
-        steps = [p['token'] for p in parsed]
+            parsed = []
+            try:
+                # parsed = tpsup.steptools.parse_steps(script)
+                parsed = tpsup.keyvaluetools.parse_keyvalue(script)
+            except Exception as e:
+                print(f"run_steps: failed to parse script: {e}")
+                ret['Success'] = False
+                ret['bad_input'] = True
+                return ret
+            # steps are the 'original' of each parsed step.
+            steps = [p['token'] for p in parsed]
+        elif script.startswith("file_py="):
+            file_name = script[len("file_py="):].strip()
+            try:
+                with open(file_name) as fh:
+                    script = fh.read()
+            except Exception as e:
+                print(f"run_steps: failed to read script from file {file_name}: {e}")
+                ret['Success'] = False
+                ret['bad_input'] = True
+                return ret
+            steps = eval(script)
+        else:
+            raise RuntimeError(f"run_steps: unsupported script format: {script}")
         print(f"run_steps: parsed script to {len(steps)} steps: {steps}")
         result = self.follow(steps, **opt)
         ret.update(result) # update hash (dict) with hash (dict)
