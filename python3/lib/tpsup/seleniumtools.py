@@ -1796,7 +1796,14 @@ class SeleniumEnv:
                     js=console.log("hello world")
                 ''',
         },
-
+        "dictfile": {
+            'need_arg': True,
+            'usage': '''
+                use the dict locator specified in the file.
+                example:
+                    dictfile=C:/users/me/dictfile
+                ''',
+        },
         "dump": {
             'has_dryrun': True,  # the cmd has extra checks in dryrun mode
             'usage': '''
@@ -2276,7 +2283,7 @@ class SeleniumEnv:
             '''
             'dict' is python code of dict locator. see locate_dict() for details.
             examples:
-                dict="{
+                "{
                     'type': 'parallel',
                     'action': {
                         'paths' : [
