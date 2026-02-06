@@ -1819,6 +1819,14 @@ class SeleniumEnv:
                     dump=page=C:/users/me/dumpdir
                 ''',
         },
+        'ensureInput': {
+            'need_arg': True,
+            'usage': '''
+                ensure the input string is set for the element.
+                example:
+                    ensureInput=myid
+                ''',
+        },
         "gone_xpath": {
             'need_arg': True,
             'siblings': ['gone_css'],
@@ -2366,6 +2374,31 @@ class SeleniumEnv:
             shutil.rmtree(output_dir, ignore_errors=True)
             self.dump(output_dir, scope=scope, **opt)
 
+        elif cmd == "ensureInput":
+            inputString = arg
+            element = self.last_element
+            if element is None:
+                raise RuntimeError("no element specified")
+            if element.tag_name not in ['input', 'textarea']:
+                raise RuntimeError(f"unsupported element type {element.tag_name}")
+            
+            max_attempts = 2
+            i = 0
+            while i < max_attempts:
+                i += 1
+                # clear the existing value
+                element.clear()
+                element.send_keys(inputString)
+                current_value = element.get_attribute("value")
+                if current_value == inputString:
+                    print(f"locate: successfully set input to '{inputString}'")
+                    break
+                print(f"locate: attempt {i} to set input to '{inputString}' failed, current value='{current_value}'")
+                sleep_time = 3
+                print(f"locate: sleeping {sleep_time} seconds before next attempt")
+                time.sleep(sleep_time)
+            else:
+                raise RuntimeError(f"failed to set input after {max_attempts} attempts")
         # elif cmd == "exp": # see:elif cmd in ['code', 'python', 'exp', 'js']:
         elif cmd in ["gone_xpath", "gone_css"]:
             ptype, paths_string = cmd, arg
@@ -3033,7 +3066,6 @@ class SeleniumEnv:
             return selected_option.text
         else:
             raise RuntimeError(f"unsupported element type {element.tag_name}")
-
 
 def get_browser_path() -> str:
     path = check_setup().get('chrome')

@@ -46,6 +46,10 @@ print=text
 "select=value,2" # 2 - Medium
 "sleep=2"
 
+'click_xpath=//input[@id="user id"],click_css=#user id,xpath=//tr[class="non exist"]'
+'ensureInput=helloWorld'
+"sleep=3"
+
 # test searching two elements
 # note: to fit into one string
 # 'xpath=//fieldset/legend[text()="Profile2"]/../input[@class="submit-btn"],xpath=//tr[@class="non exist"]',
