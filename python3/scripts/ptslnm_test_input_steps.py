@@ -1,21 +1,27 @@
 # ptslnm -af url="file:///c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_input.html"  steps_py="c:/Users/tian/sitebase/github/tpsup/python3/scripts/ptslnm_test_input_steps_py.py"   top
 
 [
-    """
-        click_xpath=//input[@id="user id"],
-        click_css=#user id,
-        xpath=//tr[class="non exist"]
-    """,
+    # """
+    #     click_xpath=//input[@id="user id"],
+    #     click_css=#user id,
+    #     xpath=//tr[class="non exist"]
+    # """,
+    'click_xpath=//input[@id="user id"],click_css=#user id,xpath=//tr[class="non exist"]',
         
     'string=myid',
     
     'print=element',
+    'print=text',
 
     # confirm text is myid
-    'code=assert last_element.text == "myid"',
+    "code=print(f\"text='{self.last_element.text}'\")",
+    "code=print(f\"value='{self.last_element.get_attribute('value')}'\")",
 
-    'code=idtext=last_element.text',
-    'if_not=last_element.text=="myid"',
+    "code=assert(self.last_element.get_attribute('value') == self.getElementValue(self.last_element))",
+
+    'code=self.idvalue=self.getElementValue(self.last_element)',
+    "code=print(f\"self.idvalue='{self.idvalue}'\")",
+    'if_not=exp=self.idvalue=="myid"',
     'return',
     'end_if',
        
@@ -24,15 +30,14 @@
     "tab=4",
         
     # test getting element id
-    """code=print(f'element id = {last_element.get_attribute("id")}, expecting DateOfBirth')""",
+    """code=print(f'element id = {self.last_element.get_attribute("id")}, expecting DateOfBirth')""",
     """sleep=2""",
-    'string=01232025', # mmddyyyy
-    "comment=go to Date of Birth",
+    'string=01232025', # mmddyyyy, DateOfBirth
     'sleep=2',
 
-    "shifttab=3",
+    "shifttab=5",
     
-    """code=print(f'element id = {last_element.get_attribute("id")}, expecting password')""",
+    """code=print(f'element id = {self.last_element.get_attribute("id")}, expecting password')""",
     'string=mypassword',
     "sleep=2",
 
@@ -45,8 +50,7 @@
     # won't move to next element.
     # ['tab=2', 'select=value,2', 'select 2-Medium'],
     'click_xpath=//select[@id="Urgency"]',
-    "select=value,2", 
-    "comment=selected 2-Medium",
+    "select=value,2", # 2 - Medium
     "sleep=2",
     
     # test searching two elements

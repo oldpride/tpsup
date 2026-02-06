@@ -155,6 +155,7 @@ our_cfg = {
     {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps=file_py="{TPP3}/ptslnm_test_steps.py"   top
 
     {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" steps=file_txt="{TPP3}/ptslnm_test_input_steps.txt" top
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" steps=file_py="{TPP3}/ptslnm_test_input_steps.py"   top
 
     {{{{prog}}}} steps=file_txt="{TPP3}/ptslnm_test_assert.txt"
     {{{{prog}}}} steps=file_txt="{TPP3}/ptslnm_test_assert_fail.txt"
