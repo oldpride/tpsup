@@ -151,9 +151,14 @@ our_cfg = {
                                                   a=1 is executed, so a is defined.
 
     - test steps in file
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps_txt="{TPP3}/ptslnm_test_steps_txt.txt" top
-    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html"  steps_py="{TPP3}/ptslnm_test_steps_py.py"   top
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps=file_txt="{TPP3}/ptslnm_test_steps.txt" top
+    {{{{prog}}}} url="{HTTP_BASE}/iframe_over_shadow_test_main.html" steps=file_py="{TPP3}/ptslnm_test_steps.py"   top
 
+    {{{{prog}}}} url="{HTTP_BASE}/ptslnm_test_input.html" steps=file_txt="{TPP3}/ptslnm_test_input_steps.txt" top
+
+    {{{{prog}}}} steps=file_txt="{TPP3}/ptslnm_test_assert.txt"
+    {{{{prog}}}} steps=file_txt="{TPP3}/ptslnm_test_assert_fail.txt"
+    
     - test parallel steps - string
     {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "xpath=//iframe[1],css=p" print=html
     {{{{prog}}}} url="{HTTP_BASE}/iframe_nested_test_main.html" sleep=1 "css=p,xpath=//iframe[1]" print=html

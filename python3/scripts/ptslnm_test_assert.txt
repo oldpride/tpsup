@@ -1,0 +1,3 @@
+"code=assert(1==1)"
+"code=s='hello world'"
+"code=assert(s=='hello world')"

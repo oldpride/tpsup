@@ -59,7 +59,7 @@ class LocateEnv:
     caller_printables: list = []
     debuggers: dict = {}
 
-    already_checked_syntax = False # whether we have checked the syntax of all locators
+    # already_checked_syntax = False # whether we have checked the syntax of all locators
     delay = 0 # delay in seconds before each step
 
     real_step_count = 0 # how many steps have been executed
@@ -510,84 +510,6 @@ class LocateEnv:
                         print(f"follow2: blockstart={blockstart}, negation={negation}, condition={condition}, "
                             f"expected_blockend={blockend}, block_stack={block_stack}")
                     continue
-
-                # if m := re.match(r"\s*steps_(txt|py)=(.+)", step):
-                #     '''
-                #     file that contains steps
-                #         steps_txt=file.txt
-                #             this is a text file that contains steps, just like command line.
-                #             steps can be in multiple lines.
-                #             multiple steps can be in a single line. (we use shell-like syntax)
-                #             there can be blank and comment lines (starting with #).
-                #         steps_py=file.py
-                #             this is a python file that contains steps, but is a python list of steps.
-                #     '''
-                #     file_type, file_name = m.groups()
-
-                #     steps2 = []
-                #     if file_type == 'txt':
-                #         with open(file_name) as fh:
-                #             # lines = fh.readlines()
-                #             # for line in lines:
-                #             #     # skip comment part of line
-                #             #     # for example,
-                #             #     #     # this is a comment
-                #             #     #     click_xpath=/a/b # this is a comment
-                #             #     #     css=#c # this is not a comment
-                #             #     if m := re.match(r"(.*?)\s(#.*?)", line):
-                #             #         # there is a comment at the end of the line; remove it.
-                #             #         line = m.group(1)
-                #             #     if m := re.match(r"#", line):
-                #             #         # comment starts at the beginning of the line; skip the whole line.
-                #             #         continue
-                #             #     if not line.strip():
-                #             #         # empty line; skip it.
-                #             #         continue
-                                
-                #             #     # split the line using shell syntax
-                #             #     steps_in_this_line = shlex.split(line)
-                #             #     if debug:
-                #             #         print(f"follow2: parsed line={line} to {steps_in_this_line}")
-                #             #     steps2.extend(steps_in_this_line)
-                #             string = fh.read()
-                #             steps2 = tpsup.steptools_new.parse_steps(string, debug=debug)
-
-                #             print(f"follow2: parsed txt file {file_name} to steps2={steps2}")
-                #     else:
-                #         # file_type == 'py':
-                #         string = None
-                #         with open(file_name) as fh:
-                #             string = fh.read()
-                #         if not string:
-                #             print(f"file {file_name} is empty")
-                #         else:
-                #             try:
-                #                 steps2 = eval(string)   
-                #             except Exception as e:
-                #                 raise RuntimeError(f"failed to eval file {file_name}: {e}")
-                            
-                #             # we expect the steps to be a list
-                #             if type(steps2) != list:
-                #                 raise RuntimeError(f"steps in python file {file_name} is not a list")
-                            
-                #             print(f"follow2: parsed py file {file_name} to steps2={steps2}")
-                                
-                #     result = self.follow2(steps2, **opt)
-                #     if dryrun:
-                #         continue
-                #     if not result['Success']:
-                #         print(f"follow2: run steps_{file_type}={file_name} failed")
-                #         return result
-                #     continue
-
-                # if m := re.match(r"delay=(\d+)$", step):
-                #     delay = int(m.group(1))
-                #     print(f"follow2: delay={delay}")
-                #     if not dryrun:
-                #         self.delay = delay
-                #     continue
-
-                # there are other string steps that are not related to block, we will handle them later.
             else:
                 # for non-string step, here we only handle block related steps. non-block steps are handled later.
                 if block_stack:
@@ -718,41 +640,13 @@ class LocateEnv:
             result = {'Success': False}
 
             if dryrun:
-                print(f"follow2-#{self.dryrun_step_count}: run step={pformat(step)}")
+                print(f"follow2-#{self.dryrun_step_count}: dryrun step={pformat(step)}")
             else:
                 print(f"follow2-#{self.real_step_count}: run step={pformat(step)}")
-
-            # call_locate = True
-            # if dryrun:
-            #     parsed = self.parse_and_check_single_step_user_input(step)
-            #     if not parsed:
-            #         raise RuntimeError(f"failed to parse step '{step}'")
-                
-            #     usage_dict = parsed['usage_dict']
-            #     if not usage_dict.get("has_dryrun", False):
-            #         # step cmd's function may have dryrun to check syntax. 
-            #         # if its usage_dict does have has_dryrun, we proceed to call the cmd with dryrun flag.
-            #         # if its usage_dict doesn't have has_dryrun, we can return here.
-            #         call_locate = False
-            
-            # if call_locate:
-            #     if interactive:
-            #         while True:
-            #             tpsup.interactivetools.hit_enter_to_continue()
-            #             try:
-            #                 result = self.combined_locate_single_step_user_input(step, **opt)
-            #                 break
-            #             except Exception as e:
-            #                 print(e)
-            #                 # setting step_count to 0 is to make interactive mode to single step.
-            #                 tpsup.interactivetools.nonstop_step_count = 0   
-            #     else:
-            #         result = self.combined_locate_single_step_user_input(step, **opt)
 
             if interactive:
                 need_skip = False
                 while True:
-                    # tpsup.interactivetools.hit_enter_to_continue()
                     pause_result = self.pause()
                     if pause_result['skip']:
                         need_skip = True
@@ -778,12 +672,6 @@ class LocateEnv:
 
             # log_FileFuncLine(f"follow2: step={step} result={pformat(result)}")
 
-            
-            # for step in self.caller_globals['debuggers']['after']:
-            #     # we don't care about the return value but we should avoid
-            #     # using locator (step) that has side effect: eg, click, send_keys
-            #     print(f"follow2: debug_after={step}")
-            #     self.locate(step, **opt)
             if 'debug' in self.combined_usage_by_long:
                 self.combined_locate_cmd_arg('debug', 'after', **opt)
 
@@ -827,10 +715,12 @@ class LocateEnv:
     def follow(self, steps: list, **opt) -> dict:
         dryrun = opt.get('dryrun', 0)
         verbose = opt.get('verbose', 0)
+        checkSyntax = opt.get('checkSyntax', 1)
 
         ret = ret0.copy()
 
-        if not self.already_checked_syntax:
+        # if not self.already_checked_syntax:
+        if checkSyntax:
             # 1. checking syntax saves a lot time by spotting syntax error early!!!
             #    we call follow2() with dryrun=1 to check syntax
             # 2. batch.py can call this function repeatedly with batches of steps,
@@ -852,7 +742,7 @@ class LocateEnv:
             print(f"----------------------------------------------")
             print(f'follow: end checking syntax - syntax looks good')
             print()
-            self.already_checked_syntax = True
+            # self.already_checked_syntax = True
 
         if not dryrun:
             result = self.follow2(steps, **opt)
@@ -1318,7 +1208,7 @@ class LocateEnv:
             else:
                 one_string = self.get_stdin(**opt)
 
-            result = self.run_steps(one_string)
+            result = self.run_steps(one_string, **opt)
             ret.update(result) # update hash (dict) with hash (dict)
         # elif cmd == 'steps_py':
         #     try:
@@ -1425,6 +1315,7 @@ class LocateEnv:
         else:
             raise RuntimeError(f"run_steps: unsupported script format: {script}")
         print(f"run_steps: parsed script to {len(steps)} steps: {steps}")
+        print(f"interactive={opt.get('interactive', 0)}")
         result = self.follow(steps, **opt)
         ret.update(result) # update hash (dict) with hash (dict)
         return ret

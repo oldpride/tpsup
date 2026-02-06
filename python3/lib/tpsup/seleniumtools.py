@@ -2999,6 +2999,34 @@ class SeleniumEnv:
         
         return ret
 
+    def getElementValue(self, element=None):
+        '''
+        element.text property (which only works for text between HTML tags like <div>...</div>).
+        element.get_attribute("value") method (which works for input elements like <input>, <textarea>, etc.).
+        '''
+        if element is None:
+            element = self.last_element
+        if element is None:
+            raise RuntimeError("no element specified")
+        
+        '''
+        Input TypeMethod to get "User Input"
+        Text/Password/Email/Textarea    element.get_attribute('value')
+        Checkbox/Radio                  element.is_selected() (returns True/False)
+        Dropdown (Select)               Use the Select class or find the option[selected]
+        '''
+        # return element.get_attribute("value")
+        if element.tag_name in ['input', 'textarea']:
+            return element.get_attribute("value")
+        elif element.tag_name in ['checkbox', 'radio']:
+            return element.is_selected()
+        elif element.tag_name in ['select']:
+            select = Select(element)
+            selected_option = select.first_selected_option
+            return selected_option.text
+        else:
+            raise RuntimeError(f"unsupported element type {element.tag_name}")
+
 
 def get_browser_path() -> str:
     path = check_setup().get('chrome')
