@@ -2379,27 +2379,33 @@ class SeleniumEnv:
             element = self.last_element
             if element is None:
                 raise RuntimeError("no element specified")
-            if element.tag_name not in ['input', 'textarea']:
+            if element.tag_name not in ['input', 'textarea', 'select']:
                 raise RuntimeError(f"unsupported element type {element.tag_name}")
             
             max_attempts = 2
             i = 0
             while i < max_attempts:
                 i += 1
-                # clear the existing value
-                element.clear()
-                element.send_keys(inputString)
-                current_value = element.get_attribute("value")
+                if element.tag_name in ['input', 'textarea']:
+                    # clear the existing value
+                    element.clear()
+                    element.send_keys(inputString)
+                    current_value = element.get_attribute("value")
+                elif element.tag_name in ['select']:
+                    selectElement = Select(element)
+                    selectElement.select_by_visible_text(inputString)
+                    selected_option = selectElement.first_selected_option
+                    current_value = selected_option.text
+                else:
+                    raise RuntimeError(f"unsupported element type {element.tag_name}")
                 if current_value == inputString:
-                    print(f"locate: successfully set input to '{inputString}'")
+                    print(f"locate: successfully set tag={element.tag_name} input='{inputString}'")
                     break
-                print(f"locate: attempt {i} to set input to '{inputString}' failed, current value='{current_value}'")
                 sleep_time = 3
-                print(f"locate: sleeping {sleep_time} seconds before next attempt")
+                print(f"locate: attempt {i} to set input to '{inputString}' failed, current value='{current_value}', sleeping={sleep_time}")
                 time.sleep(sleep_time)
             else:
-                raise RuntimeError(f"failed to set input after {max_attempts} attempts")
-        # elif cmd == "exp": # see:elif cmd in ['code', 'python', 'exp', 'js']:
+                raise RuntimeError(f"failed to set tag={element.tag_name} input after {max_attempts} attempts")
         elif cmd in ["gone_xpath", "gone_css"]:
             ptype, paths_string = cmd, arg
 
