@@ -222,7 +222,7 @@ class SeleniumEnv:
     printables = [
         "consolelog", "css", "domstack", "element", 
         "html", "iframestack", "tag", "text", 
-        "title", "timeouts", "url", "waits", "xpath"
+        "title", "timeouts", "url", "value", "waits", "xpath"
     ]
 
     def __init__(self, host_port: str = 'auto', **opt):
@@ -2632,6 +2632,8 @@ class SeleniumEnv:
                 elif key == 'element':
                     if self.last_element:
                         js_print_debug(self.driver, self.last_element)
+                        element_value = self.getElementValue(self.last_element)
+                        print(f'element_value="{element_value}"')
                     else:
                         print(f'element is not available because last_element is None')
                 elif key == 'html':
@@ -2709,6 +2711,10 @@ class SeleniumEnv:
                     # https://stackoverflow.com/questions/938180
                     parent_url = self.driver.execute_script("return document.referrer")
                     print(f'    parent_iframe_url=document.referrer={parent_url}')
+                elif key == 'value':
+                    if self.last_element:
+                        element_value = self.getElementValue(self.last_element)
+                        print(f'element_value="{element_value}"')
                 elif key == 'xpath':
                     if self.last_element:
                         xpath = js_get(self.driver, self.last_element, 'xpath', **opt)
@@ -3053,7 +3059,8 @@ class SeleniumEnv:
         if element is None:
             element = self.last_element
         if element is None:
-            raise RuntimeError("no element specified")
+            print("getElementValue: no element specified")
+            return None
         
         '''
         Input TypeMethod to get "User Input"
@@ -3071,7 +3078,8 @@ class SeleniumEnv:
             selected_option = select.first_selected_option
             return selected_option.text
         else:
-            raise RuntimeError(f"unsupported element type {element.tag_name}")
+            print(f"getElementValue: unsupported element tag={element.tag_name}")
+            return None
 
 def get_browser_path() -> str:
     path = check_setup().get('chrome')
@@ -4250,9 +4258,6 @@ def test_basic():
     
     print(f"cmd = {cmd}")
     os.system(cmd)
-
-
-
 
 def tp_switch_to_frame(driver, element: WebElement, **opt):
     '''
