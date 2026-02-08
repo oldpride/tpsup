@@ -18,7 +18,9 @@ import tpsup.locatetools
 import tpsup.utilbasic
 
 from selenium.common.exceptions import \
-    NoSuchElementException, ElementNotInteractableException, \
+    NoSuchElementException, \
+    ElementClickInterceptedException, \
+    ElementNotInteractableException, \
     TimeoutException, NoSuchShadowRootException, \
     StaleElementReferenceException, WebDriverException, UnexpectedAlertPresentException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
@@ -1774,16 +1776,7 @@ class SeleniumEnv:
                     clear_text
                 ''',
         },
-        "click": {
-            'siblings': ['tp_click'],
-            'usage': '''
-                click the current element.
-                tp_click() is a wrapper of click() to handle the case when the element is not clickable.
-                example:
-                    click
-                    tp_click
-                ''',
-        },
+
         "code": {
             'need_arg': True,
             'siblings': ['js'], # siblings are commands that share the same usage.
@@ -1950,6 +1943,17 @@ class SeleniumEnv:
                     raw_string=hello\tworld
                 ''',
         },
+        "tp_click": {
+            'usage': '''
+                click the current element.
+                tp_click() is a wrapper of click() to handle the case when the element is not clickable.
+                example:
+                    tp_click=overlayButtonXpath=.//button[@id='close-btn'] 
+                default 
+                    overlayXpath='//*[(@role="dialog" or @role="modal") and not(@aria-hidden="true")]',
+                    overlayButtonXpath=.//button   # relative to the overlay (modal)
+                ''',
+        },
         'url': {
             'siblings': ['url_accept_alert'],
             'need_arg': True,
@@ -2111,7 +2115,7 @@ class SeleniumEnv:
             element.send_keys(Keys.CONTROL + "a")
             element.send_keys(Keys.DELETE)
 
-        elif cmd in ['click', 'tp_click']:
+        elif cmd in ['click']:
             print(f"locate: click")
             # the to-be-clicked element may not be the active element, for
             # example, we just found a element by find_element_by_xpath(),
@@ -2121,13 +2125,8 @@ class SeleniumEnv:
             # element.click()
             if not self.last_element:
                 raise RuntimeError("no element to click")
-            
-            if cmd == 'click':
-                # we keep the selenium way here, in case the problem is fixed in the future.
-                self.last_element.click()
-            else:
-                # tp_click() is a wrapper of click() to handle the case when the element is not clickable.
-                tp_click(self.driver, self.last_element)
+
+            self.last_element.click()
 
             # a click may change the page
             self.handle_page_change(**opt)
@@ -2729,9 +2728,6 @@ class SeleniumEnv:
             # self.last_element = None 
             self.last_element = self.locator_driver.find_element(By.CSS_SELECTOR, ":first-child")
             self.handle_page_change(**opt)
-
-        
-        
         elif cmd == "select":
             m = re.match(r"(value|index|text),(.+)", arg)
             if not m:
@@ -2839,6 +2835,13 @@ class SeleniumEnv:
             print(f"locate: tab {count} times")         
             self.driver.switch_to.active_element.send_keys(Keys.TAB * count)
             self.last_element = self.driver.switch_to.active_element 
+        elif cmd == "tp_click":
+            kv_dict = tpsup.locatetools.parse_kv_arg(arg)
+            # tp_click() is a wrapper of click() to handle the case when the element is not clickable.
+            tp_click(self.driver, self.last_element, **kv_dict)
+
+            # a click may change the page
+            self.handle_page_change(**opt)
         elif cmd in ["url", "url_accept_alert"]:
             url = arg
             accept_alert = 0
@@ -3080,6 +3083,7 @@ class SeleniumEnv:
         else:
             print(f"getElementValue: unsupported element tag={element.tag_name}")
             return None
+
 
 def get_browser_path() -> str:
     path = check_setup().get('chrome')
@@ -3556,7 +3560,6 @@ class tp_find_element_by_chains:
         return None
 
 
-
 def correct_xpath(path: str) -> str:
     '''
     in windows gitbash, xpath=/html/body[1] will be converted to xpath=C:/Program Files/Git/html/body[1].
@@ -3578,8 +3581,6 @@ def get_locator_compiled_path2():
     return re.compile(
         r"(.+?)(?:\n|\r\n|\s?)*,(?:\n|\r\n|\s?)*(xpath|css|click_xpath|click_css)=",
         re.MULTILINE | re.DOTALL)
-
-
 
 
 def locator_chain_to_js_list(locator_chain: list, **opt) -> list:
@@ -3895,13 +3896,45 @@ def js_list_to_locator_chain(js_list: list, **opt) -> list:
         locator_chain.append(f"js=2element={js}")
     return locator_chain
 
+def getOverlay(driver, 
+               overlayXpath,
+               overlayButtonXpath,
+               **opt):
+    '''
+    find overlay element
+    '''
+    # 1. Detect using ARIA role (No ID required!)
+    modal = WebDriverWait(driver, 5).until(
+        EC.visibility_of_element_located((By.XPATH, overlayXpath))
+    )
+    print("SUCCESS: Overlay Modal detected via ARIA role!")
 
-def tp_click(driver, element: WebElement, **opt):
+    # 2. Check if the body scroll is locked
+    body_class = driver.find_element(By.TAG_NAME, "body").get_attribute("class")
+    if "modal-open" in body_class:
+        print("SUCCESS: Confirmed overlaymodal is active via body class change.")
+
+    # 3. Return the modal button
+    close_button = modal.find_element(By.XPATH, overlayButtonXpath)
+    return close_button
+
+def dismissOverlay(driver, overlayXpath, overlayButtonXpath, **opt):
+    close_button = getOverlay(driver, overlayXpath=overlayXpath, overlayButtonXpath=overlayButtonXpath, **opt)
+    close_button.click()
+    print("SUCCESS: Overlay Modal dismissed.")
+
+def tp_click(driver, element: WebElement, 
+             overlayXpath='//*[(@role="dialog" or @role="modal") and not(@aria-hidden="true")]',
+             overlayButtonXpath=".//button", # relative to the overlay (modal)
+             **opt):
     try:
         # this didn't improve
         #   print("first scrowIntoView")
         #   driver.execute_script("arguments[0].scrollIntoView();", element)
         #   print("then click")
+        element.click()
+    except ElementClickInterceptedException:
+        dismissOverlay(driver, overlayXpath=overlayXpath, overlayButtonXpath=overlayButtonXpath, **opt)
         element.click()
     except ElementNotInteractableException:
         # use js to overcome this error
@@ -4361,6 +4394,9 @@ def download_chromedriver(**opt):
     cmd = f"{driver_path} --version"
     print(cmd)
     os.system(cmd)
+
+
+
 
 procs = [
             "chromedriver", # chromedriver

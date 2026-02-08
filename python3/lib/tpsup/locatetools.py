@@ -1481,9 +1481,28 @@ def handle_break(step: str, **opt):
   
     return ret
 
-
-
-
+def parse_kv_arg(arg: str) -> dict:
+    '''
+    in locator=a1=b1,a2=b2
+    a1=b1,a2=b2 is the kv arg
+    we parse the kv arg into a dictionary
+    {
+    'a1': 'b1',
+    'a2': 'b2',
+    }
+    '''
+    if not arg:
+        return {}
+    
+    kv_dict = {}
+    for kv in arg.split(','):
+        if '=' in kv:
+            k, v = kv.split('=', 1)
+        else:
+            k = kv
+            v = None
+        kv_dict[k] = v
+    return kv_dict
 
 def main():
     # start_http_server(port=8000, debug=1)
