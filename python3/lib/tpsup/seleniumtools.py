@@ -1776,7 +1776,13 @@ class SeleniumEnv:
                     clear_text
                 ''',
         },
-
+        "click": {
+            'usage': '''
+                click the current element.
+                example:
+                    click
+                ''',
+        },
         "code": {
             'need_arg': True,
             'siblings': ['js'], # siblings are commands that share the same usage.
