@@ -99,7 +99,10 @@ def kill_procs(procs: list, **opt):
         my_env = tpsup.envtools.get_env()
         if my_env.isWindows:
             # cmd = f"taskkill /f /im {proc}"
-            cmd = f"pkill {proc}"
+            # cmd = f"pkill {proc}"
+
+            # ps_regex match full command line and with regex support, and is fast.
+            cmd = f"ps_regex -k {proc}"
         else:
             # -f means full command line
             cmd = f"pkill -f -- {proc}"

@@ -4404,8 +4404,17 @@ def download_chromedriver(**opt):
 
 
 
+sitebase_pattern = f"{os.environ['SITEBASE']}"
+                      
+# remove /cygdrive/c, /c, c: for compatibility
+sitebase_pattern = re.sub(r"^(/cygdrive/[a-zA-Z]/|[a-zA-Z]:/|/[a-zA-Z]/)", "", sitebase_pattern)
+
+# convert / and \ in path to . for pattern match
+sitebase_pattern = sitebase_pattern.replace('\\', '.').replace('/', '.')
+
 procs = [
-            "chromedriver", # chromedriver
+            # chrome and chromedriver under sitebase
+            f"{sitebase_pattern}.*chrome", 
         ]
 
 # the following is for batch framework - batch.py
