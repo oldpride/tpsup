@@ -4401,9 +4401,6 @@ def download_chromedriver(**opt):
     print(cmd)
     os.system(cmd)
 
-
-
-
 sitebase_pattern = f"{os.environ['SITEBASE']}"
                       
 # remove /cygdrive/c, /c, c: for compatibility
