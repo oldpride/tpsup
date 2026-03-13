@@ -261,7 +261,7 @@ sub swagger {
                if ( !$python_cmd ) {
                   croak "cannot find python or python3 in PATH, needed for json parsing";
                }
-               my $json_cmd = "$python_cmd -m json.tool";
+               my $json_cmd = "$python_cmd -m json.tool --sort-keys";
                open my $ofh, "|$json_cmd" or die "cmd=$json_cmd failed: $!";
                print $ofh @lines;
                close $ofh;
