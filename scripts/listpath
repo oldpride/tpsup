@@ -1,6 +1,7 @@
 #!/bin/bash
 
 prog=`basename $0`
+delimiter=':'
 
 usage="
 usage:
@@ -9,11 +10,27 @@ usage:
 
    'path' can be any env var, default to PATH
 
+   -d delimiter, default to '$delimiter'
+
 example:
 
    $prog PATH
    $prog LD_LIBRARY_PATH
 "
+
+while getopts "d:" opt; do
+   case $opt in
+      d)
+         delimiter="$OPTARG"
+         ;;
+      \?)
+         echo "ERROR: invalid option -$OPTARG" >&2
+         echo "$usage" >&2
+         exit 1
+         ;;
+   esac
+done
+shift $((OPTIND - 1))
 
 if [ $# -ne 1 ]; then
    echo "ERROR: wrong number of args" >&2
@@ -25,7 +42,7 @@ path=$1
 
 resolved=`eval "echo \\\$$path"`
 
-echo "$resolved" | /bin/sed -e "s/:/\n/g" | while read line
+echo "$resolved" | /bin/sed -e "s/$delimiter/\n/g" | while read line
 do
    echo "$line"
 done
