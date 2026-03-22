@@ -219,7 +219,9 @@ example:
 
 findpath() {
    # making findpath as function instead of a script is to make it usable when NFS hang.
-   local pattern path usage o case_insensitive OPTIND OPTARG
+   local pattern path usage o case_insensitive OPTIND OPTARG delimiter
+
+   delimiter=":"
 
    usage="
 usage: 
@@ -230,27 +232,26 @@ usage:
 
    if 'pattern' is 'all', just print every component
 
-   -i      case-insensitive
+   -i                  case-insensitive
+   -d delimiter        default to '$delimiter'
 
 example:
 
    findpath /usr
    findpath -i roaming 
    findpath all LD_LIBRARY_PATH
-"
 
-   if [ $# -eq 0 -o $# -gt 2 ]; then
-      echo "ERROR: wrong number of args" >&2
-      echo "$usage" >&2
-      return 1
-   fi
+   # on windows, we can use ';' as delimiter
+   findpath -d ';' all PYTHONPATH
+"
 
    case_insensitive=N
 
    # don't forget to localize OPTIND OPTARG
-   while getopts i o; do
+   while getopts d:i o; do
       case "$o" in
       i) case_insensitive=Y ;;
+      d) delimiter="$OPTARG" ;;
       *)
          echo "unknow switch. $usage" >&2
          return 1
@@ -259,6 +260,12 @@ example:
    done
 
    shift $((OPTIND - 1))
+
+   if [ $# -eq 0 -o $# -gt 2 ]; then
+      echo "ERROR: wrong number of args" >&2
+      echo "$usage" >&2
+      return 1
+   fi
 
    pattern=$1
    path=$2
@@ -269,7 +276,7 @@ example:
 
    resolved=$(eval "echo \$$path")
 
-   echo "$resolved" | /bin/sed -e "s/:/\n/g" | while read line; do
+   echo "$resolved" | /bin/sed -e "s/$delimiter/\n/g" | while read line; do
       if [[ ${pattern,,} = all ]]; then
          echo "$line"
       elif [ $case_insensitive = N ]; then
@@ -287,7 +294,9 @@ example:
 }
 
 listpath() {
-   local pattern path usage o case_insensitive OPTIND OPTARG
+   local pattern path usage o case_insensitive OPTIND OPTARG delimiter
+
+   delimiter=":"
 
    usage="
 usage: 
@@ -296,11 +305,28 @@ usage:
 
    'path' can be any env var, default to PATH
 
+   -d delimiter        default to '$delimiter'
+
 example:
 
    listpath PATH
    findpath LD_LIBRARY_PATH
+
+   # on windows, we can use ';' as delimiter
+   findpath -d ';' all PYTHONPATH
 "
+
+   while getopts d: o; do
+      case "$o" in
+      d) delimiter="$OPTARG" ;;
+      *)
+         echo "unknow switch. $usage" >&2
+         return 1
+         ;;
+      esac
+   done
+
+   shift $((OPTIND - 1))
 
    if [ $# -ne 1 ]; then
       echo "ERROR: wrong number of args" >&2
@@ -310,7 +336,7 @@ example:
 
    path=$1
 
-   findpath all $path
+   findpath -d "$delimiter" all $path
 }
 
 get_native_path() {
