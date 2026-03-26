@@ -1,0 +1,13 @@
+#!/bin/bash
+
+rsync -ar --delete \
+   --exclude='[.]git*' \
+   --exclude='.nfs*' \
+   --exclude='[.]*[.]sw[ponm]' \
+   --exclude='[.]idea' \
+   --exclude='[.]vscode' \
+   --exclude=__pycache__ \
+   --exclude='*[.]site' \
+   --exclude='*[.]FCStd' \
+   --exclude='*[.]FCBak' \
+$@

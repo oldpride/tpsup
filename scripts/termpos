@@ -74,7 +74,12 @@ set_terminal () {
       # mintty covers cygwin and git bash.
       # \033 is control+v, escape
       # \007 is control+v, control+g
-      printf "\033]7770;\007" > $tty
+
+      if ! [ $tty = "auto" -o $tty = "current" ]; then
+         # for mintty, we have to write the control code to the tty, not to the current terminal.
+         # if we write to the current terminal, it will not work when we "su - appid", because the current terminal is still the original terminal, not the new terminal after su.
+         printf "\033]7770;\007" > $tty
+      fi
       # printf "\033]7770;9007" > $tty # set font size to 8pt
    fi
    
