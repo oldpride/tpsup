@@ -17,7 +17,7 @@ usage:
 
 examples:
 
-   \$ git   log profile
+   \$ git   log -- profile    # -- will list deleted files too
    \$ $prog 1234444 profile
    \$ ls -l profile.old3
 
