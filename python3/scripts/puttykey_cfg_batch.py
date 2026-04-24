@@ -23,7 +23,19 @@ our_cfg = {
 
     'usage_example': f'''
     examples:
-        1. add putty pub keys to pageant.
+        save the putty private key files (.ppk) to a local path, for example
+            %USERPROFILE%/.tpsup/myputtykey.ppk
+
+        create a env file in one of the following paths
+            %TPSUP%//env/putty_key.env
+            %SITESPEC%/env/putty_key.env
+            %USERPROFILE%/.tpsup/env/putty_key.env
+
+        in the env file, define the following variables
+            putty_key_files=%USERPROFILE%/.tpsup/myputtykey.ppk
+            putty_key_passphrase=your_putty_key_passphrase
+
+        to run - add putty pub keys to pageant.
             {{{{prog}}}} add
     ''',
 
