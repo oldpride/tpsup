@@ -74,6 +74,9 @@ our_cfg = {
     - To clean up chrome persistence and driver logs
         {{{{prog}}}} any -cq
 
+    - To kill chromedriver and browser processes if they are running.
+        {{{{prog}}}} any -kill
+
     - has shadows, no iframes, simple pages to test shadows, default dump scope is element, default dump dir is $HOME/dumpdir
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump=page="{HOME}/dumpdir" # without locators, dump whole page
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" "xpath=id('shadow_host')" "shadow" dump # with locators

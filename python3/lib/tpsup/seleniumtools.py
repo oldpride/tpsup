@@ -310,9 +310,15 @@ class SeleniumEnv:
         # driver log on Windows must use Windows path, eg, C:/Users/tian/test.log.
         # Even when we run the script from Cygwin or GitBash, we still need to use Windows path.
 
-        if opt.get("cleanLog", 0) or opt.get("cleanQuit", 0):
-            self.cleanLog()
-            if opt.get("cleanQuit", 0):
+        cleanLog = opt.get("cleanLog", False)
+        cleanQuit = opt.get("cleanQuit", False)
+        kill = opt.get("kill", False)
+        if cleanLog or cleanQuit or kill:
+            if cleanLog or cleanQuit:
+                self.cleanLog()
+            if kill:
+                kill_and_check_procs(**opt)
+            if cleanQuit or kill:
                 exit(0)
 
         self.download_dir = tpsup.tmptools.tptmp(
@@ -4414,6 +4420,11 @@ procs = [
             f"{sitebase_pattern}.*chrome", 
         ]
 
+def kill_and_check_procs(**opt):
+    log_FileFuncLine(f"kill chromedriver if it is still running")
+    tpsup.pstools.kill_procs(procs, **opt)
+    tpsup.pstools.check_procs(procs, **opt)
+
 # the following is for batch framework - batch.py
 #
 # pre_batch and post_batch are used to by batch.py to do some setup and cleanup work
@@ -4458,10 +4469,11 @@ def post_batch(all_cfg, known, **opt):
         print(f"driver is still alive, quit it")
         driverEnv.driver.quit()
 
-    log_FileFuncLine(f"kill chromedriver if it is still running")
-    tpsup.pstools.kill_procs(procs, **opt)
+    # log_FileFuncLine(f"kill chromedriver if it is still running")
+    # tpsup.pstools.kill_procs(procs, **opt)
 
-    tpsup.pstools.check_procs(procs, **opt)
+    # tpsup.pstools.check_procs(procs, **opt)
+    kill_and_check_procs(**opt)
 
 tpbatch = {
     'pre_batch': pre_batch,
@@ -4520,6 +4532,12 @@ tpbatch = {
             'default': False,
             'action': 'store_true',
             'help': 'print full xpath in levels, not shortcut, eg. /html/body/... vs id("myinput")',
+        },
+        'kill': {
+            'switches': ['-kill','--kill'],
+            'default': False,
+            'action': 'store_true',
+            'help': 'kill chromedriver and browser processes if they are running',
         },
         'limit_depth': {
             'switches': ['--limit_depth'],

@@ -92,7 +92,11 @@ def code(all_cfg, known, **opt):
         # we loop here until the title changes, meaning the putty window is "matured"
         # and ready for next command.
 
-        # because "... - PuTTY" will be the title bar before and after login, we run siteenv once anyway
+        # because "... - PuTTY" will be the title bar before and after login, we run siteenv once anyway.
+        #     - if the putty is logged in (eg, by ssh key with pageant), the title not be "... - PuTTY" 
+        #       and we can skip the loop.
+        #     - if the putty is not logged in, the title will stay "... - PuTTY" and the loop will run 
+        #       until user types the command to login, which changes the title.
         f'type={siteenv_command}' + '{ENTER}',
 
         'while=exp=titlevar[0].endswith(" - PuTTY")',
