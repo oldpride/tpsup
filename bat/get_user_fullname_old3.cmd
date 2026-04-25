@@ -67,19 +67,6 @@ if "!way!" == "local" (
     REM delims== means use = as delimiter
     for /f "tokens=2 delims==" %%a in ('wmic useraccount where name^="%user1%" get fullname /value ^| findstr /i "FullName"') do set DisplayName=%%a
     echo. !DisplayName!
-) else if "!way!" == "reg" (
-    REM query registry, this works cloud env because it is cache.
-    set "DisplayName="
-    set "Found=0"
-    for /f "tokens=3,*" %%a in (
-        'reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\SessionData" /s ^| findstr /i DisplayName'
-    ) do (
-        if "!Found!"=="0" (
-            set "Found=1"
-            set "DisplayName=%%a %%b"
-        )
-    )
-    echo. !DisplayName!
 ) else (
     echo "unknown way=%way%"
     goto :usage
@@ -103,8 +90,7 @@ exit /b 0
    echo    query_way        
    echo              'local'  - net user username. fast.
    echo              'domain' - net user username /domain. fast.
-   echo              'wmic'   - wmic useraccount where name="username". slow. 
-   echo              'reg'    - query registry, this works cloud env because it is cache.
+   echo              'wmic'   - wmic useraccount where name="username". slow.
    echo.
    echo example:
    echo.
