@@ -49,6 +49,8 @@ REM after endlocal, use %var_name%k
 
 :main
 if "!way!" == "local" (
+    REM to set user full name, run this from cmd as admin:
+    REM     net user %username% /fullname:"FristName LastName" 
     REM use ^ to escape | in the loop's command
     REM Full Name                John Smith
     REM tokens=2* means get 2nd and all tokens, assign to %%b.

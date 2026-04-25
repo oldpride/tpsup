@@ -116,7 +116,7 @@ my $excludes =
 
 if ( $action eq 'do' ) {
    {
-      my @dirs  = `/bin/ls -d $backup_base/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]`;
+      my @dirs  = `/bin/ls -d "$backup_base"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]`;
       my $count = scalar(@dirs);
 
       if ( $count > $retention ) {
@@ -125,7 +125,7 @@ if ( $action eq 'do' ) {
          my $remove_count = $count - $retention;
 
          for ( my $i = 0 ; $i < $remove_count ; $i++ ) {
-            my $cmd = "/bin/rm -fr $dirs[$i]";
+            my $cmd = "/bin/rm -fr \"$dirs[$i]\"";
             print "$cmd\n";
             system($cmd);
          }
@@ -136,13 +136,13 @@ if ( $action eq 'do' ) {
    }
 
    if ( !-d $backup_base ) {
-      my $cmd = "mkdir -p $backup_base";
+      my $cmd = "mkdir -p '$backup_base'";
       print "$cmd\n";
       system($cmd) && die "$cmd failed";
    }
 
    {
-      my $cmd = "rsync -av --delete $excludes $source_base/* $backup_base/$today";
+      my $cmd = "rsync -av --delete $excludes '$source_base'/* '$backup_base'/$today";
       print "$cmd\n";
       system("$cmd");
    }
@@ -151,7 +151,7 @@ if ( $action eq 'do' ) {
       my $backupdir = "$backup_base/$yyyymmdd";
       usage("$backupdir doesn't exist, we don't have a backup for $yyyymmdd") if !-d $backupdir;
    } else {
-      $yyyymmdd = `/bin/ls $backup_base|tail -1`;
+      $yyyymmdd = `/bin/ls "$backup_base"|tail -1`;
       die "we don't have any backup" if !$yyyymmdd;
       chomp $yyyymmdd;
    }
@@ -159,16 +159,16 @@ if ( $action eq 'do' ) {
    my $cmd;
 
    if ($brief) {
-      $cmd = "rsync -avn $excludes $backup_base/$yyyymmdd/* $source_base";
+      $cmd = "rsync -avn $excludes '$backup_base'/$yyyymmdd/* '$source_base'";
    } else {
       $cmd =
-"diff -r $backup_base/$yyyymmdd $source_base|egrep -v '[.](svn|sw[pon]|git|nfs|idea)|__pycache__|^Common subdirectories'";
+"diff -r '$backup_base'/$yyyymmdd '$source_base'|egrep -v '[.](svn|sw[pon]|git|nfs|idea)|__pycache__|^Common subdirectories'";
    }
 
    print "$cmd\n";
    system("$cmd");
 } elsif ( $action eq 'list' ) {
-   my $cmd = "/bin/ls $backup_base";
+   my $cmd = "/bin/ls '$backup_base'";
    print "$cmd\n";
    system("$cmd");
 } elsif ( $action eq 'info' ) {
@@ -187,4 +187,3 @@ sub print_cfg {
    }
    render_arrays( \@rows, { headers => [qw(proj source_base backup_base retention comment)], verbose => $verbose } );
 }
-
