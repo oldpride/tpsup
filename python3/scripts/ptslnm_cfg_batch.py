@@ -71,11 +71,11 @@ our_cfg = {
     - To see all defineded locators
         {{{{prog}}}} locators
 
-    - To clean up chrome persistence and driver logs
+    - To clean up chrome persistence and driver logs and then quit.
         {{{{prog}}}} any -cq
 
-    - To kill chromedriver and browser processes if they are running.
-        {{{{prog}}}} any -kill
+    - To kill chromedriver and browser processes if they are running and then quit.
+        {{{{prog}}}} any -kq
 
     - has shadows, no iframes, simple pages to test shadows, default dump scope is element, default dump dir is $HOME/dumpdir
     {{{{prog}}}} url="{HTTP_BASE}/shadow_test2_main.html" dump=page="{HOME}/dumpdir" # without locators, dump whole page

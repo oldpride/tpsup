@@ -313,13 +313,13 @@ class SeleniumEnv:
         cleanLog = opt.get("cleanLog", False)
         cleanQuit = opt.get("cleanQuit", False)
         kill = opt.get("kill", False)
-        if cleanLog or cleanQuit or kill:
-            if cleanLog or cleanQuit:
-                self.cleanLog()
-            if kill:
-                kill_and_check_procs(**opt)
-            if cleanQuit or kill:
-                exit(0)
+        killQuit = opt.get("killQuit", False)
+        if cleanLog or cleanQuit:
+            self.cleanLog()
+        if kill or killQuit:
+            kill_and_check_procs(**opt)
+        if cleanQuit or killQuit:
+            exit(0)
 
         self.download_dir = tpsup.tmptools.tptmp(
             base=os.path.join(self.log_base, "Downloads", "selenium")
@@ -4538,6 +4538,12 @@ tpbatch = {
             'default': False,
             'action': 'store_true',
             'help': 'kill chromedriver and browser processes if they are running',
+        },
+        'killQuit': {
+            'switches': ['-kq','--killQuit'],
+            'default': False,
+            'action': 'store_true',
+            'help': 'kill chromedriver and browser processes if they are running and then quit',
         },
         'limit_depth': {
             'switches': ['--limit_depth'],
