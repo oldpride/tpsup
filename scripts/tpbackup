@@ -25,6 +25,7 @@ Usage:
    $prog do    proj
    $prog list  proj
    $prog check proj
+   $prog diff  proj
    $prog info
 
    'proj' is defined in tpbackup.csv.
@@ -33,6 +34,7 @@ Usage:
    do    - do the backup
    list  - list the backup folders
    check - list the changes since the backup
+   diff  - show the diff between this backup and previous backup.
    info  - show config in the tpbackup.csv
 
    -v              verbose mode
@@ -52,7 +54,9 @@ Examples:
    $prog check tpsup
    $prog do    tpsup
    $prog list  tpsup
+   $prog diff  tpsup 
    $prog info
+
    
 END
 
@@ -75,7 +79,7 @@ usage("wrong number of args") if !@ARGV;
 
 my ( $action, $proj ) = @ARGV;
 
-usage("unknown action='$action'") if $action !~ /(do|list|check|info)$/;
+usage("unknown action='$action'") if $action !~ /(do|list|check|diff|info)$/;
 
 my $cfg_by_proj = parse_csv_file( $CfgFile, { keyColumn => 'proj' } );
 
@@ -112,7 +116,7 @@ $backup_base =~ s:\$proj:$proj:g;
 
 # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
 my $excludes =
-  "-exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__";
+  "--exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__";
 
 if ( $action eq 'do' ) {
    {
@@ -167,6 +171,14 @@ if ( $action eq 'do' ) {
 
    print "$cmd\n";
    system("$cmd");
+} elsif ( $action eq 'diff' ) {
+   my $current_yyyymmdd = `/bin/ls "$backup_base"|tail -1`;
+   die "we don't have any backup" if !$current_yyyymmdd;
+   chomp $current_yyyymmdd;
+   my $previous_yyyymmdd = `/bin/ls "$backup_base"|tail -2|head -1`;
+   die "we don't have enough backup to compare, need at least 2 backups" if !$previous_yyyymmdd;
+   chomp $previous_yyyymmdd;
+   my $cmd = "diff -r --exclude='[.](svn|sw[pon]|git|nfs|idea)|__pycache__|^Common subdirectories' '$backup_base'/$previous_yyyymmdd '$backup_base'/$current_yyyymmdd";
 } elsif ( $action eq 'list' ) {
    my $cmd = "/bin/ls '$backup_base'";
    print "$cmd\n";
