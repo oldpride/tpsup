@@ -950,6 +950,20 @@ mysitelib() { cd "$MYBASE/github/$SPECNAME/lib/perl/${SPECNAME^^}"; } # ${x,,} l
 mysitep3() { cd "$MYBASE/github/$SPECNAME/python3/scripts"; }
 mysitep3lib() { cd "$MYBASE/github/$SPECNAME/python3/lib/tpsup"; }
 
+1drive () {
+   # this works in cygwin and gitbash
+   if [[ $UNAME =~ Msys ]]; then
+      # gitbash
+      cd /c/Users/$USERNAME/OneDrive
+   elif [[ $UNAME =~ Cygwin ]]; then
+      # cygwin
+      cd /cygdrive/c/Users/$USERNAME/OneDrive
+   else
+      echo "1drive() on unsupported OS: $UNAME"
+      return
+   fi
+}
+
 myandroid() {
    echo "ANDROID_HOME=$ANDROID_HOME"
    [ "X$ANDROID_HOME" = "X" ] || cd "$ANDROID_HOME"
