@@ -306,7 +306,7 @@ def query_user_fullname(user: str, **opt) -> str:
         # cmd = 'wmic useraccount where name="william" get fullname /value'
         # cmd = 'wmic useraccount where name="%username%" get fullname /value'
         # cmd = cmd.replace('%username%', user)
-        user_source = os.environ.get('TPSUP_USER_SOURCE', 'wmic')
+        user_source = os.environ.get('TPSUP_USER_SOURCE', 'reg')
         cmd = f"get_user_fullname.cmd {user_source} {user}"
 
         if verbose:
