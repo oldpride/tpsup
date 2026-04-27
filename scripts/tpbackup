@@ -146,7 +146,12 @@ if ( $action eq 'do' ) {
    }
 
    {
-      my $cmd = "rsync -av --delete $excludes '$source_base'/* '$backup_base'/$today";
+      my $cmd;
+      if (-d $source_base) {
+          $cmd = "rsync -av --delete $excludes '$source_base'/* '$backup_base'/$today";
+      } else {
+          $cmd = "rsync -av $excludes '$source_base' '$backup_base'/$today";
+      }
       print "$cmd\n";
       system("$cmd");
    }
