@@ -11,6 +11,8 @@ use TPSUP::PRINT qw(render_arrays);
 my $prog = $0;
 $prog =~ s:.*/::;
 
+my $method = 'tpdist';
+
 my $home = `/bin/bash -c "echo ~"`;
 chomp $home;
 
@@ -19,7 +21,7 @@ sub usage {
 
    print "$message\n" if $message;
 
-   print STDERR << "END";
+   print STDERR <<"END";
 Usage:
 
    $prog do    proj
@@ -39,10 +41,12 @@ Usage:
 
    -v              verbose mode
 
+   -m <method>     rsync, tpdist, default to $method.
+
    -d yyyymmdd     when 'check', check against this day. default to the last day of backup.
 
    -f tpbackup.csv default to ~/.tpsup/tpbackup.csv. Example of format:
-                     proj,source_base,backup_base,retention,comment
+                     proj,source,backup_base,retention,comment
                      tpsup,\$home/sitebase/github/\$proj,\$home/backup/\$proj,5,these are scripts
                      notes,\$home/sitebase/github/\$proj,\$home/backup/\$proj,5,these are notes
      retention is number of backups
@@ -57,6 +61,7 @@ Examples:
    $prog diff  tpsup 
    $prog info
 
+   $prog -m tpdist do home
    
 END
 
@@ -73,6 +78,7 @@ GetOptions(
    'brief'   => \$brief,
    'd=s'     => \$yyyymmdd,
    'f=s'     => \$CfgFile,
+   'm=s'     => \$method,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -81,115 +87,138 @@ my ( $action, $proj ) = @ARGV;
 
 usage("unknown action='$action'") if $action !~ /(do|list|check|diff|info)$/;
 
-my $cfg_by_proj = parse_csv_file( $CfgFile, { keyColumn => 'proj' } );
+my $cfg_by_key = parse_csv_file( $CfgFile, { keyColumn => 'proj,source' } );
 
-die "cannot parse $CfgFile" if !$cfg_by_proj;
+die "cannot parse $CfgFile" if !$cfg_by_key;
 
-$verbose && print "cfg_by_proj = ", Dumper($cfg_by_proj);
+$verbose && print "cfg_by_key = ", Dumper($cfg_by_key);
 
 if ( $action eq 'info' ) {
    usage("wrong number of args") if @ARGV != 1;
 
-   print_cfg($cfg_by_proj);
+   print_cfg($cfg_by_key);
    exit 0;
 }
 
 # now action is either of do|list|check
 usage("wrong number of args") if @ARGV != 2;
 
-if ( !$cfg_by_proj->{$proj} ) {
-   print "ERROR: unknown proj='$proj'. Current config in $CfgFile\n";
-   print_cfg($cfg_by_proj);
+my $matched = 0;
+for my $key ( sort keys(%$cfg_by_key) ) {
+   if ( $key !~ /^$proj,/ ) {
+      next;
+   }
+   $matched = 1;
 
-   usage();
-}
+   my $today = `date +%Y%m%d`;
+   chomp $today;
 
-my $today = `date +%Y%m%d`;
-chomp $today;
+   my ( $source, $backup_base, $retention ) = @{ $cfg_by_key->{$key}->[0] }{qw(source backup_base retention)};
 
-my ( $source_base, $backup_base, $retention ) = @{ $cfg_by_proj->{$proj}->[0] }{qw(source_base backup_base retention)};
+   $source      =~ s:\$home:$home:g;
+   $backup_base =~ s:\$home:$home:g;
+   $source      =~ s:\$proj:$proj:g;
+   $backup_base =~ s:\$proj:$proj:g;
 
-$source_base =~ s:\$home:$home:g;
-$backup_base =~ s:\$home:$home:g;
-$source_base =~ s:\$proj:$proj:g;
-$backup_base =~ s:\$proj:$proj:g;
+   # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
+   my $rsync_excludes =
+     "--exclude='[.]git' --exclude='.nfs*' --exclude='[.]*[.]sw[ponmlkj]' --exclude='[.]idea' --exclude=__pycache__";
 
-# [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
-my $excludes =
-  "--exclude='[.]git*' --exclude='.nfs*' --exclude='[.]*[.]sw[pon]' --exclude='[.]idea' --exclude=__pycache__";
+   my $diff_excludes = "--exclude='[.](svn|sw[ponmlkj]|git|nfs|idea)|__pycache__|^Common subdirectories'";
 
-if ( $action eq 'do' ) {
-   {
-      my @dirs  = `/bin/ls -d "$backup_base"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]`;
-      my $count = scalar(@dirs);
+   if ( $action eq 'do' ) {
+      {
+         my @dirs  = `/bin/ls -d "$backup_base"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]`;
+         my $count = scalar(@dirs);
 
-      if ( $count > $retention ) {
-         print "too many backups ($count) > retention ($retention) under $backup_base, cleaning up\n";
-         chomp @dirs;
-         my $remove_count = $count - $retention;
+         if ( $count > $retention ) {
+            print "too many backups ($count) > retention ($retention) under $backup_base, cleaning up\n";
+            chomp @dirs;
+            my $remove_count = $count - $retention;
 
-         for ( my $i = 0 ; $i < $remove_count ; $i++ ) {
-            my $cmd = "/bin/rm -fr \"$dirs[$i]\"";
-            print "$cmd\n";
-            system($cmd);
+            for ( my $i = 0 ; $i < $remove_count ; $i++ ) {
+               my $cmd = "/bin/rm -fr \"$dirs[$i]\"";
+               print "$cmd\n";
+               system($cmd);
+            }
+
+            # to test:
+            #    cd /home/tian/backup/config;i=0;while [ $i -lt 30 ];do mkdir 0$i; ((i++));done
+         }
+      }
+
+      if ( !-d $backup_base ) {
+         my $cmd = "mkdir -p '$backup_base'";
+         print "$cmd\n";
+         system($cmd) && die "$cmd failed";
+      }
+
+      {
+         my $cmd;
+         if ( $method eq 'rsync' ) {
+            $cmd = "rsync -av --delete $rsync_excludes '$source' '$backup_base'/$today/";
+         } elsif ( $method eq 'tpdist' ) {
+            $cmd = "tpdist local -q '$source' '$backup_base'/$today/";
+         } else {
+            print "unsupported method='$method'\n";
+            exit 1;
          }
 
-         # to test:
-         #    cd /home/tian/backup/config;i=0;while [ $i -lt 30 ];do mkdir 0$i; ((i++));done
+         print "$cmd\n";
+         system("$cmd");
       }
-   }
-
-   if ( !-d $backup_base ) {
-      my $cmd = "mkdir -p '$backup_base'";
-      print "$cmd\n";
-      system($cmd) && die "$cmd failed";
-   }
-
-   {
-      my $cmd;
-      if (-d $source_base) {
-          $cmd = "rsync -av --delete $excludes '$source_base'/* '$backup_base'/$today";
+   } elsif ( $action eq 'check' ) {
+      if ($yyyymmdd) {
+         my $backupdir = "$backup_base/$yyyymmdd";
+         usage("$backupdir doesn't exist, we don't have a backup for $yyyymmdd") if !-d $backupdir;
       } else {
-          $cmd = "rsync -av $excludes '$source_base' '$backup_base'/$today";
+         $yyyymmdd = `/bin/ls "$backup_base"|tail -1`;
+         die "we don't have any backup" if !$yyyymmdd;
+         chomp $yyyymmdd;
       }
+
+      # source_basename, source_parentdir
+      my ($source_basename)  = $source =~ /\/?([^\/]+)$/;
+      my ($source_parentdir) = $source =~ /^(.*)\/[^\/]+$/;
+
+      my $cmd;
+      if ($brief) {
+         if ( $method eq 'rsync' ) {
+            $cmd = "rsync -avn $rsync_excludes '$backup_base'/$yyyymmdd/$source_basename '$source'";
+         } elsif ( $method eq 'tpdist' ) {
+            $cmd = "tpdist local -diff -q '$backup_base'/$yyyymmdd/$source_basename '$source_parentdir'";
+         } else {
+            print "unsupported method='$method'\n";
+            exit 1;
+         }
+      } else {
+         $cmd = "diff $diff_excludes -r '$backup_base'/$yyyymmdd/$source_basename '$source'";
+      }
+
       print "$cmd\n";
       system("$cmd");
+   } elsif ( $action eq 'diff' ) {
+      my $current_yyyymmdd = `/bin/ls "$backup_base"|tail -1`;
+      die "we don't have any backup" if !$current_yyyymmdd;
+      chomp $current_yyyymmdd;
+      my $previous_yyyymmdd = `/bin/ls "$backup_base"|tail -2|head -1`;
+      die "we don't have enough backup to compare. need at least 2 backups" if !$previous_yyyymmdd;
+      chomp $previous_yyyymmdd;
+      my $cmd = "diff -r $diff_excludes '$backup_base'/$previous_yyyymmdd '$backup_base'/$current_yyyymmdd";
+      print "$cmd\n";
+      system("$cmd");
+   } elsif ( $action eq 'list' ) {
+      my $cmd = "/bin/ls '$backup_base'";
+      print "$cmd\n";
+      system("$cmd");
+   } elsif ( $action eq 'info' ) {
+      print_cfg($cfg_by_key);
    }
-} elsif ( $action eq 'check' ) {
-   if ($yyyymmdd) {
-      my $backupdir = "$backup_base/$yyyymmdd";
-      usage("$backupdir doesn't exist, we don't have a backup for $yyyymmdd") if !-d $backupdir;
-   } else {
-      $yyyymmdd = `/bin/ls "$backup_base"|tail -1`;
-      die "we don't have any backup" if !$yyyymmdd;
-      chomp $yyyymmdd;
-   }
+}
 
-   my $cmd;
-
-   if ($brief) {
-      $cmd = "rsync -avn $excludes '$backup_base'/$yyyymmdd/* '$source_base'";
-   } else {
-      $cmd =
-"diff -r '$backup_base'/$yyyymmdd '$source_base'|egrep -v '[.](svn|sw[pon]|git|nfs|idea)|__pycache__|^Common subdirectories'";
-   }
-
-   print "$cmd\n";
-   system("$cmd");
-} elsif ( $action eq 'diff' ) {
-   my $current_yyyymmdd = `/bin/ls "$backup_base"|tail -1`;
-   die "we don't have any backup" if !$current_yyyymmdd;
-   chomp $current_yyyymmdd;
-   my $previous_yyyymmdd = `/bin/ls "$backup_base"|tail -2|head -1`;
-   die "we don't have enough backup to compare, need at least 2 backups" if !$previous_yyyymmdd;
-   chomp $previous_yyyymmdd;
-   my $cmd = "diff -r --exclude='[.](svn|sw[pon]|git|nfs|idea)|__pycache__|^Common subdirectories' '$backup_base'/$previous_yyyymmdd '$backup_base'/$current_yyyymmdd";
-} elsif ( $action eq 'list' ) {
-   my $cmd = "/bin/ls '$backup_base'";
-   print "$cmd\n";
-   system("$cmd");
-} elsif ( $action eq 'info' ) {
-   print_cfg($cfg_by_proj);
+if ( !$matched ) {
+   print "ERROR: proj='$proj' is not in $CfgFile\n";
+   usage();
 }
 
 exit 0;
@@ -202,5 +231,5 @@ sub print_cfg {
    for my $proj ( sort keys(%$cfg_by_proj) ) {
       push @rows, @{ $cfg_by_proj->{"$proj"} };
    }
-   render_arrays( \@rows, { headers => [qw(proj source_base backup_base retention comment)], verbose => $verbose } );
+   render_arrays( \@rows, { headers => [qw(proj source backup_base retention comment)], verbose => $verbose } );
 }

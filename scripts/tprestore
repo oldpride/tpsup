@@ -10,6 +10,8 @@ use TPSUP::CSV qw(/./);
 my $prog = $0;
 $prog =~ s:.*/::;
 
+my $method = 'tpdist';
+
 my $home = `/bin/bash -c "echo ~"`;
 chomp $home;
 
@@ -18,7 +20,7 @@ sub usage {
 
    print "$message\n" if $message;
 
-   print STDERR << "END";
+   print STDERR <<"END";
 Usage:
 
    $prog do    file1, file2, ...
@@ -44,6 +46,8 @@ Usage:
                          tpsup,\$home/\$proj,\$home/backup/\$proj,5,scripts backups
                          notes,\$home/\$proj,\$home/backup/\$proj,5,notes   backups
 
+   -m <method>     rsync, tpdist, default to $method.
+
 Examples:
 
    cd /a/b/c
@@ -65,6 +69,7 @@ GetOptions(
    'verbose' => \$verbose,
    'd=s'     => \$yyyymmdd,
    'f=s'     => \$CfgFile,
+   'm=s'     => \$method,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -73,10 +78,10 @@ my $action = shift @ARGV;
 
 usage("unknown action='$action'") if $action !~ /^(do|list|check|info)$/;
 
-my $cfg_by_proj = parse_csv_file(
+my $cfg_by_key = parse_csv_file(
    $CfgFile,
    {
-      keyColumn      => 'proj',
+      keyColumn      => 'proj,source',
       excludePattern => '^\s*$|^\s*#',
    }
 );
@@ -84,7 +89,7 @@ my $cfg_by_proj = parse_csv_file(
 if ( $action eq 'info' ) {
    usage("wrong number of args") if @ARGV;
 
-   print_cfg($cfg_by_proj);
+   print_cfg($cfg_by_key);
    exit 0;
 }
 
@@ -95,6 +100,11 @@ chomp $today;
 
 my $cwd = `/bin/bash -c pwd`;
 chomp $cwd;
+
+my $rsync_excludes =
+  "--exclude='[.]git' --exclude='.nfs*' --exclude='[.]*[.]sw[ponmlkj]' --exclude='[.]idea' --exclude=__pycache__";
+
+my $diff_excludes = "--exclude='[.](svn|sw[ponmlkj]|git|nfs|idea)|__pycache__|^Common subdirectories'";
 
 my $error = 0;
 my @restore_cmds;
@@ -113,23 +123,32 @@ for my $f (@ARGV) {
    $verbose && print "source_full=$source_full\n";
 
    my $backup_base;
-   my $source_base;
+   my $proj;
+   my $source;
    my $relative;
 
    my $found;
 
  PROJ:
-   for my $proj ( sort keys(%$cfg_by_proj) ) {
-      for my $row ( @{ $cfg_by_proj->{$proj} } ) {
-         ( $source_base, $backup_base ) = @{$row}{qw(source_base backup_base)};
-         $source_base =~ s:\$home:$home:g;
+   for my $key ( sort keys(%$cfg_by_key) ) {
+      ( $proj, $source ) = split( /,/, $key );
+
+      for my $row ( @{ $cfg_by_key->{$key} } ) {
+         ( $source, $backup_base ) = @{$row}{qw(source backup_base)};
+         $source      =~ s:\$home:$home:g;
          $backup_base =~ s:\$home:$home:g;
 
-         $source_base =~ s:\$proj:$proj:g;
+         $source      =~ s:\$proj:$proj:g;
          $backup_base =~ s:\$proj:$proj:g;
 
-         if ( $source_full =~ /${source_base}(.*)/ ) {
+         if ( $source_full =~ m:${source}/(.*): ) {
             $relative = $1;
+
+            $found++;
+
+            last PROJ;
+         } elsif ( $source_full eq $source ) {
+            $relative = '';
 
             $found++;
 
@@ -140,17 +159,27 @@ for my $f (@ARGV) {
 
    if ( !$found ) {
       print "ERROR: $f ($source_full) is not backed up by any proj in $CfgFile\n";
-      print_cfg($cfg_by_proj);
+      print_cfg($cfg_by_key);
       $error++;
       next;
    }
 
    $verbose && print "relative=$relative\n";
-   $verbose && print "source_base=$source_base\n";
+   $verbose && print "proj=$proj\n";
+   $verbose && print "source=$source\n";
    $verbose && print "backup_base=$backup_base\n";
 
+   my $source_basename = $source;
+   $source_basename =~ s:.*/::;
+   $verbose && print "source_basename=$source_basename\n";
+
    if ( $action eq 'list' ) {
-      my $cmd = "ls -ld $backup_base/*/$relative";
+      my $cmd;
+      if ( !$relative ) {
+         $cmd = "ls -ld $backup_base/*/$source_basename";
+      } else {
+         $cmd = "ls -ld $backup_base/*/$source_basename/$relative";
+      }
       print "$cmd\n";
       system($cmd);
       next;
@@ -159,16 +188,18 @@ for my $f (@ARGV) {
    my $backup_dir;
 
    if ($yyyymmdd) {
-      $backup_dir = "${backup_base}/$yyyymmdd";
+      $backup_dir = "${backup_base}/$yyyymmdd/$source_basename";
       usage("$backup_dir doesn't exist, we don't have a backup for $yyyymmdd") if !-d $backup_dir;
    } else {
-      $yyyymmdd = `/bin/ls ${backup_base} | tai1 -1`;
+      my $cmd = "ls -1 $backup_base|tail -1";
+      print "cmd=$cmd\n";
+      $yyyymmdd = `$cmd`;
       die "we don't have any backup" if !$yyyymmdd;
       chomp $yyyymmdd;
-      $backup_dir = "${backup_base}/$yyyymmdd";
+      $backup_dir = "${backup_base}/$yyyymmdd/$source_basename";
    }
 
-   my $backup_full = "$backup_dir/$relative";
+   my $backup_full = $relative ? "$backup_dir/$relative" : $backup_dir;
 
    $verbose && print "backup_dir=$backup_dir\n";
    $verbose && print "backup_full=$backup_full\n";
@@ -183,7 +214,7 @@ for my $f (@ARGV) {
       print "We lost the source but we have backup.\n";
       $need_restore++;
    } else {
-      my $cmd = "diff -r $backup_full $source_full|egrep -v '[.]svn|Common subdirectories'";
+      my $cmd = "diff $diff_excludes -r $backup_full $source_full";
 
       print "$cmd\n";
 
@@ -204,7 +235,14 @@ for my $f (@ARGV) {
          my $source_full_parent = $source_full;
          $source_full_parent =~ s:/+[^/]+$::;
 
-         push @restore_cmds, "rsync -av --delete $backup_full $source_full_parent";
+         if ( $method eq 'tpdist' ) {
+            push @restore_cmds, "tpdist local -q '$backup_full' '$source_full_parent'";
+         } elsif ( $method eq 'rsync' ) {
+            push @restore_cmds, "rsync -av --delete $rsync_excludes '$backup_full' '$source_full_parent'";
+         } else {
+            print "unsupported method='$method'\n";
+            exit 1;
+         }
       }
    }
 }
@@ -248,9 +286,9 @@ sub print_cfg {
 
    my @rows;
 
-   for my $proj ( sort keys(%$cfg_by_proj) ) {
-      push @rows, @{ $cfg_by_proj->{$proj} };
+   for my $key ( sort keys(%$cfg_by_key) ) {
+      push @rows, @{ $cfg_by_key->{$key} };
    }
 
-   render_arrays( \@rows, { headers => [qw(proj source_base backup_base retention comment)], verbose => $verbose } );
+   render_arrays( \@rows, { headers => [qw(proj source backup_base retention comment)], verbose => $verbose } );
 }

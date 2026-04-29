@@ -80,7 +80,7 @@ $cygwin++ if $local_uname =~ /^CYGWIN/i;
 
 my $encrypt_key;
 
-my $default_exclude = "[.]git/|[.]sw[op]|[.]nfs|[.]idea|[.]github|__pycache__";
+my $default_exclude = "[.]git/|[.]sw[ponmlkj]|[.]nfs|[.]idea|[.]github|__pycache__";
 
 sub usage {
    my ($message) = @_;
@@ -357,7 +357,7 @@ if ( $dryrun || $diff ) {
    $dryrun_string = "dryrun";
 }
 
-print "version=$version, protocol=$expected_peer_protocol\n";
+$quiet || print "version=$version, protocol=$expected_peer_protocol\n";
 
 umask(022);
 
@@ -1397,7 +1397,7 @@ sub prepare_to_create_tar {
    }
 
    if ( !@{$files_to_tar} ) {
-      print get_timestamp(), "no need to send anything to remote\n";
+      $quiet || print get_timestamp(), "no need to send anything to remote\n";
       return;
    }
 
@@ -2442,7 +2442,7 @@ sub local_sync {
    #              Thu Oct 5 21:02:42 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux
    my $check_mode = ( $local_uname =~ /Darwin|Linux/i ) ? 1 : 0;
 
-   print get_timestamp(), "local uname='$local_uname'. we set check_mode=$check_mode\n";
+   $quiet || print get_timestamp(), "local uname='$local_uname'. we set check_mode=$check_mode\n";
 
    my $compare_result = compare_trees(
       $dest_tree,
@@ -2468,10 +2468,10 @@ sub local_sync {
    my $RequiredSpace    = $compare_result->{RequiredSpace};
    my @warns            = @{ $compare_result->{warns} };
 
-   print get_timestamp(), "collecting dest cksums: ", scalar(@need_cksums), " items.\n";
+   $quiet || print get_timestamp(), "collecting dest cksums: ", scalar(@need_cksums), " items.\n";
    my $dest_cksum_by_file = get_cksums( \@need_cksums, $dest_tree, { verbose => $verbose } );
 
-   print get_timestamp(), "collecting source cksums: ", scalar(@need_cksums), " items.\n";
+   $quiet || print get_timestamp(), "collecting source cksums: ", scalar(@need_cksums), " items.\n";
    my $source_cksum_by_file = get_cksums( \@need_cksums, $source_tree, { verbose => $verbose } );
 
    # because we will pass the hash by refereence, we need to prelocate the storage
