@@ -30,7 +30,7 @@ Usage:
    $prog diff  proj
    $prog info
 
-   'proj' is defined in tpbackup.csv.
+   'proj' is defined in tpbackup.csv. Use 'all' to match all projects.
 
    'action' can be
    do    - do the backup
@@ -83,7 +83,7 @@ GetOptions(
 
 usage("wrong number of args") if !@ARGV;
 
-my ( $action, $proj ) = @ARGV;
+my ( $action, $input_proj ) = @ARGV;
 
 usage("unknown action='$action'") if $action !~ /(do|list|check|diff|info)$/;
 
@@ -105,8 +105,14 @@ usage("wrong number of args") if @ARGV != 2;
 
 my $matched = 0;
 for my $key ( sort keys(%$cfg_by_key) ) {
-   if ( $key !~ /^$proj,/ ) {
-      next;
+   my $proj;
+   if ( $input_proj eq 'all' ) {
+      ($proj) = ( $key =~ /^([^,]+),/ );
+   } else {
+      $proj = $input_proj;
+      if ( $key !~ /^$proj,/ ) {
+         next;
+      }
    }
    $matched = 1;
 
@@ -217,7 +223,7 @@ for my $key ( sort keys(%$cfg_by_key) ) {
 }
 
 if ( !$matched ) {
-   print "ERROR: proj='$proj' is not in $CfgFile\n";
+   print "ERROR: proj='$input_proj' is not in $CfgFile\n";
    usage();
 }
 
