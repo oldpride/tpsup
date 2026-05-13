@@ -950,7 +950,7 @@ mysitelib() { cd "$MYBASE/github/$SPECNAME/lib/perl/${SPECNAME^^}"; } # ${x,,} l
 mysitep3() { cd "$MYBASE/github/$SPECNAME/python3/scripts"; }
 mysitep3lib() { cd "$MYBASE/github/$SPECNAME/python3/lib/tpsup"; }
 
-1drive () {
+onedrive () {
    # this works in cygwin and gitbash
    if [[ $UNAME =~ Msys ]]; then
       # gitbash
