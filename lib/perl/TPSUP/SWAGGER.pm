@@ -379,6 +379,9 @@ sub tpbatch_parse_hash_cfg {
             my $method = $cfg->{method} || 'GET';
             $example .= "      method: $method\n";
 
+            my $accept = $cfg->{accept} || 'application/json';
+            $example .= "      accept: $accept\n";
+
             my $sub_ui;    # web user interface for manual operation
             if ( $cfg->{sub_ui} ) {
                $sub_ui = $cfg->{sub_ui};
