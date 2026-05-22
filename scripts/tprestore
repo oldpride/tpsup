@@ -6,6 +6,7 @@ use Data::Dumper;
 use Getopt::Long;
 use Carp;
 use TPSUP::CSV qw(/./);
+use TPSUP::PRINT qw(render_arrays);
 
 my $prog = $0;
 $prog =~ s:.*/::;
