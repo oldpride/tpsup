@@ -177,9 +177,9 @@ for my $f (@ARGV) {
    if ( $action eq 'list' ) {
       my $cmd;
       if ( !$relative ) {
-         $cmd = "ls -ld $backup_base/*/$source_basename";
+         $cmd = "ls -ld \"$backup_base\*/*/\"$source_basename\"";
       } else {
-         $cmd = "ls -ld $backup_base/*/$source_basename/$relative";
+         $cmd = "ls -ld \"$backup_base\"/*/\"$source_basename\"/\"$relative\"";
       }
       print "$cmd\n";
       system($cmd);
@@ -192,7 +192,7 @@ for my $f (@ARGV) {
       $backup_dir = "${backup_base}/$yyyymmdd/$source_basename";
       usage("$backup_dir doesn't exist, we don't have a backup for $yyyymmdd") if !-d $backup_dir;
    } else {
-      my $cmd = "ls -1 $backup_base|tail -1";
+      my $cmd = "ls -1 \"$backup_base\"|tail -1";
       print "cmd=$cmd\n";
       $yyyymmdd = `$cmd`;
       die "we don't have any backup" if !$yyyymmdd;
@@ -215,7 +215,7 @@ for my $f (@ARGV) {
       print "We lost the source but we have backup.\n";
       $need_restore++;
    } else {
-      my $cmd = "diff $diff_excludes -r $backup_full $source_full";
+      my $cmd = "diff $diff_excludes -r \"$backup_full\" \"$source_full\"";
 
       print "$cmd\n";
 
@@ -230,7 +230,7 @@ for my $f (@ARGV) {
 
    if ($need_restore) {
       if ( -f $backup_full ) {
-         push @restore_cmds, "/bin/cp -p $backup_full $source_full";
+         push @restore_cmds, "/bin/cp -p \"$backup_full\" \"$source_full\"";
       } else {
          # find the parent dir
          my $source_full_parent = $source_full;
