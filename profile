@@ -609,7 +609,7 @@ alias cp='cp -i'
 alias grep='grep -i'
 alias ls='ls -a'
 
-export LESS="-I -N"
+export LESS="-I"
 # -I     ignore case
 # -N     show line number
 # -S     truncate long line, no wrapping.
