@@ -123,32 +123,32 @@ for my $f (@ARGV) {
 
    $verbose && print "source_full=$source_full\n";
 
-   my $backup_base;
    my $proj;
-   my $source;
+   my $backup_source;
+   my $backup_base;
    my $relative;
 
    my $found;
 
  PROJ:
    for my $key ( sort keys(%$cfg_by_key) ) {
-      ( $proj, $source ) = split( /,/, $key );
+      ( $proj, $backup_source ) = split( /,/, $key );
 
       for my $row ( @{ $cfg_by_key->{$key} } ) {
-         ( $source, $backup_base ) = @{$row}{qw(source backup_base)};
-         $source      =~ s:\$home:$home:g;
-         $backup_base =~ s:\$home:$home:g;
+         ( $backup_source, $backup_base ) = @{$row}{qw(source backup_base)};
+         $backup_source =~ s:\$home:$home:g;
+         $backup_base   =~ s:\$home:$home:g;
 
-         $source      =~ s:\$proj:$proj:g;
-         $backup_base =~ s:\$proj:$proj:g;
+         $backup_source =~ s:\$proj:$proj:g;
+         $backup_base   =~ s:\$proj:$proj:g;
 
-         if ( $source_full =~ m:${source}/(.*): ) {
+         if ( $source_full =~ m:${backup_source}/(.*): ) {
             $relative = $1;
 
             $found++;
 
             last PROJ;
-         } elsif ( $source_full eq $source ) {
+         } elsif ( $source_full eq $backup_source ) {
             $relative = '';
 
             $found++;
@@ -167,7 +167,7 @@ for my $f (@ARGV) {
 
    $verbose && print "relative=$relative\n";
    $verbose && print "proj=$proj\n";
-   $verbose && print "source=$source\n";
+   $verbose && print "backup_source=$backup_source\n";
    $verbose && print "backup_base=$backup_base\n";
 
    my $source_basename = $source;

@@ -63,7 +63,7 @@ echo ""
 # https://stackoverflow.com/questions/5491832
 if git rev-parse HEAD 1>/dev/null 2>&1; then
    # remoterepo is not empty - it had commits
-   ( set -x; git diff --cached --name-only )
+   ( set -x; git --no-pager diff --cached --name-only )
    echo ""
 fi
 
