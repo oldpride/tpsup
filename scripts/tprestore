@@ -49,6 +49,8 @@ Usage:
 
    -m <method>     rsync, tpdist, default to $method.
 
+   -p            arg is a proj name, not a file.
+
 Examples:
 
    cd /a/b/c
@@ -65,12 +67,14 @@ END
 my $verbose;
 my $yyyymmdd;
 my $CfgFile = "$home/.tpsup/tpbackup.csv";
+my $is_proj = 0;
 
 GetOptions(
    'verbose' => \$verbose,
    'd=s'     => \$yyyymmdd,
    'f=s'     => \$CfgFile,
    'm=s'     => \$method,
+   'p'       => \$is_proj,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if !@ARGV;
@@ -113,15 +117,19 @@ my @restore_cmds;
 for my $f (@ARGV) {
    $f =~ s:/+$::;    # remove ending /
 
-   my $source_full;
+   if ($f eq '.') {
+      $f = $cwd;
+   }
+   
+   my $user_source;
 
    if ( $f !~ m:^/: ) {
-      $source_full = "$cwd/$f";
+      $user_source = "$cwd/$f";
    } else {
-      $source_full = "$f";
+      $user_source = "$f";
    }
 
-   $verbose && print "source_full=$source_full\n";
+   $verbose && print "user_source=$user_source\n";
 
    my $proj;
    my $backup_source;
@@ -130,143 +138,176 @@ for my $f (@ARGV) {
 
    my $found;
 
+   my $matched_list = [];
+
  PROJ:
    for my $key ( sort keys(%$cfg_by_key) ) {
       ( $proj, $backup_source ) = split( /,/, $key );
 
-      for my $row ( @{ $cfg_by_key->{$key} } ) {
-         ( $backup_source, $backup_base ) = @{$row}{qw(source backup_base)};
-         $backup_source =~ s:\$home:$home:g;
-         $backup_base   =~ s:\$home:$home:g;
-
-         $backup_source =~ s:\$proj:$proj:g;
-         $backup_base   =~ s:\$proj:$proj:g;
-
-         if ( $source_full =~ m:${backup_source}/(.*): ) {
-            $relative = $1;
-
+      if ($is_proj) {
+         if ( $f eq $proj ) {
             $found++;
 
-            last PROJ;
-         } elsif ( $source_full eq $backup_source ) {
-            $relative = '';
+            for my $row ( @{ $cfg_by_key->{$key} } ) {
+               ( $backup_source, $backup_base ) = @{$row}{qw(source backup_base)};
+               $backup_source =~ s:\$home:$home:g;
+               $backup_base   =~ s:\$home:$home:g;
 
-            $found++;
+               $backup_source =~ s:\$proj:$proj:g;
+               $backup_base   =~ s:\$proj:$proj:g;
 
-            last PROJ;
+               $relative = '';
+
+               push @$matched_list, { proj => $proj, backup_source => $backup_source, backup_base => $backup_base, relative => $relative };
+            }
+         }
+      } else {
+         for my $row ( @{ $cfg_by_key->{$key} } ) {
+            ( $backup_source, $backup_base ) = @{$row}{qw(source backup_base)};
+            $backup_source =~ s:\$home:$home:g;
+            $backup_base   =~ s:\$home:$home:g;
+
+            $backup_source =~ s:\$proj:$proj:g;
+            $backup_base   =~ s:\$proj:$proj:g;
+
+            if ( $user_source =~ m:${backup_source}/(.*): ) {
+               $relative = $1;
+               $found++;
+            } elsif ( $user_source eq $backup_source ) {
+               $relative = '';
+               $found++;
+            }
+
+            if ($found) {
+               push @$matched_list, { proj => $proj, backup_source => $backup_source, backup_base => $backup_base, relative => $relative };
+               last PROJ;
+            }
          }
       }
    }
 
    if ( !$found ) {
-      print "ERROR: $f ($source_full) is not backed up by any proj in $CfgFile\n";
+      print "ERROR: $f ($user_source) is not backed up by any proj in $CfgFile\n";
       print_cfg($cfg_by_key);
       $error++;
       next;
    }
 
-   $verbose && print "relative=$relative\n";
-   $verbose && print "proj=$proj\n";
-   $verbose && print "backup_source=$backup_source\n";
-   $verbose && print "backup_base=$backup_base\n";
-
-   my $source_basename = $source;
-   $source_basename =~ s:.*/::;
-   $verbose && print "source_basename=$source_basename\n";
-
-   if ( $action eq 'list' ) {
-      my $cmd;
-      if ( !$relative ) {
-         $cmd = "ls -ld \"$backup_base\*/*/\"$source_basename\"";
-      } else {
-         $cmd = "ls -ld \"$backup_base\"/*/\"$source_basename\"/\"$relative\"";
-      }
-      print "$cmd\n";
-      system($cmd);
-      next;
+   if ($verbose) {
+      print "matched_list=\n";
+      print Dumper($matched_list);
+      print "\n";
    }
 
-   my $backup_dir;
+   for my $row (@$matched_list) {
+      $proj          = $row->{proj};
+      $backup_source = $row->{backup_source};
+      $backup_base   = $row->{backup_base};
+      $relative      = $row->{relative};
 
-   if ($yyyymmdd) {
-      $backup_dir = "${backup_base}/$yyyymmdd/$source_basename";
-      usage("$backup_dir doesn't exist, we don't have a backup for $yyyymmdd") if !-d $backup_dir;
-   } else {
-      my $cmd = "ls -1 \"$backup_base\"|tail -1";
-      print "cmd=$cmd\n";
-      $yyyymmdd = `$cmd`;
-      die "we don't have any backup" if !$yyyymmdd;
-      chomp $yyyymmdd;
-      $backup_dir = "${backup_base}/$yyyymmdd/$source_basename";
-   }
+      $verbose && print "relative=$relative\n";
+      $verbose && print "proj=$proj\n";
+      $verbose && print "backup_source=$backup_source\n";
+      $verbose && print "backup_base=$backup_base\n";
 
-   my $backup_full = $relative ? "$backup_dir/$relative" : $backup_dir;
+      my $source_basename = $backup_source;
+      $source_basename =~ s:.*/::;
+      $verbose && print "source_basename=$source_basename\n";
 
-   $verbose && print "backup_dir=$backup_dir\n";
-   $verbose && print "backup_full=$backup_full\n";
-
-   my $need_restore;
-
-   if ( !-e $backup_full ) {
-      print "ERROR: ${f}'s backup $backup_full doesn't exist. Please run 'check' to find anothere day's backup\n";
-      $error++;
-      next;
-   } elsif ( !-e $source_full ) {
-      print "We lost the source but we have backup.\n";
-      $need_restore++;
-   } else {
-      my $cmd = "diff $diff_excludes -r \"$backup_full\" \"$source_full\"";
-
-      print "$cmd\n";
-
-      my @lines = "$cmd 2>&1";
-
-      print @lines;
-
-      if (@lines) {
-         $need_restore++;
-      }
-   }
-
-   if ($need_restore) {
-      if ( -f $backup_full ) {
-         push @restore_cmds, "/bin/cp -p \"$backup_full\" \"$source_full\"";
-      } else {
-         # find the parent dir
-         my $source_full_parent = $source_full;
-         $source_full_parent =~ s:/+[^/]+$::;
-
-         if ( $method eq 'tpdist' ) {
-            push @restore_cmds, "tpdist local -q '$backup_full' '$source_full_parent'";
-         } elsif ( $method eq 'rsync' ) {
-            push @restore_cmds, "rsync -av --delete $rsync_excludes '$backup_full' '$source_full_parent'";
+      if ( $action eq 'list' ) {
+         my $cmd;
+         if ( !$relative ) {
+            $cmd = "ls -ld \"$backup_base\"/*/\"$source_basename\"";
          } else {
-            print "unsupported method='$method'\n";
-            exit 1;
+            $cmd = "ls -ld \"$backup_base\"/*/\"$source_basename\"/\"$relative\"";
+         }
+         print "$cmd\n";
+         system($cmd);
+         next;
+      }
+
+      my $backup_dir;
+
+      if ($yyyymmdd) {
+         $backup_dir = "${backup_base}/$yyyymmdd/$source_basename";
+         usage("$backup_dir doesn't exist, we don't have a backup for $yyyymmdd") if !-d $backup_dir;
+      } else {
+         my $cmd = "ls -1 \"$backup_base\"|tail -1";
+         print "cmd=$cmd\n";
+         $yyyymmdd = `$cmd`;
+         die "we don't have any backup" if !$yyyymmdd;
+         chomp $yyyymmdd;
+         $backup_dir = "${backup_base}/$yyyymmdd/$source_basename";
+      }
+
+      my $backup_full = $relative ? "$backup_dir/$relative" : $backup_dir;
+
+      $verbose && print "backup_dir=$backup_dir\n";
+      $verbose && print "backup_full=$backup_full\n";
+
+      my $need_restore;
+
+      if ( !-e $backup_full ) {
+         print "ERROR: ${f}'s backup $backup_full doesn't exist. Please run 'check' to find anothere day's backup\n";
+         $error++;
+         next;
+      } elsif ( !-e $user_source ) {
+         print "We lost the source but we have backup.\n";
+         $need_restore++;
+      } else {
+         my $cmd = "diff $diff_excludes -r \"$backup_full\" \"$user_source\"";
+
+         print "$cmd\n";
+
+         my @lines = "$cmd 2>&1";
+
+         print @lines;
+
+         if (@lines) {
+            $need_restore++;
+         }
+      }
+
+      if ($need_restore) {
+         if ( -f $backup_full ) {
+            push @restore_cmds, "/bin/cp -p \"$backup_full\" \"$user_source\"";
+         } else {
+            # find the parent dir
+            my $user_source_parent = $user_source;
+            $user_source_parent =~ s:/+[^/]+$::;
+
+            if ( $method eq 'tpdist' ) {
+               push @restore_cmds, "tpdist local -q '$backup_full' '$user_source_parent'";
+            } elsif ( $method eq 'rsync' ) {
+               push @restore_cmds, "rsync -av --delete $rsync_excludes '$backup_full' '$user_source_parent'";
+            } else {
+               print "unsupported method='$method'\n";
+               exit 1;
+            }
          }
       }
    }
-}
 
-if ( $action eq 'check' || $action eq 'do' ) {
-   print "---------begin restore commands--------------------\n";
-   print join( "\n", @restore_cmds );
-   print "\n";
-   print "---------end restore commands----------------------\n";
-   print "\n";
-}
+   if ( $action eq 'check' || $action eq 'do' ) {
+      print "---------begin restore commands--------------------\n";
+      print join( "\n", @restore_cmds );
+      print "\n";
+      print "---------end restore commands----------------------\n";
+      print "\n";
+   }
 
-if ( $action eq 'check' ) {
-   print "nothing done\n";
-} elsif ( $action eq 'do' ) {
-   print "--------- executing restore commands ---------------\n";
-   for my $cmd (@restore_cmds) {
-      print "cmd= $cmd\n";
-      system($cmd);
+   if ( $action eq 'check' ) {
+      print "nothing done\n";
+   } elsif ( $action eq 'do' ) {
+      print "--------- executing restore commands ---------------\n";
+      for my $cmd (@restore_cmds) {
+         print "cmd= $cmd\n";
+         system($cmd);
 
-      if ($?) {
-         print "ERROR: cmd=$cmd failed\n";
-         $error++;
+         if ($?) {
+            print "ERROR: cmd=$cmd failed\n";
+            $error++;
+         }
       }
    }
 }
