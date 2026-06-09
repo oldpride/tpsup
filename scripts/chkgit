@@ -16,6 +16,7 @@ EOF
    exit 1
 }
 
+unset LESS # disable "git diff" paging.
 
 while getopts n o;
 do
