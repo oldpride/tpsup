@@ -21,7 +21,7 @@ elif [ -d /c ]; then
    HOME=$(convertpath -t gitbash "$USERPROFILE")
    termpos_cfg=$HOME/.tpsup/termpos.cfg
    term_type=gitbash
-else:
+else
    # default to linux
    termpos_cfg=~/.tpsup/termpos.cfg
    term_type=default
