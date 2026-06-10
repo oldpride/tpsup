@@ -11,13 +11,15 @@ if [ -d /cygdrive ]; then
    # we are in a cygwin terminal
    IS_CYGWIN=Y
    # [ $verbose = Y ] && echo "we are in a cygwin terminal"
-   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+   HOME=$(convertpath -t cygwin "$USERPROFILE")
+   termpos_cfg=$HOME/.tpsup/termpos.cfg
    term_type=cygwin
 elif [ -d /c ]; then
    # we are in git bash terminal
    IS_GITBASH=Y
    # [ $verbose = Y ] && echo "we are in a git bash terminal"
-   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+   HOME=$(convertpath -t gitbash "$USERPROFILE")
+   termpos_cfg=$HOME/.tpsup/termpos.cfg
    term_type=gitbash
 else:
    # default to linux
