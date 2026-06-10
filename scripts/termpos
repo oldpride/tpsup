@@ -4,7 +4,26 @@
 prog=`basename $0`
 user=`id |cut -d\( -f2|cut -d\) -f1`
 
-termpos_cfg=~/.tpsup/termpos.cfg
+IS_CYGWIN=N
+IS_GITBASH=N
+
+if [ -d /cygdrive ]; then
+   # we are in a cygwin terminal
+   IS_CYGWIN=Y
+   # [ $verbose = Y ] && echo "we are in a cygwin terminal"
+   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+   term_type=cygwin
+elif [ -d /c ]; then
+   # we are in git bash terminal
+   IS_GITBASH=Y
+   # [ $verbose = Y ] && echo "we are in a git bash terminal"
+   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
+   term_type=gitbash
+else:
+   # default to linux
+   termpos_cfg=~/.tpsup/termpos.cfg
+   term_type=default
+fi
 
 min=0
 max=9
@@ -72,6 +91,8 @@ set_terminal () {
    height=$6
    tty=$7
 
+   [ $verbose = Y ] && echo "set_terminal() received: pos=$pos, pid=$pid, to x=$x, y=$y, width=$width, height=$height, tty=$tty"
+
    if [ "X$TERM_PROGRAM" = "Xmintty" ]; then
       # for mintty we have terminal escape codes to restore font size
       # default is set by command line. i used 12pt
@@ -80,7 +101,8 @@ set_terminal () {
       # \033 is control+v, escape
       # \007 is control+v, control+g
 
-      if ! [ $tty = "auto" -o $tty = "current" ]; then
+      
+      if ! [ "X$tty" = "Xauto" -o "X$tty" = "Xcurrent" ]; then
          # for mintty, we have to write the control code to the tty, not to the current terminal.
          # if we write to the current terminal, it will not work when we "su - appid", because the current terminal is still the original terminal, not the new terminal after su.
          printf "\033]7770;\007" > $tty
@@ -142,23 +164,7 @@ if [ "X$size" != "X" ]; then
    fi
 fi
 
-IS_CYGWIN=N
-IS_GITBASH=N
-term_type=default
-
-if [ -d /cygdrive ]; then
-   # we are in a cygwin terminal
-   IS_CYGWIN=Y
-   [ $verbose = Y ] && echo "we are in a cygwin terminal"
-   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
-   term_type=cygwin
-elif [ -d /c ]; then
-   # we are in git bash terminal
-   IS_GITBASH=Y
-   [ $verbose = Y ] && echo "we are in a git bash terminal"
-   termpos_cfg=$USERPROFILE/.tpsup/termpos.cfg
-   term_type=gitbash
-fi
+[ $verbose = Y ] && echo "IS_CYGWIN=$IS_CYGWIN, IS_GITBASH=$IS_GITBASH"
 
 # for now, we can handle cygwin on pc, putty on pc that logs into a linux server.
 if [ $IS_CYGWIN = Y -o $IS_GITBASH = Y ]; then
@@ -442,6 +448,13 @@ else
       # found a spot
       x=`expr 30 \* $i`
       y=`expr 30 \* $i`
+
+      if [ -z "$width" ]; then
+         width=$default_width
+      fi
+      if [ -z "$height" ]; then
+         height=$default_height
+      fi
 
       set_terminal $i $term_pid $x $y $width $height "auto"      
 
