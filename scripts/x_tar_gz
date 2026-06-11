@@ -18,7 +18,7 @@ sub usage {
 
    print "$message\n" if $message;
 
-   print STDERR << "END";
+   print STDERR <<"END";
 Usage:
 
    $prog file.tar.gz    pattern1 pattern2 ...
@@ -27,12 +27,18 @@ Usage:
    -n        dryrun
    -v        verbose
    -f        force without asking
+   -d        target directory, default to current directory
 
    extract files by pattern
 
 Examples:
 
+   # the following are the same
    cd /tmp; $prog $scriptdir/x_tar_gz_test.tar.gz b2
+   $prog -d /tmp $scriptdir/x_tar_gz_test.tar.gz b2
+
+   # multiple patterns
+   $prog -d /tmp $scriptdir/x_tar_gz_test.tar.gz b2/a1 b2/a2
 
 END
 
@@ -42,11 +48,13 @@ END
 my $verbose;
 my $dryrun;
 my $force;
+my $target_dir = ".";
 
 GetOptions(
    'v|verbose' => \$verbose,
    'n'         => \$dryrun,
    'f|force'   => \$force,
+   'd|dir=s'   => \$target_dir,
 ) || usage("cannot parse command line: $!");
 
 usage("wrong number of args") if @ARGV < 2;
@@ -68,6 +76,8 @@ if ( $arch =~ /gz$/ ) {
    $cmd  = "tar -tf $arch";
    $cmd2 = "tar -xvf $arch";
 }
+
+$cmd2 .= " -C $target_dir";
 
 open my $ifh, "$cmd|" or die "cmd=$cmd failed: $!, $?";
 
@@ -120,4 +130,3 @@ print "$cmd2\n";
 if ( should_do_it( { DRYRUN => $dryrun, FORCE => $force } ) ) {
    system($cmd2);
 }
-

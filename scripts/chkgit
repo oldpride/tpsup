@@ -16,8 +16,6 @@ EOF
    exit 1
 }
 
-unset LESS # disable "git diff" paging.
-
 while getopts n o;
 do
    case "$o" in
@@ -93,10 +91,10 @@ do
    fi
 
    status=$(git status --porcelain)
-   diff=$(git diff --stat --cached origin/master)
+   diff=$(git --no-pager diff --stat --cached origin/master)
    if [ -n "$status" -o -n "$diff" ]; then
       (set -x; git status)
-      (set -x; git diff --stat --cached origin/master)
+      (set -x; git --no-pager diff --stat --cached origin/master)
       if [ $check_only = N ]; then
 	 echo ""
          echo "git push? Y|N ? [N]"

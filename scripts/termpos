@@ -58,8 +58,9 @@ usage:
    -v                verbose mode.
 
    note: font size is not set by this script, but you can set it in the terminal settings. 
+
    for example, 
-      in mintty, you can set it in the "Options->Text" menu. 
+      in mintty (eg, cygwin, gitbash, vscode bash terminal), you can set it in the "Options->Text" menu. 
       in putty, you can set it in the "Window->Appearance" menu.
 
    termpos_cfg format is
