@@ -114,6 +114,12 @@ our $our_cfg = {
                comment   => 'run myop1',
                test_str  => [ 'hello', 'world' ],
             },
+            myop1_4 => {
+               num_args => 1,
+               sub_url  => 'app1/api/run_myop1_3/{{A0}}',
+               comment  => 'run myop1',
+               test_str => [ "'test special char *'", ],
+            },
          },
       },
 

@@ -29,6 +29,8 @@ use TPSUP::UTIL qw(
   add_line_number_to_code
 );
 
+use TPSUP::LOCK qw(uri_escape);
+
 use TPSUP::CFG qw(check_syntax);
 
 sub swagger_eval_code {
@@ -133,6 +135,20 @@ sub swagger {
          }
       } else {
          croak "unsupported validator type: ", ref($validator);
+      }
+   }
+
+   # if method is GET, we need uri_escape the A parameters in the dict
+   if ( !$cfg->{method} || uc( $cfg->{method} ) eq 'GET' ) {
+      for my $key ( keys %$dict ) {
+         if ( $key =~ /^A\d+$/ ) {
+            my $old = $dict->{$key};
+            my $new = uri_escape( $dict->{$key} );
+            $dict->{$key} = $new;
+            if ( $old ne $new ) {
+               print STDERR "Parameter $key was escaped from '$old' to '$new'\n";
+            }
+         }
       }
    }
 
