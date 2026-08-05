@@ -1,0 +1,5 @@
+# unset python venv variables
+
+unset _OLD_VIRTUAL_PATH
+unset _OLD_VIRTUAL_PYTHONHOME
+unset _OLD_VIRTUAL_PS1
