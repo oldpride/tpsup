@@ -21,6 +21,8 @@ dir=$(dirname "$0")
 
 UNAME=$(uname -a)
 
+unset seen_type # unset the var in case it is set in the environment.
+
 types="batch trace"
 for type in $types; do
    if [ -f "$dir/${prog}_cfg_${type}.py" ]; then

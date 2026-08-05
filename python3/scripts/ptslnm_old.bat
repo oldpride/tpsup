@@ -29,5 +29,8 @@ if not defined seen_type (
 
 set "type=%seen_type%"
 
+@REM unset seen_type
+set "seen_type="
+
 set "cfg=%dir%/%prog%_cfg_%type%.py"
 python "%TPSUp%/python3/scripts/pt%type%.py" "%cfg%" -c "%prog%" %*
