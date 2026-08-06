@@ -104,7 +104,9 @@ for t in $(echo $targets); do
 
       if [ -e "$target_script" ]; then
          if [ "$target_script" -nt "$source_script" ]; then
-            echo "skipped $target_script as it is newer than $source_script"
+            if [ $verbose = Y ]; then
+               echo "skipped $target_script because it is newer than $source_script"
+            fi
             continue
          else
             rm -f "$target_script"

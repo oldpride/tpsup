@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# this wrapper script created (copied) by tpsup/scripts/cmd_maker.bash
+# example usage see tpsup/python3/scripts/Makefile
+# the original script is tpsup/scripts/cmd_generic.bash.
+# tpsup/scripts/cmd_maker.bash will copy tpsup/scripts/cmd_generic.bash to target's directory
+# and rename it to <target>
+
+# this wrapper is to shorten command line, so that instead of
+#    python ptgrep_cmd.py ...
+# we can type
+#    ptgrep ...
+# to archive this, we could have used symbolic link
+# however: symbolic link doesn't work well on windows, cygwin or gitbash.
+#          therefore, we had to use hard copy. see Makefile in this folder.
+
+# set -x
+
+# use double quotes to enclose path so that path like /c/Program Files/... will be protected
+prog=$(basename "$0")
+dir=$(dirname "$0")
+
+UNAME=$(uname -a)
+
+# associate array of extension to interpreter
+declare -A ext2intepreters
+ext2intepreters=(
+   [js]="node"
+   [ts]="deno"
+   [py]="python3 python"   # if need, make python3 link/copy from python in venv.
+   # [py]="python"  # should be python version 3.
+)
+
+for ext in js ts py; 
+do
+   file="$dir/${prog}_cmd.$ext"
+
+   if [[ -f "$file" ]]; then
+      interpreters=${ext2intepreters[$ext]}
+      for interpreter in `echo $interpreters`
+      do
+         if which $interpreter >/dev/null 2>&1; then
+            break
+         fi
+      done
+            
+      if [[ "$UNAME" =~ Cygwin ]]; then
+         file=$(cygpath --windows "$file")
+         if [[ "$interpreter" == "deno" ]]; then
+            deno run --allow-all "$file" "$@"
+         else
+            $interpreter "$file" "$@"
+         fi
+      else
+         "file" "$@"
+      fi
+
+      break
+   fi
+done
