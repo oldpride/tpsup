@@ -325,7 +325,7 @@ def swagger(cfg, args,
         # command = f'{flag_string} -w "\nhttp_code: %{{http_code}}\n" -X {method} --header "Accept: {Accept}"'
         # ideally we should use -w '\n' to print http code into a separate line - the last line,
         # but windows cmd.exe cannot handle line continuation.
-        command = f'{flag_string} -w "http_code: %{{http_code}}" -X {method} --header "Accept: {Accept}"'
+        command = f'{flag_string} -w ' + '"http_code: %%{http_code}"' + f' -X {method} --header "Accept: {Accept}"'
 
         if entry_name:
             command = f"ptentry -- {curl} -u tpentry{{{entry_name}}}{{user}}:tpentry{{{entry_name}}}{{decoded}} {command}"
@@ -369,10 +369,14 @@ def swagger(cfg, args,
                     # 'nojson' is from caller - likely from command line
                     import json
                     # format stdout_string as json
-                    print(json.dumps(json.loads(stdout_string), indent=4, sort_keys=True))
+                    try:
+                        print(json.dumps(json.loads(stdout_string), indent=4, sort_keys=True))
+                    except Exception as e:
+                        print(f"{stdout_string}", file=sys.stderr)
+                        print(f"ERROR: failed to parse stdout_string as json: {e}", file=sys.stderr)          
                 else:
                     print(stdout_string)
-                print(status_line)
+                print(status_line, file=sys.stderr)
 
                 # lines = result['stdout'].splitlines()
                 # status_line = "unknown status line"
