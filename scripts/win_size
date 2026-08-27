@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# get window size
+wmic path Win32_VideoController get CurrentHorizontalResolution,CurrentVerticalResolution

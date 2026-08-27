@@ -78,8 +78,11 @@ elif [ $action = set ]; then
    reduce PATH
    reduce PYTHONPATH
 
-   # add freecad to PS1
-   export PS1="(freecad) $PS1"
+   # add freecad to PS1 if not already added
+   case "$PS1" in
+      (*"(freecad)"*) ;;
+      (*) export PS1="(freecad) $PS1" ;;
+   esac
    
    chk_freecad_executables
 else

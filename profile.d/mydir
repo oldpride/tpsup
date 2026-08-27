@@ -50,4 +50,5 @@ else
    fi
 
    cd "$MYBASE"/github/*$1*
+   [ -f .profile ] && source .profile
 fi
