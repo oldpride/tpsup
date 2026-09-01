@@ -43,6 +43,8 @@ done
 
 shift $((OPTIND-1))
 
+unset LESS
+
 if [ $# -eq 0 ]; then
    echo "wrong number of args"
    usage
