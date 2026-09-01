@@ -29,7 +29,7 @@ swagger_syntax = {
     },
     '^/cfg/([^/]+?)/op/([^/]+?)/$': {
         'sub_url': {'type': str, 'required': 1},
-        'num_args': {'type': int},
+        'num_args': {'type': [int,str]},
         'json': {'type': int},
         'method': {'type': str, 'pattern': r'^(GET|POST|DELETE)$'},
         'Accept': {'type': str},
@@ -67,8 +67,13 @@ def tpbatch_parse_hash_cfg(hash_cfg: dict, nojson=False, **opt):
                 example += f"   {{{{prog}}}} {base} {op}"
 
                 num_args = cfg.get('num_args', 0)
-                for i in range(num_args):
-                    example += f" arg{i}"
+                if num_args is '+':
+                    example += " arg0 [arg1 arg2 ...]"
+                elif num_args is '*':
+                    example += " [arg0 arg1 arg2 ...]"
+                else:
+                    for i in range(num_args):
+                        example += f" arg{i}"
 
                 example += "\n"
 
@@ -298,6 +303,8 @@ def swagger(cfg, args,
             flags.append('--silent')
 
         flag_string = ' '.join(flags)
+
+        cfg['base_url'] = base_url
 
         method = cfg.get('method', 'GET')
         Accept = cfg.get('Accept', 'application/json')
