@@ -67,9 +67,9 @@ def tpbatch_parse_hash_cfg(hash_cfg: dict, nojson=False, **opt):
                 example += f"   {{{{prog}}}} {base} {op}"
 
                 num_args = cfg.get('num_args', 0)
-                if num_args is '+':
+                if num_args == '+':
                     example += " arg0 [arg1 arg2 ...]"
-                elif num_args is '*':
+                elif num_args == '*':
                     example += " [arg0 arg1 arg2 ...]"
                 else:
                     for i in range(num_args):
