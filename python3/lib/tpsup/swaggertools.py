@@ -346,6 +346,15 @@ def swagger(cfg, args,
                 # sometimes curl's POST method doesn't want -d at all.
                 # therefore don't use -d "" when it is not defined.
 
+                if post_data == 'json_array_number':
+                    post_data = ','.join(args)
+                    post_data = f"[{post_data}]"
+                elif post_data == 'json_array_string':
+                    post_data = ','.join(f'"{arg}"' for arg in args)
+                    post_data = f"[{post_data}]"
+                else:
+                    post_data = resolve_scalar_var_in_string(post_data, kvp, **opt)
+
                 # escape double quote in post_data
                 post_data = post_data.replace('"', '\\"')
                 command += f" --header \"Content-Type: application/json\" -d \"{post_data}\""
