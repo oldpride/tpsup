@@ -148,7 +148,13 @@ def tpbatch_parse_input(input, all_cfg, **opt):
 
     num_input = len(copied)
 
-    if num_args != num_input:
+    if num_args == '+':
+        if num_input < 1:
+            print(f"ERROR: wrong number of args, expecting at least 1 but got {num_input}, input={copied}")
+            exit(1)
+    elif num_args == '*':
+        pass
+    elif num_args != num_input:
         print(f"ERROR: wrong number of args, expecting {num_args} but got {num_input}, input={copied}")
         exit(1)
 
