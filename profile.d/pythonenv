@@ -2,15 +2,20 @@ local OPTIND OPTARG o quiet usage expected_version actual_version binaries binar
 
 prog=${FUNCNAME[1]}
 
-usage="usage: $prog [-q] 2|3"
+usage="usage: $prog [-q] [-v] 2|3"
 
 quiet=N
+verbose=N
+delpath_flag="-q"
 
-while getopts q o; do
+while getopts qv o; do
    case "$o" in
    q)
       quiet=Y
-      flag="-q"
+      ;;
+   v)
+      verbose=Y
+      delpath_flag="" 
       ;;
    *)
       echo "unknow switch. $usage" >&2
@@ -28,7 +33,7 @@ if [ $# -ne 1 ]; then
 fi
 
 # remove old versions
-delpath $flag "Program Files/Python$expected_version"
+delpath $delpath_flag "Program Files/Python$expected_version"
 
 expected_version=$1
 
@@ -48,9 +53,9 @@ else
    return
 fi
 
-[ $quiet = Y ] || (
-   echo""
-   echo "PATH=$PATH"
+[ $verbose = Y ] && (
+   echo "" >&2
+   echo "PATH=$PATH" >&2
 )
 
 binaries=python
@@ -67,14 +72,14 @@ for binary in $(echo $binaries); do
 
    actual_version=$("$python" --version 2>&1)
    [ $quiet = Y ] || (
-      echo ""
-      echo "'$python' is $actual_version"
+      echo "" >&2
+      echo "'$python' is $actual_version" >&2
    )
 
    if [[ $actual_version =~ "Python $expected_version" ]]; then
       found_binary=Y
    else
-      [ $quiet = Y ] || echo "$python version ($actual_version) is not $expected_version"
+      [ $quiet = Y ] || echo "$python version ($actual_version) is not $expected_version" >&2
    fi
 done
 
@@ -115,13 +120,13 @@ export PATH="$SITESPEC/python$expected_version/scripts:$TPSUP/python$expected_ve
 
 reduce PATH PYTHONPATH
 
-[ $quiet = Y ] || (
-   echo ""
-   echo "PATH=$PATH"
+[ $verbose = Y ] && (
+   echo "" >&2
+   echo "PATH=$PATH" >&2
 )
-[ $quiet = Y ] || (
-   echo ""
-   echo PYTHONPATH=$PYTHONPATH
+[ $verbose = Y ] && (
+   echo "" >&2
+   echo "PYTHONPATH=$PYTHONPATH" >&2
 )
 
 sitevenv() {
@@ -193,7 +198,7 @@ dvenv() {
 }
 export -f dvenv
 
-if [[ $UNAME =~ Cygwin && $quiet = N ]]; then
+if [[ $UNAME =~ Cygwin && $verbose = Y ]]; then
    cat <<END
 On Cygwin, use relative path or windows path. eg,
                                                       ./tpcsv.py
@@ -210,4 +215,4 @@ fi
 # export the function
 set -a
 
-[ $quiet = Y ] || (echo "")
+[ $verbose = Y ] && (echo "")
