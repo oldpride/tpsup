@@ -23,7 +23,7 @@ for %%i in (%types%) do (
 )
 
 if not defined seen_type (
-   echo "ERROR: no cfg file found for %prog%"
+   echo "ERROR: no cfg file found for %prog%: missing %dir%\%prog%_cfg_<type>.py"
     exit /b 1
 )
 

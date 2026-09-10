@@ -834,6 +834,7 @@ p2env() {
 p3env() {
    pythonenv $@ 3
 }
+export -f p3env
 
 cdlatest() {
    latest_dir=$($TPSUP/scripts/cdlatest.bash "$@")

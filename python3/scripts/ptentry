@@ -23,8 +23,8 @@ dir=$(dirname "$0")
 UNAME=$(uname -a)
 
 # associate array of extension to interpreter
-declare -A ext2intepreters
-ext2intepreters=(
+declare -A interpretersByExt
+interpretersByExt=(
    [js]="node"
    [ts]="deno"
    [py]="python3 python"   # if need, make python3 link/copy from python in venv.
@@ -36,13 +36,20 @@ do
    file="$dir/${prog}_cmd.$ext"
 
    if [[ -f "$file" ]]; then
-      interpreters=${ext2intepreters[$ext]}
+      interpreters=${interpretersByExt[$ext]}
       for interpreter in `echo $interpreters`
       do
          if which $interpreter >/dev/null 2>&1; then
             break
          fi
       done
+
+      if [[ "$interpreter" =~ python ]]; then
+         if [ "X$VIRTUAL_ENV" = "X" ]; then
+            p3env -q
+            svenv
+         fi
+      fi
             
       if [[ "$UNAME" =~ Cygwin ]]; then
          file=$(cygpath --windows "$file")

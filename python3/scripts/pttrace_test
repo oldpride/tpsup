@@ -35,6 +35,11 @@ for type in $types; do
    fi
 done
 
+if [ "X$seen_type" = "X" ]; then
+   echo "ERROR: no cfg file found for $prog: missing $dir/${prog}_cfg_<type>.py"
+   exit 1
+fi
+
 type=$seen_type
 
 # check whether it is running in versbose. we will pass it to ptbatch
