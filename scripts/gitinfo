@@ -47,6 +47,9 @@ echo "pwd = `pwd`"
 unset LD_LIBRARY_PATH
 export PATH=/usr/bin:$PATH
 
+# unset pager for git commands to avoid interactive prompts
+unset LESS
+
 echo ""
 
 cmd="git config --get remote.origin.url"
@@ -99,4 +102,3 @@ echo ""
 cmd="git log -n 3"
 echo "cmd = $cmd"
 $cmd
-

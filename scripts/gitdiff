@@ -28,6 +28,9 @@ EOF
 unset LD_LIBRARY_PATH
 export PATH=/usr/bin:$PATH
 
+# unset pager for git commands to avoid interactive prompts
+unset LESS
+
 verbose=N
 while getopts v o; do
    case "$o" in
