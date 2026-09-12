@@ -32,5 +32,9 @@ endlocal & (
    ) else (
       @mycd "%MYBASE%/github/"%var%*
    )
-)
 
+   @REM if .profile.bat exists, we run it
+   if exist "%MYBASE%/github/%var%/.profile.bat" (
+      call "%MYBASE%/github/%var%/.profile.bat"
+   )
+)
