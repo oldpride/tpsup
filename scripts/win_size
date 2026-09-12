@@ -1,4 +1,5 @@
 #!/bin/bash
 
 # get window size
-wmic path Win32_VideoController get CurrentHorizontalResolution,CurrentVerticalResolution
+# wmic path Win32_VideoController get CurrentHorizontalResolution,CurrentVerticalResolution
+powershell -Command "Get-CimInstance Win32_VideoController | Select-Object CurrentHorizontalResolution, CurrentVerticalResolution"
