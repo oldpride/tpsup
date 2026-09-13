@@ -57,14 +57,16 @@ elif [ $mode == "a" ]; then
    powershell -Command "Get-CimInstance Win32_VideoController | Select-Object $headers"
 elif [ $mode == "i" ]; then
    # handle internal display
-   # AdapterDACType               : Internal
-   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { \$_.AdapterDACType -eq 'Internal'  } | Select-Object $headers"
+   # AdapterDACType               : Internal  # not a reliable indicator of internal display
+   # PNPDeviceID                  : PCI\VEN_8086&DEV_5917&SUBSYS_081A1028&REV_07\3&11583659&0&10
+   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { \$_.PNPDeviceID -notlike 'USB*' } | Select-Object $headers"
 elif [ $mode == "e" ]; then
    # handle external display
    # AdapterDACType               : 
+   # PNPDeviceID                  : USB\VID_17E9&PID_6006&MI_01\7&33B12E0A&0&0001   # reliable indicator of external display
    # AdapterCompatibility         : DisplayLink
    # MaxRefreshRate               : 75
    # MinRefreshRate               : 50
    # the inactive external display seems to have no MaxRefreshRate or MinRefreshRate
-   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { \$_.AdapterDACType -ne 'Internal' -and \$_.MaxRefreshRate -ne \$null -and \$_.MinRefreshRate -ne \$null } | Select-Object $headers"
+   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { \$_.PNPDeviceID -like 'USB*' -and \$_.MaxRefreshRate -ne \$null -and \$_.MinRefreshRate -ne \$null } | Select-Object $headers"
 fi
