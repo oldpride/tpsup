@@ -59,7 +59,7 @@ elif [ $mode == "i" ]; then
    # handle internal display
    # AdapterDACType               : Internal  # not a reliable indicator of internal display
    # PNPDeviceID                  : PCI\VEN_8086&DEV_5917&SUBSYS_081A1028&REV_07\3&11583659&0&10
-   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { \$_.PNPDeviceID -notlike 'USB*' } | Select-Object $headers"
+   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { (\$_.PNPDeviceID -notlike 'USB*' -and \$_.PNPDeviceID -notlike 'SWD*') } | Select-Object $headers"
 elif [ $mode == "e" ]; then
    # handle external display
    # AdapterDACType               : 
