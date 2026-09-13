@@ -64,9 +64,10 @@ elif [ $mode == "e" ]; then
    # handle external display
    # AdapterDACType               : 
    # PNPDeviceID                  : USB\VID_17E9&PID_6006&MI_01\7&33B12E0A&0&0001   # reliable indicator of external display
+   # PNPDeviceID                  : SWD\REMOTEDISPLAYNUM\RDPIDD_...   # another example of external display, cloud pc
    # AdapterCompatibility         : DisplayLink
    # MaxRefreshRate               : 75
    # MinRefreshRate               : 50
    # the inactive external display seems to have no MaxRefreshRate or MinRefreshRate
-   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { \$_.PNPDeviceID -like 'USB*' -and \$_.MaxRefreshRate -ne \$null -and \$_.MinRefreshRate -ne \$null } | Select-Object $headers"
+   powershell -Command "Get-CimInstance Win32_VideoController | Where-Object { (\$_.PNPDeviceID -like 'USB*' -or \$_.PNPDeviceID -like 'SWD*') -and \$_.MaxRefreshRate -ne \$null -and \$_.MinRefreshRate -ne \$null } | Select-Object $headers"
 fi
