@@ -60,6 +60,8 @@ usage:
 
    -j int            jump to next monitor. monitor size determined by win_size script.
                      default is no jump (stay on the current monitor)
+                     for negative values, eg, -1, use "-j n1" 
+                     because "-1" would be interpreted as an option by the script.
 
    -n                do not move the terminal, only update the position file under /tmp.
 
@@ -162,6 +164,7 @@ do
    esac
 done
 
+
 shift $((OPTIND-1))
 
 if [ $# -ne 1 -a $# -ne 2 ]; then
@@ -196,11 +199,10 @@ if [ $IS_CYGWIN = Y -o $IS_GITBASH = Y ]; then
    term_pid=$(win_get_pid_by_tty.pl $short_tty)
 
    term_ip="127.0.0.1"  # cygwin on pc, we assume the term client is on the same machine
-
-   if [ $jump -ne 0 ]; then
-      x_resolution=`win_size e | head -n 4 |tail -1|awk '{print $1}'`
-      jump_x=$((jump * x_resolution))
-   fi
+   
+   x_resolution=`win_size e | head -n 4 |tail -1|awk '{print $1}'`
+   [ $verbose = Y ] && echo "x_resolution=$x_resolution"
+   
 else
    # we assume this is a putty session that logs into a linux server
    # $ env |grep SSH
@@ -224,13 +226,25 @@ else
    term_tty=$(echo $WHO | awk '{print $2}')
    term_ip=$(echo $WHO | awk '{print $3}')
    term_pid=$(ps -t $term_tty --sort=start_time |grep bash |head -n 1|awk '{print $1}')
+
+   x_resolution=0
 fi
+
+if [[ $jump =~ ^n ]]; then
+   # n1 means -1
+   jump=${jump/n/-}
+fi
+jump_x=`echo "$jump * $x_resolution" | bc`
+
 
 if [ $verbose = Y ]; then
    echo "term_login=$term_login"
    echo "term_tty=$term_tty"
    echo "term_ip=$term_ip"
    echo "term_pid=$term_pid"
+   echo "jump=$jump"
+   echo "jump_x=$jump_x"
+   echo "x_resolution=$x_resolution"
 fi
 
 if [ "X$term_ip" = "X" ]; then
