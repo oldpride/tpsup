@@ -1015,7 +1015,12 @@ gittop() {
 if [[ $- == *i* ]]; then
    # this is interactive shell
    if [ "X$RUN_TERMPOS" = "XY" ]; then
-      termpos auto || : # '|| :' is to ignore the error and set return code to 0.
+      # from tpsup, only auto run termpos once per session. 
+      # this will avoid repeatedly moving the terminal when we refresh env using tpsup or siteenv.
+      if [ "X$RUN_TERMPOS_DONE" = "X" ]; then
+         termpos auto || : # '|| :' is to ignore the error and set return code to 0.
+         RUN_TERMPOS_DONE=Y
+      fi
    fi
 
    # if [ "X$RUN_PUTTYALIVE" = "XY" ]; then

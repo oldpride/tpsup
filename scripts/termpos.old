@@ -36,10 +36,9 @@ usage () {
    cat >&2 <<EOF
 usage:
 
-   $prog auto       # automatically place the current terminal based on $termpos_cfg               
-   $prog min_pos max_pos   # place the terminal between min_pos max_pos
+   $prog auto                      
+   $prog min max    
    $prog resetall   # reset all term windows to the initial position
-   $prog info       # find the current terminal's info 
 
    position a term's window in the next available position between min and max.
 
@@ -57,9 +56,6 @@ usage:
                      if width or height is not set, use default $default_width,$default_height.             
 
    -v                verbose mode.
-
-   -j int            jump to next monitor. monitor size determined by win_size script.
-                     default is no jump (stay on the current monitor)
 
    note: font size is not set by this script, but you can set it in the terminal settings. 
 
@@ -84,9 +80,6 @@ examples:
    $prog 10 12
    $prog -s 100,30 auto
    $prog resetall
-
-   $prog -j 1 auto
-   $prog -j 1 10
 
 EOF
    exit 1
@@ -147,13 +140,11 @@ set_terminal () {
 
 verbose=N
 flag=""
-jump=0
-while getopts vs:j: o;
+while getopts vs: o;
 do
    case "$o" in
       v)  verbose=Y;flag=-v;;
       s)  size=$OPTARG;;
-      j)  jump=$OPTARG;;
       *)   usage;;
    esac
 done
@@ -178,8 +169,6 @@ fi
 
 [ $verbose = Y ] && echo "IS_CYGWIN=$IS_CYGWIN, IS_GITBASH=$IS_GITBASH"
 
-jump_x=0
-
 # for now, we can handle cygwin on pc, putty on pc that logs into a linux server.
 if [ $IS_CYGWIN = Y -o $IS_GITBASH = Y ]; then
    # cygwin on pc
@@ -192,11 +181,6 @@ if [ $IS_CYGWIN = Y -o $IS_GITBASH = Y ]; then
    term_pid=$(win_get_pid_by_tty.pl $short_tty)
 
    term_ip="127.0.0.1"  # cygwin on pc, we assume the term client is on the same machine
-
-   if [ $jump -ne 0 ]; then
-      x_resolution=`win_size e | head -n 4 |tail -1|awk '{print $1}'`
-      jump_x=$((jump * x_resolution))
-   fi
 else
    # we assume this is a putty session that logs into a linux server
    # $ env |grep SSH
@@ -234,30 +218,7 @@ if [ "X$term_ip" = "X" ]; then
    exit 1
 fi
 
-if [ "$1" = "info" ]; then
-   # find which posfile has our pid
-   echo "term_login=$term_login"
-   echo "term_tty=$term_tty"
-   echo "term_ip=$term_ip"
-   echo "term_pid=$term_pid"
-   for posfile in `/bin/ls -1 /tmp/termpos.$user.$term_ip.* 2>/dev/null`; 
-   do
-      pid_in_file=$(get_nth_line 1 $posfile|cut -d' ' -f1)
-      if [ "$pid_in_file" = "$term_pid" ]; then
-         echo "Found posfile for current terminal: $posfile"
-         cat $posfile
-         break
-      fi
-   done
-
-elif [ "$1" = "resetall" ]; then
-   declare -A seen  # associative array to keep track of seen pids
-
-   # if [ ${seen[$pid]+_} ]; then
-   #                # +_: This is a shorthand way to check if the key $pid exists in the seen array.
-   #                # when you use + with an array element, it evaluates to a non-empty string 
-   #                # (e.g., _) if the key exists, or an empty string if it doesn't.
-
+if [ "$1" = "resetall" ]; then
    for posfile in `/bin/ls -1 /tmp/termpos.$user.$term_ip.* 2>/dev/null`; 
    do
       # file is like /tmp/termpos.tian.192.168.0.45.005
@@ -325,7 +286,7 @@ elif [ "$1" = "resetall" ]; then
          continue
       fi
    
-      x=`expr 30 \* $pos + $jump_x`
+      x=`expr 30 \* $pos`
       y=`expr 30 \* $pos`
 
       set_terminal $pos $pid $x $y $width $height $tty
@@ -411,8 +372,9 @@ elif [ "$1" = "auto" ]; then
    fi
 
    # recursively call this script with specific min and max
-   [ $verbose = Y ] && echo "recursively calling: termpos $flag -j $jump -s $width,$height $min_pos $max_pos"
-   $prog $flag -j $jump -s $width,$height $min_pos $max_pos    
+   [ $verbose = Y ] && echo "recursively calling: termpos $flag -s $width,$height $min_pos $max_pos"
+   termpos $flag -s $width,$height $min_pos $max_pos
+    
 else
    # termpos min max
    if [ $# -ne 2 ]; then
@@ -479,15 +441,15 @@ else
                   continue
                fi
             else 
-               [ $verbose = Y ] && echo  "pid=$pid in $posfile is not running.  use spot $i"
+               [ $verbose = Y ] && echo  "pid=$pid in $posfile is not running.  use sport $i"
             fi
          else
-            [ $verbose = Y ] && echo "$posfile is empty. we can use spot $i"
+            [ $verbose = Y ] && "$posfile is empty. we can use sport $i"
          fi
       fi
 
       # found a spot
-      x=`expr 30 \* $i + $jump_x`
+      x=`expr 30 \* $i`
       y=`expr 30 \* $i`
 
       if [ -z "$width" ]; then

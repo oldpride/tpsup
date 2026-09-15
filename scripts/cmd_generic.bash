@@ -27,7 +27,7 @@ declare -A interpretersByExt
 interpretersByExt=(
    [js]="node"
    [ts]="deno"
-   [py]="python3 python"   # if need, make python3 link/copy from python in venv.
+   [py]="python"   # if need, make python3 link/copy from python in venv.
    # [py]="python"  # should be python version 3.
 )
 
