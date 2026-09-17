@@ -20,6 +20,7 @@ if '%*'=='' (
        set "OLDPWD=%cd%"
     )
 )
+title %CD%
 
 @rem test
 @rem     mycd C:\Program Files\Git

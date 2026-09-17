@@ -59,7 +59,7 @@ do
             $interpreter "$file" "$@"
          fi
       else
-         "file" "$@"
+         "$file" "$@"
       fi
 
       break
