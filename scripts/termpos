@@ -62,6 +62,9 @@ usage:
                      default is no jump (stay on the current monitor)
                      for negative values, eg, -1, use "-j n1" 
                      because "-1" would be interpreted as an option by the script.
+                     HOWEVER, negative number is not supported by escape sequence.
+                     therefore, this option is for test purposes only.
+
 
    -n                do not move the terminal, only update the position file under /tmp.
 
@@ -234,7 +237,7 @@ if [[ $jump =~ ^n ]]; then
    # n1 means -1
    jump=${jump/n/-}
 fi
-jump_x=`echo "$jump * $x_resolution" | bc`
+jump_x=`expr "$jump" "*" "$x_resolution"`
 
 
 if [ $verbose = Y ]; then
