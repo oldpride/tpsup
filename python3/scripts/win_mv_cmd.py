@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 import argparse
+import os
 import re
 import subprocess
 import sys
+import textwrap
 from pywinauto import Desktop
 
 def is_window_type(w, termType:str):
@@ -120,9 +122,39 @@ def move_all_termType_windows(termType, xy, byMonitor=False, verbose=False):
     return moved
 
 def main():
+    prog = os.path.basename(sys.argv[0])
+    usage = textwrap.dedent(""""\
+        move all cygwin/gitbash/batch windows by x,y pixels.
+        """)
+
+    examples = textwrap.dedent(f""" 
+        -v  # verbose mode
+        -m  # move by monitor widthratio, 
+            e.g., 0.5 for half the monitor width
+
+    examples:
+        # move all cygwin by 1920 pixels horizontally
+        {prog} cyg "1920,0"
+
+        # move them back
+        {prog} cyg "-1920,0"
+
+        # move all batch by half the monitor width
+        {prog} batch -m 0.5
+
+        # move them back
+        {prog} batch -m -0.5 
+        """)
+
     parser = argparse.ArgumentParser(
-        description="Move all Cygwin/Mintty windows by DX and DY pixels."
-    )
+        prog=sys.argv[0],
+        description=usage,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=examples)
+
+    # parser = argparse.ArgumentParser(
+    #     description="Move all cygwin/gitbash/batch windows by x,y pixels."
+    # )
     parser.add_argument("termType", type=str, choices=["cyg", "cygwin", "git", "gitbash","batch", "bat", "cmd"], help="Type of terminal window to move")
     parser.add_argument("xy", type=str, help="Offset in the format 'dx,dy'")
     parser.add_argument("-v", "--verbose", action="store_true",
