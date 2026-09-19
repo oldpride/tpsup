@@ -30,20 +30,23 @@ def is_window_type(w, termType:str):
     else:
         raise ValueError(f"Unsupported termType: {termType}")
 
-    # we need to use executable to distinguish between cygwin and gitbash.
-    pid = w.process_id()
-    import psutil
+    if termType in ("cygwin", "git"):
+        # we need to use executable to distinguish between cygwin and gitbash.
+        pid = w.process_id()
+        import psutil
 
-    p = psutil.Process(pid)
+        p = psutil.Process(pid)
 
-    print("exe:", p.exe())
-    # batch cmd.exe: C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe
-    # cygwin mintty: C:\cygwin64\bin\mintty.exe
-    # git bash mintty: C:\Program Files\Git\usr\bin\mintty.exe
+        print("exe:", p.exe())
+        # batch cmd.exe: C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe
+        # cygwin mintty: C:\cygwin64\bin\mintty.exe
+        # git bash mintty: C:\Program Files\Git\usr\bin\mintty.exe
     
-    if termType in p.exe().lower():
-        return True
-    return False
+        if termType in p.exe().lower():
+            return True
+        return False
+    else:
+        raise RuntimeError(f"we should never be here. Unexpected termType: {termType}")
     
 def get_external_monitor_resolution():
     import subprocess
@@ -74,10 +77,10 @@ def get_external_monitor_resolution():
 
 def move_all_termType_windows(termType, xy, byMonitor=False, verbose=False):
     if byMonitor:
-        xy = int(xy)
+        xy = float(xy)
         monitor_horizontal_resolution = get_external_monitor_resolution()
         print(f"Monitor horizontal resolution: {monitor_horizontal_resolution}")
-        dx=monitor_horizontal_resolution*xy
+        dx=int(monitor_horizontal_resolution*xy)
         dy=0
     else:
         # xy is in the format int,int
@@ -125,7 +128,7 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Print each moved window")
     parser.add_argument("-m", "--byMonitor", action="store_true", 
-                        help="xy arg will be an int, jump number of monitors away, can be negative or positive")
+                        help="xy arg will be an float, jump this number of monitors away, can be negative or positive")
     args = parser.parse_args()
 
     results = move_all_termType_windows(args.termType, args.xy, byMonitor=args.byMonitor, verbose=args.verbose)
