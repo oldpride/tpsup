@@ -29,7 +29,7 @@ def get_external_monitor_resolution():
     else:
         raise RuntimeError("cmd failed")
 
-def is_window_termType(w: WindowSpecification, termType:str):
+def is_window_winTypes(w: WindowSpecification, winTypes:str):
     cls = (w.class_name() or "").lower()
     # print(f"cls={cls}")
     # title = (w.window_text() or "").lower()
@@ -37,47 +37,40 @@ def is_window_termType(w: WindowSpecification, termType:str):
     # print(f"cls={cls}")
     # title = (w.window_text() or "").lower()
 
-    termType = termType.lower()
-
-    if termType in ("gitbash"):
-        termType = "git"
-    elif termType in ("cyg"):
-        termType = "cygwin"
-    elif termType in ("batch", "bat"):
-        termType = "cmd"
-
-    print(f"termType={termType}, cls={cls}")
+    winTypes = winTypes.lower().split(',')
     
-    if termType in ("cygwin", "git"):
-        # cygwin and gitbash use mintty
-        if "mintty" not in cls:
-            return False
-    elif termType in ("mintty", "putty"):
-        if termType == cls:
-            return True
-        else:
-            return False
-    elif termType in ("cmd"):
-        if "CASCADIA_HOSTING_WINDOW_CLASS".lower() in cls:
-            return True
-        return False
-    else:
-        raise ValueError(f"Unsupported termType: {termType}")
+    for wt in winTypes:
+        # normalize winType for batch/cmd windows
+        if wt in ("batch", "bat", "cmd"):
+            wt = "CASCADIA_HOSTING_WINDOW_CLASS".lower()
 
-    if termType in ("cygwin", "git"):
-        # we need to use executable to distinguish between cygwin and gitbash.
-        pid = w.process_id()
-        import psutil
-
-        p = psutil.Process(pid)
-
-        print("exe:", p.exe())
-        # batch cmd.exe: C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe
-        # cygwin mintty: C:\cygwin64\bin\mintty.exe
-        # git bash mintty: C:\Program Files\Git\usr\bin\mintty.exe
-    
-        if termType in p.exe().lower():
+        if wt == cls:
             return True
-        return False
-    else:
-        raise RuntimeError(f"we should never be here. Unexpected termType: {termType}")
+
+        # cygwin and gitbash needs special handling
+        if wt in ("cyg", "cygwin", "git", "gitbash"):         
+            # cygwin and gitbash use mintty
+            if "mintty" != cls:
+                continue
+
+            if wt in ("git", "gitbash"):
+                exe_pattern = "git"
+            else:
+                exe_pattern = "cygwin"
+        
+            # we need to use executable to distinguish between cygwin and gitbash.
+            pid = w.process_id()
+            import psutil
+
+            p = psutil.Process(pid)
+
+            print("exe:", p.exe())
+            # batch cmd.exe: C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe
+            # cygwin mintty: C:\cygwin64\bin\mintty.exe
+            # git bash mintty: C:\Program Files\Git\usr\bin\mintty.exe
+        
+            if exe_pattern in p.exe().lower():
+                return True
+            continue
+        
+    return False

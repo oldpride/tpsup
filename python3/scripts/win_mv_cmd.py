@@ -6,7 +6,7 @@ import subprocess
 import sys
 import textwrap
 from pywinauto import Desktop
-from tpsup.windowstools import is_window_termType, get_external_monitor_resolution
+from tpsup.windowstools import is_window_winTypes, get_external_monitor_resolution
 
 
 def move_all_termType_windows(termType, xy, byMonitor=False, verbose=False):
@@ -26,7 +26,7 @@ def move_all_termType_windows(termType, xy, byMonitor=False, verbose=False):
     moved = []
 
     for w in desktop.windows():
-        if not is_window_termType(w, termType):
+        if not is_window_winTypes(w, termType):
             continue
 
         try:
@@ -76,6 +76,12 @@ def main():
 
         # move them back
         {prog} batch -m -0.5 
+
+        # move all putty,batch by 1920 pixels horizontally
+        {prog} putty,batch "1920,0"
+
+        # move them back
+        {prog} putty,batch "-1920,0"
         """)
 
     parser = argparse.ArgumentParser(
@@ -87,7 +93,7 @@ def main():
     # parser = argparse.ArgumentParser(
     #     description="Move all cygwin/gitbash/batch windows by x,y pixels."
     # )
-    parser.add_argument("termType", type=str, choices=["cyg", "cygwin", "git", "gitbash","batch", "bat", "cmd", "putty", "mintty"], help="Type of terminal window to move")
+    parser.add_argument("termTypes", type=str, help="Types of terminal window to move, separated by ','")
     parser.add_argument("xy", type=str, help="Offset in the format 'dx,dy'")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Print each moved window")
@@ -95,8 +101,8 @@ def main():
                         help="xy arg will be an float, jump this number of monitors away, can be negative or positive")
     args = parser.parse_args()
 
-    results = move_all_termType_windows(args.termType, args.xy, byMonitor=args.byMonitor, verbose=args.verbose)
-    print(f"Moved {len(results)} {args.termType} windows")
+    results = move_all_termType_windows(args.termTypes, args.xy, byMonitor=args.byMonitor, verbose=args.verbose)
+    print(f"Moved {len(results)} {args.termTypes} windows")
     if args.verbose:
         for title, old_pos, new_pos in results:
             print(f"{title}: {old_pos} -> {new_pos}")
