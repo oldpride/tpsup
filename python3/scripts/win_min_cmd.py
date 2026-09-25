@@ -27,17 +27,27 @@ def process_winTypes(winTypes:str, excludeFlag=False, restoreFlag=False, verbose
             if not excludeFlag:
                 continue
 
+        try:
+            visible = bool(w.is_visible())
+        except Exception:
+            visible = False
+
+        # skip background windows that are not visible or no title
+        if not visible:
+            if verbose:
+                print(f"skipping invisible window: {cls} | {title or '<no title>'} [{w.process_id()}]")
+            continue
+        
+        if not title:
+            if verbose:
+                print(f"skipping window with no title: {cls} | {title or '<no title>'} [{w.process_id()}]")
+            continue
+
+        if verbose:
+            print(f"processing window: {cls} | {title or '<no title>'} [{w.process_id()}]")
+        
         if restoreFlag:
-            try:
-                visible = bool(w.is_visible())
-            except Exception:
-                visible = False
-
             if not w.is_minimized():
-                continue
-
-            if not visible:
-                # skip background windows that are not visible
                 continue
 
             if dry_run:
@@ -58,7 +68,7 @@ def process_winTypes(winTypes:str, excludeFlag=False, restoreFlag=False, verbose
                     if verbose:
                         print(f"{action} (dry run): {cls} | {title or '<no title>'} [{w.process_id()}]")
                     continue
-                
+
                 if verbose:
                     print(f"{action}: {cls} | {title or '<no title>'} [{w.process_id()}]")
                 try:
@@ -131,10 +141,10 @@ usage:
         print(usage, file=sys.stderr)
         sys.exit(1)
 
-    termTypes = args.remainingArgs[0].split(",")
+    winTypes = args.remainingArgs[0]
 
     windows = process_winTypes(
-        termTypes=termTypes,
+        winTypes=winTypes,
         excludeFlag=args.excludeFlag,
         restoreFlag=args.restore,
         verbose=args.verbose,

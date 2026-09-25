@@ -64,7 +64,7 @@ def is_window_winTypes(w: WindowSpecification, winTypes:str):
 
             p = psutil.Process(pid)
 
-            print("exe:", p.exe())
+            # print("exe:", p.exe())
             # batch cmd.exe: C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe
             # cygwin mintty: C:\cygwin64\bin\mintty.exe
             # git bash mintty: C:\Program Files\Git\usr\bin\mintty.exe
