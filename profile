@@ -51,6 +51,9 @@ get_bash_source() {
    fi
 }
 
+# unset python virtual environment
+unset VIRTUAL_ENV
+
 get_bash_source || return $?
 # [ $TP_BASH_SOURCE_FOUND = Y ] || return $?
 export TPSUP=$(
