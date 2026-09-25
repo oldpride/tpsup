@@ -38,6 +38,11 @@ def list_windows():
             x = y = width = height = None
 
         exe, args = get_process_details(pid)
+
+        try:
+            visible = bool(w.is_visible())
+        except Exception:
+            visible = None
         rows.append({
             "title": (w.window_text() or "").strip(),
             "class_name": w.class_name() or "",
@@ -48,6 +53,7 @@ def list_windows():
             "y": y,
             "width": width,
             "height": height,
+            "visible": visible,
         })
 
     return rows
@@ -74,6 +80,7 @@ def print_rows(rows):
     y_width = max(8, max(len(str(r["y"])) if r["y"] is not None else 0 for r in rows))
     w_width = max(8, max(len(str(r["width"])) if r["width"] is not None else 0 for r in rows))
     h_width = max(8, max(len(str(r["height"])) if r["height"] is not None else 0 for r in rows))
+    visible_width = max(8, max(len(str(r["visible"])) if r["visible"] is not None else 0 for r in rows))
     title_width = max(10, max(len(r["title"]) for r in rows))
     args_width = max(10, max(len(r["args"]) for r in rows))
 
@@ -82,6 +89,7 @@ def print_rows(rows):
         f"{'pid':>{pid_width}}  "
         f"{'x':>{x_width}}  {'y':>{y_width}}  "
         f"{'width':>{w_width}}  {'height':>{h_width}}  "
+        f"{'visible':>{visible_width}}  "
         f"{'executable':<{exe_width}}  "
         f"{'title':<{title_width}}  "
         f"{'args':<{args_width}}"
@@ -97,11 +105,11 @@ def print_rows(rows):
             f"{str(r['y']) if r['y'] is not None else '':>{y_width}}  "
             f"{str(r['width']) if r['width'] is not None else '':>{w_width}}  "
             f"{str(r['height']) if r['height'] is not None else '':>{h_width}}  "
+            f"{str(r['visible']) if r['visible'] is not None else '':>{visible_width}}  "
             f"{r['executable']:<{exe_width}}  "
             f"{r['title']:<{title_width}}  "
             f"{r['args']:<{args_width}}"
         )
-
 
 def main():
     prog = os.path.basename(sys.argv[0])

@@ -1,78 +1,112 @@
 #!/usr/bin/env python
 import argparse
+import os
 import sys
 
 from pywinauto import Desktop
+from tpsup.windowstools import is_window_winTypes
 
 
-def normalize_class_name(value):
-    return (value or "").strip().lower()
-
-
-def minimize_all_except_classes(class_names, verbose=False, dry_run=False):
-    keep_classes = {normalize_class_name(name) for name in class_names}
+def process_winTypes(winTypes:str, excludeFlag=False, restoreFlag=False, verbose=False, dry_run=False):
     desktop = Desktop(backend="win32")
-    minimized = []
-    kept = []
+    windows = []
+
+    if restoreFlag:
+        action = "restoring"
+    else:
+        action = "minimizing"
 
     for w in desktop.windows():
-        cls = normalize_class_name(w.class_name())
         title = (w.window_text() or "").strip()
+        cls = (w.class_name() or "").strip().lower()
 
-        if cls in keep_classes:
-            kept.append((cls, title or "<no title>"))
-            if verbose:
-                print(f"keep: {cls} | {title or '<no title>'}")
-            continue
+        if is_window_winTypes(w, winTypes):
+            if excludeFlag:
+                continue
+        else:
+            if not excludeFlag:
+                continue
 
-        try:
-            if verbose:
-                print(f"minimizing: {cls} | {title or '<no title>'} [{w.process_id()}]")
+        if restoreFlag:
+            try:
+                visible = bool(w.is_visible())
+            except Exception:
+                visible = False
 
-            if not dry_run:
-                w.minimize()
+            if not w.is_minimized():
+                continue
 
-            minimized.append((cls, title or cls))
-        except Exception as e:
-            print(f"failed to minimize {cls} | {title or '<no title>'}: {e}", file=sys.stderr)
+            if not visible:
+                # skip background windows that are not visible
+                continue
 
-    return minimized, kept
-
-
-def restore_minimized_windows(class_names, verbose=False, dry_run=False):
-    keep_classes = {normalize_class_name(name) for name in class_names}
-    desktop = Desktop(backend="win32")
-    restored = []
-
-    for w in desktop.windows():
-        cls = normalize_class_name(w.class_name())
-        title = (w.window_text() or "").strip()
-
-        if cls in keep_classes:
-            continue
-
-        try:
-            if w.is_minimized():
+            if dry_run:
                 if verbose:
-                    print(f"restoring: {cls} | {title or '<no title>'} [{w.process_id()}]")
+                    print(f"{action} (dry run): {cls} | {title or '<no title>'} [{w.process_id()}]")
+                continue
 
-                if not dry_run:
-                    w.restore()
-                restored.append((cls, title or cls))
-        except Exception as e:
-            print(f"failed to restore {cls} | {title or '<no title>'}: {e}", file=sys.stderr)
+            if verbose:
+                print(f"{action}: {cls} | {title or '<no title>'} [{w.process_id()}]")
+            try:
+                w.restore()
+            except Exception as e:
+                print(f"failed to restore {cls} | {title or '<no title>'}: {e}", file=sys.stderr)
+        else:
+            # minimizing
+            if not w.is_minimized():
+                if dry_run:
+                    if verbose:
+                        print(f"{action} (dry run): {cls} | {title or '<no title>'} [{w.process_id()}]")
+                    continue
+                
+                if verbose:
+                    print(f"{action}: {cls} | {title or '<no title>'} [{w.process_id()}]")
+                try:
+                    w.minimize()
+                except Exception as e:
+                    print(f"failed to minimize {cls} | {title or '<no title>'}: {e}", file=sys.stderr)
 
-    return restored
+            windows.append(w)
+
+    return windows
 
 
 def main():
+    prog = os.path.basename(sys.argv[0])
+
+    usage = f"""
+usage:
+    {prog} winTypes
+
+    class_names include
+    - all win class names: putty, mintty
+    - and some custom names: cyg, gitbash, batch, cmd, bat
+    - use lowercase for all class names
+
+    examples:
+      {prog} vscode,chrome
+      {prog} -x putty,mintty
+      {prog} -r vscode,chrome
+
+    -v
+    -x
+    --dry-run
+    -r/--restore
+"""
+    
     parser = argparse.ArgumentParser(
         description="Minimize all windows except those whose class names are listed."
     )
     parser.add_argument(
-        "class_names",
+        "remainingArgs",
         nargs="*",
-        help="Window class names to keep visible, for example: putty mintty",
+        help="Window types to minimize or restore, connected by commas, for example: vscode,chrome",
+    )
+    parser.add_argument(
+        "-x", "--excludeFlag",
+        action="store_true",
+        default=False,
+        help="Exclude windows with these class names from being minimized or restored",
     )
     parser.add_argument(
         "-v", "--verbose",
@@ -85,39 +119,29 @@ def main():
         help="Show what would be minimized or restored without changing windows",
     )
     parser.add_argument(
-        "-restore",
+        "-r", "--restore",
         action="store_true",
         help="Restore minimized windows to normal size instead of minimizing others",
     )
+
     args = parser.parse_args()
 
-    if args.restore:
-        restored = restore_minimized_windows(
-            class_names=args.class_names,
-            verbose=args.verbose,
-            dry_run=args.dry_run,
-        )
+    if len(args.remainingArgs) != 1:
+        print("wrong number of arguments", file=sys.stderr)
+        print(usage, file=sys.stderr)
+        sys.exit(1)
 
-        print(f"restored: {len(restored)}")
-        if args.verbose:
-            for cls, title in restored:
-                print(f"  - {cls}: {title}")
-        return
+    termTypes = args.remainingArgs[0].split(",")
 
-    minimized, kept = minimize_all_except_classes(
-        class_names=args.class_names,
+    windows = process_winTypes(
+        termTypes=termTypes,
+        excludeFlag=args.excludeFlag,
+        restoreFlag=args.restore,
         verbose=args.verbose,
         dry_run=args.dry_run,
     )
 
-    print(f"minimized: {len(minimized)}")
-    print(f"kept: {len(kept)}")
-
-    if args.verbose:
-        for cls, title in minimized:
-            print(f"  - {cls}: {title}")
-        for cls, title in kept:
-            print(f"  + {cls}: {title}")
+    print(f"processed: {len(windows)} windows")
 
 
 if __name__ == "__main__":
