@@ -4,7 +4,7 @@ import os
 import sys
 
 from pywinauto import Desktop
-from tpsup.windowstools import is_window_winTypes
+from tpsup.windowstools import is_window_winTypes, what_are_winTypes
 
 
 def process_winTypes(winTypes:str, excludeFlag=False, restoreFlag=False, verbose=False, dry_run=False):
@@ -37,7 +37,7 @@ def process_winTypes(winTypes:str, excludeFlag=False, restoreFlag=False, verbose
             if verbose:
                 print(f"skipping invisible window: {cls} | {title or '<no title>'} [{w.process_id()}]")
             continue
-        
+
         if not title:
             if verbose:
                 print(f"skipping window with no title: {cls} | {title or '<no title>'} [{w.process_id()}]")
@@ -88,10 +88,7 @@ def main():
 usage:
     {prog} winTypes
 
-    class_names include
-    - all win class names: putty, mintty
-    - and some custom names: cyg, gitbash, batch, cmd, bat
-    - use lowercase for all class names
+{what_are_winTypes}
 
     examples:
       {prog} vscode,chrome

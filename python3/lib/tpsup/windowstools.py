@@ -3,6 +3,13 @@ import pywinauto
 
 from pywinauto.application import WindowSpecification
 
+what_are_winTypes = """
+    winTypes include
+    - all win class names: putty, mintty
+    - and some custom names: cyg, gitbash, batch, cmd, bat
+    - use lowercase for all class names
+"""
+
 def get_external_monitor_resolution():
     import subprocess
     cmd = r"""
