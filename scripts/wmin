@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Minimize all windows except for putty and mintty
+
+if [ "X$VIRTUAL_ENV" = "X" ]; then
+   p3env -q
+   svenv
+fi
+
+win_min -x putty,mintty
