@@ -47,7 +47,7 @@ do
       if [[ "$interpreter" =~ python ]]; then
          if [ "X$VIRTUAL_ENV" = "X" ]; then
             p3env -q
-            svenv
+            svenv -q
          fi
       fi
             

@@ -141,7 +141,7 @@ kcd() {
 #    - commands can only be
 #        - bash built-in, eg, echo, eval,
 #        - full path, eg, /usr/bin/perl
-delpath_code=$(cat "$TPSUP/scripts/delpath")
+export delpath_code=$(cat "$TPSUP/scripts/delpath")
 
 delpath() {
    local OPTIND OPTARG o quiet dryrun usage pattern path new old flag
@@ -219,6 +219,7 @@ example:
       echo "dry run delpath. nothing changed"
    fi
 }
+export -f delpath
 
 findpath() {
    # making findpath as function instead of a script is to make it usable when NFS hang.
@@ -295,6 +296,7 @@ example:
       fi
    done
 }
+export -f findpath
 
 listpath() {
    local pattern path usage o case_insensitive OPTIND OPTARG delimiter
@@ -341,6 +343,7 @@ example:
 
    findpath -d "$delimiter" all $path
 }
+export -f listpath
 
 get_native_path() {
    local p
@@ -355,6 +358,7 @@ get_native_path() {
       return 0
    fi
 }
+export -f get_native_path
 
 functions() {
    typeset -F
@@ -370,6 +374,7 @@ to delete a function
    
 EOF
 }
+export -f functions
 
 export PERL_BINARY=perl
 
@@ -487,6 +492,7 @@ freshenv() {
    export PATH=/bin:/usr/bin:/usr/sbin
    echo "PATH=$PATH"
 }
+export -f freshenv
 
 reduce() {
    local REDUCEPATHCMD
@@ -602,6 +608,7 @@ END
 
    eval "$NEW_EXPORT"
 }
+export -f reduce
 # https://askubuntu.com/questions/98782/how-to-run-an-alias-in-a-shell-script
 # Aliases are deprecated in favor of shell functions. From the bash manual page:
 # For almost every purpose, aliases are superseded by shell functions.
@@ -619,6 +626,7 @@ export LESS="-I"
 # -X     do not clear screen after exit
 
 tpsup() { . "$TPSUP/profile"; }
+export -f tpsup
 
 winhome() {
    # this works in cygwin and gitbash
@@ -639,6 +647,7 @@ winhome() {
    #
    cd "$HOMEDRIVE/$HOMEPATH"
 }
+export -f winhome
 
 chome() {
    # this works in cygwin and gitbash
@@ -657,6 +666,7 @@ chome() {
    #
    cd "$USERPROFILE"
 }
+export -f chome
 
 if [ "X$TPSUPMODE" != "Xsafe" ]; then
    export PERL5LIB="$TPSUP/lib/perl:$PERL5LIB"
@@ -792,11 +802,6 @@ mytmp() {
    fi
 
    cd $USER_TMP
-}
-
-functions() {
-   typeset -F
-   echo "to see detail: typeset -f"
 }
 
 

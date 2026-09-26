@@ -32,11 +32,14 @@ if [ $# -ne 1 ]; then
    return
 fi
 
-# remove old versions
-delpath $delpath_flag "Program Files/Python$expected_version"
+# echo "PATH0=$PATH"
 
 expected_version=$1
 
+# remove old versions
+delpath $delpath_flag "Program Files/Python$expected_version"
+
+# echo "PATH1=$PATH"
 if [ $expected_version = 3 ]; then
    if ! [ "X$TP_P3_PATH" = "X" ]; then
       export PATH="$TP_P3_PATH:$PATH"
@@ -130,22 +133,36 @@ reduce PATH PYTHONPATH
 )
 
 sitevenv() {
+   quiet=""
+   if [ "X$1" = "X-q" ]; then
+      quiet="-q"
+      shift
+   fi
+
    if [ "X$SITEVENV" = "X" ]; then
-      echo "SITEVENV is not defined. it should be defined in site-spec/profile"
+      echo "SITEVENV is not defined. it should be defined in site-spec/profile" >&2
       return 1
    else
-      echo "SITEVENV=$SITEVENV"
+      [ "X$quiet" = "X-q" ] || echo "SITEVENV=$SITEVENV" >&2
       cd "$SITEVENV"
    fi
 }
 export -f sitevenv
 
 svenv() {
-   repo=$1
-   # a project ia a directory under SITEBASE/githhub/
+   quiet=""
+   if [ "X$1" = "X-q" ]; then
+      quiet="-q"
+      shift
+      repo=$1
+   else
+      repo=$1
+   fi
+
+   # a project is a directory under SITEBASE/githhub/
 
    if [ "X$repo" = "X" ]; then
-      if ! sitevenv; then
+      if ! sitevenv $quiet; then
          return
       fi
 
