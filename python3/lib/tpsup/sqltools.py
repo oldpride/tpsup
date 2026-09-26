@@ -353,7 +353,8 @@ def run_sql(sql: Union[str, list], **opt):
     #    is in its own batch, it will still execute.
     #    GO has nothing to do with committing a transaction.
     # "
-    ret = []
+
+    ret = None
 
     with TpDbh(**opt) as dbh:
         # 'with' calls __enter__()
@@ -366,35 +367,52 @@ def run_sql(sql: Union[str, list], **opt):
         for sql in sqls:
             if verbose:
                 print(f'running single sql: {sql}', file=sys.stderr)
-            qr = QueryResults(sql, **opt, **opt2)
 
-            if qr.no_column:
-                continue
-
-            ret2 = []
-            if qr.ReturnType == 'DictList':  # this is default
-                ret2.extend(qr)
-            else:  # qr.ReturnType == 'ListList':
-                ret2.append(qr.columns)
-                # ret2.extend(qr) # this is not working; it returns tuples
-                ret2.extend([list(row) for row in qr])  # convert tuple to list
-
-            if opt.get("RenderOutput", False):
-                tpsup.printtools.render_arrays(ret2, **opt)
-            elif outfile := opt.get("SqlOutput", None):
-                if qr.ReturnType == 'DictList':
-                    ret3 = ret2
-                else:
-                    # convert ListList to DictList
-                    ret3 = []
-                    for row in ret2:
-                        ret3.append(dict(zip(qr.columns, row)))
-                tpsup.csvtools.write_dictlist_to_csv(
-                    ret3, qr.columns, outfile, **opt)
-
-            ret.extend(ret2)
+            ret = run_single_sql(sql, **opt, **opt2)
 
     return ret
+
+def run_single_sql(sql, **opt):
+    qr = QueryResults(sql, **opt)
+
+    if qr.no_column:
+        return None
+
+    return_aref = []
+    headers = []
+
+    if opt.get("OutputHeaders", None):
+        headers = opt["OutputHeaders"].split(',')
+    else:
+        headers = qr.columns
+
+    if qr.ReturnType == 'DictList':  # this is default
+        return_aref.extend(qr)
+    else:  # qr.ReturnType == 'ListList':
+        return_aref.append(qr.columns)
+        # ret2.extend(qr) # this is not working; it returns tuples
+        return_aref.extend([list(row) for row in qr])  # convert tuple to list
+
+    if opt.get("RenderOutput", False):
+        tpsup.printtools.render_arrays(return_aref, headers=headers, **opt)
+    elif outfile := opt.get("SqlOutput", None):
+        if qr.ReturnType == 'DictList':
+            ret3 = return_aref
+        else:
+            # convert ListList to DictList
+            ret3 = []
+            for row in return_aref:
+                ret3.append(dict(zip(qr.columns, row)))
+        tpsup.csvtools.write_dictlist_to_csv(
+                    ret3, qr.columns, outfile, **opt)
+
+    if opt.get("ReturnDetail", False):
+        ReturnDetail = {}
+        ReturnDetail["aref"] = return_aref
+        ReturnDetail["headers"] = headers
+        return ReturnDetail
+    else:
+        return return_aref
 
 
 def get_dbh(**opt):
