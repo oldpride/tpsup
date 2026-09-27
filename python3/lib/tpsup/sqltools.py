@@ -372,7 +372,7 @@ def run_sql(sql: Union[str, list], **opt):
 
     return ret
 
-def run_single_sql(sql, **opt):
+def run_single_sql(sql, SqlOutput=None, OutputHeaders=None, RenderOutput=False, ReturnDetail=False, **opt):
     qr = QueryResults(sql, **opt)
 
     if qr.no_column:
@@ -381,8 +381,8 @@ def run_single_sql(sql, **opt):
     return_aref = []
     headers = []
 
-    if opt.get("OutputHeaders", None):
-        headers = opt["OutputHeaders"].split(',')
+    if OutputHeaders:
+        headers = OutputHeaders.split(',')
     else:
         headers = qr.columns
 
@@ -393,9 +393,10 @@ def run_single_sql(sql, **opt):
         # ret2.extend(qr) # this is not working; it returns tuples
         return_aref.extend([list(row) for row in qr])  # convert tuple to list
 
-    if opt.get("RenderOutput", False):
-        tpsup.printtools.render_arrays(return_aref, headers=headers, **opt)
-    elif outfile := opt.get("SqlOutput", None):
+    if RenderOutput:
+        if SqlOutput:
+            tpsup.printtools.render_arrays(return_aref, headers=headers, RenderHeaders=True, **opt)
+    elif SqlOutput:
         if qr.ReturnType == 'DictList':
             ret3 = return_aref
         else:
@@ -404,13 +405,13 @@ def run_single_sql(sql, **opt):
             for row in return_aref:
                 ret3.append(dict(zip(qr.columns, row)))
         tpsup.csvtools.write_dictlist_to_csv(
-                    ret3, qr.columns, outfile, **opt)
+                    ret3, qr.columns, SqlOutput, **opt)
 
-    if opt.get("ReturnDetail", False):
-        ReturnDetail = {}
-        ReturnDetail["aref"] = return_aref
-        ReturnDetail["headers"] = headers
-        return ReturnDetail
+    if ReturnDetail:
+        return_detail = {}
+        return_detail["aref"] = return_aref
+        return_detail["headers"] = headers
+        return return_detail
     else:
         return return_aref
 

@@ -2,6 +2,7 @@ from pprint import pformat
 from typing import Union
 import os
 import sys
+import subprocess
 
 # from perl tpsup/lib/perl/TPSUP/UTIL.pm
 
@@ -89,6 +90,7 @@ def render_arrays(rows: Union[list, None],
                   RowType=None,
                   interactive=False,
                   out_fh=None,
+                  out_file=None,
                   **opt):
 
     # this is in ** because we want to pass it to render_one_row()
@@ -105,7 +107,12 @@ def render_arrays(rows: Union[list, None],
     elif interactive:
         # todo: this is unix only
         cmd = "less -S"
-        out_fh = os.popen(cmd, 'w')
+        out_fh = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE).stdin
+    elif out_file:
+        if out_file == '-':
+            out_fh = sys.stdout
+        else:
+            out_fh = open(out_file, 'w')
     else:
         out_fh = sys.stdout
 
