@@ -395,7 +395,7 @@ def run_single_sql(sql, SqlOutput=None, OutputHeaders=None, RenderOutput=False, 
 
     if RenderOutput:
         if SqlOutput:
-            tpsup.printtools.render_arrays(return_aref, headers=headers, RenderHeaders=True, **opt)
+            tpsup.printtools.render_arrays(return_aref, headers=headers, RenderHeaders=True, SqlOutput=SqlOutput, **opt)
     elif SqlOutput:
         if qr.ReturnType == 'DictList':
             ret3 = return_aref
