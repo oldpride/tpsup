@@ -1,4 +1,4 @@
-local OPTIND OPTARG o quiet usage expected_version actual_version binaries binary find_binary tmpvar d2 prog
+local OPTIND OPTARG o quiet usage expected_version actual_version binaries binary find_binary tmpvar d2 prog verbose
 
 prog=${FUNCNAME[1]}
 

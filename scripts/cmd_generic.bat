@@ -24,6 +24,11 @@ for %%G in (js ts py) do (
         ) else if "%%G"=="ts" (
             call deno run --allow-all "!file!" %*
         ) else if "%%G"=="py" (
+            @REM if VIRTUAL_ENV is not set, set env
+            if not defined VIRTUAL_ENV (
+                call p3env
+                call svenv
+            )
             call python "!file!" %*
         )
         

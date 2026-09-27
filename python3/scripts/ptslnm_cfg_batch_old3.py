@@ -48,6 +48,12 @@ if [ "X$1" = "X-v" ]; then
    verbose="-v"
 fi
 
+# if VIRTUAL_ENV is not set, set env
+if [ "X$VIRTUAL_ENV" = "X" ]; then
+    p3env -q
+    svenv -q
+fi
+
 if [[ "$UNAME" =~ Cygwin ]]; then
    cfg=$(cygpath --windows "$dir/${prog}_cfg_${type}.py")
    cmd=$(which pt${type}.py)

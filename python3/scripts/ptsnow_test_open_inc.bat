@@ -32,5 +32,19 @@ set "type=%seen_type%"
 @REM unset seen_type
 set "seen_type="
 
-set "cfg=%dir%/%prog%_cfg_%type%.py"
+@REM if VIRTUAL_ENV is not set, set env
+if not defined VIRTUAL_ENV (
+    @REM save prog, type as they be overridden by p3env and svenv
+    set "saved_prog=%prog%"
+    set "saved_type=%type%"
+
+    call p3env
+    call svenv
+
+    @REM restore prog, type
+    set "prog=%saved_prog%"
+    set "type=%saved_type%"
+)
+
+set "cfg=%dir%\%prog%_cfg_%type%.py"
 python "%TPSUp%/python3/scripts/pt%type%.py" "%cfg%" -c "%prog%" %*
