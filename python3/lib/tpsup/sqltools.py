@@ -32,7 +32,7 @@ from tpsup.logbasic import log_FileFuncLine, log_FileFuncLineObj
 
 
 class Conn:
-    def __init__(self, nickname: str, **opt):
+    def __init__(self, nickname: str, nickname_casesensitive: bool = False, **opt):
         env = tpsup.envtools.Env()
         connfile = opt.get('connfile', None)
         if connfile is None:
@@ -56,8 +56,12 @@ class Conn:
 
         # opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
 
-        dictlist = list(tpsup.csvtools.QueryCsv(connfile, MatchExps=[
-                        f'r["nickname"] == "{nickname}"'], **opt))
+        if nickname_casesensitive:
+            opt['MatchExps'] = [f'r["nickname"] == "{nickname}"']
+        else:
+            opt['MatchExps'] = [f'r["nickname"].lower() == "{nickname.lower()}"']
+
+        dictlist = list(tpsup.csvtools.QueryCsv(connfile, **opt))
 
         if len(dictlist) == 0:
             raise RuntimeError(
