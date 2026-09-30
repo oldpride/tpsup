@@ -68,7 +68,9 @@ def usage(message: str = None, **opt):
 '''
 
     extra_args_usage = ''
-    extra_args = all_cfg.get('extra_args', [])
+    extra_args = all_cfg.get('extra_args', {})
+
+    # print(f"extra_args = {pformat(extra_args)}")
 
     # sort by key
     for k, v in sorted(extra_args.items()):
@@ -112,7 +114,9 @@ def usage(message: str = None, **opt):
     print(f'''
 usage:{usage_top}
 example:{example}
-''', file=sys.stderr)
+''', 
+# file=sys.stderr
+)
     exit(1)
 
 
