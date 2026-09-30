@@ -296,7 +296,7 @@ if ( !$not_check_user ) {
    }
 }
 
-my $exclude_pattern = "[.]git/|[.]sw[op]|[.]nfs|[.]idea|[.]github|__pycache__";
+my $exclude_pattern = "[.]git/|[.]sw[ponmlkj]|[.]nfs|[.]idea|[.]github|__pycache__";
 if ( defined $exclude ) {
    $verbose && print "exclude = ", Dumper($exclude);
 

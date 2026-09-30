@@ -933,7 +933,8 @@ sub build_dir_tree {
 
             if ( @{ $opt->{excludes} } ) {
                for my $m ( @{ $opt->{excludes} } ) {
-                  if ( $f =~ /$m/ ) {
+                  my $full = "$front$f"; # $full is ending with "/"
+                  if ( $full =~ /$m/ ) {
                      next FILES;
                   }
                }
