@@ -92,7 +92,7 @@ fi
 
 for offset in $o1 $o2
 do
-   if [ $offset -ne 0 -a "X${commit_by_offset[$offset]}" = "X" } ]; then 
+   if [ $offset -ne 0 ] && [ "X${commit_by_offset[$offset]}" = "X" ]; then 
       echo "ERROR: commit at offset=$offset is not found. run: git log $path"
       exit 1
    fi
@@ -101,9 +101,8 @@ done
 commit1=${commit_by_offset[$o1]}
 commit2=${commit_by_offset[$o2]}
 
-set -x
+
 cmd="git diff $commit1 $commit2 -- $path"
-if [ "$verbose" = "Y" ]; then
-   echo "running: $cmd"
-fi
+echo "running: $cmd"
+
 exec $cmd

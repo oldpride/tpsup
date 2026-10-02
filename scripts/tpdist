@@ -174,11 +174,12 @@ Active-Side Switches: (To Pull, normal Client State)
                       default is no limit.
 
    -match pattern     only files that matching this pattern (Perl RegEx style).
-                      can be specified multiple times (in OR logic).
+                      can be specified multiple times (in OR logic). see below notes.
 
    -exclude pattern   exclude files that matching this pattern (Perl RegEx style)
                       can be specified multiple times (in OR logic).
                       default exclude pattern is '$default_exclude'
+                      see below notes.
 
    -deep              set to always use cksum to check. Default is fast check: if file size
                       and timestamp matches, we don't use cksum. cksum is time-consumig.
@@ -199,6 +200,23 @@ Source-side switches
    -strict_tar        fatal any error from tar, normally because file changed during archive.
                       default is to allow changed files.
 
+Notes about -match and -exclude patterns:
+   pattern matching is done relative to the last component of the source path.
+
+   example source dir
+      /a1/b1/c1/d1
+                     e1/..
+                     e2/...
+   examplecommand
+      tpdist client myhost 11111 -exclude d1/e1 /a1/b1/c1/d1 /a2/b2/c2
+   the exclude pattern only matches from d1, the last component of the source path.
+   therefore, 
+      e1 will be excluded; it matched d1/e1
+      e2 will not be excluded; it did not match d1/e1
+   note: 
+      "-exclude c1/d1/e1" will not work, because c1 is not 
+      the last component of the source path.
+      
 Examples:
 
    # to copy this script to a new host, 'host2', from this host, 'host1'
@@ -933,8 +951,27 @@ sub build_dir_tree {
 
             if ( @{ $opt->{excludes} } ) {
                for my $m ( @{ $opt->{excludes} } ) {
-                  my $full = "$front$f"; # $full is ending with "/"
-                  if ( $full =~ /$m/ ) {
+                  # my $full = "$front$f"; # $full is ending with "/"
+                  # if ( $full =~ /$m/ ) {
+                  #    next FILES;
+                  # }
+
+                  # in source dir
+                  #    /a1/b1/c1/d1
+                  #                 e1/..
+                  #                 e2/...
+                  # command
+                  #    tpdist client myhost 11111 -exclude d1/e1 /a1/b1/c1/d1 /a2/b2/c2
+                  # the exclude pattern only matches from d1, the last component of 
+                  # the source path.
+                  # therefore, 
+                  #    e1 will be excluded; it matched d1/e1
+                  #    e2 will not be excluded; it did not match d1/e1
+                  # note: 
+                  #    -exclude c1/d1/e1 will not work, because c1 is not 
+                  #    the last component of the source path.
+                  # 
+                  if ( $f =~ /$m/ ) {
                      next FILES;
                   }
                }
