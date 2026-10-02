@@ -207,14 +207,14 @@ Notes about -match and -exclude patterns:
       /a1/b1/c1/d1
                      e1/..
                      e2/...
-   examplecommand
+   example command
       tpdist client myhost 11111 -exclude d1/e1 /a1/b1/c1/d1 /a2/b2/c2
    the exclude pattern only matches from d1, the last component of the source path.
    therefore, 
       e1 will be excluded; it matched d1/e1
       e2 will not be excluded; it did not match d1/e1
    note: 
-      "-exclude c1/d1/e1" will not work, because c1 is not 
+      "-exclude ^c1/d1/e1" will not work, because c1 is not 
       the last component of the source path.
       
 Examples:
