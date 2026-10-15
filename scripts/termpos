@@ -204,7 +204,12 @@ if [ $IS_CYGWIN = Y -o $IS_GITBASH = Y ]; then
    term_ip="127.0.0.1"  # cygwin on pc, we assume the term client is on the same machine
    
    x_resolution=`win_size e | head -n 4 |tail -1|awk '{print $1}'`
-   [ $verbose = Y ] && echo "x_resolution=$x_resolution"
+   if [ "X$x_resolution" = "X" ]; then
+      [ $verbose = Y ] && echo "no external window found. set x_resolution=0"
+      x_resolution=0
+   else
+      [ $verbose = Y ] && echo "x_resolution=$x_resolution"
+   fi
    
 else
    # we assume this is a putty session that logs into a linux server
@@ -235,7 +240,9 @@ fi
 
 if [[ $jump =~ ^n ]]; then
    # n1 means -1
+   old_jump=$jump
    jump=${jump/n/-}
+   [ $verbose = Y ] && echo "jump converted from $old_jump to $jump"
 fi
 jump_x=`expr "$jump" "*" "$x_resolution"`
 
@@ -501,7 +508,12 @@ else
 
       if [ -e $posfile ]; then
          pid=$(get_nth_line 1 $posfile)
-         [ $verbose = Y ] && echo "found posfile $posfile, pid=$pid"
+         if [ $verbose = Y ]; then
+            echo "found posfile $posfile, pid=$pid. content is below"
+            echo "---------------------------"
+            cat $posfile
+            echo "---------------------------"
+         fi
 
          if ! [ "X$pid" = "X" ]; then
             if ps -p $pid >/dev/null; then
