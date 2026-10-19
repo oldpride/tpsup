@@ -150,9 +150,9 @@ for my $f (@ARGV) {
          if ( $f eq $proj ) {
             $found++;
 
-               my $v = {
-      proj      => $proj,
-   };
+            my $v = {
+               proj      => $proj,
+            };
 
             for my $row ( @{ $cfg_by_key->{$key} } ) {
                ( $backup_source, $backup_base ) = @{$row}{qw(source backup_base)};
