@@ -7,6 +7,7 @@ use Getopt::Long;
 use Carp;
 use TPSUP::CSV qw(/./);
 use TPSUP::PRINT qw(render_arrays);
+use TPSUP::BACKUP qw(resolve_vars);
 
 my $prog = $0;
 $prog =~ s:.*/::;
@@ -149,13 +150,14 @@ for my $f (@ARGV) {
          if ( $f eq $proj ) {
             $found++;
 
+               my $v = {
+      proj      => $proj,
+   };
+
             for my $row ( @{ $cfg_by_key->{$key} } ) {
                ( $backup_source, $backup_base ) = @{$row}{qw(source backup_base)};
-               $backup_source =~ s:\$home:$home:g;
-               $backup_base   =~ s:\$home:$home:g;
-
-               $backup_source =~ s:\$proj:$proj:g;
-               $backup_base   =~ s:\$proj:$proj:g;
+               $backup_source = resolve_vars($backup_source, $v);
+               $backup_base   = resolve_vars($backup_base, $v);
 
                $relative = '';
 
@@ -167,11 +169,11 @@ for my $f (@ARGV) {
 
          for my $row ( @{ $cfg_by_key->{$key} } ) {
             ( $backup_source, $backup_base ) = @{$row}{qw(source backup_base)};
-            $backup_source =~ s:\$home:$home:g;
-            $backup_base   =~ s:\$home:$home:g;
-
-            $backup_source =~ s:\$proj:$proj:g;
-            $backup_base   =~ s:\$proj:$proj:g;
+            my $v = {
+               proj => $proj,
+            };
+            $backup_source = resolve_vars($backup_source, $v);
+            $backup_base   = resolve_vars($backup_base, $v);
 
             if ( $user_source =~ m:${backup_source}/(.*): ) {
                $relative = $1;

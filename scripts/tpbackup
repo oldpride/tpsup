@@ -7,6 +7,7 @@ use Getopt::Long;
 use Carp;
 use TPSUP::CSV   qw(parse_csv_file);
 use TPSUP::PRINT qw(render_arrays);
+use TPSUP::BACKUP qw(resolve_vars);
 
 my $prog = $0;
 $prog =~ s:.*/::;
@@ -15,6 +16,8 @@ my $method = 'tpdist';
 
 my $home = `/bin/bash -c "echo ~"`;
 chomp $home;
+my $today=`date +%Y%m%d`;
+chomp $today;
 
 sub usage {
    my ($message) = @_;
@@ -55,10 +58,10 @@ Usage:
 
 Examples:
 
-   $prog check tpsup
-   $prog do    tpsup
-   $prog list  tpsup
-   $prog diff  tpsup 
+   $prog check home
+   $prog do    home
+   $prog list  home
+   $prog diff  home
    $prog info
 
    $prog -m tpdist do home
@@ -116,15 +119,16 @@ for my $key ( sort keys(%$cfg_by_key) ) {
    }
    $matched = 1;
 
-   my $today = `date +%Y%m%d`;
-   chomp $today;
+   my $v = {
+      proj      => $proj,
+   };
 
    my ( $source, $backup_base, $retention ) = @{ $cfg_by_key->{$key}->[0] }{qw(source backup_base retention)};
 
-   $source      =~ s:\$home:$home:g;
-   $backup_base =~ s:\$home:$home:g;
-   $source      =~ s:\$proj:$proj:g;
-   $backup_base =~ s:\$proj:$proj:g;
+   $source      = resolve_vars($source, $v);
+   $backup_base = resolve_vars($backup_base, $v);
+   $source      = resolve_vars($source, $v);
+   $backup_base = resolve_vars($backup_base, $v);
 
    # [.]*[.]sw[pon]       tmp files of vi. vi only create up to 3 tmp files:  .*.swp, .*.swo, .*.swn
    my $rsync_excludes =
